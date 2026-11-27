@@ -24,6 +24,7 @@ using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Kernel.Foundation.Hosting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -197,7 +198,7 @@ public sealed class KernelPublishedExecuteTests
             var isolatedActors = new List<Contract.ActorRef>();
             if (directTests)
             {
-                await VerifyDirectTestAsync(canonical, "workflow-draft-snapshot", "draft:witness", closeBeforePin: false);
+                await VerifyDirectTestAsync(canonical, "workflow-draft-snapshot", "draft:witness", closeBeforePin: false, interruptAfterPin: true);
                 await VerifyDirectTestAsync(flowchart, "workflow-definition-version", "saved-witness", closeBeforePin: false);
                 await VerifyDirectTestAsync(waiting, "workflow-definition-version", "stop-witness", closeBeforePin: false, stop: true);
                 await VerifyDirectTestAsync(waiting, "workflow-definition-version", "expire-witness", closeBeforePin: false, expire: true);
@@ -479,10 +480,10 @@ public sealed class KernelPublishedExecuteTests
             }
 
             async Task VerifyDirectTestAsync(WorkflowExecutable executable, string sourceKind, string version, bool closeBeforePin,
-                bool stop = false, bool expire = false)
+                bool stop = false, bool expire = false, bool interruptAfterPin = false)
             {
                 var privateRuns = app.Services.GetRequiredService<KernelTestRuns>().Reads;
-                Assert.Throws<ArgumentException>(() => EmbeddedTenant.Bind(privateRuns.Tenant.Tenant));
+                Assert.Throws<InvalidOperationException>(() => EmbeddedTenant.Bind(privateRuns.Tenant.Tenant));
                 var real = app.Services.GetRequiredService<KernelRuns>();
                 Assert.NotEqual(real.Tenant.Tenant, privateRuns.Tenant.Tenant);
 
@@ -515,7 +516,39 @@ public sealed class KernelPublishedExecuteTests
                         new Dictionary<string, string> { ["elsa.identity.subject-id"] = "accepted", ["elsa.identity.subject-kind"] = "persisted-user" }),
                     startAuthority: null, dispatchNestingDepth: 0, testScope: test);
                 var dispatcher = author.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
+                var interrupted = new TaskCompletionSource<RuntimeKernelExecutablePin>();
+                if (interruptAfterPin)
+                    pinBoundary.AfterTestAdmission = async (pin, cancellation) =>
+                    {
+                        interrupted.SetResult(pin);
+                        var oldActor = new Contract.ActorRef(pin.ActorReference);
+                        Assert.Equal(RootStartProof.Unresolved, await shell.ConfirmPreparedTestAsync(oldActor, pin.Issuance, cancellation));
+                        await using var competing = await scopes.CreateAsyncScopeAsync(Scope);
+                        var duplicate = await competing.ServiceProvider.GetRequiredService<IWorkflowDirectTestRunDispatcher>()
+                            .DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: cancellation);
+                        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, duplicate.CommandDispatch.Status);
+                        Assert.True((await privateRuns.GetAsync(oldActor, cancellation)).Missing);
+                        return false;
+                    };
                 var result = await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token);
+                if (interruptAfterPin)
+                {
+                    pinBoundary.AfterTestAdmission = null;
+                    Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, result.CommandDispatch.Status);
+                    var abandoned = await interrupted.Task.WaitAsync(token);
+                    var oldActor = new Contract.ActorRef(abandoned.ActorReference);
+                    Assert.Equal(RootStartProof.PreparationDisarmed, await shell.ConfirmPreparedTestAsync(oldActor, abandoned.Issuance, token));
+                    Assert.Equal(new WorkflowTestRunActorBinding(abandoned.ActorReference, abandoned.Issuance),
+                        (await scopeStore.FindAsync(test.ScopeId, token))!.IsolatedActor);
+
+                    result = await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token);
+                    Assert.NotEqual(oldActor.Id, result.WorkflowExecutionId);
+                    Assert.Equal(result.WorkflowExecutionId, (await scopeStore.FindAsync(test.ScopeId, token))!.IsolatedActor?.ActorReference);
+                    var replay = await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token);
+                    Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, replay.CommandDispatch.Status);
+                    Assert.Equal(result.WorkflowExecutionId, replay.WorkflowExecutionId);
+                    Assert.True((await privateRuns.GetAsync(oldActor, token)).Missing);
+                }
                 if (closeBeforePin)
                 {
                     Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, result.CommandDispatch.Status);
@@ -688,6 +721,7 @@ public sealed class KernelPublishedExecuteTests
     {
         public Func<WorkflowExecutableSourceReference, CancellationToken, ValueTask>? BeforeAdmission { get; set; }
         public Func<WorkflowExecutableSourceReference, CancellationToken, ValueTask>? BeforeTestAdmission { get; set; }
+        public Func<RuntimeKernelExecutablePin, CancellationToken, ValueTask<bool>>? AfterTestAdmission { get; set; }
         public bool Retracted { get; set; }
     }
 
@@ -702,10 +736,11 @@ public sealed class KernelPublishedExecuteTests
 
         public ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token) => inner.TryPinAsync(pins, token);
         public async ValueTask<bool> TryPinTestRunAsync(RuntimeKernelExecutablePin pin, WorkflowTestScope scope,
-            WorkflowExecutableSourceReference source, CancellationToken token)
+            WorkflowExecutableSourceReference source, WorkflowTestRunActorBinding? observedBinding, CancellationToken token)
         {
             if (boundary.BeforeTestAdmission is { } before) await before(source, token);
-            return await inner.TryPinTestRunAsync(pin, scope, source, token);
+            if (!await inner.TryPinTestRunAsync(pin, scope, source, observedBinding, token)) return false;
+            return boundary.AfterTestAdmission is not { } after || await after(pin, token);
         }
         public ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken token) => inner.ReadOpenTailAsync(scope, token);
         public ValueTask<RuntimeKernelExecutablePinPage> ListOpenAsync(PersistenceScope scope, string? after, string through, int limit,

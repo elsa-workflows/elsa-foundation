@@ -119,8 +119,22 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
                 reference.DefinitionVersionId != test.DefinitionVersionId || reference.ArtifactVersion != test.ArtifactVersion ||
                 !reference.IsLive(clock.GetUtcNow()) || KernelPublishedRunDispatcher.SourceDigest(reference) != test.SourceDigest)
                 return false;
-            return await store.TryPinTestRunAsync(pins.Single(), new(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition)),
-                reference, bounded.Token);
+            var expected = new WorkflowTestScope(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition));
+            var current = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, bounded.Token);
+            if (current is not { State: WorkflowTestScopeState.Open } || !WorkflowTestScope.ContextEquals(current.Scope, expected))
+                return false;
+
+            var pin = pins.Single();
+            var selectedBinding = new WorkflowTestRunActorBinding(pin.ActorReference, pin.Issuance);
+            if (current.IsolatedActor is { } previous && previous != selectedBinding)
+            {
+                // Query the issuing store before beginning the Runtime transaction. Disarm is permanent.
+                if (testActors is null || await foundation.ConfirmPreparedStartAsync(testActors,
+                    new(previous.ActorReference), previous.Issuance, bounded.Token) != RootStartProof.PreparationDisarmed)
+                    return false;
+            }
+
+            return await store.TryPinTestRunAsync(pin, expected, reference, current.IsolatedActor, bounded.Token);
         }
         if (selected?.PublishedStart is not { } publication) return await store.TryPinAsync(pins, bounded.Token);
 

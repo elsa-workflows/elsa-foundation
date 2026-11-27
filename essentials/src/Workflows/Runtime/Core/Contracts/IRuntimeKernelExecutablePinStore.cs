@@ -41,8 +41,10 @@ public interface IRuntimeKernelExecutablePinStore
         ValueTask.FromException<bool>(new NotSupportedException("The Runtime provider does not fence published executable pins."));
 
     /// <summary>Protects one prepared test root and verifies its live source and open exact test scope in the same transaction.</summary>
+    /// <remarks>The selected binding must remain unchanged. A caller proposing a different actor must first prove
+    /// that the previously observed issuance is permanently disarmed.</remarks>
     ValueTask<bool> TryPinTestRunAsync(RuntimeKernelExecutablePin pin, WorkflowTestScope scope,
-        WorkflowExecutableSourceReference source, CancellationToken cancellationToken = default) =>
+        WorkflowExecutableSourceReference source, WorkflowTestRunActorBinding? observedBinding, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<bool>(new NotSupportedException("The Runtime provider does not fence Test Run executable pins."));
 
     /// <summary>Returns the inclusive upper cursor for this cleanup pass, or null when there are no open pins.</summary>

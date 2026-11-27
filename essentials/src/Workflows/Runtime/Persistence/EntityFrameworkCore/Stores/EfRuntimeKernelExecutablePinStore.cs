@@ -42,7 +42,7 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
     }
 
     public ValueTask<bool> TryPinTestRunAsync(RuntimeKernelExecutablePin pin, WorkflowTestScope scope,
-        WorkflowExecutableSourceReference source, CancellationToken cancellationToken = default)
+        WorkflowExecutableSourceReference source, WorkflowTestRunActorBinding? observedBinding, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pin);
         ArgumentNullException.ThrowIfNull(scope);
@@ -54,11 +54,12 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
             throw new ArgumentException("The selected source and scope must belong to this isolated Test Run executable pin.", nameof(source));
         if (sourceReferences is not EfWorkflowExecutableSourceReferenceStore physical || !ReferenceEquals(physical.Context, context))
             throw new NotSupportedException("Test Run executable pins require the physical Runtime source reference store.");
-        return TryPinAsync([pin], null, new(scope, source, physical), cancellationToken);
+        return TryPinAsync([pin], null, new(scope, source, physical, observedBinding), cancellationToken);
     }
 
     private sealed record PublishedPin(WorkflowActivationSlot Slot, WorkflowExecutableSourceReference Source, EfWorkflowExecutableSourceReferenceStore Physical);
-    private sealed record TestPin(WorkflowTestScope Scope, WorkflowExecutableSourceReference Source, EfWorkflowExecutableSourceReferenceStore Physical);
+    private sealed record TestPin(WorkflowTestScope Scope, WorkflowExecutableSourceReference Source,
+        EfWorkflowExecutableSourceReferenceStore Physical, WorkflowTestRunActorBinding? ObservedBinding);
 
     private async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, PublishedPin? published, TestPin? test,
         CancellationToken cancellationToken)
@@ -117,7 +118,7 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
                                 !await EfAdmissionTargetFence.LockSourceAsync(authority.Physical, scope.Value, authority.Source, token) ||
                                 !authority.Source.IsLive(clock.GetUtcNow()))) return;
                             if (test is { } selected && (!await EfAdmissionTargetFence.LockSourceAsync(selected.Physical, scope.Value,
-                                selected.Source, token) || !await StageTestScopeAsync(selected.Scope, scope.Value, pins.Single(), token))) return;
+                                selected.Source, token) || !await StageTestScopeAsync(selected, scope.Value, pins.Single(), token))) return;
                             var pending = current.Missing.Select(Create).OrderBy(row => row.Id, StringComparer.Ordinal).ToArray();
                             if (pending.Length > 0)
                             {
@@ -151,15 +152,15 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
             (test is null ? missing : desired.Values).Select(pin => pin.Executable).Distinct().ToArray();
     }
 
-    private async ValueTask<bool> StageTestScopeAsync(WorkflowTestScope expected, string scope, RuntimeKernelExecutablePin pin,
+    private async ValueTask<bool> StageTestScopeAsync(TestPin expected, string scope, RuntimeKernelExecutablePin pin,
         CancellationToken token)
     {
         try
         {
-            var (row, record) = await EfRuntimeCheckpointTestScopeParticipantStaging.RequireOpenAsync(context, expected,
+            var (row, record) = await EfRuntimeCheckpointTestScopeParticipantStaging.RequireOpenAsync(context, expected.Scope,
                 clock.GetUtcNow(), scope, token);
             var selected = new WorkflowTestRunActorBinding(pin.ActorReference, pin.Issuance);
-            if (record.IsolatedActor is not null && record.IsolatedActor != selected) return false;
+            if (record.IsolatedActor != selected && record.IsolatedActor != expected.ObservedBinding) return false;
             WorkflowTestScopeEfSupport.Copy(row, record with { IsolatedActor = selected }, checked(row.Revision + 1));
             return true;
         }
