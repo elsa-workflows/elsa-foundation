@@ -681,7 +681,9 @@ public sealed class KernelCoordinatorTests
         foreach (var prior in previous)
         {
             var reservation = Assert.IsType<RuntimeIngressReservation>(await reader.FindAsync(scope, prior.StimulusType, prior.StimulusHash));
-            Assert.Equal(prior with { OwnerRevision = failed.Slot.Revision, ConfigurationRevision = failed.Slot.Revision }, reservation);
+            Assert.Equal(prior.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal),
+                reservation.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal));
+            Assert.Equal(prior with { OwnerRevision = failed.Slot.Revision, ConfigurationRevision = failed.Slot.Revision, Metadata = reservation.Metadata }, reservation);
         }
     }
 
