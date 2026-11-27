@@ -410,7 +410,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         var refused = observation == WorkflowDirectTestRunObservation.Refused;
         var dispatch = refused ? WorkflowExecutionCommandDispatchStatus.Rejected : WorkflowExecutionCommandDispatchStatus.Deferred;
         using var services = new ServiceCollection()
-            .AddSingleton<IWorkflowDirectTestRunDispatcher>(new UnadmittedTestRunDispatcher(_executableStore, dispatch, observation, reason))
+            .AddSingleton<IWorkflowDirectTestRunDispatcher>(new UnadmittedTestRunDispatcher(_executableStore, dispatch, observation, reason ?? "Fixture"))
             .BuildServiceProvider();
         var handler = DraftSnapshotHandler(ambientServices: services, timeProvider: clock);
         var initial = await handler.StartDraftAsync(new("definition-1", "snapshot-isolated-result", DraftState()), token);
@@ -1374,7 +1374,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     }
 
     private sealed class UnadmittedTestRunDispatcher(IWorkflowExecutableStore executables, WorkflowExecutionCommandDispatchStatus status,
-        WorkflowDirectTestRunObservation observation = WorkflowDirectTestRunObservation.Prepared, string? reason = "Fixture")
+        WorkflowDirectTestRunObservation observation = WorkflowDirectTestRunObservation.Prepared, string reason = "Fixture")
         : IWorkflowDirectTestRunDispatcher
     {
         public bool SupportsTrigger(string driverId) => false;
