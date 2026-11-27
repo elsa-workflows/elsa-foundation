@@ -526,11 +526,12 @@ internal static class StoreDefinitionsRevision
     // Query the stamp inside the same statement as the format, so a reader cannot combine two store revisions.
     private static readonly string PostgresStampSql = FormattableString.Invariant($"""
         SELECT d."StoreSchema"::text || '/' || d."MessageProtocol"::text || '/' || d."JournalCodec"::text
-        FROM "KernelStoreVersions" d WHERE d."Id" = {MarkerId}
+        FROM /*physical-relation*/"KernelStoreVersions" d WHERE d."Id" = {MarkerId}
         """);
 
-    internal static string AddPostgresStampSql(string sql, bool lockDefinitions = false) =>
-        sql.Replace("/*definitions-stamp*/", "(" + PostgresStampSql + (lockDefinitions ? " FOR SHARE OF d)" : ")"), StringComparison.Ordinal);
+    internal static string AddPostgresStampSql(string sql, bool lockDefinitions = false, bool only = false) =>
+        sql.Replace("/*definitions-stamp*/", "(" + PostgresStampSql.Replace("/*physical-relation*/", only ? "ONLY " : "", StringComparison.Ordinal)
+            + (lockDefinitions ? " FOR SHARE OF d)" : ")"), StringComparison.Ordinal);
 
     internal static FormattableString AddPostgresStamp(FormattableString sql) =>
         FormattableStringFactory.Create(AddPostgresStampSql(sql.Format), sql.GetArguments());

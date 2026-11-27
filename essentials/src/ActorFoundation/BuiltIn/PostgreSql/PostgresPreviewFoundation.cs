@@ -11,7 +11,7 @@ namespace Kernel.Foundation.Postgres;
 /// </summary>
 public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads, Contract.IActorTerminalOutputReads,
     Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads,
-    Contract.IActorRetentionReads, Contract.IActorRetentionPolicies, ICommittedRootStateReads
+    Contract.IActorRetentionReads, Contract.IActorRetentionPolicies, Contract.IActorParkInboxReads, ICommittedRootStateReads
 {
     private readonly PostgresRootAdmission admission;
     private readonly PostgresRootReads reads;
@@ -87,6 +87,12 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         reads.ReadTerminalOutputAsync(scope, actor, endedAt, includeValues, cancellationToken);
 
     bool Contract.IActorSequencedJournalReads.SupportsSequencedJournal => reads.SupportsSequencedJournal;
+
+    bool Contract.IActorParkInboxReads.SupportsParkInbox => reads.SupportsParkInbox;
+
+    ValueTask<Contract.Page<Contract.ParkInboxEntry>?> Contract.IActorParkInboxReads.ReadParkInboxAsync(
+        Contract.BoundScope scope, Contract.ActorRef actor, string selection, Contract.PageToken? from,
+        CancellationToken cancellationToken) => reads.ReadParkInboxAsync(scope, actor, selection, from, cancellationToken);
 
     bool Contract.IActorPlaybackReads.SupportsPlayback => reads.SupportsPlayback;
     bool Contract.IActorPlaybackReads.SupportsDescendantPlayback => reads.SupportsDescendantPlayback;

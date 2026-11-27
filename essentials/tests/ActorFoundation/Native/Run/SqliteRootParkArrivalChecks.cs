@@ -232,6 +232,7 @@ internal static partial class SqliteHostLifetimeChecks
                     await CheckRecoverAfterTerminalAsync(recoveryOwner);
                 }
                 await CheckReparkFifoAsync(recoveryOwner);
+                await CheckParkInboxCatchUpAsync(recoveryOwner);
                 var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
                 var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
                 await using var guards = shipped ? KernelDb.ForSqliteRootShipped(guardOptions)
@@ -586,6 +587,35 @@ internal static partial class SqliteHostLifetimeChecks
                     "Recover removes the consumed creator and keeps its immutable start receipt");
             }
 
+            async Task CheckParkInboxCatchUpAsync(Worker owner)
+            {
+                var root = (await admission.StartAsync(scope.Tenant, "park-inbox-catch-up", new(fixture, "{}"), null, null, token)).Actor!.Value;
+                var running = await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                Require(await admission.SendAsync(scope.Tenant, root, "delayed", "delayed", null, running.AsOf + 120_000, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                    await admission.SendAsync(scope.Tenant, root, "fault", "fail", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the paging fixture admits a delayed delivery before parking");
+                await DriveAsync(owner, root, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
+                Require(await admission.SendAsync(scope.Tenant, root, "later", "ordinary", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "a later arrival produces a second kept row");
+                var parked = await DriveAsync(owner, root, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
+                var previous = (await reads.GetAsync(scope, root, token))!;
+                var paging = new GeneratedRootReads(store, cursor, pageSize: 1, provider: "sqlite");
+                var first = await paging.ReadParkInboxAsync(scope, root, previous.Selection!, cancellationToken: token);
+                Require(first is { Items: [{ Kind: "fail" }], Next: not null }, "the first page starts after the pending delayed delivery");
+
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {parked.Actor.Id} AND "Kind" = 'delayed' AND NOT "Done"
+                    """, token);
+                await DriveAsync(owner, root, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
+                var current = (await reads.GetAsync(scope, root, token))!;
+                Require(current.Park == previous.Park &&
+                    await paging.ReadParkInboxAsync(scope, root, current.Selection!, first!.Next, token) is null &&
+                    await paging.ReadParkInboxAsync(scope, root, current.Selection!, cancellationToken: token) is
+                        { Items: [{ Kind: "delayed", State: Contract.DeliveryState.Arrived }] },
+                    "a newly kept older delivery invalidates the old page without replacing the Park");
+            }
+
             async Task CheckReparkFifoAsync(Worker owner)
             {
                 var root = (await admission.StartAsync(scope.Tenant, "repark", new(fixture, "{}"), null, null, token)).Actor!.Value;
@@ -598,13 +628,27 @@ internal static partial class SqliteHostLifetimeChecks
                 await DriveAsync(owner, root, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
                 Require(await admission.SendAsync(scope.Tenant, root, "released-fault", "repark-fault", null, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted } &&
-                    await admission.SendAsync(scope.Tenant, root, "later-release", "later-release", null, null, null, token) is
+                    await admission.SendAsync(scope.Tenant, root, "later-release", "later\0release", null, due: 0, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the first Park admits two arrivals in release order");
                 await DriveAsync(owner, root, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
                 var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                var parkReads = new GeneratedRootReads(store, cursor, pageSize: 1, provider: "sqlite");
+                var first = await parkReads.ReadParkInboxAsync(scope, root, selection, cancellationToken: token);
+                Require(first is { Items: [{ Kind: "fail", State: Contract.DeliveryState.Consumed }], Next: not null },
+                    "the exact Park inbox starts with the consumed delivery");
+                var second = await parkReads.ReadParkInboxAsync(scope, root, selection, first!.Next, token);
+                Require(second is { Items: [{ Kind: "repark-fault", State: Contract.DeliveryState.Arrived }], Next: not null } &&
+                    second.Items[0].Handle != first.Items[0].Handle, "the next Park inbox page carries the first arrival's own handle");
+                var third = await parkReads.ReadParkInboxAsync(scope, root, selection, second!.Next, token);
+                Require(third is { Items: [{ Kind: "later\0release", Due: 0, State: Contract.DeliveryState.Arrived }], Next: null },
+                    "the last kept input preserves its escaped kind and explicit epoch");
                 Require(await admission.OperateAsync(scope.Tenant, root, "repark-recover", Kinds.Recover, selection, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the first Park admits a Recover");
                 var repark = await DriveAsync(owner, root, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
+                var replacement = (await reads.GetAsync(scope, root, token))!.Selection!;
+                Require(await parkReads.ReadParkInboxAsync(scope, root, replacement, first.Next, token) is null &&
+                    await parkReads.ReadParkInboxAsync(scope, root, selection, cancellationToken: token) is null,
+                    "a page from the first Park cannot read evidence in the replacement Park");
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {repark.Actor.Id} AND "Kind" = 'older-future' AND NOT "Done"
                     """, token);

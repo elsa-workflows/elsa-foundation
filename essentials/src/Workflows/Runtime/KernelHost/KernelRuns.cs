@@ -60,6 +60,20 @@ public sealed class KernelRuns
     public async ValueTask<bool> SupportsSequencedJournalAsync(CancellationToken cancellationToken = default) =>
         await _reads(cancellationToken) is IActorSequencedJournalReads { SupportsSequencedJournal: true };
 
+    /// <summary>Whether the selected foundation can read kept delivery metadata for an exact Park.</summary>
+    public async ValueTask<bool> SupportsParkInboxAsync(CancellationToken cancellationToken = default) =>
+        await _reads(cancellationToken) is IActorParkInboxReads { SupportsParkInbox: true };
+
+    /// <summary>Reads a kept delivery page for the selected Park in the host's bound tenant.</summary>
+    public async ValueTask<Page<ParkInboxEntry>?> ReadParkInboxAsync(ActorRef actor, string selection, PageToken? from,
+        CancellationToken cancellationToken = default)
+    {
+        var reads = await _reads(cancellationToken);
+        return reads is IActorParkInboxReads { SupportsParkInbox: true } inbox
+            ? await inbox.ReadParkInboxAsync(Tenant, actor, selection, from, cancellationToken)
+            : null;
+    }
+
     /// <summary>Whether the selected foundation carries indexed playback.</summary>
     public async ValueTask<bool> SupportsPlaybackAsync(CancellationToken cancellationToken = default) =>
         await _reads(cancellationToken) is IActorPlaybackReads { SupportsPlayback: true };

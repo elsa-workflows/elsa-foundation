@@ -40,7 +40,7 @@ CAPTURES = {
     'Studio opens the committed kernel activity timeline': ['activity-timeline', 'activity-selection', 'history-paused',
                                                            'history-catch-up', 'history-committed'],
     'kernel HTTP response opens the committed run': ['kernel-http-result', 'kernel-http-run', 'kernel-http-refusal'],
-    PARK_RECOVERY_JOURNEY: ['parked-run', 'park-recovery-stale', 'park-recovered', 'park-run-completed'],
+    PARK_RECOVERY_JOURNEY: ['parked-run', 'park-evidence', 'park-evidence-narrow', 'park-recovery-stale', 'park-recovered', 'park-run-completed'],
 }
 EVIDENCE = {
     'core preview stack is ready': ['core-preview-smoke.json'],

@@ -44,6 +44,31 @@ export async function corePreviewParkRecoveryJourney(page: Page, info: TestInfo,
   await expect(page.getByText("This run is parked. Recover it to accept new work.")).toBeVisible();
   await capture(page, info, "parked-run");
 
+  const evidence = await api<{ faultSummary: string; deliveries: { state: string; kind: string }[] }>(`${runPath}/park`);
+  const details = page.locator("summary").filter({ hasText: /^Park details$/ });
+  await expect(details).toBeVisible();
+  await details.focus();
+  await page.keyboard.press("Enter");
+  await expect(details).toBeFocused();
+  await expect(page.getByText(evidence.faultSummary, { exact: true })).toBeVisible();
+  if (evidence.deliveries.length) {
+    const kept = page.getByRole("list", { name: "Kept deliveries" });
+    await expect(kept.getByRole("listitem")).toHaveCount(evidence.deliveries.length);
+    await expect(kept.getByRole("listitem").first()).toContainText(evidence.deliveries[0]!.state);
+  } else {
+    await expect(page.getByText("No kept deliveries.", { exact: true })).toBeVisible();
+  }
+  await capture(page, info, "park-evidence");
+  const desktop = page.viewportSize();
+  if (desktop) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByText(evidence.faultSummary, { exact: true })).toBeVisible();
+    await capture(page, info, "park-evidence-narrow");
+    await page.setViewportSize(desktop);
+  }
+  await details.focus();
+  await page.keyboard.press("Enter");
+
   const sameRecovery = (url: URL) => url.pathname === recoveryPath;
   let denyFirstRead = false;
   await page.route(sameRecovery, async route => {
@@ -95,6 +120,7 @@ export async function corePreviewParkRecoveryJourney(page: Page, info: TestInfo,
   expect(submissions).toBe(1);
   await expect(action).toHaveCount(0);
   await expect(cleared).toBeFocused();
+  await expect(details).toHaveCount(0);
   await page.unroute(sameRecovery);
   await capture(page, info, "park-recovered");
   const continued = await continueRun();
@@ -112,6 +138,7 @@ export async function corePreviewParkRecoveryJourney(page: Page, info: TestInfo,
   await capture(page, info, "park-run-completed");
   await receipt(info, "park-recovery.json", { runId: started.workflowExecutionId,
     authorization: "browser visibility after controlled 403; actual server grants qualified by #6039",
+    inspectedPark: { deliveryCount: evidence.deliveries.length, openedByKeyboard: true, narrowWidth: 390, hiddenAfterRecovery: true },
     stale: 409, admitted: 202, confirmationReadRetried: failedConfirmation, submissions,
     committed: "NotParked", continued: responseBody, terminal: "Completed" });
 }
