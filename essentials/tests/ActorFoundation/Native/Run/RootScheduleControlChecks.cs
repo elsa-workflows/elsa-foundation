@@ -132,7 +132,8 @@ internal static class RootScheduleControlChecks
             var reply = await ingress.RequestAsync(scope, new Contract.Target.Event(HeldEventActor.EventKey),
                 "managed-profile-held-event", Contract.Kinds.Event, null, null,
                 new Contract.RequestOptions(null, now + 5000), token);
-            Require(reply is { Channel: "managed-event", Error: null }, "the managed profile replies to a public held event");
+            Require(reply is { Channel: "managed-event", Error: null },
+                $"the managed profile replies to a public held event (channel {reply.Channel}, error {reply.Error})");
         }
         await UntilAsync(() => Task.FromResult(acceptor.Offers.Any(offer => offer.Schedule == reference && offer.Authority == "first")));
         Require(await Apply(5, Control.Set, Header(5, "second")) == new Contract.ScheduleControlResult(Outcome.Applied, reference),

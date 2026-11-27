@@ -14,7 +14,9 @@ internal sealed partial class SqliteRootAdmission
         return InAdmissionTransactionAsync(async (db, ct) =>
         {
             if (!db.UsesRootScheduleSettlement) throw new NotSupportedException("The profile does not confirm scheduled workflow retirement.");
-            if (requireLineage && !db.UsesRootScheduleLineage) return false;
+            if (requireLineage && (!db.UsesRootScheduleLineage || await RootScheduleInventory.FindAsync(db, tenant, occurrence.Schedule,
+                    RootScheduleInventory.RequireActorType(scheduleActorType), ct) != occurrence.ScheduleReference))
+                return false;
             var issuer = await ReadIssuerAsync(db, ct);
             var birth = ScheduledWorkflowBirth.Create(tenant, occurrence, pinnedWorkflow, issuer.Key, issuer.Partitions);
             return birth.Reference == actorReference && await birth.IsRetiredAsync(db, tenant, ct);

@@ -296,7 +296,12 @@ internal static class RootScheduleInventoryChecks
             () => RetiredAsync(nextOccurrence, nextActor.Id), token);
         Require(!await RetiredAsync(nextOccurrence, first.Actor.Value.Id),
             "retirement proof is tied to the exact occurrence birth");
-        if (!db.UsesRootScheduleLineage)
+        if (db.UsesRootScheduleLineage)
+        {
+            var unbound = nextOccurrence with { Schedule = new(timer.Definition + "-other", timer.Key + "-other") };
+            Require(!await RetiredAsync(unbound, nextActor.Id), "the hosted retirement proof requires the exact bound schedule key");
+        }
+        else
             Require(!await relay.ConfirmRetiredAsync(Wire(nextOccurrence), new(pinned.Model, pinned.Definition, pinned.Input), nextActor, token),
                 "a profile that can prove only the root cannot release a hosted occurrence");
         var messageCount = await db.Messages.CountAsync(token);

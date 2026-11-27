@@ -25,6 +25,10 @@ internal sealed partial class PostgresRootAdmission
         await using var transaction = await db.Database.BeginTransactionAsync(db.UsesRootScheduleLineage
             ? System.Data.IsolationLevel.ReadCommitted : System.Data.IsolationLevel.RepeatableRead, token);
         var pin = await PinScheduleStoreAsync(db, writing: false, token, loadIssuer: true);
+        if (requireLineage && await RootScheduleInventory.FindAsync(db, tenant, occurrence.Schedule,
+                RootScheduleInventory.RequireActorType(scheduleActorType), token, query => BindOccurrenceSource(query, pin, lineage: true))
+            != occurrence.ScheduleReference)
+            return false;
         var issuer = pin.Issuer ?? throw new StoreFormatException("The pinned root store has no issuer.");
         var birth = ScheduledWorkflowBirth.Create(tenant, occurrence, pinnedWorkflow, issuer.Key, issuer.Partitions);
         if (birth.Reference != actorReference) return false;
