@@ -56,6 +56,7 @@ internal sealed class KernelWorkflowInstanceDeletionService(
         for (var attempt = 0; attempt < 3; attempt++)
         {
             var run = await runs.GetAsync(workflowExecutionId, cancellationToken) ?? throw new RuntimeResourceMissingSignal();
+            if (run.IsolatedReads is not null) throw new RuntimeResourceMissingSignal();
             if (run.View is not { } view)
                 return await services.GetRequiredService<WorkflowInstanceDeletionService>().DeleteAsync(workflowExecutionId, cancellationToken);
 

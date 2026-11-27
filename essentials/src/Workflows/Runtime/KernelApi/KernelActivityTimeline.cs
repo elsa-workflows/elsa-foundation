@@ -24,6 +24,7 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
         if (run.Header is not { } header || !Supports(header))
             return upperRevision is null ? new Snapshot(result, null) : null;
 
+        var source = run.IsolatedReads ?? runs;
         var frames = new Dictionary<string, JournalFrame>(StringComparer.Ordinal);
         var scheduled = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
         long sequence = 0;
@@ -35,7 +36,7 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
         var finished = false;
         while (!finished)
         {
-            var page = await runs.TailAsync(actor, from, cancellationToken);
+            var page = await source.TailAsync(actor, from, cancellationToken);
             if (from is null)
             {
                 if (page.JournalHeadRevision is { } head)
@@ -75,8 +76,8 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
         }
 
         // A retired run may lose its journal while pages are being read.
-        if ((await runs.GetAsync(actor, cancellationToken)).Run is not { } current ||
-            current.Run.Workflow != header.Workflow)
+        if ((await source.GetAsync(actor, cancellationToken)).Run is not { } current ||
+            current.Run.Workflow != header.Workflow || current.Run.TestStart != header.TestStart)
             return null;
 
         foreach (var recorded in frames.Values)

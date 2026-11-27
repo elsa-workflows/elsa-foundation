@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
     <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

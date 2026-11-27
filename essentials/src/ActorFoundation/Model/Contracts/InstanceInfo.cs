@@ -16,4 +16,8 @@ public sealed record InstanceInfo(ActorRef Ref, string Tenant, string Model, str
     /// <summary>The publishing host's optional exact executable identity for this run.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ExecutableSelection { get; init; }
+
+    /// <summary>The exact isolated authoring scope when the workflow host admitted a Test Run.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TestScopeId { get; init; }
 }

@@ -1,10 +1,16 @@
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>Protects a Runtime executable before Foundation can commit the corresponding actor birth.</summary>
 public sealed record RuntimeKernelExecutablePin(PersistenceScope Scope, string Tenant, string ActorReference,
-    WorkflowExecutableIdentity Executable, string Issuance);
+    WorkflowExecutableIdentity Executable, string Issuance)
+{
+    /// <summary>The isolated provider tenant of a Test Run. <see cref="Tenant"/> remains its owning Runtime tenant.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? IsolatedTenant { get; init; }
+}
 
 /// <summary>Open pins from one physical scope, in stable cursor order.</summary>
 public sealed record RuntimeKernelExecutablePinPage(IReadOnlyList<RuntimeKernelExecutablePin> Items, string? Next);
@@ -33,6 +39,13 @@ public interface IRuntimeKernelExecutablePinStore
     ValueTask<bool> TryPinPublishedAsync(RuntimeKernelExecutablePin pin, WorkflowActivationSlot slot,
         WorkflowExecutableSourceReference source, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<bool>(new NotSupportedException("The Runtime provider does not fence published executable pins."));
+
+    /// <summary>Protects one prepared test root and verifies its live source and open exact test scope in the same transaction.</summary>
+    /// <remarks>The selected binding must remain unchanged. A caller proposing a different actor must first prove
+    /// that the previously observed issuance is permanently disarmed.</remarks>
+    ValueTask<bool> TryPinTestRunAsync(RuntimeKernelExecutablePin pin, WorkflowTestScope scope,
+        WorkflowExecutableSourceReference source, WorkflowTestRunActorBinding? observedBinding, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<bool>(new NotSupportedException("The Runtime provider does not fence Test Run executable pins."));
 
     /// <summary>Returns the inclusive upper cursor for this cleanup pass, or null when there are no open pins.</summary>
     ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken cancellationToken = default);
