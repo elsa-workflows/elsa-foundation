@@ -57,6 +57,8 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat SqliteParkArrivalsQualification => Current with { MessageProtocol = 85 };
     internal static StoreFormat PostgresRootChildrenQualification => Current with { MessageProtocol = 111 };
     internal static StoreFormat RootDueBacklogQualification => Current with { MessageProtocol = 110 };
+    internal static StoreFormat RootTerminalOutputQualification => new(3, 112, 1);
+    internal static StoreFormat RootS6TerminalOutputQualification => new(3, 113, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -65,7 +67,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 28 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 29 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -100,7 +102,8 @@ internal enum RootCapabilities
     ParkRecovery = 1 << 20,
     DueBacklog = 1 << 21,
     TimerRearm = 1 << 22,
-    Children = 1 << 23
+    Children = 1 << 23,
+    TerminalOutput = 1 << 24
 }
 
 internal static class RootProfiles
@@ -130,11 +133,14 @@ internal static class RootProfiles
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
-    internal const RootCapabilities Shipped = TimerRearmQualification | RootCapabilities.DueBacklog;
+    internal const RootCapabilities Shipped = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
 
     internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
     internal const RootCapabilities SelfTimedParkQualification = ParkRecoveryComposition | RootCapabilities.SelfProtocol | RootCapabilities.Timers;
     internal const RootCapabilities TimerRearmQualification = SelfTimedParkQualification | RootCapabilities.TimerRearm;
+    // Protocol 112 was qualified before the S6 timers and rearming capability.
+    internal const RootCapabilities TerminalOutputQualification = ParkRecoveryComposition | RootCapabilities.TerminalOutput;
+    internal const RootCapabilities S6TerminalOutputQualification = TimerRearmQualification | RootCapabilities.TerminalOutput;
 
     // Each format and the closed capability set its profile carries.
     internal static IReadOnlyDictionary<StoreFormat, RootCapabilities> Formats { get; } = new Dictionary<StoreFormat, RootCapabilities>
@@ -188,7 +194,8 @@ internal static class RootProfiles
         [RootCapabilities.ParkInspection] = RootCapabilities.ParkOpening,
         [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
         [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol,
-        [RootCapabilities.TimerRearm] = ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery
+        [RootCapabilities.TimerRearm] = ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery,
+        [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -301,7 +308,7 @@ public sealed partial class EfStore
     {
         var (stored, definitions) = await ReadVersionMarkersAsync(db, formatLock, token);
         // A locked read can wait for a concurrent change. Re-sample both rows after the lock on the same transaction.
-        if ((db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootDueBacklog || db.UsesRootChildren) &&
+        if (db.SeparateRootFormatLock &&
             formatLock != FormatLock.None && db.Database.IsNpgsql())
             (stored, definitions) = await ReadVersionMarkersAsync(db, FormatLock.None, token);
         RequireSnapshotFormat(db, stored.StoreSchema, stored.MessageProtocol, stored.JournalCodec,
@@ -371,12 +378,16 @@ internal static class StoreDefinitionsRevision
     private const int PostgreSql = 1;
     private const int Sqlite = 2;
     private const int LegacyPostgreSqlRevision = 1;
-    private const int PostgreSqlRevision = 7;
+    private const int PostgreSqlRevision = 8;
     private const int PostgreSqlChildrenRevision = 9;
-    private const int SqliteRevision = 11;
+    private const int SqliteRevision = 12;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
+    private const int SqliteTerminalOutputRevision = 10;
+    private const int PostgreSqlTerminalOutputRevision = 6;
+    private const int SqliteS6TerminalOutputRevision = 11;
+    private const int PostgreSqlS6TerminalOutputRevision = 7;
 
     internal static StoreVersionEntity? Seed(KernelDb db)
     {
@@ -384,7 +395,7 @@ internal static class StoreDefinitionsRevision
             (db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification || db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ||
                 db.RequiredFormat == StoreFormat.RootSelfTimedQualification || db.RequiredFormat == StoreFormat.RootSelfTimedParkQualification ||
                 db.RequiredFormat == StoreFormat.RootTimerRearmQualification);
-        if (db.RequiredFormat != StoreFormat.RootShipped && !sqliteQualification && !db.UsesRootDueBacklog && !db.UsesRootChildren) return null;
+        if (!db.SeparateRootFormatLock && !sqliteQualification) return null;
         var sqlite = db.Database.IsSqlite();
         return new StoreVersionEntity
         {
@@ -395,6 +406,8 @@ internal static class StoreDefinitionsRevision
                 _ when sqliteQualification => db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ? SqliteParkRecoverRevision : 1,
                 _ when db.RequiredFormat == StoreFormat.RootDueBacklogQualification => sqlite ? SqliteDueBacklogRevision : PostgreSqlDueBacklogRevision,
                 _ when db.RequiredFormat == StoreFormat.PostgresRootChildrenQualification => PostgreSqlChildrenRevision,
+                _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
+                _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision
             },
             JournalCodec = 0

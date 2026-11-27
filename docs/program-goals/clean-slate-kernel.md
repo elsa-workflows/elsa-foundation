@@ -390,8 +390,46 @@ owner's node row is live. Record the floor this produces.
 
 The [PostgreSQL prototype rehearsal](../../prototypes/kernel-model/README.md#postgresql-different-version-rehearsal)
 uses separate runtime builds and checks the physical rows after each refusal. Its tested rollback floor
-is `6f38d98648` for the ordinary relational format (3, 2, 1). Shipped provider profiles and the published
-release floor remain K12 qualification items.
+is `6f38d98648` for the ordinary relational format (3, 2, 1).
+
+The [PostgreSQL shipped compatibility rehearsal](../../essentials/tests/ActorFoundation/Native/Run/check-postgres-shipped-compatibility.sh)
+builds the shipped format 27 runtime at `fad467643e` and the shipped format 28 runtime at `8b97c31d01`.
+The test creates disposable databases on PostgreSQL 17 and runs both fence modes using the shipped partition count.
+While each owner is live, the other runtime refuses install, startup, take, sweep, projection, Foundation open
+and journal access. The existing owner commits again at the same epoch. Schema and persisted-row fingerprints
+match after each refusal, with live heartbeat timestamps excluded.
+
+The fixture stops the old owner and creates an empty protocol 28 database under the pre-GA recreation policy.
+The compatible floor runs in a new process at the next ownership epoch. It resumes the same actor without
+changing its prior journal rows and confirms compatible projection, sweep and reads.
+This is a tested PostgreSQL floor at `3/28/1` and definitions `1/7/0`.
+
+```sh
+bash essentials/tests/ActorFoundation/Native/Run/check-postgres-shipped-compatibility.sh
+```
+
+The [SQLite shipped compatibility rehearsal](../../essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibility.sh)
+builds the actual format 26 runtime at `92c54ac879` and the format 27 runtime at `fad467643e` from pinned archives.
+It uses disposable files and runs the checked and in-batch fences. The candidate installer refuses while the old
+process holds the file. The old owner then commits again at the same epoch. Once the old owner stops, the candidate
+refuses its file on the stored marker. The rehearsal installs a separate empty candidate file under the pre-GA recreation
+policy.
+
+The prior startup, installer, sweeper, projected actor-list read and journal read refuse the closed candidate file.
+SQLite maintains its shipped actor-list projection in the owner’s transaction, so the rehearsal exercises the projected
+read instead of starting a separate projector. Fingerprints cover the schema and persisted rows after each refusal.
+After the candidate owner stops, a separate process runs the pinned format 27 build as the compatibility floor. It reopens
+the file and advances the same actor with the earlier physical journal rows intact. The script prints source revisions,
+provider assembly hashes and the retained receipt directory.
+
+Run the pinned 26 to 27 rehearsal from a checkout that includes the fixture:
+
+```sh
+bash essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibility.sh
+```
+
+This is a tested SQLite floor for family versions 3/27/1 and definitions 2/10/0.
+Published rollback floors for both providers remain a release qualification item.
 
 ## Gate 2 review: counterexamples and answers
 

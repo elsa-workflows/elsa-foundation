@@ -13,6 +13,13 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["workbench-terminal-output", var outputsProvider and ("sqlite" or "postgres"), var outputsWorkbench, .. var outputMode] &&
+    outputMode is ([] or ["s6"] or ["shared"]))
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunTerminalOutputAsync(outputsWorkbench,
+        outputsProvider == "postgres", withTimers: outputMode is ["s6"] or ["shared"], shared: outputMode is ["shared"]);
+    return 0;
+}
 if (args is ["sqlite-workbench-core-preview", var workbench])
     return await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunSqliteAsync(workbench);
 if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
@@ -29,6 +36,7 @@ if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
 if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, .. var readsProfile] && readsProfile is ([] or ["timed"]))
     return await PostgresCorePreviewReadSeed.RunAsync(originalRoot, seedFile, timed: readsProfile.Length != 0);
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
+if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
 if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"), var backlogFence and ("checked" or "in-batch")])
     return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
 if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or "sqlite"), var pressureFence and ("checked" or "in-batch")])

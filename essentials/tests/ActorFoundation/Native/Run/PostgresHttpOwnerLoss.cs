@@ -1,7 +1,6 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Native;
@@ -22,7 +21,6 @@ internal static class PostgresHttpOwnerLoss
     private const string Receiver = "http-owner-loss-receiver";
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(6);
     private sealed record LeaseImage(string Owner, long Epoch, long Position, long Until, long Now);
-    private sealed record Carrier(string Node, Reply Reply);
 
     internal static async Task<int> RunAsync(string fence, string loss)
     {
@@ -37,6 +35,12 @@ internal static class PostgresHttpOwnerLoss
         await admission.InstallAsync(stop);
         var scope = EmbeddedTenant.Bind(Tenant);
         var receiver = new PostgresDirectRequests(admission, store, Receiver);
+        var arrivals = new ConcurrentQueue<Reply>();
+        await using var carrier = await LiveCarrier.OpenAsync(open, Receiver, reply =>
+        {
+            arrivals.Enqueue(reply);
+            ((IReplyTransport)receiver).Send(Receiver, reply);
+        }, stop);
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType, directRequests: receiver);
         var start = await new WorkflowRuntime(api, api).StartAsync(scope, "order",
@@ -125,34 +129,30 @@ internal static class PostgresHttpOwnerLoss
 
         await standby.SendAsync($"approve {pending.InboxKey.Id}", stop);
         var emitted = 0;
-        var accepted = 0;
         while (true)
         {
             var line = await standby.ReadAsync(stop);
-            if (!line.StartsWith("reply ", StringComparison.Ordinal))
+            if (line != "reply-queued")
             {
                 Require(line == (after ? "checkpoint 2 0" : "checkpoint 2 1"), $"Unexpected surviving owner outcome: {line}");
                 break;
             }
 
             emitted++;
-            var carrier = Json.Read<Carrier>(line["reply ".Length..]);
-            var reply = carrier.Reply.Item is JsonElement item
-                ? carrier.Reply with { Item = JsonNode.Parse(item.GetRawText()) } : carrier.Reply;
             Require((await ImageAsync()).Revision == 2 && (await PendingAsync()).Count == 0,
                 "The successor's reply must follow the committed checkpoint and disposition.");
-            if (await receiver.ReceiveAsync(carrier.Node, reply, stop)) accepted++;
         }
         if (timely)
         {
             var (answered, completedAt) = await response.WaitAsync(stop);
             using (answered)
                 Require(answered.StatusCode == HttpStatusCode.Accepted && completedAt < replyRoute.Deadline &&
-                    await answered.Content.ReadAsStringAsync(stop) == "approved" && emitted > 0 && accepted == 1,
+                    await answered.Content.ReadAsStringAsync(stop) == "approved" && emitted == 1 &&
+                    arrivals.ToArray() is [{ Request: var registration }] && registration == replyRoute.Request,
                     "The successor must deliver exactly one response to the original HTTP connection before its deadline.");
         }
         else
-            Require(emitted == 0 && accepted == 0, "The successor must send no output to an expired or already-settled request.");
+            Require(emitted == 0 && arrivals.IsEmpty, "The successor must send no output to an expired or already-settled request.");
 
         var final = await ImageAsync();
         var suffix = await api.TailAsync(scope, actor, bookmark, stop);
@@ -165,6 +165,7 @@ internal static class PostgresHttpOwnerLoss
         Require(settled.Done && settled.ReplyTo is null, "The exact input must settle and clear its live reply route.");
         await standby.SendAsync("stop", stop);
         await standby.ExpectExitAsync(stop);
+        carrier.RequireHealthy();
         Console.WriteLine($"ok PostgreSQL HTTP owner loss {fence} {loss}: processes {original.Id}->{standby.Id}, epochs {firstEpoch}->{secondEpoch}, HTTP {(timely ? 202 : 504)}, one approval revision.");
         return 0;
 
@@ -203,14 +204,16 @@ internal static class PostgresHttpOwnerLoss
         var open = OpenDatabase();
         var store = CreateStore(open, fence);
         var registry = new WorkflowRegistry().Add(PostgresHeldDirectChecks.Build());
+        var node = OwnerNode(Environment.ProcessId);
+        await using var carrier = await LiveCarrier.OpenAsync(open, node, _ => { }, stop);
         var turns = 0;
         var terminalPrepared = false;
         string? approvalId = null;
-        var (host, worker) = await PostgresHeldDirectChecks.PrepareAsync(store, OwnerNode(Environment.ProcessId), registry,
+        var (host, worker) = await PostgresHeldDirectChecks.PrepareAsync(store, node, registry,
             new WorkerOptions
             {
                 Lease = Lease,
-                Transport = new ProcessLink(() => ApprovalSettledAsync().GetAwaiter().GetResult()),
+                Transport = new ProcessLink(carrier.Relay, () => ApprovalSettledAsync().GetAwaiter().GetResult()),
                 OnTurn = (_, _, _) => turns++,
                 OnPreparedCheckpoint = (turn, _, _) =>
                 {
@@ -250,6 +253,8 @@ internal static class PostgresHttpOwnerLoss
                 Console.WriteLine($"checkpoint {revision} {turns}");
             }
         }
+        await carrier.Relay.FlushAsync(stop);
+        carrier.RequireHealthy();
         return 0;
 
         async Task<bool> ApprovalSettledAsync()
@@ -296,10 +301,44 @@ internal static class PostgresHttpOwnerLoss
 
     private static string OwnerNode(int pid) => $"http-owner-{pid}";
 
-    private sealed class ProcessLink(Func<bool> committed) : IReplyTransport
+    private sealed class ProcessLink(PostgresReplyRelay relay, Func<bool> committed) : IReplyTransport
     {
-        public void Send(string node, Reply reply) =>
-            Console.WriteLine(committed() ? "reply " + Json.Write(new Carrier(node, reply)) : "reply-before-commit");
+        public void Send(string node, Reply reply)
+        {
+            if (!committed()) { Console.WriteLine("reply-before-commit"); return; }
+            relay.Send(node, reply);
+            Console.WriteLine("reply-queued");
+        }
+    }
+
+    private sealed class LiveCarrier(PostgresReplyRelay relay, CancellationTokenSource lifetime, Task run, ConcurrentQueue<Exception> faults)
+        : IAsyncDisposable
+    {
+        internal PostgresReplyRelay Relay => relay;
+
+        internal static async Task<LiveCarrier> OpenAsync(Func<KernelDb> open, string node, Action<Reply> receive, CancellationToken stop)
+        {
+            var faults = new ConcurrentQueue<Exception>();
+            var relay = await PostgresReplyRelay.OpenAsync(open, node, receive, faults.Enqueue, stop);
+            var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            var carrier = new LiveCarrier(relay, lifetime, relay.RunAsync(lifetime.Token), faults);
+            try { await relay.ReadyAsync(stop); return carrier; }
+            catch { await carrier.DisposeAsync(); throw; }
+        }
+
+        internal void RequireHealthy()
+        {
+            if (faults.TryDequeue(out var error)) throw new InvalidOperationException("The real reply carrier failed.", error);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            using (lifetime)
+            {
+                await lifetime.CancelAsync();
+                await run;
+            }
+        }
     }
 
     private sealed class OwnerProcess(Process process) : IAsyncDisposable

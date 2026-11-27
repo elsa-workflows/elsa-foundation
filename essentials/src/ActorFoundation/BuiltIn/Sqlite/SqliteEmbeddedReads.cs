@@ -5,17 +5,22 @@ namespace Kernel.Foundation.Sqlite;
 
 public static partial class SqliteEmbeddedHosting
 {
-    internal static Contract.IActorReads CreateFoundationReads(string databasePath, int pageSize = 100)
+    internal static Contract.IActorReads CreateFoundationReads(string databasePath, int pageSize = 100, StoreFormat? terminalOutputFormat = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
         ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
         using var file = AcquireFile(databasePath);
-        return new SqliteEmbeddedReads(file.Path, pageSize);
+        return new SqliteEmbeddedReads(file.Path, pageSize, terminalOutputFormat);
     }
 
-    private sealed class SqliteEmbeddedReads(string path, int pageSize) : Contract.IActorReads
+    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? terminalOutputFormat)
+        : Contract.IActorReads, Contract.IActorTerminalOutputReads
     {
+        public ValueTask<Contract.ActorTerminalOutput?> ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+            long endedAt, bool includeValues, CancellationToken cancellationToken = default) =>
+            ReadAsync(reads => reads.ReadTerminalOutputAsync(scope, actor, endedAt, includeValues, cancellationToken), cancellationToken);
+
         public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor, CancellationToken cancellationToken = default) =>
             ReadAsync(reads => reads.GetAsync(scope, actor, cancellationToken), cancellationToken);
 
@@ -35,7 +40,7 @@ public static partial class SqliteEmbeddedHosting
         {
             token.ThrowIfCancellationRequested();
             using var file = AcquireFile(path);
-            KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions);
+            KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, terminalOutputFormat);
             await using var db = Open();
             await EfStore.RequireSqliteRootAdmissionAsync(db, token);
             await file.AdmissionDefinitions.RequireAsync(db, token);

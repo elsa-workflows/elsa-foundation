@@ -404,6 +404,8 @@ public sealed partial class EfStore
                 }
             }
             commands.Add(checkpoint);
+            if (turn.FoundationTerminalOutput is { } output)
+                commands.Add(new RootTerminalOutputCheckpoint(root, checkpoint.JournalRevision, output));
         }
         return (batch with { Turns = turns, Seen = [], Trial = [] },
             new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled,
@@ -427,6 +429,9 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
         if (turn.FoundationRootTimerRearms is not null && turn.FoundationRootOperator?.Kind != Kinds.Recover)
+            throw RootShape();
+        if (turn.FoundationTerminalOutput is not null &&
+            (turn.Row?.Status != InstanceStatus.Finished || turn.Delete || turn.OpensPark || turn.FoundationRootOperator is not null))
             throw RootShape();
         if (!postgres && (turn.FoundationKept is not null && !turn.OpensPark && _ordinaryRoots?.KeepsParkArrivals != true ||
             turn.FoundationRootOperator is { Kind: not (Kinds.Terminate or Kinds.Delete) } sqliteOperator &&
@@ -515,7 +520,8 @@ public sealed partial class EfStore
                 ? cascade : null,
             FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null,
             FoundationValues = values,
-            FoundationRootChildSends = turn.FoundationRootChildSends
+            FoundationRootChildSends = turn.FoundationRootChildSends,
+            FoundationTerminalOutput = turn.FoundationTerminalOutput
         };
         var supportedRow = new InstanceRow(row.Id, row.Model, row.Definition, row.Status, row.State, row.Revision,
             _rootChildReference is null ? null : row.Parent,
