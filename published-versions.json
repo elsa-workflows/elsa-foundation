@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "05b7abb77b00bcaeca45602c6b3d671e076f98f7",
+  "last_publish_commit": "3f6112766baeda1d3e2f18dbca3e7a4607ad91a4",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -1204,8 +1204,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.KernelApi",
-      "version": "4.0.6-preview",
-      "commit": "05b7abb77b00bcaeca45602c6b3d671e076f98f7"
+      "version": "4.0.7-preview",
+      "commit": "3f6112766baeda1d3e2f18dbca3e7a4607ad91a4"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.KernelHost",
