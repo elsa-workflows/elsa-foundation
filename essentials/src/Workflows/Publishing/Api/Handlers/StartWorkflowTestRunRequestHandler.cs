@@ -81,8 +81,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IRuntimeExecutionIdGenerator? executionIdGenerator = null,
     IServiceProvider? ambientServices = null,
     ITestRunRootCanceller? rootCanceller = null,
-    IWorkflowExecutionStateStore? executionStateStore = null,
-    IWorkflowDirectTestRunDispatcher? directTestRunDispatcher = null)
+    IWorkflowExecutionStateStore? executionStateStore = null)
     : IWorkflowTestRunStarter
 {
     public const string RequestedBy = "workflow-designer-test-run";
@@ -756,7 +755,10 @@ public sealed class StartWorkflowTestRunRequestHandler(
         await executableStore.SaveAsync(executable, cancellationToken);
 
         // Append the expiring TestRun Source Reference the dispatch gates on. Scope/expiry are reference facts now.
-        var directScopeId = directTestRunDispatcher is not null && triggerResolution.Trigger is null ? testRunId : null;
+        var directTestRunDispatcher = triggerResolution.Trigger is null
+            ? ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>()
+            : null;
+        var directScopeId = directTestRunDispatcher is not null ? testRunId : null;
         var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, draftLayout,
             directScopeId, cancellationToken);
         await rootWriteLeaseManager.ExecuteAsync(
