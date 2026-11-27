@@ -219,30 +219,7 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
     [InlineData(false, false)]
     public async Task Broad_and_publication_features_share_one_context_and_the_explicit_cache_policy(bool artifactsFirst, bool cacheEnabled)
     {
-        await using var host = CreateHost(blueprint: shell =>
-        {
-            void AddPublication() => shell.WithFeature(ArtifactsFeature, feature =>
-                    feature.WithSetting(nameof(RuntimeArtifactsEntityFrameworkCoreFeature.RecoveryContinuationSigningKey), RecoverySigningKey))
-                .WithFeature(PublicationFeature);
-
-            void AddBroad() => shell.WithFeature(FeatureName, feature => feature
-                .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.RecoveryContinuationSigningKey), RecoverySigningKey)
-                .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.HierarchyCursorSigningKey), HierarchySigningKey)
-                .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.CacheWorkflowExecutables), cacheEnabled)
-                .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.WorkflowExecutableCacheCapacity), 19));
-
-            shell.WithFeature(RuntimeEntityFrameworkCoreFeatureTests.RuntimeRootFeature.Name);
-            if (artifactsFirst)
-            {
-                AddPublication();
-                AddBroad();
-            }
-            else
-            {
-                AddBroad();
-                AddPublication();
-            }
-        });
+        await using var host = CreateHost(blueprint: shell => ComposeBoth(shell, artifactsFirst, cacheEnabled, RecoverySigningKey));
         var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         string[] expectedOrder = artifactsFirst ? [ArtifactsFeature, FeatureName] : [FeatureName, ArtifactsFeature];
         Assert.Equal(expectedOrder, shell.ServiceProvider.GetRequiredService<ShellSettings>().EnabledFeatures.Where(expectedOrder.Contains));
@@ -266,10 +243,47 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
         Assert.Equal(executable.Identity, (await store.FindAsync(executable.Identity.ArtifactId))?.Identity);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Broad_and_publication_features_refuse_conflicting_recovery_keys_in_either_order(bool artifactsFirst)
+    {
+        const string conflictingKey = "shared-runtime-conflicting-recovery-signing-key";
+        await using var host = CreateHost(blueprint: shell => ComposeBoth(shell, artifactsFirst, cacheEnabled: true, conflictingKey));
+        var registry = host.GetRequiredService<IShellRegistry>();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await registry.GetOrActivateAsync(ShellName));
+        Assert.Contains("requires one compatible recovery-continuation signing key", error.InnerException?.Message);
+    }
+
     public void Dispose()
     {
         foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(path);
+    }
+
+    private static void ComposeBoth(ShellBuilder shell, bool artifactsFirst, bool cacheEnabled, string artifactSigningKey)
+    {
+        void AddPublication() => shell.WithFeature(ArtifactsFeature, feature =>
+                feature.WithSetting(nameof(RuntimeArtifactsEntityFrameworkCoreFeature.RecoveryContinuationSigningKey), artifactSigningKey))
+            .WithFeature(PublicationFeature);
+
+        void AddBroad() => shell.WithFeature(FeatureName, feature => feature
+            .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.RecoveryContinuationSigningKey), RecoverySigningKey)
+            .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.HierarchyCursorSigningKey), HierarchySigningKey)
+            .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.CacheWorkflowExecutables), cacheEnabled)
+            .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.WorkflowExecutableCacheCapacity), 19));
+
+        shell.WithFeature(RuntimeEntityFrameworkCoreFeatureTests.RuntimeRootFeature.Name);
+        if (artifactsFirst)
+        {
+            AddPublication();
+            AddBroad();
+        }
+        else
+        {
+            AddBroad();
+            AddPublication();
+        }
     }
 
     private ServiceProvider CreateHost(IReadOnlyDictionary<string, string?>? features = null, Action<ShellBuilder>? blueprint = null)
