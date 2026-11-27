@@ -11,6 +11,7 @@ using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa3.Activities.Design.Import;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -149,13 +150,24 @@ public sealed class SchemaWriteRefusalMappingGuardTests
             .Where(type =>
             {
                 var services = new ServiceCollection();
+                DirectoryInfo? kernelDirectory = null;
                 try
                 {
-                    ((IShellFeature)Activator.CreateInstance(type)!).ConfigureServices(services);
+                    var feature = (IShellFeature)Activator.CreateInstance(type)!;
+                    if (feature is WorkflowsRuntimeKernelHostingFeature kernel)
+                    {
+                        kernelDirectory = Directory.CreateTempSubdirectory(nameof(SchemaWriteRefusalMappingGuardTests));
+                        kernel.SqlitePath = Path.Combine(kernelDirectory.FullName, "kernel.db");
+                    }
+                    feature.ConfigureServices(services);
                 }
                 catch (InvalidOperationException exception) when (!typeof(IWebShellFeature).IsAssignableFrom(type))
                 {
                     unconfigurable.Add($"{type.FullName}: {exception.Message}");
+                }
+                finally
+                {
+                    kernelDirectory?.Delete(recursive: true);
                 }
                 return services.Any(registration => registration.IsKeyedService && failureContracts.Contains(registration.ServiceType));
             })
