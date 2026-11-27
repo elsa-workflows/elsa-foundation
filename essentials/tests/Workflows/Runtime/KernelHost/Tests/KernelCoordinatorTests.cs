@@ -838,6 +838,25 @@ public sealed class KernelCoordinatorTests
         Assert.Equal("admitted-run", Assert.Single(answer.Headers).Value);
     }
 
+    [Theory]
+    [InlineData(Kernel.Foundation.Contracts.RefusalReason.RateLimited, 429)]
+    [InlineData(Kernel.Foundation.Contracts.RefusalReason.NodeBusy, 503)]
+    [InlineData(Kernel.Foundation.Contracts.RefusalReason.InboxFull, 503)]
+    public void The_edge_returns_pressure_with_a_retry_delay(Kernel.Foundation.Contracts.RefusalReason reason, int status)
+    {
+        var reply = new Kernel.Foundation.Contracts.Reply(null, null, Error: reason.ToString())
+        {
+            RefusalReason = reason,
+            RetryAfter = TimeSpan.FromMilliseconds(1_250)
+        };
+
+        var answer = KernelHttpEdge.Answer(reply);
+
+        Assert.Equal(status, answer.StatusCode);
+        Assert.Equal("2", answer.Headers["Retry-After"]);
+        Assert.False(answer.Headers.ContainsKey(KernelHttpEdge.WorkflowInstanceIdHeader));
+    }
+
     [Fact]
     public async Task A_host_workflow_serves_beside_the_publications_and_its_route_conflicts_are_refused()
     {

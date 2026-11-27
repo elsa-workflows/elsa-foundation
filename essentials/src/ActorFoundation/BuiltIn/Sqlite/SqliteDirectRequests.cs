@@ -10,7 +10,7 @@ public static partial class SqliteEmbeddedHosting
     // Share this edge with ingress and the running owner, including admissions made before it starts.
     // A successor can recover durable work through a different edge. An earlier wait may then time out.
     internal static SqliteDirectRequests CreateRequests(string databasePath, string node, string actorType,
-        TimeSpan? deduplicationWindow = null)
+        TimeSpan? deduplicationWindow = null, RootAdmissionPressure? pressure = null)
     {
         RequireFoundationActorType(actorType);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -19,7 +19,9 @@ public static partial class SqliteEmbeddedHosting
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         using var file = AcquireFile(databasePath);
-        return new(file.Path, node, actorType, window);
+        using var db = KernelDb.ForSqliteRootShipped(file.Options);
+        if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
+        return new(file.Path, node, actorType, window, pressure);
     }
 
     internal sealed class SqliteDirectRequests : IReplyTransport
@@ -30,14 +32,17 @@ public static partial class SqliteEmbeddedHosting
         private readonly Admission admission;
         private readonly HeldRootRequests edge;
 
-        internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window)
+        internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window,
+            RootAdmissionPressure? pressure = null)
         {
             (this.path, this.node, this.actorType, DeduplicationWindow) = (path, node, actorType, window);
+            Pressure = pressure;
             admission = new(this, path, window);
             edge = new(admission, node, actorType);
         }
 
         internal TimeSpan DeduplicationWindow { get; }
+        internal RootAdmissionPressure? Pressure { get; }
 
         internal void RequireBinding(string databasePath, string configuredType, string? owner = null)
         {
@@ -108,15 +113,18 @@ public static partial class SqliteEmbeddedHosting
             }
 
             public Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token) =>
-                WriteAsync((admission, ct) => admission.StartRequestAsync(request, spec, ct), token);
+                WriteAsync(request.Tenant, RootAdmissionKind.Start, (admission, attempt, ct) =>
+                    admission.StartRequestAsync(request, spec, ct, attempt), token);
 
             public Task<HeldRootAdmission> SendAsync(HeldRootRequest request, string reference, string kind, string? payload,
                 CancellationToken token) =>
-                WriteAsync((admission, ct) => admission.SendRequestAsync(request, reference, kind, payload, ct), token);
+                WriteAsync(request.Tenant, RootAdmissionKind.Input, (admission, attempt, ct) =>
+                    admission.SendRequestAsync(request, reference, kind, payload, ct, attempt), token);
 
             internal Task<Contract.Admission?> OperateAsync(Contract.ActorRef actor, string kind, Contract.OperatorCommand command,
                 HeldRootRequest request, CancellationToken token) =>
-                WriteAsync((admission, ct) => admission.OperateHeldAsync(actor, kind, command, request, ct), token);
+                WriteAsync(request.Tenant, RootAdmissionPressure.Operator(kind), (admission, attempt, ct) =>
+                    admission.OperateHeldAsync(actor, kind, command, request, ct, attempt), token);
 
             public async ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token)
             {
@@ -132,26 +140,31 @@ public static partial class SqliteEmbeddedHosting
             }
 
             private SqliteRootAdmission ForFile(FileLease file) =>
-                new(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+                CreateAdmission(file, window, owner.Pressure);
 
-            private async Task<T> WriteAsync<T>(Func<SqliteRootAdmission, CancellationToken, Task<T>> admit, CancellationToken token)
+            private async Task<T> WriteAsync<T>(string tenant, RootAdmissionKind kind,
+                Func<SqliteRootAdmission, RootAdmissionPressure.Attempt?, CancellationToken, Task<T>> admit, CancellationToken token)
             {
                 // SQLite waits synchronously for BEGIN IMMEDIATE. Keep the caller's wait cancellable and give the
                 // background operation its own leases so it can roll back after the caller has gone.
                 var write = Task.Run(async () =>
                 {
+                    using var attempt = owner.Pressure?.Begin(tenant, kind);
                     while (true)
                     {
                         token.ThrowIfCancellationRequested();
                         try
                         {
                             using var file = AcquireFile(path, requests: owner);
-                            await file.ReplyWrites.WaitAsync(token);
-                            try { return await admit(ForFile(file), token); }
-                            finally { file.ReplyWrites.Release(); }
+                            if (attempt?.IsBusy == true) return await admit(ForFile(file), attempt, token);
+                            var lane = attempt is not null && kind == RootAdmissionKind.ShedLoad ? file.ReplyOperatorWrites : file.ReplyWrites;
+                            await lane.WaitAsync(token);
+                            try { return await admit(ForFile(file), attempt, token); }
+                            finally { lane.Release(); }
                         }
                         catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
                         {
+                            attempt?.RolledBack();
                             await Task.Delay(25, token); // SQLITE_BUSY or SQLITE_LOCKED, with the original deadline.
                         }
                     }

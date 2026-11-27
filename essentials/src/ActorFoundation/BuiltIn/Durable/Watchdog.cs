@@ -138,6 +138,9 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
         watchdog.RunAsync("published backlog", cancellationToken, token => ((IDueBacklogStore)inner).ReadPublishedDueBacklogAsync(partition, token));
     ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken) =>
         watchdog.RunAsync("backlog", cancellationToken, token => ((IDueBacklogStore)inner).CountDueBacklogAsync(partition, cap, token));
+    ValueTask<IReadOnlyList<DueBacklogSample>> IDueBacklogStore.SampleDueBacklogAsync(IReadOnlyList<DueBacklogRead> reads, int cap,
+        CancellationToken cancellationToken) =>
+        watchdog.RunAsync("backlog sample", cancellationToken, token => ((IDueBacklogStore)inner).SampleDueBacklogAsync(reads, cap, token));
 
     // The owner path, watched.
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>

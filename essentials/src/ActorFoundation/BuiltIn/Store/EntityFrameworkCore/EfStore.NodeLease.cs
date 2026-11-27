@@ -200,7 +200,9 @@ public sealed partial class EfStore
         if (inside is not null) return new NodeBeat(owned, now, inside);
         await using var read = create();
         await using var pinned = await BeginPinnedRootOperationAsync(read, cancellationToken);
-        return new NodeBeat(owned, now, await MembershipAsync(read, now, window, cancellationToken));
+        var cluster = await MembershipAsync(read, now, window, cancellationToken);
+        await RefreshAdmissionPressureAsync(read, cluster.Nodes, cancellationToken);
+        return new NodeBeat(owned, now, cluster);
     }
 
     /// <summary>
