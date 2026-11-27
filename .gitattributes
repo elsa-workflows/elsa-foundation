@@ -13,3 +13,6 @@
 
 # The migration report template is embedded as is; LF keeps report.html identical across platforms (spec 1237).
 /extensions/Elsa3/src/Migration/Tooling/Report/report.html text eol=lf
+
+# The spec 1237 fixture export: export.zip holds byte copies of these files.
+/extensions/Elsa3/tests/Migration/Fixtures/export/** -text
