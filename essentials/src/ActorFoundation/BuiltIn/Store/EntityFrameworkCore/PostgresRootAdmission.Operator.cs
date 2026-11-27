@@ -352,6 +352,10 @@ internal sealed partial class PostgresRootAdmission
         {
             // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
             var receipts = db.UsesRootOperatorProtocol;
+            var childLedger = db.UsesRootChildren;
+            var lockTables = receipts ? ParkRecoverySources : ParkSources;
+            if (childLedger)
+                lockTables = lockTables.Replace("IN ACCESS SHARE MODE", ", \"FoundationRootChildCascades\" IN ACCESS SHARE MODE", StringComparison.Ordinal);
             var pin = new NpgsqlBatchCommand("""
                 SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident($1) || ',pg_temp', true)
                 """);
@@ -361,26 +365,30 @@ internal sealed partial class PostgresRootAdmission
                 FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
                     ('"Instances"'), ('"Messages"'), ('"Partitions"'), ('"Nodes"'), ('"Journal"'), ('"Subscriptions"'),
                     ('"FoundationDirectReceipts"'), ('"FoundationActorList"'), ('"FoundationRootReceipts"'), ('"Events"'),
-                    ('"FoundationOperatorReceipts"')) required(name)
+                    ('"FoundationOperatorReceipts"'), ('"FoundationRootChildCascades"')) required(name)
                 JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name) AND c.relkind = 'r'
                 JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = $2
-                WHERE $3 OR required.name <> '"FoundationOperatorReceipts"'
+                WHERE ($3 OR required.name <> '"FoundationOperatorReceipts"')
+                    AND ($4 OR required.name <> '"FoundationRootChildCascades"')
                 """);
-            validate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = receipts ? 14 : 13 });
+            validate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = (receipts ? 14 : 13) + (childLedger ? 1 : 0) });
             validate.Parameters.Add(new NpgsqlParameter<string> { TypedValue = source });
             validate.Parameters.Add(new NpgsqlParameter<bool> { TypedValue = receipts });
+            validate.Parameters.Add(new NpgsqlParameter<bool> { TypedValue = childLedger });
 
             // Resolve the lock targets after the local search_path changes. Verify their physical schema while locked.
             var transaction = (NpgsqlTransaction)db.Database.CurrentTransaction!.GetDbTransaction();
             await using var batch = new NpgsqlBatch(transaction.Connection, transaction);
             batch.BatchCommands.Add(pin);
-            batch.BatchCommands.Add(new(receipts ? ParkRecoverySources : ParkSources));
+            batch.BatchCommands.Add(new(lockTables));
             batch.BatchCommands.Add(validate);
             if (db.Database.GetCommandTimeout() is { } timeout)
                 batch.Timeout = timeout;
             await using var reader = await batch.ExecuteReaderAsync(token);
             if (!await reader.NextResultAsync(token) || !await reader.ReadAsync(token) || !reader.GetBoolean(0))
-                throw new StoreFormatException("Park requires the source tables in the marker schema.");
+                throw new StoreFormatException(childLedger
+                    ? "The child profile requires its source tables in the marker schema."
+                    : "Park requires the source tables in the marker schema.");
             return;
         }
         await db.Database.ExecuteSqlInterpolatedAsync($"""

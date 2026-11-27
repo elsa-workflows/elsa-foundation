@@ -294,6 +294,7 @@ public sealed class TurnOutcome(string instance)
     public List<InboxKey> Cancelled = [];
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls;
     internal IReadOnlyList<FoundationValue>? FoundationValues;
+    internal IReadOnlyList<Message>? FoundationRootChildSends;
     internal TerminalOutput? FoundationTerminalOutput;
     public List<Message> Sent = [];
     public HashSet<InboxKey> Fresh = [], Volatile = [];
@@ -463,15 +464,19 @@ public sealed class DurableTurn
         return id;
     }
 
-    internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
+    internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt) =>
+        SendFromActor(store.MessageHandle, target, targetCreation, kind, payload, dueAt, rootChild: false);
+
+    internal string SendFromActor(Func<string, string> issue, InstanceRef target, long targetCreation, string kind, string? payload,
+        long? dueAt, bool rootChild)
     {
         Kinds.RequireApplicationSend(kind);
         if (target == Actor && targetCreation == _input.Creation)
-            return SendToSelf(store.MessageHandle, kind, payload, dueAt);
+            return SendToSelf(issue, kind, payload, dueAt);
         var issued = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal++:D4}");
-        var id = store.MessageHandle("send:" + issued);
+        var id = issue("send:" + issued);
         _sent.Add(new Message(id, target, kind, payload, Id, Due: dueAt, TargetCreation: targetCreation, SenderCreation: _input.Creation)
-            { ActorAuthored = true, StorageId = Origin + "#" + id }.AsIssued());
+            { ActorAuthored = true, StorageId = Origin + "#" + id, FoundationRootChildInput = rootChild }.AsIssued());
         return id;
     }
 

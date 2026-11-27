@@ -8,7 +8,8 @@ public sealed partial class EfStore
     internal static Task InstallFirstRootCheckpointsAsync(KernelDb db, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlRawAsync(RenderPostgresFirstRootGuards(db), cancellationToken);
 
-    internal static string RenderPostgresFirstRootGuards(KernelDb db) => RenderRootGuards(db, PostgresFirstRootGuards);
+    internal static string RenderPostgresFirstRootGuards(KernelDb db) => RenderRootGuards(db, PostgresFirstRootGuards) +
+        (db.UsesRootChildren ? "\n" + RequireSettledTerminalChildNotice : "");
 
     private const string RootCheckpointWriteAllowed = """
         NEW."FoundationWriteRevision" = OLD."Revision" + 1
@@ -44,6 +45,7 @@ public sealed partial class EfStore
                               ADD COLUMN IF NOT EXISTS "FoundationTerminalAt" bigint;
         CREATE OR REPLACE FUNCTION kernel_require_root_checkpoint_writer() RETURNS trigger LANGUAGE plpgsql AS $fn$
         BEGIN
+            /*terminal-child-registry*/
             /*lock-live-job-before-park*/
             IF TG_OP = 'UPDATE' AND /*checkpoint-write-allowed*/
             THEN RETURN NEW; END IF;
@@ -73,6 +75,7 @@ public sealed partial class EfStore
                 ORDER BY m."Seq", m."Id" LIMIT 3 FOR UPDATE OF m;
             END IF;
             """ + "\n" : "", StringComparison.Ordinal)
+        .Replace("    /*terminal-child-registry*/\n", db.UsesRootChildren ? TerminalChildRegistryWrite + "\n" : "", StringComparison.Ordinal)
         .Replace("/*checkpoint-write-allowed*/", RootCheckpointWriteAllowed, StringComparison.Ordinal)
         .Replace("/*journal-write-refused*/", RootJournalWriteRefused, StringComparison.Ordinal)
         .Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """
@@ -136,13 +139,13 @@ public sealed partial class EfStore
                     AND NEW."FoundationParkAt" IS NOT NULL AND NEW."FoundationParkRevision" = NEW."Revision"
                     AND NEW."Jobs" IS NOT NULL AND NEW."Jobs" = OLD."Jobs" AND NEW."NextJobGeneration" = OLD."NextJobGeneration"
                     AND {ConsumedParkJobExists("NEW")})
-                OR (OLD."Status" = 2 AND NEW."Status" = 0 AND NEW."FoundationParkJobResult" IS NULL))
+                OR (OLD."Status" = 2 AND NEW."Status" = 0 AND NEW."FoundationParkJobResult" IS NULL){ClearAttachedParkJobPin(db, "FoundationParkJobResult")})
             AND (NEW."FoundationParkLiveJob" IS NOT DISTINCT FROM OLD."FoundationParkLiveJob"
                 OR (OLD."Status" = 0 AND NEW."Status" = 2 AND NOT NEW."Retired" AND OLD."FoundationParkLiveJob" IS NULL
                     AND NEW."FoundationParkAt" IS NOT NULL AND NEW."FoundationParkRevision" = NEW."Revision"
                     AND NEW."Jobs" IS NOT NULL AND NEW."Jobs" = OLD."Jobs" AND NEW."NextJobGeneration" = OLD."NextJobGeneration"
                     AND NEW."FoundationParkJobResult" IS NULL AND {LiveRootJobFootprint("NEW", journaling: true)})
-                OR (OLD."Status" = 2 AND NEW."Status" = 0 AND NEW."FoundationParkLiveJob" IS NULL))
+                OR (OLD."Status" = 2 AND NEW."Status" = 0 AND NEW."FoundationParkLiveJob" IS NULL){ClearAttachedParkJobPin(db, "FoundationParkLiveJob")})
             """ : "", StringComparison.Ordinal)
         .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
             (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
@@ -209,6 +212,9 @@ public sealed partial class EfStore
         .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
         .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
         .Replace("/*root-retirement-footprint*/", db.UsesRootRetirement ? RootRetirementFootprint : "", StringComparison.Ordinal)
+        .Replace("""/*retire-parent*/ AND OLD."Parent" IS NULL""", db.UsesRootChildren
+            ? """AND NEW."Parent" IS NULL AND (OLD."Parent" IS NULL OR OLD."FoundationTerminalRevision" = OLD."Revision")"""
+            : """/*retire-parent*/ AND OLD."Parent" IS NULL""", StringComparison.Ordinal)
         .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal);
 
     private static string RootRecoverFootprint(KernelDb db, string actor, bool journaling)
