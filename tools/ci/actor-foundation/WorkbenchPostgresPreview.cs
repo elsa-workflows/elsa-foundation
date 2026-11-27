@@ -567,7 +567,8 @@ internal static partial class WorkbenchPostgresPreview
         // The kernel's HTTP edge takes /workflows/http/**, and the old core keeps /workflows/test-runs.
         var address = (await workbench.ListeningAsync(token)).TrimEnd('/');
         using var client = new HttpClient();
-        var before = (await probeRuns()).Count;
+        var beforeRuns = await probeRuns();
+        var before = beforeRuns.Count;
         using (var probe = await client.PostAsync($"{address}/workflows/http/core-preview/probe",
                    new StringContent("""{"name":"Ada"}""", System.Text.Encoding.UTF8, "application/json"), token))
             Require(probe.StatusCode == System.Net.HttpStatusCode.OK && await probe.Content.ReadAsStringAsync(token) == "Ada",
@@ -595,6 +596,19 @@ internal static partial class WorkbenchPostgresPreview
                     items.All(item => item.GetProperty("status").GetString() == "Completed" &&
                         item.GetProperty("definitionId").GetString() == "core-preview-http-probe" && item.GetProperty("createdAt").ValueKind == JsonValueKind.String),
                 $"Studio's Runs list on the kernel shell lists the probe's kernel runs, Completed, with their start ({ids.Length} of {expected.Count})");
+            var run = expected.Single(id => !beforeRuns.Contains(id, StringComparer.Ordinal));
+            using var summary = await session.GetAsync($"{address}/runtime/workflows/instances/{Uri.EscapeDataString(run)}", token);
+            Require(summary.IsSuccessStatusCode, $"the runtime API opens the exact kernel run ({(int)summary.StatusCode})");
+            using var details = JsonDocument.Parse(await summary.Content.ReadAsStringAsync(token));
+            var instance = details.RootElement.GetProperty("instance");
+            Require(instance.GetProperty("workflowExecutionId").GetString() == run &&
+                    instance.GetProperty("status").GetString() == "Completed" &&
+                    instance.GetProperty("definitionId").GetString() == "core-preview-http-probe" &&
+                    instance.GetProperty("startedAt").ValueKind == JsonValueKind.String &&
+                    instance.GetProperty("completedAt").ValueKind == JsonValueKind.String,
+                "the standard run details endpoint shows the completed Native run and its committed times");
+            using var missing = await session.GetAsync($"{address}/runtime/workflows/instances/{Guid.NewGuid():N}", token);
+            Require(missing.StatusCode == System.Net.HttpStatusCode.NotFound, "the standard run details endpoint returns 404 for a missing kernel run");
         }
         using (var unknown = await client.PostAsync($"{address}/workflows/http/no-such-route", new StringContent(""), token))
             Require(unknown.StatusCode == System.Net.HttpStatusCode.NotFound &&

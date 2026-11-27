@@ -33,9 +33,12 @@ internal static partial class WorkbenchPostgresPreview
                 using var native = await client.PostAsJsonAsync("/workflows/http/core-preview/probe", new { name = "Ada" }, token);
                 Require(native.StatusCode == HttpStatusCode.OK && await native.Content.ReadAsStringAsync(token) == "Ada",
                     "the normal HTTP edge executes a Native sequence on SQLite");
+                const string nativeDefinition = "core-preview-http-probe";
+                await CheckRunDetailsAsync(client, nativeDefinition, (await FindRunsAsync(client, nativeDefinition, 1)).Single());
                 flowchart = await PublishFlowchartAsync(client);
                 await RunFlowchartAsync(client);
                 first = (await FindRunsAsync(client, flowchart, 1)).Single();
+                await CheckRunDetailsAsync(client, flowchart, first);
                 using var protectedRead = await client.GetAsync(PreviewRunsPath(flowchart), token);
                 Require(protectedRead.StatusCode == HttpStatusCode.Forbidden,
                     "the SQLite preview preserves the stock shell's resource authorization guard");
@@ -71,6 +74,7 @@ internal static partial class WorkbenchPostgresPreview
                 using var client = await AuthenticateAsync(host);
                 Require((await FindRunsAsync(client, flowchart, 1)).Single() == first,
                     "the restarted SQLite Workbench returns the prior run through its runtime API");
+                await CheckRunDetailsAsync(client, flowchart, first);
                 File.Delete(alias);
                 File.CreateSymbolicLink(alias, empty);
                 var observations = await ReadAsync(client, PreviewRunsPath(flowchart));
@@ -158,6 +162,18 @@ internal static partial class WorkbenchPostgresPreview
                     Require(runs.Length < expected, "the runtime endpoint returned at most the expected number of runs");
                     await Task.Delay(100, token);
                 }
+            }
+
+            async Task CheckRunDetailsAsync(HttpClient client, string definition, string run)
+            {
+                var details = await ReadAsync(client, $"/runtime/workflows/instances/{Uri.EscapeDataString(run)}");
+                var instance = details.GetProperty("instance");
+                Require(instance.GetProperty("workflowExecutionId").GetString() == run &&
+                        instance.GetProperty("definitionId").GetString() == definition &&
+                        instance.GetProperty("status").GetString() == "Completed" &&
+                        instance.GetProperty("startedAt").ValueKind == JsonValueKind.String &&
+                        instance.GetProperty("completedAt").ValueKind == JsonValueKind.String,
+                    $"the standard run details endpoint shows the exact completed SQLite run of '{definition}' and its committed times");
             }
 
             async Task<JsonElement> ReadAsync(HttpClient client, string route, object? payload = null)

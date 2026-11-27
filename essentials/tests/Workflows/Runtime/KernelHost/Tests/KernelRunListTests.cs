@@ -26,9 +26,14 @@ public sealed class KernelRunListTests
     private sealed class Reads(params ActorView[] views) : IActorReads
     {
         public List<ActorQuery> Queries { get; } = [];
+        public List<(BoundScope Scope, ActorRef Actor)> Gets { get; } = [];
+        public Func<ActorRef, ActorView?>? PointResult { get; init; }
 
-        public ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(views.FirstOrDefault(view => view.Header.Ref == actor));
+        public ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default)
+        {
+            Gets.Add((scope, actor));
+            return ValueTask.FromResult(PointResult is { } get ? get(actor) : views.FirstOrDefault(view => view.Header.Ref == actor));
+        }
 
         public ValueTask<Page<ActorView>> ListAsync(BoundScope scope, ActorQuery query, PageToken? from = null, CancellationToken cancellationToken = default)
         {
@@ -74,7 +79,8 @@ public sealed class KernelRunListTests
     ];
 
     /// <summary>A kernel shell: the runtime API's default list beside the host's kernel runs, with the feature applied.</summary>
-    private static ServiceProvider Shell(Reads reads, PersistenceAccessContext access)
+    private static ServiceProvider Shell(Reads reads, PersistenceAccessContext access, IActivityInspectionContextAsync? authorization = null,
+        IWorkflowRuntimeOperatorAccess? operatorAccess = null)
     {
         var services = new ServiceCollection();
         var executables = new InMemoryWorkflowExecutableStore();
@@ -82,10 +88,12 @@ public sealed class KernelRunListTests
         services.AddSingleton<IPersistenceAccessContextAccessor>(new Access(access));
         services.AddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
         services.AddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
-        services.AddSingleton<IActivityInspectionContextAsync>(new AllowAllActivityExecutionInspectionAuthorizationContext());
+        services.AddSingleton<IActivityInspectionContextAsync>(authorization ?? new AllowAllActivityExecutionInspectionAuthorizationContext());
+        if (operatorAccess is not null) services.AddSingleton(operatorAccess);
         services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(reads)));
-        // The runtime API's default list.
+        // The runtime API's default reads.
         services.AddScoped<IWorkflowInstanceListService, WorkflowInstanceListService>();
+        services.AddScoped<IWorkflowInstanceDetailsService, WorkflowInstanceDetailsService>();
         new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(services);
         return services.BuildServiceProvider();
     }
@@ -94,6 +102,75 @@ public sealed class KernelRunListTests
         shell.CreateScope().ServiceProvider.GetRequiredService<IWorkflowInstanceListService>().ListAsync(request, CancellationToken.None);
 
     private static readonly PersistenceAccessContext HostTenant = PersistenceAccessContext.Scoped(new PersistenceScope(Tenant));
+
+    [Fact]
+    public async Task Details_read_one_committed_run_and_preserve_its_summary_and_permissions()
+    {
+        var reads = new Reads(Views);
+        var authorization = new InspectionAccess(structure: true, values: false);
+        var management = new ManageAccess();
+        using var shell = Shell(reads, HostTenant, authorization, management);
+        var executables = (InMemoryWorkflowExecutableStore)shell.GetRequiredService<IWorkflowExecutableStore>();
+        var executable = Compiled.ExecutableOf("orders@1", "orders", Compiled.Sequence("root", Compiled.WriteLine("w", Compiled.Literal("text", "hi"))));
+        await executables.SaveAsync(executable);
+        using var request = shell.CreateScope();
+        var details = request.ServiceProvider.GetRequiredService<IWorkflowInstanceDetailsService>();
+
+        var view = Assert.IsType<Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDetailsView>(
+            await details.GetAsync(new("run-1"), CancellationToken.None));
+
+        Assert.Equal((Scope, new ActorRef("run-1")), Assert.Single(reads.Gets));
+        Assert.Empty(reads.Queries);
+        Assert.Equal(("run-1", "Completed", executable.Identity.ArtifactHash, Tenant),
+            (view.Instance.WorkflowExecutionId, view.Instance.Status, view.Instance.ArtifactHash, view.Instance.TenantId));
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1_000), view.Instance.StartedAt);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1_500), view.Instance.CompletedAt);
+        Assert.Empty(view.Activities);
+        Assert.Empty(view.Incidents);
+        Assert.Empty(view.Outputs);
+        Assert.Null(view.ActivityNextContinuationToken);
+        Assert.Equal(("Balanced", "boundary-level"), (view.PersistenceMode, view.InspectionGranularity));
+        Assert.True(view.Permissions!.CanManage);
+        Assert.False(view.Permissions.CanInspectValues);
+        Assert.Equal(["run-1"], authorization.StructureChecks);
+        Assert.Equal(["run-1"], authorization.ValueChecks);
+        Assert.Equal(["run-1"], management.Checks);
+    }
+
+    [Fact]
+    public async Task Details_make_missing_wrong_scope_wrong_identity_and_hidden_runs_indistinguishable()
+    {
+        var run = Views[0];
+        var reads = new Reads { PointResult = reference => reference.Id switch
+        {
+            "wrong-id" => run,
+            "wrong-tenant" => run with { Header = run.Header with { Ref = reference, Tenant = "other" } },
+            "wrong-type" => run with { Header = run.Header with { Ref = reference, Type = "schedule" } },
+            "run-1" => run,
+            _ => null
+        } };
+        var authorization = new InspectionAccess(structure: false, values: true);
+        var management = new ManageAccess();
+        using var shell = Shell(reads, HostTenant, authorization, management);
+        using var request = shell.CreateScope();
+        var details = request.ServiceProvider.GetRequiredService<IWorkflowInstanceDetailsService>();
+        foreach (var id in new[] { "missing", "wrong-id", "wrong-tenant", "wrong-type", "run-1" })
+            Assert.Null(await details.GetAsync(new(id), CancellationToken.None));
+        Assert.Equal(["run-1"], authorization.StructureChecks);
+        Assert.Empty(authorization.ValueChecks);
+        Assert.Empty(management.Checks);
+
+        reads.Gets.Clear();
+        using var other = Shell(reads, PersistenceAccessContext.Scoped(new PersistenceScope("other")));
+        using var across = Shell(reads, PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("kernel-run-detail-test")));
+        foreach (var denied in new[] { other, across })
+        {
+            using var deniedRequest = denied.CreateScope();
+            Assert.Null(await deniedRequest.ServiceProvider.GetRequiredService<IWorkflowInstanceDetailsService>()
+                .GetAsync(new("run-1"), CancellationToken.None));
+        }
+        Assert.Empty(reads.Gets);
+    }
 
     [Fact]
     public async Task The_list_shows_the_kernels_runs_with_their_status_times_and_workflow()
@@ -191,7 +268,7 @@ public sealed class KernelRunListTests
     }
 
     [Fact]
-    public void The_feature_needs_the_hosts_kernel_runs_and_refuses_another_list()
+    public void The_feature_needs_the_hosts_kernel_runs_and_refuses_other_runtime_read_implementations()
     {
         var bare = new ServiceCollection();
         Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(bare));
@@ -201,11 +278,58 @@ public sealed class KernelRunListTests
         custom.AddScoped<IWorkflowInstanceListService, CustomList>();
         var refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(custom));
         Assert.Contains("registers another", refused.Message, StringComparison.Ordinal);
+
+        custom.RemoveAll<IWorkflowInstanceListService>();
+        custom.AddScoped<IWorkflowInstanceDetailsService, CustomDetails>();
+        refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(custom));
+        Assert.Contains(nameof(IWorkflowInstanceDetailsService), refused.Message, StringComparison.Ordinal);
     }
 
     private sealed class CustomList : IWorkflowInstanceListService
     {
         public Task<Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceListView> ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class CustomDetails : IWorkflowInstanceDetailsService
+    {
+        public Task<Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class InspectionAccess(bool structure, bool values) : IActivityInspectionContextAsync
+    {
+        public List<string> StructureChecks { get; } = [];
+        public List<string> ValueChecks { get; } = [];
+        public string TenantScope => Tenant;
+        public string AuditSubject => "reader";
+        public string RequestCorrelationId => "request";
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult("test");
+
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default)
+        {
+            StructureChecks.Add(workflowExecution.WorkflowExecutionId);
+            return ValueTask.FromResult(structure);
+        }
+
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default)
+        {
+            ValueChecks.Add(workflowExecution.WorkflowExecutionId);
+            return ValueTask.FromResult(values);
+        }
+
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class ManageAccess : IWorkflowRuntimeOperatorAccess
+    {
+        public List<string> Checks { get; } = [];
+
+        public ValueTask<bool> CanManageAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default)
+        {
+            Checks.Add(workflowExecution.WorkflowExecutionId);
+            return ValueTask.FromResult(true);
+        }
     }
 }

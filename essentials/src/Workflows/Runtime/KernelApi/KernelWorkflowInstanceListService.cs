@@ -31,7 +31,7 @@ internal sealed class KernelWorkflowInstanceListService(
     {
         ArgumentNullException.ThrowIfNull(request);
         var store = new InMemoryWorkflowExecutionStateStore();
-        if (ReadsHostTenant())
+        if (KernelRunStates.CanReadTenant(access.Current, runs.Tenant))
         {
             var identities = new Dictionary<string, WorkflowExecutableIdentity?>(StringComparer.Ordinal);
             var definition = string.IsNullOrWhiteSpace(request.DefinitionId) ? null : request.DefinitionId;
@@ -47,9 +47,4 @@ internal sealed class KernelWorkflowInstanceListService(
         return await new WorkflowInstanceListService(store, new InMemoryActivityExecutionStateStore(), new InMemoryIncidentStateStore(), authorization)
             .ListAsync(request, cancellationToken);
     }
-
-    // The kernel's runs are its bound tenant's: a caller reading that tenant, and only that one, sees them.
-    private bool ReadsHostTenant() =>
-        access.Current is { AccessPolicy: PersistenceAccessPolicy.Ordinary, AcrossScopes: false, Scope.Value: { } scope } &&
-        string.Equals(scope, runs.Tenant.Tenant, StringComparison.Ordinal);
 }
