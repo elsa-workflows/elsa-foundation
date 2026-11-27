@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Reflection;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Microsoft.Data.Sqlite;
@@ -52,6 +53,20 @@ internal static partial class SqliteHostLifetimeChecks
             var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
             var store = new EfStore(Open, postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
             await store.EnableRootJobsAsync(token);
+            Func<CommitBatch, CancellationToken, Task>? afterCommit = null;
+            IKernelStore workerStore = store;
+            if (recovery)
+            {
+                workerStore = DispatchProxy.Create<IKernelStore, PostgresRootParkOpeningChecks.ObservedCommit>();
+                var observed = (PostgresRootParkOpeningChecks.ObservedCommit)(object)workerStore;
+                observed.Store = store;
+                observed.Write = async (batch, commitToken) =>
+                {
+                    var committed = await store.CommitAsync(batch, commitToken);
+                    if (committed.Landed && afterCommit is { } observe) await observe(batch, commitToken);
+                    return committed;
+                };
+            }
             var reads = new GeneratedRootReads(store, cursor, 8, provider: "sqlite");
             var executor = new SqliteArrivalActor(fixture);
             var adapter = new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(executor.Withholds)), executor,
@@ -190,6 +205,8 @@ internal static partial class SqliteHostLifetimeChecks
                 await CheckCreatorRecoverAsync(recoveryOwner);
                 await CheckRecordedJobRecoverAsync(recoveryOwner);
                 await CheckRecordedJobRecoverAsync(recoveryOwner, large);
+                await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: false);
+                await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: true);
                 await CheckReparkFifoAsync(recoveryOwner);
                 var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
                 var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
@@ -272,6 +289,90 @@ internal static partial class SqliteHostLifetimeChecks
                     executor.RecordedJobs == 1 && executor.RecordedResults == 1 &&
                     !await db.Messages.AnyAsync(row => row.Target == park.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
                     "SQLite Recover clears the consumed result and registration without replay or generation reuse");
+            }
+
+            async Task CheckLiveJobRecoverAsync(Worker owner, bool publishFirst)
+            {
+                executor.LiveJobEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                executor.ReleaseLiveJob = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                var previousInvocations = executor.LiveInvocations;
+                var previousResults = executor.LiveResults;
+                var operation = publishFirst ? "pending-result-recover" : "live-job-recover";
+                var root = (await admission.StartAsync(scope.Tenant, operation, new(fixture, SqliteArrivalActor.LiveJobPlan),
+                    null, null, token)).Actor!.Value;
+                await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                Require(await admission.SendAsync(scope.Tenant, root, "issue-live-job", "issue-live-job", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the fixture admits a timed job before its Park");
+                var issued = await DriveAsync(owner, root, row => row is { Revision: 2, Status: InstanceStatus.Running });
+                while (!executor.LiveJobEntered.Task.IsCompleted)
+                {
+                    await owner.WokenAsync(null, token);
+                    await owner.RunAsync(token);
+                    await Task.Delay(15, token);
+                }
+                Require(await admission.SendAsync(scope.Tenant, root, "fail-live-job", "fail", null, publishFirst ? issued.AsOf + 120_000 : null,
+                    null, token) is { Outcome: Contract.AdmissionOutcome.Accepted }, "an ordinary input is admitted while the timed job is entered");
+                if (publishFirst)
+                {
+                    afterCommit = async (batch, commitToken) =>
+                    {
+                        if (batch.Turns.Any(turn => turn.Instance == issued.Actor.Id &&
+                            turn.Sent.Any(message => message.Kind == Kinds.JobFinished)))
+                        {
+                            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                                UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {issued.Actor.Id} AND "Kind" = 'fail' AND NOT "Done"
+                                """, commitToken);
+                            afterCommit = null;
+                        }
+                    };
+                    executor.ReleaseLiveJob.TrySetResult();
+                }
+                var park = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Faulted });
+                var rows = await ReadTimedRowsAsync();
+                Require(park.Jobs == issued.Jobs && JobRegistry.Read(park.Jobs) is [{ Key: SqliteArrivalActor.LiveJob, Generation: 0 }] &&
+                    (publishFirst ? rows is [{ Kind: Kinds.JobFinished, Due: 0, JobGeneration: 0, Payload: not null }] :
+                        rows is [{ Kind: Kinds.JobDeadline, Due: > 0, JobGeneration: 0 }, { Kind: Kinds.Job, Due: 0, JobGeneration: 0 }]),
+                    publishFirst ? "the ordinary SQLite Park leaves an already published result pending" :
+                        "the ordinary Park preserves the previously issued ticket and its absolute deadline");
+                await RecordedJobRecoveryChecks.AssertLiveJobGuardsAsync(db, park, publishFirst, Require, token);
+
+                var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                Require(await admission.OperateAsync(scope.Tenant, root, "recover-" + operation, Kinds.Recover, selection, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the selected Park with a live registration accepts Recover");
+                var recovered = await DriveAsync(owner, root, row => row.Status == InstanceStatus.Running && row.Revision == park.Revision + 1);
+                Require(recovered.Jobs == park.Jobs && recovered.NextJobGeneration == park.NextJobGeneration && recovered.ParkAt is null &&
+                    (await ReadTimedRowsAsync()).SequenceEqual(rows), "Recover keeps the same timed rows, deadline and job generation");
+                await RecordedJobRecoveryChecks.AssertOrdinaryCheckpointRetainsJobAsync(db, recovered, publishFirst, Require, token);
+                if (publishFirst)
+                {
+                    executor.FaultLiveResult = true;
+                    var newPark = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Faulted } && row.Revision > recovered.Revision);
+                    executor.FaultLiveResult = false;
+                    Require(newPark.Jobs == park.Jobs && executor.LiveResults == previousResults + 1 &&
+                        executor.LiveInvocations == previousInvocations + 1 && (await ReadTimedRowsAsync()).SequenceEqual(rows),
+                        "the recovered actor can Park the same recorded result if its application faults");
+                    var newSelection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    Require(await admission.OperateAsync(scope.Tenant, root, "recover-consumed-live-job", Kinds.Recover, newSelection, null, null, token)
+                        is { Outcome: Contract.AdmissionOutcome.Accepted }, "the second Park accepts Recover after taking the recorded result");
+                    var final = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Running, Jobs: null });
+                    Require(final.NextJobGeneration == 1 && (await ReadTimedRowsAsync()).Count == 0 &&
+                        executor.LiveResults == previousResults + 1 && executor.LiveInvocations == previousInvocations + 1,
+                        "the second Recover discards the consumed result without another callback or application");
+                    return;
+                }
+
+                executor.ReleaseLiveJob.TrySetResult();
+                var ended = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Finished });
+                Require(ended is { Jobs: null, NextJobGeneration: 1 } && executor.LiveResults == previousResults + 1 &&
+                    executor.LiveInvocations == previousInvocations + 1 && (await ReadTimedRowsAsync()).Count == 0,
+                    "the recovered actor applies the held timed outcome once and clears the existing generation");
+
+                async Task<IReadOnlyList<(string Id, string Kind, long Seq, long Due, long JobGeneration, string? Payload)>> ReadTimedRowsAsync()
+                {
+                    var stored = await db.Messages.AsNoTracking().Where(row => row.Target == issued.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope)
+                        .OrderBy(row => row.Seq).ToArrayAsync(token);
+                    return stored.Select(row => (row.Id, row.Kind, row.Seq, row.Due, row.JobGeneration, row.Payload)).ToArray();
+                }
             }
 
             async Task CheckAuthoredCohortAsync()
@@ -443,7 +544,7 @@ internal static partial class SqliteHostLifetimeChecks
 
             async Task<Worker> OwnAsync(string name)
             {
-                var worker = new Worker(name, Enumerable.Range(0, partitions).ToArray(), store, adapter, new WorkerOptions
+                var worker = new Worker(name, Enumerable.Range(0, partitions).ToArray(), workerStore, adapter, new WorkerOptions
                 {
                     Lease = TimeSpan.FromSeconds(30), Partitions = partitions, PassTurnBudget = 1,
                     PollLimit = recovery ? 1 : new WorkerOptions().PollLimit
@@ -525,6 +626,14 @@ internal static partial class SqliteHostLifetimeChecks
         internal const string CreatorFault = """{"CreatorFault":true}""";
         internal const string RecordedPlan = """{"RecordedPlan":true}""";
         internal const string RecordedJob = "recorded-recover";
+        internal const string LiveJobPlan = """{"LiveJobPlan":true}""";
+        internal const string LiveJob = "live-recover";
+        internal TaskCompletionSource LiveJobEntered { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource ReleaseLiveJob { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _liveInvocations;
+        internal int LiveInvocations => Volatile.Read(ref _liveInvocations);
+        internal int LiveResults { get; private set; }
+        internal bool FaultLiveResult { get; set; }
         internal int RecordedJobs { get; private set; }
         internal int RecordedResults { get; private set; }
         internal int OrdinaryTurns { get; private set; }
@@ -534,21 +643,43 @@ internal static partial class SqliteHostLifetimeChecks
         public bool Withholds(Contract.ActorHeader header) => header.TypeData == Withheld;
         internal string? RecordedJobArguments { get; set; }
 
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
-            header.TypeData == RecordedPlan ? new([], [new(RecordedJob, RecordedJobArguments)], []) : new([], [], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => header.TypeData switch
+        {
+            RecordedPlan => new([], [new(RecordedJob, RecordedJobArguments)], []),
+            LiveJobPlan => new([], [new(LiveJob, null)], []),
+            _ => new([], [], [])
+        };
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
         {
+            if (job.Key == LiveJob)
+            {
+                Interlocked.Increment(ref _liveInvocations);
+                LiveJobEntered.TrySetResult();
+                await ReleaseLiveJob.Task.WaitAsync(cancellationToken);
+                return "after-recover";
+            }
             if (job.Key != RecordedJob) throw new InvalidOperationException("The Park Recover fixture received an unexpected job.");
             RecordedJobs++;
-            return ValueTask.FromResult<object?>("recorded");
+            return "recorded";
         }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             if (turn.Inbox is [{ Kind: "issue-recorded" }])
                 turn.StartJob(RecordedJob, timeout: TimeSpan.FromMinutes(1));
+            if (turn.Inbox is [{ Kind: "issue-live-job" }])
+                turn.StartJob(LiveJob, timeout: TimeSpan.FromMinutes(1));
+            if (turn.Header.TypeData == LiveJobPlan && turn.Inbox is [{ Kind: Contract.Kinds.JobFinished, Payload: { } outcome }])
+            {
+                if (Json.Read<Contract.JobFinished>(outcome) is not { Key: LiveJob, Error: null, Result: "\"after-recover\"" })
+                    throw new InvalidOperationException("The recovered actor received an unexpected timed outcome.");
+                LiveResults++;
+                if (FaultLiveResult) throw new InvalidOperationException("the previously published result faulted during application");
+                turn.End(Contract.ActorStatus.Finished);
+                return ValueTask.CompletedTask;
+            }
             if (turn.Header.TypeData == RecordedPlan && turn.Inbox is [{ Kind: Contract.Kinds.JobFinished }])
             {
                 RecordedResults++;

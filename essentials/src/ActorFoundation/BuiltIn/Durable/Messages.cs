@@ -77,7 +77,8 @@ internal sealed record FoundationParkMark(long Revision, long At);
 
 internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest)
 {
-    internal string? ConsumedJobRegistry { get; init; }
+    internal string? RecoverableJobRegistry { get; init; }
+    internal bool KeepsRegisteredJob { get; init; }
 
     // S5b: the row holds jobs, children, custom handles or subscriptions, which a parked Terminate cannot dispose of yet.
     internal bool Outstanding { get; init; }

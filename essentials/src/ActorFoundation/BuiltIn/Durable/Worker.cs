@@ -3629,12 +3629,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var item in retired.Inbox.ToArray()) Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
         }
-        if (unit.Slot is { CurrentRow.Status: InstanceStatus.Faulted } restored && unit.Row is { Status: InstanceStatus.Running } &&
-            unit.Consumed is [{ Message.Operator.RootParkMark: not null }])
+        if (unit.Slot is { CurrentRow.Status: InstanceStatus.Faulted } restored && unit.Row is { Status: InstanceStatus.Running } recovered &&
+            unit.Consumed is [{ Message.Operator: { RootParkMark: not null } recover }])
         {
-            // A qualified root's recover puts its released rows ahead of every input read before it. The next poll reads
-            // the inputs held here again, in that order, so no ordinary turn runs ahead of the cohort.
-            foreach (var item in restored.Inbox.Where(item => item.Durable && !item.Taken).ToArray()) Forget(item);
+            // Recover reads the released cohort before other inputs. An entered timed ticket of this
+            // same generation keeps its driver and waits for its durable row to be read again.
+            foreach (var item in restored.Inbox.Where(item => item.Durable && !item.Taken).ToArray())
+            {
+                if (recover.RootParkFacts is { KeepsRegisteredJob: true } && item.IsDurableJobTicket &&
+                    item.JobDeadline is not null && Volatile.Read(ref item.JobEntered) && item.Key is { } key &&
+                    item.Message.TargetCreation == recovered.Creation && JobRegistry.Generation(recovered, key) == item.Message.JobGeneration)
+                    (item.Marked, item.AwaitPoll) = (false, true);
+                else Forget(item);
+            }
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
             _caughtUp = false;
             _woken = true;

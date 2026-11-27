@@ -127,11 +127,20 @@ public sealed partial class EfStore
         if (expected is [{ Due: { } deadline }, _] && completion is null &&
             !await db.Database.SqlQueryRaw<bool>($"""SELECT {TimedJobClock(db)} >= {"{0}"} AS "Value" """, deadline).SingleAsync(token))
             return false;
-        if (pending is not null) return await pending.ExecuteDeleteAsync(token) == expected.Length;
-        return await db.Database.ExecuteSqlInterpolatedAsync($"""
+        return await DeleteRootTimedRowsAsync(db, actor, ids, token);
+    }
+
+    private static async Task<bool> DeleteRootTimedRowsAsync(KernelDb db, CreationAddress actor, string[] ids, CancellationToken token)
+    {
+        var home = new InstanceRef(actor.Id).Partition;
+        var removed = db.UsesSqliteRootRuntime ? await SqlitePendingRootTimedInputs(db, actor, ids).ExecuteDeleteAsync(token)
+            : await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {RootTimedJobScope} AND "Id" = ANY({ids}) AND NOT "Done"
-            """, token) == expected.Length;
+            """, token);
+        if (removed != ids.Length) return false;
+        await ReleaseProtectedTimedJobsAsync(db, actor.Id, ids, token);
+        return true;
     }
 
     private static IQueryable<MessageEntity> SqlitePendingRootTimedInputs(KernelDb db, CreationAddress actor, string[] ids)

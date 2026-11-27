@@ -12,7 +12,7 @@ public sealed partial class EfStore
     private sealed record SqliteKeptRow(string Id, long Scope, KeptRow Facts);
 
     private static Task<ParkMarkRow?> ReadSqliteParkMarkAsync(KernelDb db, string actor, int partition, CancellationToken token) =>
-        db.Database.SqlQuery<ParkMarkRow>(SelectParkJobResult(db, $"""
+        db.Database.SqlQuery<ParkMarkRow>(SelectParkJobPins(db, $"""
             SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision",
                 (i."Jobs" IS NOT NULL OR i."Children" IS NOT NULL OR i."CustomHandles" IS NOT NULL OR EXISTS (
                     SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = i."Id" AND s."Partition" = i."Partition")) AS "Outstanding",
@@ -20,7 +20,7 @@ public sealed partial class EfStore
                     AND NOT m."Done" AND (m."InboxScope" <> {InboxKey.FoundationOccurrenceScope}
                         OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL)) AS "Residue",
                 i."FoundationParkClearing" AS "Clearing", i."FoundationParkCleared" AS "Cleared", i."Jobs",
-                /*park-job-result*/ AS "ParkJobResult"
+                /*park-job-result*/ AS "ParkJobResult", /*park-live-job*/ AS "ParkLiveJob"
             FROM "Instances" i WHERE i."Id" = {actor} AND i."Partition" = {partition} AND NOT i."Retired"
             """)).SingleOrDefaultAsync(token);
 
