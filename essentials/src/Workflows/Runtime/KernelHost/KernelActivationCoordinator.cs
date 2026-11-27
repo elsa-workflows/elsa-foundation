@@ -107,10 +107,11 @@ public sealed class KernelActivationCoordinator(
         }
 
         // 2. Check the routes and schedules over the serving set with the candidate in its slot's place.
+        var requested = new KernelServedSlot(slotId, definitionId, command.SlotName, command.ActivationId, workflow, 0);
         KernelServingPlan plan;
         try
         {
-            plan = serving.Plan(slotId, new KernelServedSlot(slotId, definitionId, command.SlotName, command.ActivationId, workflow, 0));
+            plan = serving.Plan(slotId, requested);
         }
         catch (Exception refused) when (refused is ArgumentException or InvalidOperationException)
         {
@@ -130,8 +131,20 @@ public sealed class KernelActivationCoordinator(
         try
         {
             var leaseId = $"activation:{command.ActivationId}:{Guid.NewGuid():N}";
-            await rootWriteLeaseManager.ExecuteAsync(identity, leaseId,
-                async leaseToken => result = await RunSequenceAsync(command, reference, plan, leaseToken), cancellationToken);
+            await rootWriteLeaseManager.ExecuteAsync(identity, leaseId, async leaseToken =>
+            {
+                // Publishing can reuse an artifact with a new source version. Pin the catalog's immutable material
+                // under this lease while leaving source provenance and logical definition on the selected publication.
+                var material = await executableStore.FindAsync(identity.ArtifactId, leaseToken);
+                if (material is null || material.Identity.ArtifactId != identity.ArtifactId ||
+                    material.Identity.ArtifactHash != identity.ArtifactHash)
+                    throw new InvalidOperationException($"Artifact '{identity.ArtifactId}' does not match the selected publication.");
+                var selected = material.Identity == identity ? plan : serving.Plan(slotId, requested with
+                {
+                    Workflow = NativeExecutableMapper.Map(material, serving.Capabilities, definitionId)
+                });
+                result = await RunSequenceAsync(command, reference, selected, leaseToken);
+            }, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (WorkflowActivationException) { throw; }
@@ -462,7 +475,7 @@ public sealed class KernelActivationCoordinator(
         try
         {
             return new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId,
-                NativeExecutableMapper.Map(executable, serving.Capabilities), slot.Revision);
+                NativeExecutableMapper.Map(executable, serving.Capabilities, slot.WorkflowDefinitionId), slot.Revision);
         }
         catch (NativeMappingRefusedException) { return null; }
     }
@@ -628,7 +641,7 @@ public sealed class KernelActivationCoordinator(
         var executable = await executableStore.FindAsync(source.ArtifactId, token)
             ?? throw new InvalidOperationException($"Artifact '{source.ArtifactId}' of activation '{activation}' is not in the executable store.");
         Workflow workflow;
-        try { workflow = NativeExecutableMapper.Map(executable, serving.Capabilities); }
+        try { workflow = NativeExecutableMapper.Map(executable, serving.Capabilities, slot.WorkflowDefinitionId); }
         catch (NativeMappingRefusedException refused)
         {
             return (null, NotServingFailure(slot, $"{refused.Code}: {refused.Message}", WorkflowActivationStep.Mapping));

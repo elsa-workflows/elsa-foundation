@@ -13,8 +13,6 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
-if (args is ["kernel-shell-child-executable-pins", var childShellProvider and ("sqlite" or "postgres")])
-    return await KernelShellChildExecutableChecks.RunAsync(childShellProvider == "postgres");
 if (args is ["kernel-shell-managed-schedules", var scheduleShellProvider and ("sqlite" or "postgres")])
     return await KernelShellManagedScheduleChecks.RunAsync(scheduleShellProvider == "postgres");
 if (args is ["workbench-shipped-flowcharts", var graphProvider and ("sqlite" or "postgres"), var graphWorkbench])

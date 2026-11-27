@@ -51,7 +51,8 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
             return "DefinitionUnavailable";
         // A migration moves an instance between versions of its definition, and its definition label stays: a published
         // version does not move to another definition's.
-        if (before.Definition != after.Definition && (before.Definition != before.Id || after.Definition != after.Id))
+        var definition = source.ExecutableSelection is null ? before.Definition : source.Definition ?? before.Definition;
+        if (definition != after.Definition && (definition != before.Id || after.Definition != after.Id))
             return "DefinitionChanged";
         if (StructuredMigration.Validate(before, after, (NativeState)state) is { } finding)
             return finding.ToString();

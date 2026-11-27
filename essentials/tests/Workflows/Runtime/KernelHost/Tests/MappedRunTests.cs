@@ -138,6 +138,24 @@ public sealed class MappedRunTests
         public long? Deadline => null;
     }
 
+    [Fact]
+    public async Task A_migration_uses_the_selected_runs_logical_definition_after_cold_material_resolution()
+    {
+        var source = new Native.Workflow("before", Native.Wf.Event("wait", "ready"), definition: "logical")
+            { ExecutableSelection = "first-material" };
+        var canonical = new Native.Workflow(source.Id, source.Root, definition: "original-source")
+            { ExecutableSelection = source.ExecutableSelection };
+        var target = new Native.Workflow("after", Native.Wf.Event("wait", "ready"), definition: source.Definition)
+            { ExecutableSelection = "second-material" };
+        var turn = await NativeTurn.StartAsync(source);
+        var model = new Native.NativeExecutionModel(new Native.WorkflowRegistry().Add(canonical).Add(target));
+
+        var refusal = model.ValidateMigration(turn.Instance with { Definition = source.Definition }, turn.State, target.Id, out var selection);
+
+        Assert.Null(refusal);
+        Assert.Equal(target.ExecutableSelection, selection);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
