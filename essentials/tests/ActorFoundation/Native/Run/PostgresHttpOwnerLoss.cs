@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using Elsa.Workflows.Runtime.KernelHost;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Native;
@@ -12,6 +14,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Contract = Kernel.Foundation.Contracts;
+using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
 
 namespace Kernel.Native.Run;
 
@@ -22,17 +25,19 @@ internal static class PostgresHttpOwnerLoss
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(6);
     private sealed record LeaseImage(string Owner, long Epoch, long Position, long Until, long Now);
 
-    internal static async Task<int> RunAsync(string fence, string loss)
+    internal static async Task<int> RunAsync(string fence, string loss, bool heldEvent = false)
     {
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(50));
         var stop = limit.Token;
-        var open = OpenDatabase();
+        var options = DatabaseOptions();
+        var open = OpenDatabase(options, heldEvent);
         await using var db = open();
         Require(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "Use a fresh database for the owner-loss fixture.");
         var store = CreateStore(open, fence);
         var admission = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
         await store.CreateAsync(1);
-        await admission.InstallAsync(stop);
+        if (heldEvent) await store.InstallPreviewRootSchemaAsync(stop);
+        else await admission.InstallAsync(stop);
         var scope = EmbeddedTenant.Bind(Tenant);
         var receiver = new PostgresDirectRequests(admission, store, Receiver);
         var arrivals = new ConcurrentQueue<Reply>();
@@ -43,16 +48,14 @@ internal static class PostgresHttpOwnerLoss
         }, stop);
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType, directRequests: receiver);
-        var start = await new WorkflowRuntime(api, api).StartAsync(scope, "order",
-            NativeExecutionModel.Start(PostgresHeldDirectChecks.Definition), cancellationToken: stop);
-        var actor = start is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } reference }
-            ? reference : throw new InvalidOperationException("The workflow start must be accepted.");
+        var serving = heldEvent ? await CreateEventServingAsync(stop) : null;
+        var actor = await StartAsync("order");
 
         var timely = loss == "before";
         var after = loss == "after";
         var wait = timely ? 15_000 : 4_000;
         var (databaseTime, observedAt) = await PostgresHttpPreview.SampleClockAsync(admission, false, stop);
-        await using var original = OwnerProcess.Start(fence, after ? "after" : "before", actor);
+        await using var original = OwnerProcess.Start(fence, after ? "after" : "before", actor, heldEvent);
         var firstEpoch = await original.ReadEpochAsync(stop);
         await original.SendAsync("birth", stop);
         await original.ExpectAsync("checkpoint 1 1", stop);
@@ -69,7 +72,13 @@ internal static class PostgresHttpOwnerLoss
         builder.Configuration.Sources.Clear();
         builder.WebHost.ConfigureKestrel(server => server.Listen(IPAddress.Loopback, 0));
         await using var app = builder.Build();
-        app.MapPost("/approval", (Delegate)ApproveAsync);
+        if (serving is null) app.MapPost("/approval", (Delegate)ApproveAsync);
+        else
+        {
+            var handler = new KernelHttpRequestHandler(serving, _ => ValueTask.FromResult<Contract.IIngress>(api), receiver.ReadClockAsync,
+                scope, "/workflows/http", TimeSpan.FromMilliseconds(wait), 64 * 1024, enforceRequestTimeout: true);
+            app.MapPost("/workflows/http/{**path}", handler.HandleAsync);
+        }
         await app.StartAsync(stop);
         using var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
         var response = ObserveResponseAsync();
@@ -102,7 +111,7 @@ internal static class PostgresHttpOwnerLoss
                 (await PendingAsync()).SequenceEqual([pending]) && suffixAtLoss.Items.Count == 0,
                 "The original owner must still have the unchanged checkpoint and exact unconsumed input.");
 
-        await using var standby = OwnerProcess.Start(fence, "resume", actor);
+        await using var standby = OwnerProcess.Start(fence, "resume", actor, heldEvent);
         await standby.ExpectAsync("waiting", stop);
         var lease = await ReadLeaseAsync();
         Require(lease.Owner == OwnerNode(original.Id) && lease.Epoch == firstEpoch && lease.Until > lease.Now,
@@ -165,13 +174,14 @@ internal static class PostgresHttpOwnerLoss
         Require(settled.Done && settled.ReplyTo is null, "The exact input must settle and clear its live reply route.");
         await standby.SendAsync("stop", stop);
         await standby.ExpectExitAsync(stop);
+        if (serving is not null && timely) await CheckReceiverResetAsync(serving);
         carrier.RequireHealthy();
-        Console.WriteLine($"ok PostgreSQL HTTP owner loss {fence} {loss}: processes {original.Id}->{standby.Id}, epochs {firstEpoch}->{secondEpoch}, HTTP {(timely ? 202 : 504)}, one approval revision.");
+        Console.WriteLine($"ok PostgreSQL HTTP {(heldEvent ? "event " : "")}owner loss {fence} {loss}: processes {original.Id}->{standby.Id}, epochs {firstEpoch}->{secondEpoch}, HTTP {(timely ? 202 : 504)}, one approval revision.");
         return 0;
 
         async Task<(HttpResponseMessage Response, long CompletedAt)> ObserveResponseAsync()
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/approval");
+            using var request = new HttpRequestMessage(HttpMethod.Post, heldEvent ? "/workflows/http/approval/wait" : "/approval");
             var observed = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stop);
             return (observed, DatabaseNow());
         }
@@ -187,6 +197,60 @@ internal static class PostgresHttpOwnerLoss
                     payload, null, new(null, due), token).AsTask(), stop);
         }
 
+        async Task<Contract.ActorRef> StartAsync(string operation)
+        {
+            var start = serving is null
+                ? await new WorkflowRuntime(api, api).StartAsync(scope, operation,
+                    NativeExecutionModel.Start(PostgresHeldDirectChecks.Definition), cancellationToken: stop)
+                : await api.SendAsync(scope, new Contract.Target.Start(KernelHttpEdge.Match(serving,
+                    new HttpRequest("POST", "/approval/start", null), "/approval/start")!.Spec), operation, Contract.Kinds.Start,
+                    cancellationToken: stop);
+            return start is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } reference }
+                ? reference : throw new InvalidOperationException("The workflow start must be accepted.");
+        }
+
+        async Task CheckReceiverResetAsync(KernelServing configured)
+        {
+            var (host, worker) = await PrepareEventOwnerAsync(store, Receiver, configured.Registry,
+                new WorkerOptions { Lease = Lease, Transport = receiver }, stop);
+            await host.HeartbeatAsync(Lease, stop);
+            await using var activation = await host.ActivateAsync(0, stop)
+                ?? throw new InvalidOperationException("The HTTP receiver must take ownership for the local reset case.");
+            var local = await StartAsync("receiver-local-order");
+            while (await store.ReadFirstRootAsync(Tenant, local.Id, stop) is not { Revision: 1, Status: InstanceStatus.Running })
+            {
+                await worker.WokenAsync(null, stop);
+                await worker.RunAsync(stop);
+                await Task.Delay(15, stop);
+            }
+            var response = ObserveResponseAsync();
+            Message pending;
+            while (true)
+            {
+                if (await admission.ReadPendingDirectAsync(Tenant, local.Id, stop) is [var queued])
+                {
+                    pending = queued;
+                    break;
+                }
+                Require(!response.IsCompleted, "The receiver-local HTTP request must stay open until its event is admitted.");
+                await Task.Delay(15, stop);
+            }
+            var route = ReplyTo.Parse(pending.ReplyTo ?? throw new InvalidOperationException("The event must keep its durable reply route."));
+            Require(route.Node == Receiver, "The event reply must address the receiving owner.");
+            await worker.PollAsync(stop);
+            Require(!response.IsCompleted, "Polling must leave the local event and its caller pending.");
+            await activation.DisposeAsync();
+            var (received, completedAt) = await response.WaitAsync(stop);
+            using (received)
+                Require(received.StatusCode == HttpStatusCode.ServiceUnavailable && completedAt < route.Deadline &&
+                    await received.Content.ReadAsStringAsync(stop) == "the workflow's owner was lost",
+                    "Resetting the receiving owner must return HTTP 503 before the deadline.");
+            Require(await store.ReadFirstRootAsync(Tenant, local.Id, stop) is { Revision: 1, Status: InstanceStatus.Running } &&
+                (await admission.ReadPendingDirectAsync(Tenant, local.Id, stop)).SequenceEqual([pending]),
+                "The local reset must leave the checkpoint and exact durable event unchanged.");
+            Console.WriteLine($"ok PostgreSQL HTTP event receiver-local reset {fence}: HTTP 503, durable event remains pending.");
+        }
+
         async Task<EfStore.RootImage> ImageAsync() => await store.ReadFirstRootAsync(Tenant, actor.Id, stop)
             ?? throw new InvalidOperationException("Expected the recorded Native checkpoint.");
         Task<IReadOnlyList<Message>> PendingAsync() => admission.ReadPendingDirectAsync(Tenant, actor.Id, stop);
@@ -197,32 +261,33 @@ internal static class PostgresHttpOwnerLoss
             """).SingleAsync(stop);
     }
 
-    internal static async Task<int> RunOwnerAsync(string fence, string pause, Contract.ActorRef actor)
+    internal static async Task<int> RunOwnerAsync(string fence, string pause, Contract.ActorRef actor, bool heldEvent = false)
     {
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var stop = limit.Token;
-        var open = OpenDatabase();
+        var open = OpenDatabase(DatabaseOptions(), heldEvent);
         var store = CreateStore(open, fence);
-        var registry = new WorkflowRegistry().Add(PostgresHeldDirectChecks.Build());
         var node = OwnerNode(Environment.ProcessId);
         await using var carrier = await LiveCarrier.OpenAsync(open, node, _ => { }, stop);
         var turns = 0;
         var terminalPrepared = false;
         string? approvalId = null;
-        var (host, worker) = await PostgresHeldDirectChecks.PrepareAsync(store, node, registry,
-            new WorkerOptions
+        var workerOptions = new WorkerOptions
+        {
+            Lease = Lease,
+            Transport = new ProcessLink(carrier.Relay, () => ApprovalSettledAsync().GetAwaiter().GetResult()),
+            OnTurn = (_, _, _) => turns++,
+            OnPreparedCheckpoint = (turn, _, _) =>
             {
-                Lease = Lease,
-                Transport = new ProcessLink(carrier.Relay, () => ApprovalSettledAsync().GetAwaiter().GetResult()),
-                OnTurn = (_, _, _) => turns++,
-                OnPreparedCheckpoint = (turn, _, _) =>
-                {
-                    if (turn.Row is not { Revision: 2 }) return;
-                    terminalPrepared = true;
-                    if (pause == "before") Pause("prepared");
-                },
-                OnJournal = _ => { if (pause == "after" && terminalPrepared) Pause("landed"); }
-            }, stop);
+                if (turn.Row is not { Revision: 2 }) return;
+                terminalPrepared = true;
+                if (pause == "before") Pause("prepared");
+            },
+            OnJournal = _ => { if (pause == "after" && terminalPrepared) Pause("landed"); }
+        };
+        var (host, worker) = heldEvent
+            ? await PrepareEventOwnerAsync(store, node, (await CreateEventServingAsync(stop)).Registry, workerOptions, stop)
+            : await PostgresHeldDirectChecks.PrepareAsync(store, node, new WorkflowRegistry().Add(PostgresHeldDirectChecks.Build()), workerOptions, stop);
         await host.HeartbeatAsync(Lease, stop);
         var activation = await host.ActivateAsync(0, stop);
         if (activation is null)
@@ -288,12 +353,49 @@ internal static class PostgresHttpOwnerLoss
         }
     }
 
-    private static Func<KernelDb> OpenDatabase()
+    private static DbContextOptions<KernelDb> DatabaseOptions()
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a fresh PostgreSQL fixture database.");
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        return () => KernelDb.ForPostgresRootReplies(options);
+        return new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+    }
+
+    private static Func<KernelDb> OpenDatabase(DbContextOptions<KernelDb> options, bool heldEvent) => heldEvent
+        ? () => PostgresPreviewHosting.CreateShippedContext(options)
+        : () => KernelDb.ForPostgresRootReplies(options);
+
+    private static async Task<KernelServing> CreateEventServingAsync(CancellationToken stop)
+    {
+        var serving = new KernelServing(capabilities: new(Schedules: false));
+        var chart = ExecutableOf("event-approval", "event-approval", Node("flow", Types.Flowchart,
+            structure: Structure("elsa.flowchart.structure", new
+            {
+                startNodeId = "open",
+                connections = new[] { Edge("open", "approve"), Edge("approve", "answer") }
+            }), slots: [Slot("Flowchart.Activities",
+                Node("open", Types.HttpEndpoint, EndpointInputs("approval/start", true)),
+                Node("approve", Types.HttpEndpoint, EndpointInputs("approval/wait", false)),
+                Node("answer", Types.WriteHttpResponse, [Literal("StatusCode", 202, "Int32"), Literal("Body", "approved")]))]));
+        await serving.ServeHostWorkflowAsync(NativeExecutableMapper.Map(chart, serving.Capabilities), stop);
+        return serving;
+
+        static object Edge(string from, string to) => new { source = new { nodeId = from, port = "Done" }, target = new { nodeId = to } };
+        static Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding[] EndpointInputs(string path, bool start) =>
+            [Literal("Path", path), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", start, "Boolean")];
+    }
+
+    private static async Task<(DurableHost Host, Worker Worker)> PrepareEventOwnerAsync(EfStore store, string node,
+        WorkflowRegistry registry, WorkerOptions options, CancellationToken stop)
+    {
+        await store.EnableRootSelfSendsAsync(stop);
+        await store.EnableRootJobsAsync(stop);
+        await store.EnableRootChildrenAsync(stop);
+        var (roots, count) = await store.BindWorkerPartitionAsync(0, stop);
+        var actor = new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]);
+        var adapter = new ActorAdapter(store.WorkerHeaders(roots), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
+            rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true, rootTerminalOutputLimit: EfStore.RootContentBytes);
+        var worker = new Worker(node, 0, store, adapter, options with { Partitions = count });
+        return (new DurableHost([worker]), worker);
     }
 
     private static EfStore CreateStore(Func<KernelDb> open, string fence) =>
@@ -345,10 +447,11 @@ internal static class PostgresHttpOwnerLoss
     {
         internal int Id => process.Id;
 
-        internal static OwnerProcess Start(string fence, string pause, Contract.ActorRef actor)
+        internal static OwnerProcess Start(string fence, string pause, Contract.ActorRef actor, bool heldEvent)
         {
             var info = new ProcessStartInfo("dotnet") { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true };
-            foreach (var argument in new[] { typeof(PostgresHttpOwnerLoss).Assembly.Location, "pg-http-owner-process", fence, pause, actor.Id })
+            var fixture = heldEvent ? "pg-http-event-owner-process" : "pg-http-owner-process";
+            foreach (var argument in new[] { typeof(PostgresHttpOwnerLoss).Assembly.Location, fixture, fence, pause, actor.Id })
                 info.ArgumentList.Add(argument);
             return new(Process.Start(info) ?? throw new InvalidOperationException("The fixture owner process did not start."));
         }
