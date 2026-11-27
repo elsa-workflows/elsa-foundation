@@ -9,7 +9,8 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 internal interface IKernelEventPublicationRegistration
 {
     bool SupportsDurableMode { get; }
-    void Validate(KernelServingPlan plan, WorkflowActivationCommand command, WorkflowExecutableSourceReference reference,
+    bool AdoptsExistingPublications { get; }
+    void Validate(KernelServingPlan plan, WorkflowExecutableIdentity identity, WorkflowExecutableSourceReference reference, long revision,
         IReadOnlyList<WorkflowTriggerBinding> claims);
 
     ValueTask<RuntimeKernelEventPublication?> ReadAsync(WorkflowActivationSlot slot, CancellationToken cancellationToken);

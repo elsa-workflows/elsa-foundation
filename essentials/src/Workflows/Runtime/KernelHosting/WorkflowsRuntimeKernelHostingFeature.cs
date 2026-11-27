@@ -96,7 +96,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             services.AddSingleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(),
                 new(persistenceScope, tenant.Tenant), tenant, sp.GetRequiredService<KernelServing>().Capabilities,
                 () => storage.BindEventStarts(tenant), sp.GetService<TimeProvider>() ?? TimeProvider.System,
-                sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), storage.RetainsEventStartReceipts, storage.TakesOrderedEventScan));
+                sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), storage.RetainsEventStartReceipts, storage.TakesOrderedEventScan,
+                adoptExisting: storage.TakesInlineStarts && storage.TakesOrderedEventScan));
             services.AddSingleton<IKernelEventPublicationRegistration>(sp => sp.GetRequiredService<KernelEventPublicationRelay>());
         }
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),

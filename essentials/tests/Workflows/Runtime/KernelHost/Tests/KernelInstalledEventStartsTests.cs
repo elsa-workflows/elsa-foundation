@@ -74,7 +74,18 @@ public sealed class KernelInstalledEventStartsTests
         return RunAsync(true, combined: true);
     }
 
-    private static async Task RunAsync(bool postgres, bool combined = false)
+    [Fact]
+    public Task Sqlite_adopts_the_active_stock_Event_without_republishing() => RunAsync(false, combined: true, adoptStock: true);
+
+    [SkippableFact]
+    public Task Postgres_adopts_the_active_stock_Event_without_republishing()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return RunAsync(true, combined: true, adoptStock: true);
+    }
+
+    private static async Task RunAsync(bool postgres, bool combined = false, bool adoptStock = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(55));
         var token = deadline.Token;
@@ -97,14 +108,16 @@ public sealed class KernelInstalledEventStartsTests
             var gate = new RelayGate { Hold = true };
             PublicationActivationResult original;
 
+            if (adoptStock)
+            {
+                await AdoptStockAsync();
+                return;
+            }
+
             await using (var firstApp = OpenShell())
             {
                 var services = firstApp.Services.GetRequiredService<IServiceScopeFactory>();
-                await using (var initialize = await services.CreateAsyncScopeAsync(Persistence))
-                {
-                    await initialize.ServiceProvider.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
-                    await initialize.ServiceProvider.GetRequiredService<PublishingSnapshotReviewDbContext>().Database.MigrateAsync(token);
-                }
+                await MigrateAsync(services);
                 var shell = firstApp.Services.GetRequiredService<KernelShellRuntime>();
                 await shell.StartAsync(token);
                 try
@@ -429,7 +442,104 @@ public sealed class KernelInstalledEventStartsTests
                 Assert.Contains(nameof(EventRegistrationResult.Conflict), conflict.Message, StringComparison.Ordinal);
             }
 
-            WebApplication OpenShell()
+            async Task AdoptStockAsync()
+            {
+                PublicationActivationResult published;
+                PublicationActivationResult excluded;
+                await using (var stock = OpenShell(stock: true))
+                {
+                    var services = stock.Services.GetRequiredService<IServiceScopeFactory>();
+                    await MigrateAsync(services);
+                    published = await PublishAsync(services, first, 0, null);
+                    excluded = await PublishAsync(services, ephemeral, 0, null);
+                    Assert.True(published.Succeeded, published.Failure?.Message);
+                    Assert.True(excluded.Succeeded, excluded.Failure?.Message);
+                    Assert.True((await PublishAsync(services, producer, 0, null)).Succeeded);
+                    Assert.Null(await ReadGenerationAsync(services, published.Slot));
+                    Assert.Null(await ReadGenerationAsync(services, excluded.Slot));
+                }
+
+                // The stock publications use the retained Runtime database. The combined owner installs fresh
+                // Actor Foundation storage and loses acknowledgment after its first provider registration.
+                gate.InterruptRevision = published.Slot.Revision;
+                RuntimeKernelEventPublication staged;
+                await using (var interrupted = OpenShell())
+                {
+                    var shell = interrupted.Services.GetRequiredService<KernelShellRuntime>();
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => shell.StartAsync(token));
+                    var services = interrupted.Services.GetRequiredService<IServiceScopeFactory>();
+                    staged = Assert.IsType<RuntimeKernelEventPublication>(await ReadGenerationAsync(services, published.Slot));
+                    Assert.Equal(published.Publication.PublicationId, staged.Source!.ActivationId);
+                    Assert.Equal(published.Slot.Revision, staged.Revision);
+                    Assert.Equal(PersistenceMode.Durable, staged.Source.Mode);
+                    Assert.Null(await ReadGenerationAsync(services, excluded.Slot));
+                }
+
+                await using var owner = OpenShell();
+                var installed = owner.Services.GetRequiredService<KernelShellRuntime>();
+                await installed.StartAsync(token);
+                try
+                {
+                    await owner.StartAsync(token);
+                    var services = owner.Services.GetRequiredService<IServiceScopeFactory>();
+                    await using (var read = await services.CreateAsyncScopeAsync(Persistence))
+                    {
+                        var authority = read.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>();
+                        Assert.Equal(published.Slot, await authority.FindAsync(Definition, KernelServing.DefaultSlotName, token));
+                        Assert.Equal(excluded.Slot, await authority.FindAsync(ephemeral.Identity.DefinitionId, KernelServing.DefaultSlotName, token));
+                        var records = read.ServiceProvider.GetRequiredService<IPublicationRecordStore>();
+                        Assert.Equal(published.Publication, await records.FindAsync(published.Publication.PublicationId, token));
+                    }
+                    var recovered = Assert.IsType<RuntimeKernelEventPublication>(await ReadGenerationAsync(services, published.Slot));
+                    Assert.Equal(staged.Source, recovered.Source);
+                    Assert.Equal(staged.Entries, recovered.Entries);
+                    Assert.Null(await ReadGenerationAsync(services, excluded.Slot));
+
+                    await ExecuteAsync(owner, producer);
+                    var pending = Assert.IsAssignableFrom<IOrderedEventStartAdmissions>(
+                        owner.Services.GetRequiredService<KernelShellStorage>().BindEventStarts(Tenant));
+                    await UntilAsync(async () => await pending.ReadPendingTailAsync(token) > 0);
+                    var tail = await pending.ReadPendingTailAsync(token);
+                    var target = Assert.Single(await pending.ReadPendingPageAsync(0, tail, 16, token));
+                    Assert.Equal(published.Slot.SlotId, target.Target.Slot);
+                    Assert.Equal(published.Slot.Revision, target.Target.Revision);
+                    Assert.Equal(first.Identity.ArtifactId, target.Target.Registration.ArtifactId);
+                    gate.Hold = false;
+
+                    var runs = owner.Services.GetRequiredService<KernelRuns>();
+                    await UntilAsync(async () =>
+                    {
+                        await foreach (var (actor, run) in runs.ListAsync(Definition, token))
+                            if (run.Workflow == first.Identity.ArtifactId && actor.Header.Status == Contract.ActorStatus.Finished)
+                            {
+                                var output = await runs.ReadTerminalOutputAsync(actor.Header.Ref, actor.Header.EndedAt!.Value, true, token);
+                                Assert.Equal("old", JsonNode.Parse(output!.Values!)!["seen"]!.GetValue<string>());
+                                return true;
+                            }
+                        return false;
+                    });
+
+                    // Ephemeral remains normally executable. Its start Event never joined the adopted cohort.
+                    await ExecuteAsync(owner, ephemeral, expectTerminal: false);
+                }
+                finally { await installed.StopAsync(token); }
+            }
+
+            async Task MigrateAsync(IServiceScopeFactory services)
+            {
+                await using var initialize = await services.CreateAsyncScopeAsync(Persistence);
+                await initialize.ServiceProvider.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
+                await initialize.ServiceProvider.GetRequiredService<PublishingSnapshotReviewDbContext>().Database.MigrateAsync(token);
+            }
+
+            async Task<RuntimeKernelEventPublication?> ReadGenerationAsync(IServiceScopeFactory services, WorkflowActivationSlot slot)
+            {
+                await using var read = await services.CreateAsyncScopeAsync(Persistence);
+                return await read.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>()
+                    .FindAsync(Scope, slot.SlotId, slot.Revision, token);
+            }
+
+            WebApplication OpenShell(bool stock = false)
             {
                 var builder = WebApplication.CreateBuilder();
                 builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
@@ -457,12 +567,15 @@ public sealed class KernelInstalledEventStartsTests
                 services.AddScoped<UnpublishPublicationSlotRequestHandler>();
                 var api = new WorkflowsRuntimeApiFeature();
                 api.ConfigureServices(services);
-                var storage = combined ? KernelShellStorage.CreateSharedActivationQualification(provider, path, foundation)
+                var storage = stock ? KernelShellStorage.Create(provider, path, foundation)
+                    : combined ? KernelShellStorage.CreateSharedActivationQualification(provider, path, foundation)
                     : KernelShellStorage.CreateEventStartScanQualification(provider, path, foundation);
                 new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, storage, protectChildExecutables: true);
-                services.Replace(ServiceDescriptor.Singleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(), Scope,
-                    Tenant, sp.GetRequiredService<KernelServing>().Capabilities, () => new PausableAdmissions(storage.BindEventStarts(Tenant), gate),
-                    TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), retainsReceipts: true, orderedScan: true)));
+                if (!stock)
+                    services.Replace(ServiceDescriptor.Singleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(), Scope,
+                        Tenant, sp.GetRequiredService<KernelServing>().Capabilities, () => new PausableAdmissions(storage.BindEventStarts(Tenant), gate),
+                        TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), retainsReceipts: true, orderedScan: true,
+                        adoptExisting: combined)));
                 new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
                 api.PostConfigureServices(services);
                 var app = builder.Build();
@@ -490,7 +603,7 @@ public sealed class KernelInstalledEventStartsTests
                 return await scope.ServiceProvider.GetRequiredService<PublicationActivator>().ActivateAsync(new(journal, executable, source), token);
             }
 
-            async Task ExecuteAsync(WebApplication app, WorkflowExecutable executable)
+            async Task ExecuteAsync(WebApplication app, WorkflowExecutable executable, bool expectTerminal = true)
             {
                 var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
                 using var http = new HttpClient { BaseAddress = new(address) };
@@ -518,6 +631,7 @@ public sealed class KernelInstalledEventStartsTests
                     Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(token));
                     Assert.Equal("Committed", receipt.PersistenceOutcome);
                     Assert.NotNull(receipt.WorkflowExecutionId);
+                    if (!expectTerminal) return;
                     var runs = app.Services.GetRequiredService<KernelRuns>();
                     await UntilAsync(async () =>
                     {

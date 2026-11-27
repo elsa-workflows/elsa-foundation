@@ -193,7 +193,7 @@ public sealed class KernelActivationCoordinator(
             var events = EventPublications is null
                 ? []
                 : KernelEventClaims.Create(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt, mode);
-            EventPublications?.Validate(plan, command, reference, events);
+            EventPublications?.Validate(plan, command.Executable.Identity, reference, checked(command.ExpectedRevision + 1), events);
             await PrepareProjectionsAsync(command.ActivationId,
                 [.. ScheduleClaims(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt), .. events],
                 cancellationToken);
@@ -660,21 +660,34 @@ public sealed class KernelActivationCoordinator(
 
             // 6. Ensure this host serves it.
             var publication = await ReadEventPublicationAsync(slot, cancellationToken);
-            if (serving.Find(slot.SlotId) is { } served && served.ActivationId == activationId && serving.Registry.Contains(served.Workflow.Id))
-            {
-                if (repaired || publication is not null) await NotifyServingAsync(slot, served.Workflow.Id);
-                return (slot, await ApplyEventPublicationAsync(slot, publication, cancellationToken));
-            }
-            if (restore is null)
+            var served = serving.Find(slot.SlotId);
+            var servesHere = served?.ActivationId == activationId && serving.Registry.Contains(served.Workflow.Id);
+            var adoptEvents = publication is null && EventPublications is { AdoptsExistingPublications: true } &&
+                (!servesHere || NativeStartTriggers.StartEvents(served!.Workflow).Any());
+            if (restore is null && (!servesHere || adoptEvents))
             {
                 (restore, var refusal) = await PlanRestoreAsync(slot, cancellationToken);
                 if (refusal is not null) return (slot, refusal);
             }
-            if (adoption is not null && !adopted)
+            if (!servesHere && adoption is not null && !adopted)
             {
                 var claims = ScheduleClaims(restore!.Serving, restore.Identity, activationId, restore.Source.CreatedAt);
                 if (claims.Length > 0 && !await adoption.TryAdoptSchedulesAsync(slot, restore.Source, claims, [], cancellationToken))
                     return await ScheduleAdoptionMovedAsync(slot, cancellationToken);
+            }
+            if (adoptEvents && PlanEventAdoption(restore!, slot) is { Length: > 0 } eventClaims)
+            {
+                if (activationSwitch is not IWorkflowEventAdoption eventAdoption)
+                    throw new InvalidOperationException("Event cutover requires the physical publication adoption store.");
+                if (!await eventAdoption.TryAdoptEventsAsync(slot, restore!.Source, eventClaims, cancellationToken))
+                    return (slot, EventPublicationPending(slot, new InvalidOperationException("Publication authority changed during Event adoption.")));
+                publication = await ReadEventPublicationAsync(slot, cancellationToken) ??
+                    throw new InvalidOperationException("The adopted Event generation could not be read back.");
+            }
+            if (servesHere)
+            {
+                if (repaired || publication is not null) await NotifyServingAsync(slot, served!.Workflow.Id);
+                return (slot, await ApplyEventPublicationAsync(slot, publication, cancellationToken));
             }
             await ServeAsync(restore!.Serving, slot.Revision, cancellationToken);
             logger?.LogInformation("Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves on this host again",
@@ -690,7 +703,29 @@ public sealed class KernelActivationCoordinator(
         }
     }
 
-    private sealed record RestorePlan(KernelServingPlan Serving, WorkflowExecutableIdentity Identity, WorkflowExecutableSourceReference Source);
+    private sealed record RestorePlan(KernelServingPlan Serving, WorkflowExecutableIdentity Identity, WorkflowExecutableSourceReference Source,
+        WorkflowExecutable Executable);
+
+    private WorkflowTriggerBinding[] PlanEventAdoption(RestorePlan restore, WorkflowActivationSlot slot)
+    {
+        var served = restore.Serving.Served!;
+        if (!NativeStartTriggers.StartEvents(served.Workflow).Any()) return [];
+        var mode = EventPersistenceModes!.Resolve(restore.Executable);
+        if (mode == PersistenceMode.Ephemeral) return [];
+        try
+        {
+            var claims = KernelEventClaims.Create(restore.Serving, restore.Identity, served.ActivationId, restore.Source.CreatedAt, mode);
+            EventPublications!.Validate(restore.Serving, restore.Identity, restore.Source, slot.Revision, claims);
+            return claims;
+        }
+        catch (ArgumentException error)
+        {
+            // Stock can publish Event nodes with names this provider cannot register. Preserve the served executable.
+            logger?.LogWarning(error, "Existing definition {DefinitionId} slot {SlotName} cannot be registered for Event starts",
+                slot.WorkflowDefinitionId, slot.SlotName);
+            return [];
+        }
+    }
 
     private async ValueTask<(RestorePlan? Plan, WorkflowActivationResult? Refusal)> PlanRestoreAsync(WorkflowActivationSlot slot,
         CancellationToken token)
@@ -716,7 +751,7 @@ public sealed class KernelActivationCoordinator(
                 DefinitionVersionId = source.DefinitionVersionId,
                 ArtifactVersion = source.ArtifactVersion
             };
-            return (new(plan, identity, source), null);
+            return (new(plan, identity, source, executable), null);
         }
         catch (Exception refused) when (refused is ArgumentException or InvalidOperationException)
         {

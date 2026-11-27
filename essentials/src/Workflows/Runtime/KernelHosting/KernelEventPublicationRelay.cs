@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 /// <summary>Reconciles committed Runtime publication generations and their provider-selected starts.</summary>
 internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, TriggerScope scope, BoundScope actors,
     KernelHostCapabilities capabilities, Func<IEventStartAdmissions> bind, TimeProvider clock, ILogger<KernelEventPublicationRelay> logger,
-    bool retainsReceipts = false, bool orderedScan = false)
+    bool retainsReceipts = false, bool orderedScan = false, bool adoptExisting = false)
     : IKernelEventPublicationRegistration
 {
     private const int RuntimePageSize = 16;
@@ -45,18 +45,19 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
     }
 
     public bool SupportsDurableMode => retainsReceipts;
+    public bool AdoptsExistingPublications => adoptExisting;
 
-    public void Validate(KernelServingPlan plan, WorkflowActivationCommand command, WorkflowExecutableSourceReference reference,
+    public void Validate(KernelServingPlan plan, WorkflowExecutableIdentity identity, WorkflowExecutableSourceReference reference, long revision,
         IReadOnlyList<WorkflowTriggerBinding> claims)
     {
-        if (claims.Count == 0 || plan.Served is not { Workflow: { } workflow }) return;
-        var source = new RuntimeKernelEventSource(command.ActivationId, reference.SourceReferenceId, reference.SourceKind, reference.SourceId,
-            reference.SourceVersion, command.Executable.Identity)
+        if (claims.Count == 0 || plan.Served is not { Workflow: { } workflow } served) return;
+        var source = new RuntimeKernelEventSource(served.ActivationId, reference.SourceReferenceId, reference.SourceKind, reference.SourceId,
+            reference.SourceVersion, identity)
         {
             Mode = claims[0].Metadata.ContainsKey(RuntimeKernelEventPublication.ModeMetadata) ? PersistenceMode.Durable : null
         };
-        var value = new RuntimeKernelEventPublication(new(scope.Persistence, reference.TenantId), plan.SlotId, command.SlotName,
-            command.Executable.Identity.DefinitionId, checked(command.ExpectedRevision + 1), source,
+        var value = new RuntimeKernelEventPublication(new(scope.Persistence, reference.TenantId), plan.SlotId, served.SlotName,
+            identity.DefinitionId, revision, source,
             claims.Select(claim => new RuntimeKernelEventEntry(claim.ExecutableNodeId,
                 claim.Metadata[RuntimeKernelEventPublication.EventNameMetadata])).ToArray());
         KernelScheduleAuthority.RequireBoundScope(value.Scope, actors);
