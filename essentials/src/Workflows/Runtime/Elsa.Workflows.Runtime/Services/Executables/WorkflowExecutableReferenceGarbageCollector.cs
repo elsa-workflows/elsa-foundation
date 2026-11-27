@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IWorkflowExecutionStateStore _physicalWorkflowExecutions;
     private readonly IWorkflowDispatchRetentionRootStore? _workflowDispatchRootStore;
+    private IRuntimeKernelScheduleRetentionRoots? KernelScheduleRoots { get; init; }
     private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
     private readonly IStimulusDeliveryStore? _ordinaryCollectionGuard;
     private readonly IRuntimePostCommitOutboxStore? _ordinaryOutbox;
@@ -211,6 +213,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         var physicalExecutions = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
             ? sp.GetService<CoalescingInner<IWorkflowExecutionStateStore>>()?.Value : executions;
         var dispatch = sp.GetService<IWorkflowDispatchRetentionRootStore>();
+        var scheduleRoots = sp.GetService<IRuntimeKernelScheduleRetentionRoots>();
         var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkflowExecutableGarbageCollectionOptions>>();
         var clock = sp.GetRequiredService<TimeProvider>();
         var logger = sp.GetRequiredService<ILogger<WorkflowExecutableReferenceGarbageCollector>>();
@@ -222,9 +225,10 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             templates.CanMaintainReferences(material, references) && references.CanWriteRootReferences(material) &&
             delivery.CanRetainExecutables(physicalOutbox, material, references, physicalExecutions))
             return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
-                options, clock, logger, delivery, physicalExecutions);
+                options, clock, logger, delivery, physicalExecutions) { KernelScheduleRoots = scheduleRoots };
         return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
-            options, clock, logger, delivery ?? physicalOutbox as IStimulusDeliveryStore, physicalOutbox, physicalExecutions ?? executions);
+            options, clock, logger, delivery ?? physicalOutbox as IStimulusDeliveryStore, physicalOutbox, physicalExecutions ?? executions)
+            { KernelScheduleRoots = scheduleRoots };
     }
 
     private WorkflowExecutableReferenceGarbageCollector(
@@ -559,6 +563,8 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         roots.AddRange(await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         if (_workflowDispatchRootStore is not null)
             roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        if (KernelScheduleRoots is not null)
+            roots.AddRange(await KernelScheduleRoots.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         return roots;
     }
 

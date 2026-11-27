@@ -12772,3 +12772,54 @@ Elsa.Workflows.Runtime.Core.Contracts.IBookmarkResumeDispatcher.CanDispatchChild
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector.ModelKey.get -> string!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector.Project(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState! execution) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStatus?
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.RuntimeKernelScheduleOccurrence(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, string! ScheduleKey, string! ScheduleReference, string! SlotName, string! ActivationId, long PublicationRevision, long ArmGeneration, string! TimerDeliveryId, System.DateTimeOffset Due, System.DateTimeOffset AcceptBefore, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, string! TriggerNode, string! PinnedStart) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Scope.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ScheduleKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ScheduleKey.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ScheduleReference.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ScheduleReference.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.SlotName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.SlotName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ActivationId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ActivationId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.PublicationRevision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.PublicationRevision.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ArmGeneration.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ArmGeneration.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.TimerDeliveryId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.TimerDeliveryId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Due.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Due.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.AcceptBefore.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.AcceptBefore.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Executable.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.TriggerNode.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.TriggerNode.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.PinnedStart.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.PinnedStart.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Id.get -> string!
+const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ReservationType = "kernel-schedule-publication-v1" -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ReservationKey(string! scheduleKey) -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryAcceptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.DateTimeOffset>>! readScheduleClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.RuntimeKernelScheduleOccurrenceCursor(long AcceptedAtUtcTicks, string! Id) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.AcceptedAtUtcTicks.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.AcceptedAtUtcTicks.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.Id.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.Id.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.RuntimeKernelScheduleOccurrenceDelivery(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! Occurrence, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor! Cursor) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.Occurrence.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.Occurrence.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.Cursor.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.Cursor.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceDeliveryStore
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceDeliveryStore.ListPendingAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor? after, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceDeliveryStore.MarkMaterializedAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, string! actorReference, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleRetentionRoots
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleRetentionRoots.ListPinnedExecutableArtifactIdsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>
