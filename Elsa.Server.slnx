@@ -135,6 +135,10 @@
   <Folder Name="/extensions/Elsa3/tests/Migration/">
     <Project Path="extensions/Elsa3/tests/Migration/Tests/Elsa3.Migration.Tests.csproj" />
   </Folder>
+  <Folder Name="/extensions/Elsa3/tests/Migration/Fixtures/" />
+  <Folder Name="/extensions/Elsa3/tests/Migration/Fixtures/AcmeFeature/">
+    <Project Path="extensions/Elsa3/tests/Migration/Fixtures/AcmeFeature/Acme.Elsa3MigrationFixture.csproj" />
+  </Folder>
   <Folder Name="/extensions/Integrations/" />
   <Folder Name="/extensions/Integrations/src/">
     <Project Path="extensions/Integrations/src/Templates/Elsa.Integrations.Templates.csproj" />

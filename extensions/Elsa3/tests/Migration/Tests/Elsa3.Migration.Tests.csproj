@@ -15,11 +15,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Migration\Tooling\Elsa3.Migration.Tooling.csproj" />
+    <!-- The fixture feature project (spec 1237 T003). -->
+    <ProjectReference Include="..\Fixtures\AcmeFeature\Acme.Elsa3MigrationFixture.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- The contract the embedded schema must stay identical to (FR-020). -->
     <None Include="..\..\..\..\..\specs\1237-elsa3-migration-cli\contracts\report.schema.json" Link="Contracts\report.schema.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The fixture export and its zip copy (spec 1237 T002); not the fixture feature project beside them. -->
+    <None Include="..\Fixtures\export\**" LinkBase="Fixtures\export" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Fixtures\export.zip" Link="Fixtures\export.zip" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

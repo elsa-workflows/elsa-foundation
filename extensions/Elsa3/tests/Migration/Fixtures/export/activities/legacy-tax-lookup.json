@@ -1,0 +1,95 @@
+{
+  "id": "legacy-tax-lookup-v1",
+  "definitionId": "legacy-tax-lookup",
+  "name": "LegacyTaxLookup",
+  "description": "Reusable that sets a variable, which a reusable cannot. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [
+    {
+      "id": "RateVar",
+      "name": "Rate",
+      "typeName": "String",
+      "isArray": false,
+      "value": "SENTINEL-1237-default",
+      "storageDriverTypeName": null
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 280,
+          "y": 340
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "SetRate",
+        "nodeId": "Workflow1:SetRate",
+        "name": "SetRate",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 60,
+              "y": 200
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "RateVar",
+          "name": "Rate",
+          "typeName": "String",
+          "value": null
+        },
+        "value": {
+          "typeName": "Object",
+          "expression": {
+            "type": "Literal",
+            "value": "SENTINEL-1237-rate"
+          }
+        }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

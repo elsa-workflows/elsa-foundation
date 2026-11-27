@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Test-only feature for the Elsa 3 migration CLI fixture (spec 1237 T003): it provides the fixture export's custom activity, JavaScript host functions and variable type, so assess clears their findings (SC-007).</Description>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
+  </ItemGroup>
+
+</Project>
