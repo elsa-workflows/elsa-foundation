@@ -385,8 +385,12 @@ internal static class SqliteShippedInstallChecks
             prior.Add([entry]);
             await RequireEarlyStopRefusedAsync(prior, shape);
         }
-        await RequireEarlyStopRefusedAsync(Enumerable.Repeat(new[] { unavailable }, FoundationRootParkFacts.MaxProtectionRefusals - 2).ToArray(),
-            "a rejected malformed refusal", malformed: """{"Outcome":"refused","Operation":"123","Reason":"unavailable", """);
+        const string malformedRefusal = """{"Outcome":"refused","Operation":"123","Reason":"unavailable", """;
+        var priorToMalformed = Enumerable.Repeat(new[] { unavailable }, FoundationRootParkFacts.MaxProtectionRefusals - 2).ToArray();
+        if (db.UsesRootSequencedJournal)
+            await RequireEarlyStopRefusedAsync(priorToMalformed, "a rejected malformed refusal", malformed: malformedRefusal);
+        else
+            await RequireEarlyStopRefusedAsync([.. priorToMalformed, [malformedRefusal]], "a retained malformed refusal");
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
             UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4, "FoundationParkCleared" = 2,
                 "FoundationParkClearingKind" = 'kernel.terminate' WHERE "Id" = 'projected'
@@ -424,10 +428,16 @@ internal static class SqliteShippedInstallChecks
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
             await JournalAsync("mixed", revision: 2, terminated);
-            await RefusedAsync<SqliteException>(() => JournalAsync("mixed", revision: 2, discarded),
-                "the sequenced journal refuses a second outcome at the paired revision", sqliteMessage: IncreasingJournalRevisions);
+            if (db.UsesRootSequencedJournal)
+                await RefusedAsync<SqliteException>(() => JournalAsync("mixed", revision: 2, discarded),
+                    "the sequenced journal refuses a second outcome at the paired revision", sqliteMessage: IncreasingJournalRevisions);
+            else
+                await JournalAsync("mixed", revision: 2, discarded);
             Require(await EndParkAsync("mixed", 2, InstanceStatus.Cancelled) == 1,
-                "the terminated outcome still admits the matching checkpoint update after rejecting the duplicate");
+                "the terminated outcome admits the matching checkpoint update");
+            if (!db.UsesRootSequencedJournal)
+                await RefusedAsync<SqliteException>(() => write.CommitAsync(token),
+                    "a conflicting second outcome prevents the matching terminal checkpoint from committing", ForeignKeyConstraint);
             await write.RollbackAsync(token);
         }
         await using (var write = await db.Database.BeginTransactionAsync(token))
@@ -509,8 +519,16 @@ internal static class SqliteShippedInstallChecks
             {
                 await JournalAsync("projected", revision, group[0]);
                 foreach (var duplicate in group.Skip(1))
-                    await RefusedAsync<SqliteException>(() => JournalAsync("projected", revision, duplicate),
-                        "the sequenced journal refuses a duplicate refusal at one revision", sqliteMessage: IncreasingJournalRevisions);
+                {
+                    if (db.UsesRootSequencedJournal)
+                        await RefusedAsync<SqliteException>(() => JournalAsync("projected", revision, duplicate),
+                            "the sequenced journal refuses a duplicate refusal at one revision", sqliteMessage: IncreasingJournalRevisions);
+                    else
+                        await JournalAsync("projected", revision, duplicate);
+                }
+                if (!db.UsesRootSequencedJournal && group.Length > 1)
+                    Require(await db.Journal.CountAsync(row => row.Instance == "projected" && row.Revision == revision, token) == group.Length,
+                        "the journal without sequencing contains every duplicate refusal at one revision");
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision} WHERE "Id" = 'projected'
                     """, token);
