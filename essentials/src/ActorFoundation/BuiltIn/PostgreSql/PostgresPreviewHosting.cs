@@ -195,6 +195,14 @@ public static partial class PostgresPreviewHosting
         return db.UsesRootSelfProtocol;
     }
 
+    /// <summary>Whether the selected profile supports managed schedule delivery and irreversible cohort retirement.</summary>
+    public static bool TakesManagedSchedules(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootScheduleControls && db.UsesRootScheduleLineage;
+    }
+
     /// <summary>Whether the selected format takes durable actor-owned timers, as used by the Native Delay activity.</summary>
     public static bool TakesTimers(Func<KernelDb> create)
     {

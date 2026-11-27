@@ -62,6 +62,10 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
             qualificationFormat: qualificationFormat), LazyThreadSafetyMode.PublicationOnly);
     }
 
+    /// <summary>Whether this profile supports managed schedule delivery and irreversible cohort retirement.</summary>
+    public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
+        qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
+
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>
     public async Task InstallShippedAsync(CancellationToken cancellationToken = default)
     {

@@ -119,6 +119,14 @@ internal static class KernelScheduleReconciliationChecks
             await count.CancelAsync();
             await running.WaitAsync(TimeSpan.FromSeconds(5));
         }
+        Require(log.Errors.IsEmpty, "ordinary cancellation does not report a schedule fault");
+        var failure = new InvalidOperationException("Schedule timer creation failed.");
+        var faulted = new KernelScheduleReconciliationWorker(runtime.GetRequiredService<IServiceScopeFactory>(), Named,
+            ContractScopes.Bind("default"), KernelHostCapabilities.All, null, provider,
+            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), new FailingTimerClock(failure), log);
+        await faulted.RunAsync(deadline.Token);
+        Require(log.Errors.TryDequeue(out var reported) && ReferenceEquals(reported, failure),
+            "an escaping schedule fault is reported immediately, without waiting for shell shutdown");
         Console.WriteLine("ok schedule reconciliation settles scoped control, admission, replay and retirement");
         return 0;
 
@@ -365,12 +373,22 @@ internal static class KernelScheduleReconciliationChecks
         }
     }
 
+    private sealed class FailingTimerClock(Exception failure) : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            throw failure;
+    }
+
     private sealed class RecordingLogger : ILogger<KernelScheduleReconciliationWorker>
     {
         internal readonly ConcurrentQueue<string> Messages = new();
+        internal readonly ConcurrentQueue<Exception> Errors = new();
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
             Messages.Enqueue(formatter(state, exception));
+            if (logLevel == LogLevel.Error && exception is not null) Errors.Enqueue(exception);
+        }
     }
 }
