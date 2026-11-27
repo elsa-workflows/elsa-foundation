@@ -63,7 +63,7 @@ public static partial class SqliteEmbeddedHosting
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         cancellationToken.ThrowIfCancellationRequested();
-        if (publicEventHost is not null) RequireFoundationActorType(publicEventHost.ActorType);
+        if (publicEventHost is not null) RootPublicEventHost.RequireConfiguredActorType(publicEventHost.ActorType);
         var path = Path.GetFullPath(databasePath);
         // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
         using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }

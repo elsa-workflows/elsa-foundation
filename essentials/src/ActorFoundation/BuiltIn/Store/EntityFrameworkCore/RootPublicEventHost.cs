@@ -1,3 +1,4 @@
+using Kernel.Durable;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.EntityFramework;
@@ -5,6 +6,13 @@ namespace Kernel.EntityFramework;
 internal sealed record RootPublicEventHost(string ActorType, bool ProtectsStarts)
 {
     internal const string Table = "FoundationPublicEventHost";
+
+    internal static void RequireConfiguredActorType(string actorType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorType);
+        if (!FoundationMetadataLimits.FitsName(actorType) || actorType.Contains('\0'))
+            throw new ArgumentException("Invalid public Event host actor type.", nameof(actorType));
+    }
 
     internal static string Columns(bool sqlite) => sqlite
         ? """

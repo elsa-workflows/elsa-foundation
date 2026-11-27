@@ -126,7 +126,8 @@ expect_refusal() {
     return 1
 }
 
-marker='SELECT string_agg("Id" || $$=$$ || "StoreSchema" || $$/$$ || "MessageProtocol" || $$/$$ || "JournalCodec", $$ $$ ORDER BY "Id") FROM "KernelStoreVersions"'
+# The pair declares the format and provider definitions. The fingerprint also covers profile-owned install markers.
+marker='SELECT string_agg("Id" || $$=$$ || "StoreSchema" || $$/$$ || "MessageProtocol" || $$/$$ || "JournalCodec", $$ $$ ORDER BY "Id") FROM "KernelStoreVersions" WHERE "Id" IN (1, 2)'
 roles=(install cold-owner take sweeper projector edge journal)
 for fence in checked in-batch; do
     lane="$scratch/$fence"
