@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-internal static class KernelScheduleOccurrenceContract
+internal static partial class KernelScheduleOccurrenceContract
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 26, 1, 0, 0, TimeSpan.Zero);
 
@@ -239,6 +239,7 @@ internal static class KernelScheduleOccurrenceContract
         await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
         Assert.Equal(3, await context.KernelScheduleOccurrences.CountAsync());
         await CheckDefaultAliasHandoffAsync(open);
+        await CheckScheduleAdoptionAsync(open);
     }
 
     private static async Task CheckDefaultAliasHandoffAsync(Func<RuntimeDbContext> open)

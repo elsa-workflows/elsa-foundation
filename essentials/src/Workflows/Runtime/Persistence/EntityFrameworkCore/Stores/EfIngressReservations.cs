@@ -57,7 +57,7 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
     /// <summary>Stages one owner's whole exact claim set in the caller's transaction and returns its previous claims.</summary>
     internal async ValueTask<IReadOnlyList<RuntimeIngressReservation>> StageOwnerAsync(TriggerScope scope, string ownerKind, string ownerId,
         IReadOnlyList<RuntimeIngressReservation> claims, CancellationToken ct,
-        IReadOnlyDictionary<string, IIngressReservationPolicy>? policies = null)
+        IReadOnlyDictionary<string, IIngressReservationPolicy>? policies = null, bool adoptSchedules = false)
     {
         Require(scope.Persistence, ct);
         if (context.Database.CurrentTransaction is null) throw new InvalidOperationException("Reservation mutation requires its owning source transaction.");
@@ -81,6 +81,8 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
         // Standalone resource identities remain tenant-scoped and cannot reconcile another tenant's claims.
         var publicationOwner = ownerKind == RuntimeIngressReservation.PublicationSlotOwner;
         var owned = context.IngressReservations.Where(row => row.ScopeHash == scopeHash && row.OwnerKind == ownerKind && row.OwnerHash == ownerHash);
+        if (adoptSchedules)
+            owned = owned.Where(row => row.StimulusTypeHash == Hash(RuntimeKernelScheduleOccurrence.ReservationType));
         if (!publicationOwner) owned = owned.Where(row => row.TenantKey == tenantKey);
         var ownedRows = await owned.ToArrayAsync(ct);
         var previous = ownedRows.Select(row => Read(row, scope.Persistence)).ToArray();
@@ -90,6 +92,9 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
                 throw new InvalidDataException("The reservation owner projection differs from its actual source and tenant.");
         }
         var ids = claims.Select(item => item.ReservationId).ToHashSet(StringComparer.Ordinal);
+        if (adoptSchedules && (claims.Any(claim => claim.StimulusType != RuntimeKernelScheduleOccurrence.ReservationType) ||
+            previous.Any(old => !claims.Any(claim => RuntimeIngressReservationRules.Same(old, claim)))))
+            throw new InvalidDataException("The existing schedule reservations differ from the selected publication.");
         foreach (var row in ownedRows.Where(row => !ids.Contains(row.Id))) context.IngressReservations.Remove(row);
         foreach (var claim in claims)
         {
@@ -104,8 +109,11 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
             }
             else
             {
-                RuntimeIngressReservationRules.CheckOwner(Read(row, scope.Persistence), claim);
-                Copy(row, claim, checked(row.Revision + 1));
+                var current = Read(row, scope.Persistence);
+                RuntimeIngressReservationRules.CheckOwner(current, claim);
+                if (!adoptSchedules) Copy(row, claim, checked(row.Revision + 1));
+                else if (!RuntimeIngressReservationRules.Same(current, claim))
+                    throw new InvalidDataException("The existing schedule reservation differs from the selected publication.");
             }
         }
         return previous;

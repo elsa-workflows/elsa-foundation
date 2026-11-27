@@ -72,7 +72,7 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
 
     // Only the activation switch stages these rows, after staging the exact reservation in the same Serializable transaction.
     internal async ValueTask StageAsync(PersistenceScope persistence, string slotId, IReadOnlyList<RuntimeKernelScheduleControl> desired,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool adoptSchedules = false)
     {
         if (context.Database.CurrentTransaction is null || access.Current.RequireScope() != persistence)
             throw new InvalidOperationException("Schedule controls require the owning publication transaction.");
@@ -94,12 +94,13 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
                     throw InvalidControl();
                 if (current.Owner != replacement.Owner || current.Scope != replacement.Scope)
                 {
+                    if (adoptSchedules && current.Owner is not null) throw InvalidControl();
                     if (current.Owner is { } prior && prior.PublicationRevision >= replacement.Owner!.PublicationRevision)
                         throw InvalidControl();
                     Write(row, replacement with { Revision = checked(current.Revision + 1) });
                 }
             }
-            else if (current.Owner is not null)
+            else if (!adoptSchedules && current.Owner is not null)
                 Write(row, current with { Owner = null, Revision = checked(current.Revision + 1) });
             else throw InvalidControl();
         }
