@@ -41,8 +41,13 @@ public static partial class SqliteEmbeddedHosting
             : qualificationFormat is { } format &&
                 (format == StoreFormat.RootSequencedJournalQualification || format == StoreFormat.RootLiveEventQualification || SupportsPlayback);
 
-        public bool SupportsPlayback => qualificationFormat == StoreFormat.RootPlaybackQualification || SupportsDescendantPlayback;
-        public bool SupportsDescendantPlayback => qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification;
+        public bool SupportsPlayback => qualificationFormat is null
+            ? RootProfiles.Shipped.HasFlag(RootCapabilities.Playback)
+            : qualificationFormat == StoreFormat.RootPlaybackQualification || SupportsDescendantPlayback;
+
+        public bool SupportsDescendantPlayback => qualificationFormat is null
+            ? RootProfiles.Shipped.HasFlag(RootCapabilities.PlaybackDescendants)
+            : qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification;
 
         public ValueTask<Contract.ActorPlaybackPage?> ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.ActorPlaybackQuery query, CancellationToken cancellationToken = default) =>

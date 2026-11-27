@@ -22,7 +22,7 @@ if (args is ["workbench-shipped-history", var historyProvider and ("sqlite" or "
     historyMode is ([] or ["playback"] or ["descendants"]))
 {
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedHistoryAsync(historyWorkbench, historyProvider == "postgres",
-        playback: historyMode is ["playback"] or ["descendants"], descendants: historyMode is ["descendants"]);
+        historyMode.SingleOrDefault());
     return 0;
 }
 if (args is ["workbench-http-waits", var waitsProvider and ("sqlite" or "postgres"), var waitsWorkbench, .. var waitsMode] &&

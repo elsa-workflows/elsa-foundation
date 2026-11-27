@@ -16,16 +16,17 @@ namespace Elsa.Workbench.Qualification;
 
 internal static partial class WorkbenchPostgresPreview
 {
-    private static async Task VerifyPlaybackProviderAsync(string connection, string? sqlite, string run, bool descendants, CancellationToken token)
+    private static async Task VerifyPlaybackProviderAsync(string connection, string? sqlite, string run, string? qualification, CancellationToken token)
     {
         var postgres = sqlite is null;
+        var descendants = qualification is not "playback";
         var options = PlaybackOptions(connection, sqlite);
         var replacement = postgres && descendants ? new PlaybackCommitReplacement() : null;
         var validationFailure = replacement is null ? null : new PlaybackValidationFailure();
         var ownerOptions = replacement is null ? options : new DbContextOptionsBuilder<KernelDb>(options)
             .AddInterceptors(replacement, validationFailure!).Options;
         var definitions = new SqliteAdmissionDefinitions();
-        KernelDb Open() => OpenPlayback(ownerOptions, postgres, definitions, descendants);
+        KernelDb Open() => OpenPlayback(ownerOptions, postgres, definitions, qualification);
         var reads = new EfStore(Open, postgres);
         var query = new ActorPlaybackQuery(2, 0, null, null);
         var first = await reads.ReadRootPlaybackAsync("default", run, query, token);
@@ -38,7 +39,7 @@ internal static partial class WorkbenchPostgresPreview
                 { IncludeDescendants = true };
             var observer = new PlaybackScopePlanObserver(postgres);
             var intercepted = new DbContextOptionsBuilder<KernelDb>(options).AddInterceptors(observer).Options;
-            var monitored = new EfStore(() => OpenPlayback(intercepted, postgres, definitions, descendants), postgres);
+            var monitored = new EfStore(() => OpenPlayback(intercepted, postgres, definitions, qualification), postgres);
             var rankedPage = await monitored.ReadRootPlaybackAsync("default", run, ranked, token);
             Require(rankedPage is { Availability: ActorPlaybackAvailability.Available, SelectedPosition: 2 } &&
                 rankedPage.Items.Any(item => item.Position == 2) && observer.Checked == 3,
@@ -47,13 +48,16 @@ internal static partial class WorkbenchPostgresPreview
                 await RefusePostgresPlaybackDriftAsync(Open, run, ranked, token);
         }
         if (postgres)
-            await RefusePlaybackNamespaceReplacementAsync(options, run, descendants, token);
+            await RefusePlaybackNamespaceReplacementAsync(options, run, qualification, token);
 
         const string node = "playback-observation-probe";
         var actor = new PlaybackObservationProbe();
-        var sqliteHost = sqlite is null ? null : descendants
-            ? SqliteEmbeddedFoundation.ForPlaybackDescendantsQualification(sqlite, node, actor.Type)
-            : SqliteEmbeddedFoundation.ForPlaybackQualification(sqlite, node, actor.Type);
+        var sqliteHost = sqlite is null ? null : qualification switch
+        {
+            null => new SqliteEmbeddedFoundation(sqlite, node, actor.Type),
+            "playback" => SqliteEmbeddedFoundation.ForPlaybackQualification(sqlite, node, actor.Type),
+            _ => SqliteEmbeddedFoundation.ForPlaybackDescendantsQualification(sqlite, node, actor.Type)
+        };
         if (sqliteHost is not null) await sqliteHost.InstallShippedAsync(token);
         var requests = postgres ? PostgresPreviewHosting.CreateRequests(Open, node, actor.Type) : null;
         IHostedService owner = sqliteHost is null
@@ -154,7 +158,7 @@ internal static partial class WorkbenchPostgresPreview
         async Task<ActorPlaybackPage> VerifyAtomicProjectionAsync(ActorPlaybackPage before, PlaybackCommitReplacement drift,
             PlaybackValidationFailure failure)
         {
-            await using var observer = OpenPlayback(options, postgres: true, definitions, descendants: true);
+            await using var observer = OpenPlayback(options, postgres: true, definitions, qualification);
             var installed = await ReadPlaybackProjectorAsync(observer, token);
             const string completeMembership = """WHERE v."Known" = 1 OR a."Depth" = 0""";
             var selfOnly = installed.Replace(completeMembership, """WHERE a."Depth" = 0""", StringComparison.Ordinal);
@@ -476,19 +480,26 @@ internal static partial class WorkbenchPostgresPreview
             : new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
                 { DataSource = sqlite, ForeignKeys = true, Pooling = false }.ConnectionString).Options;
 
-    private static KernelDb OpenPlayback(DbContextOptions<KernelDb> options, bool postgres, SqliteAdmissionDefinitions definitions, bool descendants) =>
-        postgres
-            ? descendants ? PostgresPreviewHosting.CreatePlaybackDescendantsQualificationContext(options) : PostgresPreviewHosting.CreatePlaybackQualificationContext(options)
-            : KernelDb.ForSqliteRootRuntime(options, definitions, descendants ? StoreFormat.RootPlaybackDescendantsQualification : StoreFormat.RootPlaybackQualification);
+    private static KernelDb OpenPlayback(DbContextOptions<KernelDb> options, bool postgres, SqliteAdmissionDefinitions definitions,
+        string? qualification) =>
+        (postgres, qualification) switch
+        {
+            (true, null) => PostgresPreviewHosting.CreateShippedContext(options),
+            (true, "playback") => PostgresPreviewHosting.CreatePlaybackQualificationContext(options),
+            (true, _) => PostgresPreviewHosting.CreatePlaybackDescendantsQualificationContext(options),
+            (false, null) => KernelDb.ForSqliteRootRuntime(options, definitions),
+            (false, "playback") => KernelDb.ForSqliteRootRuntime(options, definitions, StoreFormat.RootPlaybackQualification),
+            _ => KernelDb.ForSqliteRootRuntime(options, definitions, StoreFormat.RootPlaybackDescendantsQualification)
+        };
 
     private sealed record PlaybackActorKey(int Partition, string Actor);
 
-    private static async Task RetirePlaybackAsync(string connection, string? sqlite, string run, CancellationToken token)
+    private static async Task RetirePlaybackAsync(string connection, string? sqlite, string run, string? qualification, CancellationToken token)
     {
         var postgres = sqlite is null;
         var options = PlaybackOptions(connection, sqlite);
         var definitions = new SqliteAdmissionDefinitions();
-        KernelDb Open() => OpenPlayback(options, postgres, definitions, descendants: true);
+        KernelDb Open() => OpenPlayback(options, postgres, definitions, qualification);
         var scope = EmbeddedTenant.Bind("default");
         await using var db = Open();
         var store = new EfStore(Open, postgres, fenceInBatch: true);
@@ -547,10 +558,10 @@ internal static partial class WorkbenchPostgresPreview
         }
     }
 
-    private static async Task RefusePlaybackNamespaceReplacementAsync(DbContextOptions<KernelDb> options, string run, bool descendants, CancellationToken token)
+    private static async Task RefusePlaybackNamespaceReplacementAsync(DbContextOptions<KernelDb> options, string run, string? qualification, CancellationToken token)
     {
         var definitions = new SqliteAdmissionDefinitions();
-        await using var observer = OpenPlayback(options, postgres: true, definitions, descendants);
+        await using var observer = OpenPlayback(options, postgres: true, definitions, qualification);
         await observer.Database.ExecuteSqlRawAsync("""
             CREATE SCHEMA playback_replacement;
             CREATE TABLE playback_replacement."KernelStoreVersions" AS TABLE public."KernelStoreVersions";
@@ -564,7 +575,7 @@ internal static partial class WorkbenchPostgresPreview
         try
         {
             var intercepted = new DbContextOptionsBuilder<KernelDb>(options).AddInterceptors(swap).Options;
-            var reads = new EfStore(() => OpenPlayback(intercepted, postgres: true, definitions, descendants), postgres: true);
+            var reads = new EfStore(() => OpenPlayback(intercepted, postgres: true, definitions, qualification), postgres: true);
             try
             {
                 await reads.ReadRootPlaybackAsync("default", run, new(2, null, "f1", "f1"), token);
