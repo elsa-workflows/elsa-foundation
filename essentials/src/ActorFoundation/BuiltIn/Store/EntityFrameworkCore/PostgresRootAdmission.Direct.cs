@@ -274,7 +274,7 @@ internal sealed partial class PostgresRootAdmission
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
                 AND m."EventMatch" IS NULL AND NOT m."Done" AND m."Id" NOT LIKE 'operator/%' ORDER BY m."Seq"
             """).AsNoTracking().ToListAsync(cancellationToken);
-        return rows.Select(row => DecodeDirect(row, reference, db.UsesRootReplyProtocol, db.UsesRootLiveEventWaits)).ToArray();
+        return rows.Select(row => DecodeDirect(row, reference, db.UsesRootReplyProtocol, db.UsesRootLiveEventWaits, db.UsesRootScheduleControls)).ToArray();
     }
 
     internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence, bool retentionDelete = false)
@@ -292,7 +292,8 @@ internal sealed partial class PostgresRootAdmission
         return suffix[12] == '4' && "89ab".Contains(suffix[16]) && suffix.IndexOfAnyExcept("0123456789abcdef") < 0;
     }
 
-    internal static Message DecodeDirect(MessageEntity row, string reference, bool replies = false, bool liveEventWaits = false)
+    internal static Message DecodeDirect(MessageEntity row, string reference, bool replies = false, bool liveEventWaits = false,
+        bool scheduleControls = false)
     {
         var held = IsHeldDirect(row.Start);
         if (held != (row.ReplyTo is not null) || held &&
@@ -303,6 +304,13 @@ internal sealed partial class PostgresRootAdmission
         var header = ReadDirectHeader(row.Start, reference, row.Id);
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
         var kind = header.EscapedKind ?? row.Kind;
+        if (header.ScheduleControl is { } control)
+        {
+            if (!scheduleControls || held || header.EventWait is not null || header.ExplicitZeroDue ||
+                row is not { Due: 0, KeepUntil: not null, Sender: null, InboxScope: InboxKey.FoundationOccurrenceScope, EventMatch: null })
+                throw new StoreException(Failure.Definite, "Unsupported trusted schedule control envelope.");
+            RootScheduleControls.RequireIntent(control, header.Operation, kind, payload);
+        }
         EventMatch? match = null;
         if (kind == Kinds.Event || header.EventWait is not null)
         {
@@ -316,7 +324,10 @@ internal sealed partial class PostgresRootAdmission
         }
         return new Message(header.Operation, new(row.Target), kind, payload,
             Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, ReplyTo: row.ReplyTo, TargetCreation: header.Creation)
-            { StorageId = row.Id, ProjectedEvent = match }.WithInboxScope(row.InboxScope);
+            {
+                StorageId = row.Id, ProjectedEvent = match,
+                FoundationScheduleControl = header.ScheduleControl is { } trusted ? (trusted.Tenant, trusted.ActorType) : null
+            }.WithInboxScope(row.InboxScope);
     }
 
     private static StoredDirect ReadDirectHeader(string? wire, string reference, string occurrence)
@@ -337,6 +348,8 @@ internal sealed partial class PostgresRootAdmission
         if (held != hasReply || held && !db.UsesRootReplyProtocol)
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
         var header = ReadDirectHeader(wire, reference, occurrence);
+        if (header.ScheduleControl is not null && !db.UsesRootScheduleControls)
+            throw new StoreException(Failure.Definite, "Unsupported trusted schedule control envelope.");
         return (header.Operation, header.EscapedKind ?? kind, due != 0 || header.ExplicitZeroDue ? due : null);
     }
 

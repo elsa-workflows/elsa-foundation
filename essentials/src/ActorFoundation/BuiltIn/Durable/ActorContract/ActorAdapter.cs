@@ -136,7 +136,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     // Keep unauthenticated input separate from the auxiliary actor's self timers and job results.
     private bool RefusesAuxiliaryInput(Durable.InstanceRow? row, Durable.Delivery delivery) =>
         row is not null && IsAuxiliary(row.Model) &&
-        delivery.Message is { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, Operator: null };
+        delivery.Message is { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, Operator: null, FoundationScheduleControl: null };
 
     private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
         roots?.KeepsParkArrivals == true && IsRootParked(row) && delivery.Durable &&
