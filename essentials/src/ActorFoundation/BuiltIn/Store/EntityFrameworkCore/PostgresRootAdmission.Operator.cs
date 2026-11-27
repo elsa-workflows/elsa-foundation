@@ -384,20 +384,23 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
     }
 
-    internal sealed record CheckedMarkFence(long At, uint Marker, uint Namespace, uint Messages);
+    internal sealed record PinnedMarkSource(uint Marker, uint Namespace, uint Messages);
 
     private sealed record MarkSourceRead(NpgsqlBatchCommand Bindings, NpgsqlBatchCommand? Fence)
     {
         internal List<EfStore.WorkerRoot> Roots { get; } = [];
-        internal CheckedMarkFence? Checked { get; set; }
+        internal PinnedMarkSource? Source { get; set; }
+        internal long? FenceTime { get; set; }
     }
 
-    internal static async Task<(IReadOnlyList<EfStore.WorkerRoot> Roots, CheckedMarkFence? Checked)> PinRootMarkBindingsAsync(KernelDb db,
-        int? partition, string[] actors, string[] references, IReadOnlyList<PartitionFence>? checkedFences, CancellationToken token)
+    internal static async Task<(IReadOnlyList<EfStore.WorkerRoot> Roots, PinnedMarkSource Source, long? FenceTime)> PinRootMarkBindingsAsync(
+        KernelDb db, int? partition, string[] actors, string[] references, IReadOnlyList<PartitionFence>? checkedFences, CancellationToken token)
     {
         var bindings = new NpgsqlBatchCommand("""
-            SELECT marker.oid, marker.relnamespace, b."Tenant", b."Reference", b."Actor", b."Partition", b."Fingerprint"
+            SELECT marker.oid, marker.relnamespace, messages.oid, b."Tenant", b."Reference", b."Actor", b."Partition", b."Fingerprint"
             FROM pg_catalog.pg_class marker
+            JOIN pg_catalog.pg_class messages ON messages.oid = pg_catalog.to_regclass('"Messages"')
+                AND messages.relnamespace = marker.relnamespace AND messages.relkind = 'r'
             LEFT JOIN "FoundationRootBirths" b ON ($1::integer IS NULL OR b."Partition" = $1) AND b."Creation" = 1
                 AND (b."Actor" = ANY($2) OR b."Reference" = ANY($3))
             WHERE marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
@@ -417,7 +420,7 @@ internal sealed partial class PostgresRootAdmission
         {
             throw new StoreFormatException("The qualified root store schema is unreadable.", error);
         }
-        return (read.Roots, read.Checked);
+        return (read.Roots, read.Source!, read.FenceTime);
     }
 
     // In checked mode an otherwise unchanged fence needs only the ordered row locks. All mark DML
@@ -436,11 +439,9 @@ internal sealed partial class PostgresRootAdmission
                 JOIN marker ON marker.relnamespace = source.relnamespace
                 ORDER BY p."Id" FOR UPDATE OF p
             )
-            SELECT marker.oid, marker.relnamespace, messages.oid,
-                CASE WHEN (SELECT count(*) FROM locked) = cardinality($1)
-                    THEN (extract(epoch from clock_timestamp()) * 1000)::bigint END
-            FROM marker JOIN pg_catalog.pg_class messages ON messages.oid = pg_catalog.to_regclass('"Messages"')
-                AND messages.relnamespace = marker.relnamespace AND messages.relkind = 'r'
+            SELECT marker.oid, marker.relnamespace, CASE WHEN (SELECT count(*) FROM locked) = cardinality($1)
+                THEN (extract(epoch from clock_timestamp()) * 1000)::bigint END
+            FROM marker
             """);
         command.Parameters.Add(new NpgsqlParameter<int[]> { TypedValue = fences.Select(fence => fence.Partition).ToArray() });
         command.Parameters.Add(new NpgsqlParameter<long[]> { TypedValue = fences.Select(fence => fence.Epoch).ToArray() });
@@ -515,20 +516,22 @@ internal sealed partial class PostgresRootAdmission
             {
                 if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct))
                     throw new StoreFormatException("The qualified root mark source is unreadable.");
+                var inbox = reader.GetFieldValue<uint>(2);
                 do
                 {
-                    if (reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema)
+                    if (reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema || reader.GetFieldValue<uint>(2) != inbox)
                         throw new StoreFormatException("The qualified root mark source changed its physical schema.");
-                    if (!reader.IsDBNull(2))
-                        markRead.Roots.Add(new(reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.GetString(6)));
+                    if (!reader.IsDBNull(3))
+                        markRead.Roots.Add(new(reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetInt32(6), reader.GetString(7)));
                 }
                 while (await reader.ReadAsync(ct));
+                markRead.Source = new(marker, schema, inbox);
                 if (markRead.Fence is not null)
                 {
                     if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct) ||
                         reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema)
                         throw new StoreFormatException("The qualified root mark fence changed its physical schema.");
-                    if (!reader.IsDBNull(3)) markRead.Checked = new(reader.GetInt64(3), marker, schema, reader.GetFieldValue<uint>(2));
+                    if (!reader.IsDBNull(2)) markRead.FenceTime = reader.GetInt64(2);
                 }
             }
             if (!loadIssuer) return new(marker, schema, null);

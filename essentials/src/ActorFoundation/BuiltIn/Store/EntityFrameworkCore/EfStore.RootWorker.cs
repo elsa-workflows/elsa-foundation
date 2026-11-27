@@ -264,7 +264,7 @@ public sealed partial class EfStore
     }
 
     private sealed record ScopedMarks(WorkerRoot Root, long Epoch, IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial,
-        PostgresRootAdmission.CheckedMarkFence? CheckedFence) : QualifiedRootCheckpoint(0)
+        PostgresRootAdmission.PinnedMarkSource? PostgresSource) : QualifiedRootCheckpoint(0)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -298,14 +298,15 @@ public sealed partial class EfStore
                 WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {scope}
                     AND "Id" = ANY({ids}) AND "EventMatch" IS NULL AND NOT "Done"
                 """;
-            if (CheckedFence is { } source)
+            if (PostgresSource is { } source)
             {
                 // A name can resolve to a replacement schema even with the original relations locked.
-                // The actual writes must use the inbox anchored to the physical checked fence.
+                // The actual writes must use the inbox anchored to the pinned physical source.
                 var guarded = mark.Format + "\n" + """
                     AND tableoid::bigint = {7} AND EXISTS (
                         SELECT 1 FROM "KernelStoreVersions" v JOIN pg_catalog.pg_class c ON c.oid = v.tableoid
                         WHERE v."Id" = {8} AND c.oid::bigint = {9} AND c.relnamespace::bigint = {10}
+                            AND c.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
                     )
                     """;
                 mark = FormattableStringFactory.Create(guarded,
@@ -414,13 +415,13 @@ public sealed partial class EfStore
             var fences = Batch.Fenced;
             var checkFence = !Store.FenceInBatch && !Store.Unfenced && !Store.FenceIgnoresCount && !Store.UnorderedFenceLocks &&
                 Batch.DueBacklog is null;
-            var (matches, checkedFence) = await PostgresRootAdmission.PinRootMarkBindingsAsync(db, Scope.FixedPartition,
+            var (matches, source, fenceTime) = await PostgresRootAdmission.PinRootMarkBindingsAsync(db, Scope.FixedPartition,
                 inputs[true].Distinct(StringComparer.Ordinal).ToArray(), inputs[false].Distinct(StringComparer.Ordinal).ToArray(),
                 checkFence ? fences : null, token);
             if (matches.Any(root => !Scope.Includes(root.Partition) || new InstanceRef(root.Actor).Partition != root.Partition)) throw RootShape();
             var roots = new WorkerRoots(Scope.FixedPartition, matches);
-            var checkpoints = Store.WorkerCheckpoints(PrepareWorkerMarks(roots, Batch, fences.ToDictionary(fence => fence.Partition), checkedFence), [], []);
-            return (checkpoints, checkFence, checkedFence?.At);
+            var checkpoints = Store.WorkerCheckpoints(PrepareWorkerMarks(roots, Batch, fences.ToDictionary(fence => fence.Partition), source), [], []);
+            return (checkpoints, checkFence, fenceTime);
         }
 
         internal override Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken) =>
@@ -523,7 +524,7 @@ public sealed partial class EfStore
     }
 
     private static List<QualifiedRootCheckpoint> PrepareWorkerMarks(WorkerRoots roots, CommitBatch batch,
-        IReadOnlyDictionary<int, PartitionFence> byPartition, PostgresRootAdmission.CheckedMarkFence? checkedFence = null)
+        IReadOnlyDictionary<int, PartitionFence> byPartition, PostgresRootAdmission.PinnedMarkSource? postgresSource = null)
     {
         var seen = batch.Seen.ToLookup(roots.ForInput);
         var trials = batch.Trial.ToLookup(roots.ForInput);
@@ -531,7 +532,7 @@ public sealed partial class EfStore
         foreach (var root in seen.Select(g => g.Key).Union(trials.Select(g => g.Key)))
         {
             if (!byPartition.TryGetValue(root.Partition, out var fence)) throw RootShape();
-            commands.Add(new ScopedMarks(root, fence.Epoch, seen[root].ToArray(), trials[root].ToArray(), checkedFence));
+            commands.Add(new ScopedMarks(root, fence.Epoch, seen[root].ToArray(), trials[root].ToArray(), postgresSource));
         }
         return commands;
     }

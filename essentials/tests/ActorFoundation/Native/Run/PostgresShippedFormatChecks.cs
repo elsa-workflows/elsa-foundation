@@ -39,7 +39,8 @@ internal static class PostgresShippedFormatChecks
         var stop = deadline.Token;
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a fresh PostgreSQL preview database.");
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        var markSwap = new SwapBeforeSecondMark();
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(markSwap).Options;
         KernelDb Open() => PostgresPreviewHosting.CreateShippedContext(options);
         await using (var db = Open())
         {
@@ -152,6 +153,7 @@ internal static class PostgresShippedFormatChecks
         var neighbor = await StartAsync("waits", "seen-neighbor");
         var neighborActor = (await clock.ResolveAsync(scope.Tenant, neighbor.Id, stop))!.Id;
         await CheckCreatorWitnessRollbackAsync(Open, store, scope.Tenant, waiting.Id, waitingActor, stop);
+        await CheckMarkNamespaceReplacementAsync(Open, store, markSwap, waitingActor, neighborActor, stop);
         await CheckRootTrialTakeoverAsync(Open, store, waitingActor, neighborActor, stop);
         var escalated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var service = new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message),
@@ -600,6 +602,83 @@ internal static class PostgresShippedFormatChecks
             "a drifted polled creator rolls back the checkpoint, journal, message deletion and fence position");
         await source.ExecuteUpdateAsync(update => update.SetProperty(message => message.ReplyTo, creator.ReplyTo), token);
         await store.ReleaseAsync(partition, lease.Epoch, token);
+    }
+
+    private static async Task CheckMarkNamespaceReplacementAsync(Func<KernelDb> open, EfStore store,
+        SwapBeforeSecondMark swap, string actor, string neighbor, CancellationToken token)
+    {
+        var partition = new InstanceRef(actor).Partition;
+        var span = TimeSpan.FromSeconds(15);
+        var lease = await store.TakeAsync(partition, "mark-source-owner", span, token)
+            ?? throw new InvalidOperationException("The mark source fixture could not take its partition.");
+        await using var observer = open();
+        var original = await observer.Database.SqlQueryRaw<string>("""SELECT pg_catalog.current_schema() AS "Value" """).SingleAsync(token);
+        var quoted = new NpgsqlCommandBuilder().QuoteIdentifier(original);
+        await CreateNamespaceSwapAsync(observer, token);
+        try
+        {
+            // Leave exact matching messages in the replacement so an unguarded update would write there.
+            await observer.Database.ExecuteSqlRawAsync("""
+                INSERT INTO pin_replacement."Messages" OVERRIDING SYSTEM VALUE SELECT * FROM "Messages";
+                CREATE SEQUENCE pin_replacement.mark_write_witness;
+                CREATE FUNCTION pin_replacement.record_mark_write() RETURNS trigger LANGUAGE plpgsql AS $fixture$
+                BEGIN
+                    PERFORM nextval(format('%I.mark_write_witness', TG_TABLE_SCHEMA)::regclass);
+                    RETURN NEW;
+                END
+                $fixture$;
+                CREATE TRIGGER witness AFTER UPDATE ON pin_replacement."Messages"
+                    FOR EACH ROW EXECUTE FUNCTION pin_replacement.record_mark_write();
+                """, token);
+            swap.Replace = ct => observer.Database.ExecuteSqlRawAsync(
+                "ALTER SCHEMA " + quoted + " RENAME TO pin_departed; ALTER SCHEMA pin_replacement RENAME TO " + quoted, ct);
+            var batch = new CommitBatch(partition, lease.Epoch, lease.Position, span, false, [], [new("root:" + neighbor)], [new("root:" + actor)]);
+            var refused = await store.CommitAsync(batch, token);
+            Require(!refused.Landed && swap.FirstMarkWritten && swap.Swapped,
+                "the mark batch refuses a physical source change after its first mark wrote");
+            Require(await observer.Database.SqlQueryRaw<bool>("""
+                SELECT NOT (SELECT is_called FROM mark_write_witness)
+                    AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Seen" <> 0 OR "Trial" <> 0)
+                    AND NOT EXISTS (SELECT 1 FROM pin_departed."Messages" WHERE "Seen" <> 0 OR "Trial" <> 0) AS "Value"
+                """).SingleAsync(token), "a source change rolls back the earlier mark and does not update a replacement message");
+        }
+        finally
+        {
+            swap.Replace = null;
+            if (swap.Swapped)
+                await observer.Database.ExecuteSqlRawAsync(
+                    "ALTER SCHEMA " + quoted + " RENAME TO pin_replacement; ALTER SCHEMA pin_departed RENAME TO " + quoted, token);
+            await DropNamespaceSwapAsync(observer, token);
+            await store.ReleaseAsync(partition, lease.Epoch, token);
+        }
+    }
+
+    private sealed class SwapBeforeSecondMark : DbCommandInterceptor
+    {
+        private int _marks;
+        internal Func<CancellationToken, Task>? Replace { get; set; }
+        internal bool FirstMarkWritten { get; private set; }
+        internal bool Swapped { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Replace is { } replace && IsMark(command) && ++_marks == 2)
+            {
+                await replace(cancellationToken);
+                Swapped = true;
+            }
+            return result;
+        }
+
+        public override ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData, int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Replace is not null && IsMark(command) && _marks == 1) FirstMarkWritten = result == 1;
+            return ValueTask.FromResult(result);
+        }
+
+        private static bool IsMark(DbCommand command) => command.CommandText.StartsWith("""UPDATE "Messages" SET "Seen" """, StringComparison.Ordinal);
     }
 
     private static async Task CheckRootTrialTakeoverAsync(Func<KernelDb> open, EfStore store, string actor, string neighbor,
