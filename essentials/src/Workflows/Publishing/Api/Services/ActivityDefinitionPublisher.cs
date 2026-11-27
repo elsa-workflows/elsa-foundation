@@ -53,7 +53,7 @@ public sealed record PublishActivityDefinitionResult(
 /// <summary>Resolves a trusted identity reserved for a draft referenced before publication.</summary>
 public interface IActivityDraftPublicationIdentity
 {
-    ValueTask<string?> FindVersionIdAsync(string draftId, CancellationToken cancellationToken);
+    ValueTask<(string VersionId, string Version)?> FindReservationAsync(string draftId, CancellationToken cancellationToken);
 }
 
 public interface IActivityDefinitionPublisher
@@ -159,7 +159,11 @@ public sealed class ActivityDefinitionPublisher(
             definition.Id,
             draft.Id,
             draft.Revision);
-        var candidateVersion = request.Version ?? ActivityPublicationReviewPolicy.ProvisionalVersion(context.Head?.Version);
+        var reservation = reservedIdentities is null ? null : await reservedIdentities.FindReservationAsync(draft.Id, cancellationToken);
+        if (reservation.HasValue && request.Version is not null && request.Version != reservation.Value.Version)
+            throw Reject(ActivityErrorCodes.VersionConflict, $"Imported callers use version {reservation.Value.Version} of this draft.", [], true);
+        var exactVersion = reservation?.Version ?? request.Version;
+        var candidateVersion = exactVersion ?? ActivityPublicationReviewPolicy.ProvisionalVersion(context.Head?.Version);
         if (!SemVer.TryParse(candidateVersion, out _))
             throw Reject(
                 ActivityErrorCodes.RequestInvalid,
@@ -183,7 +187,7 @@ public sealed class ActivityDefinitionPublisher(
                         Metadata: new Dictionary<string, string>(StringComparer.Ordinal))]);
 
             candidate = await EvaluateCandidateAsync(context, candidateVersionId, candidateVersion, cancellationToken);
-            if (request.Version is not null)
+            if (exactVersion is not null)
                 break;
 
             var suggestedVersion = candidate.ValidVersions.FirstOrDefault()
@@ -221,6 +225,7 @@ public sealed class ActivityDefinitionPublisher(
             candidate.Runtime,
             candidate.Diagnostics)
         {
+            ReservedVersion = reservation?.Version,
             ReviewedVersion = candidate.Version
         };
     }
@@ -337,10 +342,11 @@ public sealed class ActivityDefinitionPublisher(
         // Publish compiles under the version id it commits. Its evidence must still reproduce the token preflight issued
         // under the stable candidate id, so evidence that shifts with the version id is refused as a stale review.
         // A caller that already references the version (an import's plan) may name its id; preflight never sees it.
-        var reservedId = reservedIdentities is null ? null : await reservedIdentities.FindVersionIdAsync(draft.Id, cancellationToken);
-        if (reservedId is not null && request.RequestedVersionId is not null && reservedId != request.RequestedVersionId)
-            throw new ActivityPublicationRejectedException("activity.publication.identity-conflict", "This draft has a different reserved version identity.", [], true);
-        var versionId = reservedId ?? request.RequestedVersionId ?? NewId("activity-ver");
+        var reservation = reservedIdentities is null ? null : await reservedIdentities.FindReservationAsync(draft.Id, cancellationToken);
+        if (reservation is { } reserved && (request.Version != reserved.Version ||
+            request.RequestedVersionId is not null && request.RequestedVersionId != reserved.VersionId))
+            throw Reject(ActivityErrorCodes.VersionConflict, $"Imported callers use the reserved version {reserved.Version} of this draft.", [], true);
+        var versionId = reservation?.VersionId ?? request.RequestedVersionId ?? NewId("activity-ver");
         var candidate = await EvaluateCandidateAsync(context, versionId, request.Version, cancellationToken);
         EnsureVersionAccepted(context, candidate);
         if (!StringComparer.Ordinal.Equals(candidate.ReviewToken, request.ReviewToken))

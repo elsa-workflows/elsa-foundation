@@ -125,7 +125,7 @@ public interface IReusableActivityDraftImport
 /// <summary>Looks up the exact version reserved by an imported activity draft for later publication.</summary>
 public interface IImportedActivityDraftReservations
 {
-    ValueTask<string?> FindVersionIdAsync(string draftId, CancellationToken cancellationToken);
+    ValueTask<(string VersionId, string Version)?> FindReservationAsync(string draftId, CancellationToken cancellationToken);
 }
 
 public interface IReusableActivityImportOperationService

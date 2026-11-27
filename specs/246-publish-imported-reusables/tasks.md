@@ -457,8 +457,8 @@ no versions. Nothing publishes yet.
 
 ## Studio current drafts (#6002)
 
-- [ ] Carry draft mode through Apply and durable idempotency.
-- [ ] Commit active activity and workflow drafts with their import, preserving edits and exact identities.
-- [ ] Honor the reserved imported version on later reviewed activity publication.
-- [ ] Add the unchecked review control and receipt links to the actual drafts.
-- [ ] Verify both publication choices, replay and collision cases, legacy Apply, and the composed Approved run.
+- [X] Carry draft mode through Apply and durable idempotency.
+- [X] Commit active activity and workflow drafts with their import, preserving edits and exact identities.
+- [X] Honor the reserved imported version on later reviewed activity publication.
+- [X] Add the unchecked review control and receipt links to the actual drafts.
+- [X] Verify both publication choices, replay and collision cases, legacy Apply, and the composed Approved run.

@@ -79,7 +79,7 @@ public static class ReusableActivityImportCommitRules
         if (mutation.PublishImportedActivities.HasValue)
             foreach (var activity in mutation.Activities)
                 bindings.Add(new(ReusableActivityImportIdentity.DefinitionBinding(DraftReservationKind, activity.Version.DraftId),
-                    DraftReservationKind, activity.Version.DraftId, ActivityVersionKind, activity.Version.Id,
+                    DraftReservationKind, activity.Version.DraftId, ActivityVersionKind, $"{activity.Version.Id}@{activity.Version.Version}",
                     activity.Definition.TenantId, activity.Definition.CreatedAt));
         return bindings;
     }

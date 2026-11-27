@@ -54,7 +54,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.False(receipt.PublishImportedActivities);
         var activity = Assert.Single(receipt.Sources, source => source.SourceVersionId == "a-v1");
         Assert.NotNull(activity.ActivityDraftId);
-        Assert.Equal(activity.ActivityDefinitionVersionId, await Db.OperationStore(access).FindVersionIdAsync(activity.ActivityDraftId, default));
+        Assert.Equal((activity.ActivityDefinitionVersionId!, "1.0.0"), await Db.OperationStore(access).FindReservationAsync(activity.ActivityDraftId, default));
         await using var workflows = Db.Workflows();
         Assert.Equal(2, await workflows.Drafts.CountAsync());
         Assert.Contains(await workflows.Drafts.AsNoTracking().ToArrayAsync(), row => row.SourceVersionId == "c-v1");

@@ -126,7 +126,7 @@ export function ActivityDefinitionPublicationReview({
       }
       setBinding(exact);
       setPreflight(review);
-      setVersion(review.minimumVersion);
+      setVersion(review.reservedVersion ?? review.minimumVersion);
       setPhase("review");
     } catch (error) {
       setPhase("failed");
@@ -351,8 +351,8 @@ export function ActivityDefinitionPublicationReview({
         {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
         {!publicationBlocked ? <AdvancedSection label="Version">
           <div className="ad-publication-version">
-            <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
-            <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>Suggested version based on these changes. You can choose a higher version.</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
+            <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} readOnly={Boolean(preflight.reservedVersion)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
+            <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>{preflight.reservedVersion ? "Imported workflows reference this exact version." : "Suggested version based on these changes. You can choose a higher version."}</span>{!preflight.reservedVersion && preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
             {versionError ? <p role="alert">{versionError}</p> : null}
           </div>
         </AdvancedSection> : null}
@@ -361,8 +361,8 @@ export function ActivityDefinitionPublicationReview({
         <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact={false} />
         {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
         {!publicationBlocked ? <div className="ad-publication-version">
-          <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
-          <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>The minimum is selected by default. Advanced authors may enter any higher unique exact semantic version.</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
+          <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} readOnly={Boolean(preflight.reservedVersion)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
+          <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>{preflight.reservedVersion ? "Imported workflows reference this exact version." : "The minimum is selected by default. Advanced authors may enter any higher unique exact semantic version."}</span>{!preflight.reservedVersion && preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
           {versionError ? <p role="alert">{versionError}</p> : null}
         </div> : null}
       </>}
