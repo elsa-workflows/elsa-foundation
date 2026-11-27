@@ -95,7 +95,8 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature, IPostConfigureShe
         // options preserve the former FastEndpoints web defaults while routing Publishing types
         // through generated metadata before any general fallback resolver.
         services.ConfigureHttpJsonOptions(options => WorkflowsPublishingJsonOptions.Configure(options.SerializerOptions));
-        services.AddApiCapabilitySource<PublishingApiCapabilitySource>();
+        services.AddApiCapability(PublishingApiCapabilities.BaseDeclaration);
+        services.AddApiCapabilitySource<PublishingTestRunCapabilitySource>();
         // The conversion-profiles endpoint is served here (it reads IValueConversionProfileRegistry, supplied by
         // the engine) but advertised under the client's expressions capability; the source merges that relation
         // into elsa.api.expressions.
