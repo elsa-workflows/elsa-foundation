@@ -38,9 +38,11 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
     DisplayName = "Workflows Runtime Kernel Hosting",
     Description = "Runs published Native and Flowchart workflows on the built-in Actor Foundation. Enable on the default shell at host startup.",
     DependsOn = new object[] { WorkflowsRuntimeKernelApiFeature.FeatureName, "ActivitiesHttp", "JavaScriptJintEngine", "Tasks" })]
-public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
+public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
 {
     public const string FeatureName = "WorkflowsRuntimeKernelHosting";
+
+    protected virtual string HostingFeatureName => FeatureName;
 
     [ManifestSetting(DisplayName = "Provider", Description = "Use SQLite or PostgreSQL.", Category = "Persistence", DefaultValue = "SQLite")]
     public string Provider { get; set; } = "SQLite";
@@ -84,7 +86,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(storage);
         services.AddSingleton(new KernelOperatorIngress(storage.OpenOperatorsAsync, storage.ReadClockAsync));
         services.AddSingleton(retention);
-        services.AddSingleton(new ShellRestartRequirement(FeatureName));
+        services.AddSingleton(new ShellRestartRequirement(HostingFeatureName));
         var schedules = storage.TakesManagedSchedules;
         if (schedules) services.AddSingleton(new WorkflowScheduleCutoverClock(persistenceScope, storage.ReadClockAsync));
         services.AddSingleton(new KernelServing(cronError: schedules ? CronosCalendar.Error : null,
@@ -183,7 +185,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
                         title: "The durable retention policy is unavailable.");
                 }
             })
-            .WithOwner(FeatureName)
+            .WithOwner(HostingFeatureName)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)
             .WithName("GetKernelWorkflowRetention");
@@ -191,7 +193,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         var http = RequireHttpSettings(endpoints.ServiceProvider);
         endpoints.Map(HttpBasePath(http) + "/{**path}", static (HttpContext context) =>
                 context.RequestServices.GetRequiredService<KernelHttpRequestHandler>().HandleAsync(context))
-            .WithOwner(FeatureName)
+            .WithOwner(HostingFeatureName)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .AllowPublic("kernel workflow HTTP endpoints", "Starts or resumes a published workflow on its configured HTTP route and returns its response.");
     }
