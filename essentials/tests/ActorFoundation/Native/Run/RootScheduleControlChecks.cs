@@ -16,19 +16,19 @@ namespace Kernel.Native.Run;
 
 internal static class RootScheduleControlChecks
 {
-    internal static async Task<int> RunAsync(bool postgres, bool inBatch)
+    internal static async Task<int> RunAsync(bool postgres, bool inBatch, bool managedProfile = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var directory = postgres ? null : Directory.CreateTempSubdirectory("root-schedule-controls-");
         try
         {
-            await RunCoreAsync(postgres, inBatch, directory?.FullName, timeout.Token);
+            await RunCoreAsync(postgres, inBatch, managedProfile, directory?.FullName, timeout.Token);
             return 0;
         }
         finally { directory?.Delete(recursive: true); }
     }
 
-    private static async Task RunCoreAsync(bool postgres, bool inBatch, string? directory, CancellationToken token)
+    private static async Task RunCoreAsync(bool postgres, bool inBatch, bool managedProfile, string? directory, CancellationToken token)
     {
         const string node = "schedule-controls-owner";
         const string definition = "workflow-with-schedule";
@@ -37,19 +37,31 @@ internal static class RootScheduleControlChecks
         var scope = EmbeddedTenant.Bind("schedule-fixture");
         var path = directory is null ? null : Path.Combine(directory, "actors.db");
         var options = new DbContextOptionsBuilder<KernelDb>();
-        var sqlite = path is null ? null : SqliteEmbeddedFoundation.ForScheduleControlsQualification(path, node, WorkflowActor.WorkflowActor.ActorType);
+        var sqlite = path is null ? null : managedProfile
+            ? SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.WorkflowActor.ActorType)
+            : SqliteEmbeddedFoundation.ForScheduleControlsQualification(path, node, WorkflowActor.WorkflowActor.ActorType);
         if (postgres)
         {
             options.UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
                 ?? throw new InvalidOperationException("Use a dedicated empty PostgreSQL qualification database."));
             await using var db = Open();
             Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the PostgreSQL qualification database is empty");
-            await PostgresPreviewHosting.InstallScheduleControlsQualificationAsync(options.Options, token);
+            if (managedProfile)
+                await PostgresPreviewHosting.InstallManagedSchedulesQualificationAsync(options.Options, token);
+            else
+                await PostgresPreviewHosting.InstallScheduleControlsQualificationAsync(options.Options, token);
         }
         else
         {
             options.UseSqlite(new SqliteConnectionStringBuilder { DataSource = path!, ForeignKeys = true, Pooling = false }.ConnectionString);
             await sqlite!.InstallShippedAsync(token);
+        }
+
+        if (managedProfile)
+        {
+            await using var db = Open();
+            Require(db.RequiredFormat == StoreFormat.RootManagedSchedulesQualification && db.UsesRootPlaybackDescendants &&
+                db.UsesRootScheduleControls && db.UsesRootScheduleLineage, "managed schedules compose all shipped workflow capabilities");
         }
 
         var primary = new WorkflowActor.WorkflowActor([]);
@@ -141,13 +153,19 @@ internal static class RootScheduleControlChecks
                 await SqliteEmbeddedFoundation.ForScheduleQualification(path!, "legacy-profile", primary.Type).InstallShippedAsync(token);
             throw new InvalidOperationException("The older schedule profile opened the new control store.");
         }
-        catch (StoreFormatException) { Console.WriteLine("ok frozen protocol 120 refuses the protocol 121 store"); }
+        catch (StoreFormatException) { Console.WriteLine("ok the frozen settlement profile refuses the managed control store"); }
 
         ValueTask<Contract.ScheduleControlResult> Apply(long revision, Control kind, string? header = null, string scheduleKey = key) =>
             writes.ApplyScheduleControlAsync(scope, definition, scheduleKey, revision, kind, header, token);
 
-        KernelDb Open() => postgres ? PostgresPreviewHosting.CreateScheduleControlsQualificationContext(options.Options)
-            : KernelDb.ForSqliteRootRuntime(options.Options, new SqliteAdmissionDefinitions(), StoreFormat.RootScheduleControlsQualification);
+        KernelDb Open()
+        {
+            if (postgres)
+                return managedProfile ? PostgresPreviewHosting.CreateManagedSchedulesQualificationContext(options.Options)
+                    : PostgresPreviewHosting.CreateScheduleControlsQualificationContext(options.Options);
+            var format = managedProfile ? StoreFormat.RootManagedSchedulesQualification : StoreFormat.RootScheduleControlsQualification;
+            return KernelDb.ForSqliteRootRuntime(options.Options, new SqliteAdmissionDefinitions(), format);
+        }
 
         async Task<bool> StoppedAsync()
         {
