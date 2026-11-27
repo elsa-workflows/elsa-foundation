@@ -16,6 +16,8 @@ internal static class KernelScheduleAuthority
     // The built-in Actor Foundation limits StartSpec.TypeData and SetHeader to 16 KiB of UTF-8.
     private const int MaxTypeDataBytes = 16 * 1024;
     private const int LegacyAuthorityVersion = 1;
+    // Private managed-schedule qualification starts with a fresh Foundation store. A v1 Set already
+    // committed at the same revision has different authority bytes. Runtime occurrence receipts still replay v1.
     private const int AuthorityVersion = 2;
 
     /// <summary>Builds a managed header from the selected committed control and immutable publication material.</summary>

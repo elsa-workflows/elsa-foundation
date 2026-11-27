@@ -431,6 +431,22 @@ internal static partial class KernelScheduleOccurrenceContract
 
         clock.Advance(TimeSpan.FromMinutes(2));
         var renewedDeadline = clock.GetUtcNow().AddMinutes(1);
+        var alternate = final with { DefinitionId = "alternate-canonical-source", DefinitionVersionId = "alternate-v3" };
+        var selected = Successor(due) with { PinnedStart = PinnedStart(alternate) };
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryHandoffSelectedAttemptAsync(due, selected, final, latest.Stamp,
+            renewedDeadline, ReadClock).AsTask());
+
+        // Use real leases for the same artifact to exercise the database fence independently of lease preflight.
+        var independentlyGranted = Store(context, access, clock, inner => new ArtifactOnlyLeaseManager(inner, final));
+        var fresh = selected with { ArmGeneration = 4, TimerDeliveryId = "wrong-canonical-root" };
+        var freshRefusal = await Assert.ThrowsAsync<WorkflowExecutableDependencyGraphException>(() => independentlyGranted
+            .TryAcceptSelectedAttemptAsync(fresh, alternate, renewedDeadline, ReadClock).AsTask());
+        var handoffRefusal = await Assert.ThrowsAsync<WorkflowExecutableDependencyGraphException>(() => independentlyGranted
+            .TryHandoffSelectedAttemptAsync(due, selected, alternate, latest.Stamp, renewedDeadline, ReadClock).AsTask());
+        Assert.Equal(WorkflowExecutableDependencyGraphFailureKind.ConflictingIdentity, freshRefusal.Kind);
+        Assert.Equal(WorkflowExecutableDependencyGraphFailureKind.ConflictingIdentity, handoffRefusal.Kind);
+        Assert.Empty(await store.ListPendingAsync(named, null, 10));
+
         Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted,
             await store.TryHandoffAttemptAsync(due, Successor(due), latest.Stamp, renewedDeadline, ReadClock));
         Assert.Empty(await store.ListPendingAsync(unqualified, null, 10));
@@ -470,6 +486,10 @@ internal static partial class KernelScheduleOccurrenceContract
 
         RuntimeKernelScheduleOccurrence Successor(RuntimeKernelScheduleOccurrence offer) =>
             offer with { Scope = named, ActivationId = finalActivation, PublicationRevision = 3, Executable = final, PinnedStart = "{\"version\":3}" };
+        static string PinnedStart(WorkflowExecutableIdentity material) => JsonSerializer.Serialize(new
+        {
+            TypeData = JsonSerializer.Serialize(new { ExecutableSelection = JsonSerializer.Serialize(material) })
+        });
         ValueTask<DateTimeOffset> ReadClock(CancellationToken _) => ValueTask.FromResult(clock.GetUtcNow());
         static ValueTask<DateTimeOffset> NoClock(CancellationToken _) => throw new InvalidOperationException("An immutable replay does not need a clock.");
         static ValueTask<bool> Confirm(RuntimeKernelScheduleOccurrence _, string __, CancellationToken ___) => ValueTask.FromResult(true);
@@ -506,13 +526,32 @@ internal static partial class KernelScheduleOccurrenceContract
         new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
         incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
-    private static EfRuntimeKernelScheduleOccurrenceStore Store(RuntimeDbContext context, Accessor access, TimeProvider clock)
+    private static EfRuntimeKernelScheduleOccurrenceStore Store(RuntimeDbContext context, Accessor access, TimeProvider clock,
+        Func<IWorkflowExecutableRootWriteLeaseManager, IWorkflowExecutableRootWriteLeaseManager>? wrapLeases = null)
     {
         var artifacts = new EfWorkflowExecutableStore(context, access);
         var leases = new WorkflowExecutableRootWriteLeaseManager(artifacts,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions()), clock);
         return new(context, access, artifacts, new EfWorkflowExecutableSourceReferenceStore(context, access, new Codec(), clock),
-            new EfWorkflowTriggerBindingStore(context, access), leases, clock);
+            new EfWorkflowTriggerBindingStore(context, access), wrapLeases?.Invoke(leases) ?? leases, clock);
+    }
+
+    private sealed class ArtifactOnlyLeaseManager(IWorkflowExecutableRootWriteLeaseManager inner, WorkflowExecutableIdentity physical)
+        : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default) => inner.ExecuteAsync(artifactId, leaseId, write, cancellationToken);
+
+        public ValueTask ExecuteFencedAsync(IReadOnlyCollection<WorkflowExecutableIdentity> roots, string leaseId,
+            Func<IReadOnlyList<WorkflowExecutableRootWriteLease>, CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default)
+        {
+            var requested = Assert.Single(roots);
+            Assert.Equal(physical.ArtifactId, requested.ArtifactId);
+            Assert.Equal(physical.ArtifactHash, requested.ArtifactHash);
+            Assert.NotEqual(physical, requested);
+            return inner.ExecuteFencedAsync([physical], leaseId, write, cancellationToken);
+        }
     }
 
     private sealed class Accessor(PersistenceScope scope) : IPersistenceAccessContextAccessor

@@ -74,10 +74,8 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         RuntimeKernelScheduleOccurrence? origin, string? continuity, DateTimeOffset attemptDeadline, Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock,
         CancellationToken cancellationToken)
     {
-        Validate(occurrence);
-        var exactMaterial = selectedMaterial ?? occurrence.Executable;
-        if (exactMaterial.ArtifactId != occurrence.Executable.ArtifactId || exactMaterial.ArtifactHash != occurrence.Executable.ArtifactHash)
-            throw new ArgumentException("The selected material differs from the published schedule artifact.", nameof(selectedMaterial));
+        Validate(occurrence, selectedMaterial);
+        WorkflowExecutableIdentity[] roots = [selectedMaterial ?? occurrence.Executable];
         if (occurrence.Origin is not null) throw new ArgumentException("The store stamps the original offer on acceptance.", nameof(occurrence));
         var original = origin ?? occurrence;
         if (origin is not null) occurrence = occurrence with { Origin = new(origin.Scope.TenantId, IntentFingerprint(origin)) };
@@ -101,7 +99,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         var outcome = AttemptOutcome.Retry;
         try
         {
-            await leases.ExecuteFencedAsync([exactMaterial], $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
+            await leases.ExecuteFencedAsync(roots, $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
             {
                 await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
                 try
@@ -111,7 +109,8 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
                         outcome = AttemptOutcome.Accepted;
                         return;
                     }
-                    var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token);
+                    var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token,
+                        expectedRoots: selectedMaterial is null ? null : roots);
                     var slot = await ReadSlotAsync(token);
                     if (!MatchesSlot(slot))
                     {
@@ -422,7 +421,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
             acceptedAt >= occurrence.Due.UtcTicks && acceptedAt < (renewedBefore ?? originalDeadline);
     }
 
-    private static void Validate(RuntimeKernelScheduleOccurrence occurrence)
+    private static void Validate(RuntimeKernelScheduleOccurrence occurrence, WorkflowExecutableIdentity? selectedMaterial = null)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
         ArgumentNullException.ThrowIfNull(occurrence.Scope);
@@ -444,6 +443,18 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         using var payload = JsonDocument.Parse(occurrence.PinnedStart);
         if (payload.RootElement.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("The scheduled start payload must be a JSON object.", nameof(occurrence));
+        if (selectedMaterial is not null && (selectedMaterial.ArtifactId != occurrence.Executable.ArtifactId ||
+            selectedMaterial.ArtifactHash != occurrence.Executable.ArtifactHash || ReadSelectedMaterial(payload.RootElement) != selectedMaterial))
+            throw new ArgumentException("The selected material must match the published artifact and the pinned Native start token.", nameof(occurrence));
+    }
+
+    private static WorkflowExecutableIdentity? ReadSelectedMaterial(JsonElement start)
+    {
+        if (!start.TryGetProperty("TypeData", out var data) || data.ValueKind != JsonValueKind.String) return null;
+        using var header = JsonDocument.Parse(data.GetString()!);
+        return header.RootElement.ValueKind == JsonValueKind.Object &&
+            header.RootElement.TryGetProperty("ExecutableSelection", out var token) && token.ValueKind == JsonValueKind.String
+            ? JsonSerializer.Deserialize<WorkflowExecutableIdentity>(token.GetString()!) : null;
     }
 
     private static bool IsReference(string? reference) =>
