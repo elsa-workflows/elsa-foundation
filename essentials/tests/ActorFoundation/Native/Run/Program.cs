@@ -117,6 +117,8 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
         return await PostgresRootOperatorChecks.RunAsync([a, b, c], operatorWriter == "owned", operatorFence == "in-batch", operatorPhase == "resume");
 }
 if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
+if (args is ["keyed-root", var keyedProvider and ("postgres" or "sqlite"), var keyedFence and ("checked" or "in-batch")])
+    return await KeyedRootChecks.RunAsync(keyedProvider == "postgres", keyedFence == "in-batch");
 if (args is ["pg-k12-ownership", .. var k12Args])
 {
     if (k12Args is [var run, var scenario and ("crash" or "wedge"), var role and ("survivor" or "victim" or "revive"),

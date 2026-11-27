@@ -8,6 +8,12 @@ namespace Kernel.Foundation.Postgres;
 
 public static partial class PostgresPreviewHosting
 {
+    internal static KernelDb CreateKeyedStartsQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootKeyedStartsQualification(options);
+
+    internal static Task InstallKeyedStartsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreateKeyedStartsQualificationContext(options), cancellationToken);
+
     /// <summary>Selects the dedicated Event start qualification format.</summary>
     public static KernelDb CreateEventStartsQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootEventStartsQualification(options);

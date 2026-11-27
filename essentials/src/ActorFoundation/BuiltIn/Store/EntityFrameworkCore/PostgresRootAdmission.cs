@@ -131,8 +131,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken, exclusiveFormat || db.UsesRootTerminalSelection);
         await EfStore.RequirePreviewInstallSchemaAsync(db, cancellationToken);
         // A second Embedded process can open the same preview database while the first is installing.
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(48602345, 1)", cancellationToken);
+        var createKeyedAuthority = db.UsesRootKeyedStarts && await RootKeyedAdmission.MayCreatePostgresAuthorityAsync(db, cancellationToken);
         const string definitions = """
-            SELECT pg_advisory_xact_lock(48602345, 1);
             CREATE TABLE IF NOT EXISTS "FoundationRootIssuer" (
                 "Singleton" boolean PRIMARY KEY CHECK ("Singleton"), "Key" bytea NOT NULL,
                 "Partitions" integer NOT NULL CHECK ("Partitions" > 0));
@@ -153,6 +154,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await db.Database.ExecuteSqlRawAsync(db.UsesRootInlinePromotion
             ? RootInlineBirthRevision.Columns(definitions, sqlite: false) : definitions, cancellationToken);
         if (db.UsesRootInlinePromotion) await RootInlineBirthRevision.InstallPostgresAsync(db, cancellationToken);
+        if (db.UsesRootKeyedStarts) await RootKeyedAdmission.InstallPostgresAsync(db, createKeyedAuthority, cancellationToken);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO "FoundationRootIssuer" SELECT true, {RandomNumberGenerator.GetBytes(32)}, count(*)::integer FROM "Partitions"
@@ -229,8 +231,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal Task<Receipt?> AdmitRootRequestAsync(string tenant, string operation, StartSpec spec, string node, Request request,
         bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null, ProtectRootStartAsync? protectRootStart = null)
     {
-        if (request.Tenant != tenant || request.Done || string.IsNullOrWhiteSpace(node) || node.Length > 256 ||
-            node.Contains('|') || node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(node))
+        if (request.Tenant != tenant || request.Done || !IsValidReplyNode(node))
             throw new ArgumentException("A held root start needs an open request of its tenant and an issued reply node.", nameof(request));
         var reply = new DirectReply(request.ReplyAddress(node, early), request.Deadline);
         return protectRootStart is null
