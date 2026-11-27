@@ -181,6 +181,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             storage.ConfirmPreparedStartAsync(testTenant, actor, issuance, token);
 
     internal bool TakesEphemeralTestRuns => storage.TakesEphemeralTestRuns;
+    internal bool TakesAttachedTestRuns => storage.TakesAttachedTestRuns;
 
     internal async ValueTask<InlineStartOutcome> StartInlineTestAsync(WorkflowTestScope test, StartSpec start, Workflow executable,
         CancellationToken token)

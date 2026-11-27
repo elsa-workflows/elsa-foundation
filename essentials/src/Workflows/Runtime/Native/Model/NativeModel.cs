@@ -592,7 +592,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     private void Apply(Frame frame, Transition t)
     {
         // Each child the transition starts, read off the host once: that answer both checks the start and makes it.
-        var children = ChildTargets(t, out var refused);
+        var children = ChildTargets(frame, t, out var refused);
         if (refused is not null)
         {
             Fail(frame, refused);
@@ -664,16 +664,32 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     /// read once per id here. On a publishing host, a Dispatch the host serves nothing for, and whose id the registry does not
     /// hold, is refused with the fault returned, as is one several serve; nothing starts then.
     /// </summary>
-    private Dictionary<string, ChildWorkflowTarget>? ChildTargets(Transition t, out ActivityFault? refused)
+    private Dictionary<string, ChildWorkflowTarget>? ChildTargets(Frame frame, Transition t, out ActivityFault? refused)
     {
         refused = null;
         Dictionary<string, ChildWorkflowTarget>? targets = null;
+        if (turn.TestScopeId is not null && t.Effects?.Any(effect => effect is DispatchEffect) == true)
+        {
+            refused = new ActivityFault("dispatch.test.detached", "Dispatch Workflow must wait for completion in this Test Run.");
+            return null;
+        }
         var named = (t.Triggers ?? []).OfType<ChildTrigger>().Select(child => child.Workflow)
             .Concat((t.Effects ?? []).OfType<DispatchEffect>().Select(dispatch => dispatch.Workflow));
         foreach (var id in named)
         {
             targets ??= new(StringComparer.Ordinal);
             if (targets.ContainsKey(id)) continue;
+            if (turn.TestScopeId is not null)
+            {
+                if (_wf.Nodes[frame.Node].TestRunChild is not { } child || child.Definition != id.Trim())
+                {
+                    refused = new ActivityFault(UnpublishedFaultCode,
+                        $"Dispatch Workflow names definition '{id}', which has no exact child executable in this Test Run.");
+                    return null;
+                }
+                targets[id] = new(child.ArtifactId, TestRunChild: child);
+                continue;
+            }
             if (options.ServedWorkflow is not { } served)
             {
                 targets[id] = Registered(id);

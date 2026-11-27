@@ -3,7 +3,14 @@ using Kernel.Foundation.Contracts;
 namespace Kernel.Foundation.Hosting;
 
 /// <summary>The exact child and executable selection prepared by a built-in actor owner.</summary>
-public sealed record PendingChildBirth(string Tenant, ActorRef Actor, string Type, string TypeData, string Issuance);
+public sealed record PendingChildBirth(string Tenant, ActorRef Actor, string Type, string TypeData, string Issuance)
+{
+    /// <summary>The issuing parent's provider-owned checkpoint identity for an attached Test Run child.</summary>
+    public PendingChildParent? Parent { get; init; }
+}
+
+/// <summary>The exact parent of an attached child's pending birth.</summary>
+public sealed record PendingChildParent(ActorRef Actor, string Type, string TypeData, bool IsRoot);
 
 /// <summary>How a trusted host settled a proposed batch of child births.</summary>
 public enum ChildBirthProtectionOutcome
