@@ -23,6 +23,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     internal DbSet<RuntimeKernelScheduleControlEntity> KernelScheduleControls => Set<RuntimeKernelScheduleControlEntity>();
     internal DbSet<RuntimeKernelScheduleControlScanEntity> KernelScheduleControlScans => Set<RuntimeKernelScheduleControlScanEntity>();
     internal DbSet<RuntimeKernelExecutablePinEntity> KernelExecutablePins => Set<RuntimeKernelExecutablePinEntity>();
+    internal DbSet<RuntimeKernelExecutablePinScanEntity> KernelExecutablePinScans => Set<RuntimeKernelExecutablePinScanEntity>();
 
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
     public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();
@@ -71,6 +72,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new RuntimeKernelScheduleControlEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeKernelScheduleControlScanEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeKernelExecutablePinEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeKernelExecutablePinScanEntityConfiguration());
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());
