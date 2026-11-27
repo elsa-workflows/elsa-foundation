@@ -339,25 +339,20 @@ function toOutputCaptureValue(argument: unknown): OutputCaptureValue | null {
 // rides the wire as it is: a Variable, Input, Connection or ActivityResult reference, a portable expression
 // definition, and equally a definition this client does not know, such as a member read or a source kind
 // added later. Turning one into JSON text would change what the document means, so an unknown definition is
-// preserved rather than interpreted. Only the syntaxes in `textContractSyntaxes` carry structured values as
-// JSON text:
-//  - A Literal whose value is structured (e.g. a collection repeater's list) is sent as an "Object"
-//    expression. The backend's literal converter only handles scalars, so it can't turn the JSON-string
-//    form of a list into ICollection<T>; the Object handler JSON-deserializes it into the target type.
-//  - Object and Secret values keep the JSON-text form they have always been saved in.
+// preserved rather than interpreted. A structured Literal (a collection repeater's list, a dictionary) is JSON
+// data and rides as it is too: the backend reads a literal as strict JSON into the input's type (ADR 0091), so a
+// list stays a list instead of becoming JSON text. Only the syntaxes in `textContractSyntaxes` carry structured
+// values as JSON text: Object and Secret values keep the JSON-text form they have always been saved in.
 // isRecord covers both arrays and plain objects.
 function toWireArgument(expression: { type: string; value: unknown }): { value: unknown; expressionType: string } {
   const expressionType = expression.type || "Literal";
   if (isRecord(expression.value) && !textContractSyntaxes.has(expressionType.toLowerCase())) {
     return { value: expression.value, expressionType };
   }
-  if (expressionType === "Literal" && isRecord(expression.value)) {
-    return { value: toWireValue(expression.value), expressionType: "Object" };
-  }
   return { value: toWireValue(expression.value), expressionType };
 }
 
-const textContractSyntaxes = new Set(["literal", "object", "secret"]);
+const textContractSyntaxes = new Set(["object", "secret"]);
 
 // Scalars keep their JSON type. The backend reads a literal as strict JSON (ADR 0091 decision 2; spec 1207 refuses
 // `"true"` into Boolean and `"5"` into Int32 on every path), so a Boolean or number sent as text would not publish.

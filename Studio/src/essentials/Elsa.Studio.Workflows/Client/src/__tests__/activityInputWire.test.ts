@@ -279,26 +279,25 @@ describe("activity input wire adapter", () => {
     expect(node.inputs).toEqual([{ referenceKey: "count", value: { value: null, expressionType: "Literal" } }]);
   });
 
-  it("sends structured literals (collections and objects) as Object expressions the backend can deserialize", () => {
+  it("sends structured literals (collections and objects) as typed JSON under Literal", () => {
     const state = stateOf(writeLine("write-one", {
       lines: wrapped(["Hello", "world"], "Literal"),
-      config: wrapped({ enabled: true }, "Literal")
+      config: wrapped({ enabled: true, retries: 3 }, "Literal")
     }));
 
     const node = canonicalizeStateForWire(state).rootActivity!;
 
-    // A scalar literal converter can't turn the JSON string form of a list/object into ICollection<T> or a
-    // complex type, so structured literal values ride the "Object" expression instead of "Literal".
+    // The backend reads a literal as strict JSON into the input's type (ADR 0091), so a list stays a list and an
+    // object stays an object rather than becoming JSON text.
     expect(node.inputs).toEqual([
-      { referenceKey: "lines", value: { value: '["Hello","world"]', expressionType: "Object" } },
-      { referenceKey: "config", value: { value: '{"enabled":true}', expressionType: "Object" } }
+      { referenceKey: "lines", value: { value: ["Hello", "world"], expressionType: "Literal" } },
+      { referenceKey: "config", value: { value: { enabled: true, retries: 3 }, expressionType: "Literal" } }
     ]);
   });
 
   it("returns a structured literal to the editor as a Literal after a full save/load round-trip", () => {
-    // The Object promotion above is a serialization detail. `expandStateFromWire` has no descriptors, so it
-    // faithfully reports what the wire holds; `readWrappedInput` — which does have the descriptor — is where
-    // the authored syntax comes back, keeping the checklist/repeater rather than the raw JSON editor.
+    // A structured literal keeps its syntax and its JSON value through the wire, so the checklist/repeater
+    // reopens with the same list rather than the raw JSON editor.
     const state = stateOf(writeLine("write-one", { lines: wrapped(["Hello", "world"], "Literal") }));
     const descriptor = {
       name: "Lines",
@@ -310,7 +309,7 @@ describe("activity input wire adapter", () => {
 
     const node = expandStateFromWire(canonicalizeStateForWire(state)).rootActivity!;
 
-    expect((node.lines as { expression: unknown }).expression).toEqual({ type: "Object", value: '["Hello","world"]' });
+    expect((node.lines as { expression: unknown }).expression).toEqual({ type: "Literal", value: ["Hello", "world"] });
     expect(readWrappedInput(node, descriptor).expression).toEqual({ type: "Literal", value: ["Hello", "world"] });
   });
 
