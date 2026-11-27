@@ -437,11 +437,16 @@ public sealed class Elsa3LoopPassVariableReadTests
         Assert.Contains("literal", refusal.Guidance, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task A_computed_name_after_a_loop_that_left_its_pass_behind_is_refused()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_computed_name_after_a_loop_that_left_its_pass_behind_is_refused(bool script)
     {
+        var reader = script
+            ? Activity("node", "Elsa.RunJavaScript", ("script", Literal("var name = 'Current' + 'Value'; return getVariable(name);")))
+            : Read("getVariable(['Current', 'Value'].join(''))");
         var result = await ConvertAsync(
-            Sequence("root", ForEach("loop", Activity("loop-node", "Elsa.WriteLine", ("text", Literal("acme")))), Read("getVariable(['Current', 'Value'].join(''))")),
+            Sequence("root", ForEach("loop", Activity("loop-node", "Elsa.WriteLine", ("text", Literal("acme")))), reader),
             WorkflowCurrentValue);
 
         Assert.False(result.Succeeded);
