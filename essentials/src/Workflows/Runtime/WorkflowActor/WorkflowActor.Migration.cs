@@ -54,11 +54,11 @@ public sealed partial class WorkflowActor
         else
         {
             state = ReadState(model, workflow, turn.State, turn.Inbox);
-            if (migration.ValidateMigration(Instance(turn.Header, workflow), state, request.To) is { } finding)
+            if (migration.ValidateMigration(Instance(turn.Header, workflow), state, request.To, out var selection) is { } finding)
                 result = new(MigrationPlanOutcome.Refused, finding);
             else
             {
-                next = next with { Workflow = request.To, Version = model.StateVersion };
+                next = next with { Workflow = request.To, Version = model.StateVersion, ExecutableSelection = selection };
                 result = new(MigrationPlanOutcome.Migrated);
             }
         }

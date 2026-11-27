@@ -80,6 +80,10 @@ public sealed class KernelServing
         return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.FromWorkflow(reached.Workflow);
     }
 
+    internal bool IsHostWorkflow(string workflow, string definition) =>
+        _state.Slots.GetValueOrDefault("host:" + workflow) is { } host && host.Workflow.Definition == definition &&
+        host.Workflow.ExecutableSelection is null && Registry.TryGet(workflow, out var registered) && ReferenceEquals(registered, host.Workflow);
+
     /// <summary>What the host's foundation runs, which the coordinator maps executables against.</summary>
     public KernelHostCapabilities Capabilities { get; }
 

@@ -31,7 +31,10 @@ internal sealed class NativeTurn : Models.ITurn
     public static async Task<NativeTurn> StartAsync(NativeExecutionModel model, Workflow workflow, JsonObject? input = null)
     {
         var start = NativeExecutionModel.Start(workflow, Modes.Balanced, input);
-        var instance = new Models.InstanceInfo(new Contract.ActorRef("instance-1"), "tenant", NativeExecutionModel.ModelKey, start.Workflow, null);
+        var instance = new Models.InstanceInfo(new Contract.ActorRef("instance-1"), "tenant", NativeExecutionModel.ModelKey, start.Workflow, null)
+        {
+            ExecutableSelection = start.ExecutableSelection
+        };
         var turn = new NativeTurn(instance, [new Contract.Message("start-1", Contract.Kinds.Start, start.Input)], model.CreateState(start));
         await model.TurnAsync(turn, CancellationToken.None);
         return turn;

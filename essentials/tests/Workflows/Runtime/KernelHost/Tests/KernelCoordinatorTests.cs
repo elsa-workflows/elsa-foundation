@@ -801,18 +801,22 @@ public sealed class KernelCoordinatorTests
         Assert.Equal("waits@2", host.Serving.ServedWorkflow("waits").Workflow);
     }
 
-    [Fact]
-    public async Task A_turn_of_a_workflow_the_host_has_no_artifact_for_faults_as_before()
+    [Theory]
+    [InlineData(false, "No workflow 'waits@1'.")]
+    [InlineData(true, "The exact executable selected for this workflow is unavailable.")]
+    public async Task A_turn_of_a_workflow_the_host_has_no_artifact_for_faults(bool selected, string diagnostic)
     {
         var host = new Host();
         await host.ActivateAsync(Waits("waits@1", "first"), "waits-1");
-        var turn = await NativeTurn.StartAsync(ModelOf(host), host.Serving.Registry.Get("waits@1"));
+        var served = host.Serving.Registry.Get("waits@1");
+        var workflow = selected ? served : new Native.Workflow(served.Id, served.Root, served.Variables, served.Definition);
+        var turn = await NativeTurn.StartAsync(ModelOf(host), workflow);
 
         // Another host, whose store never held the artifact.
         var other = new Host();
         var missing = await Assert.ThrowsAsync<InvalidOperationException>(() => turn.ResumeAsync(ModelOf(other)));
 
-        Assert.Equal("No workflow 'waits@1'.", missing.Message);
+        Assert.Equal(diagnostic, missing.Message);
     }
 
     [Fact]
