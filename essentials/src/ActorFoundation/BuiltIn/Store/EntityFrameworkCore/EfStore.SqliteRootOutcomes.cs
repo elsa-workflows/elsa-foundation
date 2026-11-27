@@ -47,15 +47,16 @@ public sealed partial class EfStore
         if (db.UsesRootChildren)
         {
             // A parked live-job pin stops protecting its rows once the terminal checkpoint clears the Park.
-            // Keep the existing deferred outcome obligation until the last physical job row is deleted.
+            // Keep the deferred outcome until the last physical job row and its protected membership are gone.
             var childSettled = SqliteParkedOutcomeCheckpoint(db, "\"FoundationRootPendingOutcomes\".", firstCheckpoint: false, checkpoint: "i.");
-            yield return new("trigger", "kernel_resolve_parked_child_job_outcome", "Messages", $$"""
-                CREATE TRIGGER kernel_resolve_parked_child_job_outcome AFTER DELETE ON "Messages"
+            yield return new("trigger", "kernel_resolve_parked_child_job_outcome", "FoundationProtectedTimedJobs", $$"""
+                CREATE TRIGGER kernel_resolve_parked_child_job_outcome AFTER DELETE ON "FoundationProtectedTimedJobs"
                 WHEN OLD."InboxScope" = {{RootTimedJobScope}}
                 BEGIN
                     DELETE FROM "FoundationRootPendingOutcomes"
-                    WHERE "Instance" = OLD."Target" AND "Partition" = OLD."Partition"
-                        AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = OLD."Target" AND i."Partition" = OLD."Partition"
+                    WHERE "Instance" = OLD."Actor"
+                        AND EXISTS (SELECT 1 FROM "Instances" i
+                            WHERE i."Id" = OLD."Actor" AND i."Partition" = "FoundationRootPendingOutcomes"."Partition"
                             AND i."Revision" = "FoundationRootPendingOutcomes"."Revision" AND ({{childSettled}}) IS TRUE);
                 END
                 """);
