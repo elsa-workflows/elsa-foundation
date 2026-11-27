@@ -78,7 +78,8 @@ public sealed class StudioEssentialsDriftGuardTests
 
     private static readonly Regex CapabilityLiteral = new("""["'](?<id>elsa\.api\.[a-z0-9][a-z0-9.-]*)["']""", RegexOptions.Compiled);
     private static readonly Regex StudioModuleAttribute = new(@"^\s*\[StudioModule\(", RegexOptions.Compiled | RegexOptions.Multiline);
-    private static readonly Regex ShellFeatureName = new("""\[ShellFeature\(\s*(?:name:\s*)?"(?<name>[^"]+)""", RegexOptions.Compiled);
+    private static readonly Regex ShellFeatureName = new("""\[ShellFeature\(\s*(?:name:\s*)?(?:"(?<literal>[^"]+)"|(?<constant>[A-Za-z_]\w*))(?=\s*[,\)])""", RegexOptions.Compiled);
+    private static readonly Regex StringConstant = new("""\bconst\s+string\s+(?<identifier>[A-Za-z_]\w*)\s*=\s*"(?<value>[^"]+)"\s*;""", RegexOptions.Compiled);
 
     [Fact]
     public void Studio_essentials_ships_exactly_the_modules_the_essentials_server_serves()
@@ -211,7 +212,8 @@ public sealed class StudioEssentialsDriftGuardTests
     public void The_drift_scans_read_the_real_server_and_studio_sources()
     {
         var declared = ServerProjects().SelectMany(project => project.Features).ToHashSet(StringComparer.Ordinal);
-        Assert.DoesNotContain(EnabledServerFeatures(), feature => !declared.Contains(feature));
+        var undeclared = EnabledServerFeatures().Where(feature => !declared.Contains(feature)).Order(StringComparer.Ordinal);
+        Assert.Empty(undeclared);
 
         var served = ServerCapabilities();
         Assert.Superset(new HashSet<string>(["elsa.api.workflow-design", "elsa.api.runtime", "elsa.api.secrets", "elsa.api.user-tasks"]), served);
@@ -261,11 +263,32 @@ public sealed class StudioEssentialsDriftGuardTests
         {
             var sources = SourceFiles(Path.GetDirectoryName(project)!, "*.cs").Select(File.ReadAllText).ToArray();
             var features = sources
-                .SelectMany(source => ShellFeatureName.Matches(source).Select(match => match.Groups["name"].Value))
+                .SelectMany(ReadShellFeatureNames)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
             var capabilities = sources.Where(IsDeclarationFile).SelectMany(CapabilityIds).Distinct(StringComparer.Ordinal).ToArray();
             yield return (project, features, capabilities);
+        }
+    }
+
+    private static IEnumerable<string> ReadShellFeatureNames(string source)
+    {
+        foreach (Match feature in ShellFeatureName.Matches(source))
+        {
+            if (feature.Groups["literal"] is { Success: true } literal)
+            {
+                yield return literal.Value;
+                continue;
+            }
+
+            var identifier = feature.Groups["constant"].Value;
+            var values = StringConstant.Matches(source)
+                .Where(declaration => declaration.Groups["identifier"].Value == identifier)
+                .Select(declaration => declaration.Groups["value"].Value)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (values is [var value])
+                yield return value;
         }
     }
 
@@ -309,7 +332,7 @@ public sealed class StudioEssentialsDriftGuardTests
                     .Where(file => !file.Split(Path.DirectorySeparatorChar).Contains("__tests__") && !Path.GetFileName(file).Contains(".test.", StringComparison.Ordinal))
                     .SelectMany(file => CapabilityLiteral.Matches(File.ReadAllText(file)).Select(match => match.Groups["id"].Value))
                     .ToHashSet(StringComparer.Ordinal);
-            var features = moduleSources.SelectMany(source => ShellFeatureName.Matches(source).Select(match => match.Groups["name"].Value))
+            var features = moduleSources.SelectMany(ReadShellFeatureNames)
                 .ToHashSet(StringComparer.Ordinal);
             modules[Path.GetFileNameWithoutExtension(project)] = new(ids, features);
         }
