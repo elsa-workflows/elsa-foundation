@@ -291,8 +291,21 @@ internal static class ProfileCapabilityChecks
             RootProfiles.MissingPrerequisites(settlementPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(settlementPostgres.RequiredFormat),
             "scheduled occurrence settlement has a private protocol and retains the installed inventory definitions");
+        using var controlsPostgres = KernelDb.ForPostgresRootScheduleControlsQualification(options);
+        using var controlsSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootScheduleControlsQualification);
+        Check(controlsPostgres.RequiredFormat == new StoreFormat(3, 121, 1) && controlsSqlite.RequiredFormat == controlsPostgres.RequiredFormat &&
+            controlsPostgres.Capabilities == (settlementPostgres.Capabilities | RootCapabilities.ScheduleControls) &&
+            controlsSqlite.Capabilities == controlsPostgres.Capabilities &&
+            !sharedPostgres.UsesRootScheduleControls && !sharedSqlite.UsesRootScheduleControls &&
+            !schedulePostgres.UsesRootScheduleControls && !settlementPostgres.UsesRootScheduleControls &&
+            RootProfiles.MissingPrerequisites(controlsPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(controlsPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(controlsPostgres) is { StoreSchema: 1, MessageProtocol: 16, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(controlsSqlite) is { StoreSchema: 2, MessageProtocol: 19, JournalCodec: 0 },
+            "trusted schedule controls are private with independently verified provider definitions");
+
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
-            playbackPostgres.Capabilities | descendantsPostgres.Capabilities | settlementPostgres.Capabilities;
+            playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -330,7 +343,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
             [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening,
-            [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol
+            [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol,
+            [RootCapabilities.ScheduleControls] = RootCapabilities.ScheduleInventory | RootCapabilities.TimedJobSettlement
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
             expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),
