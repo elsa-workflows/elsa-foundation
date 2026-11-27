@@ -65,7 +65,7 @@ internal sealed class PostgresNetworkOwnershipChecks(string connection, Guid run
             "Declared topology and bounds require the current product defaults.");
         await using (var empty = Open())
             Require(await PostgresFixtureDatabase.IsEmptyAsync(empty, stop), "Choose a fresh empty database dedicated to this run.");
-        await PostgresPreviewHosting.InstallShippedAsync(_options, stop);
+        await PostgresPreviewHosting.InstallShippedAsync(_options, WorkflowActor.WorkflowActor.ActorType, protectsStarts: false, stop);
         await using (var install = Open()) await install.Database.ExecuteSqlRawAsync(SetupSql, stop);
         var store = new EfStore(Open, postgres: true);
         await using var anchor = await OpenAnchorAsync(Survivor);

@@ -52,7 +52,7 @@ internal static class PostgresShippedCompatibilityProcess
                 case "seed":
                     await using (var empty = Open())
                         Check(await PostgresFixtureDatabase.IsEmptyAsync(empty, token), "The seed owner requires an empty rehearsal database.");
-                    await PostgresPreviewHosting.InstallShippedAsync(options, token);
+                    await InstallSeedAsync(options, token);
                     await RunOwnerAsync(seed: true);
                     break;
                 case "resume":
@@ -105,6 +105,17 @@ internal static class PostgresShippedCompatibilityProcess
         {
             Console.WriteLine($"refused format {role} {format.Message}");
             return 8;
+        }
+
+        static Task InstallSeedAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken)
+        {
+            // This same fixture also compiles against archives that predate the typed Event host install.
+            var typedInstall = typeof(PostgresPreviewHosting).GetMethod(nameof(PostgresPreviewHosting.InstallShippedAsync),
+                [typeof(DbContextOptions<KernelDb>), typeof(string), typeof(bool), typeof(CancellationToken)]);
+            return typedInstall is null
+                ? PostgresPreviewHosting.InstallShippedAsync(options, cancellationToken)
+                : typedInstall.CreateDelegate<Func<DbContextOptions<KernelDb>, string, bool, CancellationToken, Task>>()
+                    (options, ActorType, false, cancellationToken);
         }
 
         Task<PostgresPreviewFoundation> OpenEdgeAsync(PostgresDirectRequests? requests = null) =>

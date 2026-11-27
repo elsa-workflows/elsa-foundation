@@ -1,6 +1,7 @@
 using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 [ManifestFeatureCategory("Workflows")]
 [ManifestFeatureCategory("Runtime")]
 [ManifestFeatureCategory("Persistence")]
-[ShellFeature(name: "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", DisplayName = "Workflows Runtime EF Core Test-Scope Persistence", Description = "Opt-in EF Core persistence for workflow test scopes.", DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+[ShellFeature(name: "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", DisplayName = "Workflows Runtime EF Core Test-Scope Persistence", Description = "Opt-in EF Core persistence for workflow test scopes.", DependsOn = new object[] { "Tasks" })]
 [UsesEfModule("Workflows.Runtime")]
 [EfPersistenceResourceParticipant]
 public sealed class RuntimeWorkflowTestScopeEntityFrameworkCoreFeature : IShellFeature
@@ -38,6 +39,7 @@ public sealed class RuntimeWorkflowTestScopeEntityFrameworkCoreFeature : IShellF
 
     [ManifestSetting(DisplayName = "Recovery continuation signing key", Description = "Stable key used to authenticate scope paging cursors.", Category = "Persistence", Secret = true)]
     public string? RecoveryContinuationSigningKey { get; set; }
-    public void ConfigureServices(IServiceCollection services) => services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey })
+    public void ConfigureServices(IServiceCollection services) => services.AddPersistenceCore()
+        .AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey })
         .AddEfModuleMigrations<RuntimeDbContext>(Provider);
 }

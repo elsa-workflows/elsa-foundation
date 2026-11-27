@@ -31,8 +31,10 @@ internal static class RootAdmissionPressureChecks
             else
                 options.UseSqlite(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ToString());
 
-            KernelDb Open() => postgres ? KernelDb.ForPostgresRootShipped(options.Options)
-                : KernelDb.ForSqliteRootRuntime(options.Options, definitions);
+            var actor = new PressureActor();
+            var eventHost = new RootPublicEventHost(actor.Type, false);
+            KernelDb Open() => postgres ? KernelDb.ForPostgresRootShipped(options.Options, eventHost)
+                : KernelDb.ForSqliteRootRuntime(options.Options, definitions, publicEventHost: eventHost);
             var store = new EfStore(Open, postgres);
             await using var db = Open();
             if (postgres)
@@ -47,7 +49,6 @@ internal static class RootAdmissionPressureChecks
             const string node = "pressure-node";
             var scope = ContractScopes.Bind("pressure-probe");
             var other = ContractScopes.Bind("separate-tenant");
-            var actor = new PressureActor();
             var rateClock = new RateClock();
             var pressure = new RootAdmissionPressure(
                 new(2, 1, TimeSpan.FromMilliseconds(75), TimeSpan.FromMilliseconds(100)),

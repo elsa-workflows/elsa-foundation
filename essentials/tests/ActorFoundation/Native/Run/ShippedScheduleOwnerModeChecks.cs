@@ -39,7 +39,7 @@ internal static class ShippedScheduleOwnerModeChecks
                 ?? throw new InvalidOperationException("Supply an empty dedicated PostgreSQL fixture."));
             await using (var db = Open())
                 Check(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the PostgreSQL fixture is empty");
-            await PostgresPreviewHosting.InstallShippedAsync(options.Options, token);
+            await PostgresPreviewHosting.InstallShippedAsync(options.Options, WorkflowActorType.ActorType, protectsStarts: false, token);
         }
         else
         {
@@ -114,7 +114,7 @@ internal static class ShippedScheduleOwnerModeChecks
         await using (var db = Open())
         {
             await db.Database.ExecuteSqlRawAsync("""DELETE FROM "FoundationScheduleOwnerMode" WHERE "Singleton" = 1""", token);
-            if (postgres) await PostgresPreviewHosting.InstallShippedAsync(options.Options, token);
+            if (postgres) await PostgresPreviewHosting.InstallShippedAsync(options.Options, WorkflowActorType.ActorType, protectsStarts: false, token);
             else await sqlite!.InstallShippedAsync(token);
 
             await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-incomplete", wantsManaged: false), "missing from the installed root store");

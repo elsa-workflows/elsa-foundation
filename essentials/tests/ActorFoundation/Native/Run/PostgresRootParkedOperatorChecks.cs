@@ -74,7 +74,7 @@ internal static class PostgresRootParkedOperatorChecks
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         var capabilities = shippedSet ? RootProfiles.Shipped
             : RootProfiles.Formats[StoreFormat.RootOperatorReplies] | RootProfiles.Formats[StoreFormat.RootParkInspection];
-        KernelDb Open() => shippedSet ? KernelDb.ForPostgresRootShipped(options)
+        KernelDb Open() => shippedSet ? KernelDb.ForPostgresRootShipped(options, new(Probe.Type, false))
             : KernelDb.ForUnshippedComposition(options, Composed, capabilities);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(240));
         var stop = timeout.Token;
@@ -430,7 +430,7 @@ internal static class PostgresRootParkedOperatorChecks
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA park_resolution", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "park_resolution" }.ConnectionString;
             var projectionOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
-            KernelDb OpenProjection() => KernelDb.ForPostgresRootShipped(projectionOptions);
+            KernelDb OpenProjection() => KernelDb.ForPostgresRootShipped(projectionOptions, new(Probe.Type, false));
             await using var set = new Set("park-resolution", OpenProjection, owned, inBatch, tenant, stop);
             await set.InstallAsync(createTables: true);
             var reads = await set.Cold.OpenPreviewRootReadsAsync(8, stop);
@@ -519,7 +519,7 @@ internal static class PostgresRootParkedOperatorChecks
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA authored_withholding", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "authored_withholding" }.ConnectionString;
             var ownOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
-            KernelDb OpenAuthored() => KernelDb.ForPostgresRootShipped(ownOptions);
+            KernelDb OpenAuthored() => KernelDb.ForPostgresRootShipped(ownOptions, new(Probe.Type, false));
             await using var set = new Set("authored-withholding", OpenAuthored, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
             const string operation = "terminate-author-withheld";
             const string ordinaryOperation = "terminate-deliverable";
@@ -618,7 +618,7 @@ internal static class PostgresRootParkedOperatorChecks
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA hosted_authored_withholding", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "hosted_authored_withholding" }.ConnectionString;
             var hostOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
-            KernelDb OpenHosted() => PostgresPreviewHosting.CreateShippedContext(hostOptions);
+            KernelDb OpenHosted() => PostgresPreviewHosting.CreateShippedContext(hostOptions, Probe.Type, protectsStarts: false);
             await using var set = new Set("hosted-authored", OpenHosted, owned, inBatch, tenant, stop);
             await set.InstallAsync(createTables: true);
 
@@ -651,7 +651,7 @@ internal static class PostgresRootParkedOperatorChecks
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA live_compound_refusal", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "live_compound_refusal" }.ConnectionString;
             var ownOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
-            KernelDb OpenLive() => KernelDb.ForPostgresRootShipped(ownOptions);
+            KernelDb OpenLive() => KernelDb.ForPostgresRootShipped(ownOptions, new(Probe.Type, false));
             await using var set = new Set("live-compound", OpenLive, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
             const string operation = "compound-after-job";
             Contract.ActorRef root = default;
@@ -717,7 +717,7 @@ internal static class PostgresRootParkedOperatorChecks
             var protocol = StoreFormat.Current with { MessageProtocol = 86 };
             var capabilities = RootProfiles.ParkCompositionBase | RootProfiles.Formats[StoreFormat.RootParkRecovery];
             KernelDb OpenResult() => recovery ? KernelDb.ForUnshippedComposition(resultOptions, protocol, capabilities)
-                : KernelDb.ForPostgresRootShipped(resultOptions);
+                : KernelDb.ForPostgresRootShipped(resultOptions, new(Probe.Type, false));
             await using var set = new Set(schema, OpenResult, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
             EfStore.RootImage? before = null;
             PublishedResult? published = null;
@@ -839,7 +839,7 @@ internal static class PostgresRootParkedOperatorChecks
             var jobOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).AddInterceptors(gate, metadata).Options;
             var protocol = StoreFormat.Current with { MessageProtocol = 86 };
             var capabilities = RootProfiles.ParkCompositionBase | RootProfiles.Formats[StoreFormat.RootParkRecovery];
-            KernelDb OpenJob() => terminate ? KernelDb.ForPostgresRootShipped(jobOptions)
+            KernelDb OpenJob() => terminate ? KernelDb.ForPostgresRootShipped(jobOptions, new(Probe.Type, false))
                 : KernelDb.ForUnshippedComposition(jobOptions, protocol, capabilities);
             await using var set = new Set(schema, OpenJob, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true, PollLimit = 1 };
             await set.InstallAsync(createTables: true);
@@ -1003,7 +1003,7 @@ internal static class PostgresRootParkedOperatorChecks
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA joint_park_recovery", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "joint_park_recovery" }.ConnectionString;
             var jointOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
-            KernelDb OpenJoint() => KernelDb.ForPostgresRootShipped(jointOptions);
+            KernelDb OpenJoint() => KernelDb.ForPostgresRootShipped(jointOptions, new(Probe.Type, false));
             await using var set = new Set("joint-park-recovery", OpenJoint, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
             await set.InstallAsync(createTables: true);
             var ingress = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenJoint, Probe.Type,
@@ -1164,7 +1164,7 @@ internal static class PostgresRootParkedOperatorChecks
             const string raceId = "competing-exact-operator-id";
             var receiptBarrier = new OperatorReceiptInsertBarrier();
             var raceOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).AddInterceptors(receiptBarrier).Options;
-            KernelDb OpenRace() => KernelDb.ForPostgresRootShipped(raceOptions);
+            KernelDb OpenRace() => KernelDb.ForPostgresRootShipped(raceOptions, new(Probe.Type, false));
             var raceFirst = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenRace, Probe.Type,
                 (caller, target, kind) => ReferenceEquals(caller, tenant) && target == suspending && kind == Contract.Kinds.Suspend,
                 cancellationToken: stop);

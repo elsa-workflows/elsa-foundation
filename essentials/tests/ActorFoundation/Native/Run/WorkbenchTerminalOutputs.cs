@@ -20,7 +20,7 @@ internal static partial class WorkbenchPostgresPreview
 {
     private sealed class EncodingProbe : Contract.IActorType
     {
-        public string Type => "terminal-output-encoding";
+        public string Type => Kernel.WorkflowActor.WorkflowActor.ActorType;
         public bool Withholds(ActorHeader header) => false;
         public long TerminalGrowth(ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(ActorHeader header, string state, long now) => false;

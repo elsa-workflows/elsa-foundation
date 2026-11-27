@@ -34,7 +34,7 @@ internal static partial class SqliteHostLifetimeChecks
             if (authored) builder.AddInterceptors(cohortPlan);
             var options = builder.Options;
             var definitions = new SqliteAdmissionDefinitions();
-            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(options, definitions)
+            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(options, definitions, publicEventHost: new(fixture, false))
                 : recovery ? KernelDb.ForSqliteParkRecoveryQualification(options, definitions)
                 : KernelDb.ForSqliteParkArrivalsQualification(options, definitions);
             await using var db = Open();

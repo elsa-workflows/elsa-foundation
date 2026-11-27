@@ -48,7 +48,7 @@ internal static class ShippedDelayRecoveryChecks
             KernelDb Open() => OpenWith(options.Options);
             KernelDb OpenWith(DbContextOptions<KernelDb> configuration) => postgres
                 ? sequencedJournal ? KernelDb.ForPostgresRootSequencedJournalQualification(configuration)
-                    : PostgresPreviewHosting.CreateShippedContext(configuration)
+                    : PostgresPreviewHosting.CreateShippedContext(configuration, PublicActor.ActorType, protectsStarts: false)
                 : KernelDb.ForSqliteRootRuntime(configuration, definitions, qualification);
 
             var cold = new EfStore(Open, postgres);
@@ -251,7 +251,7 @@ internal static class ShippedDelayRecoveryChecks
                         var ordinary = new EfStore(() => PostgresPreviewHosting.CreateShippedContext(options.Options), postgres: true);
                         await ordinary.InstallPreviewRootSchemaAsync(token);
                     }
-                    else await SqliteEmbeddedHosting.InstallShippedAsync(path, token);
+                    else await SqliteEmbeddedHosting.InstallShippedAsync(path, PublicActor.ActorType, protectsStarts: false, token);
                 }
                 catch (StoreFormatException) { refused = true; }
                 Check(refused, "the ordinary shipped install refuses the private sequenced journal store");

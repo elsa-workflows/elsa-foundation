@@ -44,7 +44,7 @@ internal static class PostgresLiveRemoteHttpChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a fresh PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => KernelDb.ForPostgresRootShipped(options);
+        KernelDb Open() => KernelDb.ForPostgresRootShipped(options, new(LiveWorkflowActor.ActorType, false));
         var ownerConnection = new NpgsqlConnectionStringBuilder(connection)
         {
             ApplicationName = "elsa-live-reply-owner",
