@@ -414,11 +414,13 @@ public sealed partial class EfStore
         if (turn.Row is not { FoundationDispatchHeader: { } header } row || turn.Expected is not { } expected || turn.Journal is null ||
             command.Operator is not { RootParkMark: { } mark, RootParkWindow: >= 0, RootParkFacts: { } facts } || turn.Done is not [var key] ||
             key != command.InboxKey || !root.Owns(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
-            turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
+            turn.Consumed.Count + turn.Sent.Count + turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
+            turn.Subscribed.Count != 0 && _ordinaryRoots?.TakesLiveEventWaits != true ||
             turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
                 turn.Journal, Held: turn.Held) { FoundationRootOperator = command, FoundationRootTimerRearms = rearms })
             throw RootShape();
         var recovered = !turn.Journal.StartsWith("""{"Outcome":"refused",""", StringComparison.Ordinal);
+        if (!recovered && turn.Subscribed.Count != 0) throw RootShape();
         if (rearms is not null && (!recovered || RootSelfIssuer is not { RearmsTimers: true } ||
             rearms.Length is 0 or > InMemoryStore.MaxRestoreWaits || facts.RestorableTimers is null ||
             rearms.Sum(FoundationRootParkTimer.RearmBytes) > InMemoryStore.MaxRestoreBytes))

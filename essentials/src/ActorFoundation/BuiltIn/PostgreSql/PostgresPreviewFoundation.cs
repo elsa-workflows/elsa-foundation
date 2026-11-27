@@ -84,7 +84,7 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
 
     public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
-        directRequests is not null && target is Contract.Target.Ref or Contract.Target.Start
+        directRequests is not null && target is Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event
             ? directRequests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken)
             : throw new NotSupportedException("This preview holds requests only with a reply-capable store and its direct requests.");
 

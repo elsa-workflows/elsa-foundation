@@ -57,6 +57,10 @@ if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, 
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
+if (args is ["kernel-http-waits", var httpWaitProvider and ("postgres" or "sqlite"), var httpWaitFence and ("checked" or "in-batch")])
+    return await KernelHttpWaitChecks.RunAsync(httpWaitProvider, httpWaitFence == "in-batch");
+if (args is ["kernel-http-waits", var shippedHttpProvider and ("postgres" or "sqlite"), var shippedHttpFence and ("checked" or "in-batch"), "shipped"])
+    return await KernelHttpWaitChecks.RunAsync(shippedHttpProvider, shippedHttpFence == "in-batch", shipped: true);
 if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"), var backlogFence and ("checked" or "in-batch")])
     return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
 if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or "sqlite"), var pressureFence and ("checked" or "in-batch")])
@@ -122,6 +126,10 @@ if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"),
     return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])
     return await PostgresHttpOwnerLoss.RunOwnerAsync(workerFence, pause, new(ownerRef));
+if (args is ["pg-http-event-owner-loss", var eventOwnerFence and ("checked" or "in-batch")])
+    return await PostgresHttpOwnerLoss.RunAsync(eventOwnerFence, "before", heldEvent: true);
+if (args is ["pg-http-event-owner-process", var eventWorkerFence and ("checked" or "in-batch"), var eventPause and ("before" or "resume"), var eventOwnerRef])
+    return await PostgresHttpOwnerLoss.RunOwnerAsync(eventWorkerFence, eventPause, new(eventOwnerRef), heldEvent: true);
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
 if (args is ["pg-child-workflows"]) return await PostgresChildWorkflowChecks.RunAsync();
 if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch")])

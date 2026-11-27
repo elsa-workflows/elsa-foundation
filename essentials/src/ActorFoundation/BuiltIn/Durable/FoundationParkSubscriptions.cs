@@ -4,7 +4,7 @@ internal sealed record ParkSubscriptionRecipe(string Key, string Wait, bool Keep
 
 public sealed partial class InMemoryStore
 {
-    private const int SubscriptionRestoreAllowance = 7168;
+    internal const int SubscriptionRestoreAllowance = 7168;
     private const int KeepingRestoreAllowance = 9728;
     private const int CatchUpTicketAllowance = 90_112;
 

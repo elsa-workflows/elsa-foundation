@@ -31,6 +31,16 @@ internal static partial class WorkbenchPostgresPreview
                 .SelectMany(capability => capability.GetProperty("links").EnumerateArray())
                 .Any(link => link.GetProperty("rel").GetString() == "workflow-history-occurrences");
             Require(occurrencesAdvertised == playback, "only the selected playback store advertises the occurrence relation");
+            using (var wait = await client.PostAsync("/workflows/http/core-preview/wait", null, token))
+                Require(wait.StatusCode == (playback ? HttpStatusCode.NotFound : HttpStatusCode.Accepted),
+                    playback ? "private Playback retains the protocol-31 HTTP capability set" :
+                        "the shipped profile opens the live HTTP wait");
+            if (!playback)
+            {
+                using var resumed = await client.PostAsync("/workflows/http/core-preview/decision", null, token);
+                Require(resumed.StatusCode == HttpStatusCode.OK && await resumed.Content.ReadAsStringAsync(token) == "decided",
+                    "the shipped host delivers the HTTP event and returns the workflow response");
+            }
 
             await PublishAsync("native-history", flowchart: false);
             await PublishAsync("flowchart-history", flowchart: true);

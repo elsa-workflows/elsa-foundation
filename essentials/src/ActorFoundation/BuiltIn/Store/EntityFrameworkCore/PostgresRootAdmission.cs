@@ -345,10 +345,14 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         }
     }
 
-    private static FormattableString WithStartSource(FormattableString query, PinnedRootSource? pin)
+    private static FormattableString WithStartSource(FormattableString query, PinnedRootSource? pin) =>
+        WithAdmissionSource(query, pin, "/*start-source*/", 3, """('"FoundationRootReceipts"'), ('"FoundationRootBirths"'), ('"Messages"')""");
+
+    private static FormattableString WithAdmissionSource(FormattableString query, PinnedRootSource? pin,
+        string placeholder, int tableCount, string tables)
     {
         if (pin is null)
-            return FormattableStringFactory.Create(query.Format.Replace("/*start-source*/", """SELECT true AS "SourceReady" """, StringComparison.Ordinal),
+            return FormattableStringFactory.Create(query.Format.Replace(placeholder, """SELECT true AS "SourceReady" """, StringComparison.Ordinal),
                 query.GetArguments());
 
         // A schema rename can redirect unqualified relation names despite the earlier table locks.
@@ -362,12 +366,12 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 WHERE v."Id" = {{markerId}} AND marker.oid::bigint = {{markerOid}}
                     AND marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
                     AND marker.relnamespace::bigint = {{namespaceOid}}
-                    AND (SELECT count(*) FROM (VALUES ('"FoundationRootReceipts"'), ('"FoundationRootBirths"'), ('"Messages"')) required(name)
+                    AND (SELECT count(*) FROM (VALUES {{tables}}) required(name)
                         JOIN pg_catalog.pg_class relation ON relation.oid = pg_catalog.to_regclass(required.name)
-                            AND relation.relkind = 'r' AND relation.relnamespace = marker.relnamespace) = 3
+                            AND relation.relkind = 'r' AND relation.relnamespace = marker.relnamespace) = {{tableCount}}
             ) AS "SourceReady"
             """;
-        return FormattableStringFactory.Create(query.Format.Replace("/*start-source*/", source, StringComparison.Ordinal),
+        return FormattableStringFactory.Create(query.Format.Replace(placeholder, source, StringComparison.Ordinal),
             [.. query.GetArguments(), StoreVersionEntity.MarkerId, (long)pin.Marker, (long)pin.Namespace]);
 
         static string Placeholder(int index) => "{" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}";

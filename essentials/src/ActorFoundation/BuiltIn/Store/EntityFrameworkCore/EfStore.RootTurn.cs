@@ -184,7 +184,7 @@ public sealed partial class EfStore
                         terminateThenDelete: true, retentionDeletes: true, operatorReplies: true, parkedTerminate: true,
                         parkRecovery: db.UsesRootParkRecovery, composedRecovery: db.UsesRootComposedParkRecovery)
                     : PostgresRootAdmission.DecodeOperator(db, row, reference)
-                : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)
+                : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol, db.UsesRootLiveEventWaits)
         };
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,

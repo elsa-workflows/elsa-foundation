@@ -62,9 +62,10 @@ internal static class WorkbenchCorePreview
         Wf.HttpEndpoint("start", HttpEchoPath),
         Wf.Respond("answer", Binding.Result("start", "Body"), 200)));
 
-    /// <summary>The wait probe, which this host refuses: an HTTP Endpoint that waits after the start.</summary>
+    /// <summary>The wait probe commits a second HTTP wait before responding to the start.</summary>
     internal static Workflow HttpWaitWorkflow() => Wf.Workflow("core-preview-http-wait", Wf.Sequence("main",
         Wf.HttpEndpoint("start", "core-preview/wait"),
+        Wf.Respond("accepted", "waiting", 202),
         Wf.HttpEndpoint("decision", "core-preview/decision"),
         Wf.Respond("answer", "decided")));
 
@@ -152,20 +153,21 @@ internal static class WorkbenchCorePreview
             Timers: useSqlite ? sqliteHasS6 && SqliteEmbeddedHosting.TakesTimers : PostgresPreviewHosting.TakesTimers(OpenPostgres),
             Children: useSqlite ? !terminalOutputQualification && SqliteEmbeddedHosting.TakesChildren : PostgresPreviewHosting.TakesChildren(OpenPostgres),
             SelfSends: useSqlite ? sqliteHasS6 && SqliteEmbeddedHosting.TakesSelfSends : PostgresPreviewHosting.TakesSelfSends(OpenPostgres),
-            HttpWaits: false);
-        string? waitProbeRefusal = null;
+            HttpWaits: useSqlite
+                ? !terminalOutputQualification && !playbackQualification && SqliteEmbeddedHosting.TakesHttpWaits
+                : PostgresPreviewHosting.TakesHttpWaits(OpenPostgres));
         var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
         if (serving is not null)
         {
             // An opt-in probe for the Workbench check: a host-served HTTP workflow at {base}/core-preview/probe that answers with
             // the posted name, so a running Workbench proves its edge without a publication.
-            // The echo probe answers with the body the edge read, and the wait probe is refused, as a publication with one is.
+            // The echo probe answers with the body the edge read. The wait probe needs a live-event store.
             if (configuration.GetValue<bool>(HttpProbeKey))
             {
                 serving.ServeHostWorkflowAsync(HttpProbeWorkflow(publications)).AsTask().GetAwaiter().GetResult();
                 serving.ServeHostWorkflowAsync(HttpEchoWorkflow()).AsTask().GetAwaiter().GetResult();
-                try { serving.ServeHostWorkflowAsync(HttpWaitWorkflow()).AsTask().GetAwaiter().GetResult(); }
-                catch (InvalidOperationException refused) { waitProbeRefusal = refused.Message; }
+                if (capabilities.HttpWaits)
+                    serving.ServeHostWorkflowAsync(HttpWaitWorkflow()).AsTask().GetAwaiter().GetResult();
             }
             services.AddSingleton(serving);
             services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
@@ -248,7 +250,6 @@ internal static class WorkbenchCorePreview
             // The node starts once the default shell is active, so its first turns find the evaluator.
             var actor = new WorkflowActor([model]);
             var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(WorkbenchCorePreview).FullName!);
-            if (waitProbeRefusal is not null) logger.LogInformation("The Core Preview refuses its HTTP wait probe: {Reason}", waitProbeRefusal);
             IHostedService owner = sqlite is null
                 ? new PostgresPreviewHostedService(OpenPostgres, node, actor, Environment.FailFast,
                     logger: provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>(), requests: postgresRequests)

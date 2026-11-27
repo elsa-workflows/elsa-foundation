@@ -23,6 +23,47 @@ internal sealed partial class PostgresRootAdmission
 
     internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget, Expired }
 
+    internal bool SupportsLiveEventWaits()
+    {
+        using var db = create();
+        return db.UsesRootLiveEventWaits;
+    }
+
+    internal async Task<HeldRootAdmission> PublishRequestAsync(HeldRootRequest request, string key, string? payload, CancellationToken token)
+    {
+        if (!RootEventAdmission.IsValid(request, key, payload)) return HeldRootAdmission.Refused;
+        var window = ReceiptWindow(deduplicationWindow, request.KeepFor);
+        for (var retry = 0; ; retry++)
+        {
+            try { return await PublishRequestOnceAsync(request, key, payload, window, token); }
+            catch (PostgresException error) when (retry < 2 &&
+                error.SqlState is PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure)
+            {
+                // The database rolled back the whole attempt. Keep the caller's original deadline and operation id.
+                await Task.Delay(TimeSpan.FromMilliseconds(10 * (retry + 1)), token);
+            }
+        }
+    }
+
+    private async Task<HeldRootAdmission> PublishRequestOnceAsync(HeldRootRequest request, string key, string? payload,
+        TimeSpan window, CancellationToken token)
+    {
+        using var attempt = pressure?.Begin(request.Tenant, RootAdmissionKind.Input);
+        await using var db = create();
+        RequirePressureProfile(db);
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
+        var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
+            throw new StoreFormatException("Live event requests require the pinned root source.");
+        await RootEventAdmission.LockPostgresKeysAsync(db, [request.Tenant + "_" + key], token);
+        var now = await RootEventAdmission.ReadPostgresClockAsync(db, token);
+        var result = await RootEventAdmission.PublishAsync(db, request, key, payload, now, window, attempt, token,
+            query => WithAdmissionSource(query, pin, "/*event-source*/", 5,
+                """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')"""));
+        await transaction.CommitAsync(token);
+        if (result == HeldRootAdmission.Accepted) attempt?.Committed();
+        return result;
+    }
+
     /// <returns>True for a new send, false for a duplicate and null for an unavailable exact life or invalid input.</returns>
     internal async Task<bool?> AdmitDirectAsync(string tenant, string reference, string id, string kind, string? payload = null,
         long? due = null, TimeSpan? keepFor = null, CancellationToken cancellationToken = default)
@@ -233,7 +274,7 @@ internal sealed partial class PostgresRootAdmission
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
                 AND m."EventMatch" IS NULL AND NOT m."Done" AND m."Id" NOT LIKE 'operator/%' ORDER BY m."Seq"
             """).AsNoTracking().ToListAsync(cancellationToken);
-        return rows.Select(row => DecodeDirect(row, reference, db.UsesRootReplyProtocol)).ToArray();
+        return rows.Select(row => DecodeDirect(row, reference, db.UsesRootReplyProtocol, db.UsesRootLiveEventWaits)).ToArray();
     }
 
     internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence, bool retentionDelete = false)
@@ -251,7 +292,7 @@ internal sealed partial class PostgresRootAdmission
         return suffix[12] == '4' && "89ab".Contains(suffix[16]) && suffix.IndexOfAnyExcept("0123456789abcdef") < 0;
     }
 
-    internal static Message DecodeDirect(MessageEntity row, string reference, bool replies = false)
+    internal static Message DecodeDirect(MessageEntity row, string reference, bool replies = false, bool liveEventWaits = false)
     {
         var held = IsHeldDirect(row.Start);
         if (held != (row.ReplyTo is not null) || held &&
@@ -261,9 +302,21 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
         var header = ReadDirectHeader(row.Start, reference, row.Id);
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
-        return new Message(header.Operation, new(row.Target), header.EscapedKind ?? row.Kind, payload,
+        var kind = header.EscapedKind ?? row.Kind;
+        EventMatch? match = null;
+        if (kind == Kinds.Event || header.EventWait is not null)
+        {
+            var separator = header.EventWait?.Key?.IndexOf('_') ?? -1;
+            if (!liveEventWaits || !held || kind != Kinds.Event || row.Sender is not null || row.Due != 0 ||
+                header.ExplicitZeroDue || row.KeepUntil is null || header.EventWait is not { Key: { } key, Wait: { } wait } ||
+                separator is not (> 0 and <= 64) ||
+                !FoundationMetadataLimits.FitsLiveWaitName(key[(separator + 1)..]) || !FoundationMetadataLimits.FitsLiveWaitName(wait))
+                throw new StoreException(Failure.Definite, "Invalid held root event delivery.");
+            match = new(key, header.Operation, row.Target, wait, header.Creation);
+        }
+        return new Message(header.Operation, new(row.Target), kind, payload,
             Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, ReplyTo: row.ReplyTo, TargetCreation: header.Creation)
-            { StorageId = row.Id }.WithInboxScope(row.InboxScope);
+            { StorageId = row.Id, ProjectedEvent = match }.WithInboxScope(row.InboxScope);
     }
 
     private static StoredDirect ReadDirectHeader(string? wire, string reference, string occurrence)

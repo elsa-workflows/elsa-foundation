@@ -201,10 +201,23 @@ internal sealed partial class ActorAdapter
         {
             HeaderLimits.RequireName(key, nameof(key));
             HeaderLimits.RequireName(wait, nameof(wait));
+            RequireLiveWait(key, wait, keep);
             _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         }
 
-        public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait, Header.Tenant);
+        public void Unsubscribe(string key, string wait)
+        {
+            RequireLiveWait(key, wait, keep: false);
+            _turn.Unsubscribe(Qualify(key), wait, Header.Tenant);
+        }
+
+        private void RequireLiveWait(string key, string wait, bool keep)
+        {
+            if (_roots?.TakesLiveEventWaits != true) return;
+            if (keep) throw new InvalidOperationException("This root profile supports live waits without keeping unreceived events.");
+            if (!Durable.FoundationMetadataLimits.FitsLiveWaitName(key) || !Durable.FoundationMetadataLimits.FitsLiveWaitName(wait))
+                throw new ArgumentException("The live event key and wait name must fit the relational text encoding.");
+        }
 
         public string Publish(string key, string? payload, TimeSpan keepFor)
         {

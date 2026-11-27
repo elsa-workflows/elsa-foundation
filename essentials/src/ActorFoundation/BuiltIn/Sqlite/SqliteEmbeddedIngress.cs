@@ -143,7 +143,7 @@ public static partial class SqliteEmbeddedHosting
             Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default)
         {
             if (requests is null) throw new NotSupportedException("SQLite held requests require the Embedded owner's reply edge.");
-            if (!Contract.Kinds.IsCommand(kind))
+            if (target is Contract.Target.Event || !Contract.Kinds.IsCommand(kind))
                 return requests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken);
 
             ArgumentNullException.ThrowIfNull(scope);

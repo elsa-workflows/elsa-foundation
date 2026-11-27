@@ -20,6 +20,8 @@ internal static class FoundationMetadataLimits
     internal static bool FitsName(string value, bool preservesCodeUnits = false) =>
         Fits(value, NameBytes, preservesCodeUnits);
 
+    internal static bool FitsLiveWaitName(string value) => FitsName(value) && !value.Contains('\0');
+
     internal static bool ReservedMessageId(string id) => id.StartsWith('~') || id.StartsWith("key/", StringComparison.Ordinal);
     internal static bool IsOutsideMessageId(string id) => !ReservedMessageId(id) && FitsName(id);
 

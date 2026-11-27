@@ -1514,7 +1514,7 @@ jobs:
           dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" sqlite-workbench-core-preview \
             "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
           dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" workbench-http-waits sqlite \
-            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host" gated
+            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
 
       - name: Run the focused WriteLine bound-input test
         shell: bash

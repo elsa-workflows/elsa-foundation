@@ -62,6 +62,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat SqliteRootChildrenQualification => new(3, 114, 1);
     internal static StoreFormat RootSequencedJournalQualification => new(3, 115, 1);
     internal static StoreFormat RootPlaybackQualification => new(3, 116, 1);
+    internal static StoreFormat RootLiveEventQualification => new(3, 117, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -70,7 +71,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 31 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 32 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -108,7 +109,8 @@ internal enum RootCapabilities
     Children = 1 << 23,
     TerminalOutput = 1 << 24,
     SequencedJournal = 1 << 25,
-    Playback = 1 << 26
+    LiveEventWaits = 1 << 26,
+    Playback = 1 << 27
 }
 
 internal static class RootProfiles
@@ -135,15 +137,16 @@ internal static class RootProfiles
 
     /// <summary>
     /// The shared shipped format includes owned children, durable self-sends and timers, one-page Park Resume,
-    /// fenced due pressure and sequenced workflow history.
+    /// fenced due pressure, sequenced workflow history and live event waits.
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
     private const RootCapabilities Shipped29 = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
-    internal const RootCapabilities Shipped = Shipped31;
+    internal const RootCapabilities Shipped = Shipped31 | RootCapabilities.LiveEventWaits;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
+    internal const RootCapabilities LiveEventQualification = Shipped31 | RootCapabilities.LiveEventWaits;
 
     internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
     internal const RootCapabilities SelfTimedParkQualification = ParkRecoveryComposition | RootCapabilities.SelfProtocol | RootCapabilities.Timers;
@@ -208,6 +211,7 @@ internal static class RootProfiles
         [RootCapabilities.TimerRearm] = ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery,
         [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
         [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
+        [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal
     };
 
@@ -433,7 +437,8 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqlitePlaybackRevision : PostgreSqlPlaybackRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
-                _ when db.RequiredFormat == StoreFormat.RootShipped => sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
+                _ when db.RequiredFormat == StoreFormat.RootShipped || db.RequiredFormat == StoreFormat.RootLiveEventQualification =>
+                    sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision
             },
             JournalCodec = 0

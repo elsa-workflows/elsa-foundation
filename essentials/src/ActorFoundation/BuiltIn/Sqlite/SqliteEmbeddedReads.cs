@@ -20,7 +20,8 @@ public static partial class SqliteEmbeddedHosting
     {
         public bool SupportsSequencedJournal => qualificationFormat is null
             ? TakesSequencedJournal
-            : qualificationFormat == StoreFormat.RootSequencedJournalQualification || SupportsPlayback;
+            : qualificationFormat is { } format &&
+                (format == StoreFormat.RootSequencedJournalQualification || format == StoreFormat.RootLiveEventQualification || SupportsPlayback);
 
         public bool SupportsPlayback => qualificationFormat == StoreFormat.RootPlaybackQualification;
 

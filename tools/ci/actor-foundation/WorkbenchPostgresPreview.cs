@@ -691,10 +691,11 @@ internal static partial class WorkbenchPostgresPreview
         using (var unrouted = await client.PostAsync($"{address}/workflows/http/no-such-route",
                    new StringContent(oversized, System.Text.Encoding.UTF8, "text/plain"), token))
             Require(unrouted.StatusCode == System.Net.HttpStatusCode.NotFound, "an unrouted request is not found whatever its body");
-        Require(workbench.WaitProbeRefusal is { } refusal &&
-                refusal.Contains("An HTTP Endpoint that waits for a request doesn't run on this host yet", StringComparison.Ordinal) &&
-                refusal.Contains("node 'decision'", StringComparison.Ordinal),
-            "the edge's host refuses a workflow with an HTTP Endpoint that waits, with the reason and what to change");
+        using (var start = await client.PostAsync($"{address}/workflows/http/core-preview/wait", null, token))
+            Require(start.StatusCode == System.Net.HttpStatusCode.Accepted, "the HTTP wait probe commits a live wait before answering the start");
+        using (var resumed = await client.PostAsync($"{address}/workflows/http/core-preview/decision", null, token))
+            Require(resumed.IsSuccessStatusCode && await resumed.Content.ReadAsStringAsync(token) == "decided",
+                "the edge resumes the committed wait and returns the workflow response");
     }
 
     private static async Task CheckEntryBeforeListeningAsync()
@@ -713,7 +714,6 @@ internal static partial class WorkbenchPostgresPreview
         internal readonly TaskCompletionSource<string> Listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource<string> KernelServing = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal volatile string? KernelComposed;
-        internal volatile string? WaitProbeRefusal;
 
         internal async Task ReadAsync(TextReader reader)
         {
@@ -724,8 +724,6 @@ internal static partial class WorkbenchPostgresPreview
                     Entry.TrySetResult(new(actor, key));
                 if (line.Contains("composed the WorkflowsRuntimeKernel feature into shell", StringComparison.Ordinal))
                     KernelComposed = line;
-                if (line.Contains("refuses its HTTP wait probe", StringComparison.Ordinal))
-                    WaitProbeRefusal = line;
                 // The serving outcome: served, or one of the two ways it fails, which the check names instead of timing out.
                 if (line.Contains("serves the publications of shell", StringComparison.Ordinal) ||
                     line.Contains("could not serve the publications of shell", StringComparison.Ordinal) ||
@@ -748,7 +746,6 @@ internal static partial class WorkbenchPostgresPreview
         internal Task<JobEntry> WaitForJobEntryAsync(CancellationToken token) =>
             WaitForOutputAsync(output.Entry.Task, "entering the timed job", token);
         internal string? KernelComposed => output.KernelComposed;
-        internal string? WaitProbeRefusal => output.WaitProbeRefusal;
         internal Task<string> WaitForKernelServingAsync(CancellationToken token) =>
             WaitForOutputAsync(output.KernelServing.Task, "serving its publications on the kernel", token);
 

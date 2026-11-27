@@ -105,6 +105,15 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         };
     }
 
+    internal Task<HeldRootAdmission> PublishRequestAsync(HeldRootRequest request, string key, string? payload,
+        CancellationToken token, RootAdmissionPressure.Attempt? reserved)
+    {
+        if (!RootEventAdmission.IsValid(request, key, payload)) return Task.FromResult(HeldRootAdmission.Refused);
+        var window = ReceiptWindow(deduplicationWindow, request.KeepFor);
+        return WriteAsync((db, now, ct) => RootEventAdmission.PublishAsync(db, request, key, payload, now, window, reserved, ct),
+            token, reserved);
+    }
+
     private async Task<Contract.Admission?> SendCoreAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,
         long? due, TimeSpan? keepFor, HeldRootRequest? reply, CancellationToken token, RootAdmissionPressure.Attempt? reserved = null)
     {

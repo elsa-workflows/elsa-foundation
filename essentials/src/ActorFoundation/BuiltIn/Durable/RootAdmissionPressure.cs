@@ -146,12 +146,17 @@ internal sealed class RootAdmissionPressure
 
         // The attempt remains reserved through the provider transaction. A successful write spends the token at
         // commit. Replays and rollbacks release only the reservation, so refill never credits them twice.
-        internal void Require(int partition)
+        internal void Require(int partition) => Require(partition, null);
+
+        internal void Require(IReadOnlyCollection<int> partitions) => Require(null, partitions);
+
+        private void Require(int? partition, IReadOnlyCollection<int>? partitions)
         {
             RequireCapacity();
             lock (owner._sync)
             {
-                if (kind != RootAdmissionKind.ShedLoad && (_placement ?? owner._full).Contains(partition))
+                var full = _placement ?? owner._full;
+                if (kind != RootAdmissionKind.ShedLoad && (partition is { } one ? full.Contains(one) : partitions!.Any(full.Contains)))
                     throw new RootAdmissionRefused(Contract.RefusalReason.InboxFull, owner.Backlog.SampleInterval);
 
                 var key = (tenant, kind);
