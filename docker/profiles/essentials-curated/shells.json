@@ -159,7 +159,10 @@
             "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
           },
           "KernelActivitiesScheduling": {},
-          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {}
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsDashboardRetained": {},
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {},
+          "WorkflowsRuntimeRetainedAttention": {}
         },
         "Configuration": {
           "WebRouting": {
