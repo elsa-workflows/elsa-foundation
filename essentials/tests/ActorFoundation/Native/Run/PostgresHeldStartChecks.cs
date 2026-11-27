@@ -73,8 +73,34 @@ internal static class PostgresHeldStartChecks
                 message => escalated.TrySetResult(message), loop, requests: requests)
             : new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message), loop, requests: requests)
                 { ObserveReplies = _ => witness! };
-        await service.StartAsync(stop);
         var scope = EmbeddedTenant.Bind("held-start");
+        PendingRootStart? oneWayOffer = null;
+        if (protectedStarts)
+        {
+            var starts = edge.BindProtectedRootStarts(scope);
+            const string operation = "protected-one-way";
+            var spec = Start(routes, "POST", "/orders", new JsonObject { ["name"] = "Durable" });
+            var ordinary = await foundation.SendAsync(scope, new Contract.Target.Start(spec), operation,
+                Contract.Kinds.Start, cancellationToken: stop);
+            var admitted = await starts.StartAsync(operation, spec, stop);
+            oneWayOffer = offers.Single();
+            var creator = await clock.ReadPendingCreatorAsync(scope.Tenant, oneWayOffer.Actor.Id, stop);
+            Require(ordinary.Outcome == Contract.AdmissionOutcome.Accepted && ordinary.Actor != oneWayOffer.Actor &&
+                    admitted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } oneWayActor } && oneWayActor == oneWayOffer.Actor &&
+                    creator is { ReplyTo: null } && await PreparedCountAsync() == 0,
+                "one-way start returns the protected durable birth before an owner runs and after consuming its preparation");
+            Require(await starts.StartAsync(operation, spec, stop) is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } replay } &&
+                    replay == oneWayOffer.Actor && offers.Count == 1, "one-way duplicate returns its exact durable receipt without repinning");
+            behavior = 1;
+            Require(await starts.StartAsync("one-way-denied", spec, stop) is
+                    { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null } &&
+                    await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, offers.Last().Actor,
+                        offers.Last().Issuance, stop) == RootStartProof.PreparationDisarmed,
+                "one-way refusal disarms its exact preparation without admitting an actor");
+            behavior = 0;
+            offers.Clear();
+        }
+        await service.StartAsync(stop);
         try
         {
             // 1. An HTTP-style start, answered with its response.
@@ -176,6 +202,19 @@ internal static class PostgresHeldStartChecks
                            finishedOffer.Issuance, stop) != RootStartProof.BirthRetired)
                     await Task.Delay(25, stop);
                 Console.WriteLine("ok protected held root retires with its committed deletion mark");
+                Require(oneWayOffer is not null &&
+                        await ReadRootAsync(store, scope, oneWayOffer.Actor, stop) is { Status: InstanceStatus.Finished } &&
+                        await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, oneWayOffer.Actor, oneWayOffer.Issuance, stop) ==
+                            RootStartProof.Unresolved,
+                    "the one-way birth finishes on the owner and remains protected until retirement");
+                var oneWayTerminal = await foundation.GetAsync(scope, oneWayOffer!.Actor, stop);
+                Require(oneWayTerminal?.Selection is not null &&
+                        (await foundation.AdmitRetentionDeleteAsync(scope, oneWayOffer.Actor, oneWayTerminal.Selection, stop)).Outcome ==
+                            Contract.AdmissionOutcome.Accepted, "normal retention accepts the exact protected one-way root");
+                while (await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, oneWayOffer.Actor,
+                           oneWayOffer.Issuance, stop) != RootStartProof.BirthRetired)
+                    await Task.Delay(25, stop);
+                Console.WriteLine("ok protected one-way root retires with its committed deletion mark");
             }
 
             async Task<Contract.Reply> RequestOnlyAsync(string id, long timeout)
