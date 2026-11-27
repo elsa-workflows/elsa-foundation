@@ -88,10 +88,11 @@ internal static partial class KernelAuthoredEventChecks
     {
         var qualified = tenant + "_" + PagedEventActor.Key;
         var occurrence = FoundationRootCreator.OperationDigest(eventId);
-        var ticket = "pub:" + occurrence;
-        var target = Kernel.Runtime.InstanceRef.In(0, "fixture-publisher");
+        var incarnation = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var keepUntil = now + (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
+        var ticket = RootPublicEventTicket.Outside(new(qualified, eventId, null, keepUntil), incarnation, occurrence, 1, keepUntil);
+        const long trialEpoch = 11;
         await using (var db = open())
         {
             await using var tx = await db.Database.BeginTransactionAsync(token);
@@ -101,9 +102,25 @@ internal static partial class KernelAuthoredEventChecks
                 CREATE TABLE "{RootPublicEventDispatch.Table}" ({RootPublicEventDispatch.Columns(db.Database.IsSqlite())})
                 """, token);
             var bind = await BindPageSourceAsync(db);
-            await RootPublicEventPublications.InsertAsync(db, tenant, qualified, eventId, occurrence, Guid.NewGuid(), occurrence,
+            await RootPublicEventPublications.InsertAsync(db, tenant, qualified, eventId, occurrence, incarnation, occurrence,
                 PagedEventActor.Payload, now, keepUntil, keepUntil, sql => RootPublicEventStarts.Bind(sql, bind), token);
-            await RootPublicEventDispatch.AddAsync(db, occurrence, ticket, target.Id, target.Partition, bind, token);
+            await RootPublicEventDispatch.AddAsync(db, occurrence, ticket.Id, ticket.Target.Id, ticket.Target.Partition, bind, token);
+            await ticket.EnqueueAsync(db, bind, token);
+            await tx.CommitAsync(token);
+        }
+        long firstSequence;
+        await using (var db = open())
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(token);
+            var bind = await BindPageSourceAsync(db);
+            var source = await ReadTicketAsync(db);
+            var decoded = RootPublicEventTicket.Decode(source);
+            Check(decoded == ticket && decoded.ToMessage().HasFencedEventStep, "the physical public ticket decodes as exact fenced work");
+            firstSequence = source.Seq;
+            Check(await ticket.ChangeAsync(db, firstSequence, 0, trialEpoch, RootPublicEventTicket.Change.Reserve, bind, token) &&
+                await ticket.ChangeAsync(db, firstSequence, 0, trialEpoch, RootPublicEventTicket.Change.RecordFailure, bind, token) &&
+                !await ticket.ChangeAsync(db, firstSequence, 0, trialEpoch, RootPublicEventTicket.Change.RecordFailure, bind, token),
+                "charging a definitively failed trial clears its reservation exactly once");
             await tx.CommitAsync(token);
         }
         var rolledBack = await PageAsync(commit: false);
@@ -111,6 +128,15 @@ internal static partial class KernelAuthoredEventChecks
         var first = await PageAsync();
         Check(first == rolledBack && first is { Complete: false, Through: not null } && await CountDeliveriesAsync() == 1,
             "rollback preserved the initial cursor and the first commit wrote one oversized delivery");
+        await using (var db = open())
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(token);
+            var bind = await BindPageSourceAsync(db);
+            var successor = await ReadTicketAsync(db);
+            Check(successor.Seq > firstSequence && successor.Attempts == 0 && successor.Seen == 0 && successor.Trial == 0 &&
+                !await ticket.ChangeAsync(db, firstSequence, 0, trialEpoch, RootPublicEventTicket.Change.Reserve, bind, token),
+                "a same-key successor has a new sequence and an old reservation cannot claim it");
+        }
         Check(await PageAsync(replay: true) == first && await CountDeliveriesAsync() == 1,
             "an obsolete cursor cannot advance committed state or enqueue an occurrence twice");
         var second = await PageAsync();
@@ -124,7 +150,8 @@ internal static partial class KernelAuthoredEventChecks
             var status = await db.Database.SqlQuery<int>($"""
                 SELECT "Status" AS "Value" FROM "FoundationPublicEventDispatch" WHERE "Occurrence" = {occurrence}
                 """).SingleAsync(token);
-            Check(status == (int)Contract.PublicationStatus.Matched, "the publication records Matched with its final delivery");
+            Check(status == (int)Contract.PublicationStatus.Matched && (await ReadTicketAsync(db)).Done,
+                "the publication records Matched and settles its ticket with the final delivery");
             // Restore this private fixture's installed schema before opening its existing host again.
             await db.Database.ExecuteSqlRawAsync("DROP TABLE \"FoundationPublicEventDispatch\"", token);
         }
@@ -134,17 +161,26 @@ internal static partial class KernelAuthoredEventChecks
             await using var db = open();
             await using var tx = await db.Database.BeginTransactionAsync(token);
             var bind = await BindPageSourceAsync(db);
-            var publication = await RootPublicEventDispatch.ReadPendingAsync(db, occurrence, ticket, target.Id, target.Partition, bind, token)
-                ?? throw new InvalidOperationException("The exact publication stopped before its last page.");
+            var source = await ReadTicketAsync(db);
+            if (!replay && !await ticket.ChangeAsync(db, source.Seq, source.Attempts, trialEpoch, RootPublicEventTicket.Change.Reserve, bind, token))
+                throw new InvalidOperationException("The pending ticket could not reserve the page.");
+            var publication = await RootPublicEventDispatch.ReadPendingAsync(db, occurrence, ticket.Id, ticket.Target.Id, ticket.Target.Partition,
+                bind, token) ?? throw new InvalidOperationException("The exact publication stopped before its last page.");
             if (replay) publication = publication with { Position = RootPublicEventDispatch.Cursor.Initial };
             var page = await RootEventAdmission.MatchLivePageAsync(db, publication.Tenant, publication.Key, publication.EventId,
                 publication.Occurrence, publication.Payload, publication.KeepUntil, publication.Position.LiveThrough, bind, token);
             var changed = await RootPublicEventDispatch.ChangeAsync(db, publication, new(page.Through, page.Complete, null),
                 page.Complete ? Contract.PublicationStatus.Matched : Contract.PublicationStatus.Pending, bind, token);
             if (changed == replay) throw new InvalidOperationException("The durable cursor update disagreed with the exact source position.");
+            var mutation = page.Complete ? RootPublicEventTicket.Change.Settle : RootPublicEventTicket.Change.Advance;
+            if (!replay && !await ticket.ChangeAsync(db, source.Seq, source.Attempts, trialEpoch, mutation, bind, token))
+                throw new InvalidOperationException("The reserved ticket could not move with the page.");
             if (commit) await tx.CommitAsync(token);
             return page;
         }
+
+        Task<MessageEntity> ReadTicketAsync(KernelDb db) => db.Messages.AsNoTracking()
+            .SingleAsync(message => message.Id == ticket.Id && message.InboxScope == RootPublicEventTicket.Scope, token);
 
         async Task<Func<FormattableString, FormattableString>?> BindPageSourceAsync(KernelDb db)
         {
