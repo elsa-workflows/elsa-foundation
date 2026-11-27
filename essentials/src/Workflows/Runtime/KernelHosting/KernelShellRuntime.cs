@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
 using Elsa.Expressions.JavaScript.Core.Contracts;
@@ -63,6 +64,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             UseStructuralJournal = Foundation.Reads is IActorSequencedJournalReads { SupportsSequencedJournal: true },
             AuthoredEventStarts = storage.TakesDirectTestRuns || storage.TakesEventStarts,
             ServedWorkflow = serving.ServedWorkflow,
+            ValidateTestRunChildInputs = storage.TakesAttachedTestRuns ? ValidateTestRunChildInputsAsync : null,
             ResolveWorkflow = ResolveWorkflowAsync
         });
         InlineRootRequests? inline = null;
@@ -284,6 +286,26 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         // routes still use their strict mapping and separate serving authority.
         return executable is null ? null : NativeExecutableMapper.Map(executable, KernelHostCapabilities.All, definition: null,
             scopedHttpTransport: testTenant is not null);
+    }
+
+    private async ValueTask<(JsonObject? Inputs, ActivityFault? Refusal)> ValidateTestRunChildInputsAsync(
+        TestRunChildSelection selection, JsonObject? supplied, CancellationToken token)
+    {
+        await using var scope = await scopes.CreateAsyncScopeAsync(persistenceScope);
+        var services = scope.ServiceProvider;
+        var executable = await services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(selection.ArtifactId, token);
+        if (executable is null || executable.Identity != NativeExecutableMapper.ReadMaterialSelection(selection.ExecutableSelection, selection.ArtifactId) ||
+            executable.InputContract is not { Version: WorkflowExecutableInputContract.CurrentVersion } contract)
+            return (null, new("dispatch.test.material-unavailable", "The selected child executable does not carry an available input contract."));
+
+        var inputs = supplied?.Select(input => KeyValuePair.Create(input.Key, JsonSerializer.SerializeToElement(input.Value))) ?? [];
+        var result = services.GetRequiredService<IWorkflowExecutableInputValidator>().Validate(contract, inputs);
+        if (!result.IsValid)
+            return (null, new("dispatch.test.invalid-input", string.Join(" ", result.Findings.Select(finding => finding.Message))));
+        var normalized = new JsonObject();
+        foreach (var input in result.NormalizedInputs)
+            normalized.Add(input.Key, JsonNode.Parse(input.Value.GetRawText()));
+        return (normalized, null);
     }
 
     public async ValueTask DisposeAsync()

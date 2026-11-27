@@ -250,12 +250,15 @@ public static class NativeExecutableMapper
             {
                 using var document = JsonDocument.Parse(metadata);
                 if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("executable", out var pin) ||
-                    pin.Deserialize<WorkflowExecutableIdentity>(PayloadOptions) is not { } identity || identity.DefinitionId != definition.GetString()?.Trim() ||
+                    pin.Deserialize<WorkflowExecutableIdentity>(PayloadOptions) is not { } identity ||
+                    !document.RootElement.TryGetProperty("source", out var sourcePin) ||
+                    sourcePin.Deserialize<WorkflowExecutableSourceProvenance>(PayloadOptions) is not { } provenance ||
+                    provenance.DefinitionId != definition.GetString()?.Trim() ||
                     identity.ArtifactId != dependency.ArtifactId || identity.ArtifactHash != dependency.ArtifactHash)
                     return null;
                 var selection = JsonSerializer.Serialize(identity);
                 return ReadMaterialSelection(selection, dependency.ArtifactId) is null ? null :
-                    new(dependency.ArtifactId, identity.DefinitionId, selection);
+                    new(dependency.ArtifactId, provenance.DefinitionId, selection);
             }
             catch (JsonException) { return null; }
         }

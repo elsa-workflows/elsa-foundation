@@ -582,14 +582,14 @@ public sealed partial class KernelPublishedExecuteTests
                 }
             }
 
-            async Task<long> DurableRowCountAsync()
+            async Task<long> DurableRowCountAsync(bool birthsOnly = false)
             {
                 await using System.Data.Common.DbConnection db = directory is null
                     ? new Npgsql.NpgsqlConnection(foundation)
                     : new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory, "foundation.db"), Pooling = false }.ToString());
                 await db.OpenAsync(token);
                 await using var command = db.CreateCommand();
-                command.CommandText = """
+                command.CommandText = birthsOnly ? "SELECT count(*) FROM \"FoundationRootBirths\"" : """
                     SELECT (SELECT count(*) FROM "Instances") + (SELECT count(*) FROM "FoundationRootBirths")
                        + (SELECT count(*) FROM "FoundationRootReceipts") + (SELECT count(*) FROM "FoundationPreparedRootStarts")
                        + (SELECT count(*) FROM "Journal")
@@ -806,19 +806,23 @@ public sealed partial class KernelPublishedExecuteTests
 
             async Task VerifyAttachedTestsAsync()
             {
-                var original = ExecutableOf("test-child-original", "test-child-definition", Sequence("root",
-                    SetOutput("answer", "selection", Literal("value", "original"))));
-                var replacement = PublishedAs(ExecutableOf("test-child-replacement", original.Identity.DefinitionId, Sequence("root",
-                    SetOutput("answer", "selection", Literal("value", "replacement")))), original.Identity.DefinitionId, "2");
-                var longChild = ExecutableOf("test-child-waiting", "test-child-waiting-definition", Sequence("root",
-                    Node("wait", Types.Delay, [Literal("Duration", "00:00:45", "TimeSpan")])));
-                var immediate = AttachedParent("attach-immediate", original);
-                var delayed = AttachedParent("attach-after-republish", original, waitFirst: true);
+                const string logicalDefinition = "test-child-published-alias";
+                var original = WithInputContract(ExecutableOf("test-child-original", "test-child-canonical", Sequence("root",
+                    SetOutput("answer", "selection", Request("value", "message")))),
+                    new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
+                        [new("message", new TypeReference("String"), isRequired: false, JsonSerializer.SerializeToElement("original-default"))]));
+                var replacement = WithInputContract(ExecutableOf("test-child-replacement", original.Identity.DefinitionId, Sequence("root",
+                    SetOutput("answer", "selection", Literal("value", "replacement")))));
+                var longChild = WithInputContract(ExecutableOf("test-child-waiting", "test-child-waiting-definition", Sequence("root",
+                    Node("wait", Types.Delay, [Literal("Duration", "00:00:45", "TimeSpan")]))));
+                var immediate = AttachedParent("attach-immediate", original, logicalDefinition);
+                var delayed = AttachedParent("attach-after-republish", original, logicalDefinition, waitFirst: true);
                 var terminating = AttachedParent("attach-stop", longChild);
-                var detached = AttachedParent("attach-refuse-detached", original, detached: true);
-                foreach (var artifact in new[] { original, replacement, longChild, immediate, delayed, terminating, detached })
+                var detached = AttachedParent("attach-refuse-detached", original, logicalDefinition, detached: true);
+                var invalidInputs = AttachedParent("attach-refuse-input", original, logicalDefinition, dynamicInputs: true);
+                foreach (var artifact in new[] { original, replacement, longChild, immediate, delayed, terminating, detached, invalidInputs })
                     await materials.SaveAsync(artifact, token);
-                await PublishAsync(original, "default");
+                await PublishAsync(PublishedAs(original, logicalDefinition, "1"), "default");
                 await PublishAsync(longChild, "default");
 
                 var isolated = app.Services.GetRequiredService<KernelTestRuns>().Reads;
@@ -829,7 +833,7 @@ public sealed partial class KernelPublishedExecuteTests
                 var pins = services.GetRequiredService<IRuntimeKernelExecutablePinStore>();
 
                 var (first, firstActor) = await StartAsync(immediate);
-                var firstChild = await FindChildAsync(first, firstActor, original);
+                var firstChild = await FindChildAsync(first, firstActor, original, logicalDefinition);
                 await ExpectOriginalCompletionAsync(firstActor, firstChild);
 
                 var (held, heldActor) = await StartAsync(delayed);
@@ -837,11 +841,11 @@ public sealed partial class KernelPublishedExecuteTests
                 WorkflowTestRunActiveWait? wait;
                 while ((wait = (await waitControl.ReadAsync(held, heldActor.Id, token)).SingleOrDefault()) is null)
                     await Task.Delay(35, token);
-                await PublishAsync(replacement, "default", expectedRevision: 1);
+                await PublishAsync(PublishedAs(replacement, logicalDefinition, "2"), "default", expectedRevision: 1);
                 var digest = TestRunDeliveryReceipt.Digest(null);
                 var delivery = new TestRunDeliveryReceipt(held.ScopeId, Guid.NewGuid().ToString("D"), wait.WaitId, digest, digest);
                 Assert.Equal("Delivered", await waitControl.DeliverAsync(held, heldActor.Id, delivery, null, token));
-                var republishedChild = await FindChildAsync(held, heldActor, original);
+                var republishedChild = await FindChildAsync(held, heldActor, original, logicalDefinition);
                 await ExpectOriginalCompletionAsync(heldActor, republishedChild);
 
                 var (stopped, stoppedActor) = await StartAsync(terminating);
@@ -858,6 +862,14 @@ public sealed partial class KernelPublishedExecuteTests
                 Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, refusal.CommandDispatch.Status);
                 Assert.Contains("Wait for completion", refusal.CommandDispatch.Reason);
                 Assert.Null((await scopeStore.FindAsync(refused.ScopeId, token))?.IsolatedActor);
+
+                var birthsBeforeInvalid = await DurableRowCountAsync(birthsOnly: true);
+                var (_, _, invalid) = await SubmitEphemeralTestAsync(services, invalidInputs,
+                    new Dictionary<string, object?> { ["childInputs"] = new Dictionary<string, int> { ["message"] = 42 } });
+                Assert.Equal(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted, invalid.CommandDispatch.Status);
+                var invalidRoot = new Contract.ActorRef(Assert.IsType<string>(invalid.WorkflowExecutionId));
+                Assert.Equal("dispatch.test.invalid-input", (await isolated.GetAsync(invalidRoot, token)).Run?.Run.SubStatus);
+                Assert.Equal(birthsBeforeInvalid + 1, await DurableRowCountAsync(birthsOnly: true));
 
                 var provider = app.Services.GetRequiredService<KernelShellStorage>();
                 var retirement = new KernelDirectTestRunRetirement(isolated.Tenant, await shell.ReadAsync(token), provider.OpenOperatorsAsync,
@@ -881,7 +893,8 @@ public sealed partial class KernelPublishedExecuteTests
                     return (test, actor);
                 }
 
-                async Task<Contract.ActorRef> FindChildAsync(WorkflowTestScope test, Contract.ActorRef parent, WorkflowExecutable selected)
+                async Task<Contract.ActorRef> FindChildAsync(WorkflowTestScope test, Contract.ActorRef parent, WorkflowExecutable selected,
+                    string? logicalDefinition = null)
                 {
                     while (true)
                     {
@@ -894,6 +907,7 @@ public sealed partial class KernelPublishedExecuteTests
                             if ((await isolated.GetAsync(actor, token)).Run is not { } run || run.View.Header.Parent != parent) continue;
                             Assert.Equal(test.ScopeId, run.Run.TestStart?.ScopeId);
                             Assert.Equal(parent.Id, run.Run.TestStart?.RootActor);
+                            Assert.Equal(logicalDefinition ?? selected.Identity.DefinitionId, run.Run.Definition);
                             Assert.True((await production.GetAsync(actor, token)).Missing);
                             Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
                             found.Add(actor);
@@ -911,7 +925,7 @@ public sealed partial class KernelPublishedExecuteTests
                     var ended = Assert.IsType<long>((await isolated.GetAsync(child, token)).Run?.View.Header.EndedAt);
                     var output = await isolated.ReadTerminalOutputAsync(child, ended, includeValues: true, token);
                     using var values = JsonDocument.Parse(Assert.IsType<byte[]>(output?.Values));
-                    Assert.Equal("original", values.RootElement.GetProperty("selection").GetString());
+                    Assert.Equal("original-default", values.RootElement.GetProperty("selection").GetString());
                     using var sameTenant = await ReadChildAsync(child, Scope.Value);
                     Assert.Equal(HttpStatusCode.OK, sameTenant.StatusCode);
                     using var otherTenant = await ReadChildAsync(child, "other-tenant");
@@ -1138,9 +1152,9 @@ public sealed partial class KernelPublishedExecuteTests
             }
 
             async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Receipt)>
-                SubmitEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable)
+                SubmitEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable, IReadOnlyDictionary<string, object?>? inputs = null)
             {
-                var (test, source, start) = await PrepareEphemeralTestAsync(author, executable);
+                var (test, source, start) = await PrepareEphemeralTestAsync(author, executable, inputs);
                 var dispatcher = author.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
                 return (test, source, await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token));
             }
@@ -1165,7 +1179,7 @@ public sealed partial class KernelPublishedExecuteTests
             }
 
             async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchRequest Request)>
-                PrepareEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable)
+                PrepareEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable, IReadOnlyDictionary<string, object?>? inputs = null)
             {
                 var now = DateTimeOffset.UtcNow;
                 var selected = new WorkflowTestScope(Guid.NewGuid().ToString("N"), now.AddMinutes(30), Scope.Value, new(Scope.Value));
@@ -1176,7 +1190,7 @@ public sealed partial class KernelPublishedExecuteTests
                     WorkflowExecutableReferenceScope.TestRun, ExpiresAt: selected.ExpiresAt, TenantId: selected.TenantId);
                 await author.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference, token);
                 var start = new WorkflowExecutionStartDispatchRequest(id.ArtifactId, "workflow-designer-test-run",
-                    workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null, inputs: null,
+                    workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null, inputs: inputs,
                     stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.TestRun,
                     sourceSelection: new(sourceReferenceId: reference.SourceReferenceId),
                     provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
@@ -1394,15 +1408,26 @@ public sealed partial class KernelPublishedExecuteTests
         executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy,
         persistenceMode: PersistenceMode.Ephemeral, workflowVariables: executable.WorkflowVariables);
 
-    private static WorkflowExecutable AttachedParent(string id, WorkflowExecutable child, bool waitFirst = false, bool detached = false)
+    private static WorkflowExecutable WithInputContract(WorkflowExecutable executable, WorkflowExecutableInputContract? contract = null) =>
+        new(executable.Identity, executable.RootActivity, executable.ResumeTargets, executable.CreatedAt,
+            executable.CompatibilityMetadata, contract ?? new(WorkflowExecutableInputContract.CurrentVersion, []), executable.Dependencies,
+            executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy, workflowVariables: executable.WorkflowVariables);
+
+    private static WorkflowExecutable AttachedParent(string id, WorkflowExecutable child, string? logicalDefinition = null,
+        bool waitFirst = false, bool detached = false, bool dynamicInputs = false)
     {
         const string dispatch = "dispatch";
         var identity = child.Identity;
-        var start = Node(dispatch, Types.Dispatch,
-            [Literal("WorkflowDefinitionId", identity.DefinitionId, "String"), Literal("WaitForCompletion", !detached, "Boolean")],
+        var definition = logicalDefinition ?? identity.DefinitionId;
+        var publication = new WorkflowExecutableSourceProvenance("activation-ref:publish-" + definition, "definition", definition, "1",
+            definition, definition + "-v1", "1", "publish-" + definition, WorkflowActivationSlotIdentity.Create(definition, "default"));
+        List<RuntimeInputBinding> inputs = [Literal("WorkflowDefinitionId", definition, "String"), Literal("WaitForCompletion", !detached, "Boolean")];
+        if (dynamicInputs) inputs.Add(Request("Inputs", "childInputs"));
+        var start = Node(dispatch, Types.Dispatch, inputs.ToArray(),
             metadata: new Dictionary<string, string>
             {
-                ["Elsa.DispatchWorkflow.PinnedTarget"] = JsonSerializer.Serialize(new { executable = identity }, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                ["Elsa.DispatchWorkflow.PinnedTarget"] = JsonSerializer.Serialize(new { executable = identity, source = publication },
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web))
             });
         var root = waitFirst ? Sequence("root", Node("gate", Types.Event,
             [Literal("EventName", "continue", "String"), Literal("CanStartWorkflow", false, "Boolean")]), start) : Sequence("root", start);
