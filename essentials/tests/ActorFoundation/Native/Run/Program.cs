@@ -156,6 +156,7 @@ if (args is ["pg-http-event-owner-loss", var eventOwnerFence and ("checked" or "
 if (args is ["pg-http-event-owner-process", var eventWorkerFence and ("checked" or "in-batch"), var eventPause and ("before" or "resume"), var eventOwnerRef])
     return await PostgresHttpOwnerLoss.RunOwnerAsync(eventWorkerFence, eventPause, new(eventOwnerRef), heldEvent: true);
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
+if (args is ["pg-protected-held-start"]) return await PostgresHeldStartChecks.RunAsync(protectedStarts: true);
 if (args is ["pg-child-workflows"]) return await PostgresChildWorkflowChecks.RunAsync();
 if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch")])
     return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");
