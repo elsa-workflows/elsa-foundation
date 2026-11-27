@@ -25,12 +25,15 @@ internal static class PostgresChildWorkflowChecks
             Check(await PostgresFixtureDatabase.IsEmptyAsync(empty, token), "the fixture is empty");
 
         var store = new EfStore(Open, postgres: true);
-        await store.CreateAsync(2);
-        await store.InstallPreviewRootSchemaAsync(token);
         if (shipped)
         {
             await PostgresPreviewHosting.InstallShippedAsync(options, token);
             Check(PostgresPreviewHosting.TakesChildren(Open), "the PostgreSQL shipped host advertises owned child starts");
+        }
+        else
+        {
+            await store.CreateAsync(2);
+            await store.InstallPreviewRootSchemaAsync(token);
         }
 
         var aliases = new WorkflowRegistry()

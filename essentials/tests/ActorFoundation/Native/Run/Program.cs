@@ -13,6 +13,11 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["workbench-shipped-children", var childrenProvider and ("sqlite" or "postgres"), var childrenWorkbench])
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedChildrenAsync(childrenWorkbench, childrenProvider == "postgres");
+    return 0;
+}
 if (args is ["workbench-terminal-output", var outputsProvider and ("sqlite" or "postgres"), var outputsWorkbench, .. var outputMode] &&
     outputMode is ([] or ["s6"] or ["shared"]))
 {
