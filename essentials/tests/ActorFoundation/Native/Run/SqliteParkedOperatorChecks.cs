@@ -91,6 +91,7 @@ internal static partial class SqliteHostLifetimeChecks
             var observation = new ParkReadObservation("bounded-park-page");
             var probe = new EfStore(() => OpenFoundationDb(file, definitions, observation), postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
             await probe.EnableRootJobsAsync(token);
+            await probe.EnableRootChildrenAsync(token);
             probe.BindSqliteWorkerNode();
             var probeFence = (await probe.TakeAsync(0, "park-page-plan", Defaults.Lease, token))!;
             var polled = await probe.PollAsync(0, probeFence.Epoch, TimeSpan.Zero, 20, token);
