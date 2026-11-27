@@ -27,6 +27,7 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
     IStimulusDeliveryStore
 {
     private readonly RuntimeDbContext context;
+    internal bool PreparedStandaloneOnly { get; init; }
     internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
         ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
     private readonly IPersistenceAccessContextAccessor accessContextAccessor;
@@ -567,6 +568,9 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        if (PreparedStandaloneOnly && (request.WorkflowExecutionId is not null ||
+            request.IntentKind != RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind))
+            throw new NotSupportedException("This Runtime owner claims only standalone Actor Foundation source deliveries.");
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var candidates = await QueryCandidatesAsync(
             scope,
@@ -577,6 +581,10 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
                 intentKind: request.IntentKind),
             CandidateSelection.Claimable,
             cancellationToken);
+        // The prepared owner leaves a mixed page untouched for the preceding source owner.
+        if (PreparedStandaloneOnly)
+            foreach (var candidate in candidates)
+                PreparedStandaloneAdmission.RequireSource(candidate);
         var claims = new List<RuntimePostCommitOutboxClaim>(Math.Min(request.Limit, candidates.Count));
         foreach (var candidate in candidates)
         {
@@ -588,6 +596,7 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
             if (row is null)
                 continue;
             var current = ReadChecked(row, scope, candidate.OutboxItemId);
+            if (PreparedStandaloneOnly) PreparedStandaloneAdmission.RequireSource(current);
             if (!RuntimePostCommitOutboxClaimTransitions.CanClaim(current, request))
                 continue;
 

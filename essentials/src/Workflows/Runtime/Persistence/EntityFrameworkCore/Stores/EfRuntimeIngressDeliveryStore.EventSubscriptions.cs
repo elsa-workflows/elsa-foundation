@@ -10,7 +10,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
         StimulusDeliverySnapshot ordinary, RuntimeWorkflowSubscriptionCandidate subscriptions, CancellationToken cancellationToken = default) =>
         EfTriggerBoundary.RunAsync(() => InstallWorkflowCohortAsyncCore(source, ordinary, subscriptions, cancellationToken), source?.Scope.Value, source?.Claim.Item.OutboxItemId);
 
-    public bool SupportsWorkflowCohort(string intentKind) => SupportsAdmission &&
+    public bool SupportsWorkflowCohort(string intentKind) => !PreparedStandaloneOnly && SupportsAdmission &&
         new StimulusDeliveryRequestProjector(stimulusAdapters ?? []).Owns(intentKind);
 
     private async ValueTask<PostCommitDeliveryContext> InstallWorkflowCohortAsyncCore(PostCommitDeliveryContext source,

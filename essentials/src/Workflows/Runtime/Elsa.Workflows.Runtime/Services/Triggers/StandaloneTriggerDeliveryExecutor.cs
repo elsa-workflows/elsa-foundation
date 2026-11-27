@@ -14,6 +14,8 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
     {
         var item = await store.ReadSourceAsync(source, cancellationToken);
         var selection = item.SubscriptionDelivery ?? throw new InvalidDataException("A standalone source has no accepted cohort.");
+        var requiresPrepared = item.StandaloneIngress is { } standalone && PreparedStandaloneAdmission.IsMarked(standalone);
+        if (requiresPrepared) PreparedStandaloneAdmission.RequireSource(item);
         var blocksOrdinaryWaits = selection.WaitDelivery is not null && !PreparedStandaloneHttp.HasVerifiedEmptyWaits(item) &&
             selection.Recipients.Any(recipient =>
             UsesPrepared(item, recipient, selection.Progress.Single(progress => progress.RecipientId == recipient.RecipientId)));
@@ -38,7 +40,7 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
                         throw new IOException("The prepared target has no committed acceptance evidence yet.");
                     continue;
                 }
-                if (!targets.TryGetValue(recipient.ModelKey, out var target))
+                if (requiresPrepared || !targets.TryGetValue(recipient.ModelKey, out var target))
                     throw new NotSupportedException("The accepted target's runtime adapter is unavailable.");
                 if (progress.Phase == RuntimeRecipientPhase.Pending)
                 {
