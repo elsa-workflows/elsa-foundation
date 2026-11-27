@@ -213,10 +213,12 @@ the inbox and no scheduler library is the timer engine.
 
 The kernel with the built-in runtime; Embedded and Cluster; the native model with structured containers, Flowchart on
 the extracted graph engine and StateMachine; synchronous HTTP; PostgreSQL, SQL Server and SQLite tuned, MySQL
-supported; MongoDB proven in CI; Studio on the new core with run views on the projections; agents as native activities;
+supported; Studio on the new core with run views on the projections; agents as native activities;
 basic trace context and metrics, retention and delete, admission control, simple instance migration; parked-work
 inspect, retry and discard; values by reference
 ([sketch, release 1](../reports/clean-slate-kernel/design-sketch-draft-5.md#release-1-scope-owner-decision-amended-15-november)).
+
+MongoDB remains a prototype. Its qualification and production support are [on hold](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7108927599). The storage contract remains provider-neutral.
 
 ### 11. The seven design-now answers
 
@@ -246,7 +248,7 @@ The gate 2 review added an eighth page, [tenancy](../architecture/tenancy.md), w
   (section 8) (owner, 16 and 19 November).
 - The Log profile.
 - BPMN (its prototype stream is parked until after release 1), ETL and its combiner tree, and a dedicated agent model.
-- MongoDB in production (1.1).
+- MongoDB production support, on hold.
 - Standalone Elsa.Jobs and remote job workers (1.x).
 
 ## Consequences
@@ -298,7 +300,7 @@ until then the listed ADRs keep governing the current core.
 | [0084](0084-runtime-commit-journal.md) commit journal | Supersede | The kernel's per-partition journal is the commit journal it proposed |
 | 0098 journal-first core (PR #4176, not on main) | Supersede | Superseded by the clean-slate decision of 12 November |
 | 0096 Elsa.Jobs (Codex branch, not on main) | Supersede | Standalone Jobs are rebuilt as a job actor type in 1.x |
-| [0073](0073-ef-core-is-the-only-first-party-persistence-family.md) EF Core only | Amend | The kernel's commit SQL is hand-written per engine; a MongoDB provider is first-party from 1.1 |
+| [0073](0073-ef-core-is-the-only-first-party-persistence-family.md) EF Core only | Amend | The kernel's commit SQL is hand-written per engine. A future first-party MongoDB provider stays behind the storage contract and requires separate qualification. |
 | [0074](0074-first-party-ef-stores-retry-in-bounded-application-loops.md) bounded EF retry | Amend | The kernel's commit classifies failures itself (reset, retry as is, park); 0074 keeps governing other stores |
 | [0078](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md) virtual actors, membership | Amend | Virtual actors stay; ownership is per partition under a fence. How the membership contract maps to the built-in runtime's node rows is settled in the runtime slice |
 | [0080](0080-elsa-4-simplification-decisions.md) simplification | Amend | D2's modes keep their names on turn boundaries; D0 gains the kernel program (owner, 17 November: now, with the proposal; the amendment and registry row are in the program plan's PR) |

@@ -140,8 +140,10 @@ def protected_product_inventory(products, source, direct, version):
     if version == 2:
         names |= {'Elsa.Serialization.Core.dll', 'Elsa.Activities.Runtime.Core.dll'}
     rows = products.get('actualProductVersions', [])
+    # The Workbench app was renamed Elsa.Workbench.Host; evidence captured before the rename names the old assembly.
+    renamed = (names - {'Elsa.Workbench.dll'}) | {'Elsa.Workbench.Host.dll'}
     return (products.get('sourceCommit') == source and products.get('metadataOnly') is True
-            and len(rows) == len(names) and {row.get('name') for row in rows} == names
+            and len(rows) == len(names) and {row.get('name') for row in rows} in (names, renamed)
             and all(row.get('productVersion', '').endswith('+' + source)
                     and re.fullmatch('[0-9a-f]{64}', row.get('sha256', '')) is not None for row in rows))
 

@@ -104,10 +104,11 @@ function occurrenceLabel(entry: ActivityExecutionBrowseEntry) {
 }
 
 export function ActivityExecutionNavigator({ context, workflowExecutionId, executableNodeId, ancestorActivityExecutionId,
-  selectedActivityExecutionId, parentActivityExecutionId, refreshKey, onResolve, onSelect, onIncident, collapseOnSelect = false, requireExplicitSelection = false, initialPage, contextLabel, hideSingleton = false, restoreChoiceFocus, captureFocusOperation }: {
+  selectedActivityExecutionId, parentActivityExecutionId, refreshKey, onResolve, onSelect, onIncident, collapseOnSelect = false, requireExplicitSelection = false, initialPage, contextLabel, hideSingleton = false, hideWhileLoading = false, restoreChoiceFocus, captureFocusOperation }: {
   initialPage?: ActivityExecutionBrowsePage;
   contextLabel?: string;
   hideSingleton?: boolean;
+  hideWhileLoading?: boolean;
   restoreChoiceFocus?: { request: ExecutionFocusRequest; ready: boolean };
   captureFocusOperation?(): ExecutionFocusOperation;
   context: StudioEndpointContext; workflowExecutionId: string; executableNodeId: string;
@@ -232,6 +233,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
     clearExecutionFocus(request, intent);
   }, [focusIdentity, focusScope, neighbor, neighborState.status, pageState.status, queryIdentity, restoreChoiceFocus, selected, selectedActivityExecutionId]);
   // Keep all reads and resolution effects active: a singleton can become unavailable or gain another occurrence.
+  if (hideWhileLoading && pageState.status === "loading" && !selected && !neighbor) return null;
   if (hideSingleton && pageState.status === "ready" && page?.totalCount === 1 && selected && !neighbor
     && !page.previousCursor && !page.nextCursor) return null;
   const currentLabel = selected ? occurrenceLabel(selected) : pageState.status === "ready" ? `${page?.totalCount ?? 0} recorded executions` : "Executions";
@@ -283,6 +285,8 @@ export function ChildExecutionBrowser({ context, execution, refreshKey, labelFor
   const groups = new Map<string, ActivityExecutionStateSummary>();
   for (const entry of state.page?.items ?? []) groups.set(entry.execution.executableNodeId, entry.execution);
   if (state.status === "ready" && state.page?.totalCount === 0) return null;
+  // Wait for confirmation before showing the collapsed section so leaf activities never flash "Child executions".
+  if (!expanded && state.status !== "ready") return null;
   return <section className="wf-execution-children" aria-label="Child executions">
     <StudioButton type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}><CornerDownRight size={15} />Child executions{state.page ? <span>{state.page.totalCount}</span> : null}<ChevronDown size={14} /></StudioButton>
     {expanded ? <>
@@ -325,8 +329,8 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
 }) {
 
   // A refresh of this same exact selection must not unmount its expanded evidence while the read is pending.
-  const key = `${runtimeValueContextId(context)}:${workflowExecutionId}:${nodeId}:${ancestorId ?? ""}:${exactId ?? ""}`;
-  const [resolved, setResolved] = useState<{ key: string; execution: ActivityExecutionStateSummary | null } | null>(null);
+  const scopeKey = `${runtimeValueContextId(context)}:${workflowExecutionId}:${nodeId}:${ancestorId ?? ""}`;
+  const [resolved, setResolved] = useState<{ scopeKey: string; requestedId: string; execution: ActivityExecutionStateSummary | null } | null>(null);
   const [supported, setSupported] = useState<{ context: StudioEndpointContext; value: boolean } | null>(null);
   const localChoiceFocus = useExecutionFocusRequest();
   const restoreChoiceFocus = choiceFocus ?? localChoiceFocus;
@@ -335,16 +339,19 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
     void Promise.resolve().then(() => supportsActivityExecutionBrowsing(context)).then(value => { if (active) setSupported({ context, value }); }).catch(() => {});
     return () => { active = false; };
   }, [context]);
-  const execution = resolved?.key === key ? resolved.execution
+  const resolvedMatches = resolved?.scopeKey === scopeKey
+    && (resolved.requestedId === (exactId ?? "")
+      || (!resolved.requestedId && Boolean(exactId) && resolved.execution?.activityExecutionId === exactId));
+  const execution = resolvedMatches ? resolved.execution
     : confirmedExecution && confirmedExecution.activityExecutionId === exactId && confirmedExecution.workflowExecutionId === workflowExecutionId && confirmedExecution.executableNodeId === nodeId ? confirmedExecution
     : supported?.context === context && !supported.value ? seed : null;
   const navigation = <ActivityExecutionNavigator context={context} workflowExecutionId={workflowExecutionId} executableNodeId={nodeId}
-    ancestorActivityExecutionId={ancestorId} selectedActivityExecutionId={exactId} refreshKey={refreshKey} requireExplicitSelection={requireExplicitSelection} initialPage={initialPage} hideSingleton collapseOnSelect
+    ancestorActivityExecutionId={ancestorId} selectedActivityExecutionId={exactId} refreshKey={refreshKey} requireExplicitSelection={requireExplicitSelection} initialPage={initialPage} hideSingleton hideWhileLoading={Boolean(execution)} collapseOnSelect
     restoreChoiceFocus={{ request: restoreChoiceFocus, ready: Boolean(execution) }} captureFocusOperation={captureFocusOperation}
-    onResolve={value => { setResolved({ key, execution: value }); if (!value && confirmedExecution) onUnavailable?.(); if (value && !exactId) onSelect(value); }} onSelect={onSelect} onIncident={onIncident} />;
+    onResolve={value => { setResolved({ scopeKey, requestedId: exactId ?? "", execution: value }); if (!value && confirmedExecution) onUnavailable?.(); if (value && !exactId) onSelect(value); }} onSelect={onSelect} onIncident={onIncident} />;
   const children = execution ? <ChildExecutionBrowser key={execution.activityExecutionId} context={context} execution={execution} refreshKey={refreshKey} labelFor={labelFor} onEnter={onEnter} onIncident={onIncident} /> : null;
   return execution ? renderDetails(execution, navigation, children) : <>
-    <section className="wf-instance-section"><h4>{nodeLabel}</h4></section>{navigation}
+    <section className="wf-instance-section wf-execution-node-header"><h4>{nodeLabel}</h4></section>{navigation}
   </>;
 }
 
@@ -366,7 +373,7 @@ export function ExecutionScopeNavigator({ context, execution, label, refreshKey,
     <ActivityExecutionNavigator context={context} workflowExecutionId={execution.workflowExecutionId}
       executableNodeId={execution.executableNodeId} parentActivityExecutionId={execution.parentActivityExecutionId ?? undefined}
       selectedActivityExecutionId={execution.activityExecutionId} refreshKey={refreshKey}
-      collapseOnSelect hideSingleton contextLabel={label} initialPage={initialPage}
+      collapseOnSelect hideSingleton hideWhileLoading contextLabel={label} initialPage={initialPage}
       restoreChoiceFocus={{ request: focusRequest, ready: true }} captureFocusOperation={captureFocusOperation}
       onResolve={value => { if (!value) onUnavailable(); }} onSelect={onSelect} onIncident={onIncident} />
   </div>;

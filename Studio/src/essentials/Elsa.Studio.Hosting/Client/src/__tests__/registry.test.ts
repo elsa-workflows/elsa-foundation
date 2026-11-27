@@ -76,12 +76,15 @@ describe("studio registry", () => {
 
     expect(api.routes.slot.id).toBe(studioSlotIds.routes);
     expect(api.dashboardWidgets.slot.id).toBe(studioSlotIds.dashboardWidgets);
+    expect(api.dashboardRecordLinks?.slot.id).toBe(studioSlotIds.dashboardRecordLinks);
+    expect(api.homeSections.slot.id).toBe(studioSlotIds.homeSections);
     expect(api.workflowDesigner.panels.slot.id).toBe(studioSlotIds.workflowDesignerPanels);
     expect(typeof api.workflowDesigner.registerActivityIcons).toBe("function");
     api.workflowDesigner.registerActivityIcons?.({});
     expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
     expect(api.triggerConfigurationEditors?.slot.id).toBe(studioSlotIds.triggerConfigurationEditors);
+    expect(api.triggerTypePresentations?.slot.id).toBe(studioSlotIds.triggerTypePresentations);
     expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
     expect(api.workflowRunRelatedLinks?.slot.id).toBe("workflow.run.related-links");
     expect(api.weaver.promptStarters.slot.id).toBe(studioSlotIds.weaverPromptStarters);

@@ -55,12 +55,11 @@ so that mismatch, and the warning it produced, are both gone; the pin and the lo
 
 **A new project** gets its lock file from its first restore; commit it with the project. A locked restore of a project
 with no lock file does not fail: NuGet writes one and carries on, unlocked. So
-`Essentials/tests/Architecture/Tests/NuGetLockFileTests.cs` fails for any project in `Elsa.Server.slnx` without a committed
+`essentials/tests/Architecture/Tests/NuGetLockFileTests.cs` fails for any project in `Elsa.Server.slnx` without a committed
 lock file beside it, for two projects sharing a directory (and so one lock file), and for a committed lock file with no
-project beside it. **Under `prototypes/`** a committed lock file needs only a committed `.csproj` beside it, since a
-prototype such as `prototypes/kernel-model/` is a self-contained repository outside the solution, with its own
-`Directory.Build.props`, `Directory.Packages.props`, `NuGet.config` and `global.json`, and keeping its lock files keeps
-its own locked restores reproducible; an orphan lock file there still fails.
+project beside it. The same rule covers prototype projects listed in `Elsa.Server.slnx`.
+Other prototype projects use their prototype's build and package configuration and may commit a lock file beside
+their `.csproj` for reproducible standalone restores. An orphan lock file under `prototypes/` still fails.
 
 ### Reconciling framework package pruning
 

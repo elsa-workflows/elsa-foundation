@@ -99,6 +99,10 @@ html[data-workspace-style] :is(.sidebar-search, .sidebar-environment) {
   box-shadow: none;
 }
 
+html[data-workspace-style] .sidebar-search:focus-within {
+  box-shadow: inset 0 0 0 1px var(--studio-focus);
+}
+
 html[data-workspace-style] .sidebar-footer {
   border: 0;
 }
@@ -338,6 +342,7 @@ html[data-workspace-style="linen"] .nav-section a { min-height: 42px; }
 html[data-workspace-style="linen"] .sidebar .sidebar-collapse-toggle { color: var(--studio-nav-text); }
 html[data-workspace-style="linen"] .sidebar-account .user-menu-button { color: var(--studio-nav-text); }
 html[data-workspace-style="linen"] :is(.sidebar-environment, .sidebar-search) { border: 1px solid color-mix(in srgb, var(--studio-nav-text) 13%, transparent); }
+html[data-workspace-style="linen"] .sidebar-search:focus-within { border-color: var(--studio-focus); box-shadow: none; }
 html[data-workspace-style="linen"] .main-frame { min-width: 0; background: transparent; }
 html[data-workspace-style="linen"] :is(.topbar, .content) { background: transparent; }
 html[data-workspace-style="linen"] .topbar { min-height: 58px; }

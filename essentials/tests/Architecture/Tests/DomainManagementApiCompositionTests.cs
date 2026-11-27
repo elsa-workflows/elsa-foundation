@@ -170,7 +170,7 @@ public sealed class DomainManagementApiCompositionTests
 
         Assert.DoesNotContain(
             typeof(DomainManagementApiCompositionTests).Assembly.GetReferencedAssemblies(),
-            reference => string.Equals(reference.Name, "Elsa.Workbench", StringComparison.Ordinal));
+            reference => string.Equals(reference.Name, "Elsa.Workbench.Host", StringComparison.Ordinal));
 
         await host.AssertJourneyAsync(HttpMethod.Get, "/design/workflows/definitions");
         await host.AssertJourneyAsync(HttpMethod.Get, "/design/activities/catalog");
@@ -432,7 +432,7 @@ public sealed class DomainManagementApiCompositionTests
     }
 
     private static string StockServerConfigurationPath =>
-        Path.Combine(RepoRoot, "apps", "Elsa.Workbench", "shells.json");
+        Path.Combine(RepoRoot, "apps", "Elsa.Workbench.Host", "shells.json");
 
     [ShellFeature(name: "ApiCapabilities")]
     public sealed class ApiCapabilitiesDependencyFeature : IShellFeature

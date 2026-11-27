@@ -12,13 +12,11 @@ import { registerBuiltInSettingEditors } from "../../src/essentials/Elsa.Studio.
 import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
-import { HomePage } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/HomePage";
-import { createHomeLayoutScope, homeLayoutLocalStoragePrefix, homeLayoutRoute } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/homeLayout";
-import { registerCoreHomeWidgets } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/widgets/registerCoreHomeWidgets";
-import { register as registerWorkflowDashboardWidgets } from "../../../extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module";
+import { HomePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/home/HomePage";
+import { createHomeLayoutScope, homeLayoutLocalStoragePrefix, homeLayoutRoute } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/home/homeLayout";
+import { register as registerWorkflowDashboard } from "../../../extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module";
 import { createWidgetHost } from "./homeFixture";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css";
 
 declare global {
   interface Window {
@@ -106,8 +104,8 @@ function createDashboardApi(responseState: string, permissions: string[]): ElsaS
   };
 
   registerBuiltInSettingEditors(api);
-  registerCoreHomeWidgets(api);
-  registerWorkflowDashboardWidgets(api);
+  // The workflow dashboard module contributes the core workflow widgets and the workflow task group.
+  registerWorkflowDashboard(api);
   if (responseState === "settings") registerSettingsFixture(api, scope);
   return api;
 }

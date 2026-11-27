@@ -44,8 +44,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Cli\Elsa.Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\extensions\Integrations\src\Templates\Elsa.Integrations.Templates.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\apps\Elsa.Workbench.Host\Elsa.Workbench.Host.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\apps\Elsa.Essentials.Host\Elsa.Essentials.Host.csproj" ReferenceOutputAssembly="false" />
     <!-- The JSON hash guard inspects Studio C# images, including the standalone host and optional sample. -->
     <ProjectReference Include="../../../../Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" ReferenceOutputAssembly="false" />
@@ -101,21 +102,37 @@
     <ProjectReference Include="../../../../extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Weaver\src\Workflows\Elsa.Weaver.Workflows\Elsa.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Weaver\src\Workflows\Runtime\Elsa.Weaver.Workflows.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
-    <ProjectReference Include="..\..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
-    <ProjectReference Include="..\..\..\src\Activities\Bpmn\Api\Elsa.Activities.Bpmn.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Activities\Bpmn\Core\Elsa.Activities.Bpmn.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Api\Elsa.Activities.Bpmn.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Core\Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj" />
     <ProjectReference Include="..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Hosting\Elsa.Foundation.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
-    <ProjectReference Include="..\..\..\src\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Diagnostics.OpenTelemetry\src\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Diagnostics.OpenTelemetry\src\Workflows\Elsa.Diagnostics.OpenTelemetry.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\Api\Elsa.Modularity.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\Http\Elsa.Http\Elsa.Http.csproj" />
-    <ProjectReference Include="..\..\..\src\Http\Core\Elsa.Http.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Http\src\Elsa.Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Http\src\Core\Elsa.Http.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Attention\Api\Elsa.Attention.Api.csproj" />
     <ProjectReference Include="..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Expressions\Api\Elsa.Expressions.Api.csproj" />
@@ -142,18 +159,18 @@
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <!-- Core_projects_contain_no_implementation_shaped_types loads every src .Core assembly; these are not otherwise reachable. -->
     <ProjectReference Include="..\..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Diagnostics.StructuredLogs\src\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
     <!-- Structured Logs composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
-    <ProjectReference Include="..\..\..\src\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
-    <ProjectReference Include="..\..\..\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Diagnostics.StructuredLogs\src\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Secrets\src\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Connections\src\Core\Elsa.Connections.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
-    <ProjectReference Include="../../../src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <ProjectReference Include="../../../../extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
-    <ProjectReference Include="../../../src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
-    <ProjectReference Include="../../../src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
-    <ProjectReference Include="../../../src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
+    <ProjectReference Include="../../../../extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
+    <ProjectReference Include="../../../../extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj" />
+    <ProjectReference Include="../../../../extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj" />
     <!-- Studio Preferences composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
@@ -183,7 +200,7 @@
     <ProjectReference Include="..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
     <ProjectReference Include="../../../src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj" />
-    <ProjectReference Include="..\..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Http\src\Activities\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
@@ -192,9 +209,9 @@
     <ProjectReference Include="..\..\..\..\extensions\Weaver\src\GitHubCopilot\Elsa.Weaver.GitHubCopilot.csproj" />
     <ProjectReference Include="..\..\..\src\Caching\Memory\Elsa.Caching.Memory.csproj" />
     <ProjectReference Include="..\..\..\src\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\src\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
-    <ProjectReference Include="..\..\..\src\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\src\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\ConsoleStream\src\Elsa.Diagnostics.ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Diagnostics.OpenTelemetry\src\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Diagnostics.StructuredLogs\src\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
     <ProjectReference Include="..\..\..\src\Expressions\Liquid\Elsa.Expressions.Liquid.csproj" />
@@ -205,29 +222,30 @@
     <ProjectReference Include="..\..\..\src\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
-    <ProjectReference Include="..\..\..\src\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\src\Foundation\Identity\OpenIddict\EntityFrameworkCore\Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Http\src\JavaScript\Elsa.Http.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Locking\Database\Elsa.Locking.Database.csproj" />
     <ProjectReference Include="..\..\..\src\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
-    <ProjectReference Include="..\..\..\src\Secrets\Api\Elsa.Secrets.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Secrets\Nuplane\Elsa.Secrets.Nuplane.csproj" />
-    <ProjectReference Include="..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\src\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
-    <ProjectReference Include="..\..\..\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
-    <ProjectReference Include="..\..\..\src\Connections\Persistence\EntityFrameworkCore\Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\src\Connections\Api\Elsa.Connections.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Connections\Design\Elsa.Connections.Design.csproj" />
-    <ProjectReference Include="..\..\..\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Secrets\src\Api\Elsa.Secrets.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Secrets\src\Nuplane\Elsa.Secrets.Nuplane.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Secrets\src\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Secrets\src\Workflows\Elsa.Secrets.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Connections\src\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Connections\src\Persistence\EntityFrameworkCore\Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Connections\src\Api\Elsa.Connections.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Connections\src\Design\Elsa.Connections.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Connections\src\Workflows\Elsa.Connections.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Git\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Http\src\Workflows\Runtime\Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
@@ -260,15 +278,15 @@
     <ProjectReference Include="../../../../extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
-    <ProjectReference Include="../../../src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
+    <ProjectReference Include="../../../../extensions/Identity/src/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
+    <ProjectReference Include="../../../../extensions/Identity/src/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../extensions/Identity/src/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
+    <ProjectReference Include="../../../../extensions/Identity/src/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
   </ItemGroup>
 </Project>

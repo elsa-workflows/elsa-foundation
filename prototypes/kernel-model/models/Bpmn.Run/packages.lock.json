@@ -15,6 +15,25 @@
           "Bpmn.Model": "0.5.0"
         }
       },
+      "elsa.actorfoundation.builtin.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.actorfoundation.builtin.runtime": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.contracts": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "kernel.bpmn": {
         "type": "Project",
         "dependencies": {
@@ -22,29 +41,11 @@
           "Kernel.Workflows": "[1.0.0, )"
         }
       },
-      "kernel.durable": {
+      "Kernel.Workflows": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Runtime": "[1.0.0, )"
-        }
-      },
-      "kernel.foundation.contracts": {
-        "type": "Project"
-      },
-      "kernel.model.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
-        }
-      },
-      "kernel.runtime": {
-        "type": "Project"
-      },
-      "kernel.workflows": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       }
     }

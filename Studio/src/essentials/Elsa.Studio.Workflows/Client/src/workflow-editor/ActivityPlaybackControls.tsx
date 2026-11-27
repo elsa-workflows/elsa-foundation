@@ -1,19 +1,84 @@
-import { formatStudioDate, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
-import { useId } from "react";
-import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from "lucide-react";
-import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { AnchoredPopover, StudioButton } from "@elsa-workflows/studio-ui";
 import { playbackOrdinal, safePlaybackRange, type PlaybackOccurrence } from "../api/activityPlayback";
 import { humanizeTypeName } from "../workflowFormatting";
-import { historyInstant } from "./run-history/historyPresentation";
+import { CopyValueButton } from "./executableShared";
+import { historyCompactInstant } from "./run-history/historyPresentation";
 import { playbackBoundaryReason, type PlaybackSpeed } from "./activityPlaybackModel";
 import type { ActivityPlayback } from "./useActivityPlayback";
 import "./activityPlayback.css";
+
+const playbackSpeeds: readonly PlaybackSpeed[] = ["0.5", "1", "2", "4"];
+
+function PlaybackFact({ label, value, copyValue, title, mono = false, truncate = false, emptyText = "Not recorded", scope }: {
+  label: string;
+  value?: string | null;
+  copyValue?: string;
+  title?: string;
+  mono?: boolean;
+  truncate?: boolean;
+  emptyText?: string;
+  scope?: string;
+}) {
+  const [message, setMessage] = useState("");
+  const empty = value === undefined || value === null || value === "";
+  const rawCopy = copyValue ?? (typeof value === "string" ? value : undefined);
+  useEffect(() => { setMessage(""); }, [rawCopy, scope]);
+  return (
+    <div className="wf-playback-fact-row">
+      <dt>{label}</dt>
+      <dd>
+        {empty ? (
+          <span className="wf-playback-fact-empty">{emptyText}</span>
+        ) : (
+          <>
+            <span
+              className={`wf-playback-fact-value${truncate ? " wf-playback-fact-truncate" : ""}`}
+              title={title ?? rawCopy ?? value}
+            >
+              {mono ? <code>{value}</code> : value}
+            </span>
+            <span className="wf-playback-fact-tools">
+              {message ? <span className="wf-playback-copy-state" role="status">{message}</span> : null}
+              {rawCopy ? (
+                <CopyValueButton
+                  scope={scope}
+                  value={rawCopy}
+                  ariaLabel={`Copy ${label.toLowerCase()}`}
+                  copiedLabel={label}
+                  onCopied={() => setMessage("Copied")}
+                  onCopyFailed={() => setMessage("Copy failed")}
+                />
+              ) : null}
+            </span>
+          </>
+        )}
+      </dd>
+    </div>
+  );
+}
 
 export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
   playback: ActivityPlayback; scopeLabel: string; labelFor(entry: PlaybackOccurrence): string;
 }) {
   useStudioTimeZone();
   const id = useId();
+  const optionsPopoverId = useId();
+  const optionsTriggerRef = useRef<HTMLButtonElement>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  useEffect(() => {
+    if (!optionsOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOptionsOpen(false);
+      optionsTriggerRef.current?.focus();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [optionsOpen]);
   const cursor = playback.cursor, page = playback.page;
   const range = page ? safePlaybackRange(page) : null;
   const position = cursor ? String(playbackOrdinal(cursor.position) + 1n) : null;
@@ -30,7 +95,8 @@ export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
   const stateLabel = playback.playing ? loading ? "Buffering" : "Playing" : playback.phase === "ended" ? "End of available segment" : playback.phase === "unavailable" ? "Unavailable" : "Paused";
   const instant = cursor?.occurredAtKnown === false ? null : cursor?.occurredAt;
   const displayedInstant = instant ?? cursor?.recordedAt;
-  const compactInstant = displayedInstant ? formatStudioDate(displayedInstant) : "Unknown";
+  const compactInstant = displayedInstant ? historyCompactInstant(displayedInstant) : "Unknown";
+  const copyScope = cursor ? `${cursor.workflowExecutionId}:${cursor.activityExecutionId}:${cursor.historyEventId}` : undefined;
   const coverageLabels: Record<string, string> = { disabled: "Recording was disabled for this admission.",
     uncaptured: "No recording was captured for this admission.", unsupported: "Recorded history is unsupported by this host.",
     pending: "Recording is pending.", invalid: "Recorded history could not be verified.", partial: "Only partial recorded history is available.",
@@ -45,6 +111,23 @@ export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
       <StudioButton type="button" disabled={!cursor?.nextActivityExecutionId} aria-disabled={!!playback.pending || undefined} onClick={() => { if (!playback.pending) void playback.next(); }}>Next<ChevronRight size={15} aria-hidden="true" /></StudioButton>
 
       <StudioButton type="button" disabled={playback.playing || loading} onClick={() => { void playback.refresh(); }}>{playback.newer ? "Include new history" : "Refresh playback"}</StudioButton>
+      <StudioButton
+        ref={optionsTriggerRef}
+        type="button"
+        className="wf-playback-options-trigger"
+        aria-label="Playback options"
+        title="Playback options"
+        aria-haspopup="dialog"
+        aria-expanded={optionsOpen}
+        aria-controls={optionsOpen ? optionsPopoverId : undefined}
+        onClick={() => setOptionsOpen(current => !current)}
+        onKeyDown={event => {
+          if (event.key === "Escape" && optionsOpen) {
+            event.preventDefault();
+            setOptionsOpen(false);
+          }
+        }}
+      ><SlidersHorizontal size={15} aria-hidden="true" /></StudioButton>
     </div>
     <div className="wf-playback-position" role="status" aria-live="polite" aria-atomic="true">
       <strong>{positionText}</strong>
@@ -63,24 +146,90 @@ export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
     {cursor && page?.coverage.sourceHistoryPending === true ? <p className="wf-playback-note" role="status">{page.coverage.limitation || "Some history observations are still pending. Playback shows the recorded prefix."}</p> : null}
     {page && !cursor ? <p className="wf-playback-note" role="status">{Object.hasOwn(coverageLabels, page.coverage.state) ? coverageLabels[page.coverage.state] : "Recording status is unavailable."}</p> : null}
     {cursor && page && (page.state === "partial" || page.coverage.state === "partial") ? <p className="wf-playback-note" role="status">Partial playback range. {page.coverage.limitation || "Playback covers only the recorded segment."}{page.reason ? ` ${playbackBoundaryReason(page.reason)}` : ""}</p> : null}
-    <details className="wf-playback-options"><summary>Playback options</summary>
-      <StudioField label="Presentation pace"><select aria-label="Playback speed" value={playback.speed} onChange={event => playback.setSpeed(event.currentTarget.value as PlaybackSpeed)}>
-        <option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option>
-      </select></StudioField>
-      <p className="wf-playback-note">Recorded order · 1× = one activity step per second</p>
-      {cursor ? <p className="wf-playback-note" title={historyInstant(displayedInstant)}>{instant ? "First observed" : "Occurrence time unknown · recorded"} {compactInstant}</p> : null}
-    {cursor && playback.window ? <details className="wf-playback-details"><summary>{page?.coverage.state === "partial" ? "Partial playback range" : "Recorded playback range"} · through #{playback.window.upperSequence}</summary>
-      <p>Presentation pace does not change recorded durations. Order does not imply causation or reconstruct historical workflow state.</p>
-      {page?.coverage.limitation && page.coverage.sourceHistoryPending !== true ? <p>{page.coverage.limitation}</p> : null}{page?.reason ? <p>{playbackBoundaryReason(page.reason)}</p> : null}
-      <dl>
-      <dt>Run</dt><dd>{cursor.workflowExecutionId}</dd><dt>Activity execution</dt><dd>{cursor.activityExecutionId}</dd>
-      <dt>Original observation</dt><dd>{humanizeTypeName(cursor.observationKind)}</dd><dt>Event</dt><dd>{cursor.historyEventId}</dd>
-      <dt>Occurred</dt><dd>{historyInstant(instant)}</dd><dt>Recorded</dt><dd>{historyInstant(cursor.recordedAt)}</dd>
-      <dt>Parent execution</dt><dd>{cursor.parentActivityExecutionId ?? (cursor.activityAncestryKnown ? "Root execution" : "Not recorded")}</dd>
-      {cursor.iterationId ? <><dt>Iteration</dt><dd>{cursor.iterationId}</dd></> : null}{cursor.attemptId ? <><dt>Attempt</dt><dd>{cursor.attemptId}</dd></> : null}
-      {cursor.executionScopeId ? <><dt>Recorded scope</dt><dd>{cursor.executionScopeId}</dd></> : null}
-      <dt>Retained after</dt><dd>#{playback.window.retainedAfterSequence}</dd><dt>Playback upper bound</dt><dd>#{playback.window.upperSequence}</dd>
-    </dl></details> : null}
-    </details>
+    <AnchoredPopover
+      anchorRef={optionsTriggerRef}
+      open={optionsOpen}
+      id={optionsPopoverId}
+      role="dialog"
+      aria-label="Playback options"
+      className="wf-playback-options-popover"
+      minWidth={300}
+      maxHeight={520}
+      onDismiss={() => setOptionsOpen(false)}
+      onKeyDown={event => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          setOptionsOpen(false);
+          optionsTriggerRef.current?.focus();
+        }
+      }}
+    >
+      <div className="wf-playback-options-content">
+        <div className="wf-playback-options-header">
+          <strong>Playback options</strong>
+        </div>
+        <div className="wf-playback-pace-row">
+          <span className="wf-playback-pace-label">Presentation pace</span>
+          <div className="wf-playback-pace-group" role="group" aria-label="Playback speed">
+            {playbackSpeeds.map(option => (
+              <button
+                key={option}
+                type="button"
+                className="wf-playback-pace-option"
+                aria-pressed={playback.speed === option}
+                onClick={() => playback.setSpeed(option)}
+              >
+                {option}×
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="wf-playback-note">Recorded order · 1× = one activity step per second</p>
+        {cursor ? <p className="wf-playback-note" title={displayedInstant ?? undefined}>{instant ? "First observed" : "Occurrence time unknown · recorded"} {compactInstant}</p> : null}
+        {cursor && playback.window ? <details className="wf-playback-details">
+          <summary>
+            <ChevronRight size={14} className="wf-playback-details-chevron" aria-hidden="true" />
+            <span>{page?.coverage.state === "partial" ? "Partial playback range" : "Recorded playback range"}</span>
+            <small>through #{playback.window.upperSequence}</small>
+          </summary>
+          <div className="wf-playback-details-body">
+            {page?.coverage.limitation && page.coverage.sourceHistoryPending !== true ? <p className="wf-playback-details-warning">{page.coverage.limitation}</p> : null}
+            {page?.reason ? <p className="wf-playback-details-warning">{playbackBoundaryReason(page.reason)}</p> : null}
+            <dl className="wf-playback-facts">
+              <PlaybackFact label="Observation" value={humanizeTypeName(cursor.observationKind)} copyValue={cursor.observationKind} title={cursor.observationKind} scope={copyScope} />
+              <PlaybackFact label="Occurred" value={instant ? historyCompactInstant(instant) : null} copyValue={instant ?? undefined} title={instant ?? undefined} scope={copyScope} />
+              <PlaybackFact label="Recorded" value={cursor.recordedAt ? historyCompactInstant(cursor.recordedAt) : null} copyValue={cursor.recordedAt ?? undefined} title={cursor.recordedAt ?? undefined} scope={copyScope} />
+              <PlaybackFact
+                label="Sequence range"
+                value={`#${playback.window.retainedAfterSequence} – #${playback.window.upperSequence}`}
+                copyValue={`${playback.window.retainedAfterSequence}..${playback.window.upperSequence}`}
+                title={`Retained after #${playback.window.retainedAfterSequence} through #${playback.window.upperSequence}`}
+                mono
+                scope={copyScope}
+              />
+            </dl>
+            <p className="wf-playback-facts-section-label">Identifiers</p>
+            <dl className="wf-playback-facts">
+              <PlaybackFact label="Run" value={cursor.workflowExecutionId} mono truncate scope={copyScope} />
+              <PlaybackFact label="Activity execution" value={cursor.activityExecutionId} mono truncate scope={copyScope} />
+              <PlaybackFact
+                label="Parent execution"
+                value={cursor.parentActivityExecutionId}
+                emptyText={cursor.activityAncestryKnown ? "Root execution" : "Not recorded"}
+                mono
+                truncate
+                scope={copyScope}
+              />
+              {cursor.iterationId ? <PlaybackFact label="Iteration" value={cursor.iterationId} mono truncate scope={copyScope} /> : null}
+              {cursor.attemptId ? <PlaybackFact label="Attempt" value={cursor.attemptId} mono truncate scope={copyScope} /> : null}
+              {cursor.executionScopeId ? <PlaybackFact label="Recorded scope" value={cursor.executionScopeId} mono truncate scope={copyScope} /> : null}
+              <PlaybackFact label="Event" value={cursor.historyEventId} mono truncate scope={copyScope} />
+            </dl>
+            <p className="wf-playback-details-footer">Presentation pace does not change recorded durations. Order does not imply causation or reconstruct historical workflow state.</p>
+          </div>
+        </details> : null}
+      </div>
+    </AnchoredPopover>
   </section>;
 }

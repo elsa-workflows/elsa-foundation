@@ -1,0 +1,1238 @@
+{
+  "schemaVersion": "2.0",
+  "generatedAt": "2026-11-24T06:34:10.251287+00:00",
+  "packages": [
+    {
+      "id": "Acornima",
+      "version": "1.6.1",
+      "feed": "nuget",
+      "hash": "sha512:dn94AYj2Tkc/56rJYsbAyNm5pVVuYTXbPX14yMbIs19AlPMa4CB1enutdIlNebKV3uhN3bl9yhhFCzPbZqjVcg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Cronos",
+      "version": "0.13.0",
+      "feed": "nuget",
+      "hash": "sha512:ZhTUnOxMf0SvlVgAPtzYDzh0ETH0zbrVu5HeXdDZPk02Bw6KBvwswVPVHJ4yHDPwdHYFdGmofZaPpe/WhprsTQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "DistributedLock.Core",
+      "version": "1.0.8",
+      "feed": "nuget",
+      "hash": "sha512:QHGUidcDxddS1856I0\u002Bk1DNVdVy7PJSEaws7aQDogDO3mC0AFjhowemmi9qiYs9JQc2/pxXzEv5m\u002BfxQ7Bccjw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "DistributedLock.FileSystem",
+      "version": "1.0.3",
+      "feed": "nuget",
+      "hash": "sha512:xkuwUQ7h5U\u002BwQH1fEsIwhagWZD4wWbbsaTxHhU9bYoaxEmz6DvXabzan5ZyNFjZCSkGJ1faAzxzV4ETO/AQOlA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.ControlFlow",
+      "version": "4.0.26-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:t5XQWk55m\u002BY/KDHHCkbdjIWoSwXWO2TzIn/3ddhOAackAHgh2/zxdpcZRBJaflzAROfI7UAsaJQhRc33dp05nA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Design.Api",
+      "version": "4.0.43-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:bp0KZxwH8z5S4JgQwccubrU7/H0/9hMhl0s\u002B\u002BciSEg5oSb4ZE5xbX99RDsJj4rdl6XjGPZpv4DRh83QQuaz/XQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Design.Core",
+      "version": "4.0.31-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:VNp/r/2zZwMIuB5Pivnf0FTH5s4gx4EW4DFxe5xjDQP\u002B8ibzrtPKxV1nsbfFw72kZ9zbFWZfbQ0zwQkJfUGaLA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Design.Persistence.Core",
+      "version": "4.0.29-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:TgxH8OrXmY35bPqyAr2rmWK92WFC/2W2st8YZ02A2rxSMZlei\u002BGH4m8k6\u002BChGbru6blDW31TdizuSzzV2ngxiQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+      "version": "4.0.38-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:p\u002BtiWmCD\u002BZuCc\u002BpGyEyxXuK\u002BRCWMmcU\u002BpecOXMgB4/czFGf4wo8BSmEp/TRXmshq7z6rpVyZk5LjU\u002Bg0GoK2XA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Design.Reconciliation.Clr",
+      "version": "4.0.26-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:qp219acwIte8UD3w530UN0rJbVBgkV7doDR0sk3PUvdmfZDvcF\u002B\u002B4WIusPCN0EeVuXMmvKv4H/7DwAXAa/iv/g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.DispatchWorkflow.Design",
+      "version": "4.0.23-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:COgesgu/aLmh0QzupiScMLbVpcZtKxmIQ4VJtBwExYlJ7JMdrtwJCy53aQ0Y6UpswrAm/7Cj1p48p3bszyq\u002BzA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.DispatchWorkflow.Runtime",
+      "version": "4.0.24-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:NGHHU8co4MAvtYe0plcuwJViybk32Q7A3enjiNMTeblFRvUxKozpLMpfiG\u002BTqp52XLFFOiEl7ZtcFLOOlSQUNw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Flowchart",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:qNn8r7kOhjURcpQGV9Ir4uVkokvnh2K4LiBrvE4zD1YzRkMvENIMN7N1ACqLxgUWEtJ26L6z8p0LIM8QuJC7vA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Graph.Design",
+      "version": "4.0.28-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:BFTs/a2tAlMqR5TQ0Ft8\u002BJcjtcnmfdh1iBwfWZkMLf3d2yMkClJQ2SvNogA026v3W1opQaK0DhyTgyDnQLcwqg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Graph.Runtime",
+      "version": "4.0.24-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:fVGScv0PlFcUTR3LzhSO479IeBzbjozd0HWPbPUJC8QZ4kUmCVwTMLCv8aAF\u002BDPUnXQir3PC2zMtHbpr0kvpkw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Http",
+      "version": "4.0.37-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:Gacru/U8bGQMXvG4uaj1fPo9U2GHCcZmjoyi\u002BJZfTlyuxLXb3o0DaigewPH5wcK0UDNQy69UEkYZ72J1FQZm0w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Primitives",
+      "version": "4.0.34-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:\u002B2zD1t3Vb9Iy2DL9A9CiQ81TCb5hmZkaDgtqGD6ZbV8OzNs3\u002BZwLyJPa52TJjC7tkIMDaSUAYNumf45cvbveSQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Runtime",
+      "version": "4.0.51-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:uld6HYmjf0tuPhUBsvU9pGixfCOh7sZXiX/x03fIa//7hoxvdtnQAPBlQae1RA6dyToI2l0KQ11zGtQfmhwiDA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Runtime.Core",
+      "version": "4.0.36-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:dGgPHjGn0oQKGWo6NbtIlZAu6zbPb3BUOxxeQbMBc2WH9I4H6DzsYGlDFfEDMI/W4R7lK5kj2XlJgJSqtpglBA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Activities.Sequence",
+      "version": "4.0.23-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:4uorRSZHR2PTYnSIfnAx4EpTrU2ekqnuUzAK4DHEwOOL7oGhsTmRARZXRytu3U3c4rgezLfFszT9ET\u002Bi\u002BjjYug==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Api.AspNetCore",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:WiVyHuuaapBIWUyNiutfkyDOf3TqppQLZYbAcQHjt7aEiStOAFS7HN6Rpl0sqBc\u002BnaVb\u002BNvWJf9zjtGX/wzJ9A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Api.Capabilities",
+      "version": "4.0.23-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:Igel8BII3eR8F7KwTB4zeeOcupqaSRJmzEVef6mnEjIcgJ5fQpUzO2X7LZl1avvkOLFgPUX1RsSTkUO37Cf66g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Api.Capabilities.Core",
+      "version": "4.0.6-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:mrB3jLNls9XW\u002BpxA6K6XAxWP4oVU4f29E1OJQ2A33NEYzf8hzbQA2mwnMHSCu5dSUmhBwXUm/BgK5O8QRAnjoA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Attention.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:zgnQNTwqYnNINiQvLkFWwRMxH7w8BMZx4uxGSRezLCIq9/sLX1xexnQ9BjSH2TXyeC/FoIoLKnGqLXO3eMXNIw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Caching.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:Nw\u002B6L4WfwMq9ddf6wIDt0kfF/N\u002BE07naKOEjjWEe5GJ0QvwhFt6A9mtrI2K/hru3wgvq/jeY5aLv9NZETow5ig==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Caching.Memory",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:eFMXhcvNPYGz3foJnQe\u002BuMNDndmyOLOZ2LzH1nvLtgIoI5hx4H6EgCf8OgEPMkMGZ63Lg7pve8c88B52fx1KyA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Cluster.Core",
+      "version": "4.0.20-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:KiRxJ\u002BGm4vKCrTjDeRmzdI6a/eP1ZY9Q3/zwYHBra5fdqnYzk4jg92VdNAw9IV/5Vo42eVgZd7UE15xEmOdPXA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Cluster.InProcess",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:33YVLDkH2GNVj94aVl8iE4mpbe/TNIng4AkX5UEmb93gis0Dvpg1dnXerHJ3Mco9cT6/BbNR9GM2stoJKQtuLQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Events",
+      "version": "4.0.21-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:W2tX\u002B0GdArnTZHP8XmCx/E6xnn2xABZ7Ae7mQE7pS2Mv8q3I4cIdz8iH80wDwX3wrilhvZhJ5DSq6uObX61YkQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Events.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:Dp\u002Bcl5LfFIhuRd8j4CQ0CR8WHJy2wz/Vjvh3J\u002B5L5eiBHFIyFg9JHRvlRUKrVCWvZ0WV2a9OdVh\u002BdTyFiUE2XA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Events.Strategies",
+      "version": "4.0.16-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:86M/xwDixqEGTP54MBksUuFBRquwSHhdW7R7aebiO6/dHFsq4jQhulWIpEfb\u002Bf8q6Gj7uAJH4/KvTlrRptw9Cw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Expressions",
+      "version": "4.0.22-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:yet4lQngkX/hK1ukXwchWddeJQYZxYsU89LwmRmEDdhcqc/weKvC/IYgLGIGh1rpIgOrYJXb8F8sOSrWEnn92w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Expressions.Api",
+      "version": "4.0.21-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:4n24nujfuxN2/lqRTQjanx6bL7X0BiwKDTjPWiNPcL1AwrorfC0S9wrvvH5wUFiXqVmDfkskD4inRn1DkkH6MQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Expressions.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:IfxT0avCiAf1l2PMNtUS5QG0eUGCM5qqpccqcNQogB8BJb1YBmRRfXKb8Y4Ef/fAdcaZnN/jX2aASnrmosUG9A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Expressions.JavaScript",
+      "version": "4.0.21-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:LxWXJDs0t1i4OgbZbDKGqfzOEQXHqyy6hXT/xBeMdwPo5/F/sQb7U/QEVzrJGjIfLwHImxErQgDf9VfZUStIAA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Expressions.JavaScript.Core",
+      "version": "4.0.15-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:CwmgKu1t/Z2YtjWJ4kKKb49ncTWfNJyQs4LNxYvDIDDNNEsoyhBn\u002BZmV1CJT324bvR7NzVgFHa707Sohzyj4dw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Expressions.JavaScript.Jint",
+      "version": "4.0.21-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:mm4/AJyZ\u002B4X9\u002BoxAABt10WnHkaq3uszFfehPctJf9Np7ErWBhPcjJtxzOJb4pObOh26KgCOdt5PN/0srIVasWg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Expressions.JavaScript.Rendering",
+      "version": "4.0.21-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:0xW08sfzREOh7dFj1DNngo29bEH6be4nveDw0ayzA9THpMR7ouRgtJyTGr7Lujkoytvt5YMOjnN1zYZIKoMb/w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Expressions.JavaScript.Rendering.Core",
+      "version": "4.0.16-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:vzR3n1DZIRxwAjLTbknNGMbUDE1NWNYenf6ui0qoupYY8HHp5GaUa1BJp4T8KTzIFOAv7/ss4ZPGspKIpDdr4g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity",
+      "version": "4.0.26-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:aAKS0dHi0ooLvJhxhu\u002BfUs/241Ujy\u002BBBzY3HjwwiNXWrWF3mJUNzkp4gBPjDqmXbqqJ3lzSP7u0ZjdkGDa0KCw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity.Api",
+      "version": "4.0.23-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:S09o1N5HgiP\u002ByasX1oZyLWa1jUeD3kRORFLOt\u002B7wne8jK4D3BiIzjt1WmnPl38TyE7O2I8hhwBTNfdFaruXLOw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "version": "4.0.37-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:k2OZR2u2o6U\u002B0ANJXgmZIOsoUsbt4xPH\u002BY2\u002BFpdkCLgrPEanzxVsVioQN8jdDFAdIIj1ZKFo1il135vO7BskfA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+      "version": "4.0.28-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:6Os1SfX\u002BDDSDltlPJ2bapu9juC5Y3ZxwCjjkUqiPmJnJTr1U/PwO42WPcbdd4bCO/1MJ83/V/CBake0WcnlNhw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity.Core",
+      "version": "4.0.22-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:b\u002B8XMBHKnRz\u002BA2sWZdxJ97U4SfEoM3aRN1VdHF7ez\u002Bfds5i8cn3DXTi1/0HLtpvLCqSqoE37sdFfBkKJzF3VMg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity.Oidc",
+      "version": "4.0.23-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:xc5DwGrVsVRxiuERVD3HGYT8fDuOzZd0pCnTvaRHr4ylVqX8JfAusN6u1wZjSMs4sGVWc9RiNB59DZI4Qa1flA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity.OpenIddict",
+      "version": "4.0.18-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:5chhE/9klJCsqoxKd/MAtcH3xZ2ZYC29ThhHm\u002BvORJbA18N8kamdblotYvdUcTEmg26YE\u002BarHIEKWef/gdQkkA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity.OpenIddict.Behavior",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:kdQ6LbS3VlVdr1JAHjUDx\u002Bi0moUKkHAjZi9cltTI9oLsJVQVGewq\u002B40Rf5jAXOF2KUlyt0sMc17iV9X9I0virQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
+      "version": "4.0.29-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:j9I3DS25\u002B3sx8259UyCQW6bi3G\u002BBnfaeoUt/bsIpe\u002B5YHEMffomHFoDTMywROI7LlJxOpOOA/jy7BhEmqROMkQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Http",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:gjgzjQYcYQCCrMvNx86yewlfWbVcVCH5EB2M/PM/skubyeSfUM8yJCvgJHJiCBZ0fbCawCIQneQgwFTTfWO7yQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Http.Core",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:BhqfoI1O6cL1b/usMTShRqglggLY4Zgsz4j\u002BTOzaVu0GMstLd0LQc5KaZ\u002B6p6ql3yqhbbQcEvLZoOKgWogeMMg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Http.JavaScript",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:UHbNwcTR8UWh1suk9k3DNyJ59JXffXmWtegeZEiRXtU0qPt4S1fztMh1WRrKDINIwH8dnl024T5O6Il1rvqLqQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Locking.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:ProHjLCO1hjbHUav/\u002BWq9Cw0A\u002BNdczpvsMyAsF0JKKkkDASyJ92AA0LCvORL1CHrM/bNLG7UcR\u002BzENEyM5P0ew==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Locking.FileSystem",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:FPQgRKNB9S/5p5TyAXNcJHmTlWTS5rb2rJ7NaWPtsqrJg\u002BM38540qyYpqifZ5RN4C63J68uw8TnI4O9KNCxBFg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Mediator",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:\u002BlKGvN/RnYibsKZbYT8d6OZ\u002B\u002BHpkTNPhrjPavCb7BmPx6rc\u002Br7N9BeRE3FGteXyChLfLDkBfHcBSupLFg50fMg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Mediator.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:ZFUTnRPN8QP60P6/HmKaoIOWNmXSsgQBJMlGd2N\u002BXb/Xu\u002BQ0JFHc5kjMDEwKe1RaA5HVm\u002B6fc7fIIzKHYvjizQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Modularity.Api",
+      "version": "4.0.29-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:eJLhK5C0KPaAkpb9eyEOnTgFUOGib2IxEKxaL5l1qYbmO26kI60LgHhxYZGsKk\u002BGTEhCGaMC8wOtLl3uM2Ox4w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Modularity.Core",
+      "version": "4.0.16-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:gFv0GvlcRTDiF2gx2Fn0iD2w7boeIeDGxLvDsESqgOaIbX5Ew0fTQHeESTI0i4vVHTIARBSJICoPfEW03wOtFw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Modularity.Nuplane",
+      "version": "4.0.21-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:/rLE80mEXLYgvFXgWdUH3j09Vqp9utzYlza3aVtkgszpuIK\u002BW0Cv6KXmaerQJl3s67MzAl21eHaS6IASSMaJWQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Persistence.Core",
+      "version": "4.0.6-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:0QBs7Ib008Za2LvLEW/yGB6cJygsDS7ZAulYXXFz0Hg\u002BfKetevMNlcRxnihCbdFV4oJ8sn1Y5Z6E4U9/IB1MLg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "version": "4.0.48-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:SquIFOhmUUFSW3mKPNJac2jVnt/v2tvIN3\u002BKHCTAXirtRURfoz0c/R0B5pR\u002BmlWUaYla9sgH4bHH/xgujrDCrw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "version": "4.0.20-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:Xzjyy8S3VMnB0eiRGUFutqccFwDwZmWSdyhyIkHF/L010sj4n8Qwol5fcNT9RrQlfNPhBR9fbJW5fJovwv9VXQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Pipelines.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:Mxosy0T9VY1m3gqE7QC9bOFsXhHgBUfAaVgKvvN2LLzmUbUrineMuAnyiNv3VvHczmpjH8og7QvNDExvqB13/g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:wax3KbmbIeF2\u002BF88aPjtesoHntjq03xa5eJ0WR9\u002BodphOU0dY5FF43KvgWtYNBYgoBaXbrXgOrbJDsjwpvW8sQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Primitives.Hosting",
+      "version": "4.0.17-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:j6INBIJv00oIk4AkG2pewYlrnzUoQXoZFeaTpTELu/Qf2FDTy3oH0qd2YQiY8DlikDexadPIPHCzQ\u002BnOs2BRHg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Secrets",
+      "version": "4.0.26-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:I3L06LLZR1YSYyNC20COlPIPxE9BFOPDoTLBFYgo7/cagyZMr\u002B/15TN2fkR1WsfVeqB//VNuKlyU189L/jARQA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Secrets.Api",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:VMWdlYRUiu0h2EpdLI9n5\u002Bp7YE721y18/OyHzP9LsqEiTCc0JQzDKWpIidz8VAL8wPw/1mPvmffMfUkSOIMGVQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Secrets.Core",
+      "version": "4.0.20-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:JjqdhMh6JwxLxrhHcHapql95i\u002BrjBnn816Cxa2KKGNxvsv3eotNLdfoEMie1/0uOZCxfZ0m43Gni8sN7efmTVA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
+      "version": "4.0.30-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:9Swrq8lJ\u002BFsvCXcdAec\u002B5zWjJGLOxQiO1vfmon8A/jzSBjY8qqMLjcOyySrdHhCN7g99JKXeJQoP4ytKxuHjmQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Serialization.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:zNEhSq6uINZ5CXRPvYdAzGJ3CunuS4UkzJV4OGisp1rb0/NVUI\u002BY0\u002BaByOwa5MZGakgZ0UNKpBngUiTDKKvB1A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Serialization.SystemText",
+      "version": "4.0.19-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:CpTwzz29YT1vG3Lwrmj\u002BeActjF4g5XMgaOW90EtABwA7Lo0JJFILboJMalQffDct0Jb4qXV08GpM6GyIwprO1A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Studio.Dashboard.Core",
+      "version": "4.0.3-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:x4Ajz0gVslWKBa4RfwkZzg9P10/Q7BnKE9aBOp92iQUzFOHRFvLyirLaejnPRgnoP3WiEDBhX4RMMrrk0dXBiw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Studio.Dashboard.Management",
+      "version": "4.0.2-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:hMEdbHNKb2gBh7iJPXOe72kJ93A7zoZuG6agKzUlfnOWTEzdKcWOgg0u\u002Bccp0Kd5LC4udEJfS1UxS\u002BlKWGxaNA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+      "version": "4.0.2-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:gihiyqTbaSUeSua\u002BEl\u002BNLgRne5kaHW0aZVIrylF5r0d0vIjc6Kv2GyEY42zLIrvvsyjCvts2R1\u002BGIv2B0ucJDw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:ctZYEVlbGvLmOti9G9yWk0q8InXBhi2fhZBNc8phnDEgXSoyXE\u002BkPsFPDtEqAVCKekMHoyPjxIm5PciUDa4i1Q==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Tasks.Schedules",
+      "version": "4.0.18-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:CTEG0O/jLhuQX99b14hbU2G6KHR\u002BXoJD3jbb7\u002BjRVo33Gf8M9sqKPH/W3\u002B\u002BCr8vTzWQspCvhmbrrxYfUl40pRA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Dashboard",
+      "version": "4.0.28-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:j3rTtf/8nGLcjQYaM0aZ5hHVKmYixEzC8y/JQkok52gnIW/AB6ambM71jJMv/9z2sZa0x0o9h3qV0ss/yPTh\u002Bg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
+      "version": "4.0.26-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:kg7qfATdO\u002BA2VAK5Ko11XRZCAgNt74dZnXsQvdMzkQlgEUyahb7mmqFpu7INM2/NNBtnHTkUs\u002BawalgK2IhnFQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Design.Api",
+      "version": "4.0.45-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:62EEdPMOcNkNko9dcmO/TV\u002BMAMrRUegIxfX0IQpQzkSqJwyx/y5ian0AERUADstOu4N5xcSQinbvoTrRC0AgYg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Design.Core",
+      "version": "4.0.33-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:4mTpvNaUZOYu2ZdS4Z3bdJPDyU6A9LP/xkmo4NG/KLQ3gNu\u002BKSVi3xaJFIAVmWwQ1B2VwV0PIrew\u002BR1oiTD26g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Design.JavaScript",
+      "version": "4.0.18-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:Kv0VjVyrNGPLYXucCRppk6CVBqO6Wt8zGWD/h/K3tinHvb0hMcfPt51I2FZFPCOLyMuH3TH\u002BRVuibe1RwUivTA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Design.Persistence.Core",
+      "version": "4.0.27-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:fJi/9Nou21afc8cV5hE\u002B\u002BaYQpGJrIhZUbMde1WVbgNW80Mnh4Wb9Uw3sLHX4P7Th/\u002BVGNqUYKIrEM\u002BNrg89yqg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+      "version": "4.0.41-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:sNJJVuqPDXfXiUc1Oxqhhdgu51EY6LVNF\u002BKIPNC5M1VzZM58A4K2RVGwHg9aHkbGot2MamjGMQO2et7RmA8x8g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Design.Validations",
+      "version": "4.0.31-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:crpGTEa2Ij9Noh1fqjC73tXhM7iPyvs64zsPF/esbtHF0GKjyhtV1\u002B4\u002BDMA2ZJsUhJdv2OmS8V0b6AQeAaN9Zw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Design.Validations.Core",
+      "version": "4.0.25-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:ODSF4GZCbzPTiOZoYwlMJFZasYRvuXAtdpkaKAiOZz9upULjxRt\u002BORdJsaduH52M60lg17XhILJwPZLZOJ6Mfw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing",
+      "version": "4.0.67-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:aZpgDlBLzdLMtHWjIBNOA4kIBrdr0p5JqG4eal8/i\u002B8YNNhhkQGEkIFf3Cs8hWeRkKiKQKuOkW0DWpvwMPiKZQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Api",
+      "version": "4.0.43-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:fVNGQBD2ORh23qKx5S4Jkkqr\u002BKJcDAxqpWAg5SWsaZFdxBvvm\u002BzTcX15URZ1Da3D90aeLhsbo5PpeUHU2xsLaw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Core",
+      "version": "4.0.33-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:/af3JvCNoSMrVOTa7TYY9utWbUd20xbCeqH7LZqj2diieQ74zbIikatYM\u002Bjt2npLLokq3xyhG1yzUqOYAxHMIQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+      "version": "4.0.35-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:6oPUE0XryLB3s8kFJKo/cfyN83riFvpAbRgrr5v2A2iEmgJGi9/AvKnbZOhZ0ZzGC\u002Bew3JwqUDeM6/TBL1BYJg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Releases.Capture.Core",
+      "version": "4.0.2-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:oddMzpk/K1Dk/OeJ9IR\u002BcIyyxokjYEa9Nze78MnrbXSG3iMXfz/meX4\u002Bw\u002Bu\u002B6OBvzhcNXuxVP/CQUqjjj7L03w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Releases.Core",
+      "version": "4.0.2-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:HubEagpstyRlp\u002BH2PYEkVZSquffAOpPgpOM\u002Bkgcp6EOeZJHoN0O8yI9GavDphriRtbmMMuTlES8oEJcu/cm8Mg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Releases.Runtime.Core",
+      "version": "4.0.2-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:2vW1xBDMgyDEtnbfTASGYsRFm2/PUufUPNzWS7xqpPjG2b5UYy\u002BjtkFor7TbgRdog/Wz3x3wVaRwogZT/3XDvg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime",
+      "version": "4.0.115-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:EHejJcHgNxzk1LmFqsksrrbzjcJsa81Kch5f1ljzRhpyHOpojWUISF7/Z3kxzS8HZ7lNCaNGkd1qcx\u002BhormjTQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Api",
+      "version": "4.0.57-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:0cBwuuEvb42IOzyiYI6nyEyRoGcYjTpDt3i9A4ZVbtkiXWw7FD4UvCXmRYBkoOD4hfply1bsZ04Qr6xI8c0RJQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Core",
+      "version": "4.0.96-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:0twV2ploTcPhM0bNQePcrKmSj\u002Bdsput49Sh7gzOUDlZ8LomPkclTNmPRYNiGNBqDb2JjuL3HFAIdvGCP0xVCGg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Distributed",
+      "version": "4.0.24-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:LfJmwaenBV1qVjaVt2aE1NqMSIcvjlX8ckUKlVSfh0DujRvWNjg8ncrQRp2\u002Ba4iNzNNxzeDgBbkDuWsCH2uLfw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
+      "version": "4.0.29-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:nXCZVI4dhg0JaNMDovMlaN0kPY2CSNp6wqNuq5mfMSj/KXUr43eWcCf/rpYcrJvYGkUhorSzwwMK\u002BGW5aTpFyw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Http",
+      "version": "4.0.21-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:nh0g7osdA\u002B17wtb6QEbnK1sEHWSobSgYb80mVk8g/N59jje1o1ROKkEE3dpgFTo9/TIsTmCydJpKoNEFhX1jCQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Inspection.Core",
+      "version": "4.0.2-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:kpszfiXL2tW9ekh/UrFviawDd5\u002Bxvh\u002B09J\u002Bj8lHgFbpS/C0B6UDFj7WssupdUJ8XgZWGTx1AfNdEHmLAKzY9lQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.JavaScript",
+      "version": "4.0.19-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:cG\u002BFj5KscVogK9/YqoiiSAsvh/78msy8glT58YMiXGwce/bVX3Ak7WS5MYAIXGt8L40Nm\u002Bh8EFpNBjYCKo7ggg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "version": "4.0.68-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:7/26l2d/pK4/E0u8mXEvomgOvurj66o8/f/gdGVoPYoyOkNnwagkUwQUF5VyWKecUYuNNw3L7bs0tZbdpbpSVw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Jint",
+      "version": "4.9.1",
+      "feed": "nuget",
+      "hash": "sha512:BmntMVWi1RZiSntoaj0bsFm4ILV2AT4ojt3ZbeXRBdf5Sxy2t30LH8Dv7x3hkCbvJQ/V6EjmVKjhhzU5u/rV3Q==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.AspNetCore.Authentication.JwtBearer",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:GY1shNg\u002B/5kL7a/n4E4ema5z7elRwsGB8u/OAl7bKyNSQNv7/f1dhy\u002B21qTP/UC/3irTYwItSAj\u002BDDYn5ET\u002B2g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.AspNetCore.Authentication.OpenIdConnect",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:XL5f3El7UcQAtWWsTDYJeUx7F0SGFS\u002B9P21FIMr5gozD1VLxqDCaGXVE9GhsVufQUVgAyzjbeBi\u002BaxEK3JRoCw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.AspNetCore.Cryptography.Internal",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:ZOV9dzxmNQ09QaIRFVKLYEVjA1fYlw3AN7\u002Bt1qSa\u002B57NvBIdVNoortHumXO0dcnbhRfNheo8vfHxS7/awXUDqA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.AspNetCore.DataProtection",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:mx4QLVS33sBvGgbrXFFnBWGfSPoLIweMxlj8ZU7ohG87Lxlp1\u002Befc\u002B41nKhi0X6fTokbLppqXn7BHrlMpJ7gYw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.AspNetCore.DataProtection.Abstractions",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:v533QcZzFTCZYApbUqvHmA0f/Jv4\u002BY4mozakP0ZiaIvCJYD7Ap\u002BPqXWOiEcM/RSCmWIF\u002Bm8xNoagaXrGMs7Byw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.AspNetCore.OpenApi",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:L1r6ygVsP1iKZGMbq7mynIrJtVPUz1QVD0eKpdJGiKNC7i2tTRKV\u002BzMNgKevbCkfQkWW2KyZhNI5TXjfzVpccQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Bcl.Cryptography",
+      "version": "10.0.2",
+      "feed": "nuget",
+      "hash": "sha512:rbP/krRdXXVG10QyWH0rWa5\u002B0qP5Rob8VZDKno910kHnDcmH9XdFbBtdedO5pVVlpA1y2MXWx360zLLNLctJ\u002BQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.EntityFrameworkCore.Sqlite",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:BMjHWxjbQJlhKqVXuBOOby2MzBgzIA\u002BBz76v5WuzXF2m4FPOPg9vi/TLhUpaivogcozqtSuQhZKrCqHNMUAVAQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.AmbientMetadata.Application",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:rC2Dbl8/hle\u002BmZvhbIeDzfkN7Sj4269VPgkaGIIUYjWZgd/mInXHao1ePBnbmZJzfJZi0e\u002B5kWdaAm/A2gAVRQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Caching.Abstractions",
+      "version": "10.0.12",
+      "feed": "nuget",
+      "hash": "sha512:tpbESsKJgXYHIAmM6KWhw8utAY0isZKBjPlAbsaZ1ccV1MhGBE\u002BgX1ZKiwyFAAkLW3Qr50Y8OprmAoRsP3PvbQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Caching.Memory",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:3bvsDZpsST9b6uEKFEbiRmShf5qOW2lMbP0xXujD8ZSQrFH1q7tiS9Uf0UzaOB1RW8/38aTTqu8G9Ynqj6ft9A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Compliance.Abstractions",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:v\u002BIVAuCVyWxf1rIUZrPCl8p/CoVMak5iIkUnrGynlEyHfH8tZrQJB4Mn/oJ\u002BrLUOzdOM/ix0HXsKF73n9u3lfw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Configuration",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:lDwJ1rdZlj3UAb2PPD1/l0RDauEVfvk4EKjKyCPj7QlqUYFzJ6\u002Bt3FdB5UGRLUk9BT1WbNiY5vhig5jHJkmBsw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Configuration.Abstractions",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:e/TNbyXX4DDjZsyctZO3mokPNH31mAYsDSAwzbYtI/Rl9pzN/H6D0\u002BcJ/L4S7cS9SvaCKcLYiSFqqE69Q6axYg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Configuration.Binder",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:WBotbF\u002Bj5cFivEdpimL14fp\u002B/0IqvwlSXkx9eOAKHZq07e2h3C3MSfpR5bzlB2kWyWM2e6bvRDQYcEASiVhzGw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:paBm0K/ucDx\u002BaXQsSUrYLnW/C3pLC8ypsHuOqdIIuntrH\u002Bipk35YpylxH6\u002BHGqEkBcsEt8lA0L/ibkCIDvc6wQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Configuration.FileExtensions",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:Dqf7VxyBnhzTcf0h8FMjMwyDUAUKeLOQUDT9fFNQTujEN9AuEJtkSQ5YykBnJ6Xah0mJjpaUYHVVWMwKTgTz9A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Configuration.Json",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:FSIyn156zoJw07adGXPF2aMv3\u002B3m\u002BAULME40mhbf2PCwjfweYUMTn8WaPOTgtysvRUzD1hwCyT5TtAEsnaZ4eQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:hijuwcJvJ6eVbuzz0EaP3YZQOYJncPJn\u002BaTuvo15SeN9HCmLhbinOoc9mgT99eUOWTDgKJ88SCQTewVD/g57DQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "version": "10.0.12",
+      "feed": "nuget",
+      "hash": "sha512:kTf3x6w7DOuNj6kS0kL8oEGSSXJnqiPm3G\u002BddUfVB743EaO5Np8CX3r9pQp0ovBY7/J\u002BKY0JLbwuhC02nFQO1g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection.AutoActivation",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:fc5GRciDa4K1F0MT4LTOrlNyfHDU\u002BGf7LuyzRKrOOBMqE7WktCPSt7nqvS9lSRi8wWp\u002BMtEWg1CPnllZJ4N30w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Diagnostics",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:jO2qRweM7Q3cZSnZSNTQcYlpD/tnQPVnS5VRAykFeDfRbCdOwhkyjz9Tc3/SVMJ\u002BQCfH7OYbspa7K3iZZdf4Ag==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Diagnostics.Abstractions",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:sWPhHd1eEM601Akc\u002B\u002BNaJKYcpwop1I2Yjpykj16aeZtA4cd1JwH39406WGsXh1B1gTV\u002BSigTqPVhvpy4Cju0rw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Diagnostics.ExceptionSummarization",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:v/7OlZxxVRKMn0WvJ0DRsmLbykZx/OVs/vIngDY1QdTsqHpxYrzusBhhZWXarXD339e8xqPRTQDrebvegDi31w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.FileProviders.Abstractions",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:bzg2PR7uwwNMG8/5BYspXxnE8m6c7arsZxrz\u002BiLSEuZx24yrBojdsBYJyFCgbQwsWxAxdvhi9/fcq6FkgdUcUQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.FileProviders.Physical",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:9i0tZxylK\u002B5r\u002BOJShT2EqdV1\u002B4fYoE6d2Y6luyXoa6HG\u002BRLRBCynoESrZLh5cF1FimLxdtscpCJPrAbNUhAqvQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.FileSystemGlobbing",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:GUnnwojYhLX/bStKVNRo/6QvAoX6sHhqXVj6R6fw9dqqOkkarQkvMdB9GQyifMJfYy26DI0l0tRL3zIFjt0E1Q==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Hosting.Abstractions",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:Aps7givpQKaZSzpzMwRuZMdeRxx/MiXGkMDLPOxsGdIFlKrate/ChgLC\u002BjfuO810XtJmMrf3pFgM0ClNO5ZtyQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Http",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:T0mkNkTQsM/CBjdhUquKeOGABBc8DnZXZLECMw9IpxGA6z2vborRIMccRh6oYmmuEEZh2ScdRV\u002BnV/Ycc6vLPw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Http.Diagnostics",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:ktpnzYsLMPqKVl7SECU1aVta7QZNpInjvNLF2Fooep1PmeAPV6CQ5xvLJVA7FQ7wxvQrfU8GeQaYsEiAvICg1A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Http.Polly",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:\u002Be\u002BxwQN1iDt7UWngvGRjvKktXDs5RyYUG6bhep/oEDsbMlx\u002Bc/rcT\u002BrxKpuaL341mTGMcSOzzknUkZr4KGoLlg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Http.Resilience",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:C5X8z3fJJOq325rlu8JySPWn1I5CCJ0f6wL\u002BP2S3rRQuIgnHNfKNaHR4r/UM2\u002B68jwDvNQfHlzeejjQWjtFJUQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Logging",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:UmHJqv9rg7s6gG79kc\u002Bze\u002B1/6Ptf2ZD\u002BQfC7a3cr8prIMgxoNxtQ\u002B4rn2OwzlEKOq0ci3B7G1yAVuhZjUZVnEA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Logging.Abstractions",
+      "version": "10.0.12",
+      "feed": "nuget",
+      "hash": "sha512:6U8g6MRgR1JhFCr4XnlPJIjgKh9Fhh30wwUnuFvnaeJqpgx6c1J4BA5RnPNaMm7vE1zN/QOR\u002BnTSTNswgInX2w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Logging.Configuration",
+      "version": "10.0.3",
+      "feed": "nuget",
+      "hash": "sha512:upJhvKmJHpFvgAhqd4AaQ4g7rl9/0C7WdXcVBH9JTZOCBoyEIoW3YAzxD1dxjsm3zi\u002Bq4vQ\u002BNFjqYyBaDYSamg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.ObjectPool",
+      "version": "10.0.3",
+      "feed": "nuget",
+      "hash": "sha512:eUYigr6stVSoX\u002BMgxEAAni5bI9Gq9pWipDhfFRJu/m8vG9oG/WxddAMxcEMG64XY80yRqu3Rkct0cKeiTTdl2g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Options",
+      "version": "10.0.10",
+      "feed": "nuget",
+      "hash": "sha512:U4Mion/ZuwBMTD/CH8WE7Ajt6IdAtU3JXLwkG1UzOWM1lNFnoO8NAuQtZILNpkKyGEFP9t7FvQakgHnMCUjZKQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Options.ConfigurationExtensions",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:lL0naBPTXmJQw5uYasmAHEoHPBWJ/AocolsoX6hEi\u002BTSfo1Veb3yrOa/RD4a7j0HQ2IH1hw9e11jvKL1HAOlxw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Primitives",
+      "version": "10.0.12",
+      "feed": "nuget",
+      "hash": "sha512:G4hMZ9wJv75ufnnBkHAHbqiywfMGfeyfz/aiBZoLeg5vVgEqZPPAT/nLFb/Pk\u002B/mGCAIRi3i0WfGHTcVDN9lCg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Resilience",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:qgXN\u002BKwWGMh7JdPIn/gs43MfI8ntlI4UVCG0WDkv4duo5DcSzRxG2SJmbDMylHaNkHVM13iZRO2epasxcawtEA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Telemetry",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:cVVxdphRlvB78wKc/RESqu98kOufChO/7G84tkB/T1afN2TJYc8\u002B6p4bg3J/lpky2XDOW/Te7DSm9VpMZ680Ww==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Extensions.Telemetry.Abstractions",
+      "version": "10.3.0",
+      "feed": "nuget",
+      "hash": "sha512:6/U7INXYOV/5XQtXe2QxCcFkYKiMscJzIxQTR8uqcPDvrDBuXR376JE3TlKaCAwJTQaYrKmLAfoEkD8r1/4v0A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.IdentityModel.Abstractions",
+      "version": "8.19.2",
+      "feed": "nuget",
+      "hash": "sha512:ASRJB/oHIKh2N45fTt/t/\u002Bp2WaKxWUfvjTrHUq2N39mON6wJTQTX2gwfZOtwWBM4FZ9I7uNi8rFNaynXbMYNsQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.IdentityModel.JsonWebTokens",
+      "version": "8.19.2",
+      "feed": "nuget",
+      "hash": "sha512:9kokzW5MVsHjANELTihcvrI48azhzhdFQW\u002BoaEce2rD/sGe5Vf57BRQdXFIyDoWluxYh3vhe8aLQ3mg3BP983w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.IdentityModel.Logging",
+      "version": "8.19.2",
+      "feed": "nuget",
+      "hash": "sha512:15BrxnYEFaE\u002B3svU/8GB7EYQkOd\u002Bx0UdlqmNFoV3gY6vN/u4dg10NuXLoDSSUhxHPdc01cvKeoztwGvAw6Vhng==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.IdentityModel.Protocols",
+      "version": "8.19.2",
+      "feed": "nuget",
+      "hash": "sha512:\u002BOTRiYr9kxDvuGaNtPblS0ZlUcMmgF07YkPa\u002B5lZ1wL7OXnXDeym29XQWiuKnimfnhkO7T4imtkA8dy46p44OQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.IdentityModel.Protocols.OpenIdConnect",
+      "version": "8.19.2",
+      "feed": "nuget",
+      "hash": "sha512:JMioo0XfC6Gk6Ui5Sbs9lSzkFkp78vjcxb7qtzRgK3k1BXB8Baegq/Sr/ROg00qkq99MsZZZt3mgDGdACFTv0w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.IdentityModel.Tokens",
+      "version": "8.19.2",
+      "feed": "nuget",
+      "hash": "sha512:4rGCcWWvktrOG1esOPr2DMLJpxl9DjIAD943L8C8K8Rcsq30vnOG0IcFMlckuOMots/FHNSUJDxqsmo/EG6eBw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.Net.Http.Headers",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:ICjEBM4Jz9Vt1qLiiWEeZ6xcR\u002BE7S2CRwnfki5cDE8n/NH5RoJV\u002BGnWZjBCzdTU47j89JsYWD37S18w2y4N60Q==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Microsoft.OpenApi",
+      "version": "2.7.5",
+      "feed": "nuget",
+      "hash": "sha512:Es/SJ6CGHqGR9QoqpEDjv5YHkm4Nv6JniZj1tnfaUbV7wmCQmYMD\u002Bhoprj8v9enM11EUBse0rFJ0yT34ZWGMfA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:mOlxeCnETAg16JLyagkAssspJtHmmwYsBqhDDz3wAxP\u002BE72UFaodLFWGRCwVWYhOju15j6cyHWJ2TmWRYn8JyA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Abstractions",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:tmDhsZfWQRJpV\u002BE7JnvJnVkOzxO8Cd6QwZTnoomKa/J1J/nADM69XII/qKvQN3w\u002BY4Ysu44AaQNEHg2Kr8RYlA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.AspNetCore",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:p7Do4BuSsV54f4KNBjIK0W07JF0Xff82FFvWc3uUCLz7n5EN9hxbmgr/VgbdNFm\u002BkKdD6Rvw3PGudlZtrtFRRg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Client",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:tZswQ5IUEy338lucpLcoGjNokt9ger0lIDzUbYA79t6jQKVrK2rcs5x/XJvR1eVxYRAbyrHD73IzleuuU3Ps1Q==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Client.AspNetCore",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:iNbFAmllGMeCi2b\u002BK440Xi3gMD0chQDyNhenCF3EtFTJ2m7n4alyp79nwZayU82rvC7DGcWhaRC8ODSRrw4UMQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Client.DataProtection",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:lOxoB3lm7wiS9FMertE\u002Bud8NEWlCS6oDIPvNuDEugnDRGdWxfUDE9PgTA/gm1GPATNIlxJdZKSflbYbeihd0QA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Client.SystemIntegration",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:YQyOZPrLhYDhSe7wQaa\u002BIew49HPFcN5zKGHRrhX\u002BCn0Qq1eE6xcBVW4mW46XssJVuYP3d2GH5aOHUQ1NwRiR\u002Bg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Client.SystemNetHttp",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:Y7k/jGCWXbUw6SUcGr0aKfJ5wZgEjhfhs/mfSZBiW3TWXGZscvxhB/eKI5kVXgCtTD12MxE5kS07\u002B/be\u002B6d2Qw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Client.WebIntegration",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:0GdqzcyCP0BBEGPmNlAs0peQSDA1nzYa/VTWksWzFJgzvEucoE/KpCW21jIgsM4Vymgsyp2035w9629tcsUHkg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Core",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:sb6LDW3y9r4prsrc17JNCkAsXaZNVRK4YUrVDPGKlu1TC1ho6YQoNMcQzJvx2zPoKRP\u002BsmSSuH9klt1zBn1ewg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Server",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:k7zbIK1gCOhP2ugyeokSBAYmGsHKzYFzdZktAYdehg82G3BxO7o5uhrMkTwII49FYfr1mWe5fKma246i0Gzvcg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Server.AspNetCore",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:8BIa8M31Zr0JJI/9M1cZUlFCmnnksh1p7Y6n9kifNuRS0\u002B4R2jkxe/\u002BZz5RlIOOj821rYaQIPhKYTx14LAcaKA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Server.DataProtection",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:s0KbzCmNhlaqi0DXXMVyvnZpNJREt5/Yltxj9ofxr\u002BdYT/na/i8opx/J3wFQUIbpzTUhhu/WUD8yxW7qv2xZ7A==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Validation",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:WTV7jILG0UlftrAjXsxbj/rzmuZh3GPOqKad30iXh10OuCaYYLdUHGOFvvUggjNy\u002BbfOXt2MG1ZXtABAiGyCsw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Validation.AspNetCore",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:1tSX6CcRql6rxvH0C8PSLhCgMDBbpneu7bEQwC6xsjGijmc\u002BrhFhorriHsMkBxabEadhiUsrnjdvSMf2qXoCJQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Validation.DataProtection",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:0JsKio4eXBV3lHZQNc/E6g4OMV7fsbL1Q8\u002BqcYQzjjM\u002B2ZeyqZ/clFIONATA5LBefpSp5QSU6hmlkyA7DsHGAg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Validation.ServerIntegration",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:eWVjEbw1jsqy/jzmfQ4oJFZowja/Pe9GjAROkyp7JSaAxkI0HCEfAZMIFlY89zVjKNfvBxJqXgaQgoOV9XyCfA==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "OpenIddict.Validation.SystemNetHttp",
+      "version": "7.5.0",
+      "feed": "nuget",
+      "hash": "sha512:VgCUyCXO5Tn/H/GfLf9Y2rBLmrTv/LGbiYuQb4RoCmXzI6Rs1EIPhwojgFIzaTvsLEL1J\u002BVlsMpbNq8jjqy8aw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Polly",
+      "version": "7.2.4",
+      "feed": "nuget",
+      "hash": "sha512:dHT\u002BCnskCR3X3T7sUzjiEFSe/UE\u002BqAKjVuzb8b4P8mFfnX6g8UOxpsMDJuZEbFTq6DiDSwcgWOuPsxbS5iBc2Q==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "Polly.Extensions.Http",
+      "version": "3.0.0",
+      "feed": "nuget",
+      "hash": "sha512:k4Pr\u002BfTneV0F4t7HQPjPKNlwtchFbrI6ay3fBd1oF2H0Y7oVgVWAs8xPnokv8BHAQgOasTxEZdoGotYjh8USIQ==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "System.IdentityModel.Tokens.Jwt",
+      "version": "8.19.2",
+      "feed": "nuget",
+      "hash": "sha512:DXewKSmxxRBuvUOd2aG/TAZafCVR6VcqLD0AJAG74wwoDLqukwTPGa0I2SOItZdhXuz43Mfiog1BSpHAC8SVkg==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "System.Reflection.MetadataLoadContext",
+      "version": "10.0.8",
+      "feed": "nuget",
+      "hash": "sha512:YcFpYWsCdnD5vjpskco7E87TD9g6v6nxow1Qu3/XrBlUEulEZOUfTSV5EP7mSSKMYgT3\u002BfJK7zrijCeg\u002Bz3w9g==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "System.Security.Cryptography.Pkcs",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:gI2lKhXZeIyuOn2I/w/PY2JTN39U6VjQbpnXYdHIJyGZMVX6fM8KGDtDUBYHOiunxc6mZfoRN9JaCUc4w\u002BuRDw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "System.Security.Cryptography.Xml",
+      "version": "10.0.7",
+      "feed": "nuget",
+      "hash": "sha512:VgakeRcWiSkhcbK7YFA0eS8XsSsIoS\u002BTpqLteX7a2Ejt\u002B9s5K0bfOXcg5BUInQu33rjqTUcLK2eyH5zQW/mp0w==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    },
+    {
+      "id": "System.Text.Json",
+      "version": "8.0.5",
+      "feed": "nuget",
+      "hash": "sha512:E1iQIa4\u002BgfVMh3q/YTzpMcwkyle/EnrxBjzMHrTcV6bMIjph5kUiB/XQ3ORTtmJ0MOMeQUPHjnHptd1kf2gKvw==",
+      "timestamp": "2026-11-24T06:34:10.251287+00:00"
+    }
+  ]
+}

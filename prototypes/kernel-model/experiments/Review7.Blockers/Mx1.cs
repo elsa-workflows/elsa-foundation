@@ -166,11 +166,13 @@ sealed class Mx1(string variant, Rules rules)
     /// <summary>W's turn: consume every pending delivery to W, in seq order, through the real commit (kept rows become Done).</summary>
     private void Consume()
     {
-        var due = _k.Store.Messages.Values.Where(m => m.Message.Target.Id == W && m.Message.Kind == Kinds.Event && !m.Done).OrderBy(m => m.Seq).ToList();
+        // The store can strip a settled row's payload. A delivered turn keeps its observed envelopes.
+        var due = _k.Store.Messages.Values.Where(m => m.Message.Target.Id == W && m.Message.Kind == Kinds.Event && !m.Done)
+            .OrderBy(m => m.Seq).Select(m => m.Message).ToList();
         if (due.Count == 0) { _r.Line($"t={_k.Now}: W's turn: nothing pending"); return; }
-        var commit = new TurnCommit(W, null, null, [], due.Select(m => m.Message.InboxKey).ToList(), [], [], [], null);
+        var commit = new TurnCommit(W, null, null, [], due.Select(m => m.InboxKey).ToList(), [], [], [], null);
         var (landed, error) = _k.Commit(W, [commit]);
-        _r.Line($"t={_k.Now}: W's turn consumes [{string.Join(", ", due.Select(m => m.Message.Payload))}]: {(landed ? "landed, the rows are kept Done" : "not landed: " + error)}");
-        if (landed) _received.AddRange(due.Select(m => m.Message.Payload!));
+        _r.Line($"t={_k.Now}: W's turn consumes [{string.Join(", ", due.Select(m => m.Payload))}]: {(landed ? "landed, the rows are kept Done" : "not landed: " + error)}");
+        if (landed) _received.AddRange(due.Select(m => m.Payload!));
     }
 }

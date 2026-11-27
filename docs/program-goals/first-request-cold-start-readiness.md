@@ -51,7 +51,9 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
    shell state), so no CShells edit and no synthetic request are needed. Supports "all configured shells"
    (default/`*`) and named-shell config shapes; a many-shell host pays every activation at boot only when it opts
    in (the documented trade). Demo default remains OFF; flipping it is a separate decision. See
-   `specs/230-eager-shell-activation/`.
+   `specs/230-eager-shell-activation/`. Since #5715 the Workbench uses `Elsa.Foundation.Hosting`'s eager activation,
+   which activates every configured shell and retries a failed one; the named-shell list is gone, and the Workbench's
+   `appsettings.json` keeps it OFF.
 5. **Warmups.** Targeted first-use warmups (JIT/route-table/serializer/connection) for whatever residual
    first-request cost remains after units 2–4.
 

@@ -49,7 +49,7 @@ public sealed class DockerWorkflowTests
         Assert.False(on.ContainsKey("pull_request"), "docker.yml must not build images on pull requests (#2751); found an 'on: pull_request' trigger.");
         // The workflow_run trigger's shape (Packages, completed, main) is pinned by the test above.
         Assert.Equal(["workflow_dispatch", "workflow_run"], on.Keys.Cast<string>().Order(StringComparer.Ordinal));
-        Assert.All(new[] { "build-and-push", "build-and-push-foundation-host" },
+        Assert.All(new[] { "build-and-push", "build-and-push-foundation-host", "build-and-push-essentials-host" },
             job => Assert.Equal("true", (string)Map(Jobs[job], "with")["push"]));
     }
 
@@ -75,6 +75,7 @@ public sealed class DockerWorkflowTests
         Assert.Equal("needs.admission.outputs.allowed == 'true'", (string)versions["if"]);
         Assert.Equal("versions", (string)Jobs["build-and-push"]["needs"]);
         Assert.Equal("versions", (string)Jobs["build-and-push-foundation-host"]["needs"]);
+        Assert.Equal("versions", (string)Jobs["build-and-push-essentials-host"]["needs"]);
 
         var steps = ((List<object>)versions["steps"]).Cast<Dictionary<object, object>>().ToList();
         Assert.DoesNotContain(steps, step => step.TryGetValue("name", out var name) && (string)name == "Plan");

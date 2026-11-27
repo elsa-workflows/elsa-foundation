@@ -45,7 +45,7 @@ public sealed class WeaverRecordStoreProviderTests
 
         // Round-trip with byte-identical canonical text and fingerprints.
         var canonical = "{\"a\":1.50,\"b\":\"café \\u2028 \u2028 ñ 😀\",\"c\":[true,null]}";
-        var digest = WeaverInvocationIntegrity.DigestCanonical(canonical);
+        var digest = Elsa.Serialization.Core.JsonHashInput.HashJson(canonical);
         var session = Session("session-1");
         var created = await store.CreateAsync(new(session)
         {

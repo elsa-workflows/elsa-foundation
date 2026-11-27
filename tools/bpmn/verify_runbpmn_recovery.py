@@ -19,7 +19,7 @@ q=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(q)
 START="Elsa.Bpmn.StartEmbedded.v1";CANCEL="Elsa.Bpmn.CancelEmbedded.v1";RESULT="Elsa.Bpmn.ResumeNativeParent.v1"
 ACTIVITY="Elsa.Activities.Bpmn.Activities.RunBpmn"
 ACTIVITY_STATUSES=("Scheduled","Running","Waiting","Suspended","Completed","Faulted","Cancelled","Recovered","Superseded")
-PRODUCTS={"Elsa.Workbench.dll","Elsa.Workflows.Runtime.Core.dll","Elsa.Workflows.Runtime.dll",
+PRODUCTS={"Elsa.Workbench.Host.dll","Elsa.Workflows.Runtime.Core.dll","Elsa.Workflows.Runtime.dll",
     "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll","Elsa.Activities.Bpmn.Core.dll","Elsa.Activities.Bpmn.dll",
     "Elsa.Activities.Bpmn.Api.dll","Elsa.Workflows.Publishing.Core.dll","Elsa.Workflows.Publishing.dll","Bpmn.Model.dll","Bpmn.Semantics.dll"}
 
