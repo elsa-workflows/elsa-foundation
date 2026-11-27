@@ -26,6 +26,8 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     private readonly Func<Contract.ActorStatus, bool>? _allowAdditionalWriteFreeCompletion;
     private (EfStore Store, Worker Worker, Action<Kernel.Runtime.InstanceRef> Wake)? _owner;
     private bool _closed;
+    private int _pendingSettlements;
+    private TaskCompletionSource? _settlementsDrained;
 
     /// <summary>Binds the primary scope and a second host-owned scope to the same inline owner.</summary>
     /// <remarks>The installed format must explicitly support the additional scope. Configure it once with a distinct isolated tenant.</remarks>
@@ -70,62 +72,104 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
         }
     }
 
+    /// <summary>Waits for accepted additional-scope starts to finish settling after admission closes.</summary>
+    public Task DrainSettlementsAsync(CancellationToken token)
+    {
+        lock (_gate)
+        {
+            if (!_closed) throw new InvalidOperationException("Close inline admissions before draining settlements.");
+            return _pendingSettlements == 0 ? Task.CompletedTask :
+                (_settlementsDrained ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task.WaitAsync(token);
+        }
+    }
+
     /// <summary>Offers an exact start and its trusted local material to this owner, then observes its outcome.</summary>
     public ValueTask<InlineStartOutcome> StartAsync(string operationId, Contract.StartSpec start, object material,
-        CancellationToken token) => StartCoreAsync(scope, operationId, start, material, token);
+        CancellationToken token) => StartCoreAsync(scope, operationId, start, material, null, token);
 
     /// <summary>Offers an exact start and its trusted local material to the additional scope bound at composition.</summary>
+    /// <remarks>Settlement of an accepted owner receipt continues when the caller stops waiting.</remarks>
     public ValueTask<InlineStartOutcome> StartAdditionalAsync(string operationId, Contract.StartSpec start, object material,
-        CancellationToken token)
+        Func<InlineStartOutcome, ValueTask<InlineStartOutcome>> settle, CancellationToken token)
     {
+        ArgumentNullException.ThrowIfNull(settle);
         token.ThrowIfCancellationRequested();
-        return _additionalScope is { } additional ? StartCoreAsync(additional, operationId, start, material, token)
-            : ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Refused));
+        return _additionalScope is { } additional ? StartCoreAsync(additional, operationId, start, material, settle, token)
+            : settle(new(InlineStartDisposition.Refused));
     }
 
     private async ValueTask<InlineStartOutcome> StartCoreAsync(Contract.BoundScope selectedScope, string operationId,
-        Contract.StartSpec start, object material, CancellationToken token)
+        Contract.StartSpec start, object material, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>>? settle, CancellationToken token)
+    {
+        var (receipt, unqueued) = Offer(selectedScope, operationId, start, material, settle, token);
+        if (receipt is null) return settle is null ? unqueued : await settle(unqueued);
+
+        try { return await receipt.WaitAsync(RootPreparedStarts.OneWayBudget, token); }
+        catch (TimeoutException)
+        {
+            token.ThrowIfCancellationRequested();
+            // Queueing succeeded. The owner can settle later, so the caller cannot retry it as a shed request.
+            return new(InlineStartDisposition.Unknown);
+        }
+    }
+
+    private (Task<InlineStartOutcome>? Receipt, InlineStartOutcome Unqueued) Offer(Contract.BoundScope selectedScope,
+        string operationId, Contract.StartSpec start, object material, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>>? settle,
+        CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (start.Type != actorType || EfStore.CreateInlineRootSpec(operationId, start) is not { } trusted || !validate(start, material))
-            return new(InlineStartDisposition.Refused);
-        (Contract.ActorRef Reference, Task<InlineRootResult> Outcome)? pending;
+            return (null, new(InlineStartDisposition.Refused));
         lock (_gate)
         {
             token.ThrowIfCancellationRequested();
-            if (_owner is not { } owner) return new(InlineStartDisposition.Unavailable);
+            if (_owner is not { } owner) return (null, new(InlineStartDisposition.Unavailable));
             using var attempt = owner.Store.AdmissionPressure!.BeginInlineStart(selectedScope.Tenant);
             try { attempt.RequireInlineTenantRate(); }
             catch (RootAdmissionRefused refusal)
             {
                 var admission = refusal.Admission;
-                return new(InlineStartDisposition.Unavailable)
-                    { RefusalReason = admission.Reason, RetryAfter = admission.RetryAfter };
+                return (null, new(InlineStartDisposition.Unavailable)
+                    { RefusalReason = admission.Reason, RetryAfter = admission.RetryAfter });
             }
-            pending = owner.Store.QueueInlineRoot(owner.Worker, operationId, trusted, material, owner.Wake, selectedScope);
+            if (owner.Store.QueueInlineRoot(owner.Worker, operationId, trusted, material, owner.Wake, selectedScope) is not { } admitted)
+                return (null, new(InlineStartDisposition.Unavailable));
             // Queued authored work spends its start permit even if it finishes without a checkpoint.
-            if (pending is not null) attempt.Committed();
+            attempt.Committed();
+            var outcome = ReadOutcomeAsync(admitted.Reference, admitted.Outcome);
+            if (settle is null) return (outcome, default);
+            _pendingSettlements++;
+            return (SettleAcceptedAsync(outcome, settle), default);
         }
-        if (pending is not { } admitted) return new(InlineStartDisposition.Unavailable);
+    }
 
+    private async Task<InlineStartOutcome> SettleAcceptedAsync(Task<InlineStartOutcome> outcome,
+        Func<InlineStartOutcome, ValueTask<InlineStartOutcome>> settle)
+    {
         try
         {
-            var result = await admitted.Outcome.WaitAsync(RootPreparedStarts.OneWayBudget, token);
-            var status = (Contract.ActorStatus?)result.Status;
-            return result.Disposition switch
-            {
-                InlineRootDisposition.WriteFree => new(InlineStartDisposition.Volatile, Status: status),
-                InlineRootDisposition.Committed => new(InlineStartDisposition.Committed, admitted.Reference, status),
-                InlineRootDisposition.Refused => new(InlineStartDisposition.Refused) { RefusalReason = result.RefusalReason },
-                InlineRootDisposition.OwnershipLost => new(InlineStartDisposition.Unknown),
-                _ => throw new InvalidOperationException("The local owner returned an unknown start outcome.")
-            };
+            // The owner can finish before Offer releases its gate. Start the persistence callback outside it.
+            var result = await outcome.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+            return await settle(result);
         }
-        catch (TimeoutException)
+        finally
         {
-            token.ThrowIfCancellationRequested();
-            // Queueing succeeded. A late commit may win, so the caller cannot safely retry it as a shed request.
-            return new(InlineStartDisposition.Unknown);
+            lock (_gate)
+                if (--_pendingSettlements == 0) _settlementsDrained?.TrySetResult();
         }
+    }
+
+    private static async Task<InlineStartOutcome> ReadOutcomeAsync(Contract.ActorRef actor, Task<InlineRootResult> outcome)
+    {
+        var result = await outcome;
+        var status = (Contract.ActorStatus?)result.Status;
+        return result.Disposition switch
+        {
+            InlineRootDisposition.WriteFree => new(InlineStartDisposition.Volatile, Status: status),
+            InlineRootDisposition.Committed => new(InlineStartDisposition.Committed, actor, status),
+            InlineRootDisposition.Refused => new(InlineStartDisposition.Refused) { RefusalReason = result.RefusalReason },
+            InlineRootDisposition.OwnershipLost => new(InlineStartDisposition.Unknown),
+            _ => throw new InvalidOperationException("The local owner returned an unknown start outcome.")
+        };
     }
 }
