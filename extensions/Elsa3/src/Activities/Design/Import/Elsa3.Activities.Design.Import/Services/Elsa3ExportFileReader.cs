@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text.Json;
 using Elsa3.Activities.Design.Import.Models;
@@ -63,10 +64,10 @@ internal sealed class Elsa3ExportFileReader(ReusableActivityImportOptions option
             throw new ReusableActivityImportPayloadException("Select at least one export containing a workflow definition.");
     }
 
-    private async Task ReadArchiveAsync(Stream content, string archiveName, CancellationToken cancellationToken)
+    private async Task ReadArchiveAsync(MemoryStream content, string archiveName, CancellationToken cancellationToken)
     {
         using var archive = new ZipArchive(content, ZipArchiveMode.Read);
-        if (archive.Entries.Count > options.MaximumArchiveEntries - _archiveEntries)
+        if (DeclaredEntryCount(content) > (ulong)(options.MaximumArchiveEntries - _archiveEntries))
             throw new ReusableActivityImportPayloadException($"{archiveName}: the selection exceeds the {options.MaximumArchiveEntries}-entry ZIP limit.");
         _archiveEntries += archive.Entries.Count;
         var before = _definitions.Count;
@@ -91,6 +92,37 @@ internal sealed class Elsa3ExportFileReader(ReusableActivityImportOptions option
         }
         if (before == _definitions.Count)
             throw new ReusableActivityImportPayloadException($"{archiveName}: the ZIP contains no workflow definitions.");
+    }
+
+    // ZipArchive verifies its declared count while reading, but Entries materializes that many
+    // records. Check its end-of-directory count first, including the ZIP64 replacement record.
+    private static ulong DeclaredEntryCount(MemoryStream content)
+    {
+        var bytes = content.GetBuffer().AsSpan(0, (int)content.Length);
+        const int footerSize = 22;
+        if (bytes.Length < footerSize)
+            throw new InvalidDataException("Missing ZIP directory footer.");
+        var start = Math.Max(0, bytes.Length - footerSize - ushort.MaxValue);
+        var signature = bytes[start..(bytes.Length - footerSize + 4)].LastIndexOf("PK\x05\x06"u8);
+        if (signature < 0)
+            throw new InvalidDataException("Missing ZIP directory footer.");
+        var offset = start + signature;
+        var footer = bytes[offset..];
+        var count = BinaryPrimitives.ReadUInt16LittleEndian(footer[10..]);
+        if (count != ushort.MaxValue && BinaryPrimitives.ReadUInt16LittleEndian(footer[4..]) != ushort.MaxValue
+            && BinaryPrimitives.ReadUInt32LittleEndian(footer[16..]) != uint.MaxValue)
+            return count;
+
+        const int locatorSize = 20;
+        if (offset < locatorSize || !bytes[(offset - locatorSize)..].StartsWith("PK\x06\x07"u8))
+            throw new InvalidDataException("Missing ZIP64 directory locator.");
+        var position = BinaryPrimitives.ReadUInt64LittleEndian(bytes[(offset - locatorSize + 8)..]);
+        if (position > (ulong)(offset - locatorSize) || offset - locatorSize - (long)position < 56)
+            throw new InvalidDataException("Invalid ZIP64 directory footer offset.");
+        var zip64 = bytes[(int)position..];
+        if (!zip64.StartsWith("PK\x06\x06"u8))
+            throw new InvalidDataException("Missing ZIP64 directory footer.");
+        return BinaryPrimitives.ReadUInt64LittleEndian(zip64[32..]);
     }
 
     private async Task ReadJsonAsync(Stream stream, string source, CancellationToken cancellationToken)

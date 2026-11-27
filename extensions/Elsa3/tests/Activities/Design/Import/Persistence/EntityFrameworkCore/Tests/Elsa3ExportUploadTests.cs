@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.Support;
 using Elsa3.Activities.Design.Import.Services;
@@ -30,7 +31,8 @@ public sealed class Elsa3ExportUploadTests
             { new ByteArrayContent(ObjectBytes(caller)), "files", "caller.JSON" },
             { new ByteArrayContent(ObjectBytes(new[] { other })), "files", "more.json" }
         };
-        var upload = await service.UploadExportFilesAsync(await selection.ReadAsStreamAsync(), Boundary, null, Scope);
+        var uploader = Assert.IsAssignableFrom<IReusableActivityExportFileUpload>(service);
+        var upload = await uploader.UploadExportFilesAsync(await selection.ReadAsStreamAsync(), Boundary, null, Scope);
         Assert.Equal(3, upload.SourceVersionCount);
         var page = await service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope);
         Assert.Equal(new[] { "Exact-A", "Exact-C", "Exact-O" }, page.Items.Select(item => item.SourceVersionId));
@@ -39,7 +41,7 @@ public sealed class Elsa3ExportUploadTests
 
         selection.Add(new ByteArrayContent(ObjectBytes(approval)), "files", "also-approval.json");
         using var bytes = new MemoryStream(await selection.ReadAsByteArrayAsync());
-        var overlapping = await service.UploadExportFilesAsync(bytes, Boundary, bytes.Length, Scope);
+        var overlapping = await uploader.UploadExportFilesAsync(bytes, Boundary, bytes.Length, Scope);
         var diagnostics = (await service.AnalyzeAsync(overlapping.CollectionHandle, 0, 10, Scope)).Diagnostics;
         Assert.Contains(diagnostics, d => d.Code == ReusableActivityImportDiagnosticCodes.DuplicateSourceVersion);
     }
@@ -84,8 +86,9 @@ public sealed class Elsa3ExportUploadTests
             { new ByteArrayContent(definition), "files", "standalone.json" },
             { new ByteArrayContent(archive), "files", scenario == "unsupported file" ? "notes.txt" : "batch.zip" }
         };
+        var uploader = Assert.IsAssignableFrom<IReusableActivityExportFileUpload>(service);
         var error = await Assert.ThrowsAsync<ReusableActivityImportPayloadException>(async () =>
-            await service.UploadExportFilesAsync(await batch.ReadAsStreamAsync(), Boundary, null, Scope));
+            await uploader.UploadExportFilesAsync(await batch.ReadAsStreamAsync(), Boundary, null, Scope));
         Assert.Contains(source, error.Message);
         Assert.Equal(0, (await harness.Database.CountAsync()).Collections);
     }

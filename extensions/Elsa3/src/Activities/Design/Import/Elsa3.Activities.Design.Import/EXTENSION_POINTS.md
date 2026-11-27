@@ -94,7 +94,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 
 `Elsa3ImportActivitiesFeature` exposes these permission-guarded routes:
 
-- `POST migration/elsa3/reusable-activities/collections` — bounded authored-definition array upload.
+- `POST migration/elsa3/reusable-activities/collections` — upload a raw authored-definition JSON array or a multipart selection of JSON and ZIP files as one collection. Each JSON document can contain a single definition or an array.
 - `GET .../collections/{collectionHandle}/analysis` — deterministic, side-effect-free, offset-paged analysis.
 - `POST .../collections/{collectionHandle}/selection` — authoritative dependency-closure expansion and readiness.
 - `POST .../collections/{collectionHandle}/apply` — exact Plan ID, selection, tenant-plus-user
@@ -102,8 +102,8 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
   `elsa3-import:manage` and `workflows/publishing:manage`, because it publishes the imported reusable activities.
 - `GET .../imports/{idempotencyKey}` — durable lost-response reconciliation.
 
-Uploads default to 16 MiB, 20,000 source versions, a 24-hour lifetime, and analysis pages of at
-most 500 rows. Hosts may lower or raise these finite bounds through `ReusableActivityImportOptions`.
+A selection allows 16 MiB of uploaded file data, 32 MiB of expanded JSON, 2,000 ZIP entries
+and 20,000 source versions by default. Collections expire after 24 hours and analysis pages contain at most 500 rows. Hosts may lower or raise these finite bounds through `ReusableActivityImportOptions`.
 Apply never falls back to `ExecuteWorkflow`; recursive reusable composition remains a blocking
 diagnostic with a complete typed cycle.
 

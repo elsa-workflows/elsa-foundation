@@ -44,7 +44,7 @@ public sealed class ReusableActivityImportOperationService(
     IOptions<ReusableActivityImportOptions> options,
     TimeProvider timeProvider,
     ILogger<ReusableActivityImportOperationService> logger,
-    IActivityDefinitionVersionPublicationStore? publications = null) : IReusableActivityImportOperationService
+    IActivityDefinitionVersionPublicationStore? publications = null) : IReusableActivityImportOperationService, IReusableActivityExportFileUpload
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly ReusableActivityImportOptions _options = ValidateOptions(options.Value);

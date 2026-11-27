@@ -35,8 +35,15 @@
 }
 
 .elsa3-import-field {
+  min-width: 0;
+  overflow-wrap: anywhere;
   display: grid;
   gap: 0.5rem;
+}
+
+.elsa3-import-field input {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .elsa3-import-or {

@@ -25,10 +25,17 @@ public sealed class Endpoint(IReusableActivityImportOperationService service) : 
         var request = HttpContext.Request;
         var scope = ReusableActivityImportHttp.Scope(HttpContext.User);
         var type = request.GetTypedHeaders().ContentType;
-        var result = type?.MediaType.Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase) == true
-            ? await service.UploadExportFilesAsync(request.Body, HeaderUtilities.RemoveQuotes(type.Boundary).Value ?? "",
-                request.ContentLength, scope, cancellationToken)
-            : await service.UploadAsync(request.Body, request.ContentLength, scope, cancellationToken);
+        ReusableActivityImportUploadResult result;
+        if (type?.MediaType.Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            if (service is not IReusableActivityExportFileUpload upload)
+                throw new ReusableActivityImportPayloadException("This import service accepts raw JSON arrays only.");
+            var boundary = HeaderUtilities.RemoveQuotes(type.Boundary).Value ?? "";
+            result = await upload.UploadExportFilesAsync(request.Body, boundary, request.ContentLength, scope, cancellationToken);
+        }
+        else
+            result = await service.UploadAsync(request.Body, request.ContentLength, scope, cancellationToken);
+
         HttpContext.Response.Headers.Location = $"/migration/elsa3/reusable-activities/collections/{Uri.EscapeDataString(result.CollectionHandle)}/analysis";
         return result;
     }
