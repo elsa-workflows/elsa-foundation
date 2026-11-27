@@ -35,8 +35,7 @@ public sealed class UsesEfModuleGuardTests
     /// <summary>
     /// The feature inventory, pinned: every feature the provider-agreement check and the activation guard
     /// must recognise, the module(s) it maps to, and whether it declares a <c>Provider</c> setting of its
-    /// own — the distinction the agreement rules turn on. The dashboard feature is the one row with no
-    /// <c>Provider</c>; it is skipped by the comparison rather than defaulted to Sqlite.
+    /// own. The agreement rules skip features without a <c>Provider</c> setting in the comparison.
     /// </summary>
     private static readonly (string Feature, string[] Modules, bool DeclaresProvider)[] Inventory =
     [
@@ -65,6 +64,7 @@ public sealed class UsesEfModuleGuardTests
         ("WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", ["Workflows.Runtime.Distributed.Placement"], true),
         ("WorkflowsRuntimeEntityFrameworkCore", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
+        ("WorkflowsRuntimePublicationEntityFrameworkCorePersistence", ["Workflows.Runtime"], false),
         ("WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence", ["Workflows.Runtime"], true)
     ];
