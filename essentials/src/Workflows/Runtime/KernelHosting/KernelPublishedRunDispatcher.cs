@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -65,9 +63,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
 
         var subjectId = request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-kind") == "persisted-user"
             ? request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-id") : null;
-        var publication = new WorkflowPublishedStart(source.SourceReferenceId, source.SourceKind, source.SourceId, source.SourceVersion,
-            source.DefinitionVersionId, source.ArtifactVersion, published.ActivationId, published.SlotId, published.SlotName,
-            published.Revision, SourceDigest(source), subjectId);
+        var publication = KernelSourceStamp.Published(source, published, subjectId);
         var spec = WorkflowActor.Start(NativeExecutionModel.Start(published.Workflow, mode.ToString(), input), publication);
 
         var operationId = Guid.NewGuid().ToString("N");
@@ -102,9 +98,6 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         WorkflowExecutableReferenceRejectedException Rejected() => new(request.ArtifactId, requiredScope,
             WorkflowExecutableReferenceRejectionReason.NoLiveReference);
     }
-
-    internal static string SourceDigest(WorkflowExecutableSourceReference source) =>
-        Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(source)));
 
     internal static WorkflowExecutionStartDispatchResult Result(string operationId, WorkflowExecutableIdentity material,
         WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt, string? refusal = null,

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Kernel.Model.Contracts;
 using Kernel.Native;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -34,9 +35,7 @@ public static class KernelHttpEdge
     public static NativeHttpRouteMatch? Route(KernelServing serving, string method, string path)
     {
         ArgumentNullException.ThrowIfNull(serving);
-        var match = HttpRouteMatcher.Match(serving.Routes, method, path);
-        return match.Route is { } route && (route.Start || serving.Capabilities.HttpWaits)
-            ? match : null;
+        return serving.MatchHttp(method, path)?.Route;
     }
 
     /// <summary>
@@ -45,19 +44,27 @@ public static class KernelHttpEdge
     /// </summary>
     /// <param name="request">The request, built by the edge from the wire; its route values are filled in from the match.</param>
     public static KernelHttpStart? Start(KernelServing serving, NativeHttpRouteMatch match, HttpRequest request)
+        => SelectStart(serving, match, request, null) is { } selected
+            ? new(Kernel.WorkflowActor.WorkflowActor.Start(selected.Start), selected.Workflow, selected.RespondBeforeCommit)
+            : null;
+
+    internal static (WorkflowStart Start, string Workflow, bool RespondBeforeCommit)? SelectStart(KernelServing serving,
+        NativeHttpRouteMatch match, HttpRequest request, KernelServedSlot? expected)
     {
         ArgumentNullException.ThrowIfNull(serving);
         ArgumentNullException.ThrowIfNull(match);
         ArgumentNullException.ThrowIfNull(request);
         // What serves now: the route the match found, still served by the same workflow's node.
-        if (match.Route is not { Start: true } matched || serving.HttpStart(matched) is not { } startBinding) return null;
-        var (route, workflow) = startBinding;
+        if (match.Route is not { Start: true } matched || serving.HttpStart(matched) is not { } startBinding ||
+            expected is not null && startBinding.Slot != expected) return null;
+        var (route, slot) = startBinding;
+        var workflow = slot.Workflow;
         var trigger = Values.From(request with { RouteValues = match.Values });
         var start = NativeExecutionModel.Start(workflow.Id, Modes.Balanced, null, route.Node, trigger, workflow.Definition) with
         {
             ExecutableSelection = workflow.ExecutableSelection
         };
-        return new(Kernel.WorkflowActor.WorkflowActor.Start(start), workflow.Id, route.RespondBeforeCommit);
+        return (start, workflow.Id, route.RespondBeforeCommit);
     }
 
     /// <summary>The start a request makes, or null when no start route of what serves matches its method and path.</summary>

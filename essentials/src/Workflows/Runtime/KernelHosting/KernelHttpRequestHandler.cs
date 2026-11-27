@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Elsa.Api.AspNetCore;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Native;
+using Kernel.WorkflowActor;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,8 +30,8 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         var sent = SentPath(context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? request.Path.ToUriComponent());
         var onBase = sent.StartsWith(basePath, StringComparison.OrdinalIgnoreCase) &&
                      (sent.Length == basePath.Length || sent[basePath.Length] == '/');
-        var route = onBase ? KernelHttpEdge.Route(serving, request.Method, sent[basePath.Length..]) : null;
-        if (route is null)
+        var route = onBase ? serving.MatchHttp(request.Method, sent[basePath.Length..]) : null;
+        if (route is not { } match)
         {
             await WriteAsync(context, KernelHttpEdge.NotFound, clientAborted);
             return;
@@ -38,7 +39,7 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
 
         if (!enforceRequestTimeout)
         {
-            await WriteAsync(context, await AnswerAsync(context, route, null, clientAborted), clientAborted);
+            await WriteAsync(context, await AnswerAsync(context, match.Route, match.Slot, null, clientAborted), clientAborted);
             return;
         }
 
@@ -49,7 +50,7 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         context.RequestAborted = deadline.Token;
         try
         {
-            var answer = await AnswerAsync(context, route, matchedAt, deadline.Token);
+            var answer = await AnswerAsync(context, match.Route, match.Slot, matchedAt, deadline.Token);
             await WriteAsync(context, answer, deadline.Token);
         }
         catch (OperationCanceledException) when (clientAborted.IsCancellationRequested)
@@ -105,7 +106,8 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         catch (OperationCanceledException) when (clientAborted.IsCancellationRequested) { }
     }
 
-    private async Task<KernelHttpAnswer> AnswerAsync(HttpContext context, NativeHttpRouteMatch route, long? matchedAt, CancellationToken token)
+    private async Task<KernelHttpAnswer> AnswerAsync(HttpContext context, NativeHttpRouteMatch route, KernelServedSlot? slot,
+        long? matchedAt, CancellationToken token)
     {
         var request = context.Request;
         IReadOnlyDictionary<string, string> query, headers;
@@ -147,10 +149,14 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         string kind;
         string? payload;
         bool respondBeforeCommit;
+        var selected = serving.ProtectsHttpStarts && slot is { Revision: > 0 } ? slot : null;
+        var publication = selected?.HttpPublication;
+        if (selected is not null && publication is null) return KernelHttpEdge.NotFound;
         try
         {
-            if (KernelHttpEdge.Start(serving, route, message) is { } start)
-                (target, kind, payload, respondBeforeCommit) = (new Contract.Target.Start(start.Spec), Contract.Kinds.Start, null, start.RespondBeforeCommit);
+            if (KernelHttpEdge.SelectStart(serving, route, message, selected) is { } start)
+                (target, kind, payload, respondBeforeCommit) =
+                    (new Contract.Target.Start(WorkflowActor.Start(start.Start, publication)), Contract.Kinds.Start, null, start.RespondBeforeCommit);
             else if (KernelHttpEdge.Wait(serving, route, message) is { } wait)
                 (target, kind, payload, respondBeforeCommit) = (new Contract.Target.Event(wait.Key), Contract.Kinds.Event, wait.Payload, wait.RespondBeforeCommit);
             else return KernelHttpEdge.NotFound;
@@ -167,6 +173,8 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         var reply = await ingress.RequestAsync(tenant, target, Guid.NewGuid().ToString("N"), kind, payload, null,
             new Contract.RequestOptions(null, deadline, respondBeforeCommit), token);
         if (matchedAt is not null && reply.Error == "timeout") throw new RequestDeadlineElapsed();
+        if (publication is not null && reply.RefusalReason == Contract.RefusalReason.TargetMismatch)
+            return KernelHttpEdge.NotFound;
         return KernelHttpEdge.Answer(reply);
     }
 

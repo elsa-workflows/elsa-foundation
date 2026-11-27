@@ -205,6 +205,7 @@ public sealed class KernelShellChildExecutableTests
             });
             new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation }
                 .ConfigureServices(services);
+            services.AddPersistenceModes();
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }
