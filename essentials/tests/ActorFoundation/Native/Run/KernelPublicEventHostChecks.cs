@@ -15,7 +15,9 @@ internal static partial class KernelAuthoredEventChecks
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = stop.Token;
         var scope = ContractScopes.Bind("event-host");
-        var model = new PublicEventActor();
+        var ambient = new object();
+        var liveAmbient = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var model = new PublicEventActor(value => liveAmbient.TrySetResult(value));
         var directory = Directory.CreateTempSubdirectory("public-event-host-");
         var path = Path.Combine(directory.FullName, "events.db");
         var host = new RootPublicEventHost(model.Type, protectedStarts);
@@ -49,8 +51,10 @@ internal static partial class KernelAuthoredEventChecks
                         item.Wait == "live", token))
                         await Task.Delay(25, token);
 
-                var liveReply = await RequestAsync(PublicEventActor.Key, "live", "live item");
+                var liveReply = await RequestAsync(PublicEventActor.Key, "live", "live item", ambient);
                 Check(liveReply is { Status: Contract.ActorStatus.Finished, Error: null }, "the Event host still holds replies from exact live waits");
+                Check(liveAmbient.Task.IsCompletedSuccessfully && ReferenceEquals(liveAmbient.Task.Result, ambient),
+                    "the live Event actor receives the caller's exact nonnull Ambient object");
                 if (observeReplies)
                     Check(frames.Task.IsCompletedSuccessfully && frames.Task.Result is { Channel: null, Error: null } frame &&
                         frame.Tenant == scope.Tenant, "the observer saw the tenant-bound terminal reply on the protected hosted node");
@@ -104,13 +108,13 @@ internal static partial class KernelAuthoredEventChecks
                 "the exact owner reopens without changing public publication authority");
             return 0;
 
-            async Task<Contract.Reply> RequestAsync(string key, string id, string item)
+            async Task<Contract.Reply> RequestAsync(string key, string id, string item, object? callerAmbient = null)
             {
                 await using var db = open();
                 var now = provider == "postgres" ? await RootEventAdmission.ReadPostgresClockAsync(db, token)
                     : await SqliteRootAdmission.ReadClockAsync(db, token);
                 return await ingress.RequestAsync(scope, new Contract.Target.Event(key), id, Contract.Kinds.Event, item, null,
-                    new(null, now + 6000), token);
+                    new(callerAmbient, now + 6000), token);
             }
         }
         finally { directory.Delete(recursive: true); }
