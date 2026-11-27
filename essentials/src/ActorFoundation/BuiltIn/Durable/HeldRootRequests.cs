@@ -218,6 +218,10 @@ internal sealed class HeldRootRequests : IReplyTransport
 
             return await PresentAsync(await completion.WaitAsync(token));
         }
+        catch (RootAdmissionRefused refusal)
+        {
+            return refusal.Reply;
+        }
         catch (OperationCanceledException) when (budget.IsCancellationRequested && !stop.IsCancellationRequested)
         {
             requests.Timeout(waiting);

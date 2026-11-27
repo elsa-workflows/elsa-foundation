@@ -374,7 +374,9 @@ internal static class PostgresShippedFormatChecks
             ("shipped 25", "refuse_25", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 25 },
                 RootProfiles.ParkCompositionBase)),
             ("shipped 26", "refuse_26", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 26 },
-                RootProfiles.ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery))
+                RootProfiles.ParkRecoveryComposition)),
+            ("shipped 27", "refuse_27", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 27 },
+                RootProfiles.TimerRearmQualification))
         })
         {
             await using (var older = open(shipped))

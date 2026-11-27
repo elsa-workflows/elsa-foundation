@@ -72,7 +72,7 @@ internal static class SqliteShippedInstallChecks
                 UPDATE "FoundationRootIssuer" SET "Key" = 'abcdefghijklmnopqrstuvwxyzabcdef'
                 """, token), "SQLite requires a BLOB issuer key", DataTypeConstraint);
             var versions = db.StoreVersions.Where(row => row.Id == StoreVersionEntity.MarkerId);
-            await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, 26), token);
+            await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, 27), token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses the previous shipped protocol");
             await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, StoreFormat.RootShipped.MessageProtocol), token);

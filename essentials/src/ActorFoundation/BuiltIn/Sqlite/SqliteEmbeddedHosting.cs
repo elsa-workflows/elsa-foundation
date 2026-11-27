@@ -91,8 +91,10 @@ public static partial class SqliteEmbeddedHosting
             KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : new(file.Options);
 
             int partitions;
+            bool selfSends;
             await using (var db = Open())
             {
+                selfSends = db.UsesRootSelfProtocol;
                 if (shipped)
                 {
                     var admission = new SqliteRootAdmission(Open, TimeSpan.Zero, file.AdmissionDefinitions);
@@ -109,10 +111,12 @@ public static partial class SqliteEmbeddedHosting
                 await UseWalAsync(db, cancellationToken);
             }
 
-            var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch) { CommitSql = CommitSql.Owned };
+            var pressure = requests?.Pressure;
+            var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch)
+                { CommitSql = CommitSql.Owned, AdmissionPressure = pressure };
             if (shipped)
             {
-                if (TakesSelfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
+                if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
                 await store.EnableRootJobsAsync(cancellationToken);
             }
             var watchdog = new Watchdog(Defaults.Lease, endProcess);
@@ -122,9 +126,11 @@ public static partial class SqliteEmbeddedHosting
             {
                 Partitions = partitions,
                 OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error),
-                Transport = requests
+                Transport = requests,
+                Backlog = pressure?.Backlog
             };
             var host = DurableHost.ForNode(node, watched, createActor(store), partitions, workers);
+            await store.PrimeAdmissionPressureAsync(cancellationToken);
             var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
                 beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
             {
@@ -219,6 +225,7 @@ public static partial class SqliteEmbeddedHosting
         internal SqliteDirectRequests? ReplyEdge { get; set; }
         internal int ReplyUsers { get; set; }
         internal SemaphoreSlim ReplyWrites { get; } = new(1);
+        internal SemaphoreSlim ReplyOperatorWrites { get; } = new(1);
 
         internal void RequireReplyEdge(SqliteDirectRequests? requested)
         {
@@ -234,6 +241,7 @@ public static partial class SqliteEmbeddedHosting
         internal DbContextOptions<KernelDb> Options => Current.Options;
         internal SqliteAdmissionDefinitions AdmissionDefinitions => Current.AdmissionDefinitions;
         internal SemaphoreSlim ReplyWrites => Current.ReplyWrites;
+        internal SemaphoreSlim ReplyOperatorWrites => Current.ReplyOperatorWrites;
         private ActiveFile Current => _file ?? throw new ObjectDisposedException(nameof(FileLease));
 
         public void Dispose()
@@ -255,6 +263,7 @@ public static partial class SqliteEmbeddedHosting
                 finally
                 {
                     held.ReplyWrites.Dispose();
+                    held.ReplyOperatorWrites.Dispose();
                     held.Lock.Dispose();
                 }
             }
