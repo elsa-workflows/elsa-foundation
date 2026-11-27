@@ -390,6 +390,9 @@
           "Elsa.Pipelines.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.modularity.core": {
+        "type": "Project"
+      },
       "elsa.pipelines.core": {
         "type": "Project"
       },

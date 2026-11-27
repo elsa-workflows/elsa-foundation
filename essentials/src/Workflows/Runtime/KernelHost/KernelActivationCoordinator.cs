@@ -43,7 +43,8 @@ public sealed class KernelActivationCoordinator(
     IRecurringTriggerScheduleStore? recurringScheduleStore = null,
     ActivationChannelOptions? channels = null,
     IEnumerable<IWorkflowTriggerIndexObserver>? triggerObservers = null,
-    ILogger<KernelActivationCoordinator>? logger = null) : IWorkflowActivationCoordinator
+    ILogger<KernelActivationCoordinator>? logger = null,
+    IPersistenceAccessContextAccessor? access = null) : IWorkflowActivationCoordinator
 {
     public const string ReplacedRetireReason = "activation-replaced";
     public const string FailedRetireReason = "activation-failed";
@@ -66,6 +67,8 @@ public sealed class KernelActivationCoordinator(
             throw new ArgumentException(
                 $"The supplied source reference points at artifact '{command.Reference.ArtifactId}' but the executable is '{identity.ArtifactId}'.", nameof(command));
 
+        if (!HasPublicationScope())
+            return ScopeRefusal(command.Executable.Identity.DefinitionId, command.SlotName);
         return await serving.RunAsync(() => ActivateCoreAsync(command, cancellationToken), cancellationToken);
     }
 
@@ -301,6 +304,8 @@ public sealed class KernelActivationCoordinator(
         ArgumentException.ThrowIfNullOrWhiteSpace(command.SlotName);
         ArgumentOutOfRangeException.ThrowIfNegative(command.ExpectedRevision);
 
+        if (!HasPublicationScope())
+            return ScopeRefusal(command.Executable.Identity.DefinitionId, command.SlotName);
         return await serving.RunAsync(() => DeactivateCoreAsync(command, cancellationToken), cancellationToken);
     }
 
@@ -448,12 +453,23 @@ public sealed class KernelActivationCoordinator(
         return others;
     }
 
+    private bool HasPublicationScope() => serving.PublicationScope is not { } expected ||
+        access?.Current is { AccessPolicy: PersistenceAccessPolicy.Ordinary, AcrossScopes: false } current &&
+        current.Scope == expected;
+
+    private WorkflowActivationResult ScopeRefusal(string definitionId, string slotName) =>
+        new(false, WorkflowActivationOutcome.Failed, EmptySlot(definitionId, slotName),
+            Diagnostic: "This kernel shell serves publications for its configured tenant only.",
+            FailedStep: WorkflowActivationStep.ProjectionActivation);
+
     // ---- ensuring serving ----------------------------------------------------------------------------------------
 
     public async ValueTask<WorkflowActivationResult> EnsureServingAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
+        if (!HasPublicationScope())
+            return ScopeRefusal(workflowDefinitionId, slotName);
         return await serving.RunAsync(async () =>
         {
             var slot = await authority.FindAsync(workflowDefinitionId, slotName, cancellationToken);
@@ -478,6 +494,9 @@ public sealed class KernelActivationCoordinator(
     /// <returns>Each active slot's result; a slot that could not be served is reported failed, and the others still serve.</returns>
     public async ValueTask<IReadOnlyList<WorkflowActivationResult>> ServeActiveSlotsAsync(CancellationToken cancellationToken = default)
     {
+        if (!HasPublicationScope())
+            throw new InvalidOperationException("The publication restore requires the kernel shell's configured tenant.");
+
         var definitions = new SortedSet<string>(StringComparer.Ordinal);
         string? continuation = null;
         do

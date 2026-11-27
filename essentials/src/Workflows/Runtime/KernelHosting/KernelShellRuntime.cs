@@ -3,6 +3,8 @@ using CShells.Lifecycle;
 using Elsa.Activities.Http.Options;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
 using Kernel.Native;
@@ -15,7 +17,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope) : IAsyncDisposable
 {
     private IHostedService? _owner;
     private IAsyncDisposable? _lifetime;
@@ -58,7 +60,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     private async Task ServePublicationsAsync(CancellationToken token)
     {
-        await using var scope = scopes.CreateAsyncScope();
+        await using var scope = await scopes.CreateAsyncScopeAsync(persistenceScope);
         if (scope.ServiceProvider.GetRequiredService<IWorkflowActivationCoordinator>() is not KernelActivationCoordinator coordinator)
             throw new InvalidOperationException("The kernel shell requires the kernel publication coordinator.");
         var results = await coordinator.ServeActiveSlotsAsync(token);
@@ -73,7 +75,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     private async ValueTask<Workflow?> ResolveWorkflowAsync(string artifactId, CancellationToken token)
     {
-        await using var scope = scopes.CreateAsyncScope();
+        await using var scope = await scopes.CreateAsyncScopeAsync(persistenceScope);
         return await NativeExecutableMapper.MapStoredAsync(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>(), artifactId, token);
     }
 

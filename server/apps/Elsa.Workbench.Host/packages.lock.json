@@ -1972,6 +1972,7 @@
           "CShells.Nuplane": "[0.0.31, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Nuplane": "[0.0.15, )",
           "Nuplane.Admin": "[0.0.15, )",
@@ -2919,6 +2920,7 @@
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelApi": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )"
         }

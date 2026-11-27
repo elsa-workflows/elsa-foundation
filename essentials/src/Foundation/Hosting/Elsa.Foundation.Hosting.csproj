@@ -18,6 +18,7 @@
     <ProjectReference Include="../../Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <!-- The contract the opt-in shell-activation Attention contributor implements. -->
     <ProjectReference Include="../../Attention/Core/Elsa.Attention.Core.csproj" />
+    <ProjectReference Include="../../Modularity/Core/Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="../../Persistence/Schema/Elsa.Persistence.Schema.csproj" />
     <InternalsVisibleTo Include="Elsa.Foundation.Hosting.Tests" />
   </ItemGroup>

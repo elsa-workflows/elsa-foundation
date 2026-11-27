@@ -5,6 +5,8 @@ using CShells.Lifecycle;
 using Elsa.Activities.Http.Options;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
+using Elsa.Modularity.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -13,6 +15,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
@@ -46,11 +49,16 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     {
         var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
         var tenant = EmbeddedTenant.Bind(Tenant);
+        var persistenceScope = new PersistenceScope(tenant.Tenant);
         services.AddSingleton(storage);
+        services.AddSingleton(new ShellRestartRequirement(FeatureName));
         services.AddSingleton(new KernelServing(capabilities: new KernelHostCapabilities(
-            Schedules: false, Timers: false, Children: false, SelfSends: storage.TakesSelfSends, HttpWaits: false)));
+            Schedules: false, Timers: false, Children: false, SelfSends: storage.TakesSelfSends, HttpWaits: false),
+            publicationScope: persistenceScope));
         services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
-        services.AddSingleton<KernelShellRuntime>();
+        services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
+            sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
+            persistenceScope));
         services.AddSingleton(sp => new KernelRuns(tenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync));
         services.AddSingleton(sp =>
         {
@@ -60,7 +68,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             var basePath = HttpBasePath(http);
             var requestBasePath = string.IsNullOrEmpty(shellPath) ? basePath : "/" + shellPath + basePath;
             return new KernelHttpRequestHandler(sp.GetRequiredService<KernelServing>(), runtime.IngressAsync,
-                storage.ReadClockAsync, tenant, requestBasePath, http.SyncRequestTimeout, http.MaxRequestBodyBytes);
+                storage.ReadClockAsync, tenant, requestBasePath, http.SyncRequestTimeout, http.MaxRequestBodyBytes,
+                enforceRequestTimeout: true);
         });
         KernelToolbox.Register(services);
 
