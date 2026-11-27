@@ -134,7 +134,8 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
 
     bool IDueBacklogStore.MeasuresDueBacklog => inner is IDueBacklogStore { MeasuresDueBacklog: true };
-    int IDueBacklogStore.PublishedDueBacklog(int partition) => ((IDueBacklogStore)inner).PublishedDueBacklog(partition);
+    ValueTask<int> IDueBacklogStore.ReadPublishedDueBacklogAsync(int partition, CancellationToken cancellationToken) =>
+        watchdog.RunAsync("published backlog", cancellationToken, token => ((IDueBacklogStore)inner).ReadPublishedDueBacklogAsync(partition, token));
     ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken) =>
         watchdog.RunAsync("backlog", cancellationToken, token => ((IDueBacklogStore)inner).CountDueBacklogAsync(partition, cap, token));
 

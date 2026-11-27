@@ -32,6 +32,7 @@ public sealed partial class EfStore
         internal bool KeepsParkInputs { get; set; }
         internal bool KeepsParkArrivals { get; set; }
         internal bool RecoversPark { get; set; }
+        internal bool MeasuresDueBacklog { get; set; }
         internal bool RefusesParkedOperators { get; set; }
         internal bool SettlesEndedMailbox { get; init; }
         internal Func<Contract.ActorHeader, bool>? AuthoredWithholds { get; init; }
@@ -126,6 +127,7 @@ public sealed partial class EfStore
             scope.KeepsParkInputs = db.UsesRootParkOpening;
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
             scope.RecoversPark = db.UsesRootParkRecovery;
+            scope.MeasuresDueBacklog = db.UsesRootDueBacklog;
             scope.RefusesParkedOperators = db.UsesRootParkedOperators;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
@@ -329,7 +331,7 @@ public sealed partial class EfStore
         var fences = batch.Fenced;
         if (fences.Count == 0 || fences.Any(f => !roots.Includes(f.Partition)) ||
             fences[0] != new PartitionFence(batch.Partition, batch.Epoch, batch.Position) || batch.ClearJobTrials.Count != 0 ||
-            batch.Window is not null || batch.PublicationReservation is not null || batch.DueBacklog is not null ||
+            batch.Window is not null || batch.PublicationReservation is not null ||
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
         if (batch.Seen.Concat(batch.Trial).Any(key =>

@@ -5,13 +5,14 @@ internal sealed record BacklogOptions(int HighWater, int LowWater, TimeSpan Samp
 /// <summary>Each sampled estimate belongs to the epoch that read it.</summary>
 internal sealed class BacklogSampling(IDueBacklogStore store, BacklogOptions options)
 {
-    private sealed class Sample(long epoch, long now, int published)
+    private sealed class Sample(long epoch, long now)
     {
         public long Epoch { get; } = epoch;
         public long NextRead { get; set; } = now;
         public long LastWrite { get; set; } = now;
-        public int Estimate { get; set; } = published;
-        public int Published { get; set; } = published;
+        public int Estimate { get; set; }
+        public int Published { get; set; }
+        public bool HasPublished { get; set; }
     }
 
     private readonly Dictionary<int, Sample> _samples = [];
@@ -24,12 +25,17 @@ internal sealed class BacklogSampling(IDueBacklogStore store, BacklogOptions opt
         {
             if (cancellationToken.IsCancellationRequested) return;
             if (!_samples.TryGetValue(fence.Partition, out var sample) || sample.Epoch != fence.Epoch)
-                _samples[fence.Partition] = sample = new(fence.Epoch, now, store.PublishedDueBacklog(fence.Partition));
+                _samples[fence.Partition] = sample = new(fence.Epoch, now);
             if (now < sample.NextRead) continue;
 
             sample.NextRead = now + SampleMs;
             try
             {
+                if (!sample.HasPublished)
+                {
+                    sample.Estimate = sample.Published = await store.ReadPublishedDueBacklogAsync(fence.Partition, cancellationToken);
+                    sample.HasPublished = true;
+                }
                 sample.Estimate = await store.CountDueBacklogAsync(fence.Partition, options.HighWater + 1, cancellationToken);
             }
             catch (Exception)

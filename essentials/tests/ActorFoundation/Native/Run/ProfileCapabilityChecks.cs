@@ -169,6 +169,12 @@ internal static class ProfileCapabilityChecks
         Check(accessors.Count == profiles.Length, $"every profile has its expected accessors");
         Check(families.Count == profiles.Length, "every profile has its expected state family");
         var mapped = RootProfiles.Formats.Values.Aggregate(RootCapabilities.None, (all, next) => all | next);
+        using var backlog = KernelDb.ForRootDueBacklogQualification(options);
+        Check(backlog.RequiredFormat == StoreFormat.RootDueBacklogQualification && backlog.UsesRootDueBacklog &&
+            backlog.Capabilities == (RootProfiles.Shipped | RootCapabilities.DueBacklog) &&
+            !RootProfiles.Formats.ContainsKey(backlog.RequiredFormat) && !mapped.HasFlag(RootCapabilities.DueBacklog),
+            "due backlog is isolated to a private qualification format");
+        mapped |= backlog.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
