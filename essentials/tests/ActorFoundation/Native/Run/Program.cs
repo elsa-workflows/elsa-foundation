@@ -60,6 +60,8 @@ if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
 if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, .. var readsProfile] && readsProfile is ([] or ["timed"]))
     return await PostgresCorePreviewReadSeed.RunAsync(originalRoot, seedFile, timed: readsProfile.Length != 0);
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
+if (args is ["root-schedule-inventory", var scheduleProvider and ("postgres" or "sqlite")])
+    return await RootScheduleInventoryChecks.RunAsync(scheduleProvider == "postgres");
 if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
 if (args is ["kernel-http-waits", var httpWaitProvider and ("postgres" or "sqlite"), var httpWaitFence and ("checked" or "in-batch")])

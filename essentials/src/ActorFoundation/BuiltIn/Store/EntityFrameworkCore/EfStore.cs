@@ -175,6 +175,7 @@ public class KernelDb : DbContext
     internal bool UsesRootLiveEventWaits => Has(RootCapabilities.LiveEventWaits);
     internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
+    internal bool UsesRootScheduleInventory => Has(RootCapabilities.ScheduleInventory);
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
     internal bool UsesRootComposedParkRecovery =>
@@ -197,6 +198,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootPlaybackQualification, RootProfiles.PlaybackQualification);
     internal static KernelDb ForPostgresRootLiveEventQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootLiveEventQualification, RootProfiles.LiveEventQualification);
+    internal static KernelDb ForPostgresRootScheduleInventoryQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootScheduleInventoryQualification, RootProfiles.ScheduleInventoryQualification);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
     internal static KernelDb ForSqliteRootSelfTimedQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
@@ -229,6 +232,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootLiveEventQualification)
             return new(options, qualificationFormat.Value, RootProfiles.LiveEventQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootScheduleInventoryQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ScheduleInventoryQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         return qualificationFormat is { } format
             ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)

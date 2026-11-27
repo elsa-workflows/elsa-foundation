@@ -257,7 +257,18 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(playbackPostgres) is { StoreSchema: 1, MessageProtocol: 12, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(playbackSqlite) is { StoreSchema: 2, MessageProtocol: 15, JournalCodec: 0 },
             "private playback retains exactly protocol 31 plus indexed occurrences and its own provider definitions");
-        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities | playbackPostgres.Capabilities;
+        using var schedulePostgres = KernelDb.ForPostgresRootScheduleInventoryQualification(options);
+        using var scheduleSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootScheduleInventoryQualification);
+        Check(schedulePostgres.RequiredFormat == new StoreFormat(3, 119, 1) && scheduleSqlite.RequiredFormat == schedulePostgres.RequiredFormat &&
+            schedulePostgres.UsesRootScheduleInventory && scheduleSqlite.Capabilities == schedulePostgres.Capabilities &&
+            !sharedPostgres.UsesRootScheduleInventory && !sharedSqlite.UsesRootScheduleInventory &&
+            RootProfiles.MissingPrerequisites(schedulePostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(schedulePostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(schedulePostgres) is { StoreSchema: 1, MessageProtocol: 15, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(scheduleSqlite) is { StoreSchema: 2, MessageProtocol: 18, JournalCodec: 0 },
+            "the schedule inventory uses a private protocol with its own definitions on both providers");
+        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
+            playbackPostgres.Capabilities | schedulePostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -292,7 +303,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
             [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
-            [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection
+            [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
+            [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
             expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),

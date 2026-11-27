@@ -308,6 +308,11 @@ public sealed partial class EfStore
             "Fingerprint" TEXT NOT NULL,
             UNIQUE ("Actor", "Creation")
             """);
+        if (db.UsesRootScheduleInventory)
+        {
+            yield return Table(RootScheduleInventory.Table, RootScheduleInventory.Columns(sqlite: true));
+            yield return Index(RootScheduleInventory.DefinitionIndex, RootScheduleInventory.Table, RootScheduleInventory.IndexedColumns);
+        }
         yield return Table("FoundationRootReceipts", """
             "Tenant" TEXT NOT NULL,
             "Operation" TEXT NOT NULL,
