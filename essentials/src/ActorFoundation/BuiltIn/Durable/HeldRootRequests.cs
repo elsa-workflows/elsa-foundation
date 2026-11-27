@@ -16,6 +16,9 @@ internal interface IHeldRootAdmission
     ValueTask<long> ReadClockAsync(CancellationToken token);
     Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token);
     Task<HeldRootAdmission> SendAsync(HeldRootRequest request, string reference, string kind, string? payload, CancellationToken token);
+    bool SupportsKeys => false;
+    Task<Contract.Admission?> AdmitKeyAsync(HeldRootRequest request, Contract.Target.Key key, string kind, string? payload,
+        CancellationToken token) => throw new NotSupportedException("This held reply edge has no caller-key admission.");
     bool SupportsEvents => false;
     Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
         throw new NotSupportedException("This held reply edge has no event admission.");
@@ -117,6 +120,8 @@ internal sealed class HeldRootRequests : IReplyTransport
                 break;
             case Contract.Target.Event when admission.SupportsEvents:
                 break;
+            case Contract.Target.Key when admission.SupportsKeys:
+                break;
             case Contract.Target.Start start:
                 if (startType is null)
                     throw new NotSupportedException("This edge starts no roots: open it with the actor type it starts.");
@@ -133,7 +138,8 @@ internal sealed class HeldRootRequests : IReplyTransport
         Contract.ActorRef? actor = target is Contract.Target.Ref exact ? exact.Actor : null;
         var reply = await HoldAsync(scope, id, request, add?.KeepFor, IssueAsync, ReadStatusAsync, stop);
         // An early response can arrive before the actor has a readable checkpoint.
-        return spec is not null && !request.ReleaseBeforeCommit && reply.Error is null ? reply with { Actor = actor } : reply;
+        return (spec is not null || target is Contract.Target.Key { Spec: not null }) &&
+            !request.ReleaseBeforeCommit && reply.Error is null ? reply with { Actor = actor } : reply;
 
         async Task<Contract.Reply?> IssueAsync(HeldRootRequest caller, CancellationToken token)
         {
@@ -144,6 +150,21 @@ internal sealed class HeldRootRequests : IReplyTransport
                 catch (MetadataLimitExceeded) { return new(null, null, Error: "missing"); }
                 if (started is null) return new(null, null, Error: "timeout");
                 actor = new Contract.ActorRef(started);
+            }
+            else if (target is Contract.Target.Key key)
+            {
+                var result = await admission.AdmitKeyAsync(caller, key, kind, payload, token);
+                actor = result?.Actor;
+                if (result is null) return new(null, null, Error: "timeout");
+                if (result.Reason == Contract.RefusalReason.ObligationOutstanding)
+                    return new(null, null, Error: "in progress") { RefusalReason = result.Reason, RetryAfter = result.RetryAfter };
+                if (result.Outcome == Contract.AdmissionOutcome.Refused)
+                    return new(null, null, Error: result.Reason switch
+                    {
+                        Contract.RefusalReason.Conflict => "conflict",
+                        Contract.RefusalReason.Repeat => "repeat",
+                        _ => "missing"
+                    });
             }
             else
             {

@@ -47,13 +47,17 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal SqliteEmbeddedHosting.SqliteDirectRequests EventStarts =>
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
-        qualificationFormat == StoreFormat.RootEphemeralTestRunQualification ||
+        qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat == StoreFormat.RootEphemeralTestRunQualification ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
             throw new InvalidOperationException("The selected SQLite profile does not support Event starts.");
 
     internal static SqliteEmbeddedFoundation ForAuthoredEventsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootAuthoredEventsQualification);
+
+    internal static SqliteEmbeddedFoundation ForKeyedStartsQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync? protectRootStart = null) =>
+        new(databasePath, node, actorType, StoreFormat.RootKeyedStartsQualification, protectRootStart);
 
     /// <summary>Composes the dedicated preview format for qualifying indexed playback.</summary>
     public static SqliteEmbeddedFoundation ForPlaybackQualification(string databasePath, string node, string actorType) =>
@@ -125,6 +129,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootEphemeralTestRunQualification ||
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
+        qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>
