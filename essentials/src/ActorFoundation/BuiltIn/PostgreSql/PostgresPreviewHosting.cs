@@ -381,11 +381,12 @@ public static partial class PostgresPreviewHosting
             throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
         int partitions;
-        bool nativeJobs, selfSends, liveReplyRelay;
+        bool nativeJobs, selfSends, liveReplyRelay, publicEventMaintenance;
         int terminalOutputLimit;
         await using (var db = create())
         {
             nativeJobs = db.UsesRootJobProtocol;
+            publicEventMaintenance = db.UsesRootPublicEventStarts;
             liveReplyRelay = db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootPlaybackDescendants;
             selfSends = db.UsesRootSelfProtocol;
             if (auxiliaryActor is not null && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
@@ -422,6 +423,7 @@ public static partial class PostgresPreviewHosting
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;
+        var publicEvents = publicEventMaintenance ? new PostgresRootAdmission(create, TimeSpan.Zero) : null;
         var edge = liveReplyRelay ? replies as PostgresDirectRequests : null;
         var relay = edge is null ? null : await edge.OpenLiveRepliesAsync(create,
             error => Volatile.Read(ref reporter)?.RecordLoopError(error), cancellationToken);
@@ -461,7 +463,13 @@ public static partial class PostgresPreviewHosting
 
         async Task RunBesideAsync(CancellationToken stop)
         {
-            try { await watchdog.RunAsync(stop); }
+            try
+            {
+                var watching = watchdog.RunAsync(stop);
+                if (publicEvents is null) await watching;
+                else await Task.WhenAll(watching, RootPublicEventStarts.RunMaintenanceAsync(publicEvents.MaintainPublicEventsAsync,
+                    error => Volatile.Read(ref reporter)?.RecordLoopError(error), stop));
+            }
             finally { StopRelay(); }
         }
 

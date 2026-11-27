@@ -13,6 +13,37 @@ internal sealed partial class PostgresRootAdmission
         return db.UsesRootPublicEventStarts;
     }
 
+    internal async Task<bool> MaintainPublicEventsAsync(bool cleanup, CancellationToken token)
+    {
+        await using var db = create();
+        db.Database.SetCommandTimeout(TimeSpan.FromSeconds(2));
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
+        var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
+            throw new StoreFormatException("Public event maintenance requires the pinned PostgreSQL store.");
+        await LockPublicEventStartTablesAsync(db, token);
+        bool changed;
+        if (cleanup)
+        {
+            var sampled = await RootEventAdmission.ReadPostgresClockAsync(db, token);
+            var candidate = await RootPublicEventPublications.FindCleanupAsync(db, sampled, Bind, token);
+            if (candidate is null) return false;
+            await RootEventAdmission.LockPostgresKeysAsync(db, [candidate.Key!], token);
+            var now = await RootEventAdmission.ReadPostgresClockAsync(db, token);
+            changed = await RootPublicEventPublications.CleanupAsync(db, candidate, now, Bind, token);
+        }
+        else
+        {
+            var candidate = await RootPublicEventStarts.FindCatchUpAsync(db, Bind, token);
+            if (candidate is null) return false;
+            await RootEventAdmission.LockPostgresKeysAsync(db, [candidate.Key!], token);
+            changed = await RootPublicEventStarts.CatchUpAsync(db, candidate, Bind, token);
+        }
+        await transaction.CommitAsync(token);
+        return changed;
+
+        FormattableString Bind(FormattableString query) => BindPublicEventStarts(query, pin);
+    }
+
     internal async Task<Contract.Admission> PublishPublicEventAsync(string tenant, string key, string id, string? payload,
         Contract.AddOptions? options, CancellationToken token)
     {
@@ -63,20 +94,21 @@ internal sealed partial class PostgresRootAdmission
         await LockPublicEventStartTablesAsync(db, token);
         var qualified = tenant + "_" + key;
         await RootEventAdmission.LockPostgresKeysAsync(db, [qualified], token);
-        await RootPublicEventStarts.SetAsync(db, tenant, qualified, wait, spec, sql => BindPublicEventStarts(sql, pin), token);
+        var now = await RootEventAdmission.ReadPostgresClockAsync(db, token);
+        await RootPublicEventStarts.SetAsync(db, tenant, qualified, wait, spec, now, sql => BindPublicEventStarts(sql, pin), token);
         await transaction.CommitAsync(token);
     }
 
     private static Task LockPublicEventStartTablesAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""
             LOCK TABLE ONLY "FoundationPublicEventStarts", ONLY "FoundationPublicEventTargets", ONLY "FoundationPublicEventPublications",
-                ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Messages" IN ACCESS SHARE MODE
+                ONLY "FoundationPublicEventHorizons", ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Messages" IN ACCESS SHARE MODE
             """, token);
 
     private static FormattableString BindPublicEventStarts(FormattableString sql, PinnedRootSource pin) =>
-        WithAdmissionSource(sql, pin, RootPublicEventStarts.Source, 6,
+        WithAdmissionSource(sql, pin, RootPublicEventStarts.Source, 7,
             """
-            ('"FoundationPublicEventStarts"'), ('"FoundationPublicEventTargets"'), ('"FoundationPublicEventPublications"'),
+            ('"FoundationPublicEventStarts"'), ('"FoundationPublicEventTargets"'), ('"FoundationPublicEventPublications"'), ('"FoundationPublicEventHorizons"'),
             ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'), ('"Messages"')
             """, requirePermanentDirectRelations: true);
 }

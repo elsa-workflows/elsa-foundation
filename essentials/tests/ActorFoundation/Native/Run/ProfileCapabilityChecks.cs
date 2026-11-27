@@ -403,6 +403,19 @@ internal static class ProfileCapabilityChecks
             "the combined qualification profile retains its distinct store marker and exact DDL revisions");
         Check(EfStore.RenderPostgresFirstRootGuards(sharedPostgres) == EfStore.RenderPostgresFirstRootGuards(privateActivationPostgres),
             "the PostgreSQL shipped profile installs the same physical guards as the combined qualification");
+        using var publicEventsPostgres = KernelDb.ForPostgresRootPublicEventStartsQualification(options);
+        using var publicEventsSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
+            StoreFormat.RootPublicEventStartsQualification);
+        Check(publicEventsPostgres.RequiredFormat == StoreFormat.RootPublicEventStartsQualification &&
+            publicEventsSqlite.RequiredFormat == publicEventsPostgres.RequiredFormat &&
+            publicEventsPostgres.Capabilities == (RootProfiles.SharedActivationQualification | RootCapabilities.PublicEventStarts) &&
+            publicEventsSqlite.Capabilities == publicEventsPostgres.Capabilities &&
+            !sharedPostgres.UsesRootPublicEventStarts && !sharedSqlite.UsesRootPublicEventStarts &&
+            !publicEventsPostgres.UsesRootDirectTestRuns && !publicEventsSqlite.UsesRootDirectTestRuns &&
+            RootProfiles.MissingPrerequisites(publicEventsPostgres.Capabilities) == RootCapabilities.None &&
+            StoreDefinitionsRevision.Seed(publicEventsPostgres) is { StoreSchema: 1, MessageProtocol: 27, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(publicEventsSqlite) is { StoreSchema: 2, MessageProtocol: 30, JournalCodec: 0 },
+            "private outside Events carry their own marker and definitions while preserving shared activation");
         using var testPostgres = KernelDb.ForPostgresRootDirectTestRunQualification(options);
         using var testSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootDirectTestRunQualification);
         Check(testPostgres.RequiredFormat.MessageProtocol == 131 && testSqlite.RequiredFormat == testPostgres.RequiredFormat &&
@@ -424,7 +437,7 @@ internal static class ProfileCapabilityChecks
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
             playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
             inlinePostgres.Capabilities | authoredPostgres.Capabilities | startEventsPostgres.Capabilities |
-            receiptsPostgres.Capabilities | eventScanPostgres.Capabilities | testPostgres.Capabilities;
+            receiptsPostgres.Capabilities | eventScanPostgres.Capabilities | testPostgres.Capabilities | publicEventsPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped

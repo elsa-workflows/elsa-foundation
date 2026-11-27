@@ -49,7 +49,7 @@ internal static partial class KernelAuthoredEventChecks
         var directory = Directory.CreateTempSubdirectory("authored-events");
         try
         {
-            var (open, ingress, reads, owner, _) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"), inBatch, token);
+            var (open, ingress, reads, owner, _, _) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"), inBatch, token);
             await using var owned = owner;
             var native = await StartAsync(scope, "native-wait", "native");
             var flowchart = await StartAsync(scope, "chart-wait", "flowchart");
@@ -180,7 +180,7 @@ internal static partial class KernelAuthoredEventChecks
     private static Contract.StartSpec Spec(string workflow) => PublicWorkflow.Start(NativeExecutionModel.Start(workflow));
 
     private static async Task<(Func<KernelDb> Open, Contract.IIngress Ingress, Contract.IActorReads Reads,
-        IAsyncDisposable Owner, EventStartPort? Events)>
+        IAsyncDisposable Owner, EventStartPort? Events, Func<CancellationToken, Task<IAsyncDisposable>> Restart)>
         OpenAsync(Contract.IActorType model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
             bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false)
     {
@@ -206,14 +206,20 @@ internal static partial class KernelAuthoredEventChecks
                 publicStarts ? StoreFormat.RootPublicEventStartsQualification : orderedScan ? StoreFormat.RootEventStartScanQualification :
                 retainReceipts ? StoreFormat.RootEventStartReceiptsQualification :
                 eventStarts ? StoreFormat.RootEventStartsQualification : StoreFormat.RootAuthoredEventsQualification);
-            var owner = sqlite.CreateHostedService(model, EndProcess, loop, inBatch);
-            await owner.StartAsync(token);
+            var owner = await StartAsync(token);
             var ingress = eventStarts ? await sqlite.OpenIngressWithOperatorsAsync(Authorize, token) : await sqlite.OpenIngressAsync(token);
             var events = eventStarts ? new EventStartPort(sqlite.EventStarts.ApplyEventStartsAsync, sqlite.EventStarts.ListEventStartsAsync,
                 sqlite.EventStarts.AdmitEventStartAsync, sqlite.EventStarts.ConfirmEventStartRegistrationDrainedAsync,
                 sqlite.ConfirmPreparedStartAsync, sqlite.EventStarts.PruneSettledEventStartsAsync,
                 sqlite.EventStarts.ReadEventStartTailAsync, sqlite.EventStarts.ReadEventStartPageAsync) : null;
-            return (Open, ingress, sqlite.CreateReads(), owner, events);
+            return (Open, ingress, sqlite.CreateReads(), owner, events, StartAsync);
+
+            async Task<IAsyncDisposable> StartAsync(CancellationToken cancellationToken)
+            {
+                var host = sqlite.CreateHostedService(model, EndProcess, loop, inBatch);
+                await host.StartAsync(cancellationToken);
+                return host;
+            }
         }
 
         var pg = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
@@ -232,8 +238,7 @@ internal static partial class KernelAuthoredEventChecks
         var foundation = eventStarts
             ? await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenPostgres, model.Type, Authorize, requests, cancellationToken: token)
             : await PostgresPreviewHosting.OpenFoundationAsync(OpenPostgres, model.Type, requests, cancellationToken: token);
-        var hosted = await PostgresPreviewHosting.StartAsync(OpenPostgres, node, model, EndProcess, loop, token,
-            Console.Error.WriteLine, (IReplyTransport)requests, fenceInBatch: inBatch);
+        var hosted = await StartPostgresAsync(token);
         var admission = new PostgresRootAdmission(OpenPostgres, TimeSpan.FromHours(1));
         var port = eventStarts ? new EventStartPort(
             (scope, slot, revision, registrations, ct) => admission.ApplyEventStartsAsync(scope.Tenant, slot, revision, registrations, ct),
@@ -244,7 +249,11 @@ internal static partial class KernelAuthoredEventChecks
             (scope, ct) => admission.PruneSettledEventStartsAsync(scope.Tenant, ct),
             (scope, ct) => admission.ReadEventStartTailAsync(scope.Tenant, ct),
             (scope, after, through, limit, ct) => admission.ReadEventStartPageAsync(scope.Tenant, after, through, limit, ct)) : null;
-        return (OpenPostgres, foundation, foundation, hosted, port);
+        return (OpenPostgres, foundation, foundation, hosted, port, StartPostgresAsync);
+
+        async Task<IAsyncDisposable> StartPostgresAsync(CancellationToken cancellationToken) =>
+            await PostgresPreviewHosting.StartAsync(OpenPostgres, node, model, EndProcess, loop, cancellationToken,
+                Console.Error.WriteLine, (IReplyTransport)requests, fenceInBatch: inBatch);
 
         static bool Authorize(Contract.BoundScope scope, Contract.ActorRef _, string kind) =>
             scope.Tenant == "authored-events" && kind == Contract.Kinds.Delete;

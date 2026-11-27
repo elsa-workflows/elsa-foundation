@@ -124,11 +124,12 @@ public static partial class SqliteEmbeddedHosting
                 qualificationFormat: requests?.QualificationFormat) : new(file.Options);
 
             int partitions;
-            bool selfSends;
+            bool selfSends, publicEventMaintenance;
             int terminalOutputLimit;
             await using (var db = Open())
             {
                 selfSends = db.UsesRootSelfProtocol;
+                publicEventMaintenance = db.UsesRootPublicEventStarts;
                 if (auxiliaryActorType is not null && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
                     throw new NotSupportedException("This SQLite root profile does not host an auxiliary actor.");
                 terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
@@ -169,7 +170,8 @@ public static partial class SqliteEmbeddedHosting
             };
             var host = DurableHost.ForNode(node, watched, createActor(store, terminalOutputLimit), partitions, workers);
             await store.PrimeAdmissionPressureAsync(cancellationToken);
-            var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
+            var publicEvents = publicEventMaintenance ? new SqliteRootAdmission(OpenMaintenance, TimeSpan.Zero, file.AdmissionDefinitions) : null;
+            var runtime = new RuntimeNode(node, watched, partitions, options, beside: RunBesideAsync,
                 beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
             {
                 AfterCleanStop = file.Dispose
@@ -185,6 +187,22 @@ public static partial class SqliteEmbeddedHosting
             {
                 await runtime.KillAsync();
                 throw;
+            }
+
+            Task RunBesideAsync(CancellationToken stop)
+            {
+                var watching = watchdog.RunAsync(stop);
+                return publicEvents is null ? watching : Task.WhenAll(watching,
+                    RootPublicEventStarts.RunMaintenanceAsync(publicEvents.MaintainPublicEventsAsync,
+                        error => Volatile.Read(ref reporter)?.RecordLoopError(error), stop));
+            }
+
+            KernelDb OpenMaintenance()
+            {
+                var db = Open();
+                ((SqliteConnection)db.Database.GetDbConnection()).DefaultTimeout = 2;
+                db.Database.SetCommandTimeout(2);
+                return db;
             }
         }
         catch

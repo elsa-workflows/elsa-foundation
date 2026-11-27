@@ -4,6 +4,22 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class SqliteRootAdmission
 {
+    internal async Task<bool> MaintainPublicEventsAsync(bool cleanup, CancellationToken token)
+    {
+        // An empty maintenance pass takes a read snapshot. Only a candidate needs the SQLite writer.
+        if (cleanup)
+        {
+            var candidate = await InAdmissionTransactionAsync(async (db, ct) =>
+                await RootPublicEventPublications.FindCleanupAsync(db, await ReadClockAsync(db, ct), bind: null, ct), token, readOnly: true);
+            return candidate is not null &&
+                await WriteAsync((db, now, ct) => RootPublicEventPublications.CleanupAsync(db, candidate, now, bind: null, ct), token);
+        }
+
+        var pending = await InAdmissionTransactionAsync((db, ct) => RootPublicEventStarts.FindCatchUpAsync(db, bind: null, ct),
+            token, readOnly: true);
+        return pending is not null && await WriteAsync((db, ct) => RootPublicEventStarts.CatchUpAsync(db, pending, bind: null, ct), token);
+    }
+
     internal async Task<Contract.Admission> PublishPublicEventAsync(string tenant, string key, string id, string? payload,
         Contract.AddOptions? options, CancellationToken token)
     {
@@ -14,10 +30,10 @@ internal sealed partial class SqliteRootAdmission
     }
 
     internal Task SetPublicEventStartAsync(string tenant, string key, string wait, Contract.StartSpec? spec, CancellationToken token) =>
-        WriteAsync(async (db, ct) =>
+        WriteAsync(async (db, now, ct) =>
         {
             if (!db.UsesRootPublicEventStarts) throw new NotSupportedException("The public event start profile is unavailable.");
-            await RootPublicEventStarts.SetAsync(db, tenant, tenant + "_" + key, wait, spec, bind: null, ct);
+            await RootPublicEventStarts.SetAsync(db, tenant, tenant + "_" + key, wait, spec, now, bind: null, ct);
             return true;
         }, token);
 }

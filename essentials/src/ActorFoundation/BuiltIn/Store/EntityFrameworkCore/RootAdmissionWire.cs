@@ -91,6 +91,11 @@ internal static class RootAdmissionWire
         Encoding.UTF8.GetByteCount(header) + (payload is null ? 0L : Encoding.UTF8.GetByteCount(payload)) +
         (replyTo is null ? 0 : Encoding.UTF8.GetByteCount(replyTo)) <= EfStore.RootContentBytes;
 
+    internal static bool FitsRetainedEventPayload(string? payload) =>
+        FoundationMetadataLimits.FitsContent(payload, FoundationMetadataLimits.EventContentBytes) &&
+        (!RequiresEnvelope(payload) ||
+         FoundationMetadataLimits.FitsContent(DurableKeyJson.Write(payload!), FoundationMetadataLimits.EventContentBytes));
+
     private static bool RequiresEnvelope(string? value) =>
         value is not null && (value.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(value));
 }

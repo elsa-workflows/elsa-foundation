@@ -143,6 +143,8 @@ internal static partial class RootEventAdmission
             }
             if (db.UsesRootPublicEventStarts)
             {
+                if (until > now && !FitsRetainedEventPayload(publication.Payload))
+                    throw new RootPublicEventStarts.FanoutExceeded("The retained event exceeds the root delivery envelope limit.");
                 var occurrence = FoundationRootCreator.OperationDigest(DurableKeyJson.Write(new[] { "authored", publication.Key, publication.Id }));
                 var captured = await RootPublicEventStarts.CaptureAsync(db, publication.FoundationTenant!, publication.Key, publication.Id,
                     occurrence, publication.Payload, FoundationMetadataLimits.MaxTurnSends - count, FoundationMetadataLimits.MessageContentBytes - bytes,
@@ -151,6 +153,8 @@ internal static partial class RootEventAdmission
                 bytes += captured.Bytes;
                 if (captured.Count != 0)
                     await RootPublicEventStarts.DispatchAsync(db, publication.FoundationTenant!, occurrence, until, bindPostgresSource, token);
+                if (captured.Count != 0 || until > now)
+                    await RootPublicEventPublications.RememberAuthoredAsync(db, publication, occurrence, until, bindPostgresSource, token);
             }
             var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
                 WITH source AS MATERIALIZED (/*event-source*/)

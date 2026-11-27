@@ -49,7 +49,7 @@ internal static partial class RootEventAdmission
         if (waits.Count != 0 || starts.Length != 0)
             attempt?.Require(waits.Select(wait => wait.Partition!.Value).Concat(starts).Distinct().ToArray());
         if (messages.Count != 0) await EnqueueAsync(db, messages, null, keepThrough, BindLive, bind is not null, token);
-        await RootPublicEventPublications.InsertAsync(db, tenant, qualified, id, operation, incarnation, payload, receiptThrough,
+        await RootPublicEventPublications.InsertAsync(db, tenant, qualified, id, operation, incarnation, occurrence, payload, receiptThrough,
             keepThrough, BindPublic, token);
         return new(Contract.AdmissionOutcome.Accepted) { Publication = new(key, id, incarnation, Contract.PublicationStatus.Matched) };
 

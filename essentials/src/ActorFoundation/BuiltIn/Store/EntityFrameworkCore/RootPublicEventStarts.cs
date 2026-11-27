@@ -7,18 +7,23 @@ using static Kernel.EntityFramework.RootAdmissionWire;
 namespace Kernel.EntityFramework;
 
 /// <summary>Public start subscriptions and the immutable creator intents selected by a committed publication.</summary>
-internal static class RootPublicEventStarts
+internal static partial class RootPublicEventStarts
 {
     internal const string Registrations = "FoundationPublicEventStarts";
     internal const string Targets = "FoundationPublicEventTargets";
     internal const string Source = "/*public-event-start-source*/";
+    internal const string CatchUpIndex = "IX_FoundationPublicEventStarts_CatchUp";
+    internal const string CatchUpColumns = """("Tenant","Key","Wait") WHERE "CatchAfter" < "CatchThrough" """;
 
     internal static string RegistrationColumns(bool sqlite)
     {
         var text = TextType(sqlite);
+        var number = sqlite ? "INTEGER" : "bigint";
         return $"""
             "Tenant" {text} NOT NULL, "Key" {text} NOT NULL, "Wait" {text} NOT NULL,
             "Incarnation" {text} NOT NULL, "Start" {text} NOT NULL,
+            "RetainAfter" {number} NOT NULL, "CatchAfter" {number} NOT NULL,
+            "CatchThrough" {number} NOT NULL CHECK ("CatchAfter" <= "CatchThrough"),
             PRIMARY KEY ("Tenant", "Key", "Wait")
             """;
     }
@@ -59,10 +64,11 @@ internal static class RootPublicEventStarts
         FoundationMetadataLimits.RequireContent(spec.Input, nameof(spec), FoundationMetadataLimits.EventStartInputBytes);
     }
 
-    internal static async Task SetAsync(KernelDb db, string tenant, string key, string wait, Contract.StartSpec? spec,
+    internal static async Task SetAsync(KernelDb db, string tenant, string key, string wait, Contract.StartSpec? spec, long now,
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         RequireTransaction(db, bind);
+        var retainedAfter = spec is null ? now : await RootPublicEventPublications.RetentionThresholdAsync(db, tenant, now, bind, token);
         var command = spec is null
             ? (FormattableString)$"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/)
@@ -70,11 +76,18 @@ internal static class RootPublicEventStarts
                     AND (SELECT "SourceReady" FROM source)
                 """
             : $"""
-                WITH source AS MATERIALIZED (/*public-event-start-source*/)
-                INSERT INTO "FoundationPublicEventStarts" ("Tenant", "Key", "Wait", "Incarnation", "Start")
-                SELECT {tenant}, {key}, {wait}, {Guid.NewGuid().ToString("N")}, {DurableKeyJson.Write(spec)} FROM source WHERE "SourceReady"
+                WITH source AS MATERIALIZED (/*public-event-start-source*/), coverage AS (
+                    SELECT coalesce(max("Ordinal"), 0) AS "Through" FROM "FoundationPublicEventPublications"
+                    WHERE "Tenant" = {tenant} AND "Key" = {key} AND "KeepUntil" > {retainedAfter} AND "CleanupAt" = "KeepUntil"
+                        AND (SELECT "SourceReady" FROM source)
+                )
+                INSERT INTO "FoundationPublicEventStarts"
+                    ("Tenant", "Key", "Wait", "Incarnation", "Start", "RetainAfter", "CatchAfter", "CatchThrough")
+                SELECT {tenant}, {key}, {wait}, {Guid.NewGuid().ToString("N")}, {DurableKeyJson.Write(spec)}, {retainedAfter}, 0, coverage."Through"
+                FROM coverage, source WHERE "SourceReady"
                 ON CONFLICT ("Tenant", "Key", "Wait") DO UPDATE
-                    SET "Incarnation" = excluded."Incarnation", "Start" = excluded."Start"
+                    SET "Incarnation" = excluded."Incarnation", "Start" = excluded."Start", "RetainAfter" = excluded."RetainAfter",
+                        "CatchAfter" = excluded."CatchAfter", "CatchThrough" = excluded."CatchThrough"
                     WHERE "FoundationPublicEventStarts"."Start" <> excluded."Start"
                 """;
         if (await db.Database.ExecuteSqlInterpolatedAsync(Bind(command, bind), token) == 0 && bind is not null)
