@@ -2,6 +2,7 @@ using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
+using Kernel.Foundation.Sqlite;
 using Kernel.Runtime;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,12 @@ internal static class SqliteShippedInstallChecks
 
         try
         {
+            await RefusedAsync<ArgumentException>(() => SqliteEmbeddedHosting.InstallShippedAsync(path, "", false, token),
+                "the public SQLite install refuses an empty root actor type");
+            await RefusedAsync<ArgumentException>(() => SqliteEmbeddedHosting.InstallShippedAsync(path, "actor\0type", false, token),
+                "the public SQLite install refuses a malformed root actor type");
+            Require(!File.Exists(path), "invalid root actor types leave the SQLite path untouched");
+
             await using var db = New();
             await EfStore.InstallSqliteShippedAsync(db, 2, token);
             var initialKey = await IssuerKeyAsync();
