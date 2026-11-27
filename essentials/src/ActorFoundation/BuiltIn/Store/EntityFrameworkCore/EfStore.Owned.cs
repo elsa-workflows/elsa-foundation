@@ -54,6 +54,13 @@ public sealed partial class EfStore
         if (formatFunction is null) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
             await PinRootNamespaceForCommitAsync(db, cancellationToken);
+        if (root is PostgresMarkPreparation marks)
+        {
+            // Discover the exact binding while the same transaction already holds the format and source pins.
+            // Only the existing fenced checkpoint binder writes the marks.
+            try { root = await marks.PrepareAsync(db, cancellationToken); }
+            catch (Exception error) { throw new RootMarkPreparationFailure(error); }
+        }
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = true };
         if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);
