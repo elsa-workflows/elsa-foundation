@@ -7,8 +7,9 @@ public sealed partial class EfStore
 {
     private sealed record SqliteWorkflowHistoryRow(string Reference, InstanceStatus Status, string Header, long UpdatedAt);
 
-    private static IEnumerable<SqliteDefinition> SqliteRootWorkflowHistoryDefinitions()
+    private static IEnumerable<SqliteDefinition> SqliteRootWorkflowHistoryDefinitions(KernelDb db)
     {
+        var firstRevision = db.UsesRootInlinePromotion ? """b."FirstRevision" """ : "1 ";
         yield return Table("FoundationWorkflowHistory", """
             "Tenant" TEXT NOT NULL,
             "Reference" TEXT NOT NULL,
@@ -29,7 +30,7 @@ public sealed partial class EfStore
                 FROM "FoundationRootBirths" b
                 WHERE b."Tenant" = NEW."FoundationTenant" AND b."Reference" = NEW."FoundationReference"
                     AND b."Actor" = NEW."Id" AND b."Partition" = NEW."Partition" AND b."Creation" = 1
-                    AND (OLD."FoundationReference" IS NULL AND NEW."Revision" = 1 OR
+                    AND (OLD."FoundationReference" IS NULL AND NEW."Revision" = {firstRevision}OR
                         OLD."FoundationReference" = NEW."FoundationReference" AND NEW."Revision" = OLD."Revision" + 1
                         AND NEW."FoundationWriteRevision" = NEW."Revision")
                 ON CONFLICT ("Tenant", "Reference") DO UPDATE SET "Revision" = excluded."Revision", "UpdatedAt" = excluded."UpdatedAt"

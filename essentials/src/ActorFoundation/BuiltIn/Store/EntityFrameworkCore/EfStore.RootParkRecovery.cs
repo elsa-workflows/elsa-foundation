@@ -315,6 +315,20 @@ public sealed partial class EfStore
         return Convert.ToHexString(hash.GetHashAndReset());
     }
 
+    private static async Task<Message?> ReadInlineRetryAsync(KernelDb db, string actor, int partition, IReadOnlyList<KeptRow> kept,
+        FoundationSelfIssuer? issuer, CancellationToken token)
+    {
+        if (!db.UsesRootInlinePromotion || issuer is null) return null;
+        var key = FoundationInlineRetry.Key(issuer, actor);
+        if (!kept.Any(row => row.Id == key.Id && row.Scope == RootSelfScope && row.KeptBy == (short)ParkKeepReason.Arrived)) return null;
+        var relation = db.UsesSqliteRootRuntime ? "\"Messages\"" : PostgresPrivateInboxView;
+        var row = await db.Messages.FromSqlRaw($$"""
+            SELECT * FROM {{relation}} WHERE "Target" = {0} AND "Partition" = {1} AND "Id" = {2}
+                AND "InboxScope" = {3} AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" = {4}
+            """, actor, partition, key.Id, RootSelfScope, (short)ParkKeepReason.Arrived).AsNoTracking().SingleOrDefaultAsync(token);
+        return row is null ? null : DecodeRootSelf(row, issuer);
+    }
+
     // A recover is decided on the Park facts read with it, and the bind refuses the commit when the kept set has changed since.
     private async Task<Polled> WithRootParkFactsAsync(KernelDb db, Polled polled, CancellationToken token)
     {
@@ -401,7 +415,8 @@ public sealed partial class EfStore
                 fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Residue = park?.Residue ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
                     ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db), ProtectionRefusals = refusals,
                     RecoverableJobRegistry = job is null ? null : park?.Jobs, KeepsRegisteredJob = job?.KeepsRegistration == true,
-                    RestorableTimers = timers };
+                    RestorableTimers = timers, InlineRetry = recover && fits ?
+                        await ReadInlineRetryAsync(db, message.Target.Id, message.Target.Partition, kept, RootSelfIssuer, token) : null };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };
@@ -487,6 +502,7 @@ public sealed partial class EfStore
                 kept = read.Kept;
                 if (!read.Fits || facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) ||
                     KeptSetDigest(kept) != facts.KeptDigest) return false;
+                if (facts.InlineRetry != await ReadInlineRetryAsync(db, Root.Actor, Root.Partition, kept, SelfIssuer, token)) return false;
                 if (await ReadRootParkTimersAsync(db, Root.Actor, Root.Partition, SelfIssuer, lockRows: true, token) != facts.RestorableTimers)
                     return false;
             }

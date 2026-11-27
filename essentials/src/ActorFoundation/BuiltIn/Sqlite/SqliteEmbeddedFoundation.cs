@@ -81,6 +81,14 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootPreparedStartsQualification, protectRootStart);
     }
 
+    /// <summary>Binds the private SQLite inline start qualification profile with its executable protection.</summary>
+    public static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootInlinePromotionQualification, protectRootStart);
+    }
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat,
         ProtectRootStartAsync? protectRootStart = null)
     {
@@ -95,6 +103,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     /// <summary>Whether this profile supports managed schedule delivery and irreversible cohort retirement.</summary>
     public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
         qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
+        qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>
@@ -143,14 +152,26 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return CreateHostedServiceCore(actor, endProcess, retentionWindow, options, fenceInBatch, logger, auxiliaryActor, protectChildBirths);
     }
 
+    /// <summary>Creates the SQLite owner for the private inline start qualification profile.</summary>
+    public SqliteEmbeddedHostedService CreateInlineQualification(Contract.IActorType actor, Contract.IActorType? auxiliaryActor,
+        ProtectChildBirthsAsync protectChildren, InlineRootRequests inlineStarts, Action<string> endProcess,
+        Func<Contract.ActorHeader, TimeSpan?> retentionWindow, ILogger<SqliteEmbeddedHostedService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(protectChildren);
+        ArgumentNullException.ThrowIfNull(inlineStarts);
+        if (auxiliaryActor is not null) Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return CreateHostedServiceCore(actor, endProcess, retentionWindow, null, true, logger, auxiliaryActor, protectChildren, inlineStarts);
+    }
+
     private SqliteEmbeddedHostedService CreateHostedServiceCore(Contract.IActorType actor, Action<string> endProcess,
         Func<Contract.ActorHeader, TimeSpan?>? retentionWindow, LoopOptions? options, bool fenceInBatch,
-        ILogger<SqliteEmbeddedHostedService>? logger, Contract.IActorType? auxiliaryActor, ProtectChildBirthsAsync? protectChildBirths = null)
+        ILogger<SqliteEmbeddedHostedService>? logger, Contract.IActorType? auxiliaryActor, ProtectChildBirthsAsync? protectChildBirths = null,
+        InlineRootRequests? inlineStarts = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (actor.Type != actorType) throw new ArgumentException("The actor type must match the Embedded foundation.", nameof(actor));
         return SqliteEmbeddedHostedService.ForShipped(node, actor, endProcess, options, fenceInBatch, logger,
-            () => (InstalledPath, requests.Value), retentionWindow, auxiliaryActor, protectChildBirths);
+            () => (InstalledPath, requests.Value), retentionWindow, auxiliaryActor, protectChildBirths, inlineStarts);
     }
 
     /// <summary>Confirms an exact protected child in this foundation's installed file.</summary>

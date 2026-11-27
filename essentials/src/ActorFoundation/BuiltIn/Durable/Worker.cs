@@ -6,6 +6,10 @@ namespace Kernel.Durable;
 /// <summary>Where the worker released an emitted item relative to its own store operation. For test observation.</summary>
 public enum ReplyRelease { BeforeCommit, AfterCommit, WriteFree, EphemeralWriteFree }
 
+internal enum InlineRootDisposition { WriteFree, Committed, Refused, OwnershipLost }
+internal readonly record struct InlineRootResult(InlineRootDisposition Disposition, InstanceStatus? Status = null,
+    Kernel.Foundation.Contracts.RefusalReason? RefusalReason = null);
+
 public sealed record WorkerOptions
 {
     /// <summary>The owner's default of 12 November: 10 s. A takeover waits for it to run out, so failover takes about one lease.</summary>
@@ -124,7 +128,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private long _jobEntryEpoch; // A scheduler callback submitted before shutdown cannot enter after a host restart.
     private TaskCompletionSource? _drainBeat; // set while the node's job drain keeps ownership: a heartbeat answer wakes it
     private readonly HashSet<Delivery> _schedulerRetries = [];
+    private sealed record QueuedInlineRoot(long Generation, Message Creator, int Partition, long Epoch, object Material,
+        TaskCompletionSource<InlineRootResult> Receipt);
+    private sealed record PendingInlineRoot(int Partition, TaskCompletionSource<InlineRootResult> Receipt,
+        InlineRootCreatorWitness? Witness, long Bytes);
+    private const long MaxPendingInlineRootBytes = 64 * 1024 * 1024;
+    private const int InlineRootCaptureOverheadBytes = 8 * 1024;
     private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
+    private readonly Queue<QueuedInlineRoot> _queuedInlineRoots = new(); // protected by _turnSync with their pending receipts
+    private readonly Dictionary<string, PendingInlineRoot> _pendingInlineRoots = new(StringComparer.Ordinal);
+    private long _pendingInlineRootBytes;
     private int _jobsDeferredByCancellation;
     private long _lastReceivedJob; // owner-side observation order of the latest result moved into an inbox
 
@@ -539,6 +552,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (inline.Generation != _generation || !Post(inline.Creator, fresh: true))
                 LoseInlineStart(inline.Creator);
         }
+        lock (_turnSync)
+            while (_queuedInlineRoots.TryDequeue(out var inline))
+                if (inline.Generation != _generation || EpochOf(inline.Partition) != inline.Epoch ||
+                    !Post(inline.Creator, fresh: true, ambient: inline.Material))
+                    CompleteInlineRoot(inline.Creator.Target.Id, new(InlineRootDisposition.OwnershipLost), inline.Receipt);
         // Retry once per pass. A scheduler that keeps refusing cannot make the publication drain spin.
         if (_schedulerRetries.Count > 0)
             foreach (var ticket in _schedulerRetries.ToArray())
@@ -1164,7 +1182,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal long Monotonic => _options.Monotonic();
 
     /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
-    internal bool PassWanted => _woken || AnswerWaiting || !_inlineStarts.IsEmpty || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
+    internal bool PassWanted => _woken || AnswerWaiting || !_inlineStarts.IsEmpty || QueuedInlineRootCount != 0 ||
+        !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
+
+    internal int QueuedInlineRootCount { get { lock (_turnSync) return _queuedInlineRoots.Count; } }
 
     internal async Task<bool> GainAsync(int partition, CancellationToken cancellationToken = default)
     {
@@ -1393,6 +1414,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // Rows sent to these partitions that the poll would have read back: it no longer reads them, so they must not
         // keep the worker from catching up (F1).
         var gone = leaving.Select(f => f.Partition).ToHashSet();
+        for (var remaining = _queuedInlineRoots.Count; remaining > 0; remaining--)
+        {
+            var inline = _queuedInlineRoots.Dequeue();
+            if (!gone.Contains(inline.Partition)) _queuedInlineRoots.Enqueue(inline);
+        }
+        foreach (var pending in _pendingInlineRoots.Where(entry => gone.Contains(entry.Value.Partition)).ToArray())
+            CompleteInlineRoot(pending.Key, new(InlineRootDisposition.OwnershipLost));
         foreach (var key in _behind.Where(b => gone.Contains(b.Value)).Select(b => b.Key).ToList()) _behind.Remove(key);
         foreach (var (id, slot) in slots)
         {
@@ -1427,6 +1455,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _jobPublications = new();
             _schedulerRetries.Clear();
             while (_inlineStarts.TryDequeue(out var inline)) LoseInlineStart(inline.Creator);
+            _queuedInlineRoots.Clear();
+            foreach (var pending in _pendingInlineRoots.Values)
+                pending.Receipt.TrySetResult(new(InlineRootDisposition.OwnershipLost));
+            _pendingInlineRoots.Clear();
+            _pendingInlineRootBytes = 0;
             Volatile.Write(ref _jobsDeferredByCancellation, 0);
             _held.Clear();
             _polling = _loading = _flushing = _meeting = _releasing = _aliasesChangedDuringLoad = _retryAliases = false;
@@ -1569,9 +1602,88 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return true;
     }
 
+    internal (Message Creator, Task<InlineRootResult> Receipt)? TryPlaceQualifiedInlineStart(string name, StartSpec start,
+        object material, object? issuer, RootAdmissionPressure? pressure, Func<InstanceRef, Message> bind)
+    {
+        ArgumentNullException.ThrowIfNull(material);
+        if (!_type.AcceptsQualifiedInlineStart(start, material, issuer)) return null;
+        lock (_turnSync)
+        {
+            var eligible = _held.Keys.Where(partition => !_handingOver.Contains(partition)).ToArray();
+            if (RootAdmissionPressure.PlaceInlineStart(name, eligible, pressure) is not { } partition) return null;
+            var target = InstanceRef.In(partition, name);
+            var creator = bind(target);
+            // Binding adds the creation proof. It cannot substitute the prevalidated spec or its input.
+            if (creator.Target != target || creator.Start is not { } bound || !ReferenceEquals(bound.Input, start.Input) ||
+                (bound with { Creation = null }) != start)
+                return null;
+            return QueueQualifiedInlineStart(creator, material, issuer) is { } receipt ? (creator, receipt) : null;
+        }
+    }
+
+    internal Task<InlineRootResult>? TryQueueQualifiedInlineStart(Message creator, object material, object? issuer = null)
+    {
+        ArgumentNullException.ThrowIfNull(material);
+        if (creator.Start is not { } start || !_type.AcceptsQualifiedInlineStart(start, material, issuer)) return null;
+        lock (_turnSync) return QueueQualifiedInlineStart(creator, material, issuer);
+    }
+
+    // Only an owner that can commit the first promotion may register a creator. Under _turnSync, keep its receipt
+    // and its memory reservation until the disposition, including while the actor waits in memory.
+    private Task<InlineRootResult>? QueueQualifiedInlineStart(Message creator, object material, object? issuer)
+    {
+        if (creator.Start is not { Ephemeral: true, Parent: null, Creation: { Generation: 1, Previous: 0 } creation } start ||
+            creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id ||
+            !FoundationRootCreator.IsGeneratedReference(binding.Reference) ||
+            creator.Target.GeneratedAddress || StoreBatchRules.AddressPartition(creator.Target.Id) is not { } partition || partition < 0 ||
+            creator.InboxKey != new InboxKey("root:" + binding.Actor) ||
+            creator.Payload != start.Input || creation.Intent != FoundationRootCreator.OperationDigest(creator.Id) ||
+            creator is not { Kind: Kinds.Start, TargetCreation: 1, Sender: null, ReplyTo: null, Due: null, KeepUntil: null,
+                Operator: null, ActorAuthored: false, BindFoundationChild: false })
+            return null;
+        var generation = _generation;
+        if (_releasing || _handingOver.Contains(partition) || !CanStartGeneration(generation) ||
+            !_held.TryGetValue(partition, out var fence) || _pendingInlineRoots.Count >= _options.MaxBatch)
+            return null;
+
+        // Charge the retained UTF-16 creator text once plus the bounded envelope, capture and receipt.
+        // The native capture references an immutable mapped workflow shared with the registry.
+        var bytes = InlineRootCaptureOverheadBytes + 2L * (start.Input?.Length ?? 0) + 2L * start.Definition.Length;
+        if (!ReferenceEquals(creator.Payload, start.Input)) bytes += 2L * (creator.Payload?.Length ?? 0);
+        if (bytes > MaxPendingInlineRootBytes - _pendingInlineRootBytes) return null;
+        var receipt = new TaskCompletionSource<InlineRootResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var local = creator with { Start = start with { FoundationInlineTenant = binding.Tenant } };
+        var witness = issuer is null ? null : new InlineRootCreatorWitness(issuer, local, Remaining);
+        if (!_pendingInlineRoots.TryAdd(binding.Actor, new(partition, receipt, witness, bytes))) return null;
+        _pendingInlineRootBytes += bytes;
+        _queuedInlineRoots.Enqueue(new(generation, local, partition, fence.Epoch, material, receipt));
+        return receipt.Task;
+
+        TimeSpan Remaining()
+        {
+            lock (_turnSync)
+                return _held.TryGetValue(partition, out var current) && current.Epoch == fence.Epoch && CanStartGeneration(generation)
+                    ? TimeSpan.FromMilliseconds(Math.Max(0, Volatile.Read(ref _safeUntil) - _options.Monotonic()))
+                    : TimeSpan.Zero;
+        }
+    }
+
     private void LoseInlineStart(Message creator)
     {
         if (creator.ReplyTo is { } route) Send(new(route, creator.Start?.FoundationInlineTenant), "lost", null, null, error: "lost");
+    }
+
+    private void CompleteInlineRoot(string actor, InlineRootResult result, TaskCompletionSource<InlineRootResult>? exactReceipt = null,
+        Slot? appliedSlot = null)
+    {
+        lock (_turnSync)
+        {
+            if (!_pendingInlineRoots.TryGetValue(actor, out var pending) || exactReceipt is not null && pending.Receipt != exactReceipt) return;
+            _pendingInlineRoots.Remove(actor);
+            _pendingInlineRootBytes -= pending.Bytes;
+            if (appliedSlot is not null) (appliedSlot.Ambient, appliedSlot.Starting) = (null, null);
+            pending.Receipt.TrySetResult(result);
+        }
     }
 
     /// <summary>
@@ -3374,7 +3486,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 await FailAsync(units, generation, cancellationToken);      // the fence matched nothing
                 return Outcome.Lost;
             }
-            batch = batch.WithoutRetentionJournals(result.RetentionRefusals);
+            batch = batch.WithoutActorJournals(result.RetentionRefusals);
+            batch = batch.WithoutActorJournals(result.InlineRefusals?.Keys.ToHashSet(StringComparer.Ordinal));
             lock (_turnSync)
             {
                 // A stand-down on another thread may have reset since the check above: the landed result is then nobody's.
@@ -3414,6 +3527,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var fenced = batch.Fenced.Select(f => f.Partition).ToHashSet();
             foreach (var unit in units)
             {
+                if (result.InlineRefusals?.TryGetValue(unit.Instance, out var inlineRefusal) == true)
+                {
+                    lock (_turnSync)
+                    {
+                        ForgetInMemory(unit.Instance);
+                        ReleaseJobRestriction(unit);
+                        RemoveSlot(unit.Instance);
+                        CompleteInlineRoot(unit.Instance, inlineRefusal);
+                    }
+                    continue;
+                }
                 if (result.RetentionRefusals?.Contains(unit.Instance) == true)
                 {
                     // The durable decision consumed this command without changing the terminal checkpoint.
@@ -3464,6 +3588,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private static bool HasUnissuedPrivateKind(TurnOutcome unit) =>
         unit.Sent.Exists(Kinds.IsUnissuedPrivate);
 
+    private RootCreatorWitness? PendingPromotion(TurnOutcome unit)
+    {
+        if (unit.Expected is not null || unit.Row?.FoundationInlineBirth is null) return null;
+        lock (_turnSync) return _pendingInlineRoots.GetValueOrDefault(unit.Instance)?.Witness;
+    }
+
     private TurnCommit PrepareCommit(TurnOutcome unit)
     {
         var conversions = unit.HeldJobResults;
@@ -3486,22 +3616,27 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _type.RevisitsHeld(row.Model, row, stimulus)
             ? unit.Slot!.Inbox.Where(i => i.Held && i.Durable && !i.Taken && i.InboxOrder < stimulus.InboxOrder).Select(i => i.Message.InboxKey).ToArray()
             : null;
+        var promotion = PendingPromotion(unit);
+        var inlinePark = PrepareInlinePark(unit, promotion);
         return new TurnCommit(unit.Instance, unit.Row, unit.Expected,
             Has(Flaw.KeepConsumedMessages) ? [] : [.. consumed, .. settled, .. cancelled],
             Has(Flaw.KeepConsumedMessages) ? [] : done.ToList(),
-            unit.Sent.Where(m => !unit.Volatile.Contains(m.InboxKey)).ToList(), unit.Subscribed, unit.Unsubscribed, unit.Journal, unit.Unsubscribe,
+            inlinePark is null ? unit.Sent.Where(m => !unit.Volatile.Contains(m.InboxKey)).ToList() : [],
+            unit.Subscribed, unit.Unsubscribed, unit.Journal, unit.Unsubscribe,
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
-            RootCreator = unit is { Expected: null, OpensPark: false } &&
+            RootCreator = promotion ?? (unit is { Expected: null, OpensPark: false } &&
                 unit.Consumed is [{ Durable: true, RootCreator: { } witness } source] && ReferenceEquals(source.Message, witness.Envelope)
-                ? witness : null,
+                ? witness : null),
+            FoundationInlinePark = inlinePark,
+            FoundationInlineJob = unit.FoundationInlineJob,
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
                     unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })
                     ? qualified.Message : null,
             FoundationRootRefusedInput = unit.FoundationRootRefusedInput,
-            FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
+            FoundationRootJobCompletion = unit.FoundationInlineJob is null && unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
                 (completed.JobDeadline is null || _type.RootTimedJobPublicationClock is not null)
                     ? new((original with { }).AsKernelTicket(), (completed.Message with { }).AsKernelTicket(),
@@ -3532,6 +3667,25 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationPublicationSequence = unit.FoundationPublicationSequence,
             FoundationCascade = unit.FoundationCascade
         };
+    }
+
+    private InlineParkWitness? PrepareInlinePark(TurnOutcome unit, RootCreatorWitness? promotion)
+    {
+        if (promotion is not InlineRootCreatorWitness creator || !unit.OpensPark || unit.Slot is not { } parked ||
+            unit.Consumed.Count == 0 || unit.Consumed.Exists(delivery => delivery.Durable || delivery.Original is not null)) return null;
+        if (parked.Row is null && unit.Consumed is [var initial] && unit.Sent.Count == 0 && ReferenceEquals(initial.Message, creator.Creator))
+            return new(null, [new(initial.Message, Failed: true)]);
+        if (!parked.Unwritten || parked.Row is null) return null;
+
+        var inputs = new List<(long Order, InlineParkInput Input)>();
+        inputs.AddRange(unit.Consumed.Select(delivery => (delivery.InboxOrder, new InlineParkInput(delivery.Message, Failed: true))));
+        foreach (var message in unit.Sent)
+        {
+            if (_items.GetValueOrDefault(message.InboxKey) is not { Durable: false, Original: null } delivery ||
+                !ReferenceEquals(delivery.Message, message)) return null;
+            inputs.Add((delivery.InboxOrder, new(message, Failed: false)));
+        }
+        return new(parked.Row, inputs.OrderBy(input => input.Order).Select(input => input.Input).ToArray());
     }
 
     private Dictionary<InboxKey, ParkKeepReason>? PrepareKeptInputs(TurnOutcome unit)
@@ -3633,6 +3787,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // inserted, not updated at its revision.
         if (unit.Row is not null) unit.Expected = null;
         if (Has(Flaw.ForgetShortWaits)) return;
+        CaptureInlineJobWinner(unit);
         // Public results held by the turn already have their settled row staged above. Legacy jobs retain their F7 ticket.
         var prior = _items.Values.Where(i => !i.Durable && Canonical(i.Message.Target.Id) == unit.Instance && !unit.Consumed.Contains(i)
                      && !unit.Cancelled.Contains(i.Message.InboxKey) && unit.HeldJobResults?.ContainsKey(i) != true)
@@ -3642,6 +3797,37 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Promoted.Add(item.Message.InboxKey);
         }
         unit.Sent.InsertRange(0, prior.Select(item => item.Original ?? item.Message));
+    }
+
+    private void CaptureInlineJobWinner(TurnOutcome unit)
+    {
+        if (_type.RootTimedJobPublicationClock is null || unit.OpensPark || unit.FoundationInlineJob is not null ||
+            unit.Row is not { Status: InstanceStatus.Running, Jobs: not null } row ||
+            unit.Slot?.Row is not { FoundationInlineBirth: not null, Jobs: not null } checkpoint || row.Jobs != checkpoint.Jobs ||
+            PendingPromotion(unit) is not InlineRootCreatorWitness || JobRegistry.Read(row.Jobs) is not [var registered]) return;
+        var key = InboxKey.Ticket(row.Id, registered.Key, row.Creation, registered.Generation);
+        if (_items.GetValueOrDefault(key) is not { Durable: false } item || unit.Cancelled.Contains(key)) return;
+        var original = item.Original ?? item.Message;
+        if (!original.HasIssuedTicket || RootJobTicket.Read(original, row.Id, row.Model, timed: true) is not { } ticket) return;
+        var deadline = RootJobTicket.Deadline(row.Id, ticket);
+        if (_items.GetValueOrDefault(deadline.InboxKey) is not { Durable: false, Message: { } timer } ||
+            !timer.HasIssuedTicket || timer.WithoutTicketAuthority() != deadline) return;
+
+        RootJobCompletion? callback = null;
+        string payload;
+        if (item.IsWorkerJobCompletion && item.CompletedAt < ticket.Deadline && RootJobTicket.MatchesCompletion(original, item.Message, ticket.Key))
+        {
+            callback = new(original, (item.Message with { }).AsKernelTicket(), item.CompletedAt);
+            payload = item.Message.Payload!;
+        }
+        else if (item.JobDeadlineClosed && Now >= ticket.Deadline)
+            payload = Json.Write(new JobFinished(ticket.Key, null, "timeout"));
+        else return;
+        var result = RootJobTicket.RecordedResult(row.Id, ticket.Key, registered.Generation, payload);
+        unit.FoundationInlineJob = new(checkpoint, original, timer, result, callback);
+        unit.Cancelled.Add(key);
+        unit.Cancelled.Add(deadline.InboxKey);
+        unit.Sent.Add(result);
     }
 
     /// <summary>Decision 4: an instance kept in memory ended there, and its turn leaves nothing that is a row.</summary>
@@ -3692,6 +3878,22 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>The commit landed (or there was nothing to write): now, and only now, memory follows.</summary>
     private void Apply(TurnOutcome unit, Queue<long>? seqs, bool handOver, CancellationToken cancellationToken, ReplyRelease release, IReadOnlySet<int>? fenced = null)
     {
+        TaskCompletionSource<InlineRootResult>? inlineReceipt = null;
+        if (!unit.InMemory && (unit.Slot?.Row?.FoundationInlineBirth is not null ||
+            unit.Row?.FoundationInlineBirth is not null ||
+            unit.Consumed.Exists(item => !item.Durable && item.Message.Start?.FoundationInlineTenant is not null)))
+        {
+            lock (_turnSync) inlineReceipt = _pendingInlineRoots.GetValueOrDefault(unit.Instance)?.Receipt;
+        }
+        if (release == ReplyRelease.AfterCommit && unit.OpensPark && unit.Sent.Count != 0 && PendingPromotion(unit) is InlineRootCreatorWitness)
+        {
+            // The provider wrote these inputs as part of the ordered Park, without generic sends or handover sequences.
+            foreach (var message in unit.Sent)
+                if (_items.TryGetValue(message.InboxKey, out var local)) Forget(local);
+            unit.Sent.Clear();
+            _caughtUp = false;
+            _woken = true;
+        }
         if (unit.Row is { } ending && unit.FoundationCascade is { Input: null } cascade)
             foreach (var job in cascade.Entries.Jobs)
                 if (_items.GetValueOrDefault(InboxKey.Ticket(ending.Id, job.Key, ending.Creation, job.Generation)) is { } ticket)
@@ -3906,6 +4108,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var held in slot.Inbox.Where(i => i.Held && i.InboxOrder < completion.InboxOrder)) held.Held = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit, release);
         ReleaseExplicit(unit, early: false);
+        if (inlineReceipt is not null)
+        {
+            var disposition = (unit.CreationRefused, release, unit.Row, unit.Status) switch
+            {
+                (false, ReplyRelease.AfterCommit, not null, _) => InlineRootDisposition.Committed,
+                (false, ReplyRelease.EphemeralWriteFree or ReplyRelease.WriteFree, null,
+                    InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled) => InlineRootDisposition.WriteFree,
+                _ => InlineRootDisposition.Refused
+            };
+            CompleteInlineRoot(unit.Instance, new(disposition, unit.Status), inlineReceipt, slot);
+        }
         // A load, poll or gate release can encounter any of this actor's jobs while its checkpoint is busy.
         foreach (var ticket in slot.Inbox.Where(i => i.Key is not null).ToArray()) StartJob(ticket, cancellationToken);
         if (slot.Row is null && slot.Inbox.Count == 0) RemoveSlot(unit.Instance);

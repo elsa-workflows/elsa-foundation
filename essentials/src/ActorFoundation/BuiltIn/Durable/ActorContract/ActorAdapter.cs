@@ -74,6 +74,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             (IsRootControl(message) || IsRootRecover(message) ||
                 !IsAuxiliary(row.Model) && roots.SupportsChildren && message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, message));
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
+    bool Durable.IActorType.AcceptsQualifiedInlineStart(Durable.StartSpec spec, object material, object? issuer) =>
+        spec.Model == actor.Type && ReferenceEquals(roots?.InlineIssuer, issuer) &&
+        roots?.ValidateInlineMaterial?.Invoke(spec, material) == true;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
     Func<CancellationToken, ValueTask<long>>? Durable.IActorType.RootTimedJobPublicationClock => rootTimedJobClock;
@@ -410,7 +413,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             ? input.Row is { } row ? Header(store.FoundationTurnHeader(row)) : StartHeader(input)
             : input.Row is { } running ? RootHeader(running) : RootStartHeader(input);
         var delivery = input.Taken[input.From];
-        var ambient = local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
+        var ambient = roots?.SupportsInlineStarts == true &&
+            (delivery.Message.Start?.FoundationInlineTenant is not null || input.Row?.FoundationInlineBirth is not null)
+            ? input.Ambient
+            : local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
         var turn = new ActorTurn(inMemory, roots, input, header, ambient, issueSelf, rootJobHandle,
@@ -570,6 +576,19 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             ? Durable.Json.Write((object[])[.. entries, "parked"])
             : Durable.Json.Write(new[] { "parked" });
         result.FoundationHeader = next.FoundationInlineHeader ?? (row is null ? InitialHeader(next.Definition) : null);
+        if (roots is { RecoversInlineInitialRoots: true })
+        {
+            if (row is null && taken is [{ Durable: false, Message: { FoundationRootBinding: { } binding } }]
+                && next.FoundationInlineBirth is not null)
+                result.Row = next with
+                {
+                    FoundationDispatchHeader = new(binding.Tenant, binding.Reference, result.FoundationHeader!),
+                    NextJobGeneration = rootJobHandle is null ? null : 0
+                };
+            else if (row is not null && issueSelf is { } issuer && taken is [{ Durable: true, Message: var retry }] &&
+                Durable.FoundationInlineRetry.Matches(issuer, row, retry))
+                result.FoundationKeep = Durable.ParkKeepReason.Arrived;
+        }
         if (row?.ParkRecovery is { } recovery)
         {
             result.Cancelled.Add(recovery.Control);

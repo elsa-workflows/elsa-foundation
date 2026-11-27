@@ -97,14 +97,18 @@ public sealed partial class EfStore
         }
 
         if (refused.Count == 0) return (batch, checkpoints with { Commands = commands }, null);
-        batch = batch.WithoutRetentionJournals(refused);
+        batch = batch.WithoutActorJournals(refused);
         var positions = batch.Fenced.ToDictionary(fence => fence.Partition, fence => fence.Position);
         var journalPositions = new Dictionary<string, long>(StringComparer.Ordinal);
         foreach (var turn in batch.Turns.Where(turn => turn.Journal is not null))
             journalPositions.Add(turn.Instance, ++positions[batch.PartitionOf(turn)]);
         for (var i = 0; i < commands.Count; i++)
-            if (commands[i] is RootRetirement retirement)
-                commands[i] = retirement with { Position = journalPositions.GetValueOrDefault(retirement.Root.Actor) };
+            commands[i] = commands[i] switch
+            {
+                RootRetirement retirement => retirement with { Position = journalPositions.GetValueOrDefault(retirement.Root.Actor) },
+                InlineRootCheckpoint promotion => promotion with { Position = journalPositions[promotion.Stage.Actor] },
+                var command => command
+            };
         return (batch, checkpoints with { Commands = commands }, refused);
     }
 }

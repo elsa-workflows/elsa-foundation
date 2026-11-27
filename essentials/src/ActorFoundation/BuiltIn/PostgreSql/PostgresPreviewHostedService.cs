@@ -52,6 +52,19 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
             { RetentionWindow = retentionWindow };
     }
 
+    /// <summary>Creates the PostgreSQL owner for the private inline start qualification profile.</summary>
+    public static PostgresPreviewHostedService CreateInlineQualification(Func<KernelDb> create, string node, IActorType actor,
+        IActorType? auxiliaryActor, PostgresDirectRequests requests, ProtectChildBirthsAsync protectChildren, InlineRootRequests inlineStarts,
+        Action<string> endProcess, Func<ActorHeader, TimeSpan?> retentionWindow, ILogger<PostgresPreviewHostedService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(protectChildren);
+        ArgumentNullException.ThrowIfNull(inlineStarts);
+        if (auxiliaryActor is not null) Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return new(create, node, actor, endProcess, null, logger, requests, auxiliaryActor, protectChildren, inlineStarts)
+            { RetentionWindow = retentionWindow };
+    }
+
     /// <summary>Confirms an exact protected child using the same installed store as the owner.</summary>
     public static ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(Func<KernelDb> create, BoundScope scope,
         ActorRef child, string issuance, CancellationToken cancellationToken = default) =>
@@ -59,7 +72,7 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
 
     private PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor, Action<string> endProcess,
         LoopOptions? options, ILogger<PostgresPreviewHostedService>? logger, PostgresDirectRequests? requests, IActorType? auxiliaryActor,
-        ProtectChildBirthsAsync? protectChildBirths = null)
+        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null)
     {
         ArgumentNullException.ThrowIfNull(endProcess);
         if (requests is not null && requests.Node != node)
@@ -72,7 +85,7 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
                 Kernel.Durable.IReplyTransport? replies = requests;
                 if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
                 return PostgresPreviewHosting.StartAsync(create, node, actor, escalate, options, token, fault, replies,
-                    retentionWindow: RetentionWindow, auxiliaryActor: auxiliaryActor, protectChildBirths: protectChildBirths);
+                    retentionWindow: RetentionWindow, auxiliaryActor: auxiliaryActor, protectChildBirths: protectChildBirths, inlineStarts: inlineStarts);
             }, logger);
     }
 
