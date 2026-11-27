@@ -31,9 +31,9 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
         };
     }
 
-    internal async ValueTask<bool> InitializeAsync(IActorReads reads, CancellationToken token)
+    internal async ValueTask<bool> InitializeAsync(IActorRetentionPolicies policies, IActorReads reads, CancellationToken token)
     {
-        if (reads is not IActorRetentionPolicies policies || reads is not IActorRetentionConfirmation protection)
+        if (reads is not IActorRetentionConfirmation protection)
             throw new InvalidOperationException("The installed actor store does not provide guarded retention policies.");
 
         var approved = configuredConfirmation is { Length: > 0 } confirmation

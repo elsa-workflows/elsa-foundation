@@ -48,7 +48,7 @@ internal abstract class KernelShellStorage
         public override ValueTask<long> ReadClockAsync(CancellationToken token) => _foundation.ReadClockAsync(token);
 
         public override async ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token) =>
-            new(await _foundation.OpenIngressAsync(token), _foundation.CreateReads(), _foundation.AdmitRetentionDeleteAsync);
+            new(await _foundation.OpenIngressAsync(token), _foundation.CreateReads(), _foundation, _foundation.AdmitRetentionDeleteAsync);
 
         public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
             Func<ActorHeader, TimeSpan?> retentionWindow)
@@ -83,7 +83,7 @@ internal abstract class KernelShellStorage
         {
             var foundation = await PostgresPreviewHosting.OpenFoundationAsync(OpenDatabase, WorkflowActor.ActorType, _requests,
                 cancellationToken: token);
-            return new(foundation, foundation, foundation.AdmitRetentionDeleteAsync);
+            return new(foundation, foundation, foundation, foundation.AdmitRetentionDeleteAsync);
         }
 
         public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
@@ -101,5 +101,5 @@ internal abstract class KernelShellStorage
     }
 }
 
-internal sealed record KernelShellFoundation(IIngress Ingress, IActorReads Reads,
+internal sealed record KernelShellFoundation(IIngress Ingress, IActorReads Reads, IActorRetentionPolicies RetentionPolicies,
     Func<BoundScope, ActorRef, string, CancellationToken, ValueTask<Admission>> AdmitRetentionDelete);
