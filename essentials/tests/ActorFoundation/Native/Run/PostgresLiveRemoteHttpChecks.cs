@@ -32,6 +32,12 @@ internal static class PostgresLiveRemoteHttpChecks
         var wideName = new JsonObject { [new string('n', 6 * 1024 * 1024)] = true };
         Check(frames.Encode(channel, fits).Length > 3_000 && frames.Encode(channel, fits with { Item = wideName }).Length > 1_000,
             "wire-legal Unicode text and long JSON names fit within the byte limit");
+        JsonNode? deep = null;
+        for (var depth = 0; depth < 64; depth++) deep = new JsonArray(deep);
+        var refusedDepth = false;
+        try { frames.Encode(channel, fits with { Item = deep }); }
+        catch (InvalidOperationException) { refusedDepth = true; }
+        Check(refusedDepth, "the producer refuses a nested reply that cannot pass the receiver's wire depth");
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var stop = timeout.Token;

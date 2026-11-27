@@ -17,14 +17,17 @@ internal sealed class PostgresReplyFrames(byte[] key)
 {
     private const int ChunkBytes = 5_500;
     private const int MaxReplyBytes = 16 * 1024 * 1024;
+    private const int WireDepth = 64;
     private const int NonceBytes = 12;
     private const int TagBytes = 16;
     private const int Overhead = NonceBytes + TagBytes;
     private const int StringSegment = 4_096;
     private static readonly JsonSerializerOptions WriterOptions = new()
     {
+        MaxDepth = WireDepth,
         Converters = { new SegmentedString(), new SegmentedNode() }
     };
+    private static readonly JsonSerializerOptions ReaderOptions = new() { MaxDepth = WireDepth };
 
     private enum ItemKind { Json, Text, Boolean, Creation }
     private sealed record WireReply(Reply Reply, ItemKind Item);
@@ -45,7 +48,7 @@ internal sealed class PostgresReplyFrames(byte[] key)
             _ => ItemKind.Json
         };
         var buffer = new ReplyBuffer();
-        using (var writer = new Utf8JsonWriter(buffer))
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { MaxDepth = WireDepth }))
             JsonSerializer.Serialize(writer, new WireReply(reply, kind), WriterOptions);
         var bytes = buffer.Written;
 
@@ -230,7 +233,7 @@ internal sealed class PostgresReplyFrames(byte[] key)
             var bytes = _data.GetBuffer().AsSpan(0, (int)_data.Length);
             try
             {
-                var wire = JsonSerializer.Deserialize<WireReply>(bytes);
+                var wire = JsonSerializer.Deserialize<WireReply>(bytes, ReaderOptions);
                 if (wire?.Reply is not { } reply || reply.Item is not JsonElement value)
                     return wire?.Reply;
                 return reply with
