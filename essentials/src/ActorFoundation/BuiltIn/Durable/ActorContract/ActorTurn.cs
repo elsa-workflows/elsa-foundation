@@ -312,7 +312,8 @@ internal sealed partial class ActorAdapter
             if (row.FoundationInlineBirth is not null)
             {
                 var until = _input.Unwritten ? _input.Until : InlineUntil();
-                if (ended && cascade is null or { Count: 0 } && (_input.Row is null || _input.CheckpointTime < until) &&
+                if (ended && _roots?.AllowsWriteFreeInlineCompletion(Header.Tenant, _status) != false &&
+                    cascade is null or { Count: 0 } && (_input.Row is null || _input.CheckpointTime < until) &&
                     _turn.SentCount == 0 && _turn.SubscribedCount == 0 &&
                     outcome.Held.Count == 0 && outcome.Consumed.TrueForAll(item => !item.Durable))
                     return outcome;

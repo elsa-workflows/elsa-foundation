@@ -276,7 +276,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var direct = isolated ? ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>() : null;
         if (testRun is null || direct is not null &&
             testRun.Status is not (WorkflowTestRunStatus.Rejected or WorkflowTestRunStatus.DispatchRejected) &&
-            (scopeRecord!.State != WorkflowTestScopeState.Open ||
+            (scopeRecord!.State != WorkflowTestScopeState.Open || scopeRecord.InlineStart is not null && scopeRecord.IsolatedActor is null ||
              testRun.WorkflowExecutionId != scopeRecord.IsolatedActor?.ActorReference))
             return await RecoverDirectRunAsync(scopeRecord, testRun, cancellationToken) is { } recovered
                 ? WorkflowTestRunView.From(recovered.Run, recovered.Command) : null;
@@ -308,7 +308,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var refreshed = testRun with
         {
             WorkflowExecutionId = TestRunActorId(result.Dispatch, direct is not null),
-            Status = MapStatus(command.Status),
+            Status = MapStatus(result.Dispatch),
             Reason = command.Reason,
             DriverAction = null
         };
@@ -664,7 +664,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             throw;
         }
 
-        var status = MapStatus(dispatch.Dispatch.CommandDispatch.Status);
+        var status = MapStatus(dispatch.Dispatch);
         if (status == WorkflowTestRunStatus.DispatchRejected)
             await CloseTestScopeAsync(runtimeScopeStore, testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow());
 
@@ -876,7 +876,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             throw;
         }
 
-        var status = MapStatus(dispatch.CommandDispatch.Status);
+        var status = MapStatus(dispatch);
         if (status == WorkflowTestRunStatus.DispatchRejected)
             await runtimeScopeStore.CloseAsync(
                 new WorkflowTestScopeCloseRequest(testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow()),
@@ -1171,28 +1171,33 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var started = observation is WorkflowDirectTestRunObservation.Started or WorkflowDirectTestRunObservation.Ended;
         var status = (scope.State, observation) switch
         {
+            (_, WorkflowDirectTestRunObservation.CompletedWithoutRecord) => WorkflowTestRunStatus.CompletedWithoutRecord,
+            (_, WorkflowDirectTestRunObservation.Refused) => WorkflowTestRunStatus.DispatchRejected,
             (not WorkflowTestScopeState.Open, WorkflowDirectTestRunObservation.Started or WorkflowDirectTestRunObservation.Pending) =>
                 WorkflowTestRunStatus.StopRequested,
             (not WorkflowTestScopeState.Open, _) or (_, WorkflowDirectTestRunObservation.Retired) => WorkflowTestRunStatus.Stopped,
             (_, WorkflowDirectTestRunObservation.Prepared) => WorkflowTestRunStatus.Prepared,
-            (_, WorkflowDirectTestRunObservation.Pending) => WorkflowTestRunStatus.DispatchDeferred,
+            (_, WorkflowDirectTestRunObservation.Pending or WorkflowDirectTestRunObservation.Unavailable or WorkflowDirectTestRunObservation.RateLimited) =>
+                WorkflowTestRunStatus.DispatchDeferred,
             (_, WorkflowDirectTestRunObservation.Disarmed) => WorkflowTestRunStatus.DispatchRejected,
             _ => WorkflowTestRunStatus.DispatchAccepted
         };
         var command = status switch
         {
-            WorkflowTestRunStatus.DispatchAccepted => WorkflowExecutionCommandDispatchStatus.Accepted,
+            WorkflowTestRunStatus.DispatchAccepted or WorkflowTestRunStatus.CompletedWithoutRecord => WorkflowExecutionCommandDispatchStatus.Accepted,
             WorkflowTestRunStatus.DispatchDeferred => WorkflowExecutionCommandDispatchStatus.Deferred,
             WorkflowTestRunStatus.DispatchRejected => WorkflowExecutionCommandDispatchStatus.Rejected,
             _ => (WorkflowExecutionCommandDispatchStatus?)null
         };
         var run = new WorkflowTestRun(scope.Scope.ScopeId, source.DefinitionId, source.DefinitionVersionId, source.ArtifactId,
             started ? scope.IsolatedActor!.ActorReference : null, status, RequestedBy, scope.CreatedAt, scope.Scope.ExpiresAt,
-            status switch
+            (status, observation) switch
             {
-                WorkflowTestRunStatus.DispatchDeferred => "The isolated Test Run has not yet appeared.",
-                WorkflowTestRunStatus.DispatchRejected => "The isolated Test Run did not start.",
-                WorkflowTestRunStatus.StopRequested => "The Test Run scope is closed. Stop can be retried until the actor settles.",
+                (WorkflowTestRunStatus.DispatchDeferred, WorkflowDirectTestRunObservation.Unavailable) => "NodeBusy",
+                (WorkflowTestRunStatus.DispatchDeferred, WorkflowDirectTestRunObservation.RateLimited) => nameof(WorkflowDirectTestRunObservation.RateLimited),
+                (WorkflowTestRunStatus.DispatchDeferred, _) => "The isolated Test Run has not yet appeared.",
+                (WorkflowTestRunStatus.DispatchRejected, _) => "The isolated Test Run did not start.",
+                (WorkflowTestRunStatus.StopRequested, _) => "The Test Run scope is closed. Stop can be retried until the actor settles.",
                 _ => null
             }, presentation?.Metadata ?? new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -1289,12 +1294,13 @@ public sealed class StartWorkflowTestRunRequestHandler(
     private static readonly IReadOnlyDictionary<string, object?> EmptyInputs = new Dictionary<string, object?>(StringComparer.Ordinal);
 
     private static string? TestRunActorId(WorkflowExecutionStartDispatchResult dispatch, bool usesDirectDispatcher) =>
+        dispatch.TestRunCompletedWithoutRecord ? null :
         !usesDirectDispatcher || dispatch.CommandDispatch.Status is WorkflowExecutionCommandDispatchStatus.Accepted or
             WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted or WorkflowExecutionCommandDispatchStatus.Duplicate
             ? dispatch.WorkflowExecutionId : null;
 
-    private static WorkflowTestRunStatus MapStatus(WorkflowExecutionCommandDispatchStatus status) =>
-        status switch
+    private static WorkflowTestRunStatus MapStatus(WorkflowExecutionStartDispatchResult dispatch) =>
+        dispatch.TestRunCompletedWithoutRecord ? WorkflowTestRunStatus.CompletedWithoutRecord : dispatch.CommandDispatch.Status switch
         {
             WorkflowExecutionCommandDispatchStatus.Accepted => WorkflowTestRunStatus.DispatchAccepted,
             // Dispatch was accepted; the workflow faulted during the ensuing drain. The fault is authoritatively surfaced
@@ -1304,7 +1310,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             WorkflowExecutionCommandDispatchStatus.Duplicate => WorkflowTestRunStatus.DispatchDuplicate,
             WorkflowExecutionCommandDispatchStatus.Rejected => WorkflowTestRunStatus.DispatchRejected,
             WorkflowExecutionCommandDispatchStatus.Deferred => WorkflowTestRunStatus.DispatchDeferred,
-            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown workflow execution command dispatch status.")
+            _ => throw new ArgumentOutOfRangeException(nameof(dispatch), dispatch.CommandDispatch.Status, "Unknown workflow execution command dispatch status.")
         };
 
     private static IReadOnlyDictionary<string, string> TestRunCompatibilityMetadata(string testRunId) =>

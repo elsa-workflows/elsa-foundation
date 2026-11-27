@@ -397,6 +397,41 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         Assert.Null(await handler.StopAsync(run.TestRunId, CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData(WorkflowDirectTestRunObservation.Refused, "DispatchRejected", "Rejected", "The isolated Test Run did not start.")]
+    [InlineData(WorkflowDirectTestRunObservation.Disarmed, "Stopped", null, null)]
+    [InlineData(WorkflowDirectTestRunObservation.RateLimited, "DispatchDeferred", "Deferred", "RateLimited")]
+    [InlineData(WorkflowDirectTestRunObservation.Unavailable, "DispatchDeferred", "Deferred", "NodeBusy")]
+    public async Task DirectTestRunRecoveryPreservesDefiniteNoActorOutcomesWithoutPresentation(
+        WorkflowDirectTestRunObservation observation, string expected, string? command, string? reason)
+    {
+        var token = CancellationToken.None;
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var refused = observation == WorkflowDirectTestRunObservation.Refused;
+        var dispatch = refused ? WorkflowExecutionCommandDispatchStatus.Rejected : WorkflowExecutionCommandDispatchStatus.Deferred;
+        using var services = new ServiceCollection()
+            .AddSingleton<IWorkflowDirectTestRunDispatcher>(new UnadmittedTestRunDispatcher(_executableStore, dispatch, observation, reason ?? "Fixture"))
+            .BuildServiceProvider();
+        var handler = DraftSnapshotHandler(ambientServices: services, timeProvider: clock);
+        var initial = await handler.StartDraftAsync(new("definition-1", "snapshot-isolated-result", DraftState()), token);
+        Assert.Equal(refused ? "DispatchRejected" : "DispatchDeferred", initial.Status);
+        if (observation == WorkflowDirectTestRunObservation.Disarmed)
+            Assert.Equal("Stopped", (await handler.StopAsync(initial.TestRunId, token))?.Status);
+        if (expected is "DispatchRejected" or "Stopped")
+            Assert.Equal(WorkflowTestScopeState.Closed, (await _testScopeStore.CompleteAsync(initial.TestRunId, clock.GetUtcNow(), token)).State);
+        else
+            Assert.Equal(reason, (await handler.GetAsync(initial.TestRunId, token))?.Reason);
+
+        var emptyPresentation = CreateTestRunStore(_testScopeStore);
+        Assert.Null(await emptyPresentation.FindAsync(initial.TestRunId, token));
+        var afterRestart = DraftSnapshotHandler(ambientServices: services, timeProvider: clock, presentationStore: emptyPresentation);
+        var recovered = await afterRestart.GetAsync(initial.TestRunId, token);
+        Assert.NotNull(recovered);
+        Assert.Equal((expected, command, reason), (recovered.Status, recovered.CommandDispatchStatus, recovered.Reason));
+        Assert.Equal((initial.TestRunId, initial.ArtifactId, initial.ExpiresAt), (recovered.TestRunId, recovered.ArtifactId, recovered.ExpiresAt));
+        Assert.Null(recovered.WorkflowExecutionId);
+    }
+
     [Fact]
     public async Task DraftTestRunWithInputContractFailsClosedWhenInputValidatorIsUnavailable()
     {
@@ -1078,7 +1113,8 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         Action<WorkflowExecutableCompileRequest>? onCompile = null,
         IServiceProvider? ambientServices = null,
         TimeProvider? timeProvider = null,
-        ITestRunRootCanceller? rootCanceller = null)
+        ITestRunRootCanceller? rootCanceller = null,
+        InMemoryWorkflowTestRunStore? presentationStore = null)
     {
         return new(
             ObserveCompiler(TestCompiler.Create(
@@ -1089,7 +1125,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
             _executableStore,
             _sourceReferenceStore,
             new EmptyWorkflowDefinitionVersionLayoutStore(),
-            _testRunStore,
+            presentationStore ?? _testRunStore,
             dispatcher ?? Dispatcher(),
             TestRootWriteLeases.Create(_executableStore),
             timeProvider ?? TimeProvider.System,
@@ -1337,7 +1373,8 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         }
     }
 
-    private sealed class UnadmittedTestRunDispatcher(IWorkflowExecutableStore executables, WorkflowExecutionCommandDispatchStatus status)
+    private sealed class UnadmittedTestRunDispatcher(IWorkflowExecutableStore executables, WorkflowExecutionCommandDispatchStatus status,
+        WorkflowDirectTestRunObservation observation = WorkflowDirectTestRunObservation.Prepared, string reason = "Fixture")
         : IWorkflowDirectTestRunDispatcher
     {
         public bool SupportsTrigger(string driverId) => false;
@@ -1349,13 +1386,13 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
             var id = request.TestScope!.ScopeId;
             var executable = (await executables.FindAsync(request.ArtifactId, cancellationToken))!;
             var recordedAt = DateTimeOffset.UtcNow;
-            return new(id, executable.Identity, new(id, id, status, recordedAt, "Fixture"),
+            return new(id, executable.Identity, new(id, id, status, recordedAt, reason),
                 new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt));
         }
 
         public ValueTask<WorkflowDirectTestRunObservation?> ObserveAsync(WorkflowTestScopeRecord scope,
             WorkflowExecutableSourceReference source, CancellationToken cancellationToken) =>
-            ValueTask.FromResult<WorkflowDirectTestRunObservation?>(WorkflowDirectTestRunObservation.Prepared);
+            ValueTask.FromResult<WorkflowDirectTestRunObservation?>(observation);
 
         public ValueTask RequestStopAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();

@@ -46,6 +46,7 @@ public sealed partial class EfStore
         internal bool MeasuresDueBacklog { get; set; }
         internal bool RefusesParkedOperators { get; set; }
         internal Func<StartSpec, object, bool>? ValidateInlineMaterial { get; set; }
+        internal Func<string, Contract.ActorStatus, bool>? AllowsWriteFreeInlineCompletion { get; set; }
         internal object? InlineIssuer { get; set; }
         internal bool RecoversInlineInitialRoots { get; set; }
         internal bool SettlesEndedMailbox { get; init; }
@@ -95,6 +96,8 @@ public sealed partial class EfStore
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
         public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
         public Func<StartSpec, object, bool>? ValidateInlineMaterial => roots.ValidateInlineMaterial;
+        public bool AllowsWriteFreeInlineCompletion(string tenant, Contract.ActorStatus status) =>
+            roots.AllowsWriteFreeInlineCompletion?.Invoke(tenant, status) != false;
         public object? InlineIssuer => roots.InlineIssuer;
         public bool RecoversInlineInitialRoots => roots.RecoversInlineInitialRoots;
 
@@ -173,6 +176,7 @@ public sealed partial class EfStore
             if (_inlineStarts is { } inline && scope.Discover)
             {
                 scope.ValidateInlineMaterial = inline.Validate;
+                scope.AllowsWriteFreeInlineCompletion = inline.AllowsWriteFreeCompletion;
                 scope.InlineIssuer = inline;
             }
             Volatile.Write(ref _ordinaryRoots, scope);
@@ -482,6 +486,7 @@ public sealed partial class EfStore
             batch.Seen.Count + batch.Trial.Count > 0)
             return await CommitAsync(batch with { Seen = [], Trial = [] }, new PostgresMarkPreparation(this, roots, batch), sentAt, cancellationToken);
 
+        // The queue spends each tenant's rate permit. Promotion reserves one node slot for the entire write batch.
         using var promotions = _inlineStarts is { } inline && batch.Turns.Any(turn => turn.RootCreator is InlineRootCreatorWitness)
             ? AdmissionPressure?.Begin(inline.Scope.Tenant, RootAdmissionKind.Start) : null;
         (CommitBatch Batch, RootCheckpoints Checkpoints, IReadOnlyDictionary<string, InlineRootResult>? InlineRefusals)? prepared;
@@ -533,7 +538,7 @@ public sealed partial class EfStore
             if (submitted.RootCreator is InlineRootCreatorWitness inline)
             {
                 if (_inlineStarts is not { } installed || !ReferenceEquals(installed, inline.Issuer) ||
-                    inline.Creator.FoundationRootBinding is not { } identity || identity.Tenant != installed.Scope.Tenant ||
+                    inline.Creator.FoundationRootBinding is not { } identity || installed.ScopeFor(identity.Tenant) is not { } scope ||
                     identity.Actor != turn.Instance || !byPartition.TryGetValue(inline.Creator.Target.Partition, out var fence))
                     throw RootShape();
                 try { promotions?.RequireInlinePromotion(fence.Partition); }
@@ -549,7 +554,7 @@ public sealed partial class EfStore
                     var commit = batch.Lease - System.Diagnostics.Stopwatch.GetElapsedTime(sentAt);
                     return worker < commit ? worker : commit;
                 }
-                var promotion = await PrepareInlineCheckpointAsync(installed.Scope, inline.Creator, turn, fence,
+                var promotion = await PrepareInlineCheckpointAsync(scope, inline.Creator, turn, fence,
                     installed.ReceiptWindow, installed.Protect, installed, inline, Remaining, cancellationToken);
                 if (promotion is null)
                 {

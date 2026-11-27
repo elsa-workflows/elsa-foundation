@@ -815,6 +815,10 @@ public sealed class WorkflowExecutionStartDispatchResult
     /// <summary>The response from a synchronous HTTP Test Run, available only to its authenticated request.</summary>
     [JsonIgnore]
     public WorkflowTestRunHttpReply? TestRunHttpReply { get; init; }
+
+    /// <summary>The scoped Test Run finished before a workflow execution record was created.</summary>
+    [JsonIgnore]
+    public bool TestRunCompletedWithoutRecord { get; init; }
 }
 
 public sealed record WorkflowTestRunHttpReply(int StatusCode, string ContentType, string? Body,

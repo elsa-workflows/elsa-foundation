@@ -128,8 +128,8 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata, httpReply);
     }
 
-    private static WorkflowExecutionStartDispatchResult InlineResult(string operationId, WorkflowExecutableIdentity material,
-        WorkflowExecutableSourceProvenance source, InlineStartOutcome outcome, DateTimeOffset recordedAt)
+    internal static WorkflowExecutionStartDispatchResult InlineResult(string operationId, WorkflowExecutableIdentity material,
+        WorkflowExecutableSourceProvenance source, InlineStartOutcome outcome, DateTimeOffset recordedAt, bool testRun = false)
     {
         var (status, reason) = outcome.Disposition switch
         {
@@ -154,7 +154,8 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
             metadata[RuntimeMetadataKeys.DispatchShed] = "true";
             metadata[RuntimeMetadataKeys.DispatchRetryAfterSeconds] = RetrySeconds(outcome.RetryAfter);
         }
-        return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata);
+        return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata,
+            completedWithoutRecord: testRun && outcome is { Disposition: InlineStartDisposition.Volatile, Status: ActorStatus.Finished });
     }
 
     private static string RetrySeconds(TimeSpan? retryAfter) =>
@@ -162,8 +163,9 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
 
     private static WorkflowExecutionStartDispatchResult CreateResult(string operationId, string id, WorkflowExecutableIdentity material,
         WorkflowExecutableSourceProvenance source, WorkflowExecutionCommandDispatchStatus status, DateTimeOffset recordedAt,
-        string? reason, IReadOnlyDictionary<string, string>? metadata, WorkflowTestRunHttpReply? httpReply = null) =>
+        string? reason, IReadOnlyDictionary<string, string>? metadata, WorkflowTestRunHttpReply? httpReply = null,
+        bool completedWithoutRecord = false) =>
         new(id, material, new(operationId, id, status, recordedAt, reason, metadata),
             new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt), source)
-            { TestRunHttpReply = httpReply };
+            { TestRunHttpReply = httpReply, TestRunCompletedWithoutRecord = completedWithoutRecord };
 }
