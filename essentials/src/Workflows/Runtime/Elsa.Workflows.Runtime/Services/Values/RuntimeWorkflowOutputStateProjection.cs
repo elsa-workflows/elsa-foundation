@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -37,14 +38,55 @@ public static class RuntimeWorkflowOutputStateProjection
         ArgumentNullException.ThrowIfNull(durableValues);
         ArgumentNullException.ThrowIfNull(payloadCapturePolicy);
 
+        return LatestByName(durableValues)
+            .Select(entry => ProjectOne(entry.Key, entry.Value, payloadCapturePolicy))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Reads the committed workflow output values themselves, with the same latest-per-name selection as
+    /// <see cref="Project"/> but without any payload capture policy (spec 1245 FR-003). A value whose protection policy
+    /// is protected (sensitive, encryption, redaction mode or retention) or that is not stored inline is left out and
+    /// named in <see cref="WorkflowOutputValues.WithheldNames"/>: carrying it raw would drop the policy (ADR 0045 §9).
+    /// </summary>
+    public static WorkflowOutputValues ProjectValues(IEnumerable<DurableValueState> durableValues)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+
+        // Write each committed value through unchanged (ADR 0091); no node model re-reads its numbers.
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        var withheld = new List<string>();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            foreach (var (name, value) in LatestByName(durableValues))
+            {
+                var policy = DurableValuePolicies.Read(value);
+                if (!value.InlineValue.HasValue || policy.Storage != DurableValueStorage.Inline ||
+                    policy.IsSensitive || policy.RequiresEncryption || policy.RedactionMode is not null || policy.RetentionPolicy is not null)
+                {
+                    withheld.Add(name);
+                    continue;
+                }
+
+                writer.WritePropertyName(name);
+                value.InlineValue.Value.WriteTo(writer);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        using var document = System.Text.Json.JsonDocument.Parse(buffer.WrittenMemory);
+        return new WorkflowOutputValues(document.RootElement, withheld);
+    }
+
+    private static IEnumerable<KeyValuePair<string, DurableValueState>> LatestByName(IEnumerable<DurableValueState> durableValues)
+    {
         var latestByName = new Dictionary<string, DurableValueState>(StringComparer.Ordinal);
         foreach (var durableValue in durableValues.Where(IsWorkflowOutput).OrderBy(value => value.CapturedAt))
             latestByName[durableValue.Metadata[RuntimeMetadataKeys.OutputName]] = durableValue;
 
-        return latestByName
-            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
-            .Select(entry => ProjectOne(entry.Key, entry.Value, payloadCapturePolicy))
-            .ToArray();
+        return latestByName.OrderBy(entry => entry.Key, StringComparer.Ordinal);
     }
 
     private static bool IsWorkflowOutput(DurableValueState value) =>
@@ -58,13 +100,13 @@ public static class RuntimeWorkflowOutputStateProjection
     {
         // A workflow output whose payload is not stored inline (external or custom storage) has nothing this
         // projection can expose — but the name must still surface (never absent). Project it as a marker; no
-        // policy consult is needed because there is no payload to disclose. Latent today: nothing writes
-        // externalized workflow outputs yet, but the read contract must be honest from day one.
+        // policy consult is needed because there is no payload to disclose. Set Output writes externalized workflow
+        // outputs when the value's policy requires it.
         if (!value.InlineValue.HasValue)
             return new WorkflowOutputProjection(name, Value: null, IsRedacted: true, RedactionReason: NotStoredInlineReason, value.Type, value.CapturedAt);
 
-        // The sensitivity marker is a read-side contract today (nothing writes it yet); threading it into the
-        // policy request means a sensitive-marked output is redacted even by a payload-capturing host policy.
+        // Set Output writes the sensitivity marker from the value's policy; threading it into the policy request
+        // means a sensitive-marked output is redacted even by a payload-capturing host policy.
         var isSensitive = value.Metadata.TryGetValue(RuntimeMetadataKeys.IsSensitive, out var marker) &&
                           bool.TryParse(marker, out var parsed) && parsed;
 

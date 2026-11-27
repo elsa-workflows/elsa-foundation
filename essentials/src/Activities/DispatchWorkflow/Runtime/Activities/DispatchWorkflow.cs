@@ -236,7 +236,7 @@ public sealed class DispatchWorkflow(
         if (!WaitForCompletion)
         {
             return Complete(
-                new DispatchWorkflowActivityResult(identity.ChildWorkflowExecutionId, Result: null),
+                new DispatchWorkflowActivityResult(identity.ChildWorkflowExecutionId, DispatchWorkflowOutcomes.Dispatched, Output: null, Terminal: null),
                 DispatchWorkflowOutcomes.Dispatched);
         }
 
@@ -276,9 +276,31 @@ public sealed class DispatchWorkflow(
             WorkflowDispatchStatus.DispatchFailed => DispatchWorkflowOutcomes.DispatchFailed,
             _ => throw new InvalidOperationException("DispatchWorkflow completion resume payload has an unsupported child terminal status.")
         };
+        // Output holds the completed child's committed values; after a faulted, cancelled or failed child it is {} so a
+        // member read gives undefined and no earlier value survives (spec 1245 FR-002).
+        var output = payload.Result.Status == WorkflowDispatchStatus.Completed
+            ? payload.Output ?? throw new InvalidOperationException("A completed DispatchWorkflow resume payload carries no child output.")
+            : EmptyOutput;
+        if (payload.WithheldOutputs is { Count: > 0 } withheld)
+            context.Warnings?.Report(ChildOutputWithheld(withheld));
+
         return ValueTask.FromResult(Complete(
-            new DispatchWorkflowActivityResult(payload.ChildWorkflowExecutionId, payload.Result),
+            new DispatchWorkflowActivityResult(payload.ChildWorkflowExecutionId, outcome, output, payload.Result),
             outcome));
+    }
+
+    private static readonly JsonElement EmptyOutput = JsonDocument.Parse("{}").RootElement.Clone();
+
+    // Names only: the withheld outputs are the child's declared contract names, never their values (ADR 0046 V6).
+    private static Elsa.Expressions.Core.Models.ExecutionWarning ChildOutputWithheld(IReadOnlyList<string> names)
+    {
+        var outputs = string.Join(", ", names.Order(StringComparer.Ordinal));
+        return new Elsa.Expressions.Core.Models.ExecutionWarning(
+            DispatchWorkflowDiagnostics.ChildOutputWithheldCode,
+            $"The child workflow's outputs {outputs} were left out of Output because their value protection policy " +
+            "(sensitive, encryption, redaction mode or retention) or their storage does not allow carrying them to the parent.",
+            Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Warning,
+            new Dictionary<string, string>(StringComparer.Ordinal) { [DispatchWorkflowDiagnostics.WithheldOutputsKey] = outputs });
     }
 
     private static void ValidatePin(DispatchWorkflowPin pin, string definitionId)

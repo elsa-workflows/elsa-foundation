@@ -1,0 +1,107 @@
+{
+  "id": "sequence-execute-faulted-v1",
+  "definitionId": "sequence-execute-faulted",
+  "name": "sequence-execute-faulted",
+  "description": "Test-owned workflow: a Sequence that executes fault-target, then writes.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "sequence-execute-faulted-root",
+    "nodeId": "sequence-execute-faulted-root",
+    "name": "sequence-execute-faulted-root",
+    "type": "Elsa.Sequence",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "run-child",
+        "nodeId": "run-child",
+        "name": "run-child",
+        "type": "Elsa.ExecuteWorkflow",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "workflowDefinitionId": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "fault-target"
+          }
+        }
+      },
+      {
+        "id": "after",
+        "nodeId": "after",
+        "name": "after",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "after"
+          }
+        }
+      }
+    ],
+    "variables": []
+  }
+}

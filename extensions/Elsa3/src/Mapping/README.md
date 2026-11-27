@@ -81,6 +81,50 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     scope only.
   - A loop's current value captured into a variable is read as the loop's scoped variable (`index`, `currentItem`)
     inside the loop body. Outside the loop that read is not representable.
+- **Dispatch Workflow and Execute Workflow** (spec 1245). Both become an Elsa 4 Dispatch Workflow, whose outputs are
+  `ChildWorkflowExecutionId`, `Status` (the selected outcome's name) and `Output` (the completed child's named outputs;
+  `{}` after a faulted, cancelled or failed child; absent on `Dispatched`).
+  - **Dispatch Workflow `Result`** (FR-006): an awaited Elsa 3 dispatch's `Result` was the child's output dictionary, so a
+    capture becomes an `Output` capture into the same variable, whatever `WaitForCompletion` is. Not awaited, Elsa 3
+    never set it; Elsa 4 leaves `Output` absent there, so the variable keeps its value.
+  - **Execute Workflow always waits** (FR-008): `WaitForCompletion` is literal `true` whatever the Elsa 3 value, with one
+    `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` warning. Unless the Elsa 3 value was literal true it adds that Elsa 4 waits
+    for a child that suspends, where Elsa 3 continued (Elsa 3 ran an unset value as false).
+  - **Execute Workflow `Result`** (FR-010): Elsa 3's value was an `ExecuteWorkflowResult` wrapping the output. The node
+    captures `Output` into the same variable `V`, and every read of `V` becomes the Elsa 4 value it stood for:
+
+    | Elsa 3 read of `V` | Elsa 4 |
+    |---|---|
+    | `.Output`, `.Output.X` | `variables.V`, `variables.V.X` |
+    | `.WorkflowInstanceId` | the node's `ChildWorkflowExecutionId` output |
+    | `.Status` | `"Finished"` |
+    | `.SubStatus` | the node's `Status` output: `Completed` → `"Finished"`; `Faulted`, `DispatchFailed` → `"Faulted"`; `Cancelled` → `"Cancelled"` |
+    | `.CorrelationId`, `.WorkflowDefinitionVersionId` | `null` |
+    | the whole value in a script | an object with Elsa 3's keys built from the rows above |
+    | the whole value bound into another input | a JavaScript expression that builds that object |
+
+    JavaScript reads convert in every row, through `getV()`, `variables.V` or a literal `getVariable('V')`, in dot,
+    literal-bracket or optional-chaining form. Liquid converts only `.Output` and `.Output.X`. The node-output rows bind
+    to the capturing node, which must run before the read in the same container (`VF-IMP-003`,
+    `VF-IMP-004` otherwise); a read where the node may not have run is refused at publish
+    (`ValueFlow/UnavailableProducer`). `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` refuses: a variable with another writer
+    (another capture, a Set Variable, a declared initial value, or a script that calls `setV`, `setVariable('V', …)`,
+    assigns `V` or a member of it, or writes a variable by a computed name); any other member of `V`; any other Liquid
+    read of `V`, or a Liquid read of the node's result through the `Output` root; and a script that reads a variable by
+    a computed name.
+  - **`Done`** (FR-007, FR-009): Dispatch Workflow's `Done` maps to `Dispatched`, `Completed` and `Faulted`; Execute
+    Workflow's to `Completed` and `Faulted`. Elsa 3 continued after a child that faulted. `Cancelled` and
+    `DispatchFailed` stay unmapped.
+  - **Accepted differences** (FR-011; no warning, since they depend on how the child runs or how a script reads):
+    - a faulted child's outputs are not carried: `Output` is `{}`, where Elsa 3 resumed with the partial outputs;
+    - a cancelled child selects `Cancelled`: a Flowchart branch ends there and a Sequence runs its next step, where
+      Elsa 3 left an awaited parent suspended;
+    - a failed child start selects `DispatchFailed`, with the same Flowchart and Sequence behaviour, where Elsa 3
+      faulted the parent's activity;
+    - the child gets no `ParentInstanceId` input; pass it as an explicit input to keep it;
+    - after a waited child that suspended, Elsa 3 set an Execute Workflow `Result` to the bare output dictionary, where
+      `.Output.X` and `.SubStatus` read `undefined`; the converted reads return the child's value and `"Finished"`;
+    - an output read must match the output name's case; Elsa 3's dictionary ignored case.
 - **Variable starting values** (spec 264). Elsa 3 stored a variable's starting value as text and converted it to the
   variable's type when the workflow started. The converter applies that rule, through Elsa 4's object converter, and
   carries the result as a `Literal`:

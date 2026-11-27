@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Testing;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -125,6 +126,35 @@ public sealed class DispatchWorkflowCheckpointTests
     }
 
     [Fact]
+    public async Task Waiting_parent_resumed_after_a_replayed_child_checkpoint_gets_the_same_output()
+    {
+        // Spec 1245 FR-003, FR-012: the child's terminal checkpoint carries the output values in its resume intent, so a
+        // replay after a restart re-enriches to the same payload and the parent resumes with the same Output.
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync(
+            childOutputs: new Dictionary<string, JsonElement> { ["Decision"] = JsonSerializer.SerializeToElement("approved") });
+        var run = await fixture.StartParentAsync(
+            caseId: "wait-output-replay",
+            parentWorkflowExecutionId: "parent-wait-output-replay",
+            parentCorrelationId: "correlation-parent",
+            waitForCompletion: true);
+        await fixture.SweepAsync();
+        var terminal = fixture.Checkpoints.SingleIntentCommit(DispatchWorkflowConstants.ResumeParentIntentKind);
+        var intent = Assert.Single(CheckpointCommitIntents.IntentsOf(terminal),
+            item => item.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
+
+        await fixture.ReplayAsync(terminal);
+        await fixture.SweepAsync();
+
+        var payload = intent.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal("""{"Decision":"approved"}""", payload.Output!.Value.GetRawText());
+        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        var result = activity.Completion!.Result.InlineValue!.Value.Deserialize<DispatchWorkflowActivityResult>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal(payload.Output.Value.GetRawText(), result.Output!.Value.GetRawText());
+        Assert.Equal(DispatchWorkflowOutcomes.Completed, result.Status);
+    }
+
+    [Fact]
     public async Task Wait_activity_reexecution_uses_durable_invoke_time_after_wall_clock_advances()
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
@@ -237,7 +267,11 @@ public sealed class DispatchWorkflowCheckpointTests
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(activityResult);
         Assert.Equal(run.Identity.ChildWorkflowExecutionId, activityResult.ChildWorkflowExecutionId);
-        Assert.Null(activityResult.Result);
+        Assert.Null(activityResult.Terminal);
+        Assert.Equal(DispatchWorkflowOutcomes.Dispatched, activityResult.Status);
+        // Spec 1245 D-1: Output is absent, not null, so a capture leaves its variable unchanged.
+        Assert.Null(activityResult.Output);
+        Assert.False(activityChange.State.Completion!.Result.InlineValue!.Value.TryGetProperty("output", out _));
 
         var dispatchChange = Assert.Single(commit.StateChanges.WorkflowDispatches);
         Assert.Equal(run.Identity.DispatchId, dispatchChange.StateId);

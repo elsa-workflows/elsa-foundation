@@ -1,45 +1,22 @@
 using System.Collections.ObjectModel;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Models;
 
-/// <summary>A JSON-safe child output captured by waited DispatchWorkflow execution.</summary>
-public sealed class DispatchWorkflowOutput
-{
-    public DispatchWorkflowOutput(string name, JsonElement? value, string? declaredType, bool isRedacted)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (value is { ValueKind: JsonValueKind.Undefined })
-            throw new ArgumentException("A captured child output value must be valid JSON.", nameof(value));
-        if (isRedacted && value.HasValue)
-            throw new ArgumentException("A redacted child output cannot carry a value.", nameof(value));
-
-        Name = name.Trim();
-        Value = value?.Clone();
-        DeclaredType = string.IsNullOrWhiteSpace(declaredType) ? null : declaredType.Trim();
-        IsRedacted = isRedacted;
-    }
-
-    public string Name { get; }
-    public JsonElement? Value { get; }
-    public string? DeclaredType { get; }
-    public bool IsRedacted { get; }
-}
-
 /// <summary>
-/// Reserved structured result for waited execution. #676 leaves it unset; #679 populates it for a terminal child.
+/// The stored terminal result of a waited child: its status, the allow-listed fault and cancellation diagnostics and
+/// the child-control transport. It is not an activity output and carries no child outputs (spec 1245 FR-004); the
+/// child's output values travel as <see cref="WorkflowDispatchParentResumePayload.Output"/>.
 /// </summary>
 public sealed class DispatchWorkflowResult
 {
     public DispatchWorkflowResult(
         string childWorkflowExecutionId,
         WorkflowDispatchStatus status,
-        IReadOnlyCollection<DispatchWorkflowOutput>? outputs = null,
         IReadOnlyDictionary<string, string>? diagnosticMetadata = null)
-        : this(childWorkflowExecutionId, status, outputs, diagnosticMetadata, control: null)
+        : this(childWorkflowExecutionId, status, diagnosticMetadata, control: null)
     {
     }
 
@@ -47,7 +24,6 @@ public sealed class DispatchWorkflowResult
     public DispatchWorkflowResult(
         string childWorkflowExecutionId,
         WorkflowDispatchStatus status,
-        IReadOnlyCollection<DispatchWorkflowOutput>? outputs,
         IReadOnlyDictionary<string, string>? diagnosticMetadata,
         RuntimeChildControlTransport? control)
     {
@@ -61,15 +37,6 @@ public sealed class DispatchWorkflowResult
             !StringComparer.Ordinal.Equals(control.Batch.ChildWorkflowExecutionId, childWorkflowExecutionId.Trim()) ||
             status == WorkflowDispatchStatus.DispatchFailed))
             throw new ArgumentException("DispatchWorkflow control must match the exact terminal child result.", nameof(control));
-
-        var outputSnapshot = (outputs ?? []).ToArray();
-        if (status != WorkflowDispatchStatus.Completed && outputSnapshot.Length != 0)
-            throw new ArgumentException("Only a completed child may expose captured outputs.", nameof(outputs));
-
-        if (outputSnapshot.Any(output => output is null))
-            throw new ArgumentException("A captured child output cannot be null.", nameof(outputs));
-        if (outputSnapshot.Select(output => output.Name).Distinct(StringComparer.Ordinal).Count() != outputSnapshot.Length)
-            throw new ArgumentException("Captured child output names must be unique.", nameof(outputs));
 
         var diagnosticSnapshot = (diagnosticMetadata ?? new Dictionary<string, string>())
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
@@ -88,14 +55,12 @@ public sealed class DispatchWorkflowResult
 
         ChildWorkflowExecutionId = childWorkflowExecutionId.Trim();
         Status = status;
-        Outputs = Array.AsReadOnly(outputSnapshot);
         DiagnosticMetadata = new ReadOnlyDictionary<string, string>(diagnosticSnapshot);
         Control = control;
     }
 
     public string ChildWorkflowExecutionId { get; }
     public WorkflowDispatchStatus Status { get; }
-    public IReadOnlyCollection<DispatchWorkflowOutput> Outputs { get; }
     public IReadOnlyDictionary<string, string> DiagnosticMetadata { get; }
 
     /// <summary>Authored control carried separately from fixed safe diagnostics; absent on legacy and ordinary results.</summary>

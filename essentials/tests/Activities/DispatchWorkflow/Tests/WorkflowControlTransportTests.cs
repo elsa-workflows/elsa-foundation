@@ -120,7 +120,6 @@ public sealed class WorkflowControlTransportTests
         var payload = original.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(Json)!;
         var control = payload.Result.Control!;
         var result = new DispatchWorkflowResult(payload.ChildWorkflowExecutionId, scenario == "dispatch-failed" ? WorkflowDispatchStatus.DispatchFailed : payload.Result.Status,
-            scenario == "outputs" ? [new DispatchWorkflowOutput("forged-output", JsonSerializer.SerializeToElement(42), "Int32", false)] : [],
             scenario == "dispatch-failed" ? new Dictionary<string, string>
             {
                 [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.DispatchFailedCode,
@@ -129,7 +128,9 @@ public sealed class WorkflowControlTransportTests
                 [DispatchWorkflowDiagnostics.DeliveryIncidentIdKey] = "forged-incident"
             } : payload.Result.DiagnosticMetadata, scenario is "omitted" or "dispatch-failed" ? null : scenario == "batch" ? Copy(control, "batch") : control);
         var forgedPayload = new WorkflowDispatchParentResumePayload(payload.DispatchId, payload.ParentWorkflowExecutionId,
-            payload.ParentActivityExecutionId, payload.ChildWorkflowExecutionId, payload.BookmarkId, payload.StimulusType, payload.StimulusHash, result);
+            payload.ParentActivityExecutionId, payload.ChildWorkflowExecutionId, payload.BookmarkId, payload.StimulusType, payload.StimulusHash, result,
+            scenario == "dispatch-failed" ? null : scenario == "outputs" ? JsonDocument.Parse("{\"forged-output\":42}").RootElement : payload.Output,
+            scenario == "dispatch-failed" ? null : payload.WithheldOutputs);
         var forged = new RuntimePostCommitIntent(original.IntentId, original.WorkflowExecutionId, original.Kind, original.RecordedAt,
             original.ActivityExecutionId, original.IdempotencyKey, JsonSerializer.SerializeToElement(forgedPayload, Json), original.Metadata);
         await using var scope = fixture.Services.CreateAsyncScope();

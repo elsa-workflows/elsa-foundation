@@ -174,10 +174,10 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | DispatchWorkflow.CorrelationId, WaitForCompletion | same | R1 | 2 |
 | DispatchWorkflow.Input | `Inputs` (JSON, child-declared keys) | R1 rename + R5 (JSON) | 2 |
 | DispatchWorkflow.StartNewTrace, ChannelName | — | R3 (false / null) | 2 |
-| DispatchWorkflow.Result | `Result` (`DispatchWorkflowResult`) | R4: captured → unconvertible (shape differs) | 2 (1 captured) |
+| DispatchWorkflow.Result | `Output` output (the child's named outputs) | R1: carried to `Output` whatever `WaitForCompletion` is (spec 1245 FR-006; was R4 captured → unconvertible, amended 2026-11-27: Elsa 4's `Result` output is removed) | 2 (1 captured → converts) |
 | (Elsa 4) DispatchWorkflow.CancelChildOnParentCancellation | default true | R2: emit `false` | 2 |
-| DispatchWorkflow outcome `Done` | Dispatched / Completed / Faulted / Cancelled / DispatchFailed | R8 | 2 |
-| ExecuteWorkflow → DispatchWorkflow | `WaitForCompletion = true` | R1 + **W** (durable dispatch instead of an in-process call); members as DispatchWorkflow | 1 (Result captured → unconvertible; target is an expression → unconvertible) |
+| DispatchWorkflow outcome `Done` | `Dispatched`, `Completed`, `Faulted` (ExecuteWorkflow: `Completed`, `Faulted`); `Cancelled` and `DispatchFailed` unmapped | R8 (spec 1245 FR-007, FR-009; was `Dispatched`, `Completed`, amended 2026-11-27: Elsa 3 continued on `Done` after a faulted child) | 2 |
+| ExecuteWorkflow → DispatchWorkflow | `WaitForCompletion` literal `true`, whatever the Elsa 3 value | R7 rewrite (`ExecuteWorkflowAsDispatch`) + **W** (durable dispatch instead of an in-process call; unless the Elsa 3 value was literal true the warning adds that Elsa 4 waits for a child that suspends, where Elsa 3 continued); members as DispatchWorkflow. `Result` is carried to `Output` and every read of its variable is rewritten (spec 1245 FR-008, FR-010; amended 2026-11-27: was a default flip to `true`, but Elsa 3 ran an unset `WaitForCompletion` as `false`, and a captured `Result` was unconvertible) | 1 (Result captured → converts; target is an expression → unconvertible) |
 | BulkDispatchWorkflows, RunTask | — | R6 | 2 / 0 |
 
 ## JavaScript
@@ -212,7 +212,7 @@ R7 structure members, ports and custom properties keep their own handling, which
 | No binding (Elsa 4's default is Elsa 3's value) | If / While / FlowDecision.Condition; For.Start, End; HttpEndpoint.Authorize; SendHttpRequest / FlowSendHttpRequest.Method; WriteHttpResponse.StatusCode; PublishEvent.IsLocalEvent; DispatchWorkflow.WaitForCompletion |
 | Elsa 3's value | R2: For.OuterBoundInclusive `true` (3.6.3), Delay `00:01:00`, WriteLine `""`, Fault code / category / faultType; R5: Timer `00:01:00`; recorded: FlowSendHttpRequest.ExpectedStatusCodes `[200]`, Correlate.CorrelationId and SetName.Value `""` |
 | `ELS3-ACTIVITY-NULL-UNCONVERTIBLE` | For.Step (ran as 0); ForEach.Items, SendHttpRequest / FlowSendHttpRequest.RequestHeaders, WriteHttpResponse.ResponseHeaders (faulted); SendHttpRequest / FlowSendHttpRequest.ContentType with Content bound (no body sent; a typed null otherwise); Cron.CronExpression (a disabled trigger); RunJavaScript.Script (ran nothing); HttpEndpoint.Path, SendHttpRequest / FlowSendHttpRequest.Url, Event / PublishEvent.EventName, DispatchWorkflow / ExecuteWorkflow.WorkflowDefinitionId, SetOutput.OutputName (required); SetVariable.Value, SetOutput.OutputValue (Elsa 4 cannot publish a null value, #3280) |
-| Unchanged (spec 236's mapping) | ExecuteWorkflow.WaitForCompletion: Elsa 3 ran a null as `false`, but spec 236 maps ExecuteWorkflow to a Dispatch that waits (`true`), with `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` |
+| Unchanged (spec 236's mapping) | ExecuteWorkflow.WaitForCompletion: Elsa 3 ran a null as `false`; ExecuteWorkflow converts to a Dispatch that always waits (literal `true`), and `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` adds that Elsa 4 waits for a child that suspends (spec 1245 FR-008, amended 2026-11-27) |
 | No binding, by rule | A null output (nothing captures it); a null member of an activity resolved by name (on an alias or a verbatim catalog key, with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT` where the Elsa 4 input declares a default, #3293); R3 removed inputs and R6 restrictions, which already treat null as absent |
 
 ### Missing, blank and deliberate-null corrections (spec 267 follow-up)

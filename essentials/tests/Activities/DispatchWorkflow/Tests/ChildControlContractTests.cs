@@ -21,7 +21,7 @@ public sealed partial class ChildControlContractTests
     {
         var diagnostics = FaultDiagnostics();
         var result = new DispatchWorkflowResult(Identity.ChildWorkflowExecutionId, WorkflowDispatchStatus.Faulted,
-            [], diagnostics, Transport(Batch(terminal: true, failure: "AuthoredError")));
+            diagnostics, Transport(Batch(terminal: true, failure: "AuthoredError")));
 
         var restored = JsonSerializer.Deserialize<DispatchWorkflowResult>(JsonSerializer.Serialize(result, Web), Web)!;
 
@@ -36,13 +36,13 @@ public sealed partial class ChildControlContractTests
 
         diagnostics["authoredFailureCode"] = "AuthoredError";
         Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(Identity.ChildWorkflowExecutionId,
-            WorkflowDispatchStatus.Faulted, [], diagnostics));
+            WorkflowDispatchStatus.Faulted, diagnostics));
     }
 
     [Fact]
     public void Existing_constructor_and_legacy_payload_keep_control_absent()
     {
-        var result = new DispatchWorkflowResult("old-child", WorkflowDispatchStatus.Faulted, [], FaultDiagnostics());
+        var result = new DispatchWorkflowResult("old-child", WorkflowDispatchStatus.Faulted, FaultDiagnostics());
         var oldWire = JsonSerializer.Serialize(result, Web);
         Assert.False(JsonDocument.Parse(oldWire).RootElement.TryGetProperty("control", out _));
 
@@ -136,11 +136,11 @@ public sealed partial class ChildControlContractTests
     {
         Assert.Throws<ArgumentException>(() => Batch(failure: "authored"));
         Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult("different-child", WorkflowDispatchStatus.Completed,
-            [], null, Transport(Batch(terminal: true))));
+            null, Transport(Batch(terminal: true))));
         Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(Identity.ChildWorkflowExecutionId, WorkflowDispatchStatus.DispatchFailed,
-            [], null, Transport(Batch(terminal: true, failure: "authored"))));
+            null, Transport(Batch(terminal: true, failure: "authored"))));
         Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(Identity.ChildWorkflowExecutionId, WorkflowDispatchStatus.Completed,
-            [], null, Transport(Batch())));
+            null, Transport(Batch())));
     }
 
     [Fact]

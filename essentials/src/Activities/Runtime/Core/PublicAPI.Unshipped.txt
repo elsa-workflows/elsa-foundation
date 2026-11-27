@@ -446,6 +446,7 @@ Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.Oper
 Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.RegistrationId.get -> string!
 Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.State.get -> TState
 Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.TargetOperationKey.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
 Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.Trigger.get -> TTrigger
 Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.Variables.get -> Elsa.Activities.Runtime.Core.Contracts.IStepVariables!
 Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.WorkflowExecutionId.get -> string!
