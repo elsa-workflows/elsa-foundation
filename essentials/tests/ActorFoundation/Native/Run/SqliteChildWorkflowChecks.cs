@@ -84,6 +84,12 @@ internal static class SqliteChildWorkflowChecks
                 "point and paged reads return the exact parent reference");
             Check(await reads.GetAsync(ContractScopes.Bind("other-tenant"), childRef, token) is null,
                 "another tenant cannot see the child");
+            var birth = await ChildBirthProofChecks.ReadBirthAsync(Open, tenant, parentRef, childRef, 1, token);
+            var abandoned = await ChildBirthProofChecks.PlanAbsentAsync(Open, birth, long.MaxValue, long.MaxValue, token);
+            Check(birth.Reference == childRef &&
+                await birth.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved &&
+                await abandoned.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "a live child and an absent issuance from a still-eligible parent both retain their pins");
             await service.StopAsync(token);
 
             var replacement = OpenFoundation("replacement-child-owner");
@@ -98,6 +104,12 @@ internal static class SqliteChildWorkflowChecks
             var waitingAfterPark = await WaitAsync(parentRef, row => row.Revision > 1);
             Check(parked.Revision == 3 && waitingAfterPark is { Status: InstanceStatus.Running, Revision: 2, Children: not null },
                 "the timer parks the child and delivers a non-final notice without advancing Dispatch");
+            Check(await abandoned.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.IssuanceFencedAbsent &&
+                await birth.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "a replacement epoch proves exact absence without releasing a committed parked child");
+            var displaced = await ChildBirthProofChecks.PlanAbsentAsync(Open, birth, 3, long.MaxValue - 1, token, atCurrentEpoch: true);
+            Check(await displaced.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "the replacement epoch can still commit its next exact parent revision");
             var childSelection = (await reads.GetAsync(tenant, childRef, token))!.Selection;
             await SendAsync(childRef, "recover-child", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(childSelection)));
             await WaitAsync(childRef, row => row is { Status: InstanceStatus.Running, Revision: 4 });
@@ -114,11 +126,20 @@ internal static class SqliteChildWorkflowChecks
                 !await db.Messages.AnyAsync(message => !message.Done, token),
                 "the child finishes once and creator and notice are settled");
 
+            Check(await ChildBirthProofChecks.ReadEpochAsync(Open, displaced, token) == displaced.Body.Fence().Epoch &&
+                await displaced.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.IssuanceFencedAbsent &&
+                await birth.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "the committed parent checkpoint disarms the absent issue in the same epoch; child finish alone does not release");
             var terminalChild = (await reads.GetAsync(tenant, childRef, token))!.Selection;
             await SendAsync(childRef, "delete-child", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(terminalChild)));
             await EventuallyAsync(successor, async () => await reads.GetAsync(tenant, childRef, token), view => view is null);
             Check(await reads.GetAsync(tenant, parentRef, token) is { Header.Status: Contract.ActorStatus.Finished },
                 "retiring the attached terminal child preserves the parent continuation");
+            Check(await birth.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.BirthRetired &&
+                await ChildBirthProofChecks.InvalidFingerprint(birth).ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved &&
+                await ChildBirthProofChecks.InvalidSignature(birth).ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved &&
+                await birth.ConfirmAsync(Open, ContractScopes.Bind("other-tenant"), token) == FoundationChildBirthProof.Unresolved,
+                "only the exact committed and retired birth authorizes release");
 
             var raceParent = await StartAsync("cancel-parent", "race-parent");
             var (raceWait, raceChild) = await ChildAsync(raceParent);
@@ -171,6 +192,9 @@ internal static class SqliteChildWorkflowChecks
                         WHERE "Target" = {earlyChild.Actor.Id} AND "InboxScope" = 0 AND "Done"
                             AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
                     """).SingleAsync(token), "a fault in the child's creator turn retains its creator and commits a non-final parent notice");
+            var creatorPark = await ChildBirthProofChecks.ReadBirthAsync(Open, tenant, earlyParent, earlyChildRef, 1, token);
+            Check(await creatorPark.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "a child parked at its first creator checkpoint keeps the existing birth pin");
             await SendAsync(earlyParent, "terminate-faulted-creator", Fixture.TerminateChild, earlyChildRef.Id);
             await WaitAsync(earlyChildRef, row => row is { Status: InstanceStatus.Cancelled, ParkAt: null });
             await WaitAsync(earlyParent, row => row.Children is null);
