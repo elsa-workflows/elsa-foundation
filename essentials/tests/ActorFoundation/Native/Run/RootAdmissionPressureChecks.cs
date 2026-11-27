@@ -168,6 +168,13 @@ internal static class RootAdmissionPressureChecks
                 await standalone.SendAsync(scope, Start("serve"), "live", Contract.Kinds.Start, cancellationToken: token) is
                     { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } old } && old == live,
                 "one-way ingress primes the published pressure list and still replays existing starts");
+            if (postgres)
+            {
+                var preview = await store.OpenPreviewRootIngressAsync(actor.Type, TimeSpan.FromHours(1), token);
+                Check(await preview.SendAsync(scope, Start("serve"), "cold-preview-start", Contract.Kinds.Start, cancellationToken: token) is
+                    { Reason: Contract.RefusalReason.InboxFull, RetryAfter: not null },
+                    "the public PostgreSQL preview factory applies the shared pressure limits");
+            }
             return 0;
 
             Contract.Target.Start Start(string typeData) => new(new(actor.Type, TypeData: typeData));

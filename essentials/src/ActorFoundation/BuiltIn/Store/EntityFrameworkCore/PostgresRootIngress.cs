@@ -321,7 +321,8 @@ public sealed partial class EfStore
                 host.Node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(host.Node))
                 throw new ArgumentException("Expected an issued reply node.", nameof(heldOperators));
         }
-        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType,
+        var pressure = db.UsesRootDueBacklog ? await OpenStandalonePostgresPressureAsync(create, cancellationToken) : null;
+        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true, pressure: pressure), actorType,
             authorizeTerminate, authorizeDelete, heldOperators);
     }
 
@@ -341,6 +342,7 @@ public sealed partial class EfStore
         if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
             throw new NotSupportedException("Ingress requires the ordinary or Native job PostgreSQL Core Preview format.");
         await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
-        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType);
+        var pressure = db.UsesRootDueBacklog ? await OpenStandalonePostgresPressureAsync(create, cancellationToken) : null;
+        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true, pressure: pressure), actorType);
     }
 }

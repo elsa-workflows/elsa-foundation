@@ -7,12 +7,25 @@ public sealed partial class EfStore
 {
     internal RootAdmissionPressure? AdmissionPressure { get; init; }
 
+    internal static async Task<RootAdmissionPressure> OpenStandalonePostgresPressureAsync(Func<KernelDb> create, CancellationToken token)
+    {
+        var pressure = RootAdmissionPressure.CreateDefault();
+        var store = new EfStore(create, postgres: true) { AdmissionPressure = pressure };
+        await store.PrimeAdmissionPressureAsync(token);
+        pressure.RefreshOnDemand(store.PrimeAdmissionPressureAsync);
+        return pressure;
+    }
+
     internal async Task PrimeAdmissionPressureAsync(CancellationToken cancellationToken)
     {
         if (AdmissionPressure is null) return;
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
-        await RefreshAdmissionPressureAsync(db, 1, cancellationToken);
+        var nodes = postgres ? await db.Database.SqlQueryRaw<int>("""
+            SELECT CAST(count(*) AS integer) AS "Value" FROM "Nodes"
+            WHERE "LeaseUntil" >= floor(extract(epoch from statement_timestamp()) * 1000)::bigint
+            """).SingleAsync(cancellationToken) : 1;
+        await RefreshAdmissionPressureAsync(db, nodes, cancellationToken);
     }
 
     private async Task RefreshAdmissionPressureAsync(KernelDb db, int nodes, CancellationToken cancellationToken)
