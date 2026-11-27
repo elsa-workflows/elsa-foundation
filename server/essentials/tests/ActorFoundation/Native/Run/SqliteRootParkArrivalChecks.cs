@@ -225,7 +225,11 @@ internal static partial class SqliteHostLifetimeChecks
                 await CheckRecordedJobRecoverAsync(recoveryOwner, large);
                 await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: false);
                 await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: true);
-                if (shipped) await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: false, terminate: true);
+                if (shipped)
+                {
+                    await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: false, terminate: true);
+                    await CheckRecoverAfterTerminalAsync(recoveryOwner);
+                }
                 await CheckReparkFifoAsync(recoveryOwner);
                 var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
                 var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
@@ -413,6 +417,37 @@ internal static partial class SqliteHostLifetimeChecks
                         .OrderBy(row => row.Seq).ToArrayAsync(token);
                     return stored.Select(row => (row.Id, row.Kind, row.Seq, row.Due, row.JobGeneration, row.Payload)).ToArray();
                 }
+            }
+
+            async Task CheckRecoverAfterTerminalAsync(Worker owner)
+            {
+                var root = (await admission.StartAsync(scope.Tenant, "faulted-after-recover", new(fixture, "{}"),
+                    null, null, token)).Actor!.Value;
+                await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                Require(await admission.SendAsync(scope.Tenant, root, "park-before-terminal", "fail", null, null, null, token)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted }, "a failing input opens the SQLite terminal-race Park");
+                await DriveAsync(owner, root, row => row is { Revision: 2, Status: InstanceStatus.Faulted, TerminalRevision: null });
+                Require(await admission.SendAsync(scope.Tenant, root, "terminal-arrival", "end-faulted", null, null, null, token)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted }, "the SQLite Park admits the input that will end the root");
+                await DriveAsync(owner, root, row => row is { Revision: 3, Status: InstanceStatus.Faulted, TerminalRevision: null });
+                var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                Require(await admission.OperateAsync(scope.Tenant, root, "recover-before-terminal", Kinds.Recover, selection, null, null, token)
+                        is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                    await admission.OperateAsync(scope.Tenant, root, "recover-after-terminal", Kinds.Recover, selection, null, null, token)
+                        is { Outcome: Contract.AdmissionOutcome.Accepted },
+                    "the SQLite terminal-race Park admits two distinct Recover commands before the owner runs");
+                var terminal = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Faulted, TerminalRevision: not null });
+                while (await db.Messages.AsNoTracking().AnyAsync(message => message.Target == terminal.Actor.Id && !message.Done, token))
+                {
+                    await owner.WokenAsync(null, token);
+                    await owner.RunAsync(token);
+                    await Task.Delay(15, token);
+                }
+                var after = await store.ReadFirstRootAsync(scope.Tenant, root.Id, token);
+                Require(after is { Revision: 5, TerminalRevision: 5, Status: InstanceStatus.Faulted, ParkAt: null } && owner.Owns &&
+                    !(await store.ReadJournalOfAsync(new InstanceRef(terminal.Actor.Id).Partition, terminal.Actor.Id, 0, token))
+                        .Any(entry => entry.Revision > 5),
+                    "a released SQLite arrival ends the root Faulted and the second Recover settles without another checkpoint");
             }
 
             async Task CheckAuthoredCohortAsync()
@@ -716,6 +751,11 @@ internal static partial class SqliteHostLifetimeChecks
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (turn.Inbox is [{ Kind: "end-faulted" }])
+            {
+                turn.End(Contract.ActorStatus.Faulted, "ordinary input ended the actor");
+                return ValueTask.CompletedTask;
+            }
             if (turn.Header.TypeData == LiveJobPlan && turn.Inbox is [{ Kind: Contract.Kinds.Terminate }])
                 turn.End(Contract.ActorStatus.Cancelled);
             if (turn.Inbox is [{ Kind: "issue-recorded" }])

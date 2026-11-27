@@ -67,7 +67,7 @@ internal sealed partial class PostgresRootAdmission
 
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
         TimeSpan? keepFor, CancellationToken token, string? selection = null, bool thenDelete = false, bool retentionDelete = false,
-        OperatorReply? reply = null)
+        OperatorReply? reply = null, bool requireExactTarget = false)
     {
         if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete or Kinds.Recover) || !retentionDelete && !FoundationMetadataLimits.IsOutsideMessageId(operation))
             throw new ArgumentException("Expected a one-way exact-root operator command.");
@@ -154,7 +154,7 @@ internal sealed partial class PostgresRootAdmission
             if (prior is not null)
             {
                 await tx.CommitAsync(token);
-                return selected && prior != reference ? null : new(prior, true);
+                return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
             }
             if (!deletion && park is null)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
@@ -202,7 +202,7 @@ internal sealed partial class PostgresRootAdmission
                     SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
                     """).SingleAsync(token);
                 await tx.CommitAsync(token);
-                return selected && prior != reference ? null : new(prior, true);
+                return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
             }
             var actor = new InstanceRef(address.Id);
             var replyAddress = reply?.Address;

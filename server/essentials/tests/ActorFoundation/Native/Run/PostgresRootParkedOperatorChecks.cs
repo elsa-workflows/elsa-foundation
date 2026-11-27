@@ -1141,6 +1141,50 @@ internal static class PostgresRootParkedOperatorChecks
                 "the shipped profile still admits Resume after the stale Recover settles");
             await set.DriveAsync(suspending, image => image is { Revision: 6, Status: InstanceStatus.Running, Suspended: false });
 
+            var firstGrant = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenJoint, Probe.Type,
+                (caller, target, kind) => ReferenceEquals(caller, tenant) && target == suspending && kind == Contract.Kinds.Suspend,
+                cancellationToken: stop);
+            var secondGrant = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenJoint, Probe.Type,
+                (caller, target, kind) => ReferenceEquals(caller, tenant) && target == recovering && kind == Contract.Kinds.Suspend,
+                cancellationToken: stop);
+            const string sharedId = "same-exact-operator-id";
+            var firstRef = new Contract.Target.Ref(suspending);
+            var secondRef = new Contract.Target.Ref(recovering);
+            Check(await firstGrant.SendAsync(tenant, firstRef, sharedId, Contract.Kinds.Suspend, cancellationToken: stop)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                await firstGrant.SendAsync(tenant, firstRef, sharedId, Contract.Kinds.Suspend, cancellationToken: stop)
+                    is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var prior } && prior == suspending &&
+                await secondGrant.SendAsync(tenant, secondRef, sharedId, Contract.Kinds.Suspend, cancellationToken: stop)
+                    is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null },
+                "the public operator grant returns the same actor's receipt and refuses a receipt for a different actor");
+            const string raceId = "competing-exact-operator-id";
+            var competing = await Task.WhenAll(
+                firstGrant.SendAsync(tenant, firstRef, raceId, Contract.Kinds.Suspend, cancellationToken: stop).AsTask(),
+                secondGrant.SendAsync(tenant, secondRef, raceId, Contract.Kinds.Suspend, cancellationToken: stop).AsTask());
+            Check(competing.Count(result => result.Outcome == Contract.AdmissionOutcome.Accepted) == 1 &&
+                competing[0].Actor == (competing[0].Outcome == Contract.AdmissionOutcome.Accepted ? suspending : null) &&
+                competing[1].Actor == (competing[1].Outcome == Contract.AdmissionOutcome.Accepted ? recovering : null) &&
+                competing.Any(result => result is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null }),
+                "competing grants for separate actors leave one accepted operation and one refusal");
+
+            var finishing = await set.StartAsync("faulted-after-recover");
+            Check(await set.SendAsync(finishing, "park-before-terminal", "fail"), "a failing input opens the terminal-race Park");
+            await set.DriveAsync(finishing, image => image is { Revision: 2, Status: InstanceStatus.Faulted, TerminalRevision: null });
+            Check(await set.SendAsync(finishing, "terminal-arrival", "end-faulted"), "the Park admits the input that will end the root");
+            await set.DriveAsync(finishing, image => image is { Revision: 3, Status: InstanceStatus.Faulted, TerminalRevision: null });
+            var endSelection = await set.ParkSelectionAsync(finishing, 2);
+            Check(await SendOperatorAsync(finishing, "recover-before-terminal", Contract.Kinds.Recover, endSelection, stop)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                await SendOperatorAsync(finishing, "recover-after-terminal", Contract.Kinds.Recover, endSelection, stop)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the terminal-race Park admits two distinct Recover commands before the owner runs");
+            await set.SettledInputsAsync(finishing);
+            var terminal = await set.ImageAsync(finishing);
+            Check(terminal is { Revision: 5, TerminalRevision: 5, Status: InstanceStatus.Faulted, ParkAt: null } &&
+                set.Probe.Count(finishing, "end-faulted") == 1 && ReferenceEquals(set.Owner, owner) && !set.StoodDown &&
+                !(await set.Cold.ReadJournalOfAsync(0, terminal.Actor.Id, 0, stop)).Any(entry => entry.Revision > 5),
+                "a released arrival ends the root Faulted and the second Recover settles without another checkpoint");
+
             clearing = await set.StartAsync("clearing-and-recover");
             var payload = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
             Check(await set.SendAsync(clearing, "clearing-1", "fail", payload: payload) &&
@@ -3638,6 +3682,7 @@ internal static class PostgresRootParkedOperatorChecks
                 return new(ReleaseCohort.Task.WaitAsync(cancellationToken));
             }
             if (turn.Inbox.Any(input => input.Kind == Contract.Kinds.Terminate)) turn.End(Contract.ActorStatus.Cancelled);
+            if (turn.Inbox is [{ Kind: "end-faulted" }]) turn.End(Contract.ActorStatus.Faulted, "ordinary input ended the actor");
             if (turn.Inbox is [{ Kind: "issue-job" }])
             {
                 turn.StartJob("work", timeout: TimeSpan.FromSeconds(30));
