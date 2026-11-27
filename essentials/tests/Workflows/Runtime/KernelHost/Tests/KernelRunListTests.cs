@@ -1,6 +1,9 @@
 using System.Data.Common;
+using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -8,6 +11,7 @@ using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelApi;
@@ -17,6 +21,11 @@ using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Values;
 using Kernel.Foundation.Contracts;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -153,6 +162,52 @@ public sealed class KernelRunListTests
         shell.CreateScope().ServiceProvider.GetRequiredService<IWorkflowInstanceListService>().ListAsync(request, CancellationToken.None);
 
     private static readonly PersistenceAccessContext HostTenant = PersistenceAccessContext.Scoped(new PersistenceScope(Tenant));
+
+    [Fact]
+    public async Task Retained_http_reads_activate_and_serve_without_legacy_execution_services()
+    {
+        const string scheme = "KernelExecuteFixture";
+        var reads = new Reads(Views[0]);
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
+        builder.Services.AddAuthentication(scheme)
+            .AddScheme<AuthenticationSchemeOptions, KernelPublishedExecuteTests.FixtureAuthentication>(scheme, _ => { });
+        builder.Services.AddAuthorization();
+        builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string> { scheme });
+        builder.Services.AddPersistenceCore();
+        builder.Services.AddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        builder.Services.AddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        builder.Services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(reads)));
+        WorkflowsRuntimeKernelApiFeature.ConfigureRetainedServices(builder.Services);
+        new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(builder.Services);
+
+        await using var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        WorkflowsRuntimeKernelApiFeature.MapRetainedEndpoints(app);
+        await app.StartAsync();
+        await using var scope = app.Services.CreateAsyncScope();
+        Assert.Null(scope.ServiceProvider.GetService<IWorkflowSchedulerDrainer>());
+        Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionActorProvider>());
+        Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
+        Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
+
+        var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
+        using var client = new HttpClient { BaseAddress = new(address) };
+        client.DefaultRequestHeaders.Add("X-Fixture-Subject", "read-verifier");
+        client.DefaultRequestHeaders.Add("X-Fixture-Tenant", Tenant);
+        client.DefaultRequestHeaders.Add("X-Fixture-Read", "yes");
+        client.DefaultRequestHeaders.Add("X-Fixture-Inspect", "yes");
+
+        var list = await client.GetFromJsonAsync<WorkflowInstanceListView>("/runtime/workflows/instances/page");
+        Assert.Equal(Views[0].Header.Ref.Id, Assert.Single(list!.Items).WorkflowExecutionId);
+        using var detail = await client.GetAsync("/runtime/workflows/instances/" + Views[0].Header.Ref.Id);
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        using var history = await client.GetAsync("/runtime/workflows/instances/missing/history/occurrences");
+        Assert.Equal(HttpStatusCode.NotFound, history.StatusCode);
+        using var legacy = await client.GetAsync("/runtime/workflows/diagnostics/settings");
+        Assert.Equal(HttpStatusCode.NotFound, legacy.StatusCode);
+    }
 
     [Fact]
     public async Task Standard_history_pages_committed_structure_and_catches_up_without_reopening_the_snapshot()
