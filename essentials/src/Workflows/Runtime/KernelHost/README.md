@@ -52,11 +52,11 @@ the Native model's definitions.
     not a correctness bound. Past either the workflow faults with `native.burst.limit`, saying what it ran and what to
     change. The 1,000-item ForEach cap stands. A PostgreSQL host reads whether its store format takes self-sends from
     `PostgresPreviewHosting.TakesSelfSends`.
-- `KernelHttpEdge` is the framework-free half of a host's HTTP edge. `Route` matches a request's method and path,
-  relative to the edge's base path, against the start routes of what serves now; a wait route or no route is not served,
-  and an edge reads no body for it. `Start` then makes the start of the route's workflow, with the request (and its route
-  values) as the trigger. `Match` does both. `Answer` maps a held start's
-  reply to the HTTP answer: the designed response, 204, 404, 500, 503 or 504.
+- `KernelHttpEdge` matches a request's method and edge-relative path against the published routes before reading its body.
+  `Start` makes a workflow start with the request and its decoded route values as the trigger. With `HttpWaits` enabled,
+  `Wait` makes an event request on the resolved key of the published template. A mid-flow HTTP Endpoint declares a literal
+  path and binds the template parameters in `RouteValues`. Its `RouteData` output contains the decoded values. `Answer`
+  maps the held reply to the authored HTTP response or the corresponding status. A request with no waiter returns 404.
 - `KernelServing.ServeHostWorkflowAsync` serves a workflow the host defines itself beside the publications, its routes
   checked against the serving set (the Workbench's opt-in HTTP probe is one).
 - On a kernel shell the feature also unmounts the old core's HTTP endpoint middleware (`HttpEndpointMiddleware`): it is
