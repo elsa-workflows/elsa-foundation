@@ -74,6 +74,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             (IsRootControl(message) || IsRootRecover(message) ||
                 !IsAuxiliary(row.Model) && roots.SupportsChildren && message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, message));
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
+    bool Durable.IActorType.SupportsQualifiedInlineStart(string type) => roots?.SupportsInlineStarts == true && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
     Func<CancellationToken, ValueTask<long>>? Durable.IActorType.RootTimedJobPublicationClock => rootTimedJobClock;
@@ -410,7 +411,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             ? input.Row is { } row ? Header(store.FoundationTurnHeader(row)) : StartHeader(input)
             : input.Row is { } running ? RootHeader(running) : RootStartHeader(input);
         var delivery = input.Taken[input.From];
-        var ambient = local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
+        var ambient = roots?.SupportsInlineStarts == true &&
+            (delivery.Message.Start?.FoundationInlineTenant is not null || input.Row?.FoundationInlineBirth is not null)
+            ? input.Ambient
+            : local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
         var turn = new ActorTurn(inMemory, roots, input, header, ambient, issueSelf, rootJobHandle,

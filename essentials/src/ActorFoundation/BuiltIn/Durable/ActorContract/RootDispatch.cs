@@ -9,6 +9,7 @@ internal interface IRootDispatchHeaders
 {
     (string Tenant, string Reference) Creator(Durable.Message creator);
     Durable.FoundationDispatchHeader Checkpoint(Durable.InstanceRow row);
+    bool SupportsInlineStarts => false;
     bool SupportsChildren => false;
     Func<string, string>? ChildMessageHandle => null;
     string? ChildReference(string tenant, Durable.CreationAddress address) => null;
@@ -404,7 +405,16 @@ internal sealed partial class ActorAdapter
         foreach (var delivery in input.Taken)
         {
             var message = delivery.Message;
-            if (issueSelf is not null && issueSelf.Allows(message.Due) && delivery.Durable && input.Row is { } issuer &&
+            if (!auxiliary && roots?.SupportsInlineStarts == true && !delivery.Durable && input.Row is null &&
+                input.Taken.Count == 1 && message.Start?.FoundationInlineTenant is { } tenant &&
+                message.FoundationRootBinding is { } identity && tenant == identity.Tenant && identity.Actor == input.Actor &&
+                message.Target.Id == input.Actor && message.InboxKey == new Durable.InboxKey("root:" + input.Actor) &&
+                message.Start is { Ephemeral: true, Parent: null, Creation: { Generation: 1, Previous: 0 } } &&
+                message is { Kind: Durable.Kinds.Start, TargetCreation: 1, Sender: null, ReplyTo: null, Due: null, KeepUntil: null,
+                    Operator: null, ActorAuthored: false, BindFoundationChild: false })
+                continue;
+            if (issueSelf is not null && issueSelf.Allows(message.Due) && input.Row is { } issuer &&
+                (delivery.Durable || roots?.SupportsInlineStarts == true && issuer.FoundationInlineBirth is not null) &&
                 Durable.FoundationSelfSend.IsSelfInput(message, issuer.Id, issuer.Creation)) continue;
             if (!auxiliary && roots?.SupportsChildren == true && message.FoundationRootChildNotice && delivery.Durable)
             {
@@ -455,6 +465,12 @@ internal sealed partial class ActorAdapter
 
     private void RequireRootOutcome(Durable.TurnOutcome outcome, Durable.InstanceRow? previous, Durable.Message input)
     {
+        var inline = roots?.SupportsInlineStarts == true &&
+            (input.Start?.FoundationInlineTenant is not null || previous?.FoundationInlineBirth is not null);
+        if (inline && outcome.Row is null && !outcome.Durable &&
+            outcome.Status is Durable.InstanceStatus.Finished or Durable.InstanceStatus.Faulted or Durable.InstanceStatus.Cancelled)
+            return;
+
         if (roots?.SupportsChildren == true && outcome.Sent.Any(IsChildEffect))
         {
             // The qualified writer commits these rows. Their recipients obtain the stored envelope through polling.
@@ -504,7 +520,7 @@ internal sealed partial class ActorAdapter
             outcome.Replied.Count != 0 ||
             // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
             // their delivery, and drops it when it holds none (Worker.Release), as the in-memory reference does.
-            outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory)
+            outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory && !inline)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
 

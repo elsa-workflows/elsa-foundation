@@ -329,9 +329,10 @@ internal sealed partial class ActorAdapter
 
         private long InlineUntil()
         {
-            var configured = (long)_input.Services.ShortWait.TotalMilliseconds;
-            var deadline = Durable.ReplyTo.Parse(_input.Taken[_input.From].Message.ReplyTo!).Deadline;
-            return Math.Min(checked(Now + configured), deadline);
+            var configured = checked(Now + (long)_input.Services.ShortWait.TotalMilliseconds);
+            return _input.Taken[_input.From].Message.ReplyTo is { } reply
+                ? Math.Min(configured, Durable.ReplyTo.Parse(reply).Deadline)
+                : configured;
         }
 
         private Durable.Message Received(Contract.Message message) =>

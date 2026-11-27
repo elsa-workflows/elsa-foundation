@@ -20,6 +20,7 @@ public interface IActorType
     internal bool AcceptsFoundationOperator(InstanceRow? row, Message message) => SupportsFoundationOperator(row);
 
     internal bool SupportsFoundationInlineStart(string type) => false;
+    internal bool SupportsQualifiedInlineStart(string type) => false;
 
     /// <summary>Whether this actor type can verify the operator or parent authority of a terminate.</summary>
     internal bool SupportsTrialWithdrawal => false;
