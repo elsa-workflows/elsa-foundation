@@ -101,10 +101,7 @@ public sealed class KernelShellHeldExecutableTests
             {
                 var handler = new KernelHttpRequestHandler(services.GetRequiredService<KernelServing>(), shell.IngressAsync,
                     services.GetRequiredService<KernelShellStorage>().ReadClockAsync, tenant, "/workflows/http", TimeSpan.FromSeconds(10),
-                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true)
-                {
-                    ReadPublication = shell.ReadHeldPublicationAsync
-                };
+                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true);
                 var reads = await shell.ReadAsync(token);
                 sourceReads.FailNextRead();
                 var context = await RequestAsync(handler, Route);
@@ -120,7 +117,7 @@ public sealed class KernelShellHeldExecutableTests
                 Assert.Equal((publishedSourceId, published.Slot.ActiveActivationId, published.Slot.SlotId,
                     published.Slot.SlotName, published.Slot.Revision),
                     (selected.SourceReferenceId, selected.ActivationId, selected.SlotId, selected.SlotName, selected.SlotRevision));
-                Assert.Equal(KernelPublishedRunDispatcher.SourceDigest(publishedSource), selected.SourceDigest);
+                Assert.Equal(KernelSourceStamp.Digest(publishedSource), selected.SourceDigest);
                 var pins = stores.GetRequiredService<IRuntimeKernelExecutablePinStore>();
                 var tail = await pins.ReadOpenTailAsync(Persistence, token);
                 Assert.NotNull(tail);
@@ -131,10 +128,7 @@ public sealed class KernelShellHeldExecutableTests
                 unavailable.FailWrites = true;
                 var shortRequest = new KernelHttpRequestHandler(services.GetRequiredService<KernelServing>(), shell.IngressAsync,
                     services.GetRequiredService<KernelShellStorage>().ReadClockAsync, tenant, "/workflows/http", TimeSpan.FromSeconds(2),
-                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true)
-                {
-                    ReadPublication = shell.ReadHeldPublicationAsync
-                };
+                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true);
                 Assert.Equal(408, (await RequestAsync(shortRequest, Route)).StatusCode);
                 Assert.True(unavailable.Attempts > 0);
                 Assert.Equal(actor, Assert.Single((await reads.ListAsync(tenant, new(), cancellationToken: token)).Items).Header.Ref);
@@ -143,14 +137,20 @@ public sealed class KernelShellHeldExecutableTests
                 sourceReads.Unavailable = true;
                 try
                 {
-                    var timedOut = await RequestAsync(shortRequest, Route);
+                    var request = RequestAsync(shortRequest, Route);
+                    await sourceReads.Blocked.WaitAsync(token);
+                    var timedOut = await request.WaitAsync(TimeSpan.FromSeconds(5), token);
                     Assert.Equal(408, timedOut.StatusCode);
                     Assert.False(timedOut.Headers.ContainsKey(KernelHttpEdge.WorkflowInstanceIdHeader));
                     Assert.True(sourceReads.Failures > earlierFailures + 1);
-                    Assert.Equal(1, sourceReads.LateFailures);
                     Assert.Equal(actor, Assert.Single((await reads.ListAsync(tenant, new(), cancellationToken: token)).Items).Header.Ref);
                 }
-                finally { sourceReads.Unavailable = false; }
+                finally
+                {
+                    sourceReads.Unavailable = false;
+                    sourceReads.ReleaseBlockedRead();
+                }
+                Assert.True(await sourceReads.BlockedReadFinished.WaitAsync(token));
 
                 unavailable.FailWrites = true;
                 var probe = Wf.Workflow("held-probe", Wf.Sequence("main", Wf.HttpEndpoint("start", "held-probe"), Wf.Respond("out", "ok")));
@@ -268,12 +268,16 @@ public sealed class KernelShellHeldExecutableTests
         private int failNext;
         private int failures;
         private int unavailableAttempts;
-        private int lateFailures;
+        private readonly TaskCompletionSource blocked = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> blockedReadFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal volatile bool Unavailable;
         internal int Failures => Volatile.Read(ref failures);
-        internal int LateFailures => Volatile.Read(ref lateFailures);
+        internal Task Blocked => blocked.Task;
+        internal Task<bool> BlockedReadFinished => blockedReadFinished.Task;
 
         internal void FailNextRead() => Interlocked.Exchange(ref failNext, 1);
+        internal void ReleaseBlockedRead() => release.TrySetResult();
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
             InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
@@ -282,14 +286,12 @@ public sealed class KernelShellHeldExecutableTests
                 (Unavailable || Interlocked.Exchange(ref failNext, 0) != 0))
             {
                 Interlocked.Increment(ref failures);
-                if (Unavailable && Interlocked.Increment(ref unavailableAttempts) >= 3)
+                if (Unavailable && Interlocked.Increment(ref unavailableAttempts) == 3)
                 {
-                    // A provider can surface its transient error after the request has already expired.
-                    try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        Interlocked.Increment(ref lateFailures);
-                    }
+                    // SQLite can enter a synchronous provider read that ignores cancellation until it returns.
+                    blocked.TrySetResult();
+                    await release.Task;
+                    blockedReadFinished.TrySetResult(cancellationToken.IsCancellationRequested);
                 }
                 if (command is SqliteCommand) throw new SqliteException("Test source read is busy.", 5);
                 throw new NpgsqlException("Test source read is transient.", new TimeoutException());

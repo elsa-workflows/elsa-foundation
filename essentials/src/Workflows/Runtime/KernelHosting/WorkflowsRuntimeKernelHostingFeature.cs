@@ -90,7 +90,10 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(new KernelServing(cronError: schedules ? CronosCalendar.Error : null,
             capabilities: new KernelHostCapabilities(Schedules: schedules, Timers: storage.TakesTimers,
                 Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits),
-            publicationScope: persistenceScope));
+            publicationScope: persistenceScope)
+        {
+            ProtectsHttpStarts = storage.TakesPreparedStarts
+        });
         services.AddSingleton<IScheduleActors>(schedules
             ? new RuntimeManagedScheduleActors()
             : new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
@@ -140,10 +143,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             var requestBasePath = string.IsNullOrEmpty(shellPath) ? basePath : "/" + shellPath + basePath;
             return new KernelHttpRequestHandler(sp.GetRequiredService<KernelServing>(), runtime.IngressAsync,
                 storage.ReadClockAsync, tenant, requestBasePath, http.SyncRequestTimeout, http.MaxRequestBodyBytes,
-                enforceRequestTimeout: true)
-            {
-                ReadPublication = storage.TakesPreparedStarts ? runtime.ReadHeldPublicationAsync : null
-            };
+                enforceRequestTimeout: true);
         });
         KernelToolbox.Register(services);
 

@@ -21,8 +21,6 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
     Func<CancellationToken, ValueTask<long>> readClock,
     Contract.BoundScope tenant, string basePath, TimeSpan timeout, long maxRequestBodyBytes, bool enforceRequestTimeout = false)
 {
-    internal Func<KernelServedSlot, CancellationToken, ValueTask<WorkflowPublishedStart?>>? ReadPublication { get; init; }
-
     /// <summary>Serves a published workflow HTTP endpoint with the actor foundation's held reply.</summary>
     public async Task HandleAsync(HttpContext context)
     {
@@ -151,15 +149,12 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         string kind;
         string? payload;
         bool respondBeforeCommit;
-        WorkflowPublishedStart? publication = null;
+        var selected = serving.ProtectsHttpStarts && slot is { Revision: > 0 } ? slot : null;
+        var publication = selected?.HttpPublication;
+        if (selected is not null && publication is null) return KernelHttpEdge.NotFound;
         try
         {
-            if (ReadPublication is { } read && slot is { Revision: > 0 })
-            {
-                publication = await read(slot, token);
-                if (publication is null) return KernelHttpEdge.NotFound;
-            }
-            if (KernelHttpEdge.SelectStart(serving, route, message, publication is null ? null : slot) is { } start)
+            if (KernelHttpEdge.SelectStart(serving, route, message, selected) is { } start)
                 (target, kind, payload, respondBeforeCommit) =
                     (new Contract.Target.Start(WorkflowActor.Start(start.Start, publication)), Contract.Kinds.Start, null, start.RespondBeforeCommit);
             else if (KernelHttpEdge.Wait(serving, route, message) is { } wait)

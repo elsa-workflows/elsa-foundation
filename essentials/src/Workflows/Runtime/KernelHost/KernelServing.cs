@@ -1,12 +1,16 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Kernel.Native;
+using Kernel.WorkflowActor;
 
 namespace Elsa.Workflows.Runtime.KernelHost;
 
 /// <summary>What one activation slot serves on a kernel host: the Native workflow its activation maps to.</summary>
 /// <param name="SlotId">The slot (<c>WorkflowActivationSlotIdentity</c>).</param>
 /// <param name="Revision">The slot's revision when its workflow began to serve; schedules are set at it.</param>
-public sealed record KernelServedSlot(string SlotId, string DefinitionId, string SlotName, string ActivationId, Workflow Workflow, long Revision);
+public sealed record KernelServedSlot(string SlotId, string DefinitionId, string SlotName, string ActivationId, Workflow Workflow, long Revision)
+{
+    internal WorkflowPublishedStart? HttpPublication { get; init; }
+}
 
 /// <summary>
 /// What a kernel host serves, a host singleton the shells share (definitions on the kernel, "The serving set and versions"):
@@ -48,6 +52,8 @@ public sealed class KernelServing
     }
 
     internal PersistenceScope? PublicationScope { get; }
+
+    internal bool ProtectsHttpStarts { get; init; }
 
     public WorkflowRegistry Registry { get; } = new();
 

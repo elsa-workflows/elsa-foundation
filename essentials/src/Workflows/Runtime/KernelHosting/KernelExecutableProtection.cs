@@ -22,7 +22,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
     private const int PageSize = 32;
     private static readonly TimeSpan CleanupCadence = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan OperationBudget = TimeSpan.FromSeconds(5);
-    internal static readonly TimeSpan HeldRetryDelay = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan HeldRetryDelay = TimeSpan.FromMilliseconds(200);
 
     internal async Task RequireAsync(CancellationToken token)
     {
@@ -137,7 +137,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         }
     }
 
-    internal static bool IsTransientHeldStorageFailure(Exception error)
+    private static bool IsTransientHeldStorageFailure(Exception error)
     {
         // A Runtime store or a provider execution strategy can wrap the original failure. SQLite reports busy and locked by code.
         for (Exception? cause = error; cause is not null; cause = cause.InnerException)
@@ -207,7 +207,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
             source.DefinitionVersionId != publication.DefinitionVersionId || source.ArtifactVersion != publication.ArtifactVersion ||
             source.SlotId != publication.SlotId || (source.TenantId ?? PersistenceScope.DefaultValue) != actors.Tenant ||
             source.PublicationScope is { } protectedScope && protectedScope != scope || !source.IsLive(clock.GetUtcNow()) ||
-            KernelPublishedRunDispatcher.SourceDigest(source) != publication.SourceDigest) return false;
+            KernelSourceStamp.Digest(source) != publication.SourceDigest) return false;
         var slot = await services.GetRequiredService<IWorkflowActivationAuthority>()
             .FindAsync(selected.Definition, publication.SlotName, bounded.Token);
         if (slot is null || slot.SlotId != publication.SlotId || slot.ActiveActivationId != publication.ActivationId ||
@@ -227,7 +227,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
             source.ExpiresAt != test.ExpiresAt || source.SourceKind != test.SourceKind || source.SourceId != test.SourceId ||
             source.SourceVersion != test.SourceVersion || source.DefinitionVersionId != test.DefinitionVersionId ||
             source.ArtifactVersion != test.ArtifactVersion || !source.IsLive(clock.GetUtcNow()) ||
-            KernelPublishedRunDispatcher.SourceDigest(source) != test.SourceDigest)
+            KernelSourceStamp.Digest(source) != test.SourceDigest)
             return null;
         var expected = new WorkflowTestScope(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition));
         var current = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, token);

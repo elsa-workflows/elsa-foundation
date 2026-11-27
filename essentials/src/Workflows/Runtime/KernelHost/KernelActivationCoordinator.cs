@@ -282,7 +282,8 @@ public sealed class KernelActivationCoordinator(
     /// The workflow whose schedules the slot served before, when this host may not serve it (a deactivation after a restart);
     /// otherwise what the slot serves on this host.
     /// </param>
-    private async ValueTask ServeAsync(KernelServingPlan plan, long revision, CancellationToken cancellationToken, Workflow? replaced = null)
+    private async ValueTask ServeAsync(KernelServingPlan plan, long revision, CancellationToken cancellationToken, Workflow? replaced = null,
+        WorkflowExecutableSourceReference? restoredSource = null)
     {
         var state = plan.State;
         NativeSchedule[] after = [];
@@ -298,7 +299,10 @@ public sealed class KernelActivationCoordinator(
                     throw new InvalidOperationException("The activation's schedules need publication claims before they can be served.");
             }
             // The slot's revision is known only once the switch commits.
-            state = state with { Slots = new Dictionary<string, KernelServedSlot>(state.Slots, StringComparer.Ordinal) { [plan.SlotId] = served with { Revision = revision } } };
+            var committed = served with { Revision = revision };
+            if (serving.ProtectsHttpStarts && state.HttpStarts.Values.Any(start => start.Route.Workflow == served.Workflow.Id))
+                committed = committed with { HttpPublication = await ReadHttpPublicationAsync(committed, restoredSource, cancellationToken) };
+            state = state with { Slots = new Dictionary<string, KernelServedSlot>(state.Slots, StringComparer.Ordinal) { [plan.SlotId] = committed } };
         }
         var before = (replaced ?? serving.Find(plan.SlotId)?.Workflow) is { } previous ? serving.SchedulesOf(previous) : [];
         serving.Apply(plan with { State = state });
@@ -315,6 +319,21 @@ public sealed class KernelActivationCoordinator(
             await schedules.StopAsync(schedule.Key, revision, cancellationToken);
             await schedules.RegisterRunAsync(schedule.StartKey, null, cancellationToken);
         }
+    }
+
+    private async ValueTask<WorkflowPublishedStart> ReadHttpPublicationAsync(KernelServedSlot slot,
+        WorkflowExecutableSourceReference? source, CancellationToken token)
+    {
+        var sourceId = WorkflowActivationReferenceIdentity.Create(slot.ActivationId);
+        source ??= await sourceReferenceStore.FindAsync(sourceId, token);
+        if (source is null || source.SourceReferenceId != sourceId || source.Scope != WorkflowExecutableReferenceScope.Published ||
+            source.ArtifactId != slot.Workflow.Id || source.DefinitionId != slot.DefinitionId || source.SlotId != slot.SlotId ||
+            source.ActivationId != slot.ActivationId || !source.IsLive(timeProvider.GetUtcNow()) ||
+            (serving.PublicationScope is { } scope && ((source.TenantId ?? PersistenceScope.DefaultValue) != scope.Value ||
+                source.PublicationScope is { } sourceScope && sourceScope != scope)))
+            throw new InvalidOperationException("The activation needs an exact live source reference before serving its HTTP starts.");
+
+        return KernelSourceStamp.Published(source, slot, subjectId: null);
     }
 
     private static RecurringSchedule Recurring(NativeSchedule schedule) =>
@@ -661,7 +680,8 @@ public sealed class KernelActivationCoordinator(
             // 6. Ensure this host serves it.
             var publication = await ReadEventPublicationAsync(slot, cancellationToken);
             var served = serving.Find(slot.SlotId);
-            var servesHere = served?.ActivationId == activationId && serving.Registry.Contains(served.Workflow.Id);
+            var servesHere = served is not null && served.ActivationId == activationId && served.Revision == slot.Revision &&
+                serving.Registry.Contains(served.Workflow.Id);
             var adoptEvents = publication is null && EventPublications is { AdoptsExistingPublications: true } &&
                 (!servesHere || NativeStartTriggers.StartEvents(served!.Workflow).Any());
             if (restore is null && (!servesHere || adoptEvents))
@@ -696,7 +716,7 @@ public sealed class KernelActivationCoordinator(
                 if (repaired || publication is not null) await NotifyServingAsync(slot, served!.Workflow.Id);
                 return (slot, await ApplyEventPublicationAsync(slot, publication, cancellationToken));
             }
-            await ServeAsync(restore!.Serving, slot.Revision, cancellationToken);
+            await ServeAsync(restore!.Serving, slot.Revision, cancellationToken, restoredSource: restore.Source);
             logger?.LogInformation("Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves on this host again",
                 activationId, slot.WorkflowDefinitionId, slot.SlotName);
             if (repaired || publication is not null) await NotifyServingAsync(slot, restore.Identity.ArtifactId);
