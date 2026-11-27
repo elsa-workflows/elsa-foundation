@@ -108,6 +108,9 @@ if (args is ["kernel-public-event-host", var eventHostProvider and ("postgres" o
     return await KernelAuthoredEventChecks.RunPublicEventHostAsync(eventHostProvider, eventHostFence == "in-batch", eventHostMode == "protected");
 if (args is ["kernel-protected-event-observer"])
     return await KernelAuthoredEventChecks.RunPublicEventHostAsync("postgres", inBatch: true, protectedStarts: true, observeReplies: true);
+if (args is ["kernel-sb7-broadcast", var sb7Provider and ("postgres" or "sqlite"), var sb7Fence and ("checked" or "in-batch"),
+    var sb7Source and ("outside" or "authored")])
+    return await KernelAuthoredEventChecks.RunSb7BroadcastAsync(sb7Provider, sb7Fence == "in-batch", sb7Source == "authored");
 if (args is ["kernel-paged-event-publication", var pagedEventProvider and ("postgres" or "sqlite"), var pagedEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedEventProvider, pagedEventFence == "in-batch");
 if (args is ["kernel-paged-authored-event", var pagedAuthoredProvider and ("postgres" or "sqlite"), var pagedAuthoredFence and ("checked" or "in-batch")])
