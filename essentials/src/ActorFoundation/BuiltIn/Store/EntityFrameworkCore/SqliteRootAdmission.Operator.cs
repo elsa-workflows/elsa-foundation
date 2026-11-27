@@ -82,8 +82,7 @@ internal sealed partial class SqliteRootAdmission
     {
         await using var db = create();
         await db.Database.OpenConnectionAsync(token);
-        await EfStore.RequireSqliteRootAdmissionAsync(db, token);
-        await definitions.RequireAsync(db, token);
+        await EfStore.RequireSqliteRootAdmissionAsync(db, definitions, token);
         var result = await db.Database.SqlQuery<int?>($"""
             SELECT i."Status" AS "Value" FROM "Instances" i
                 JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
