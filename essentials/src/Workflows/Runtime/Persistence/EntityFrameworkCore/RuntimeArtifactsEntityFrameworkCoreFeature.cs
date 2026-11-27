@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -65,22 +66,21 @@ public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var signingKey = RecoveryContinuationSigningKey;
+        RuntimeEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, signingKey, "Runtime artifacts");
         services.AddPersistenceCore();
         services.TryAddSingleton(TimeProvider.System);
         services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
         services.TryAddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
-        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
-        {
-            if (!string.IsNullOrWhiteSpace(RecoveryContinuationSigningKey))
-                options.SigningKey = RecoveryContinuationSigningKey;
-            options.AllowEphemeralDevelopmentKey = false;
-        });
         services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions
         {
             Provider = Provider ?? "Sqlite",
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling
         });
+        if (!string.IsNullOrWhiteSpace(signingKey))
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<RuntimeRecoveryContinuationOptions>>(
+                new ConfigureArtifactRecoveryContinuationSigningKey(signingKey)));
         services.AddEfModuleMigrations<RuntimeDbContext>(Provider ?? "Sqlite");
     }
 }

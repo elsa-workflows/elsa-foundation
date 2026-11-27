@@ -80,8 +80,11 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             var optionsDescriptor = ServiceDescriptor.Singleton(configured);
             services.Add(optionsDescriptor);
             owned.Add(optionsDescriptor);
-            if (RuntimeEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
+            var context = RuntimeEfContextRegistration.ContextRegistrations(services, provider);
+            if (context.Count == 0)
                 owned.AddRange(RuntimeEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
+            else
+                owned.AddRange(context);
 
             var durableContract = ServiceDescriptor.Scoped<IDurableValueStateStore>(provider => provider.GetRequiredService<EfDurableValueStateStore>());
             var schedulerContract = ServiceDescriptor.Scoped<ISchedulerStateStore>(provider => provider.GetRequiredService<EfSchedulerStateStore>());
