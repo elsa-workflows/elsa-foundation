@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -81,13 +82,16 @@ internal sealed class KernelParkRecovery(KernelRunReader runs, KernelRuns founda
         var operationId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(selected)));
         var admission = await ingress.SendAsync(binding, new Target.Ref(actor), operationId, Kinds.Recover,
             JsonSerializer.Serialize(new OperatorCommand(selected, ExpectedTarget: actor)), cancellationToken: token);
-        return admission switch
+        if (admission.Outcome is AdmissionOutcome.Accepted or AdmissionOutcome.Duplicate) return Results.Accepted();
+        if (admission.Reason is RefusalReason.RateLimited or RefusalReason.NodeBusy or RefusalReason.InboxFull)
         {
-            { Outcome: AdmissionOutcome.Accepted or AdmissionOutcome.Duplicate } => Results.Accepted(),
-            { Reason: RefusalReason.NodeBusy or RefusalReason.RateLimited or RefusalReason.InboxFull } =>
-                Results.StatusCode(StatusCodes.Status503ServiceUnavailable),
-            _ => Results.Conflict()
-        };
+            if (admission.RetryAfter is { } retry)
+                context.Response.Headers.RetryAfter = Math.Max(1, Math.Ceiling(retry.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+            return Results.StatusCode(admission.Reason == RefusalReason.RateLimited
+                ? StatusCodes.Status429TooManyRequests
+                : StatusCodes.Status503ServiceUnavailable);
+        }
+        return Results.Conflict();
     }
 
     private async Task<ActorView?> ReadAuthorizedAsync(string workflowExecutionId, HttpContext context, CancellationToken token)

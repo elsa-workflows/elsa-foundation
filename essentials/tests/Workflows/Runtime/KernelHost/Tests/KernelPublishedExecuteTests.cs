@@ -116,7 +116,7 @@ public sealed class KernelPublishedExecuteTests
             { "KernelExecuteFixture" });
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
-        builder.Services.AddSingleton<IPermissionResourceHandler, DeleteResourcePolicy>();
+        builder.Services.AddSingleton<IPermissionResourceHandler, FixtureRunPolicy>();
         builder.Services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
         builder.Services.AddSingleton(new ShellSettings(new ShellId("default")));
         var expressions = new FixtureExpressions();
@@ -270,6 +270,8 @@ public sealed class KernelPublishedExecuteTests
                     $"Recovery status {status}; workflow HTTP {(int)first.StatusCode}: {await first.Content.ReadAsStringAsync(token)}");
                 var selected = Assert.IsType<string>(status.GetProperty("token").GetString());
                 Assert.NotEmpty(selected);
+                using var denied = await RecoveryAsync(HttpMethod.Post, selection: selected, subject: "deny-park-recover");
+                Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
                 using var stale = await RecoveryAsync(HttpMethod.Post, selection: otherSelection ?? "stale");
                 Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
                 Assert.NotNull((await reads.GetAsync(bound, actor, token))?.Park);
@@ -289,11 +291,12 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(Contract.ActorStatus.Finished, (await reads.GetAsync(bound, actor, token))?.Header.Status);
                 return selected;
 
-                async Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null)
+                async Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null,
+                    string subject = "accepted")
                 {
                     using var request = new HttpRequestMessage(method, route);
                     if (method == HttpMethod.Post) request.Content = JsonContent.Create(new { token = selection });
-                    request.Headers.Add("X-Fixture-Subject", "accepted");
+                    request.Headers.Add("X-Fixture-Subject", subject);
                     if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
                     if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
                     return await http.SendAsync(request, token);
@@ -432,12 +435,13 @@ public sealed class KernelPublishedExecuteTests
         }
     }
 
-    private sealed class DeleteResourcePolicy : IPermissionResourceHandler
+    private sealed class FixtureRunPolicy : IPermissionResourceHandler
     {
         public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
         {
-            var deny = context.Resource is WorkflowExecutionState { Status: WorkflowExecutionStatus.Cancelled } &&
-                context.Principal.FindFirstValue(IdentityClaimTypes.UserId) == "deny-terminal-purge";
+            var deny = (context.Resource, context.Principal.FindFirstValue(IdentityClaimTypes.UserId)) is
+                (WorkflowExecutionState { Status: WorkflowExecutionStatus.Cancelled }, "deny-terminal-purge") or
+                (WorkflowExecutionState { Status: WorkflowExecutionStatus.Faulted }, "deny-park-recover");
             return ValueTask.FromResult<PermissionEvaluationResult?>(deny ? PermissionEvaluationResult.Denied() : null);
         }
     }
