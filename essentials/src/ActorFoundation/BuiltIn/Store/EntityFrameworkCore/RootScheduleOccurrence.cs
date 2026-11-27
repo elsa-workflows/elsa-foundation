@@ -55,4 +55,29 @@ internal sealed record ScheduledWorkflowBirth(string Reference, Message Creator,
             throw new StoreFormatException("The scheduled workflow birth differs from its accepted occurrence.");
         return true;
     }
+
+    // This proves retirement of this actor birth. Detached descendants have independent lifetimes.
+    internal async Task<bool> IsRetiredAsync(KernelDb db, string tenant, CancellationToken token,
+        Func<FormattableString, FormattableString>? bindSource = null)
+    {
+        if (!await ReadReceiptAsync(db, tenant, token, bindSource)) return false;
+
+        FormattableString query = $"""
+            WITH source AS MATERIALIZED (/*schedule-source*/)
+            SELECT source."SourceReady", source."SourceReady" AND EXISTS (
+                SELECT 1 FROM "Instances" instance
+                JOIN "Journal" tombstone ON tombstone."Instance" = instance."Id"
+                    AND tombstone."Partition" = instance."Partition" AND tombstone."Revision" = -1
+                WHERE instance."Id" = {Creator.Target.Id} AND instance."Partition" = {Creator.Target.Partition}
+                    AND instance."FoundationTenant" = {tenant}
+                    AND instance."FoundationReference" = {Reference} AND instance."Retired"
+                    AND tombstone."Entries" = '["delete"]') AS "Retired"
+            FROM source
+            """;
+        var proof = await db.Database.SqlQuery<RetirementProof>(RootScheduleInventory.Bind(query, bindSource)).SingleAsync(token);
+        if (!proof.SourceReady) throw new StoreFormatException("The pinned schedule store changed during retirement confirmation.");
+        return proof.Retired;
+    }
+
+    private sealed record RetirementProof(bool SourceReady, bool Retired);
 }

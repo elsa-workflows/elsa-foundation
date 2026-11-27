@@ -1,6 +1,9 @@
 using System.Data.Common;
+using Elsa.ActorFoundation.Hosting;
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
+using Kernel.Foundation.Sqlite;
 using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +14,7 @@ namespace Kernel.Native.Run;
 
 internal static class RootScheduleInventoryChecks
 {
-    internal static async Task<int> RunAsync(bool postgres, bool settleOccurrences = false)
+    internal static async Task<int> RunAsync(bool postgres, bool settleOccurrences = false, bool fenceInBatch = true)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var token = timeout.Token;
@@ -31,19 +34,21 @@ internal static class RootScheduleInventoryChecks
                 }.ConnectionString);
 
             var format = settleOccurrences ? StoreFormat.RootScheduleSettlementQualification : StoreFormat.RootScheduleInventoryQualification;
-            KernelDb Open() => !postgres ? KernelDb.ForSqliteRootShipped(options.Options, format)
+            var definitions = new SqliteAdmissionDefinitions();
+            KernelDb Open() => !postgres ? KernelDb.ForSqliteRootRuntime(options.Options, definitions, qualificationFormat: format)
                 : settleOccurrences ? KernelDb.ForPostgresRootScheduleSettlementQualification(options.Options)
                 : KernelDb.ForPostgresRootScheduleInventoryQualification(options.Options);
             await using var db = Open();
             var pg = new PostgresRootAdmission(Open, TimeSpan.Zero, scheduleActorType: ScheduleActor.ActorType);
-            var sqlite = new SqliteRootAdmission(Open, TimeSpan.Zero, new SqliteAdmissionDefinitions(), scheduleActorType: ScheduleActor.ActorType);
+            var sqlite = new SqliteRootAdmission(Open, TimeSpan.Zero, definitions, scheduleActorType: ScheduleActor.ActorType);
             if (postgres)
             {
                 Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the PostgreSQL qualification database is empty");
-                await new EfStore(Open, postgres: true).CreateAsync(2);
-                await pg.InstallAsync(token);
+                var provisioner = new EfStore(Open, postgres: true);
+                await provisioner.CreateAsync(2);
+                await provisioner.InstallPreviewRootSchemaAsync(token);
             }
-            else await EfStore.InstallSqliteShippedAsync(db, 2, token);
+            else await EfStore.InstallSqliteShippedAsync(db, 1, token);
 
             const string typeData = """{"Schedule":{"Kind":"interval","Value":"PT1M"},"StartKey":"unused","Revision":1}""";
             var timer = new ScheduleRootKey("definition", "timer-a");
@@ -100,7 +105,7 @@ internal static class RootScheduleInventoryChecks
                 "a foreign tenant cannot see either schedule actor");
             if (settleOccurrences)
             {
-                await VerifyOccurrencesAsync(db, postgres, pg, sqlite, timer, reference, token);
+                await VerifyOccurrencesAsync(db, Open, postgres, fenceInBatch, pg, sqlite, timer, reference, token);
                 if (postgres)
                     Require(barrier.ConfirmedSettlementOverlap, "two relays contend on the same birth and creation identity");
             }
@@ -176,8 +181,8 @@ internal static class RootScheduleInventoryChecks
         }
     }
 
-    private static async Task VerifyOccurrencesAsync(KernelDb db, bool postgres, PostgresRootAdmission pg, SqliteRootAdmission sqlite,
-        ScheduleRootKey timer, string reference, CancellationToken token)
+    private static async Task VerifyOccurrencesAsync(KernelDb db, Func<KernelDb> open, bool postgres, bool fenceInBatch,
+        PostgresRootAdmission pg, SqliteRootAdmission sqlite, ScheduleRootKey timer, string reference, CancellationToken token)
     {
         const string tenant = "tenant-a";
         var occurrence = new RootScheduleOccurrence(timer, reference, 1, "~timer-a", 1000);
@@ -200,11 +205,14 @@ internal static class RootScheduleInventoryChecks
         var next = await AdmitAsync(tenant, occurrence with { ArmGeneration = 2 }, pinned);
         Require(next.Outcome == Contract.AdmissionOutcome.Accepted && next.Actor != first.Actor &&
             await db.Messages.CountAsync(token) == before + 2, "the next arm generation has a distinct occurrence even with the same timer identity");
+        Require(!await RetiredAsync(occurrence, first.Actor!.Value.Id),
+            "a committed birth awaiting its first checkpoint is not retired");
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Target" = (SELECT "Actor" FROM "FoundationRootBirths" WHERE "Reference" = {first.Actor?.Id})
             """, token);
         Require((await AdmitAsync(tenant, occurrence, pinned)).Actor == first.Actor &&
             await db.Messages.CountAsync(token) == before + 1, "replay does not require or recreate the original inbox row");
+        Require(!await RetiredAsync(occurrence, first.Actor.Value.Id), "an absent actor body never proves retirement");
         if (postgres)
         {
             var blocked = occurrence with { ArmGeneration = 3 };
@@ -220,9 +228,35 @@ internal static class RootScheduleInventoryChecks
                 await db.Messages.CountAsync(token) == before + 2, "a suppressed PostgreSQL creator rolls back its birth and the exact retry can enqueue it");
         }
 
+        // The inventory fixture leaves schedule creators pending. Keep them out of this workflow-only owner's
+        // horizon while preserving the genuine schedule births and the occurrence's ordinary workflow creator.
+        var deferred = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Messages" AS pending SET "Due" = {long.MaxValue - 1}
+            WHERE pending."InboxScope" = 0 AND pending."Due" = 0 AND EXISTS (
+                SELECT 1 FROM "FoundationScheduleRoots" schedule JOIN "FoundationRootBirths" birth
+                    ON birth."Reference" = schedule."Reference" AND birth."Tenant" = schedule."Tenant"
+                WHERE birth."Creator" = pending."Id" AND birth."Actor" = pending."Target"
+                    AND birth."Partition" = pending."Partition" AND birth."Creation" = 1)
+            """, token);
+        Require(deferred > 0, "the workflow-retirement fixture defers only the pending schedule actors");
+        var nextOccurrence = occurrence with { ArmGeneration = 2 };
+        var nextActor = next.Actor!.Value;
+        await RunRetirementAsync(open, db, postgres, fenceInBatch, tenant, pinned.Model, nextActor,
+            () => RetiredAsync(nextOccurrence, nextActor.Id), token);
+        Require(!await RetiredAsync(nextOccurrence, first.Actor.Value.Id),
+            "retirement proof is tied to the exact occurrence birth");
+        var messageCount = await db.Messages.CountAsync(token);
+        var retiredReplay = await AdmitAsync(tenant, nextOccurrence, pinned);
+        Require(retiredReplay is { Outcome: Contract.AdmissionOutcome.Duplicate } && retiredReplay.Actor == nextActor &&
+            await db.Messages.CountAsync(token) == messageCount, "the retired birth replays without recreating its inbox");
+
         Task<Contract.Admission> AdmitAsync(string tenantId, RootScheduleOccurrence item, StartSpec spec) => postgres
             ? pg.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token)
             : sqlite.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token);
+
+        Task<bool> RetiredAsync(RootScheduleOccurrence item, string actorReference) => postgres
+            ? pg.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token)
+            : sqlite.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token);
 
         async Task MustRefuseAsync(RootScheduleOccurrence item, StartSpec spec)
         {
@@ -233,6 +267,90 @@ internal static class RootScheduleInventoryChecks
             }
             catch (StoreFormatException) { }
         }
+    }
+
+    private static async Task RunRetirementAsync(Func<KernelDb> open, KernelDb db, bool postgres, bool fenceInBatch, string tenant, string type,
+        Contract.ActorRef reference, Func<Task<bool>> isRetired, CancellationToken token)
+    {
+        const string node = "schedule-retirement";
+        var actor = new FinishingActor(type);
+        var store = new EfStore(open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
+        await store.EnableRootSelfSendsAsync(token);
+        await store.EnableRootJobsAsync(token);
+        await store.EnableRootChildrenAsync(token);
+        var roots = postgres ? store.BindWorkerNode(actor.Withholds) : store.BindSqliteWorkerNode(actor.Withholds);
+        var adapter = new ActorAdapter(store.WorkerHeaders(roots), actor, store.RootSelfIssuer,
+            rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
+        Contract.IIngress ingress;
+        Contract.IActorReads reads;
+        if (postgres)
+        {
+            var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(open, type, Authorize, cancellationToken: token);
+            ingress = foundation;
+            reads = foundation;
+        }
+        else
+        {
+            var path = db.Database.GetDbConnection().DataSource;
+            var format = StoreFormat.RootScheduleSettlementQualification;
+            var requests = SqliteEmbeddedHosting.CreateRequests(path, node, type, qualificationFormat: format);
+            ingress = await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(path, type, Authorize, requests, token);
+            reads = SqliteEmbeddedHosting.CreateFoundationReads(path, qualificationFormat: format);
+        }
+
+        var partitions = await db.Partitions.CountAsync(token);
+        await using var worker = new Worker(node, Enumerable.Range(0, partitions).ToArray(), store, adapter,
+            new WorkerOptions { Partitions = partitions, PassTurnBudget = 1 });
+        var host = new DurableHost([worker]);
+        await host.HeartbeatAsync(Defaults.Lease, token);
+        Require(await host.ActivateAsync(0, token) == worker && worker.Fences.Count == partitions,
+            $"the fixture holds its partition fences ({(fenceInBatch ? "in-batch" : "checked")})");
+        var scope = EmbeddedTenant.Bind(tenant);
+        Contract.ActorView? completed;
+        do
+        {
+            await DriveAsync();
+            completed = await reads.GetAsync(scope, reference, token);
+        } while (completed?.Header.Status != Contract.ActorStatus.Finished);
+        Require(!await isRetired(), "a finished scheduled workflow still owns its executable pin");
+        var command = Json.Write(new Contract.OperatorCommand(completed.Selection!, ExpectedTarget: reference));
+        Require((await ingress.SendAsync(scope, new Contract.Target.Ref(reference), "retire-occurrence", Contract.Kinds.Delete,
+            command, cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the owner admits selected scheduled workflow retirement");
+        while (!await isRetired())
+        {
+            await DriveAsync();
+        }
+        Require(await isRetired(), "the fenced owner committed a durable exact retirement proof");
+
+        async Task DriveAsync()
+        {
+            await worker.WokenAsync(null, token);
+            await worker.RunAsync(token);
+            if (!worker.Owns) throw new InvalidOperationException("The scheduled retirement fixture lost its owner.");
+            await Task.Delay(15, token);
+        }
+
+        bool Authorize(Contract.BoundScope bound, Contract.ActorRef target, string kind) =>
+            bound.Tenant == tenant && target == reference && kind == Contract.Kinds.Delete;
+    }
+
+    private sealed class FinishingActor(string type) : Contract.IActorType
+    {
+        public string Type => type;
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (turn.Header.Type == type)
+            {
+                turn.State = "{}";
+                turn.End(Contract.ActorStatus.Finished);
+            }
+            return ValueTask.CompletedTask;
+        }
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
 
     private static void Require(bool condition, string description)

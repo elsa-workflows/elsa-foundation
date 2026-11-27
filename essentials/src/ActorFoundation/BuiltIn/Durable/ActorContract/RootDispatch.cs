@@ -271,7 +271,8 @@ internal sealed partial class ActorAdapter
         try
         {
             var header = RootHeader(row);
-            var plan = actor.RestoreWaits(header, row.State);
+            if (RootActor(row.Model) is not { } handler) return false;
+            var plan = handler.RestoreWaits(header, row.State);
             if (!CanRecoverTimers(row, facts, plan.Timers, plan.Jobs.Count, rearms, out var timerBytes))
                 return false;
             var subscriptionBytes = (long)plan.Subscriptions.Count * Durable.InMemoryStore.SubscriptionRestoreAllowance;
@@ -342,7 +343,7 @@ internal sealed partial class ActorAdapter
         var row = input.Row;
         if (row is not { Creation: 1, Retired: false, Children: null, Jobs: null, FoundationDispatchHeader: { } header } ||
             row.Parent is not null && (roots?.SupportsChildren != true || row.Status == Durable.InstanceStatus.Running) ||
-            row.Model != actor.Type || row.Id != message.Target.Id || message.TargetCreation != row.Creation ||
+            RootActor(row.Model) is null || row.Id != message.Target.Id || message.TargetCreation != row.Creation ||
             (command.RootThenDelete ? command.DeleteTarget != header.Reference : header.Terminal is null || header.Terminal != command.QualifiedTerminal))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
         if (row.Status == Durable.InstanceStatus.Running)
@@ -372,9 +373,21 @@ internal sealed partial class ActorAdapter
         message.Target.Id == child.Id && message.TargetCreation == child.Creation &&
         message.Sender == child.Parent && message.SenderCreation == child.ParentCreation;
 
+    private Durable.TurnOutcome RefuseRootInput(Durable.TurnInput input, string reason)
+    {
+        var refused = Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, reason);
+        // A creator rejected before its first checkpoint and an auxiliary direct input both need a
+        // fenced inbox disposition without running any actor or editing its checkpoint.
+        if (auxiliaryActor is not null && input.Taken is [{ Durable: true, Message: var message }] &&
+            (input.Row is null && message is { InboxScope: 0, Start: not null, FoundationRootBinding: not null } ||
+                RefusesAuxiliaryInput(input.Row, input.Taken[0])))
+            refused.FoundationRootRefusedInput = message;
+        return refused;
+    }
+
     private string? RootRefusal(Durable.TurnInput input)
     {
-        if ((input.Row?.Model ?? input.Spec?.Model) != actor.Type) return "UnknownActorType";
+        var auxiliary = IsAuxiliary(input.Row?.Model ?? input.Spec?.Model);
         if (input.Row is { Status: not Durable.InstanceStatus.Running }) return "Ended";
         if (input.Row is { } row && (row.Creation != 1 || row.Retired ||
             row.ParkRecovery is not null || row.ParkCohort is not null || row.ParkDiscard is not null || row.Cascade is not null ||
@@ -393,17 +406,20 @@ internal sealed partial class ActorAdapter
             var message = delivery.Message;
             if (issueSelf is not null && issueSelf.Allows(message.Due) && delivery.Durable && input.Row is { } issuer &&
                 Durable.FoundationSelfSend.IsSelfInput(message, issuer.Id, issuer.Creation)) continue;
-            if (roots?.SupportsChildren == true && message.FoundationRootChildNotice && delivery.Durable)
+            if (!auxiliary && roots?.SupportsChildren == true && message.FoundationRootChildNotice && delivery.Durable)
             {
                 if (ChildNoticeError(input.Row, message) is { } error) return error;
                 continue;
             }
-            if (roots?.SupportsChildren == true && message.FoundationRootChildInput && delivery.Durable)
+            if (!auxiliary && roots?.SupportsChildren == true && message.FoundationRootChildInput && delivery.Durable)
             {
                 if (!MatchesRootChildInput(input.Row, message)) return "WrongParent";
                 continue;
             }
-            var childStart = roots?.SupportsChildren == true && message.BindFoundationChild && message.Start is not null;
+            var childStart = !auxiliary && roots?.SupportsChildren == true && message.BindFoundationChild && message.Start is not null;
+            if (auxiliary && (message.Start is null || message.BindFoundationChild || message.ReplyTo is not null ||
+                message.FoundationRootBinding is null))
+                return "RootDispatchUnavailable";
             if (!delivery.Durable || message.Target.Id != input.Actor || message.TargetCreation != 1 ||
                 message.Sender is not null && !childStart || message.EventMatch is not null ||
                 message.ActorAuthored || message.Operator is not null)

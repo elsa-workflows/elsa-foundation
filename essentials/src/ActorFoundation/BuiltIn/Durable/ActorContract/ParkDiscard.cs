@@ -90,7 +90,9 @@ internal sealed partial class ActorAdapter
 
     private string? DeletionRefusal(Contract.ActorHeader header, string state, long now)
     {
-        try { return actor.ProtectsDeletion(header, state, now) ? "Protected" : null; }
+        var handler = roots is null ? actor : RootActor(header.Type);
+        if (handler is null) return "ProtectionUnavailable";
+        try { return handler.ProtectsDeletion(header, state, now) ? "Protected" : null; }
         catch (Exception) { return "ProtectionUnavailable"; }
     }
 

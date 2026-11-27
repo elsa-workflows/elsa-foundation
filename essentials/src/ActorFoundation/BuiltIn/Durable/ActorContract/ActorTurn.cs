@@ -18,6 +18,7 @@ internal sealed partial class ActorAdapter
         private readonly bool _rootTimedJobIssuance;
         private readonly RootValueReader? _readRootValue;
         private readonly int _terminalOutputLimit;
+        private readonly string? _primaryChildType;
         private List<Durable.FoundationValue>? _values;
         private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
@@ -36,7 +37,7 @@ internal sealed partial class ActorAdapter
 
         public ActorTurn(Durable.InMemoryStore? store, IRootDispatchHeaders? roots, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
             Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance, RootValueReader? readRootValue,
-            int terminalOutputLimit)
+            int terminalOutputLimit, string? primaryChildType)
         {
             _inMemory = store;
             _roots = roots;
@@ -45,6 +46,7 @@ internal sealed partial class ActorAdapter
             _rootTimedJobIssuance = rootTimedJobIssuance;
             _readRootValue = readRootValue;
             _terminalOutputLimit = terminalOutputLimit;
+            _primaryChildType = primaryChildType;
             _input = input;
             Now = input.Services.Now;
             _turn = new(input, foundation: true);
@@ -140,6 +142,8 @@ internal sealed partial class ActorAdapter
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
         {
             HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
+            if (_primaryChildType is { } primary && (Header.Type != primary || spec.Type != primary))
+                throw new NotSupportedException("Only the primary root type can start children of its own type on this owner.");
             if (_roots?.SupportsChildren == true && placement != Contract.Placement.WithParent)
                 throw new NotSupportedException("This PostgreSQL profile places children in their parent's partition.");
             var destination = placement == Contract.Placement.Spread

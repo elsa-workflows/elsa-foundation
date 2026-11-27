@@ -68,6 +68,7 @@ public sealed partial class EfStore
         }
         else if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
             marker = await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
+        if (db.UsesRootScheduleInventory && root is RootCheckpoints qualifiedRoots) root = qualifiedRoots.BindRefusalSource(marker);
         (batch, root, var retentionRefusals) = await BindRetentionPoliciesAsync(db, batch, root, marker, cancellationToken);
         if (postgres && db.UsesRootLiveEventWaits && waits.Count != 0)
             await RootEventAdmission.LockPostgresKeysAsync(db, waits.Keys.Select(wait => wait.Key).Distinct(StringComparer.Ordinal).ToArray(), cancellationToken);

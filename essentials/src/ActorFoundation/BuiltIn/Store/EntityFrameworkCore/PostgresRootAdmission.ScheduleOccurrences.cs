@@ -6,6 +6,22 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
+    internal async Task<bool> IsScheduledOccurrenceRetiredAsync(string tenant, RootScheduleOccurrence occurrence, StartSpec pinnedWorkflow,
+        string actorReference, CancellationToken token)
+    {
+        occurrence.Validate();
+        RequireCreator(occurrence.CreatorOperation, pinnedWorkflow);
+        await using var db = create();
+        if (!db.UsesRootScheduleSettlement) throw new NotSupportedException("The profile does not confirm scheduled workflow retirement.");
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, token);
+        var pin = await PinScheduleStoreAsync(db, writing: false, token, loadIssuer: true);
+        var issuer = pin.Issuer ?? throw new StoreFormatException("The pinned root store has no issuer.");
+        var birth = ScheduledWorkflowBirth.Create(tenant, occurrence, pinnedWorkflow, issuer.Key, issuer.Partitions);
+        if (birth.Reference != actorReference) return false;
+        return await birth.IsRetiredAsync(db, tenant, token, query => WithAdmissionSource(query, pin, "/*schedule-source*/", 5,
+            """('"FoundationScheduleRoots"'), ('"FoundationRootBirths"'), ('"Messages"'), ('"Instances"'), ('"Journal"')"""));
+    }
+
     internal async Task<Contract.Admission> AdmitScheduledOccurrenceAsync(string tenant, RootScheduleOccurrence occurrence,
         StartSpec pinnedWorkflow, CancellationToken token)
     {
