@@ -42,8 +42,9 @@ public sealed partial class EfStore
     {
         if (!db.UsesRootPagedPublicEvents) return true;
         var rows = await ReadParkPublicationsAsync(db, root, token);
-        return rows is not [var row] ||
-            await row.Decode().DeadLetterAuthoredAsync(db, row.Seq, row.Attempts, fromPark: true, bind: null, token);
+        if (rows is not [var row]) return true;
+        var bind = db.Database.IsNpgsql() ? await PostgresRootAdmission.PinPagedParkEventSourceAsync(db, token) : null;
+        return await row.Decode().DeadLetterAuthoredAsync(db, row.Seq, row.Attempts, fromPark: true, bind, token);
     }
 
     private sealed record KeptPublication(string Id, string Target, int Partition, long Seq, int Attempts, string Start, string? Payload)

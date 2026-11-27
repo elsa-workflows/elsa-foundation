@@ -125,7 +125,7 @@ internal sealed partial class PostgresRootAdmission
                 ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Instances", ONLY "Subscriptions", ONLY "Messages"
             """;
         var host = db.UsesRootPublicEventHost ? """, ONLY "FoundationPublicEventHost" """ : "";
-        var dispatch = db.UsesRootPagedPublicEvents ? """, ONLY "FoundationPublicEventDispatch" """ : "";
+        var dispatch = db.UsesRootPagedPublicEvents ? """, ONLY "FoundationPublicEventDispatch", ONLY "FoundationPagedEventStarts" """ : "";
         return db.Database.ExecuteSqlRawAsync(tables + host + dispatch + " IN ACCESS SHARE MODE", token);
     }
 
@@ -137,9 +137,9 @@ internal sealed partial class PostgresRootAdmission
             ('"Instances"'), ('"Subscriptions"'), ('"Messages"')
             """;
         var host = db.UsesRootPublicEventHost ? """ , ('"FoundationPublicEventHost"') """ : "";
-        var dispatch = db.UsesRootPagedPublicEvents ? """ , ('"FoundationPublicEventDispatch"') """ : "";
+        var dispatch = db.UsesRootPagedPublicEvents ? """ , ('"FoundationPublicEventDispatch"'), ('"FoundationPagedEventStarts"') """ : "";
         return WithAdmissionSource(sql, pin, RootPublicEventStarts.Source,
-            11 + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 1 : 0),
+            11 + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 2 : 0),
             tables + host + dispatch, requirePermanentDirectRelations: true);
     }
 }
