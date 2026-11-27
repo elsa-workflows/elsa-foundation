@@ -190,7 +190,11 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private async ValueTask<Workflow?> ResolveWorkflowAsync(string artifactId, CancellationToken token)
     {
         await using var scope = await scopes.CreateAsyncScopeAsync(persistenceScope);
-        return await NativeExecutableMapper.MapStoredAsync(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>(), artifactId, token);
+        var executable = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindAsync(artifactId, token);
+        // A stored actor already passed admission. The runtime only rebuilds its execution model here. Published
+        // routes still use their strict mapping and separate serving authority.
+        return executable is null ? null : NativeExecutableMapper.Map(executable, KernelHostCapabilities.All, definition: null,
+            scopedHttpTransport: testTenant is not null);
     }
 
     public async ValueTask DisposeAsync()

@@ -69,7 +69,8 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         try
         {
             // Fire once runs on the selected test root and creates no recurring schedule.
-            workflow = NativeExecutableMapper.Map(executable, serving.Capabilities with { Children = false, Schedules = true }, source.DefinitionId);
+            workflow = NativeExecutableMapper.Map(executable, serving.Capabilities with { Children = false, Schedules = true },
+                source.DefinitionId, scopedHttpTransport: true);
         }
         catch (NativeMappingRefusedException error)
         {
