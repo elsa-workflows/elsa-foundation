@@ -23,6 +23,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
     private readonly EfStore _store;
     private readonly string? _startType;
     private readonly ProtectRootStartAsync? _protectRootStart;
+    private readonly bool _supportsKeys;
     private PostgresReplyRelay? _liveReplies;
 
     internal PostgresDirectRequests(PostgresRootAdmission admission, EfStore store, string node, string? startType = null,
@@ -34,8 +35,9 @@ public sealed class PostgresDirectRequests : IReplyTransport
         _store = store;
         _startType = startType;
         _protectRootStart = protectRootStart;
+        _supportsKeys = admission.SupportsKeyedStarts();
         Node = node;
-        edge = new(new Admission(admission, store, protectRootStart), node, startType);
+        edge = new(new Admission(admission, store, protectRootStart, startType, _supportsKeys), node, startType);
     }
 
     /// <summary>The node whose callers these are: a reply addressed to another node is not this edge's.</summary>
@@ -93,6 +95,12 @@ public sealed class PostgresDirectRequests : IReplyTransport
             throw new ArgumentException("Protected held starts must use the same PostgreSQL store factory and primary actor type.");
     }
 
+    internal void RequireKeyBinding(Func<KernelDb> create, string actorType, bool supportsKeys)
+    {
+        if (supportsKeys != _supportsKeys || supportsKeys && (!admission.UsesDatabaseFactory(create) || _startType != actorType))
+            throw new ArgumentException("Caller-key requests require the same PostgreSQL store factory, profile and actor type.");
+    }
+
     internal ValueTask<bool> ReceiveAsync(string destination, Reply reply, CancellationToken stop) =>
         edge.ReceiveAsync(destination, reply, stop);
 
@@ -131,9 +139,19 @@ public sealed class PostgresDirectRequests : IReplyTransport
         edge.RequestOperatorAsync(scope, id, request, add?.KeepFor, admit,
             async ct => (Contract.ActorStatus?)(await _store.ReadFirstRootAsync(scope.Tenant, actor.Id, ct))?.Status, token);
 
-    private sealed class Admission(PostgresRootAdmission admission, EfStore store, ProtectRootStartAsync? protectRootStart) : IHeldRootAdmission
+    private sealed class Admission(PostgresRootAdmission admission, EfStore store, ProtectRootStartAsync? protectRootStart,
+        string? startType, bool supportsKeys) : IHeldRootAdmission
     {
         public bool SupportsEvents { get; } = admission.SupportsLiveEventWaits();
+        public bool SupportsKeys { get; } = supportsKeys;
+
+        public Task<Contract.Admission?> AdmitKeyAsync(HeldRootRequest request, Contract.Target.Key key, string kind,
+            string? payload, CancellationToken token)
+        {
+            if (key.Spec is not null && protectRootStart is not null)
+                throw new NotSupportedException("Held caller-key starts do not support configured root-start protection.");
+            return admission.AdmitKeyedRequestAsync(request, key, kind, payload, startType, token);
+        }
 
         public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
             admission.PublishRequestAsync(request, key, payload, token);

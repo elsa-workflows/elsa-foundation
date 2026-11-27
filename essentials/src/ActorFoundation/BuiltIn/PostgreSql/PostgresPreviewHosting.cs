@@ -288,13 +288,15 @@ public static partial class PostgresPreviewHosting
         var window = requests?.DeduplicationWindow ?? deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         var pressure = requests?.Pressure;
-        bool usesPressure;
+        bool usesPressure, takesKeyedRequests;
         await using (var db = create())
         {
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("The Foundation requires a PostgreSQL Core Preview format.");
             if (requests is not null && !db.UsesRootReplyProtocol)
                 throw new NotSupportedException("Held requests require a PostgreSQL store with held replies.");
+            takesKeyedRequests = db.UsesRootKeyedStarts;
+            requests?.RequireKeyBinding(create, actorType, takesKeyedRequests);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
             usesPressure = db.UsesRootDueBacklog;
@@ -304,7 +306,7 @@ public static partial class PostgresPreviewHosting
         var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure);
         var store = new EfStore(create, postgres: true);
         return new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(cancellationToken), pageSize),
-            actorType, directRequests: requests, authorizeExactOperator: authorizeOperator);
+            actorType, directRequests: requests, authorizeExactOperator: authorizeOperator, takesKeyedRequests: takesKeyedRequests);
     }
 
     /// <summary>
@@ -400,6 +402,7 @@ public static partial class PostgresPreviewHosting
                 throw new NotSupportedException(replies is null
                     ? "A store with held replies needs the reply transport its callers wait on."
                     : "Only a store with held replies answers held callers.");
+            (replies as PostgresDirectRequests)?.RequireKeyBinding(create, actor.Type, db.UsesRootKeyedStarts);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);

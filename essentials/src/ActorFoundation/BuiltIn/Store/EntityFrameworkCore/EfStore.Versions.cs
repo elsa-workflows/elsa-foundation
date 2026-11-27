@@ -78,6 +78,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootSharedActivationQualification => new(3, 130, 1);
     internal static StoreFormat RootDirectTestRunQualification => new(3, 131, 1);
     internal static StoreFormat RootPublicEventStartsQualification => new(3, 132, 1);
+    internal static StoreFormat RootKeyedStartsQualification => new(3, 133, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -139,7 +140,8 @@ internal enum RootCapabilities : long
     EventStartReceipts = 1L << 38,
     EventStartScan = 1L << 39,
     PublicEventStarts = 1L << 40,
-    DirectTestRuns = 1L << 41
+    DirectTestRuns = 1L << 41,
+    KeyedStarts = 1L << 43
 }
 
 internal static class RootProfiles
@@ -191,6 +193,7 @@ internal static class RootProfiles
     internal const RootCapabilities SharedActivationQualification = EventStartScanQualification | InlinePromotionQualification;
     internal const RootCapabilities PublicEventStartsQualification = SharedActivationQualification | RootCapabilities.PublicEventStarts;
     internal const RootCapabilities DirectTestRunQualification = PreparedStartsQualification | RootCapabilities.DirectTestRuns;
+    internal const RootCapabilities KeyedStartsQualification = SharedActivationQualification | RootCapabilities.KeyedStarts;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
@@ -266,6 +269,7 @@ internal static class RootProfiles
         [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
         [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
         [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
+        [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts | RootCapabilities.Retirement | RootCapabilities.Children,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
         [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
         [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
@@ -545,6 +549,7 @@ internal static class StoreDefinitionsRevision
                 // The private Test Run selector keeps the pre-activation provider definitions.
                 _ when db.RequiredFormat == StoreFormat.RootDirectTestRunQualification =>
                     sqlite ? SqliteDirectTestRunRevision : PostgreSqlDirectTestRunRevision,
+                _ when db.RequiredFormat == StoreFormat.RootKeyedStartsQualification => sqlite ? 31 : 28,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision
             },
             JournalCodec = 0

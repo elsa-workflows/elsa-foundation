@@ -21,17 +21,19 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     private readonly PostgresDirectRequests? directRequests;
     private readonly PostgresRootIngress ingress;
     private readonly string actorType;
+    private readonly bool takesKeyedRequests;
 
     /// <summary>The held requests of this Foundation, and the transport its owner answers through: null without held replies.</summary>
     public PostgresDirectRequests? Requests => directRequests;
 
     internal PostgresPreviewFoundation(PostgresRootAdmission admission, PostgresRootReads reads, string actorType,
         Func<Contract.BoundScope, string, bool>? authorizeOperator = null, PostgresDirectRequests? directRequests = null,
-        Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeExactOperator = null)
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeExactOperator = null, bool takesKeyedRequests = false)
     {
         (this.admission, this.reads, this.authorizeOperator, this.directRequests) = (admission, reads, authorizeOperator, directRequests);
         this.authorizeExactOperator = authorizeExactOperator;
         this.actorType = actorType;
+        this.takesKeyedRequests = takesKeyedRequests;
         ingress = new(admission, actorType,
             (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Terminate) == true,
             (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Delete) == true,
@@ -119,9 +121,11 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default)
     {
-        if (directRequests is null || target is not (Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event))
+        if (directRequests is null || target is not (Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event or Contract.Target.Key))
             throw new NotSupportedException("This preview holds requests only with a reply-capable store and its direct requests.");
-        // Route Start and Event targets before classifying exact-reference commands.
+        if (target is Contract.Target.Key && !takesKeyedRequests)
+            throw new NotSupportedException("This PostgreSQL Foundation profile does not hold caller-key requests.");
+        // Classify operator commands only when addressed to an exact reference.
         if (target is not Contract.Target.Ref exact || authorizeExactOperator is null || !Contract.Kinds.IsCommand(kind))
             return directRequests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken);
 

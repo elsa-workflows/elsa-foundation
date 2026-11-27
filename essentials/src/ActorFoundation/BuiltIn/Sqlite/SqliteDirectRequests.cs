@@ -161,12 +161,24 @@ public static partial class SqliteEmbeddedHosting
                   format == StoreFormat.RootAuthoredEventsQualification || format == StoreFormat.RootEventStartsQualification ||
                   format == StoreFormat.RootEventStartReceiptsQualification || format == StoreFormat.RootEventStartScanQualification ||
                   format == StoreFormat.RootDirectTestRunQualification || format == StoreFormat.RootSharedActivationQualification ||
-                  format == StoreFormat.RootPublicEventStartsQualification
+                  format == StoreFormat.RootPublicEventStartsQualification ||
+                  format == StoreFormat.RootKeyedStartsQualification
                 : TakesHttpWaits;
 
             public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
                 WriteAsync(request.Tenant, RootAdmissionKind.Input, (admission, attempt, ct) =>
                     admission.PublishRequestAsync(request, key, payload, ct, attempt), token);
+
+            public bool SupportsKeys => owner.QualificationFormat == StoreFormat.RootKeyedStartsQualification;
+
+            public Task<Contract.Admission?> AdmitKeyAsync(HeldRootRequest request, Contract.Target.Key key, string kind,
+                string? payload, CancellationToken token)
+            {
+                if (key.Spec is not null && protectRootStart is not null)
+                    throw new NotSupportedException("Held caller-key starts do not support configured root-start protection.");
+                return WriteAsync(request.Tenant, key.Spec is null ? RootAdmissionKind.Input : RootAdmissionKind.Start,
+                    (admission, attempt, ct) => admission.AdmitKeyedRequestAsync(request, key, kind, payload, owner.actorType, ct, attempt), token);
+            }
 
             public async ValueTask<long> ReadClockAsync(CancellationToken token)
             {

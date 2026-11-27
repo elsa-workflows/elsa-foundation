@@ -311,6 +311,11 @@ public sealed partial class EfStore
             """;
         yield return Table("FoundationRootBirths", db.UsesRootInlinePromotion
             ? RootInlineBirthRevision.Columns(births, sqlite: true) : births);
+        if (db.UsesRootKeyedStarts)
+        {
+            yield return Table(RootKeyedAdmission.BindingTable, RootKeyedAdmission.BindingColumns(sqlite: true));
+            yield return Table(RootKeyedAdmission.ReceiptTable, RootKeyedAdmission.ReceiptColumns(sqlite: true));
+        }
         if (db.UsesRootInlinePromotion)
             yield return new("trigger", RootInlineBirthRevision.Guard, "FoundationRootBirths", RootInlineBirthRevision.SqliteGuard);
         if (db.UsesRootScheduleInventory)
