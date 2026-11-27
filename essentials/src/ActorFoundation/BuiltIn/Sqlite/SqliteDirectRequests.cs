@@ -53,6 +53,7 @@ public static partial class SqliteEmbeddedHosting
         internal RootPublicEventHost? PublicEventHost => QualificationFormat == StoreFormat.RootPublicEventHostQualification
             ? new(actorType, protectRootStart is not null) : null;
         internal Requests Pending => edge.Pending;
+        internal HeldRootRequests HeldEdge => edge;
 
         internal void RequireBinding(string databasePath, string configuredType, string? owner = null)
         {

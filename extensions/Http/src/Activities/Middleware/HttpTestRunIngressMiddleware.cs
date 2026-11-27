@@ -281,12 +281,15 @@ internal sealed class HttpTestRunIngressMiddleware(
 
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         context.Response.ContentType = "application/json";
+        var executionId = isolated && (dispatchResult.Dispatch.TestRunCompletedWithoutRecord ||
+            dispatchResult.Dispatch.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Deferred)
+            ? null : dispatchResult.Dispatch.WorkflowExecutionId;
         if (isolated && authoredOptions.ResponseMode == ResponseMode.Sync && dispatchResult.AlreadyDispatched)
         {
             await context.Response.WriteAsync(JsonSerializer.Serialize(new
             {
                 testRunId,
-                workflowExecutionId = dispatchResult.Dispatch.WorkflowExecutionId,
+                workflowExecutionId = executionId,
                 alreadyDispatched = true,
                 responseReplayAvailable = false
             }), cancellationToken);
@@ -295,7 +298,7 @@ internal sealed class HttpTestRunIngressMiddleware(
         await context.Response.WriteAsync(JsonSerializer.Serialize(new
         {
             testRunId,
-            workflowExecutionId = dispatchResult.Dispatch.WorkflowExecutionId,
+            workflowExecutionId = executionId,
             alreadyDispatched = dispatchResult.AlreadyDispatched
         }), context.RequestAborted);
     }

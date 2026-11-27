@@ -122,12 +122,14 @@ internal sealed class TestRunTargetDispatcher(
             dispatchOptions,
             cancellationToken: cancellationToken);
         var result = new TestRunTargetDispatchResult(dispatched,
-            AlreadyDispatched: held && dispatched.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate);
+            AlreadyDispatched: held && (dispatched.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate ||
+                dispatched.TestRunCompletedWithoutRecord && dispatched.TestRunHttpReply is null));
         if (held)
         {
             // Retain only an answered admission. If this caller disconnects after receiving it from the actor,
             // complete the cache write before releasing the flight so the next authorized request can replay it.
-            if (dispatched is { CommandDispatch.Status: WorkflowExecutionCommandDispatchStatus.Accepted, TestRunHttpReply: not null })
+            if (dispatched.TestRunHttpReply is { } reply &&
+                (dispatched.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted || reply.OwnerAccepted))
                 await targets.CompleteDispatchAsync(testRunId, result, CancellationToken.None);
         }
         else if (target.SourceReferenceId != target.Scope.ScopeId ||

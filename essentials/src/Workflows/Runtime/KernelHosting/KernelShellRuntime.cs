@@ -184,6 +184,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     internal bool TakesEphemeralTestRuns => storage.TakesEphemeralTestRuns;
     internal bool TakesAttachedTestRuns => storage.TakesAttachedTestRuns;
+    internal bool TakesHeldEphemeralHttp => storage.TakesHeldEphemeralHttp;
 
     internal async ValueTask<InlineStartOutcome> StartInlineTestAsync(WorkflowTestScope test, StartSpec start, Workflow executable,
         CancellationToken token)
@@ -194,6 +195,28 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         var unavailable = await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable));
         token.ThrowIfCancellationRequested();
         return unavailable;
+    }
+
+    internal async ValueTask<InlineHeldStartOutcome> StartInlineHeldTestAsync(WorkflowTestScope test, StartSpec start, Workflow executable,
+        WorkflowTestRunHttpBudget budget, CancellationToken token)
+    {
+        if (Volatile.Read(ref _publishedInlineStarts) is not { } inline)
+            return new(await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable)), null);
+
+        long now;
+        try { now = await storage.ReadClockAsync(token); }
+        catch
+        {
+            await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable));
+            throw;
+        }
+        var remaining = budget.Remaining;
+        if (remaining <= TimeSpan.Zero)
+            return new(await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable)),
+                new(null, null, Error: "timeout"));
+        var deadline = checked(now + (long)Math.Ceiling(remaining.TotalMilliseconds));
+        return await inline.Requests.StartAdditionalHeldAsync(test.ScopeId, start, inline.Model.CaptureInlineMaterial(executable), deadline,
+            outcome => SettleInlineTestOutcomeAsync(test, outcome), token);
     }
 
     private async ValueTask<InlineStartOutcome> SettleInlineTestOutcomeAsync(WorkflowTestScope test, InlineStartOutcome outcome)

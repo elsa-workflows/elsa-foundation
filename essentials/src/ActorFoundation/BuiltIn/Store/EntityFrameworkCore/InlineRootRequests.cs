@@ -17,6 +17,9 @@ public readonly record struct InlineStartOutcome(InlineStartDisposition Disposit
     public TimeSpan? RetryAfter { get; init; }
 }
 
+/// <summary>An isolated inline start and its independently bounded live response observation.</summary>
+public readonly record struct InlineHeldStartOutcome(InlineStartOutcome Start, Contract.Reply? Reply);
+
 /// <summary>Binds qualified inline starts to one installed owner, tenant, and host activation.</summary>
 public sealed class InlineRootRequests(Contract.BoundScope scope, string actorType,
     Func<Contract.StartSpec, object, bool> validate, ProtectRootStartAsync protect)
@@ -24,7 +27,7 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     private readonly object _gate = new();
     private readonly Contract.BoundScope? _additionalScope;
     private readonly Func<Contract.ActorStatus, bool>? _allowAdditionalWriteFreeCompletion;
-    private (EfStore Store, Worker Worker, Action<Kernel.Runtime.InstanceRef> Wake)? _owner;
+    private (EfStore Store, Worker Worker, Action<Kernel.Runtime.InstanceRef> Wake, HeldRootRequests? Replies)? _owner;
     private bool _closed;
     private int _pendingSettlements;
     private TaskCompletionSource? _settlementsDrained;
@@ -53,12 +56,12 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
             protect, TimeSpan.FromHours(1), token, _additionalScope, _allowAdditionalWriteFreeCompletion);
     }
 
-    internal void Attach(EfStore store, Worker worker, Action<Kernel.Runtime.InstanceRef> wake)
+    internal void Attach(EfStore store, Worker worker, Action<Kernel.Runtime.InstanceRef> wake, HeldRootRequests? replies = null)
     {
         lock (_gate)
         {
             if (_closed || _owner is not null) throw new InvalidOperationException("The local start edge cannot be attached twice.");
-            _owner = (store, worker, wake);
+            _owner = (store, worker, wake, replies);
         }
     }
 
@@ -99,14 +102,54 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
         return outcome;
     }
 
+    /// <summary>Offers an isolated inline start and holds its first response through the same owner reply edge.</summary>
+    /// <remarks>The accepted owner settles even if the live observer leaves. Only the qualified additional scope can use this path.</remarks>
+    public async ValueTask<InlineHeldStartOutcome> StartAdditionalHeldAsync(string operationId, Contract.StartSpec start, object material,
+        long deadline, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>> settle, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(settle);
+        HeldRootRequests? replies;
+        lock (_gate) replies = _owner?.Replies;
+        var offer = new InlineOffer(new(InlineStartDisposition.Unavailable));
+        if (_additionalScope is not { } scope || replies is null)
+        {
+            var unavailable = await settle(offer.Unqueued);
+            token.ThrowIfCancellationRequested();
+            return new(unavailable, null);
+        }
+
+        Contract.Reply reply;
+        try { reply = await replies.HoldInlineStartAsync(scope, operationId, deadline, IssueAsync, token); }
+        catch
+        {
+            if (offer.Accepted is null) await settle(offer.Unqueued);
+            throw;
+        }
+        if (offer.Accepted is not { } accepted)
+        {
+            var unqueued = await settle(offer.Unqueued);
+            token.ThrowIfCancellationRequested();
+            return new(unqueued, reply.Error == "timeout" ? reply : null);
+        }
+        var observation = accepted.Result.IsCompletedSuccessfully ? ReadOutcome(accepted.Actor, accepted.Result.Result) :
+            new InlineStartOutcome(InlineStartDisposition.Unknown);
+        return new(observation, reply);
+
+        Task<Contract.Reply?> IssueAsync(HeldRootRequest caller, CancellationToken budget)
+        {
+            offer = Offer(scope, operationId, start, material, settle, budget, caller);
+            return Task.FromResult<Contract.Reply?>(offer.Accepted is null ? new(null, null, Error: "not admitted") : null);
+        }
+    }
+
     private async ValueTask<InlineStartOutcome> StartCoreAsync(Contract.BoundScope selectedScope, string operationId,
         Contract.StartSpec start, object material, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>>? settle, CancellationToken token)
     {
-        var (receipt, unqueued) = Offer(selectedScope, operationId, start, material, settle, token);
-        if (receipt is null)
+        var offer = Offer(selectedScope, operationId, start, material, settle, token);
+        if (offer.Receipt is not { } receipt)
         {
             // Before the queue accepts work, a cancelled caller still has a definite no-actor outcome.
-            var outcome = settle is null ? unqueued : await settle(unqueued);
+            var outcome = settle is null ? offer.Unqueued : await settle(offer.Unqueued);
             token.ThrowIfCancellationRequested();
             return outcome;
         }
@@ -120,32 +163,35 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
         }
     }
 
-    private (Task<InlineStartOutcome>? Receipt, InlineStartOutcome Unqueued) Offer(Contract.BoundScope selectedScope,
+    private readonly record struct InlineOffer(InlineStartOutcome Unqueued, Task<InlineStartOutcome>? Receipt = null,
+        (Contract.ActorRef Actor, Task<InlineRootResult> Result)? Accepted = null);
+
+    private InlineOffer Offer(Contract.BoundScope selectedScope,
         string operationId, Contract.StartSpec start, object material, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>>? settle,
-        CancellationToken token)
+        CancellationToken token, HeldRootRequest? held = null)
     {
-        if (token.IsCancellationRequested) return (null, new(InlineStartDisposition.Unavailable));
+        if (token.IsCancellationRequested) return new(new(InlineStartDisposition.Unavailable));
         if (start.Type != actorType || EfStore.CreateInlineRootSpec(operationId, start) is not { } trusted || !validate(start, material))
-            return (null, new(InlineStartDisposition.Refused));
+            return new(new(InlineStartDisposition.Refused));
         lock (_gate)
         {
-            if (token.IsCancellationRequested || _owner is not { } owner) return (null, new(InlineStartDisposition.Unavailable));
+            if (token.IsCancellationRequested || _owner is not { } owner) return new(new(InlineStartDisposition.Unavailable));
             using var attempt = owner.Store.AdmissionPressure!.BeginInlineStart(selectedScope.Tenant);
             try { attempt.RequireInlineTenantRate(); }
             catch (RootAdmissionRefused refusal)
             {
                 var admission = refusal.Admission;
-                return (null, new(InlineStartDisposition.Unavailable)
+                return new(new(InlineStartDisposition.Unavailable)
                     { RefusalReason = admission.Reason, RetryAfter = admission.RetryAfter });
             }
-            if (owner.Store.QueueInlineRoot(owner.Worker, operationId, trusted, material, owner.Wake, selectedScope) is not { } admitted)
-                return (null, new(InlineStartDisposition.Unavailable));
+            if (owner.Store.QueueInlineRoot(owner.Worker, operationId, trusted, material, owner.Wake, selectedScope, held) is not { } admitted)
+                return new(new(InlineStartDisposition.Unavailable));
             // Queued authored work spends its start permit even if it finishes without a checkpoint.
             attempt.Committed();
             var outcome = ReadOutcomeAsync(admitted.Reference, admitted.Outcome);
-            if (settle is null) return (outcome, default);
+            if (settle is null) return new(default, outcome, admitted);
             _pendingSettlements++;
-            return (SettleAcceptedAsync(outcome, settle), default);
+            return new(default, SettleAcceptedAsync(outcome, settle), admitted);
         }
     }
 
@@ -165,9 +211,11 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
         }
     }
 
-    private static async Task<InlineStartOutcome> ReadOutcomeAsync(Contract.ActorRef actor, Task<InlineRootResult> outcome)
+    private static async Task<InlineStartOutcome> ReadOutcomeAsync(Contract.ActorRef actor, Task<InlineRootResult> outcome) =>
+        ReadOutcome(actor, await outcome);
+
+    private static InlineStartOutcome ReadOutcome(Contract.ActorRef actor, InlineRootResult result)
     {
-        var result = await outcome;
         var status = (Contract.ActorStatus?)result.Status;
         return result.Disposition switch
         {

@@ -251,6 +251,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootEphemeralTestRunQualification, RootProfiles.EphemeralTestRunQualification);
     internal static KernelDb ForPostgresRootAttachedTestRunQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootAttachedTestRunQualification, RootProfiles.EphemeralTestRunQualification);
+    internal static KernelDb ForPostgresRootHeldEphemeralHttpQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootHeldEphemeralHttpQualification, RootProfiles.EphemeralTestRunQualification);
     internal static KernelDb ForPostgresRootInlinePromotionQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootInlinePromotionQualification, RootProfiles.InlinePromotionQualification);
     internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>

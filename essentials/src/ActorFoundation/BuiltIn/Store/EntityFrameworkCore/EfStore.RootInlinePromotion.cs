@@ -11,13 +11,15 @@ public sealed partial class EfStore
         Func<FormattableString, FormattableString>? Bind);
     private sealed record InlineStarts(Contract.BoundScope Scope, byte[] Key, (uint Marker, uint Namespace, long Table)? Postgres,
         Func<StartSpec, object, bool> Validate, ProtectRootStartAsync Protect, TimeSpan ReceiptWindow,
-        Contract.BoundScope? AdditionalScope, Func<Contract.ActorStatus, bool>? AllowsAdditionalWriteFreeCompletion)
+        Contract.BoundScope? AdditionalScope, Func<Contract.ActorStatus, bool>? AllowsAdditionalWriteFreeCompletion, bool HoldsAdditional)
     {
         internal Contract.BoundScope? ScopeFor(string tenant) => tenant == Scope.Tenant ? Scope :
             tenant == AdditionalScope?.Tenant ? AdditionalScope : null;
 
         internal bool AllowsWriteFreeCompletion(string tenant, Contract.ActorStatus status) =>
             tenant != AdditionalScope?.Tenant || AllowsAdditionalWriteFreeCompletion!(status);
+
+        internal bool Holds(Contract.BoundScope scope) => HoldsAdditional && ReferenceEquals(AdditionalScope, scope);
     }
     private InlineStarts? _inlineStarts;
 
@@ -43,7 +45,8 @@ public sealed partial class EfStore
             if (_ordinaryRoots is not null || _inlineStarts is not null)
                 throw new InvalidOperationException("Configure inline starts once before binding the worker.");
             _inlineStarts = new(scope, origin.Key, origin.Postgres, validate, protect, receiptWindow,
-                additionalScope, allowsAdditionalWriteFreeCompletion);
+                additionalScope, allowsAdditionalWriteFreeCompletion,
+                db.RequiredFormat == StoreFormat.RootHeldEphemeralHttpQualification && additionalScope is not null);
         }
     }
 
@@ -65,15 +68,16 @@ public sealed partial class EfStore
     }
 
     internal (Contract.ActorRef Reference, Task<InlineRootResult> Outcome)? QueueInlineRoot(Worker worker, string operationId,
-        StartSpec start, object material, Action<InstanceRef>? wake, Contract.BoundScope? selectedScope = null)
+        StartSpec start, object material, Action<InstanceRef>? wake, Contract.BoundScope? selectedScope = null, HeldRootRequest? held = null)
     {
         if (_inlineStarts is not { } inline || !ReferenceEquals(_ordinaryRoots?.InlineIssuer, inline)) return null;
         var scope = selectedScope ?? inline.Scope;
-        if (!ReferenceEquals(inline.ScopeFor(scope.Tenant), scope)) return null;
+        if (!ReferenceEquals(inline.ScopeFor(scope.Tenant), scope) ||
+            held is not null && (!inline.Holds(scope) || held.Tenant != scope.Tenant)) return null;
         var name = scope.Tenant + "_" + Guid.NewGuid().ToString("N");
         var operation = RootPreparedStarts.InlineOperation(operationId);
         var digest = FoundationRootCreator.OperationDigest(operation);
-        if (worker.TryPlaceQualifiedInlineStart(name, start, material, inline, AdmissionPressure, Bind) is not { } selected)
+        if (worker.TryPlaceQualifiedInlineStart(name, start, material, inline, AdmissionPressure, Bind, held) is not { } selected)
             return null;
         var (creator, receipt) = selected;
         wake?.Invoke(creator.Target);
@@ -82,7 +86,7 @@ public sealed partial class EfStore
         Message Bind(InstanceRef actor)
         {
             var reference = FoundationRootCreator.ReferenceFor(inline.Key, scope.Tenant, new(actor.Id, 1));
-            return FoundationRootCreator.Create(actor, operation, digest, start, null, null)
+            return FoundationRootCreator.Create(actor, operation, digest, start, null, held?.Address)
                 with { FoundationRootBinding = (actor.Id, scope.Tenant, reference) };
         }
     }
@@ -107,7 +111,7 @@ public sealed partial class EfStore
         if (!OwnedCommit || creator.Start is not { Ephemeral: true, Parent: null } spec ||
             creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id || binding.Tenant != scope.Tenant ||
             !RootPreparedStarts.IsInlineOperation(creator.Id) ||
-            creator.Due is not null || creator.ReplyTo is not null || creator.KeepUntil is not null ||
+            creator.Due is not null || creator.ReplyTo is not null && (installed is null || !installed.Holds(scope)) || creator.KeepUntil is not null ||
             turn is not { Expected: null, Journal: not null, FoundationHeader: { } header,
                 Row: { Revision: > 0, FoundationInlineBirth: { } birth } row } ||
             turn.Instance != binding.Actor || birth != (binding.Tenant, creator.InboxKey) ||
