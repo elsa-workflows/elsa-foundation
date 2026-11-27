@@ -35,7 +35,9 @@ internal static partial class WorkbenchPostgresPreview
                     "the normal HTTP edge executes a Native sequence on SQLite");
                 const string nativeDefinition = "core-preview-http-probe";
                 await CheckRunDetailsAsync(client, nativeDefinition, (await FindRunsAsync(client, nativeDefinition, 1)).Single());
-                flowchart = await PublishFlowchartAsync(client);
+                var published = await PublishFlowchartAsync(client);
+                flowchart = published.Definition;
+                await CheckAuthoringTestRunAsync(client, published.Version);
                 await RunFlowchartAsync(client);
                 first = (await FindRunsAsync(client, flowchart, 1)).Single();
                 await CheckRunDetailsAsync(client, flowchart, first);
@@ -105,7 +107,7 @@ internal static partial class WorkbenchPostgresPreview
                 catch { client.Dispose(); throw; }
             }
 
-            async Task<string> PublishFlowchartAsync(HttpClient client)
+            async Task<(string Definition, string Version)> PublishFlowchartAsync(HttpClient client)
             {
                 var start = await NodeAsync("start", "Elsa.Activities.Http.Activities.HttpEndpoint",
                     new() { ["Path"] = "core-preview/sqlite-flowchart", ["CanStartWorkflow"] = true, ["SupportedMethods"] = new[] { "POST" } });
@@ -125,7 +127,7 @@ internal static partial class WorkbenchPostgresPreview
                 });
                 var version = submitted.GetProperty("version").GetProperty("id").GetString();
                 await ReadAsync(client, $"/publishing/workflows/{version}/publish", new { });
-                return submitted.GetProperty("definition").GetProperty("id").GetString()!;
+                return (submitted.GetProperty("definition").GetProperty("id").GetString()!, version!);
 
                 async Task<object> NodeAsync(string nodeId, string type, Dictionary<string, object> bindings, object? structure = null)
                 {
@@ -137,6 +139,26 @@ internal static partial class WorkbenchPostgresPreview
                         nodeId, activityVersionId = version, structure, outputs = Array.Empty<object>(),
                         inputs = bindings.Select(binding => new { referenceKey = binding.Key, value = new { expressionType = "Literal", value = binding.Value } })
                     };
+                }
+            }
+
+            async Task CheckAuthoringTestRunAsync(HttpClient client, string version)
+            {
+                var started = await ReadAsync(client, $"/publishing/workflows/{Uri.EscapeDataString(version)}/test-runs",
+                    new { acknowledgeUnavailableExpressionValidation = true });
+                var execution = started.GetProperty("workflowExecutionId").GetString()!;
+                while (true)
+                {
+                    using var response = await client.GetAsync($"/runtime/workflows/instances/{Uri.EscapeDataString(execution)}", token);
+                    if (response.StatusCode == HttpStatusCode.NotFound) { await Task.Delay(100, token); continue; }
+                    var body = await response.Content.ReadAsStringAsync(token);
+                    Require(response.IsSuccessStatusCode, $"the author's test run read answered {(int)response.StatusCode}: {body}");
+                    using var details = JsonDocument.Parse(body);
+                    var instance = details.RootElement.GetProperty("instance");
+                    Require(instance.GetProperty("workflowExecutionId").GetString() == execution &&
+                            instance.GetProperty("runKind").GetString() == "TestRun",
+                        "the standard run details endpoint preserves the author's TestRun on a kernel shell");
+                    return;
                 }
             }
 

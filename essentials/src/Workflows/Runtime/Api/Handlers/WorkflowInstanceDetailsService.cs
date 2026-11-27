@@ -19,12 +19,26 @@ public sealed class WorkflowInstanceDetailsService(
     RuntimePersistenceModeInspector persistenceModeInspector,
     IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
 {
-    public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
+    public Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken) =>
+        ReadAsync(request, testRunTenant: null, cancellationToken);
+
+    /// <summary>Reads a legacy authoring test run in the request's tenant while a kernel shell serves published runs.</summary>
+    public Task<WorkflowInstanceDetailsView?> GetTestRunAsync(GetWorkflowInstance request, string tenant, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenant);
+        return ReadAsync(request, tenant, cancellationToken);
+    }
+
+    private async Task<WorkflowInstanceDetailsView?> ReadAsync(GetWorkflowInstance request, string? testRunTenant,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
 
         var state = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
-        if (state is null || !await authorization.CanInspectStructureAsync(state, cancellationToken))
+        if (state is null ||
+            testRunTenant is not null && (state.RunKind != WorkflowRunKind.TestRun ||
+                !string.Equals(state.TenantId, testRunTenant, StringComparison.Ordinal)) ||
+            !await authorization.CanInspectStructureAsync(state, cancellationToken))
             return null;
 
         var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken);

@@ -17,6 +17,7 @@ internal sealed class KernelWorkflowInstanceDetailsService(
     IWorkflowExecutableStore executables,
     IPersistenceAccessContextAccessor access,
     IActivityInspectionContextAsync authorization,
+    WorkflowInstanceDetailsService testRuns,
     IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
 {
     // A kernel turn commits one durable boundary and can execute several activities within it.
@@ -26,11 +27,19 @@ internal sealed class KernelWorkflowInstanceDetailsService(
     public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
-        if (!KernelRunStates.CanReadTenant(access.Current, runs.Tenant) ||
-            await runs.GetAsync(new ActorRef(request.WorkflowExecutionId), cancellationToken) is not { } found)
+        if (access.Current is not { AccessPolicy: PersistenceAccessPolicy.Ordinary, AcrossScopes: false, Scope.Value: { } tenant })
             return null;
 
-        var (view, run) = found;
+        if (!string.Equals(tenant, runs.Tenant.Tenant, StringComparison.Ordinal))
+            return await testRuns.GetTestRunAsync(request, tenant, cancellationToken);
+
+        var (missing, found) = await runs.GetAsync(new ActorRef(request.WorkflowExecutionId), cancellationToken);
+        if (missing)
+            return await testRuns.GetTestRunAsync(request, tenant, cancellationToken);
+        if (found is not { } committed)
+            return null;
+
+        var (view, run) = committed;
         var identity = (await executables.FindAsync(run.Workflow, cancellationToken))?.Identity;
         var state = KernelRunStates.From(view, run, identity, runs.Tenant.Tenant);
         if (!await authorization.CanInspectStructureAsync(state, cancellationToken))

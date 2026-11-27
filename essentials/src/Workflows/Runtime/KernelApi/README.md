@@ -21,7 +21,8 @@ Serves the workflow runtime API's Runs list and individual run summaries from th
   the rest in memory.
 - The run details endpoint loads the exact committed actor header in the host's bound tenant and applies the runtime
   API's structure and sensitive-value authorization. It reports Balanced persistence and boundary-level inspection
-  because one kernel turn can execute several activities before it commits.
+  because one kernel turn can execute several activities before it commits. Studio authoring test runs continue to use
+  the legacy exact-run read with the normal runtime authorization and request tenant.
 
 ## Coupling to the old core's read model
 
@@ -35,5 +36,5 @@ with paging in the store.
 Each request reads every run of the tenant (or of the definition it names) from the foundation, once. This is fine for a
 preview database and slows with the number of runs. A kernel list query that pages in the store replaces it later.
 
-The run summary includes empty activity, incident and output collections. The activity timeline is a separate K10 slice.
+The kernel run summary includes empty activity, incident and output collections. The activity timeline is a separate K10 slice.
 Workflow outputs need a committed capture projection before the runtime API can serve them.
