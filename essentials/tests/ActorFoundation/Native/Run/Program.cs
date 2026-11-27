@@ -13,8 +13,6 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
-if (args is ["kernel-shell-managed-schedules", var scheduleShellProvider and ("sqlite" or "postgres")])
-    return await KernelShellManagedScheduleChecks.RunAsync(scheduleShellProvider == "postgres");
 if (args is ["workbench-shipped-flowcharts", var graphProvider and ("sqlite" or "postgres"), var graphWorkbench])
 {
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedFlowchartsAsync(graphWorkbench, graphProvider == "postgres");
@@ -74,7 +72,6 @@ if (args is ["root-schedule-occurrence", var occurrenceProvider and ("postgres" 
     return await RootScheduleInventoryChecks.RunAsync(occurrenceProvider == "postgres", settleOccurrences: true);
 if (args is ["root-schedule-occurrence", var occurrenceLifecycleProvider and ("postgres" or "sqlite"), var occurrenceFence and ("checked" or "in-batch")])
     return await RootScheduleInventoryChecks.RunAsync(occurrenceLifecycleProvider == "postgres", settleOccurrences: true, fenceInBatch: occurrenceFence == "in-batch");
-if (args is ["kernel-schedule-reconciliation"]) return await KernelScheduleReconciliationChecks.RunAsync();
 if (args is ["root-schedule-lineage", var lineageProvider and ("postgres" or "sqlite"), var lineageFence and ("checked" or "in-batch")])
     return await RootScheduleInventoryChecks.RunAsync(lineageProvider == "postgres", settleOccurrences: true,
         fenceInBatch: lineageFence == "in-batch", trackLineage: true);

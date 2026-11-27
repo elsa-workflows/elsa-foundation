@@ -11,15 +11,16 @@ using Kernel.Foundation.Contracts;
 using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
 using Actor = Kernel.WorkflowActor.WorkflowActor;
 using ContractAdmission = Kernel.Foundation.Contracts.Admission;
 using Native = Kernel.Native;
 using StartSpec = Kernel.Foundation.Contracts.StartSpec;
 
-namespace Kernel.Native.Run;
+namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 
-internal static class KernelScheduleReconciliationChecks
+public sealed class KernelScheduleReconciliationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 27, 11, 0, 0, TimeSpan.Zero);
     private static readonly TriggerScope Unqualified = new(new(PersistenceScope.DefaultValue), null);
@@ -29,7 +30,8 @@ internal static class KernelScheduleReconciliationChecks
     private static readonly string Timer = "~" + new string('C', 64);
     private const string Key = "schedule:definition:trigger";
 
-    internal static async Task<int> RunAsync()
+    [Fact]
+    public async Task Reconciliation_settles_scoped_control_delivery_and_retirement()
     {
         var executable = ExecutableOf("artifact", "definition", Node("trigger", Types.Timer, [Literal("Interval", "PT1S", "String")]));
         var material = new InMemoryWorkflowExecutableStore();
@@ -120,15 +122,13 @@ internal static class KernelScheduleReconciliationChecks
             await running.WaitAsync(TimeSpan.FromSeconds(5));
         }
         Require(log.Errors.IsEmpty, "ordinary cancellation does not report a schedule fault");
-        var failure = new InvalidOperationException("Schedule timer creation failed.");
+        var failure = new InvalidOperationException("Reading the reconciliation clock failed.");
         var faulted = new KernelScheduleReconciliationWorker(runtime.GetRequiredService<IServiceScopeFactory>(), Named,
             ContractScopes.Bind("default"), KernelHostCapabilities.All, null, provider,
-            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), new FailingTimerClock(failure), log);
+            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), new FailingTimestampClock(failure), log);
         await faulted.RunAsync(deadline.Token);
         Require(log.Errors.TryDequeue(out var reported) && ReferenceEquals(reported, failure),
             "an escaping schedule fault is reported immediately, without waiting for shell shutdown");
-        Console.WriteLine("ok schedule reconciliation settles scoped control, admission, replay and retirement");
-        return 0;
 
         RuntimeKernelScheduleOccurrence Offer(TriggerScope scope, long generation) =>
             new(scope, Key, Schedule.Id, "Green", "publication", 1, generation, Timer, Now, Now.AddMinutes(1),
@@ -375,10 +375,9 @@ internal static class KernelScheduleReconciliationChecks
         }
     }
 
-    private sealed class FailingTimerClock(Exception failure) : TimeProvider
+    private sealed class FailingTimestampClock(Exception failure) : TimeProvider
     {
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
-            throw failure;
+        public override long GetTimestamp() => throw failure;
     }
 
     private sealed class RecordingLogger : ILogger<KernelScheduleReconciliationWorker>
