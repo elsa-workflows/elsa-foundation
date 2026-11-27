@@ -45,6 +45,7 @@ export interface Elsa3ReusableImportDirectStart {
 }
 
 export interface Elsa3ReusableImportItem {
+  sourceName?: string | null;
   sourceDefinitionId: string;
   sourceVersionId: string;
   sourceVersion: number;
@@ -96,6 +97,9 @@ export interface Elsa3ReusableImportAccessScope {
 export type Elsa3ReusableImportResourceDisposition = "Created" | "Reused" | string | number;
 
 export interface Elsa3ReusableImportSourceReceipt {
+  activityDraftId?: string | null;
+  workflowDraftSourceVersionId?: string | null;
+  name?: string | null;
   sourceDefinitionId: string;
   sourceVersionId: string;
   workflowDefinitionId: string;
@@ -135,6 +139,7 @@ export interface Elsa3ReusableImportPublication {
 }
 
 export interface Elsa3ReusableImportReceipt {
+  publishImportedActivities?: boolean | null;
   receiptId: string;
   collectionHandle: string;
   planId: string;

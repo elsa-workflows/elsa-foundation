@@ -167,6 +167,7 @@ export interface ActivityPublicationReadiness {
 }
 
 export interface ActivityPublicationPreflight {
+  reservedVersion?: string | null;
   draftId: string;
   draftRevision: number;
   definitionId: string;

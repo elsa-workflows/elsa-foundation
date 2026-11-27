@@ -34,6 +34,18 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Whether the shipped Embedded profile supports protected held root preparation.</summary>
     public static bool TakesPreparedStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.PreparedStarts);
 
+    /// <summary>Whether the shipped Embedded profile supports inline promotion.</summary>
+    public static bool TakesInlineStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.InlinePromotion);
+
+    /// <summary>Whether the shipped Embedded profile supports Event-triggered starts.</summary>
+    public static bool TakesEventStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStarts);
+
+    /// <summary>Whether the shipped Embedded profile supports Event start receipt retention.</summary>
+    public static bool RetainsEventStartReceipts => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStartReceipts);
+
+    /// <summary>Whether the shipped Embedded profile supports ordered Event replay.</summary>
+    public static bool TakesOrderedEventScan => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStartScan);
+
     /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
     /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
     public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>
@@ -47,7 +59,7 @@ public static partial class SqliteEmbeddedHosting
         var path = Path.GetFullPath(databasePath);
         // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
         using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }
-        using var file = AcquireFile(path, forRuntime: true);
+        using var file = await AcquireRuntimeFileAsync(path, requests: null, cancellationToken);
         await using var db = KernelDb.ForSqliteRootShipped(file.Options, qualificationFormat);
         await EfStore.InstallSqliteShippedAsync(db, partitions: 1, cancellationToken);
         await UseWalAsync(db, cancellationToken);
@@ -103,7 +115,7 @@ public static partial class SqliteEmbeddedHosting
             throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
         cancellationToken.ThrowIfCancellationRequested();
-        var file = AcquireFile(databasePath, forRuntime: true, requests: requests);
+        var file = await AcquireRuntimeFileAsync(databasePath, requests, cancellationToken);
         try
         {
             if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
@@ -191,16 +203,40 @@ public static partial class SqliteEmbeddedHosting
             throw new InvalidOperationException("The SQLite kernel database could not enable WAL.");
     }
 
-    private static FileLease AcquireFile(string databasePath, bool forRuntime = false, SqliteDirectRequests? requests = null)
+    private static string ResolveFilePath(string databasePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         var path = Path.GetFullPath(databasePath);
         if (!File.Exists(path))
             throw new FileNotFoundException("An installed SQLite kernel database is required.", path);
-        path = OperatingSystem.IsWindows() ? ResolveWindowsPath(path) : ResolveUnixPath(path);
+        return OperatingSystem.IsWindows() ? ResolveWindowsPath(path) : ResolveUnixPath(path);
+    }
 
+    private static FileLease AcquireFile(string databasePath, SqliteDirectRequests? requests = null,
+        CancellationToken cancellationToken = default) =>
+        AcquireResolvedFile(ResolveFilePath(databasePath), forRuntime: false, requests, cancellationToken, out _)!;
+
+    private static async Task<FileLease> AcquireRuntimeFileAsync(string databasePath, SqliteDirectRequests? requests,
+        CancellationToken cancellationToken)
+    {
+        var path = ResolveFilePath(databasePath);
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var lease = AcquireResolvedFile(path, forRuntime: true, requests, cancellationToken, out var retiredReplies);
+            if (lease is not null) return lease;
+            await retiredReplies!.WaitAsync(cancellationToken);
+        }
+    }
+
+    private static FileLease? AcquireResolvedFile(string path, bool forRuntime, SqliteDirectRequests? requests,
+        CancellationToken cancellationToken, out Task? retiredReplies)
+    {
+        retiredReplies = null;
         lock (FileGate)
         {
+            // A canceled write that has yet to take a lease must not recreate a retired reply edge.
+            cancellationToken.ThrowIfCancellationRequested();
             if (!ActiveFiles.TryGetValue(path, out var file))
             {
                 var identity = ReadLinuxIdentity(path);
@@ -223,6 +259,12 @@ public static partial class SqliteEmbeddedHosting
             if (forRuntime)
             {
                 if (file.Runtime) throw new SqliteHostLockException(file.Lock.Name);
+                // A canceled request can keep its reply lease until SQLite rolls back after the owner stops.
+                if (file.RetiredReplies is { } pending && !ReferenceEquals(file.ReplyEdge, requests))
+                {
+                    retiredReplies = pending.Task;
+                    return null;
+                }
                 file.RequireReplyEdge(requests);
                 file.Runtime = true;
                 file.ReplyEdge = requests;
@@ -251,6 +293,7 @@ public static partial class SqliteEmbeddedHosting
         internal bool Runtime { get; set; }
         internal SqliteDirectRequests? ReplyEdge { get; set; }
         internal int ReplyUsers { get; set; }
+        internal TaskCompletionSource? RetiredReplies { get; set; }
         internal SemaphoreSlim ReplyWrites { get; } = new(1);
         internal SemaphoreSlim ReplyOperatorWrites { get; } = new(1);
 
@@ -276,8 +319,17 @@ public static partial class SqliteEmbeddedHosting
             if (Interlocked.Exchange(ref _file, null) is not { } held) return;
             lock (FileGate)
             {
-                if (forRuntime) held.Runtime = false;
-                if (forReplies) held.ReplyUsers--;
+                if (forRuntime)
+                {
+                    held.Runtime = false;
+                    if (held.ReplyUsers != 0)
+                        held.RetiredReplies ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+                if (forReplies && --held.ReplyUsers == 0)
+                {
+                    held.RetiredReplies?.SetResult();
+                    held.RetiredReplies = null;
+                }
                 if (!held.Runtime && held.ReplyUsers == 0) held.ReplyEdge = null;
                 if (--held.Users != 0) return;
 

@@ -52,7 +52,7 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
             { RetentionWindow = retentionWindow };
     }
 
-    /// <summary>Creates the PostgreSQL owner for the private inline start qualification profile.</summary>
+    /// <summary>Creates the PostgreSQL owner with inline start promotion.</summary>
     public static PostgresPreviewHostedService CreateInlineQualification(Func<KernelDb> create, string node, IActorType actor,
         IActorType? auxiliaryActor, PostgresDirectRequests requests, ProtectChildBirthsAsync protectChildren, InlineRootRequests inlineStarts,
         Action<string> endProcess, Func<ActorHeader, TimeSpan?> retentionWindow, ILogger<PostgresPreviewHostedService> logger)

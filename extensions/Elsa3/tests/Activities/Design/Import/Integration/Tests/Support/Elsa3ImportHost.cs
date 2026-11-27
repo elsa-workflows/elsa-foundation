@@ -213,7 +213,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         string? reconcileFolder = null,
         bool strict = false,
         bool refuseAllPublications = false,
-        DirectoryInfo? existingRoot = null)
+        DirectoryInfo? existingRoot = null,
+        Func<string, CancellationToken, Task>? beforeAcquireLock = null)
     {
         var root = existingRoot ?? Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
@@ -238,7 +239,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Logging.AddProvider(warnings);
             builder.Configuration.AddConfiguration(configuration);
             builder.Services.AddSingleton<IConfiguration>(configuration);
-            builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
+            builder.Services.AddSingleton<IDistributedLockProvider>(new ProcessLockProvider(beforeAcquireLock));
             // An instance, not a type: a shell copies the host's registrations, and the tests read the one its seam uses.
             builder.Services.AddSingleton(refusals);
             // Same host-wide fleet/observed schema boundary as Workbench; the publisher must not infer finalization.
@@ -777,11 +778,16 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     }
 
     /// <summary>A lock provider for one process, which is all one test host needs.</summary>
-    private sealed class ProcessLockProvider : IDistributedLockProvider
+    private sealed class ProcessLockProvider(Func<string, CancellationToken, Task>? beforeAcquireLock) : IDistributedLockProvider
     {
         public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
         public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
-        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+        public async ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            if (beforeAcquireLock is not null)
+                await beforeAcquireLock(name, cancellationToken);
+            return new Handle();
+        }
 
         private sealed class Handle : IDistributedSynchronizationHandle
         {

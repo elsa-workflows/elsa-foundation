@@ -64,25 +64,25 @@ public sealed class KernelInstalledEventStartsTests
     }
 
     [Fact]
-    public Task Sqlite_commits_an_Ephemeral_publisher_and_its_first_Event_together() => RunAsync(false, combined: true);
+    public Task Sqlite_commits_an_Ephemeral_publisher_and_its_first_Event_together() => RunAsync(false, shipped: true);
 
     [SkippableFact]
     public Task Postgres_commits_an_Ephemeral_publisher_and_its_first_Event_together()
     {
         Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
             string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
-        return RunAsync(true, combined: true);
+        return RunAsync(true, shipped: true);
     }
 
     [Fact]
-    public Task Sqlite_adopts_the_active_stock_Event_without_republishing() => RunAsync(false, combined: true, adoptStock: true);
+    public Task Sqlite_adopts_the_active_stock_Event_without_republishing() => RunAsync(false, shipped: true, adoptStock: true);
 
     [SkippableFact]
     public Task Postgres_adopts_the_active_stock_Event_without_republishing()
     {
         Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
             string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
-        return RunAsync(true, combined: true, adoptStock: true);
+        return RunAsync(true, shipped: true, adoptStock: true);
     }
 
     [Theory]
@@ -90,9 +90,9 @@ public sealed class KernelInstalledEventStartsTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     public Task Sqlite_adoption_handles_a_drained_predecessor(bool startup, bool afterAdoption) =>
-        RunAsync(false, combined: true, adoption: (startup, afterAdoption));
+        RunAsync(false, shipped: true, adoption: (startup, afterAdoption));
 
-    private static async Task RunAsync(bool postgres, bool combined = false, bool adoptStock = false,
+    private static async Task RunAsync(bool postgres, bool shipped = false, bool adoptStock = false,
         (bool Startup, bool AfterAdoption)? adoption = null)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(55));
@@ -111,7 +111,7 @@ public sealed class KernelInstalledEventStartsTests
             var replacement = Subscriber(flowchart: false);
             var ephemeral = Subscriber(flowchart: true, mode: PersistenceMode.Ephemeral, definition: "ephemeral-event-subscriber");
             var producer = Producer("producer-old", "old");
-            var nextProducer = Producer("producer-new", null, mode: combined ? PersistenceMode.Ephemeral : null);
+            var nextProducer = Producer("producer-new", null, mode: shipped ? PersistenceMode.Ephemeral : null);
             var wrongName = Producer("producer-wrong-case", "ignored", eventName: "changed");
             var gate = new RelayGate { Hold = true };
             PublicationActivationResult original;
@@ -458,7 +458,7 @@ public sealed class KernelInstalledEventStartsTests
             async Task RaceAdoptionAsync(bool startup, bool afterAdoption)
             {
                 PublicationActivationResult published;
-                await using (var stock = OpenShell(stock: true))
+                await using (var stock = OpenShell(priorCapabilities: true))
                 {
                     var services = stock.Services.GetRequiredService<IServiceScopeFactory>();
                     await MigrateAsync(services);
@@ -526,7 +526,7 @@ public sealed class KernelInstalledEventStartsTests
             {
                 PublicationActivationResult published;
                 PublicationActivationResult excluded;
-                await using (var stock = OpenShell(stock: true))
+                await using (var stock = OpenShell(priorCapabilities: true))
                 {
                     var services = stock.Services.GetRequiredService<IServiceScopeFactory>();
                     await MigrateAsync(services);
@@ -539,7 +539,7 @@ public sealed class KernelInstalledEventStartsTests
                     Assert.Null(await ReadGenerationAsync(services, excluded.Slot));
                 }
 
-                // The stock publications use the retained Runtime database. The combined owner installs fresh
+                // The stock publications use the retained Runtime database. The shipped owner installs fresh
                 // Actor Foundation storage and loses acknowledgment after its first provider registration.
                 gate.InterruptRevision = published.Slot.Revision;
                 RuntimeKernelEventPublication staged;
@@ -619,7 +619,7 @@ public sealed class KernelInstalledEventStartsTests
                     .FindAsync(Scope, slot.SlotId, slot.Revision, token);
             }
 
-            WebApplication OpenShell(bool stock = false, AdoptionRace? adoptionRace = null)
+            WebApplication OpenShell(bool priorCapabilities = false, AdoptionRace? adoptionRace = null)
             {
                 var builder = WebApplication.CreateBuilder();
                 builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
@@ -647,15 +647,29 @@ public sealed class KernelInstalledEventStartsTests
                 services.AddScoped<UnpublishPublicationSlotRequestHandler>();
                 var api = new WorkflowsRuntimeApiFeature();
                 api.ConfigureServices(services);
-                var storage = stock ? KernelShellStorage.Create(provider, path, foundation)
-                    : combined ? KernelShellStorage.CreateSharedActivationQualification(provider, path, foundation)
-                    : KernelShellStorage.CreateEventStartScanQualification(provider, path, foundation);
-                new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, storage, protectChildExecutables: true);
-                if (!stock)
-                    services.Replace(ServiceDescriptor.Singleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(), Scope,
-                        Tenant, sp.GetRequiredService<KernelServing>().Capabilities, () => new PausableAdmissions(storage.BindEventStarts(Tenant), gate),
-                        TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), retainsReceipts: true, orderedScan: true,
-                        adoptExisting: combined)));
+                var hosting = new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation };
+                if (shipped && !priorCapabilities)
+                    hosting.ConfigureServices(services);
+                else
+                {
+                    // The prior-capability shell seeds Runtime publications only. The shipped owner installs the Foundation store.
+                    var storage = priorCapabilities ? KernelShellStorage.CreatePreparedStartsQualification(provider, path, foundation)
+                        : KernelShellStorage.CreateEventStartScanQualification(provider, path, foundation);
+                    hosting.ConfigureServices(services, storage, protectChildExecutables: true);
+                }
+                if (!priorCapabilities)
+                {
+                    Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(KernelEventPublicationRelay));
+                    services.Replace(ServiceDescriptor.Singleton(sp =>
+                    {
+                        var storage = sp.GetRequiredService<KernelShellStorage>();
+                        Assert.Equal(shipped, storage.TakesInlineStarts);
+                        return new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(), Scope,
+                            Tenant, sp.GetRequiredService<KernelServing>().Capabilities, () => new PausableAdmissions(storage.BindEventStarts(Tenant), gate),
+                            TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), storage.RetainsEventStartReceipts,
+                            storage.TakesOrderedEventScan, adoptExisting: storage.TakesInlineStarts && storage.TakesOrderedEventScan);
+                    }));
+                }
                 if (adoptionRace is not null)
                     services.Replace(ServiceDescriptor.Singleton<IKernelEventPublicationRegistration>(sp =>
                         new InterruptAdoptionRead(sp.GetRequiredService<KernelEventPublicationRelay>(), adoptionRace)));
