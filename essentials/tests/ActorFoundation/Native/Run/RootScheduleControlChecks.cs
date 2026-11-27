@@ -133,7 +133,7 @@ internal static class RootScheduleControlChecks
                 "managed-profile-held-event", Contract.Kinds.Event, null, null,
                 new Contract.RequestOptions(null, now + 5000), token);
             Require(reply is { Channel: Request.Response, Error: null } && reply.Item?.ToString() == "accepted",
-                $"the managed profile replies to a public held event (channel {reply.Channel}, error {reply.Error})");
+                $"the managed profile replies to a public held event (channel {reply.Channel}, error {reply.Error}, status {reply.Status}, item {reply.Item})");
         }
         await UntilAsync(() => Task.FromResult(acceptor.Offers.Any(offer => offer.Schedule == reference && offer.Authority == "first")));
         Require(await Apply(5, Control.Set, Header(5, "second")) == new Contract.ScheduleControlResult(Outcome.Applied, reference),
@@ -237,7 +237,7 @@ internal static class RootScheduleControlChecks
                     turn.Subscribe(EventKey, WaitName);
                 }
                 else if (message.Event is not null)
-                    turn.Reply(message, Request.Response, "accepted");
+                    turn.Emit(Request.Response, "accepted");
             }
             return ValueTask.CompletedTask;
         }
