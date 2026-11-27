@@ -5,7 +5,12 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    // The fenced Park path keeps direct inputs and can open on an authenticated timed-job result.
+    private static long ParkStorageScope(Message input) => input.FoundationJobResult ? RootTimedJobScope :
+        input.InboxKey.Scope == InboxKey.FoundationOccurrenceScope ? InboxKey.FoundationOccurrenceScope : RootSelfScope;
+
+    private static string ParkStorageId(Message input) => input.FoundationJobResult ? StoredJobId(input.InboxKey) : input.InboxKey.Id;
+
+    // The fenced Park path keeps direct or qualified private inputs and can open on an authenticated timed-job result.
     private async Task<PreparedRoot?> PrepareRootParkOpeningAsync(WorkerRoot root, TurnCommit turn, bool parkedOperators,
         CancellationToken cancellationToken)
     {
@@ -27,7 +32,10 @@ public sealed partial class EfStore
             turn.Expected is not > 0 || opening && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 && !split ||
             turn.FoundationKept is not { } kept || kept.Count != turn.Done.Count ||
             turn.FoundationRootParkInputs is not { } envelopes || !SameInputs(envelopes, turn.Done) ||
-            turn.Done.Any(key => (!recorded && key.Scope != InboxKey.FoundationOccurrenceScope) || !root.Owns(key) ||
+            (!recorded && envelopes.Any(input => input.InboxKey.Scope != InboxKey.FoundationOccurrenceScope &&
+                (_ordinaryRoots?.KeepsPrivateParkInputs != true || RootSelfIssuer is null ||
+                    !FoundationSelfSend.IsSelfInput(input, root.Actor, 1)))) ||
+            turn.Done.Any(key => !root.Owns(key) ||
                 PostgresRootAdmission.IsOperatorOccurrence(key) || !kept.TryGetValue(key, out var actual) ||
                 actual != reason) || turn.Done.Distinct().Count() != kept.Count ||
             turn.Consumed.Count != 0 || turn.Sent.Count != 0 || turn.Subscribed.Count != 0 ||
@@ -53,7 +61,7 @@ public sealed partial class EfStore
 
         var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
         return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned,
-            row.Suspended, current.Jobs, current.NextJobGeneration, row.Model));
+            row.Suspended, current.Jobs, current.NextJobGeneration, row.Model, RootSelfIssuer));
     }
 
     private static TurnCommit WithoutOperators(TurnCommit turn)
@@ -81,7 +89,8 @@ public sealed partial class EfStore
     private sealed record LockedParkCheckpoint(long At, long? ParkAt, long? OpenRevision, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
-        IReadOnlyList<Message> Inputs, string[] Returned, bool Suspended, string? Jobs, long? NextJobGeneration, string Model)
+        IReadOnlyList<Message> Inputs, string[] Returned, bool Suspended, string? Jobs, long? NextJobGeneration, string Model,
+        FoundationSelfIssuer? SelfIssuer)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
@@ -90,7 +99,6 @@ public sealed partial class EfStore
             if (db.UsesSqliteRootRuntime) return await BindSqliteParkOpeningAsync(db, this, cancellationToken);
             var recorded = Inputs is [{ FoundationJobResult: true }];
             if (recorded && (!Opening || !db.UsesRootTimedJobSettlement)) return false;
-            var scope = recorded ? RootTimedJobScope : InboxKey.FoundationOccurrenceScope;
             var priorStatus = Opening ? InstanceStatus.Running : InstanceStatus.Faulted;
             FormattableString read = $"""
                 SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "At", i."FoundationParkAt" AS "ParkAt",
@@ -129,7 +137,7 @@ public sealed partial class EfStore
                 write = FormattableStringFactory.Create(
                     write.Format.Replace("/*open-revision*/", $$""", "FoundationParkRevision" = {{{write.ArgumentCount}}}""", StringComparison.Ordinal),
                     [.. write.GetArguments(), openRevision]);
-            var keys = Inputs.Select(input => recorded ? StoredJobId(input.InboxKey) : input.InboxKey.Id).ToArray();
+            var keys = Inputs.Select(ParkStorageId).ToArray();
             var pinsResult = recorded && RecordsConsumedRootJob(db);
             var live = Opening && !recorded && Jobs is not null
                 ? await ReadLiveRootJobAsync(db, Root.Actor, Root.Partition, Model, Jobs, cancellationToken) : null;
@@ -138,25 +146,15 @@ public sealed partial class EfStore
             if (!pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
 
             // A different input can mature between dispatch and Park. Lock the dispatched identities.
-            var pending = await db.Messages.FromSqlInterpolated($"""
-                SELECT * FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
-                    AND "InboxScope" = {scope} AND "Id" = ANY({keys})
-                    AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "Due" <= {prior.At}
-                ORDER BY "Seq" FOR UPDATE
-                """).AsNoTracking().ToListAsync(cancellationToken);
-            var inputs = (recorded ? pending.Select(DecodeRootTimedRow) : pending.Select(row => DecodeRootInput(db, row, Root.Reference, null))).ToArray();
-            if (inputs.Any(input => input.TargetCreation != 1 || input.Operator is not null) ||
-                !inputs.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)
-                    .SequenceEqual(Inputs.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)))
-                return false;
-
-            if (pinsResult) await ReleaseProtectedTimedJobsAsync(db, Root.Actor, keys, cancellationToken);
-            var kept = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)Reason}
-                WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
-                    AND "InboxScope" = {scope} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationKeptBy" IS NULL
-                """, cancellationToken);
-            if (kept != keys.Length || pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
+            var keptInputs = new List<(long Scope, string[] Ids, MessageEntity[] Pending)>();
+            foreach (var group in Inputs.GroupBy(ParkStorageScope).OrderBy(group => group.Key))
+            {
+                var ids = group.Select(ParkStorageId).ToArray();
+                var pending = await KeepPostgresInputsAsync(db, group.Key, ids, group.ToArray(), prior.At, pinsResult, cancellationToken);
+                if (pending is null) return false;
+                keptInputs.Add((group.Key, ids, pending));
+            }
+            if (pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
             if (Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Seen" = 0
                 WHERE "Id" = ANY({Returned}) AND "Id" LIKE 'operator/%' AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
@@ -176,17 +174,11 @@ public sealed partial class EfStore
                     DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
                     """, cancellationToken);
 
-            var retained = await db.Messages.AsNoTracking()
-                .Where(row => row.Target == Root.Actor && row.Partition == Root.Partition &&
-                    row.InboxScope == scope && row.EventMatch == null && keys.Contains(row.Id))
-                .OrderBy(row => row.Seq).ToArrayAsync(cancellationToken);
-            var envelope = (MessageEntity row) => new
+            foreach (var (scope, ids, pending) in keptInputs)
             {
-                row.Id, row.Seq, row.Kind, row.Payload, row.Start, row.Sender, row.Due, row.KeepUntil, row.ReplyTo,
-                row.JobGeneration, row.Seen, row.Attempts
-            };
-            if (!retained.Select(envelope).OrderBy(row => row.Id, StringComparer.Ordinal)
-                .SequenceEqual(pending.Select(envelope).OrderBy(row => row.Id, StringComparer.Ordinal))) return false;
+                var retained = await ReadPostgresParkInputsAsync(db, scope, ids, prior.At, kept: true, cancellationToken);
+                if (!retained.Select(Envelope).SequenceEqual(pending.Select(Envelope))) return false;
+            }
 
             var stored = await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (
@@ -197,10 +189,7 @@ public sealed partial class EfStore
                         AND "Suspended" = {Suspended} AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest}
                         AND "Jobs" IS NOT DISTINCT FROM {Jobs} AND "NextJobGeneration" IS NOT DISTINCT FROM {NextJobGeneration}
-                ) AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor}
-                        AND "Partition" = {Root.Partition} AND "InboxScope" = {scope}
-                        AND "EventMatch" IS NULL AND "Done" AND "Trial" = 0 AND "FoundationKeptBy" = {(short)Reason}
-                ) = {keys.Length}
+                )
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                 AS "Value"
                 """).SingleAsync(cancellationToken);
@@ -215,5 +204,45 @@ public sealed partial class EfStore
                 AS "Value"
                 """).SingleAsync(cancellationToken));
         }
+
+        private async Task<MessageEntity[]?> KeepPostgresInputsAsync(KernelDb db, long scope, string[] ids, Message[] expected, long now,
+            bool pinsResult, CancellationToken token)
+        {
+            var pending = await ReadPostgresParkInputsAsync(db, scope, ids, now, kept: false, token);
+            var decoded = pending.Select(row => DecodeRootInput(db, row, Root.Reference, SelfIssuer, timed: scope == RootTimedJobScope));
+            if (!ParkInputsMatch(decoded, expected)) return null;
+
+            if (pinsResult) await ReleaseProtectedTimedJobsAsync(db, Root.Actor, ids, token);
+            return await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)Reason}
+                WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {scope}
+                    AND "Id" = ANY({ids}) AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationKeptBy" IS NULL
+                """, token) == ids.Length ? pending : null;
+        }
+
+        private Task<MessageEntity[]> ReadPostgresParkInputsAsync(KernelDb db, long scope, string[] ids, long now, bool kept,
+            CancellationToken token)
+        {
+            var source = scope == RootSelfScope ? PostgresPrivateInboxView : "\"Messages\"";
+            var state = kept ? """AND m."Trial" = 0 AND m."FoundationKeptBy" = {6} ORDER BY m."Seq" """ :
+                """AND m."FoundationKeptBy" IS NULL ORDER BY m."Seq" FOR UPDATE OF m""";
+            var sql = $$"""
+                SELECT * FROM {{source}} m WHERE m."Target" = {0} AND m."Partition" = {1} AND m."InboxScope" = {2}
+                    AND m."Id" = ANY({3}) AND m."EventMatch" IS NULL AND m."Due" <= {4} AND m."Done" = {5} {{state}}
+                """;
+            object[] args = [Root.Actor, Root.Partition, scope, ids, now, kept];
+            if (kept) args = [.. args, (short)Reason];
+            return db.Messages.FromSqlInterpolated(FormattableStringFactory.Create(sql, args)).AsNoTracking().ToArrayAsync(token);
+        }
+
+        private static object Envelope(MessageEntity row) => new
+        {
+            row.Id, row.Seq, row.Kind, row.Payload, row.Start, row.Sender, row.Due, row.KeepUntil, row.ReplyTo,
+            row.JobGeneration, row.Seen, row.Attempts
+        };
     }
+
+    private static bool ParkInputsMatch(IEnumerable<Message> decoded, IEnumerable<Message> expected) =>
+        decoded.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)
+            .SequenceEqual(expected.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal));
 }

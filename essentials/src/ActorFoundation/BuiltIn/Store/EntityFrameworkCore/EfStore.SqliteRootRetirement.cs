@@ -12,6 +12,7 @@ public sealed partial class EfStore
         var park = retire.Park;
         var ending = running || park is not null;
         var scope = InboxKey.FoundationOccurrenceScope;
+        var clearsPrivate = park is null && db.UsesRootPrivateParkInputs;
         // The owned immediate transaction holds the position and prevents a concurrent admission during retirement.
         if (!await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS (SELECT 1 FROM "Instances" i
@@ -25,8 +26,8 @@ public sealed partial class EfStore
                     AND i."FoundationParkAt" IS NOT DISTINCT FROM {park?.Mark.At}
                     AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."Parent" IS NULL AND i."CustomHandles" IS NULL
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = i."Id")
-                    AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
-                        AND NOT m."Done" AND (m."InboxScope" <> {scope} OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL)))
+                    AND ({clearsPrivate} OR NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
+                        AND NOT m."Done" AND (m."InboxScope" <> {scope} OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL))))
             AS "Value"
             """).SingleAsync(token)) return false;
 
@@ -41,6 +42,10 @@ public sealed partial class EfStore
                 park.Cleared, park.KeptDigest, park.Count, ends: true, retire.Command, token);
             if (page is null || !await ClearSqliteParkPageAsync(db, root, page, retire.Command.Operator!.RootParkWindow!.Value, token)) return false;
         }
+
+        if (clearsPrivate && (!await ClearTerminalRootSelfAsync(db, current.Actor, root.Partition, current.Revision, retire.SelfIssuer, includeImmediate: true, token) ||
+            await HasRootRetirementInboxResidueAsync(db, root, token)))
+            return false;
 
         var revision = checked(current.Revision + 1);
         var status = running || park is not null && retire.Command.Operator?.RootThenDelete == true ? InstanceStatus.Cancelled : current.Status;

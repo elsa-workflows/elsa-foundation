@@ -15,6 +15,12 @@ namespace Kernel.Foundation.Sqlite;
 /// <summary>Starts one Embedded node against an installed SQLite kernel qualification store.</summary>
 public static partial class SqliteEmbeddedHosting
 {
+    /// <summary>Whether the shipped SQLite format takes an actor's self-sends.</summary>
+    public static bool TakesSelfSends => RootProfiles.Shipped.HasFlag(RootCapabilities.SelfProtocol);
+
+    /// <summary>Whether the shipped SQLite format takes durable actor-owned timers.</summary>
+    public static bool TakesTimers => RootProfiles.Shipped.HasFlag(RootCapabilities.Timers);
+
     /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
     /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
     public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>
@@ -56,7 +62,7 @@ public static partial class SqliteEmbeddedHosting
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
-        return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor,
+        return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor, store.RootSelfIssuer,
                 rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true,
                 retentionWindow: retentionWindow),
             actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests);
@@ -85,8 +91,10 @@ public static partial class SqliteEmbeddedHosting
             KernelDb Open() => shipped ? OpenRoot(file, requests?.QualifiesPressure == true, runtime: true) : new(file.Options);
 
             int partitions;
+            bool selfSends;
             await using (var db = Open())
             {
+                selfSends = db.UsesRootSelfProtocol;
                 if (shipped)
                 {
                     var admission = new SqliteRootAdmission(Open, TimeSpan.Zero, file.AdmissionDefinitions);
@@ -106,7 +114,11 @@ public static partial class SqliteEmbeddedHosting
             var pressure = requests?.Pressure;
             var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch)
                 { CommitSql = CommitSql.Owned, AdmissionPressure = pressure };
-            if (shipped) await store.EnableRootJobsAsync(cancellationToken);
+            if (shipped)
+            {
+                if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
+                await store.EnableRootJobsAsync(cancellationToken);
+            }
             var watchdog = new Watchdog(Defaults.Lease, endProcess);
             var watched = watchdog.Watch(store);
             RuntimeNode? reporter = null;

@@ -64,7 +64,8 @@ internal static class ProfileCapabilityChecks
             ("root-shipped", () => KernelDb.ForPostgresRootShipped(options), StoreFormat.RootShipped,
                 RootCapabilities.OperatorProtocol | RootCapabilities.Termination | RootCapabilities.StableBody | RootCapabilities.TerminalSelection | RootCapabilities.Retirement | RootCapabilities.TerminateThenDelete | RootCapabilities.Retention | RootCapabilities.OperatorReplies |
                 RootCapabilities.JobProtocol | RootCapabilities.TimedJobSettlement | RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol |
-                RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery)
+                RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery |
+                RootCapabilities.SelfProtocol | RootCapabilities.Timers | RootCapabilities.TimerRearm)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -93,9 +94,9 @@ internal static class ProfileCapabilityChecks
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
             ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootComposedParkRecovery", "UsesRootJobProtocol",
                 "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening",
-                "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootReplyProtocol", "UsesRootRetention",
-                "UsesRootRetirement", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
-                "UsesRootTimedJobPreview", "UsesRootTimedJobSettlement"],
+                "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootPrivateParkInputs", "UsesRootReplyProtocol", "UsesRootRetention",
+                "UsesRootRetirement", "UsesRootSelfProtocol", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
+                "UsesRootTimedJobPreview", "UsesRootTimedJobSettlement", "UsesRootTimerRearm", "UsesRootTimers"],
         };
         // S3: each profile's root state family, the prefix bytes written before S3 and the statuses besides Finished that end it.
         const string family = "!kernel-state/";
@@ -147,13 +148,13 @@ internal static class ProfileCapabilityChecks
                 seeds.Any(row => Equals(row["Id"], StoreDefinitionsRevision.MarkerId)) == shipped,
                 $"{name} seeds exactly the markers it requires");
             var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(model.ToDebugString(MetadataDebugStringOptions.LongDefault))))[..16];
-            Console.WriteLine($"profile {name} protocol={db.RequiredFormat.MessageProtocol} marker={marker} timers={db.RequiredFormat == StoreFormat.RootTimers} model={fingerprint} uses=[{string.Join(",", set)}]");
+            Console.WriteLine($"profile {name} protocol={db.RequiredFormat.MessageProtocol} marker={marker} timers={db.UsesRootTimers} model={fingerprint} uses=[{string.Join(",", set)}]");
             Check(db.GetType() == typeof(KernelDb), $"{name} is a plain KernelDb");
             Check(db.RequiredFormat == format, $"{name} carries format {format.MessageProtocol}");
             Check(db.Capabilities == expected, $"{name} carries exactly {expected}");
             Check(RootProfiles.Formats[format] == expected, $"{name} mapping for protocol {format.MessageProtocol} is {expected}");
             Check(Equals(marker, format.MessageProtocol), $"{name} model seeds marker protocol {format.MessageProtocol}");
-            Check(db.UsesRootTimers == (format == StoreFormat.RootTimers), $"{name} timer selection matches its format");
+            Check(db.UsesRootTimers == (format == StoreFormat.RootTimers || shipped), $"{name} timer selection matches its format");
             Check(set.SequenceEqual(accessors[name]), $"{name} turns on exactly [{string.Join(",", accessors[name])}]");
             var (prefix, cancelled, faulted) = families[name];
             Check(db.RootStateFamily == new RootStateFamily(prefix, cancelled, faulted),
@@ -171,9 +172,14 @@ internal static class ProfileCapabilityChecks
         var mapped = RootProfiles.Formats.Values.Aggregate(RootCapabilities.None, (all, next) => all | next);
         using var backlog = KernelDb.ForRootDueBacklogQualification(options);
         Check(backlog.RequiredFormat == StoreFormat.RootDueBacklogQualification && backlog.UsesRootDueBacklog &&
-            backlog.Capabilities == (RootProfiles.Shipped | RootCapabilities.DueBacklog) &&
+            backlog.Capabilities == (RootProfiles.ParkRecoveryComposition | RootCapabilities.DueBacklog) &&
             !RootProfiles.Formats.ContainsKey(backlog.RequiredFormat) && !mapped.HasFlag(RootCapabilities.DueBacklog),
             "due backlog is isolated to a private qualification format");
+        var sqliteOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite("Data Source=:memory:").Options;
+        using var sqliteBacklog = KernelDb.ForRootDueBacklogQualification(sqliteOptions, new SqliteAdmissionDefinitions());
+        Check(StoreDefinitionsRevision.Seed(backlog) is { StoreSchema: 1, MessageProtocol: 5, JournalCodec: 0 } &&
+              StoreDefinitionsRevision.Seed(sqliteBacklog) is { StoreSchema: 2, MessageProtocol: 10, JournalCodec: 0 },
+            "the due-backlog qualification retains its installed PostgreSQL and SQLite definitions");
         mapped |= backlog.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
@@ -203,18 +209,22 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.TimedJobPreview] = RootCapabilities.TimedJobSettlement,
             [RootCapabilities.ParkInspection] = RootCapabilities.ParkOpening,
             [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
-            [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol
+            [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol,
+            [RootCapabilities.TimerRearm] = RootProfiles.ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
             expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),
             $"the prerequisite map is exactly the {expectedEdges.Count} pinned edges");
         // An unshipped composition must be closed: stable body without termination would write a shipped prefix over the wire layout.
         var unshipped = StoreFormat.Current with { MessageProtocol = 96 };
+        var standaloneRearm = RootProfiles.Formats[StoreFormat.RootParkRecovery] | RootProfiles.Formats[StoreFormat.RootTimers] |
+            RootCapabilities.TimerRearm;
         foreach (var (composition, missing) in new (RootCapabilities Set, RootCapabilities Missing)[]
                  {
                      (RootCapabilities.StableBody, RootCapabilities.Termination),
                      (RootCapabilities.StableBody | RootCapabilities.Termination, RootCapabilities.OperatorProtocol),
                      (RootCapabilities.ParkInspection, RootCapabilities.ParkOpening),
+                     (standaloneRearm, RootProfiles.ParkCompositionBase & ~standaloneRearm),
                      (RootCapabilities.TimedJobPreview | RootCapabilities.JobProtocol, RootCapabilities.TimedJobSettlement),
                      (RootProfiles.Formats[StoreFormat.RootStableBody] | RootCapabilities.OperatorReplies, RootCapabilities.TerminalSelection)
                  })

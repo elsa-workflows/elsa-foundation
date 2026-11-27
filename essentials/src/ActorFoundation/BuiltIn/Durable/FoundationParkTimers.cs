@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Kernel.Durable;
@@ -11,14 +10,13 @@ internal sealed record ParkTimerOpen(IReadOnlyList<ParkTimerRecipe> Recipes, IRe
 public sealed partial class InMemoryStore
 {
     internal const int MaxRestoreWaits = 4096;
-    private const int MaxRestoreBytes = 24 * 1024 * 1024;
-    private const int RestoreWaitAllowance = 5406;
+    internal const int MaxRestoreBytes = 24 * 1024 * 1024;
+    internal const int RestoreWaitAllowance = 5406;
     private const byte SuppressedTimer = 1;
     private const byte RearmedTimer = 2;
     private const int TimerDispositionEntryBytes = 33;
 
-    private bool TimerHandleMatches(string origin, string id) => CryptographicOperations.FixedTimeEquals(
-        Convert.FromHexString(id.AsSpan(33)), Convert.FromHexString(FoundationSelfSend.TimerTag(MessageHandle, origin, id[1..33])));
+    private bool TimerHandleMatches(string origin, string id) => FoundationSelfSend.HasTimerTag(MessageHandle, origin, id);
 
     internal ParkTimerOpen? PlanFoundationTimers(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkTimerRecipe> recipes, ParkRetryOpen? retry = null)
     {

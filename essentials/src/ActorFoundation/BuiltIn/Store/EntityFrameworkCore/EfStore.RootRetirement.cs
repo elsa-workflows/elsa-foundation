@@ -89,7 +89,7 @@ public sealed partial class EfStore
     private sealed record ParkedRetirement(FoundationParkMark Mark, string KeptDigest, string? Clearing, long Cleared, int Count);
 
     private sealed record RootRetirement(WorkerRoot Root, RootImage Current, Message Command, long Position = 0, ParkedRetirement? Park = null,
-        bool WithheldInputs = false)
+        bool WithheldInputs = false, FoundationSelfIssuer? SelfIssuer = null)
         : QualifiedRootCheckpoint(-1)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
@@ -103,6 +103,7 @@ public sealed partial class EfStore
                 return await BindSqliteRootRetirementAsync(db, this, token);
 
             var occurrence = InboxKey.FoundationOccurrenceScope;
+            var clearsPrivate = Park is null && db.UsesRootPrivateParkInputs;
             var rows = await db.Database.SqlQuery<long>($"""
                 SELECT i."Revision" AS "Value" FROM "Instances" i
                 JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
@@ -115,8 +116,8 @@ public sealed partial class EfStore
                     AND i."FoundationTerminalAt" IS NOT DISTINCT FROM {Current.TerminalAt}
                     AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."Parent" IS NULL AND i."CustomHandles" IS NULL
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = i."Id")
-                    AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
-                        AND NOT m."Done" AND (m."InboxScope" <> {occurrence} OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL))
+                    AND ({clearsPrivate} OR NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
+                        AND NOT m."Done" AND (m."InboxScope" <> {occurrence} OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL)))
                 FOR UPDATE OF i
                 """).ToListAsync(token);
             var thenDelete = Command.Operator?.RootThenDelete == true;
@@ -126,6 +127,10 @@ public sealed partial class EfStore
             if (!await SettleRootInputsAsync(db, Root.Reference, Current.Actor, [Command.InboxKey], [Command], null,
                     Park is null ? running && (Current.Suspended || WithheldInputs) : !db.UsesRootParkArrivals || Park.Clearing is not null,
                     token, parked: Park is not null))
+                return false;
+
+            if (clearsPrivate && (!await ClearTerminalRootSelfAsync(db, Current.Actor, Root.Partition, Current.Revision, SelfIssuer, includeImmediate: true, token) ||
+                await HasRootRetirementInboxResidueAsync(db, Root, token)))
                 return false;
 
             var revision = checked(Current.Revision + 1);
@@ -247,6 +252,13 @@ public sealed partial class EfStore
         }
     }
 
+    private static Task<bool> HasRootRetirementInboxResidueAsync(KernelDb db, WorkerRoot root, CancellationToken token) =>
+        db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}
+                AND NOT "Done" AND ("InboxScope" <> {InboxKey.FoundationOccurrenceScope} OR "KeepUntil" IS NULL OR "EventMatch" IS NOT NULL))
+            AS "Value"
+            """).SingleAsync(token);
+
     private async Task<PreparedRoot?> PrepareRootRetirementAsync(WorkerRoot root, TurnCommit turn, CancellationToken token)
     {
         var command = turn.FoundationRootOperator;
@@ -291,6 +303,6 @@ public sealed partial class EfStore
             throw RootShape();
 
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal), new RootRetirement(root, current, command,
-            WithheldInputs: current.Status == InstanceStatus.Running && AuthoredWithholding(root, current)));
+            WithheldInputs: current.Status == InstanceStatus.Running && AuthoredWithholding(root, current), SelfIssuer: RootSelfIssuer));
     }
 }

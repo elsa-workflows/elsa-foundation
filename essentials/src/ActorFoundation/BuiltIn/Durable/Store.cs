@@ -180,6 +180,7 @@ public sealed record TurnCommit(
     internal ParkRecoveryPage? FoundationRecoveryPage { get; init; }
     internal ParkRetryOpen? FoundationRetry { get; init; }
     internal ParkTimerOpen? FoundationRecoveryTimers { get; init; }
+    internal ParkTimerRecipe[]? FoundationRootTimerRearms { get; init; }
     internal ParkJobOpen? FoundationRecoveryJobs { get; init; }
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions { get; init; }
     internal InboxKey? FoundationCatchUpStep { get; init; }

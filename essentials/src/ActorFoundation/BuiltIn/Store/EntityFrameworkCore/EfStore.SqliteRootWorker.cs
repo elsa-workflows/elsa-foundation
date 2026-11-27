@@ -35,13 +35,13 @@ public sealed partial class EfStore
             : "";
         return $"""
         AND m."EventMatch" IS NULL AND (m."InboxScope" = 0 OR (
-            m."InboxScope" IN ({RootTimedJobScope}, {InboxKey.FoundationOccurrenceScope}) AND EXISTS (
+            m."InboxScope" IN ({RootTimedJobScope}, {InboxKey.FoundationOccurrenceScope}/*root-self-scope*/) AND EXISTS (
                 SELECT 1 FROM "Instances" i
                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
                     AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
-                        m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND (m."Id" GLOB 'operator/*'
-                            {(includeParkArrivals ? """OR (i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")}))
+                        m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" GLOB 'operator/*'
+                        {(includeParkArrivals ? """OR (m."InboxScope" IN (/*park-input-scopes*/) AND i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")})
                     {cohort})
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.", recovery)}))))
         """;
@@ -163,7 +163,7 @@ public sealed partial class EfStore
         if (turn.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault && !terminated ||
             turn.Current.Suspended && !terminated || turn.OperatorSuspension is not null ||
             !turn.TimedJob && turn.JobCompletion is not null || turn.Values is not null ||
-            turn.Issue is not null || turn.Recalls is not null)
+            (turn.Issue is not null || turn.Recalls is not null) && !db.UsesRootSelfProtocol)
             throw new NotSupportedException("The staged SQLite root worker supports ordinary and timed job checkpoints.");
 
         var family = RootStatePrefix(db);
@@ -195,10 +195,21 @@ public sealed partial class EfStore
         var settled = turn.TimedJob
             ? await ConsumeRootTimedInputsAsync(db, actor, turn.Inputs, turn.JobCompletion, token)
             : await SettleSqliteRootInputsAsync(db, turn.Reference, actor,
-                turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, turn.Current.Suspended || turn.WithheldInputs, token);
+                turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, turn.Current.Suspended || turn.WithheldInputs,
+                token, issue: turn.Issue);
         if (!settled) return false;
+        if (turn.Recalls is { Length: > 0 } recalls)
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope}
+                    AND "Id" IN (SELECT value FROM json_each({Json.Write(recalls)}))
+                    AND "Target" = {actor.Id} AND "Sender" = {actor.Id} AND "Partition" = {home}
+                        AND ("Kind" = {RootSelfWire} OR {db.UsesRootPrivateParkInputs} AND "Kind" = {RootSelfTimerWire})
+                        AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
+                """, token);
         if (turn.SettledJobs is { Length: > 0 } jobIds && !await DeleteRootTimedRowsAsync(db, actor, jobIds, token)) return false;
 
+        if (ended && !await ClearTerminalRootSelfAsync(db, actor, home, turn.Current.Revision, turn.Issue, includeImmediate: false, token))
+            return false;
         var revision = turn.JournalRevision;
         FormattableString update = $"""
             UPDATE "Instances" SET "State" = {family + turn.State}, "FoundationHeader" = {turn.Header},
@@ -215,35 +226,49 @@ public sealed partial class EfStore
     }
 
     private static async Task<bool> SettleSqliteRootInputsAsync(KernelDb db, string reference, CreationAddress actor,
-        IReadOnlyList<InboxKey> expected, Message[]? expectedEnvelopes, bool suspended, CancellationToken token, bool parked = false)
+        IReadOnlyList<InboxKey> expected, Message[]? expectedEnvelopes, bool suspended, CancellationToken token, bool parked = false,
+        FoundationSelfIssuer? issue = null)
     {
-        if (expected.Any(key => key.Scope != InboxKey.FoundationOccurrenceScope || key.Match is not null)) return false;
+        if (expected.Any(key => key.Match is not null ||
+            key.Scope != InboxKey.FoundationOccurrenceScope && (issue is null || SelfActor(key) != actor.Id))) return false;
         if (expected.Count == 0) return true;
         var home = new InstanceRef(actor.Id).Partition;
+        var includePrivate = issue is not null || db.UsesRootPrivateParkInputs && parked && !suspended;
         FormattableString ready = $"""
             SELECT m.* FROM "Messages" m WHERE "Target" = {actor.Id} AND "Partition" = {home}
-                AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
+                AND ("InboxScope" = {InboxKey.FoundationOccurrenceScope} OR {includePrivate} AND "InboxScope" = {RootSelfScope})
+                AND "EventMatch" IS NULL AND NOT "Done"
                 AND "Due" <= /*sqlite-root-clock*/ AND (NOT {suspended} OR "Id" GLOB 'operator/*')
                 AND (NOT {parked && db.UsesRootParkArrivals} OR "ReplyTo" IS NULL OR "Id" GLOB 'operator/*')
                 AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/)) /*released-cohort*/
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
         var cohort = db.UsesRootParkRecovery && !parked && !suspended
-            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})"""
+            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter(db)})"""
             : "";
         var eligible = WithSqliteOperatorPredicate(db, UseSqliteRootClock(FormattableStringFactory.Create(
             ready.Format.Replace("/*released-cohort*/", cohort, StringComparison.Ordinal), ready.GetArguments())));
         var rows = await db.Messages.FromSqlInterpolated(eligible).AsNoTracking().ToListAsync(token);
-        var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue: null)).ToArray();
+        if (issue is null && rows.Any(row => row.InboxScope == RootSelfScope))
+            return false;
+        var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
-        var ids = Json.Write(expected.Select(key => key.Id).ToArray());
+        var self = expected.Where(key => key.Scope == -1).Select(key => key.Id).ToArray();
+        if (self.Length > 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope}
+                AND "Id" IN (SELECT value FROM json_each({Json.Write(self)})) AND "Target" = {actor.Id}
+                AND "Partition" = {home} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
+            """, token) != self.Length) return false;
+        var outside = expected.Where(key => key.Scope == InboxKey.FoundationOccurrenceScope).Select(key => key.Id).ToArray();
+        if (outside.Length == 0) return true;
+        var ids = Json.Write(outside);
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Messages" SET "Done" = 1, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
             WHERE "Target" = {actor.Id} AND "Partition" = {home} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                 AND "Id" IN (SELECT value FROM json_each({ids})) AND "EventMatch" IS NULL AND "KeepUntil" IS NOT NULL
                 AND NOT "Done"
-            """, token) == expected.Count;
+            """, token) == outside.Length;
     }
 
     private static Task<List<long>> ReadSqliteTerminalRevisionAsync(KernelDb db, WorkerRoot root, CancellationToken token) =>

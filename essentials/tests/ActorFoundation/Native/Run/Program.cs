@@ -33,6 +33,8 @@ if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"
     return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
 if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or "sqlite"), var pressureFence and ("checked" or "in-batch")])
     return await RootAdmissionPressureChecks.RunAsync(pressureProvider == "postgres", pressureFence == "in-batch");
+if (args is ["shipped-delay-recovery", var delayProvider and ("postgres" or "sqlite"), var delayFence and ("checked" or "in-batch")])
+    return await ShippedDelayRecoveryChecks.RunAsync(delayProvider == "postgres", delayFence == "in-batch");
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])
@@ -50,6 +52,12 @@ if (args is ["sqlite-root-terminal-envelope", var sqliteTerminalFence and ("chec
 if (args is ["pg-root-terminal-envelope", "owned", var pgTerminalFence and ("checked" or "in-batch")])
     return await ShippedNativeTerminalEnvelopeChecks.RunAsync(postgres: true, inBatch: pgTerminalFence == "in-batch");
 if (args is ["sqlite-root-ingress"]) return await SqliteRootIngressChecks.RunAsync();
+if (args is ["root-self-timed-union", var unionProvider and ("postgres" or "sqlite"), var unionFence and ("checked" or "in-batch")])
+    return await RootSelfTimedUnionChecks.RunAsync(unionProvider == "postgres", unionFence == "in-batch");
+if (args is ["root-self-timed-park", var parkUnionProvider and ("postgres" or "sqlite"), var parkUnionFence and ("checked" or "in-batch")])
+    return await RootSelfTimedParkChecks.RunAsync(parkUnionProvider == "postgres", parkUnionFence == "in-batch");
+if (args is ["root-timer-rearm", var rearmProvider and ("postgres" or "sqlite"), var rearmFence and ("checked" or "in-batch")])
+    return await RootSelfTimedParkChecks.RunAsync(rearmProvider == "postgres", rearmFence == "in-batch", rearm: true);
 if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
 if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])

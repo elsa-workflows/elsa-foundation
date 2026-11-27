@@ -158,11 +158,11 @@ public sealed partial class InMemoryStore
         }
     }
 
-    internal static bool FitsSingleParkJobRecipe(InstanceRow row, ParkJobRecipe recipe)
+    internal static bool FitsSingleParkJobRecipe(InstanceRow row, ParkJobRecipe recipe, long otherWaitBytes = 0)
     {
         if (!FitsParkJobRecipe(recipe)) return false;
         var payload = EncodeParkJobRecipe(row, recipe, row.NextJobGeneration ?? 1, out _);
-        return ParkJobRecipeBytes(payload) <= MaxRestoreBytes && FoundationMetadataLimits.FitsContent(payload);
+        return otherWaitBytes + ParkJobRecipeBytes(payload) <= MaxRestoreBytes && FoundationMetadataLimits.FitsContent(payload);
     }
 
     private static bool FitsParkJobRecipe(ParkJobRecipe recipe) => recipe.Key is not null &&
