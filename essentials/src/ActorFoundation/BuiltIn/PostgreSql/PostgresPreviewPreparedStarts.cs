@@ -17,6 +17,14 @@ public static partial class PostgresPreviewHosting
     public static Task InstallPreparedStartsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
         InstallPreviewFormatAsync(() => CreatePreparedStartsQualificationContext(options), cancellationToken);
 
+    /// <summary>Creates the PostgreSQL context for private inline start qualification.</summary>
+    public static KernelDb CreateInlineStartsQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootInlinePromotionQualification(options);
+
+    /// <summary>Installs the private PostgreSQL inline start qualification profile.</summary>
+    public static Task InstallInlineStartsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreateInlineStartsQualificationContext(options), cancellationToken);
+
     /// <summary>Confirms the exact protected held start under the installed root source.</summary>
     public static async Task<RootStartProof> ConfirmPreparedStartAsync(Func<KernelDb> open, Contract.BoundScope scope,
         Contract.ActorRef actor, string issuance, CancellationToken cancellationToken = default)

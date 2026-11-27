@@ -230,9 +230,9 @@ public sealed partial class EfStore
         }).ToArray();
     }
 
-    private async Task<bool> ProtectPreparedChildBirthsAsync(RootCheckpoints checkpoints, CancellationToken token)
+    private Task<bool> ProtectPreparedChildBirthsAsync(RootCheckpoints checkpoints, CancellationToken token)
     {
-        if (ProtectChildBirths is not { } protect) return true;
+        if (ProtectChildBirths is null) return Task.FromResult(true);
         var prepared = checkpoints.Commands.Select(command => command switch
         {
             FirstRootCheckpoint first => first.ChildEffects,
@@ -240,7 +240,12 @@ public sealed partial class EfStore
             RootParkOpening park => park.ChildEffects,
             _ => null
         }).OfType<RootChildEffects>().Where(children => children.PendingBirths is not null).ToArray();
-        if (prepared.Length == 0) return true;
+        return ProtectRootChildEffectsAsync(prepared, token);
+    }
+
+    private async Task<bool> ProtectRootChildEffectsAsync(RootChildEffects[] prepared, CancellationToken token)
+    {
+        if (prepared.Length == 0 || ProtectChildBirths is not { } protect) return true;
 
         // Preparation has disposed its read transactions. No Foundation locks span this host callback.
         var births = Array.AsReadOnly(prepared.SelectMany(children => children.PendingBirths!).ToArray());

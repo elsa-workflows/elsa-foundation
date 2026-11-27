@@ -73,7 +73,7 @@ public static partial class SqliteEmbeddedHosting
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null,
         Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null,
-        ProtectChildBirthsAsync? protectChildBirths = null)
+        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
@@ -84,13 +84,13 @@ public static partial class SqliteEmbeddedHosting
                 retentionWindow: retentionWindow,
                 rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor),
             actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests,
-            auxiliaryActorType: auxiliaryActor?.Type, protectChildBirths: protectChildBirths);
+            auxiliaryActorType: auxiliaryActor?.Type, protectChildBirths: protectChildBirths, inlineStarts: inlineStarts);
     }
 
     private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, int, IActorType> createActor,
         string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
         Action<Exception>? onFault, SqliteDirectRequests? requests, string? auxiliaryActorType = null,
-        ProtectChildBirthsAsync? protectChildBirths = null)
+        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -144,6 +144,7 @@ public static partial class SqliteEmbeddedHosting
                 await store.EnableRootJobsAsync(cancellationToken);
                 await store.EnableRootChildrenAsync(cancellationToken);
             }
+            if (inlineStarts is not null) await inlineStarts.PrepareAsync(store, cancellationToken);
             var watchdog = new Watchdog(Defaults.Lease, endProcess);
             var watched = watchdog.Watch(store);
             RuntimeNode? reporter = null;
@@ -165,6 +166,7 @@ public static partial class SqliteEmbeddedHosting
             try
             {
                 await runtime.StartAsync(host, cancellationToken);
+                inlineStarts?.Attach(store, host.NodeWorker ?? throw new InvalidOperationException("Inline starts need an owned Worker."), runtime.WakeLocal);
                 return runtime;
             }
             catch

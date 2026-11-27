@@ -67,6 +67,7 @@ public static partial class SqliteEmbeddedHosting
             : qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification ||
               qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
               qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
+              qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
               qualificationFormat == StoreFormat.RootAuthoredEventsQualification || qualificationFormat == StoreFormat.RootEventStartsQualification ||
               qualificationFormat == StoreFormat.RootEventStartReceiptsQualification || qualificationFormat == StoreFormat.RootEventStartScanQualification;
 

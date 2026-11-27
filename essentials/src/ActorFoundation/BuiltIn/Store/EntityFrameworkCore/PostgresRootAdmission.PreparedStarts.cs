@@ -181,7 +181,24 @@ internal sealed partial class PostgresRootAdmission
         return (issuer.Key, query => BindPreparedStart(query, pin, source.Table, deadline: null));
     }
 
-    private static FormattableString BindPreparedStart(FormattableString query, PinnedRootSource pin, long table, long? deadline)
+    internal static async Task<(byte[] Key, (uint Marker, uint Namespace, long Table) Physical,
+        Func<FormattableString, FormattableString> BindSource)> PinInlineRootPreparationAsync(KernelDb db, CancellationToken token)
+    {
+        var (pin, source) = await PinPreparedStartSourceAsync(db, loadIssuer: true, token);
+        var issuer = pin.Issuer ?? throw new StoreFormatException(RootIssuerMissing);
+        FormattableString Bind(FormattableString query) => BindPreparedStart(query, pin, source.Table, deadline: null, includesReceipts: true);
+        var keys = await db.Database.SqlQuery<byte[]>(Bind($"""
+            WITH source AS MATERIALIZED (/*prepared-start-source*/)
+            SELECT issuer."Key" AS "Value" FROM ONLY "FoundationRootIssuer" issuer, source
+            WHERE issuer."Singleton" AND source."SourceReady" FOR SHARE OF issuer
+            """)).ToListAsync(token);
+        if (keys is not [var key] || !key.AsSpan().SequenceEqual(issuer.Key))
+            throw new StoreFormatException("The PostgreSQL inline issuer no longer matches its pinned source.");
+        return (key, (source.Marker, source.Namespace, source.Table), Bind);
+    }
+
+    private static FormattableString BindPreparedStart(FormattableString query, PinnedRootSource pin, long table, long? deadline,
+        bool includesReceipts = false)
     {
         const string physical = "/*prepared-physical-source*/";
         var guard = $$"""
@@ -193,7 +210,8 @@ internal sealed partial class PostgresRootAdmission
             """;
         var bound = FormattableStringFactory.Create(query.Format.Replace(RootPreparedStarts.Source, guard, StringComparison.Ordinal),
             [.. query.GetArguments(), table, deadline!]);
-        return WithAdmissionSource(bound, pin, physical, 7, PreparedStartRelations);
+        return WithAdmissionSource(bound, pin, physical, includesReceipts ? 8 : 7,
+            includesReceipts ? PreparedStartRelations + """, ('"FoundationRootReceipts"')""" : PreparedStartRelations);
     }
 
     private static Task<bool> IsBeforeDeadlineAsync(KernelDb db, long deadline, CancellationToken token) => db.Database.SqlQuery<bool>($"""

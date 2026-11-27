@@ -15,6 +15,10 @@ public sealed record WorkflowRunHeader(string Workflow, string Definition, bool 
     /// <summary>The journal history retained for the committed run.</summary>
     public History History { get; init; } = History.Full;
 
+    /// <summary>Whether the actor was started in Ephemeral mode.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool Ephemeral { get; init; }
+
     /// <summary>Exact publication and caller attribution of a standard published Execute request.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public WorkflowPublishedStart? PublishedStart { get; init; }
@@ -262,7 +266,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         catch (JsonException) { return null; }
         return workflow is null ? null : new(workflow.Workflow, workflow.Definition ?? workflow.Workflow,
             workflow.Suspended, workflow.SubStatus, workflow.StartedAt is { } started ? DateTimeOffset.FromUnixTimeMilliseconds(started) : null)
-            { Model = workflow.Model, History = workflow.History, PublishedStart = workflow.PublishedStart };
+            { Model = workflow.Model, History = workflow.History, Ephemeral = workflow.Ephemeral, PublishedStart = workflow.PublishedStart };
     }
 
     private sealed record WorkflowJobArguments(string Model, string? Arguments);

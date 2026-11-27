@@ -77,19 +77,42 @@ public sealed partial class EfStore
         return row.Id == StoredJobId(key) && RootJobTicket.Read(message, row.Target, ticket.Model, timed) is not null ? message : throw RootShape();
     }
 
-    private Message[] EncodeRootSends(WorkerRoot root, InstanceRow row, IReadOnlyList<Message> sends)
+    private Message[] EncodeRootFirstSends(WorkerRoot root, InstanceRow row, TurnCommit turn, bool promotingInline = false)
+    {
+        if (RootTimedJobPreviewEnabled) RequireRootTimedIssuance(turn, row);
+        if (RootJobsEnabled)
+        {
+            // A volatile Native run has already used its earlier job generations. Keep that history
+            // even though the first stored checkpoint has no physical predecessor.
+            var generation = promotingInline
+                ? (row.NextJobGeneration ?? throw RootShape()) - turn.Sent.Count(message => message.Kind == Kinds.Job)
+                : 0;
+            if (generation < 0) throw RootShape();
+            ValidateRootJobChange(null, row, [], turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs, generation);
+        }
+        return EncodeRootSends(root, row, turn.Sent, promotingInline);
+    }
+
+    private Message[] EncodeRootSends(WorkerRoot root, InstanceRow row, IReadOnlyList<Message> sends, bool promotingInline = false)
     {
         if (!RootTimedJobs)
             return sends.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
                 ? EncodeRootJob(message, root, row.Model)
-                : EncodeRootSelf(root.Actor, row.Revision, FoundationSelfSend.AuthoredOrdinal(message) ?? index, message)).ToArray();
+                : EncodeSelf(message, index)).ToArray();
         if (RootSelfIssuer is null) return EncodeRootTimedSends(sends);
 
         var timed = EncodeRootTimedSends(sends.Where(RootJobTicket.IsTimedSend).ToArray());
         var nextTimed = 0;
         return sends.Select(message => RootJobTicket.IsTimedSend(message)
             ? timed[nextTimed++]
-            : EncodeRootSelf(root.Actor, row.Revision, FoundationSelfSend.AuthoredOrdinal(message) ?? throw RootShape(), message)).ToArray();
+            : EncodeSelf(message, null)).ToArray();
+
+        Message EncodeSelf(Message message, int? fallbackOrdinal)
+        {
+            var revision = promotingInline ? FoundationSelfSend.AuthoredRevision(message) ?? throw RootShape() : row.Revision;
+            if (revision < 1 || revision > row.Revision) throw RootShape();
+            return EncodeRootSelf(root.Actor, revision, FoundationSelfSend.AuthoredOrdinal(message) ?? fallbackOrdinal ?? throw RootShape(), message);
+        }
     }
 
     private Message[] EncodeRootTimedSends(IReadOnlyList<Message> sends) =>
@@ -137,11 +160,11 @@ public sealed partial class EfStore
     }
 
     private static void ValidateRootJobChange(RootImage? before, InstanceRow row, Message[] inputs, IReadOnlyList<Message> sends,
-        RootJobCompletion? completion, bool timed = false)
+        RootJobCompletion? completion, bool timed = false, long initialGeneration = 0)
     {
         var previous = JobRegistry.Read(before?.Jobs);
         var current = JobRegistry.Read(row.Jobs);
-        var generation = before?.NextJobGeneration ?? 0;
+        var generation = before?.NextJobGeneration ?? initialGeneration;
         var consumed = inputs.Where(message => message.Kind == Kinds.Job).ToArray();
         var started = sends.Where(message => message.Kind == Kinds.Job).ToArray();
         if (consumed.Length != 0)
