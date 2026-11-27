@@ -25,7 +25,7 @@ public sealed partial class EfStore
         var ordinal = sqlite ? "BINARY" : "\"C\"";
         var tenant = sqlite ? """
             length("Tenant") BETWEEN 1 AND 64 AND instr("Tenant", char(0)) = 0 AND "Tenant" NOT GLOB '*[^a-z0-9-]*'
-            """ : """ "Tenant" ~ '^[a-z0-9-]{1,64}$' """;
+            """ : """ length("Tenant") BETWEEN 1 AND 64 AND "Tenant" !~ '[^a-z0-9-]' """;
         var integer = sqlite ? "INTEGER" : "bigint";
         var blob = sqlite ? "BLOB" : "bytea";
         return $"""
@@ -39,9 +39,11 @@ public sealed partial class EfStore
             """;
     }
 
-    internal static Task InstallRootRetentionPolicyAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS \"" + RetentionPolicyTable + "\" (" +
-            RetentionPolicyColumns(sqlite: false) + ")", token);
+    internal static Task InstallRootRetentionPolicyAsync(KernelDb db, CancellationToken token)
+    {
+        var sql = $"""CREATE TABLE IF NOT EXISTS "{RetentionPolicyTable}" ({RetentionPolicyColumns(sqlite: false)})""";
+        return db.Database.ExecuteSqlRawAsync(sql, token);
+    }
 
     internal async Task<ActorRetentionPolicy> ReadRootRetentionPolicyAsync(BoundScope scope, string actorType, CancellationToken token)
     {
