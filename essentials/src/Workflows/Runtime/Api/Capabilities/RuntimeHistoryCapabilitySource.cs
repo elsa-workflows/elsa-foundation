@@ -1,5 +1,6 @@
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Api.Capabilities;
@@ -8,6 +9,14 @@ namespace Elsa.Workflows.Runtime.Api.Capabilities;
 public sealed class RuntimeHistoryCapabilitySource(IRuntimeCheckpointCommitStore? writer = null, IRuntimeHistoryStore? history = null)
     : IApiCapabilitySource
 {
+    private readonly bool _ownsOccurrenceRoute = true;
+
+    public RuntimeHistoryCapabilitySource(IRuntimeCheckpointCommitStore writer, IRuntimeHistoryStore history,
+        IRuntimeHistoryOccurrencePageReader selectedReader) : this(writer, history)
+    {
+        _ownsOccurrenceRoute = selectedReader is RuntimeHistoryInspectionService;
+    }
+
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -21,7 +30,7 @@ public sealed class RuntimeHistoryCapabilitySource(IRuntimeCheckpointCommitStore
             new("workflow-history-page", "runtime/workflows/instances/{workflowExecutionId}/history", templated: true),
             new("workflow-history-bookmarks", "runtime/workflows/instances/{workflowExecutionId}/history/bookmarks", templated: true)
         };
-        if (history is IRuntimeHistoryOccurrenceStore)
+        if (_ownsOccurrenceRoute && history is IRuntimeHistoryOccurrenceStore)
             links.Add(new("workflow-history-occurrences", "runtime/workflows/instances/{workflowExecutionId}/history/occurrences", templated: true));
         if (history is IRuntimeHistoryDetailsStore)
         {
