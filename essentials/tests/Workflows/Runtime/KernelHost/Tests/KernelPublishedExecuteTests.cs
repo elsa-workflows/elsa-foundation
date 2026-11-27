@@ -92,11 +92,19 @@ public sealed class KernelPublishedExecuteTests
 
         var waiting = ExecutableOf("execute-waiting", "waiting", Sequence("sequence",
             Node("delay", Types.Delay, [Literal("Duration", "00:00:45", "TimeSpan")])));
-        var recoverable = ExecutableOf("execute-recoverable", "recoverable", Sequence("sequence",
-            Node("wait", Types.HttpEndpoint,
-                [Literal("Path", "recoverable", "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", false, "Boolean")]),
-            SetOutput("output", "result", Expression("value", "JavaScript", "'recovered'", "String")),
-            Node("reply", Types.WriteHttpResponse, [Literal("Body", "recovered", "String")])));
+        const string nativeRoute = "recoverable-native";
+        const string flowchartRoute = "recoverable-flowchart";
+        var recoverable = ExecutableOf("execute-recoverable", "recoverable", Sequence("sequence", RecoveryNodes(nativeRoute)));
+        var recoverableFlowchart = ExecutableOf("execute-recoverable-flow", "recoverable-flow", Node("flow", Types.Flowchart,
+            structure: Structure("elsa.flowchart.structure", new
+            {
+                startNodeId = "wait",
+                connections = new[]
+                {
+                    new { source = new { nodeId = "wait", port = "Done" }, target = new { nodeId = "output" } },
+                    new { source = new { nodeId = "output", port = "Done" }, target = new { nodeId = "reply" } }
+                }
+            }), slots: [Slot("Flowchart.Activities", RecoveryNodes(flowchartRoute))]));
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
@@ -155,11 +163,13 @@ public sealed class KernelPublishedExecuteTests
         await materials.SaveAsync(flowchart, token);
         await materials.SaveAsync(waiting, token);
         await materials.SaveAsync(recoverable, token);
+        await materials.SaveAsync(recoverableFlowchart, token);
         await PublishAsync(alias, "blue");
         await PublishAsync(sibling, "default");
         await PublishAsync(flowchart, "default");
         await PublishAsync(waiting, "default");
         await PublishAsync(recoverable, "default");
+        await PublishAsync(recoverableFlowchart, "default");
         var shell = app.Services.GetRequiredService<KernelShellRuntime>();
         await shell.StartAsync(token);
         try
@@ -233,17 +243,20 @@ public sealed class KernelPublishedExecuteTests
             Assert.Equal(HttpStatusCode.NotFound, deniedPurge.StatusCode);
             Assert.Equal(Contract.ActorStatus.Cancelled, (await reads.GetAsync(bound, new(reauthorized), token))?.Header.Status);
             await VerifyDeletedAsync(reauthorized);
-            await VerifyRecoveryAsync();
+            var nativeParkSelection = await VerifyRecoveryAsync(recoverable, nativeRoute);
+            await VerifyRecoveryAsync(recoverableFlowchart, flowchartRoute, nativeParkSelection);
 
-            async Task VerifyRecoveryAsync()
+            async Task<string> VerifyRecoveryAsync(WorkflowExecutable executable, string path, string? otherSelection = null)
             {
-                using var start = await ExecuteAsync(recoverable.Identity.ArtifactId, new { });
+                expressions.IsAvailable = false;
+                using var start = await ExecuteAsync(executable.Identity.ArtifactId, new { });
                 Assert.Equal(HttpStatusCode.OK, start.StatusCode);
                 var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await start.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
                 var actor = new Contract.ActorRef(receipt.WorkflowExecutionId);
                 while ((await reads.TailAsync(bound, actor, cancellationToken: token)).JournalHeadRevision is not > 0)
                     await Task.Delay(40, token);
-                using var first = await http.PostAsync("/fixture/workflows/recoverable", null, token);
+                var waitRoute = "/fixture/workflows/" + path;
+                using var first = await http.PostAsync(waitRoute, null, token);
                 var route = $"/runtime/workflows/instances/{actor.Id}/recovery";
 
                 using var forbidden = await RecoveryAsync(HttpMethod.Get, manage: false);
@@ -255,9 +268,9 @@ public sealed class KernelPublishedExecuteTests
                 var status = await parked.Content.ReadFromJsonAsync<JsonElement>(token);
                 Assert.True(status.GetProperty("status").GetString() == "Available",
                     $"Recovery status {status}; workflow HTTP {(int)first.StatusCode}: {await first.Content.ReadAsStringAsync(token)}");
-                var selected = status.GetProperty("token").GetString();
-                Assert.False(string.IsNullOrEmpty(selected));
-                using var stale = await RecoveryAsync(HttpMethod.Post, selection: "stale");
+                var selected = Assert.IsType<string>(status.GetProperty("token").GetString());
+                Assert.NotEmpty(selected);
+                using var stale = await RecoveryAsync(HttpMethod.Post, selection: otherSelection ?? "stale");
                 Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
                 Assert.NotNull((await reads.GetAsync(bound, actor, token))?.Park);
 
@@ -270,10 +283,11 @@ public sealed class KernelPublishedExecuteTests
                 using var retiredSelection = await RecoveryAsync(HttpMethod.Post, selection: selected);
                 Assert.Equal(HttpStatusCode.Conflict, retiredSelection.StatusCode);
 
-                using var second = await http.PostAsync("/fixture/workflows/recoverable", null, token);
+                using var second = await http.PostAsync(waitRoute, null, token);
                 Assert.Equal(HttpStatusCode.OK, second.StatusCode);
                 Assert.Equal("recovered", await second.Content.ReadAsStringAsync(token));
                 Assert.Equal(Contract.ActorStatus.Finished, (await reads.GetAsync(bound, actor, token))?.Header.Status);
+                return selected;
 
                 async Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null)
                 {
@@ -376,6 +390,14 @@ public sealed class KernelPublishedExecuteTests
             Assert.True(result.Succeeded, result.Diagnostic);
         }
     }
+
+    private static ExecutableNode[] RecoveryNodes(string path) =>
+    [
+        Node("wait", Types.HttpEndpoint,
+            [Literal("Path", path, "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", false, "Boolean")]),
+        SetOutput("output", "result", Expression("value", "JavaScript", "'recovered'", "String")),
+        Node("reply", Types.WriteHttpResponse, [Literal("Body", "recovered", "String")])
+    ];
 
     private sealed class FixtureExpressions : IPortableExpressionEvaluator
     {
