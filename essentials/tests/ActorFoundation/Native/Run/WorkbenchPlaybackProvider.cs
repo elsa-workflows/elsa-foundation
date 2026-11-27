@@ -21,9 +21,9 @@ internal static partial class WorkbenchPostgresPreview
         var postgres = sqlite is null;
         var options = PlaybackOptions(connection, sqlite);
         var replacement = postgres && descendants ? new PlaybackCommitReplacement() : null;
-        var receiptFailure = replacement is null ? null : new PlaybackReceiptFailure();
+        var validationFailure = replacement is null ? null : new PlaybackValidationFailure();
         var ownerOptions = replacement is null ? options : new DbContextOptionsBuilder<KernelDb>(options)
-            .AddInterceptors(replacement, receiptFailure!).Options;
+            .AddInterceptors(replacement, validationFailure!).Options;
         var definitions = new SqliteAdmissionDefinitions();
         KernelDb Open() => OpenPlayback(ownerOptions, postgres, definitions, descendants);
         var reads = new EfStore(Open, postgres);
@@ -78,7 +78,7 @@ internal static partial class WorkbenchPostgresPreview
             prefix is { Availability: ActorPlaybackAvailability.Available, Count: 1 },
             "unmarked diagnostic strings leave Playback membership unchanged");
         if (replacement is not null)
-            prefix = await VerifyAtomicProjectionAsync(prefix, replacement, receiptFailure!);
+            prefix = await VerifyAtomicProjectionAsync(prefix, replacement, validationFailure!);
         var clean = prefix;
         if (descendants)
         {
@@ -97,9 +97,9 @@ internal static partial class WorkbenchPostgresPreview
                 RetainedAfterSequence = original.RetainedAfterSequence
             });
             var exactOrphan = await ReadScopeAsync(scopedQuery with { Activity = "f9", IncludeDescendants = false });
-            Require(original is { Availability: ActorPlaybackAvailability.Available, Count: 1 } &&
-                frozenScope is { Availability: ActorPlaybackAvailability.Available, Count: 1 } &&
-                clean is { Availability: ActorPlaybackAvailability.Available, Count: 3 } &&
+            Require(original is { Availability: ActorPlaybackAvailability.Available } && original.Count == prefix.Count &&
+                frozenScope is { Availability: ActorPlaybackAvailability.Available } && frozenScope.Count == prefix.Count &&
+                clean is { Availability: ActorPlaybackAvailability.Available } && clean.Count == prefix.Count + 2 &&
                 exactOrphan is { Availability: ActorPlaybackAvailability.Available, Count: 1 } &&
                 unavailable is { Availability: ActorPlaybackAvailability.Unavailable, Reason: "scope-ancestry-unknown", Items.Count: 0 },
                 "a late parent never repairs the orphan's committed ancestry or disturbs earlier frozen, exact and global membership");
@@ -151,48 +151,69 @@ internal static partial class WorkbenchPostgresPreview
             }
         }
 
-        async Task<ActorPlaybackPage> VerifyAtomicProjectionAsync(ActorPlaybackPage before, PlaybackCommitReplacement drift, PlaybackReceiptFailure failure)
+        async Task<ActorPlaybackPage> VerifyAtomicProjectionAsync(ActorPlaybackPage before, PlaybackCommitReplacement drift,
+            PlaybackValidationFailure failure)
         {
             await using var observer = OpenPlayback(options, postgres: true, definitions, descendants: true);
             var installed = await ReadPlaybackProjectorAsync(observer, token);
-            var baseline = await ReadPhysicalAsync();
-            Require(baseline.Ranges == baseline.Receipts && baseline.Ranges > 0, "normal owned PostgreSQL writes complete their exact projection receipts");
-            await using (var cut = await observer.Database.BeginTransactionAsync(token))
-            {
-                // The other connection changes the function only after the owner's namespace pin and immediately before its journal SQL.
-                drift.Arm(async ct =>
-                {
-                    await observer.Database.ExecuteSqlRawAsync(ReplacePlaybackProjector, ct);
-                    await cut.CommitAsync(ct);
-                });
-                var delivery = await ingress.SendAsync(scope, new Target.Ref(exact), "owned-projector-race", "record",
-                    """["owned-projector-race"]""", cancellationToken: token);
-                Require(delivery.Outcome == AdmissionOutcome.Accepted, "the owner admits the input for the after-pin projection race");
-                await failure.Rejected.Task.WaitAsync(token);
-            }
+            const string completeMembership = """WHERE v."Known" = 1 OR a."Depth" = 0""";
+            var selfOnly = installed.Replace(completeMembership, """WHERE a."Depth" = 0""", StringComparison.Ordinal);
+            Require(selfOnly != installed, "the partial projector keeps base observations and self membership while omitting ancestors");
+            await observer.Database.ExecuteSqlRawAsync("""
+                CREATE SCHEMA playback_projection_shadow;
+                CREATE TABLE playback_projection_shadow."FoundationJournalPlaybackScopes"
+                    AS TABLE public."FoundationJournalPlaybackScopes";
+                """, token);
             try
             {
-                Require(await ReadPhysicalAsync() == baseline, "a missing projection receipt rolls back the exact journal range, checkpoint and fence");
+                before = await VerifyRaceAsync("partial-playback-append", "f2", selfOnly, before);
+                return await VerifyRaceAsync("shadow-playback-append", "f3", """
+                    ALTER FUNCTION public.kernel_project_root_playback_scopes()
+                        SET search_path TO pg_catalog, playback_projection_shadow, public, pg_temp;
+                    """, before);
             }
             finally
             {
-                await observer.Database.ExecuteSqlRawAsync(installed, token);
+                await observer.Database.ExecuteSqlRawAsync("DROP SCHEMA playback_projection_shadow CASCADE", token);
             }
-            var recovered = await ObserveAfterAsync(before.LatestSequence);
-            var committed = await ReadPhysicalAsync();
-            Require(recovered.Count == before.Count && committed.Ranges == baseline.Ranges + 1 &&
-                committed.Receipts == baseline.Receipts + 1 && committed.Revision == baseline.Revision + 1,
-                "the real owner retries the same input and commits its single matching projection receipt after restoration");
-            return recovered;
+
+            async Task<ActorPlaybackPage> VerifyRaceAsync(string input, string frame, string changed, ActorPlaybackPage current)
+            {
+                var baseline = await ReadPhysicalAsync();
+                try
+                {
+                    var rejected = failure.ExpectRejection();
+                    // Change the function only after the real owner's journal pin, on a separate connection.
+                    drift.Arm(ct => observer.Database.ExecuteSqlRawAsync(changed, ct));
+                    var body = JsonSerializer.Serialize(new[] { new { NativeStructure = 1, Kind = 2, At = 1000, Frame = frame, Node = frame, Parent = "f1" } });
+                    var delivery = await ingress.SendAsync(scope, new Target.Ref(exact), input, "record", body, cancellationToken: token);
+                    Require(delivery.Outcome == AdmissionOutcome.Accepted, $"the owner admits the {input} input");
+                    await rejected.WaitAsync(token);
+                    Require(await ReadPhysicalAsync() == baseline, $"the {input} rolls back the exact fence, checkpoint, journal and index rows");
+                }
+                finally
+                {
+                    await observer.Database.ExecuteSqlRawAsync("ALTER FUNCTION public.kernel_project_root_playback_scopes() RESET ALL", token);
+                    await observer.Database.ExecuteSqlRawAsync(installed, token);
+                }
+
+                var recovered = await ObserveAfterAsync(current.LatestSequence);
+                var committed = await ReadPhysicalAsync();
+                Require(recovered.Count == current.Count + 1 && committed.Ranges == baseline.Ranges + 1 &&
+                    committed.Observations == baseline.Observations + 1 && committed.Memberships == baseline.Memberships + 2 &&
+                    committed.Revision == baseline.Revision + 1,
+                    $"the real owner retries {input} and commits the exact child and ancestor membership once");
+                return recovered;
+            }
 
             Task<PlaybackWriteState> ReadPhysicalAsync() => observer.Database.SqlQuery<PlaybackWriteState>($"""
                 SELECT p."Position", state."Revision",
                     (SELECT COUNT(*) FROM "FoundationSequencedJournal" range_row
                         WHERE range_row."Partition" = birth."Partition" AND range_row."Actor" = birth."Actor") AS "Ranges",
-                    (SELECT COUNT(*) FROM "FoundationSequencedJournal" range_row
-                        JOIN "FoundationJournalPlaybackReceipts" receipt ON receipt."Partition" = range_row."Partition"
-                            AND receipt."Position" = range_row."Position"
-                        WHERE range_row."Partition" = birth."Partition" AND range_row."Actor" = birth."Actor") AS "Receipts"
+                    (SELECT COUNT(*) FROM "FoundationJournalPlayback" observation
+                        WHERE observation."Partition" = birth."Partition" AND observation."Actor" = birth."Actor") AS "Observations",
+                    (SELECT COUNT(*) FROM "FoundationJournalPlaybackScopes" member
+                        WHERE member."Partition" = birth."Partition" AND member."Actor" = birth."Actor") AS "Memberships"
                 FROM "FoundationRootBirths" birth
                 JOIN "Instances" state ON state."Partition" = birth."Partition" AND state."Id" = birth."Actor"
                 JOIN "Partitions" p ON p."Id" = birth."Partition"
@@ -203,7 +224,7 @@ internal static partial class WorkbenchPostgresPreview
         static void Escalate(string message) => throw new InvalidOperationException(message);
     }
 
-    private sealed record PlaybackWriteState(long Position, long Revision, long Ranges, long Receipts);
+    private sealed record PlaybackWriteState(long Position, long Revision, long Ranges, long Observations, long Memberships);
 
     private sealed class PlaybackCommitReplacement : DbCommandInterceptor
     {
@@ -221,15 +242,22 @@ internal static partial class WorkbenchPostgresPreview
         }
     }
 
-    private sealed class PlaybackReceiptFailure : DbTransactionInterceptor
+    private sealed class PlaybackValidationFailure : DbTransactionInterceptor
     {
-        internal TaskCompletionSource Rejected { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource? rejected;
+
+        internal Task ExpectRejection()
+        {
+            var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Interlocked.Exchange(ref rejected, signal);
+            return signal.Task;
+        }
 
         public override Task TransactionFailedAsync(DbTransaction transaction, TransactionErrorEventData eventData,
             CancellationToken cancellationToken = default)
         {
-            if (eventData.Exception is PostgresException { SqlState: "23503", ConstraintName: EfStore.PlaybackReceiptRequired })
-                Rejected.TrySetResult();
+            if (eventData.Exception is PostgresException { SqlState: "23514", ConstraintName: EfStore.PlaybackScopeGuard })
+                Interlocked.Exchange(ref rejected, null)?.TrySetResult();
             return Task.CompletedTask;
         }
     }
@@ -438,10 +466,6 @@ internal static partial class WorkbenchPostgresPreview
             WHERE "Tenant" = {scope.Tenant} AND "Reference" = {run} AND "Creation" = 1
             """).SingleAsync(token);
         Require(await ScopesAsync() > 0, "the selected run has committed descendant membership before Delete");
-        var positions = postgres ? await db.Database.SqlQuery<long>($"""
-            SELECT "Position" AS "Value" FROM "FoundationSequencedJournal"
-            WHERE "Partition" = {key.Partition} AND "Actor" = {key.Actor}
-            """).ToArrayAsync(token) : [];
         if (postgres)
         {
             var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
@@ -457,12 +481,6 @@ internal static partial class WorkbenchPostgresPreview
         while (await reads.GetAsync(scope, new(run), token) is not null)
             await Task.Delay(50, token);
         Require(await ScopesAsync() == 0, "fenced retirement cascades the exact run's Playback scope index");
-        if (postgres)
-            Require(positions.Length > 0 && !await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "FoundationJournalPlaybackReceipts"
-                    WHERE "Partition" = {key.Partition} AND "Position" = ANY({positions})) AS "Value"
-                """).SingleAsync(token), "fenced retirement removes each committed PostgreSQL projection receipt");
-
         Task<long> ScopesAsync() => db.Database.SqlQuery<long>($"""
             SELECT CAST(COUNT(*) AS bigint) AS "Value" FROM "FoundationJournalPlaybackScopes"
             WHERE "Partition" = {key.Partition} AND "Actor" = {key.Actor}

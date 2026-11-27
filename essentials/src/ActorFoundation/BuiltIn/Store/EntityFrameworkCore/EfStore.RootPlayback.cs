@@ -20,7 +20,7 @@ public sealed partial class EfStore
     private static string PlaybackProjector(bool descendants) => descendants ? PlaybackScopesTrigger : PlaybackTrigger;
     private static string PostgresPlaybackSource(bool descendants) => $"""
         pg_catalog.concat_ws('/', {PostgresPlaybackSourceRelations}{(descendants
-            ? $", pg_catalog.to_regclass('\"{PlaybackScopesName}\"')::oid, pg_catalog.to_regclass('\"{PlaybackReceiptsName}\"')::oid" : "")})
+            ? $", pg_catalog.to_regclass('\"{PlaybackScopesName}\"')::oid" : "")})
         """;
 
     private const string PostgresPlaybackSourceRelations = """
@@ -56,13 +56,17 @@ public sealed partial class EfStore
 
     // The Native writer reserves version 1 JSON objects for structural facts. Public authored diagnostics
     // remain JSON strings. Select one eligible first observation per exact execution in commit order.
-    private static string PlaybackInsert(string entriesSql) => $"""
+    private static string PlaybackInsert(string entriesSql, bool bounded = false) => $"""
         INSERT INTO "{PlaybackName}" ("Partition", "Actor", "Position", "Activity", "Ordinal",
             "Sequence", "Revision", "CommitOrdinal", "Observation", "RecordedAt")
+        {PlaybackFirstRows(entriesSql, bounded)}
+        """;
+
+    private static string PlaybackFirstRows(string entriesSql, bool bounded) => $"""
         SELECT NEW."Partition", NEW."Actor", NEW."Position", fresh."Activity",
             COALESCE((SELECT "Ordinal" FROM "{PlaybackName}" prior
-                WHERE prior."Partition" = NEW."Partition" AND prior."Actor" = NEW."Actor"
-                ORDER BY "Ordinal" DESC LIMIT 1), -1) + ROW_NUMBER() OVER (ORDER BY fresh."Slot"),
+                WHERE prior."Partition" = NEW."Partition" AND prior."Actor" = NEW."Actor"{(bounded ? """ AND prior."Sequence" < NEW."FirstSequence" """ : "")}
+                ORDER BY "{(bounded ? "Sequence" : "Ordinal")}" DESC LIMIT 1), -1) + ROW_NUMBER() OVER (ORDER BY fresh."Slot"),
             NEW."FirstSequence" + fresh."Slot", NEW."Revision", fresh."Slot", fresh."Observation", NEW."RecordedAt"
         FROM (
             SELECT observation.*, ROW_NUMBER() OVER (PARTITION BY "Activity" ORDER BY "Slot") AS "First"
@@ -71,11 +75,15 @@ public sealed partial class EfStore
         ) fresh
         WHERE fresh."First" = 1 AND NOT EXISTS (
             SELECT 1 FROM "{PlaybackName}" existing WHERE existing."Partition" = NEW."Partition"
-                AND existing."Actor" = NEW."Actor" AND existing."Activity" = fresh."Activity")
+                AND existing."Actor" = NEW."Actor" AND existing."Activity" = fresh."Activity"{(bounded ? """ AND existing."Sequence" < NEW."FirstSequence" """ : "")})
         """;
 
     private static string PlaybackInvalidInsert(string observations) => $"""
         INSERT INTO "{PlaybackInvalidName}" ("Partition", "Actor", "Position", "Sequence")
+        {PlaybackInvalidRows(observations)}
+        """;
+
+    private static string PlaybackInvalidRows(string observations) => $"""
         SELECT NEW."Partition", NEW."Actor", NEW."Position", NEW."FirstSequence" + MIN(invalid."Slot")
         FROM ({observations}) invalid WHERE invalid."Disposition" = 2
         HAVING COUNT(*) > 0
@@ -145,17 +153,18 @@ public sealed partial class EfStore
         CREATE TABLE "{PlaybackName}" ({PlaybackColumns("bigint", """text COLLATE "C" """)});
         CREATE TABLE "{PlaybackInvalidName}" ({PlaybackInvalidColumns("bigint", """text COLLATE "C" """)});
         CREATE INDEX kernel_playback_commit ON "{PlaybackName}" ("Partition", "Position");
-        {(descendants ? $"{PostgresPlaybackScopes}\n{PostgresPlaybackReceipts}" : "")}
+        {(descendants ? PostgresPlaybackScopes : "")}
         CREATE FUNCTION {PlaybackProjector(descendants)}() RETURNS trigger LANGUAGE plpgsql
             AS $fn${PostgresPlaybackProjectorBody(descendants)}$fn$;
         CREATE TRIGGER {PlaybackProjector(descendants)} AFTER INSERT ON "{SequencedJournalName}"
             FOR EACH ROW EXECUTE FUNCTION {PlaybackProjector(descendants)}();
+        {(descendants ? PostgresPlaybackValidation : "")}
         """;
 
     private static string PostgresPlaybackProjectorBody(bool descendants) => ("\n" + $"""
         BEGIN
-            {PlaybackInsert(PostgresPlaybackObservations)};
-            {PlaybackInvalidInsert(PostgresPlaybackObservations)};{(descendants ? $"\n    {PostgresPlaybackScopeInsert};\n    {PostgresPlaybackReceiptInsert}" : "")}
+            {PlaybackInsert(PostgresPlaybackObservations, bounded: descendants)};
+            {PlaybackInvalidInsert(PostgresPlaybackObservations)};{(descendants ? $"\n    {PostgresPlaybackScopeInsert};" : "")}
             RETURN NULL;
         END
         """ + "\n").ReplaceLineEndings("\n");
@@ -163,7 +172,10 @@ public sealed partial class EfStore
     // PostgreSQL keeps the source between the dollar quotes. Qualify that same canonical body
     // so a restore or CREATE OR REPLACE cannot silently leave materialization stale.
     private static readonly Lazy<string> PostgresPlaybackScopeProjectorDigest = new(() =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(PostgresPlaybackProjectorBody(descendants: true)))));
+        PostgresPlaybackDigest(PostgresPlaybackProjectorBody(descendants: true)));
+
+    private static string PostgresPlaybackDigest(string body) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(body)));
 
     private static IEnumerable<SqliteDefinition> SqlitePlaybackDefinitions(bool descendants)
     {
