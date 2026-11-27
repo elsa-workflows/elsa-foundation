@@ -104,6 +104,88 @@ public sealed class Elsa3ExpressionRewriter(
     }
 
     /// <summary>
+    /// The variable writes a JavaScript source makes, for the spec 1245 FR-010 other-writer check: a generated setter
+    /// (<c>set{Name}(…)</c>), <c>setVariable</c> with a literal or a computed name, and an assignment, update or delete of a
+    /// variable or one of its members read through <c>variables.X</c>, <c>variables[expr]</c>, <c>getVariable(…)</c> or
+    /// <c>get{Name}()</c>. A source that does not parse yields nothing: its conversion is refused anyway.
+    /// </summary>
+    internal static IReadOnlyList<Elsa3ScriptVariableWrite> FindVariableWrites(string source)
+    {
+        Script script;
+        try
+        {
+            script = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            return [];
+        }
+
+        var writes = new List<Elsa3ScriptVariableWrite>();
+        var pending = new Stack<Node>();
+        pending.Push(script);
+        while (pending.Count > 0)
+        {
+            var node = pending.Pop();
+            switch (node)
+            {
+                case CallExpression { Callee: Identifier { Name: "setVariable" } } setVariable:
+                    writes.Add(setVariable.Arguments.Count > 0 && setVariable.Arguments[0] is Literal { Value: string literal }
+                        ? new(Elsa3ScriptWriteKind.VariableName, literal)
+                        : new(Elsa3ScriptWriteKind.Computed, null));
+                    break;
+                case CallExpression { Callee: Identifier { Name: { Length: > 3 } setter } } when setter.StartsWith("set", StringComparison.Ordinal):
+                    writes.Add(new(Elsa3ScriptWriteKind.Setter, setter[3..]));
+                    break;
+                case AssignmentExpression assignment:
+                    AddTarget(assignment.Left);
+                    break;
+                case UpdateExpression update:
+                    AddTarget(update.Argument);
+                    break;
+                case UnaryExpression { Operator: Operator.Delete } delete:
+                    AddTarget(delete.Argument);
+                    break;
+            }
+
+            foreach (var child in node.ChildNodes)
+                pending.Push(child);
+        }
+
+        return writes;
+
+        void AddTarget(Node target)
+        {
+            // The member read on the variable itself, and the variable read below it.
+            MemberExpression? first = null;
+            var current = target;
+            while (current is MemberExpression member)
+            {
+                first = member;
+                current = member.Object;
+            }
+
+            switch (current)
+            {
+                case Identifier { Name: "variables" } when first is not null:
+                    writes.Add(first.Computed
+                        ? first.Property is Literal { Value: string literal } ? new(Elsa3ScriptWriteKind.VariableName, literal) : new(Elsa3ScriptWriteKind.Computed, null)
+                        : new(Elsa3ScriptWriteKind.VariableName, ((Identifier)first.Property).Name));
+                    break;
+                case CallExpression { Callee: Identifier { Name: "getVariable" } } getVariable when first is not null:
+                    writes.Add(getVariable.Arguments.Count > 0 && getVariable.Arguments[0] is Literal { Value: string name }
+                        ? new(Elsa3ScriptWriteKind.VariableName, name)
+                        : new(Elsa3ScriptWriteKind.Computed, null));
+                    break;
+                case CallExpression { Callee: Identifier { Name: { Length: > 3 } getter }, Arguments.Count: 0 } when first is not null &&
+                                                                                                         getter.StartsWith("get", StringComparison.Ordinal):
+                    writes.Add(new(Elsa3ScriptWriteKind.Accessor, getter[3..]));
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
     /// What to change in the Elsa 3 workflow when an expression assigns a value: Elsa 4 expressions are pure. In Elsa 3
     /// terms, because the engineer edits the Elsa 3 workflow; the reusable caveat is spec 246 D-7.
     /// </summary>
@@ -457,6 +539,15 @@ public sealed class Elsa3ExpressionRewriter(
             // Spec 1222 FR-005, FR-026: a variable read keeps a variables root, spelled as the variable is declared.
             if (resolution.VariableName is { } variableName && resolution.Binding is VariableExpressionParameterBinding variable)
             {
+                // Spec 1245 FR-010: of a wrapped Execute Workflow result only .Output and .Output.X convert in Liquid; the
+                // variable holds the dispatch's Output, so .Output is dropped from the read.
+                var wrapped = resolution.WrappedResult is not null;
+                if (wrapped && (segments.Count < 3 || segments[2] is not Fluid.Ast.IdentifierSegment { Identifier: "Output" }))
+                {
+                    issues.Add(Elsa3WrappedResultReads.LiquidRead(variableName));
+                    continue;
+                }
+
                 var pinned = new VariableExpressionParameterBinding(variable.DeclaringScopeNodeId, variable.VariableKey, ExpressionParameterSurfaces.Variables);
                 if (!TryAddParameter(parameters, ExpressionParameterSurfaces.VariablesKey(variableName), pinned, out var variableCollision))
                 {
@@ -465,7 +556,10 @@ public sealed class Elsa3ExpressionRewriter(
                 }
 
                 requestedEdits.Add(new LiquidRootEdit(root.Identifier, memberSegment.Identifier,
-                    IsLiquidIdentifier(variableName) ? $"variables.{variableName}" : $"variables[{JsonSerializer.Serialize(variableName)}]"));
+                    IsLiquidIdentifier(variableName) ? $"variables.{variableName}" : $"variables[{JsonSerializer.Serialize(variableName)}]")
+                {
+                    Trailing = wrapped ? ".Output" : null
+                });
                 continue;
             }
 
@@ -509,9 +603,24 @@ public sealed class Elsa3ExpressionRewriter(
                 continue;
             }
 
+            var end = match.MemberStart + requested.Member.Length;
+            if (requested.Trailing is { } trailing)
+            {
+                if (string.CompareOrdinal(source, end, trailing, 0, trailing.Length) != 0 ||
+                    end + trailing.Length < source.Length && (char.IsLetterOrDigit(source[end + trailing.Length]) || source[end + trailing.Length] is '_' or '-'))
+                {
+                    issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.UnsupportedShape,
+                        $"Liquid syntax tree member '{requested.Root}.{requested.Member}{trailing}' could not be correlated to a source token.",
+                        "Simplify the Liquid expression or replace it with a portable expression before import."));
+                    continue;
+                }
+                end += trailing.Length;
+            }
+
             used.Add(match.Start);
             edits.Add(requested.Replacement is { } replacement
-                ? new SourceEdit(match.Start, match.MemberStart + requested.Member.Length, replacement)
+                ? new SourceEdit(match.Start, end, replacement)
                 : new SourceEdit(match.Start, match.MemberStart, string.Empty));
         }
 
@@ -2283,6 +2392,12 @@ public sealed class Elsa3ExpressionRewriter(
                 return;
             }
 
+            if (resolution is { WrappedResult: { } wrapped, VariableName: { } wrappedName, Binding: VariableExpressionParameterBinding wrappedVariable })
+            {
+                AddWrappedResultEdit(node, wrapped, wrappedName, wrappedVariable);
+                return;
+            }
+
             // Spec 1222 FR-026: a variable read becomes variables.<name>, spelled as the variable is declared, and is
             // pinned at publish to its nearest declaring scope. The parameter added here is what the converter resolved;
             // publish derives the pins again.
@@ -2317,6 +2432,114 @@ public sealed class Elsa3ExpressionRewriter(
             }
 
             Edits.Add(new SourceEdit(node.Start, node.End, ScriptValue(node, resolution.ScriptValueKind, "args", name, FormatArgumentAccess(name))));
+        }
+
+        /// <summary>
+        /// Spec 1245 FR-010: a read of a variable an Elsa 3 ExecuteWorkflow captured its wrapped result into. The member
+        /// read on it (dot, literal bracket or optional chaining) decides the Elsa 4 value: <c>.Output</c> is the variable,
+        /// which holds the dispatch's Output; <c>.WorkflowInstanceId</c> and <c>.SubStatus</c> read the capturing node's
+        /// <c>ChildWorkflowExecutionId</c> and <c>Status</c> outputs; <c>.Status</c> is "Finished", with the same frame and order checks;
+        /// <c>.CorrelationId</c> and <c>.WorkflowDefinitionVersionId</c> are null; the whole value is rebuilt with Elsa 3's
+        /// keys. Any other member is refused.
+        /// </summary>
+        private void AddWrappedResultEdit(Node node, Elsa3WrappedResultRead wrapped, string variableName, VariableExpressionParameterBinding variable)
+        {
+            var index = _syntaxParents.FindLastIndex(candidate => ReferenceEquals(candidate, node));
+            var parent = index > 0 ? _syntaxParents[index - 1] : null;
+            Node replaced = node;
+            string? member = null;
+            var hasMember = false;
+            if (parent is MemberExpression read && ReferenceEquals(read.Object, node))
+            {
+                hasMember = true;
+                member = read.Computed ? (read.Property as Literal)?.Value as string : (read.Property as Identifier)?.Name;
+                replaced = read;
+                if (member is null)
+                {
+                    Issues.Add(Elsa3WrappedResultReads.UnknownMember(variableName, null));
+                    return;
+                }
+            }
+
+            string? text = member switch
+            {
+                "Status" => "(\"Finished\")",
+                "CorrelationId" or "WorkflowDefinitionVersionId" => "(null)",
+                _ => null
+            };
+            if (text is not null)
+            {
+                // "Finished" holds only once the node has run: a read before it, or in another frame, read V's earlier
+                // value in Elsa 3, so it keeps the node-output rows' frame and order checks (spec 1245 FR-010).
+                if (member == "Status" && wrapped.ProducerReadIssue is { } statusIssue)
+                {
+                    Issues.Add(statusIssue);
+                    return;
+                }
+                Edits.Add(new SourceEdit(replaced.Start, replaced.End, text));
+                return;
+            }
+
+            var usesOutput = !hasMember || member == "Output";
+            var usesNode = !hasMember || member is "WorkflowInstanceId" or "SubStatus";
+            if (!usesOutput && !usesNode)
+            {
+                Issues.Add(Elsa3WrappedResultReads.UnknownMember(variableName, member));
+                return;
+            }
+
+            string? output = null;
+            if (usesOutput)
+            {
+                if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, node))
+                    return;
+                var pinned = new VariableExpressionParameterBinding(variable.DeclaringScopeNodeId, variable.VariableKey, ExpressionParameterSurfaces.Variables);
+                if (!TryAddParameter(Parameters, ExpressionParameterSurfaces.VariablesKey(variableName), pinned, out var variableCollision))
+                {
+                    Issues.Add(variableCollision!);
+                    return;
+                }
+                output = FormatVariableAccess(variableName);
+            }
+
+            string? instanceId = null;
+            string? status = null;
+            if (usesNode)
+            {
+                if (wrapped.ProducerReadIssue is { } issue)
+                {
+                    Issues.Add(issue);
+                    return;
+                }
+                if (!EnsureRootFree("args", node))
+                    return;
+                if (!hasMember || member == "WorkflowInstanceId")
+                    instanceId = AddNodeOutput(Elsa3WrappedResultReads.InstanceIdArgument(variableName), Elsa3WrappedResultReads.ChildWorkflowExecutionIdOutput);
+                if (!hasMember || member == "SubStatus")
+                    status = AddNodeOutput(Elsa3WrappedResultReads.StatusArgument(variableName), Elsa3WrappedResultReads.StatusOutput);
+                if ((!hasMember || member == "WorkflowInstanceId") && instanceId is null || (!hasMember || member == "SubStatus") && status is null)
+                    return;
+            }
+
+            text = member switch
+            {
+                null => Elsa3WrappedResultReads.WholeValue(output!, instanceId!, status!),
+                "Output" => output!,
+                "WorkflowInstanceId" => instanceId!,
+                _ => Elsa3WrappedResultReads.SubStatus(status!)
+            };
+            Edits.Add(new SourceEdit(replaced.Start, replaced.End, text));
+
+            string? AddNodeOutput(string argument, string outputKey)
+            {
+                var binding = new ActivityResultExpressionParameterBinding(wrapped.ProducerNodeId, outputKey);
+                if (!TryAddParameter(Parameters, argument, binding, out var collision))
+                {
+                    Issues.Add(collision!);
+                    return null;
+                }
+                return FormatArgumentAccess(argument);
+            }
         }
 
         /// <summary>
@@ -3072,7 +3295,11 @@ public sealed class Elsa3ExpressionRewriter(
     }
 
     private sealed record SourceEdit(int Start, int End, string Replacement);
-    private sealed record LiquidRootEdit(string Root, string Member, string? Replacement = null);
+    private sealed record LiquidRootEdit(string Root, string Member, string? Replacement = null)
+    {
+        /// <summary>Source text right after the member that the replacement also consumes (spec 1245: <c>.Output</c>).</summary>
+        public string? Trailing { get; init; }
+    }
     private sealed record LiquidRootToken(int Start, int MemberStart, string Root, string Member);
 }
 
@@ -3157,9 +3384,38 @@ public sealed class Elsa3ExpressionParameterResolution
 
     /// <summary>A failure because nothing in the Elsa 3 definition is the reference's source.</summary>
     internal static Elsa3ExpressionParameterResolution NotFound(Elsa3ExpressionRewriteIssue issue) => new(null, issue) { NoSource = true };
+
+    /// <summary>
+    /// For a resolved variable read: the variable holds an Elsa 3 ExecuteWorkflow result, so the read is rewritten per spec
+    /// 1245 FR-010 rather than read as the variable.
+    /// </summary>
+    public Elsa3WrappedResultRead? WrappedResult { get; private init; }
+
+    internal Elsa3ExpressionParameterResolution WithWrappedResult(Elsa3WrappedResultRead read) =>
+        new(Binding, Issue, VariableName) { ScriptValueKind = ScriptValueKind, NoSource = NoSource, WrappedResult = read };
 }
 
 public sealed record Elsa3ExpressionRewriteIssue(string Code, string Message, string Guidance);
+
+/// <summary>One variable write a JavaScript source makes (spec 1245 FR-010).</summary>
+/// <param name="Kind">How the source names the variable.</param>
+/// <param name="Name">The literal variable name, or the accessor suffix of <c>set{Name}</c>/<c>get{Name}</c>; null when computed.</param>
+internal sealed record Elsa3ScriptVariableWrite(Elsa3ScriptWriteKind Kind, string? Name);
+
+internal enum Elsa3ScriptWriteKind
+{
+    /// <summary>A literal variable name: <c>setVariable('V', …)</c>, <c>variables.V… =</c>, <c>getVariable('V').x =</c>.</summary>
+    VariableName,
+
+    /// <summary>A generated setter <c>set{Name}(…)</c>.</summary>
+    Setter,
+
+    /// <summary>A member of a generated accessor's value: <c>get{Name}().x =</c>.</summary>
+    Accessor,
+
+    /// <summary>A computed variable name: <c>setVariable(expr, …)</c>, <c>variables[expr] =</c>.</summary>
+    Computed
+}
 
 public sealed class Elsa3ExpressionRewriteResult
 {

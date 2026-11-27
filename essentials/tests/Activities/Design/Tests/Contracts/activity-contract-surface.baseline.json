@@ -190,12 +190,21 @@
           "sourceRepresentation": null
         },
         {
-          "key": "Result",
-          "name": "Result",
-          "type": "Elsa.Activities.DispatchWorkflow.Runtime.Models.DispatchWorkflowResult",
+          "key": "Output",
+          "name": "Output",
+          "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "Status",
+          "name": "Status",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
           "sourceRepresentation": null
         }
       ],

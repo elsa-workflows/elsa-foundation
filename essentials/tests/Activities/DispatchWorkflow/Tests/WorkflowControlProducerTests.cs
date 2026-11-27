@@ -179,8 +179,7 @@ public sealed partial class WorkflowControlProducerTests
         var carried = new RuntimeChildControlTransport(run.Dispatch.DispatchId, run.Dispatch.ParentWorkflowExecutionId,
             run.Dispatch.ParentActivityExecutionId, parent.InvocationId, (await fixture.FindWorkflowAsync(run.Dispatch.ParentWorkflowExecutionId))!.PinnedExecutable,
             terminal.CommitId, sourceIntent, RuntimePostCommitOutboxIdentity.CreateLogicalValue(terminal.CommitId, sourceIntent), retained.ProducedControl!);
-        var result = new DispatchWorkflowResult(childId, WorkflowDispatchStatus.Cancelled, [],
-            new Dictionary<string, string> { ["code"] = DispatchWorkflowDiagnostics.CancelledCode,
+        var result = new DispatchWorkflowResult(childId, WorkflowDispatchStatus.Cancelled, new Dictionary<string, string> { ["code"] = DispatchWorkflowDiagnostics.CancelledCode,
                 ["category"] = DispatchWorkflowDiagnostics.Category, ["summary"] = DispatchWorkflowDiagnostics.CancelledSummary }, carried);
         Assert.Equal(WorkflowDispatchStatus.Cancelled, result.Status);
         Assert.Equal("authored-error", result.Control!.Batch.AuthoredFailureCode);

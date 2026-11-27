@@ -83,7 +83,9 @@ public sealed class WorkflowDispatchDeliveryFailureProjector(
             identity.WaitBookmarkId,
             DispatchWorkflowConstants.WaitStimulusType,
             identity.WaitStimulusHash,
-            result);
+            result,
+            output: null,
+            withheldOutputs: null);
         var intent = new RuntimePostCommitIntent(
             identity.ParentResumeIntentId,
             dispatch.ParentWorkflowExecutionId,

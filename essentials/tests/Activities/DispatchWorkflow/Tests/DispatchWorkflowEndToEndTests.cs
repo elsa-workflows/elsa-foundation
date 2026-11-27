@@ -245,10 +245,12 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Empty(await fixture.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run.Start.WorkflowExecutionId));
 
         var activityResult = ReadActivityResult(activity);
-        var dispatchResult = activityResult.Result;
+        var dispatchResult = activityResult.Terminal;
         Assert.NotNull(dispatchResult);
         Assert.Equal(dispatchStatus, dispatchResult.Status);
-        Assert.Empty(dispatchResult.Outputs);
+        Assert.Equal(expectedOutcome, activityResult.Status);
+        // Spec 1245 FR-002: no child data crosses after a faulted or cancelled child.
+        Assert.Equal("{}", activityResult.Output?.GetRawText());
         Assert.Equal(
             childStatus == WorkflowExecutionStatus.Faulted
                 ? DispatchWorkflowDiagnostics.FaultedCode
@@ -299,11 +301,13 @@ public sealed class DispatchWorkflowEndToEndTests
         var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
         Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
 
-        var result = ReadActivityResult(activity).Result;
+        var activityResult = ReadActivityResult(activity);
+        var result = activityResult.Terminal;
         Assert.NotNull(result);
         Assert.Equal(run.Identity.ChildWorkflowExecutionId, result.ChildWorkflowExecutionId);
         Assert.Equal(WorkflowDispatchStatus.Completed, result.Status);
-        Assert.Empty(result.Outputs);
+        Assert.Equal(DispatchWorkflowOutcomes.Completed, activityResult.Status);
+        Assert.Equal("{}", activityResult.Output?.GetRawText());
 
         var duplicateSweep = await fixture.SweepAsync();
         Assert.Equal(0, duplicateSweep.OutboxAttemptedCount);
@@ -861,9 +865,11 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(
             new[] { DispatchWorkflowOutcomes.DispatchFailed },
             JsonSerializer.Deserialize<string[]>(activity.Metadata[RuntimeMetadataKeys.CompletionOutcomeNames]));
-        var result = Assert.IsType<DispatchWorkflowResult>(ReadActivityResult(activity).Result);
+        var activityResult = ReadActivityResult(activity);
+        var result = Assert.IsType<DispatchWorkflowResult>(activityResult.Terminal);
         Assert.Equal(WorkflowDispatchStatus.DispatchFailed, result.Status);
-        Assert.Empty(result.Outputs);
+        Assert.Equal(DispatchWorkflowOutcomes.DispatchFailed, activityResult.Status);
+        Assert.Equal("{}", activityResult.Output?.GetRawText());
         Assert.Equal(
             WorkflowDispatchLifecycle.ReadDeliveryIncidentId(failed),
             result.DiagnosticMetadata[DispatchWorkflowDiagnostics.DeliveryIncidentIdKey]);
@@ -947,7 +953,7 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(
             new[] { DispatchWorkflowOutcomes.DispatchFailed },
             JsonSerializer.Deserialize<string[]>(activity.Metadata[RuntimeMetadataKeys.CompletionOutcomeNames]));
-        var result = Assert.IsType<DispatchWorkflowResult>(ReadActivityResult(activity).Result);
+        var result = Assert.IsType<DispatchWorkflowResult>(ReadActivityResult(activity).Terminal);
         Assert.Equal(
             WorkflowDispatchLifecycle.ReadDeliveryIncidentId(failed),
             result.DiagnosticMetadata[DispatchWorkflowDiagnostics.DeliveryIncidentIdKey]);

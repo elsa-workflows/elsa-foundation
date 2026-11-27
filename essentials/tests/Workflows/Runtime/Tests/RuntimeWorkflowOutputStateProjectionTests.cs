@@ -115,8 +115,8 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
     {
         // A workflow output whose payload is externalized carries no inline value: the projection must still
         // surface the name — as a marker with the not-stored-inline reason — even under a payload-capturing
-        // policy, never silently dropping the entry. Latent today (nothing writes externalized workflow
-        // outputs yet), but the read contract is honest from day one.
+        // policy, never silently dropping the entry. Set Output externalizes a workflow output when the value's
+        // policy requires it.
         var external = new DurableValueState(
             durableValueId: "durable-output:Report",
             workflowExecutionId: ExecutionId,
@@ -145,12 +145,119 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
         Assert.Equal(RuntimeWorkflowOutputStateProjection.NotStoredInlineReason, projection.RedactionReason);
     }
 
+    [Fact]
+    public void ProjectValues_returns_committed_values_unchanged_without_any_capture_policy()
+    {
+        // Spec 1245 FR-003: a 1,000-character string and an output named like a secret are data, not a diagnostics
+        // view, so neither is truncated nor redacted.
+        var summary = new string('x', 1000);
+        var durableValues = States(RuntimeWorkflowStateSeed.BuildWorkflowOutputChanges(
+                ExecutionId, new Dictionary<string, object?> { ["Summary"] = summary, ["token"] = "abc", ["Text"] = "a+b Prüfung" }, _now))
+            .Append(NewDurableValue("output:Decision", "Decision", "first", _now))
+            .Append(NewDurableValue("output:Decision", "Decision", "approved", _now.AddMinutes(1)))
+            .ToArray();
+
+        var values = RuntimeWorkflowOutputStateProjection.ProjectValues(durableValues);
+
+        Assert.Equal(["Decision", "Summary", "Text", "token"], values.Values.EnumerateObject().Select(property => property.Name));
+        // Written with the baseline encoder (ADR 0091): no escaping of '+' or non-ASCII letters.
+        Assert.Equal("\"a+b Prüfung\"", values.Values.GetProperty("Text").GetRawText());
+        Assert.Equal("approved", values.Values.GetProperty("Decision").GetString());
+        Assert.Equal(summary, values.Values.GetProperty("Summary").GetString());
+        Assert.Equal("abc", values.Values.GetProperty("token").GetString());
+        Assert.Empty(values.WithheldNames);
+    }
+
+    [Fact]
+    public void ProjectValues_without_outputs_is_an_empty_object()
+    {
+        var values = RuntimeWorkflowOutputStateProjection.ProjectValues([]);
+
+        Assert.Equal("{}", values.Values.GetRawText());
+        Assert.Empty(values.WithheldNames);
+    }
+
+    [Theory]
+    [InlineData(RuntimeMetadataKeys.IsSensitive, "true")]
+    [InlineData(RuntimeMetadataKeys.RedactionMode, "mask")]
+    [InlineData(RuntimeMetadataKeys.RetentionPolicy, "short")]
+    public void ProjectValues_leaves_out_a_protected_output_and_names_it(string key, string marker)
+    {
+        var durableValues = new[]
+        {
+            NewDurableValue("output:Plain", "Plain", "visible", _now),
+            NewDurableValue("output:Guarded", "Guarded", "hidden-value", _now, metadata: new() { [key] = marker })
+        };
+
+        var values = RuntimeWorkflowOutputStateProjection.ProjectValues(durableValues);
+
+        Assert.Equal("""{"Plain":"visible"}""", values.Values.GetRawText());
+        Assert.Equal(["Guarded"], values.WithheldNames);
+    }
+
+    [Fact]
+    public void ProjectValues_leaves_out_an_encryption_required_explicit_null()
+    {
+        // Set Output refuses a non-null value that requires encryption, so only an explicit null can carry it.
+        var durableValues = new[]
+        {
+            NewDurableValue("output:Key", "Key", null, _now, metadata: new() { [RuntimeMetadataKeys.RequiresEncryption] = "true" })
+        };
+
+        var values = RuntimeWorkflowOutputStateProjection.ProjectValues(durableValues);
+
+        Assert.Equal("{}", values.Values.GetRawText());
+        Assert.Equal(["Key"], values.WithheldNames);
+    }
+
+    [Fact]
+    public void ProjectValues_leaves_out_an_explicit_null_whose_minimum_storage_is_external()
+    {
+        // A null row is physically inline; its External minimum still keeps it off the parent's surfaces.
+        var durableValues = new[]
+        {
+            NewDurableValue("output:Report", "Report", null, _now,
+                metadata: new() { [RuntimeMetadataKeys.NullMinimumStorage] = nameof(DurableValueStorage.External) })
+        };
+
+        var values = RuntimeWorkflowOutputStateProjection.ProjectValues(durableValues);
+
+        Assert.Equal("{}", values.Values.GetRawText());
+        Assert.Equal(["Report"], values.WithheldNames);
+    }
+
+    [Fact]
+    public void ProjectValues_leaves_out_an_externally_stored_output()
+    {
+        var external = new DurableValueState(
+            durableValueId: "durable-output:Report",
+            workflowExecutionId: ExecutionId,
+            valueId: "output:Report",
+            type: new RuntimeValueTypeDescriptor("clr", "System.String", null),
+            lifecycle: DurableValueLifecycle.Instance,
+            storage: DurableValueStorage.External,
+            inlineValue: null,
+            externalReference: new DurableValueExternalReference(
+                StorageProfile: "blob",
+                Locator: "runs/exec-1/report",
+                Metadata: new Dictionary<string, string>()),
+            sourceActivityExecutionId: null,
+            capturedAt: _now,
+            metadata: new Dictionary<string, string>(StringComparer.Ordinal) { [RuntimeMetadataKeys.OutputName] = "Report" });
+
+        var values = RuntimeWorkflowOutputStateProjection.ProjectValues([external, NewDurableValue("output:Zeta", "Zeta", "z", _now), NewDurableValue("output:Alpha", "Alpha", "a", _now, isSensitive: true)]);
+
+        Assert.Equal("""{"Zeta":"z"}""", values.Values.GetRawText());
+        Assert.Equal(["Alpha", "Report"], values.WithheldNames);
+    }
+
     private static IEnumerable<DurableValueState> States(IEnumerable<RuntimeStateChange<DurableValueState>> changes) =>
         changes.Select(change => change.State!);
 
-    private static DurableValueState NewDurableValue(string valueId, string outputName, string value, DateTimeOffset capturedAt, bool isSensitive = false)
+    private static DurableValueState NewDurableValue(string valueId, string outputName, string? value, DateTimeOffset capturedAt,
+        bool isSensitive = false, Dictionary<string, string>? metadata = null)
     {
-        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        metadata = new Dictionary<string, string>(metadata ?? [], StringComparer.Ordinal)
         {
             [RuntimeMetadataKeys.OutputName] = outputName
         };

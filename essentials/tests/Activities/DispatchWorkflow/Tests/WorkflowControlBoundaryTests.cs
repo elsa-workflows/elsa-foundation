@@ -343,6 +343,10 @@ public sealed class WorkflowControlBoundaryTests
         public ValueTask<IReadOnlyCollection<RuntimeWorkflowOutput>> ReadAsync(string workflowExecutionId,
             IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null,
             CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<RuntimeWorkflowOutput>>([]);
+        public ValueTask<WorkflowOutputValues> ReadValuesAsync(string workflowExecutionId,
+            IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new WorkflowOutputValues(System.Text.Json.JsonDocument.Parse("{}").RootElement, []));
     }
 
     private sealed class NoOutboxLookup : IPostCommitOutboxLookupStore

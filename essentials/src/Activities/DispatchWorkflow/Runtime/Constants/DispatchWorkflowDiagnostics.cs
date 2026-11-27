@@ -22,6 +22,12 @@ public static class DispatchWorkflowDiagnostics
     public const string DispatchFailedSummary = "The child workflow could not be started.";
     public const int MaximumIncidentIds = 32;
 
+    /// <summary>The run-time warning a resumed dispatch reports when it left child outputs out of <c>Output</c>.</summary>
+    public const string ChildOutputWithheldCode = "dispatch.child-output-withheld";
+
+    /// <summary>The warning <c>Details</c> key that lists the withheld output names, ordinal, joined with <c>", "</c>.</summary>
+    public const string WithheldOutputsKey = "outputs";
+
     internal static IReadOnlyDictionary<string, string> Faulted(IReadOnlyCollection<string> incidentIds)
     {
         ArgumentNullException.ThrowIfNull(incidentIds);

@@ -205,8 +205,8 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
    - `Catalog("ExecuteWorkflow", …, [Outcome("Done", "Completed", "Faulted")])`.
    - `Cancelled` stays unmapped. An Elsa 3 cancelled child never resumed its parent (FR-011).
 4. **Records.**
-   - `extensions/Elsa3/src/Mapping/README.md` gets the rows for FR-006 to FR-011, including the six accepted
-     differences.
+   - `extensions/Elsa3/src/Mapping/README.md` gets the rows for FR-006 to FR-011, including the accepted
+     differences (six from the spec, a seventh added in the implementation).
    - Spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and `ExecuteWorkflow`, and the
      null-member row for `ExecuteWorkflow.WaitForCompletion`, are amended in place, citing spec 1245 (FR-011a).
    - `Elsa3ActivityMapCoverageTests` and the `elsa3-activity-surface.json` fixture are updated to the new rules.
