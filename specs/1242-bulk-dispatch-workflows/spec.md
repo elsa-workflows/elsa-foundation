@@ -264,7 +264,8 @@ and on-completed-callbacks suites pass.
   - 16 is a fixed constant, not an author-facing input. It applies whether or not the child waits:
     - a fire-and-forget `Dispatch` ends its pass with `Dispatched` straight away, so the window refills at once;
     - a waiting one holds its place until the child ends.
-  - Elsa 3 dispatched all at once; the converter warns (FR-020). This is Q4.
+  - Elsa 3 dispatched all at once; the converter warns (FR-020). 16 is the starting value. Tuning it for GA is
+    follow-up #5980.
 - **FR-006**: Routing by the `Dispatch` execution's outcome:
   - `Dispatched` (the node did not wait): the pass ends. No branch runs.
   - `Completed`: `ChildCompleted` runs in that item's scope, when present.
@@ -277,7 +278,8 @@ and on-completed-callbacks suites pass.
   - This is the release 1 cap of `docs/architecture/large-fan-out.md` decision 1, which says that a body starting a
     child workflow per item stays inside the same cap.
   - The cap is not an author-facing input.
-  - The cap itself is under question in #5875 (Elsa 3 had none), and this spec follows whatever #5875 decides.
+  - The cap itself is under question in #5875 (Elsa 3 had none). #5875 settles it for the parallel ForEach and this
+    activity together, and this spec follows the outcome.
   - Whether it applies to fire-and-forget children too is Q1.
 - **FR-008**: Faults of child executions are never absorbed.
   - A fault of the `Dispatch` execution itself, a fault of a slot child, or a fault of an activity deeper inside a slot
@@ -345,8 +347,12 @@ and on-completed-callbacks suites pass.
   - An absent function leaves `CorrelationId` unbound, as for Elsa 3 `DispatchWorkflow`.
 - **FR-016**: `DefaultItemInputKey`, `Input` and the item become the `Dispatch` node's per-item `Inputs`
   expression.
-  - **The target must be in the same import**, so its declared inputs are known. Otherwise the node is refused with
-    `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (Q2).
+  - **The target's declared inputs must be known**, from either of two sources:
+    - the same import;
+    - a workflow already published in Elsa 4 by an earlier import, whose declared inputs the converter reads from the
+      published definition.
+
+    A target in neither place is refused with `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (Q2).
   - **Contents**: the static `Input` first, then, for a map item, each declared input the item has, in the declared
     spelling. Members match declared names regardless of letter case, as in the #5808 rules. When two members differ
     only in case and match one declared name, the script faults that pass with a clear message rather than pick one; for any other item, `{DefaultItemInputKey: item}` when the target declares that name. The item wins on a
@@ -391,7 +397,7 @@ and on-completed-callbacks suites pass.
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` |
 | `Items` a non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: Elsa 3 read it as text and dispatched no child |
 | `DefaultItemInputKey` not a literal, or static `Input` in another language | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
-| Target workflow not in the import | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target in the same run |
+| Target workflow neither in the import nor published in Elsa 4 | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target first, or in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
 | A branch (or `CorrelationIdFunction`/`Input`) writing a variable declared outside the bulk node. Elsa 3 ran the branches one at a time; Elsa 4 runs passes concurrently (FR-010a) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTER-WRITE`. Guidance: Elsa 4 runs the branches concurrently, so a shared counter or list would lose updates (publish only warns). Record per-child results in the child workflow, or compute the total after the bulk activity |
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
@@ -466,18 +472,24 @@ and on-completed-callbacks suites pass.
 - Dispatch channels, trace options, a degree-of-parallelism or batch input.
 - Editing the S-15 ledger or adjusted JTest copies.
 
-## Open questions for the coordinator
+## Coordinator answers (2026-11-27)
 
-1. **Q1**: Does the 1,000-item cap apply without waiting too, once #5875 settles the cap itself? Recommendation:
-   yes, one rule. Each child commits its own record, but every item's pass, with its scope and item copy, is held in
-   the parent instance's state.
-2. **Q2**: Converter: refuse a target outside the import (recommended), or warn? Without the target's declarations an
-   undeclared item member faults the child's dispatch at run time.
-3. **Q3**: `ChildFaulted` for cancelled and undispatchable children (FR-006, FR-018), where Elsa 3 ran nothing.
-   Recommendation: yes. An author needs one place to see every child that did not complete.
-4. **Q4**: A fixed window of 16 open passes, with no input (recommended, FR-005)? The alternatives are spec 1243's
-   author input `MaxDegreeOfParallelism`, or all at once as in Elsa 3. All at once departs from large-fan-out.md's
-   bound on outstanding children, so it needs a decision-register entry or an ADR amendment first.
-5. **Q5**: The converter refuses an Elsa 3 branch that writes an outer variable (`…-OUTER-WRITE`), while an Elsa 4
-   author only gets spec 266's warning. Recommendation: keep the refusal. A converted counter would silently lose
-   updates where Elsa 3 counted correctly, and the author has not seen the warning's reason.
+1. **Q1, the cap**: settled in #5875, which covers the parallel ForEach and this activity. Sipke is looking at it.
+   FR-007 follows its outcome, with one rule for waiting and fire-and-forget children.
+2. **Q2, the target outside the import**: a target published in Elsa 4 by an earlier import is valid. The converter
+   reads its declared inputs from the published Elsa 4 definition. It refuses only a target that is neither in the
+   import nor published (FR-016).
+3. **Q3, `ChildFaulted` for cancelled and undispatchable children**: agreed. A separate `ChildCanceled` slot can be
+   added later if needed; it is not part of this spec.
+4. **Q4, the window of 16**: kept as the starting value. Tuning it for GA is follow-up #5980.
+5. **Q5, outer writes**: open, see below.
+
+## Open question for the coordinator
+
+- **Q5**: what should happen to a write to an outer variable from a branch?
+  - Elsa 4's own rule (spec 266) classifies a variable write from concurrent passes as `ValueFlow/ConcurrentWrite`
+    and only warns at publish, never refuses.
+  - Following Elsa 4's rules, the converter drops its own `…-OUTER-WRITE` refusal and lets Elsa 4's publish
+    validation speak. A converted counter then publishes with that warning.
+  - The alternative is to make the warning a refusal, but only for writes under a `BulkDispatchWorkflows` node. That
+    would add a rule Elsa 4 does not have elsewhere.

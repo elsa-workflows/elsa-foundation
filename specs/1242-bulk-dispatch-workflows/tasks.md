@@ -43,7 +43,7 @@ converter) needs the activity in the catalog.
   - records the wait classification in the plan field.
 
   Add the plan field for the item key, the item-read resolution in `Elsa3ValueFlowLowerer`, the `args.<key>`
-  acceptance in `Elsa3ExpressionRewriter`, and the bulk key in `AncestorScopeNames` (plan §3). Add `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` and
+  acceptance in `Elsa3ExpressionRewriter`, and the bulk key in `AncestorScopeNames` (plan §3). Add the published-target lookup for declared inputs (plan §3, R-3). Add `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` and
   `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` here.
 - [ ] T010 [US3] Outcome step in `Elsa3FlowchartGraphBuilder` (FR-017). Add `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`
   here.

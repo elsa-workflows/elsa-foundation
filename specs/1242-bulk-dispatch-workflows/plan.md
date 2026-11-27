@@ -178,7 +178,13 @@ the design side), and converter rules.
   - The static `Input` follows the #5808 rules (literal or Object). A JavaScript `Input` is lowered on its own by the
     existing JavaScript rewrite; Elsa 3 evaluated it without the item. Its lowered text and bindings are embedded as
     the first operand.
-  - A target outside the import is refused (`…-TARGET-UNKNOWN`).
+  - **Target declarations**: from `DispatchTargetInputs` (the same import, filled by
+    `Elsa3ReusableActivityImportMaterializer`). Otherwise from the published Elsa 4 definition with that definition
+    id: the materializer gets a lookup of published workflow input declarations from the host's workflow definition
+    store.
+    - Research item R-3: confirm the lookup, and how an Elsa 3 definition id maps to the published Elsa 4 definition
+      id after an earlier import.
+    - A target in neither place is refused (`…-TARGET-UNKNOWN`).
   - Item resolution through `get{key}`/`args.<key>` (Item read, above) therefore applies only to the correlation
     function.
 - **Outcomes** (spec FR-017): in `Elsa3FlowchartGraphBuilder.DropDeadEdges`, before `MapPorts` and `CheckJoins`. The
