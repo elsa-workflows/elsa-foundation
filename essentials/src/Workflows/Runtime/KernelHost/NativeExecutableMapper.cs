@@ -55,13 +55,14 @@ public static class NativeExecutableMapper
     }
 
     /// <summary>Maps canonical material under the logical definition of its selected publication.</summary>
-    internal static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities, string? definition)
+    internal static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities, string? definition,
+        bool scopedHttpTransport = false)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(capabilities);
         try
         {
-            var mapping = new Mapping(executable);
+            var mapping = new Mapping(executable, scopedHttpTransport);
             var root = mapping.MapNode(executable.RootActivity, Scope.Workflow);
             var variables = mapping.WorkflowVariables();
             Native.Workflow workflow;
@@ -109,7 +110,7 @@ public static class NativeExecutableMapper
     /// </summary>
     private sealed record GraphScope(string Node, IReadOnlySet<string> Inputs, IReadOnlyDictionary<string, string> Variables);
 
-    private sealed class Mapping(WorkflowExecutable executable)
+    private sealed class Mapping(WorkflowExecutable executable, bool scopedHttpTransport)
     {
         private const string WorkflowScopeId = VariableReference.WorkflowScopeId;
         private const string LegacyGraphScopeId = "activity-graph";
@@ -473,6 +474,10 @@ public static class NativeExecutableMapper
                         break;
                     case InputRule.Unmodelled unmodelled:
                         if (mapped is null) break;
+                        // The scoped HTTP edge checks its target's literal settings before admitting its exact test root.
+                        // These settings do not participate in the activity's model state or effects.
+                        if (scopedHttpTransport && node.Type == typeof(Native.HttpEndpoint) && mapped is Native.LiteralBinding &&
+                            key is "Authorize" or "Policy" or "RequestTimeout" or "RequestSizeLimit" or "ResponseMode") break;
                         if (mapped is not Native.LiteralBinding fixedValue || !unmodelled.Accepts(fixedValue.Value))
                             throw NativeMappingRefusedException.Binding(id, key, $"This value does not run on this host: {unmodelled.Reason}. {unmodelled.Action}");
                         break;

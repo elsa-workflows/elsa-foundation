@@ -82,6 +82,13 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootPreparedStartsQualification, protectRootStart);
     }
 
+    internal static SqliteEmbeddedFoundation ForDirectTestRunQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootDirectTestRunQualification, protectRootStart);
+    }
+
     /// <summary>Binds the private SQLite inline start qualification profile with its executable protection.</summary>
     public static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
         ProtectRootStartAsync protectRootStart)
@@ -104,6 +111,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     /// <summary>Whether this profile supports managed schedule delivery and irreversible cohort retirement.</summary>
     public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
         qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
+        qualificationFormat == StoreFormat.RootDirectTestRunQualification ||
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);

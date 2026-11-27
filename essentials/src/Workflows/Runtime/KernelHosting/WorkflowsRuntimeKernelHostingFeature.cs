@@ -11,6 +11,8 @@ using Elsa.Modularity.Core.Models;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
@@ -73,6 +75,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
         var tenant = EmbeddedTenant.Bind(Tenant);
+        var testTenant = storage.TakesDirectTestRuns ? EmbeddedTenant.Isolate(tenant, "workflow-test-run") : null;
         var persistenceScope = new PersistenceScope(tenant.Tenant);
         var proposedRetention = new ActorRetentionWindows(RetentionWindow(FinishedRetentionSeconds, nameof(FinishedRetentionSeconds)),
             RetentionWindow(CancelledRetentionSeconds, nameof(CancelledRetentionSeconds)),
@@ -102,7 +105,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         }
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
-            persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables,
+            persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables, testTenant,
             sp.GetService<KernelEventPublicationRelay>()));
         if (storage.TakesPreparedStarts)
             services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionStartService>(sp =>
@@ -115,6 +118,19 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
                     sp.GetService<NormalizedPrincipalValidator>());
             }));
         services.AddSingleton(sp => new KernelRuns(tenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync));
+        if (testTenant is not null)
+        {
+            services.AddKeyedSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>(
+                IWorkflowDirectTestRunDispatcher.TriggerBindingKey);
+            services.AddSingleton(sp => new KernelTestRuns(new(testTenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync)));
+            services.AddScoped<IWorkflowDirectTestRunDispatcher>(sp => new KernelDirectTestRunDispatcher(
+                sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<KernelServing>(), persistenceScope,
+                sp.GetRequiredService<KernelShellRuntime>(), sp.GetRequiredService<KernelTestRuns>(),
+                sp.GetRequiredService<KernelOperatorIngress>(), sp.GetRequiredService<TimeProvider>()));
+            services.AddScoped<IWorkflowTestRunWaitControl>(sp => new KernelTestRunWaitControl(
+                sp.GetRequiredService<KernelTestRuns>(), sp.GetRequiredService<KernelShellRuntime>(),
+                sp.GetRequiredService<IServiceScopeFactory>(), persistenceScope, sp.GetRequiredService<TimeProvider>()));
+        }
         services.AddSingleton(sp =>
         {
             var runtime = sp.GetRequiredService<KernelShellRuntime>();

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Options;
@@ -142,15 +144,16 @@ internal sealed class HttpTestRunIngressMiddleware(
         using var timeoutSource = requestTimeout is not null
             ? CancellationTokenSource.CreateLinkedTokenSource(clientAborted)
             : null;
-        if (sync && timeoutSource is not null)
+        var heldBudget = sync && requestTimeout is { } timeout ? new WorkflowTestRunHttpBudget(Stopwatch.GetTimestamp(), timeout) : null;
+        if (heldBudget is not null && timeoutSource is not null)
         {
-            timeoutSource.CancelAfter(requestTimeout!.Value);
+            timeoutSource.CancelAfter(heldBudget.Timeout);
             context.RequestAborted = timeoutSource.Token;
         }
 
         try
         {
-            await HandleTargetAsync(context, testRunId, endpointPath, target, authoredOptions, timeoutSource);
+            await HandleTargetAsync(context, testRunId, endpointPath, target, authoredOptions, timeoutSource, heldBudget);
         }
         catch (OperationCanceledException) when (!clientAborted.IsCancellationRequested && timeoutSource?.IsCancellationRequested == true)
         {
@@ -172,7 +175,8 @@ internal sealed class HttpTestRunIngressMiddleware(
         string endpointPath,
         TestRunTarget target,
         HttpEndpointStimulusOptions authoredOptions,
-        CancellationTokenSource? timeoutSource)
+        CancellationTokenSource? timeoutSource,
+        WorkflowTestRunHttpBudget? heldBudget)
     {
         if (authoredOptions.Authorize && !await AuthorizeEndpointAsync(context, authoredOptions.Policy))
             return;
@@ -225,7 +229,7 @@ internal sealed class HttpTestRunIngressMiddleware(
             dispatchResult = await dispatcher.DispatchAsync(
                 testRunId,
                 stimulusInput,
-                new WorkflowExecutionCommandDispatchOptions(context.RequestServices),
+                new WorkflowExecutionCommandDispatchOptions(context.RequestServices) { TestRunHttpBudget = heldBudget },
                 cancellationToken);
         }
         catch (KeyNotFoundException)
@@ -244,13 +248,50 @@ internal sealed class HttpTestRunIngressMiddleware(
             return;
         }
 
-        if (authoredOptions.ResponseMode == ResponseMode.Sync
+        if (dispatchResult.Dispatch.TestRunHttpReply is { } held)
+        {
+            context.Response.StatusCode = held.StatusCode;
+            context.Response.ContentType = held.ContentType;
+            foreach (var (key, value) in held.Headers) context.Response.Headers[key] = value;
+            if (held.Body is { } body)
+                await context.Response.WriteAsync(body, cancellationToken);
+            return;
+        }
+        var isolated = target.SourceReferenceId == target.Scope.ScopeId;
+        if (isolated)
+        {
+            var receipt = dispatchResult.Dispatch.CommandDispatch;
+            if (receipt.IsShed)
+            {
+                context.Response.StatusCode = receipt.Reason == "RateLimited" ? 429 : 503;
+                if (receipt.ShedRetryAfter is { } retry)
+                    context.Response.Headers.RetryAfter = Math.Ceiling(retry.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+                return;
+            }
+            if (receipt.Status == WorkflowExecutionCommandDispatchStatus.Rejected)
+            {
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                return;
+            }
+        }
+        if (!isolated && authoredOptions.ResponseMode == ResponseMode.Sync
             && context.RequestServices.GetService<HttpResponseInstructionDelivery>() is { } delivery
             && await delivery.TryDeliverAsync(context.Response, [dispatchResult.Dispatch.WorkflowExecutionId], cancellationToken))
             return;
 
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         context.Response.ContentType = "application/json";
+        if (isolated && authoredOptions.ResponseMode == ResponseMode.Sync && dispatchResult.AlreadyDispatched)
+        {
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new
+            {
+                testRunId,
+                workflowExecutionId = dispatchResult.Dispatch.WorkflowExecutionId,
+                alreadyDispatched = true,
+                responseReplayAvailable = false
+            }), cancellationToken);
+            return;
+        }
         await context.Response.WriteAsync(JsonSerializer.Serialize(new
         {
             testRunId,

@@ -272,6 +272,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     {
         switch (m.Kind)
         {
+            case NativeTestRunWaitControl.Deliver:
+                AcceptTestRunWait(m);
+                break;
             case NativeRetry.Kind:
             {
                 var result = Retry(m);

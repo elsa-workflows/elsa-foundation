@@ -105,8 +105,9 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
     internal static string SourceDigest(WorkflowExecutableSourceReference source) =>
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(source)));
 
-    private static WorkflowExecutionStartDispatchResult Result(string operationId, WorkflowExecutableIdentity material,
-        WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt, string? refusal = null)
+    internal static WorkflowExecutionStartDispatchResult Result(string operationId, WorkflowExecutableIdentity material,
+        WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt, string? refusal = null,
+        WorkflowTestRunHttpReply? httpReply = null)
     {
         var pressure = admission is { Outcome: AdmissionOutcome.Refused,
             Reason: RefusalReason.RateLimited or RefusalReason.NodeBusy or RefusalReason.InboxFull };
@@ -124,7 +125,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
             [RuntimeMetadataKeys.DispatchShed] = "true",
             [RuntimeMetadataKeys.DispatchRetryAfterSeconds] = RetrySeconds(admission.RetryAfter)
         } : null;
-        return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata);
+        return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata, httpReply);
     }
 
     private static WorkflowExecutionStartDispatchResult InlineResult(string operationId, WorkflowExecutableIdentity material,
@@ -161,7 +162,8 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
 
     private static WorkflowExecutionStartDispatchResult CreateResult(string operationId, string id, WorkflowExecutableIdentity material,
         WorkflowExecutableSourceProvenance source, WorkflowExecutionCommandDispatchStatus status, DateTimeOffset recordedAt,
-        string? reason, IReadOnlyDictionary<string, string>? metadata) =>
+        string? reason, IReadOnlyDictionary<string, string>? metadata, WorkflowTestRunHttpReply? httpReply = null) =>
         new(id, material, new(operationId, id, status, recordedAt, reason, metadata),
-            new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt), source);
+            new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt), source)
+            { TestRunHttpReply = httpReply };
 }

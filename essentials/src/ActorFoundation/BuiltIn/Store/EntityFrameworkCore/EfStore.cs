@@ -185,6 +185,7 @@ public class KernelDb : DbContext
     internal bool UsesRootScheduleControls => Has(RootCapabilities.ScheduleControls);
     internal bool UsesRootScheduleLineage => Has(RootCapabilities.ScheduleLineage);
     internal bool UsesRootPreparedStarts => Has(RootCapabilities.PreparedStarts);
+    internal bool UsesRootDirectTestRuns => Has(RootCapabilities.DirectTestRuns);
     internal bool UsesRootInlinePromotion => Has(RootCapabilities.InlinePromotion);
     internal uint? ScheduleLineageCommitMarker { get; set; }
     internal bool SeparateRootFormatLock =>
@@ -232,6 +233,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootScheduleLineageQualification, RootProfiles.ScheduleLineageQualification);
     internal static KernelDb ForPostgresRootPreparedStartsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootPreparedStartsQualification, RootProfiles.PreparedStartsQualification);
+    internal static KernelDb ForPostgresRootDirectTestRunQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootDirectTestRunQualification, RootProfiles.DirectTestRunQualification);
     internal static KernelDb ForPostgresRootInlinePromotionQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootInlinePromotionQualification, RootProfiles.InlinePromotionQualification);
     internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>
@@ -301,6 +304,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootPreparedStartsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PreparedStartsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootDirectTestRunQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.DirectTestRunQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootInlinePromotionQualification)
             return new(options, qualificationFormat.Value, RootProfiles.InlinePromotionQualification,
