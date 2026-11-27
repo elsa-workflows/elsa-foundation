@@ -38,7 +38,7 @@ if (studioOrigins.Length > 0)
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials()
-        .WithExposedHeaders("Content-Disposition", "Retry-After")));
+        .WithExposedHeaders("Content-Disposition", "Retry-After", "x-elsa-workflow-instance-id")));
 }
 
 // ---------------------------------------------------------------------------------------------------------

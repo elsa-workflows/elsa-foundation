@@ -245,7 +245,7 @@ export function useWorkflowOperations({
     versionSelection: PublicationVersionSelection,
     direct = false
   ) => {
-    if (!publicationReview || publicationReview.phase === "success") return;
+    if (!publicationReview || publicationReview.phase === "success" || publicationReview.publicationUnsupported) return;
     if (intent.action === "sideBySide" && !intent.slotName?.trim()) {
       setError("Enter a meaningful slot name for side-by-side publication.");
       return;
@@ -366,6 +366,7 @@ export function useWorkflowOperations({
       const failure = describeWorkflowError(e, "Publication failed.");
       const failureMessage = decorateConversionDiagnostic(failure.detail || failure.message);
       const publicationValidationErrors = extractExpressionValidationDiagnosticMessages(e);
+      const publicationUnsupported = failure.code === "definition_unsupported";
       if (promotedVersionId && isStalePreflightError(e)) {
         setPublicationReview(current => current ? {
           ...current,
@@ -386,9 +387,12 @@ export function useWorkflowOperations({
           ...(publicationValidationErrors.length
             ? { validationErrors: publicationValidationErrors, executableStatus: "blocked" as const }
             : {}),
-          failureMessage: publicationValidationErrors.length
-            ? `Publication was blocked by ${publicationValidationErrors.length} expression validation error${publicationValidationErrors.length === 1 ? "" : "s"} (listed above). The promoted version was retained; correct the expressions, then review and publish again.`
-            : `Publication failed after promotion: ${failureMessage}. The promoted version was retained; retry Publish or close this review and publish it later.`
+          publicationUnsupported,
+          failureMessage: publicationUnsupported
+            ? `${failureMessage} The promoted version was retained. Close this review to edit the workflow.`
+            : publicationValidationErrors.length
+              ? `Publication was blocked by ${publicationValidationErrors.length} expression validation error${publicationValidationErrors.length === 1 ? "" : "s"} (listed above). The promoted version was retained; correct the expressions, then review and publish again.`
+              : `Publication failed after promotion: ${failureMessage}. The promoted version was retained; retry Publish or close this review and publish it later.`
         } : current);
       } else if (savedDraft) {
         const failedSavedDraft = savedDraft;

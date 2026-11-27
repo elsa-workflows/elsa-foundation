@@ -63,7 +63,11 @@ public sealed record Admission(
     public PublicationReceipt? Publication { get; init; }
 }
 
-public sealed record Reply(string? Channel, object? Item, ActorStatus? Status = null, string? Error = null);
+public sealed record Reply(string? Channel, object? Item, ActorStatus? Status = null, string? Error = null)
+{
+    /// <summary>The admitted actor when a provider supplies its reference with a held start's reply.</summary>
+    public ActorRef? Actor { get; init; }
+}
 
 public enum RecoverMode { Resume, Retry, RetryAll }
 

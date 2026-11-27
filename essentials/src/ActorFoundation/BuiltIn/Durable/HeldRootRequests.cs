@@ -126,7 +126,8 @@ internal sealed class HeldRootRequests : IReplyTransport
         }
 
         Contract.ActorRef? actor = target is Contract.Target.Ref exact ? exact.Actor : null;
-        return await HoldAsync(scope, id, request, add?.KeepFor, IssueAsync, ReadStatusAsync, stop);
+        var reply = await HoldAsync(scope, id, request, add?.KeepFor, IssueAsync, ReadStatusAsync, stop);
+        return spec is not null && reply.Error is null ? reply with { Actor = actor } : reply;
 
         async Task<Contract.Reply?> IssueAsync(HeldRootRequest caller, CancellationToken token)
         {

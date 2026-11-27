@@ -365,6 +365,25 @@ describe("HTTP test request dialog", () => {
     expect(requestResponse).toHaveBeenCalledOnce();
   });
 
+  it("links a synchronous response to the run from the Elsa response header", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    requestResponse.mockResolvedValue(new Response("from workflow", {
+      status: 201, headers: { "x-elsa-workflow-instance-id": "run/exact" }
+    }));
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => {
+      const response = container.querySelector("[aria-label='HTTP response']");
+      const link = response?.querySelector("a");
+      expect(link?.textContent).toBe("Inspect run");
+      expect(link?.getAttribute("href")).toBe("/workflows/instances/run%2Fexact");
+      expect(response?.textContent).toContain("from workflow");
+    });
+  });
+
   it("shows clear empty body and header states for a 204 response", async () => {
     advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
