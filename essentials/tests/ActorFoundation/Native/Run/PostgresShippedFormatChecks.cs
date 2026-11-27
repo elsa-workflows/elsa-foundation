@@ -346,7 +346,7 @@ internal static class PostgresShippedFormatChecks
         await using var db = open();
         var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
-        Require(fingerprint == "386668f5b48fff1df215164659610a159b98efa15fb588264a65c0375ef094ba",
+        Require(fingerprint == "b0b5889fd66fe781935b9364e934b8a7c0c0d7f9b3e5f9a1f0f42d05c43b8943",
             $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
@@ -357,7 +357,7 @@ internal static class PostgresShippedFormatChecks
             ORDER BY p.proname
             """).ToListAsync(token);
         Require(bodies is ["631edb89241ac99b9413e1101d7eea78", "e7baf78be308c2709f13bfda3a6c4a1e",
-                "4a83fb3dc15c4bdf262a7da76f726a47", "32455ab166ed6b45a9ecf861da7d4d74", "dc1bee032b85280076623ff9c5561d04"],
+                "bcd6ab56c79da3232833fa96c6ddeb76", "32455ab166ed6b45a9ecf861da7d4d74", "dc1bee032b85280076623ff9c5561d04"],
             $"the installed PostgreSQL Park job protection, projector, checkpoint, journal and deferred outcome functions match their revision ({string.Join(", ", bodies)})");
     }
 

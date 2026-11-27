@@ -34,6 +34,18 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Whether the shipped Embedded profile supports protected held root preparation.</summary>
     public static bool TakesPreparedStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.PreparedStarts);
 
+    /// <summary>Whether the shipped Embedded profile supports inline promotion.</summary>
+    public static bool TakesInlineStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.InlinePromotion);
+
+    /// <summary>Whether the shipped Embedded profile supports Event-triggered starts.</summary>
+    public static bool TakesEventStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStarts);
+
+    /// <summary>Whether the shipped Embedded profile supports Event start receipt retention.</summary>
+    public static bool RetainsEventStartReceipts => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStartReceipts);
+
+    /// <summary>Whether the shipped Embedded profile supports ordered Event replay.</summary>
+    public static bool TakesOrderedEventScan => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStartScan);
+
     /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
     /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
     public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>
