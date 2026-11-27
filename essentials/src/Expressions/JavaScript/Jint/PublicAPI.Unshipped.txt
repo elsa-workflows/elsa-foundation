@@ -12,8 +12,8 @@ Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputDepth.get -> int
 Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputDepth.set -> void
 Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputNodes.get -> int
 Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputNodes.set -> void
-Elsa.Expressions.JavaScript.Jint.JintFeature.MaxMemoryBytes.get -> long?
-Elsa.Expressions.JavaScript.Jint.JintFeature.MaxMemoryBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxMemoryProfile.get -> Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxMemoryProfile.set -> void
 Elsa.Expressions.JavaScript.Jint.JintFeature.MaxRecursionDepth.get -> int?
 Elsa.Expressions.JavaScript.Jint.JintFeature.MaxRecursionDepth.set -> void
 Elsa.Expressions.JavaScript.Jint.JintFeature.MaxResultBytes.get -> int
@@ -36,8 +36,8 @@ Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputDepth.get -> int
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputDepth.set -> void
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputNodes.get -> int
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputNodes.set -> void
-Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxMemoryBytes.get -> long?
-Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxMemoryBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxMemoryProfile.get -> Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxMemoryProfile.set -> void
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxRecursionDepth.get -> int?
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxRecursionDepth.set -> void
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultBytes.get -> int
@@ -74,3 +74,7 @@ static Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Diagnos
 static Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Reason(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber! number) -> string!
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge.Begin(Jint.Engine! engine, bool undefinedAsNull) -> Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation!
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
+Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile
+Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile.Low = 0 -> Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile
+Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile.Maximum = 2 -> Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile
+Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile.Medium = 1 -> Elsa.Expressions.JavaScript.Jint.Options.JavaScriptMemoryProfile

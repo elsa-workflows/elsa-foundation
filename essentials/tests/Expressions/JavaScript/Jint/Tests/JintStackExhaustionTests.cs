@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Expressions.JavaScript.Jint.Services;
 using Elsa.Primitives.Models;
 using Jint.Runtime;
@@ -73,7 +74,7 @@ public sealed class JintStackExhaustionTests
         var exception = await EvaluateScriptFromSmallStackAsync(source, feature =>
         {
             feature.ExecutionTimeout = TimeSpan.FromMilliseconds(200);
-            feature.MaxMemoryBytes = null;
+            feature.MaxMemoryProfile = JavaScriptMemoryProfile.Maximum;
         });
 
         Assert.IsType<TimeoutException>(exception);
@@ -142,7 +143,7 @@ public sealed class JintStackExhaustionTests
         var exception = await EvaluateScriptFromSmallStackAsync(source, feature =>
         {
             feature.ExecutionTimeout = TimeSpan.FromMilliseconds(200);
-            feature.MaxMemoryBytes = null;
+            feature.MaxMemoryProfile = JavaScriptMemoryProfile.Maximum;
         });
 
         Assert.IsType<TimeoutException>(exception);

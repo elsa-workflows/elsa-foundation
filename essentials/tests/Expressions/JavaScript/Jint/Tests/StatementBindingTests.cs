@@ -140,7 +140,7 @@ public sealed class StatementBindingTests
         var engine = IsolatedJintEngine.Create(new FeatureOptions
         {
             ExecutionTimeout = null,
-            MaxMemoryBytes = null,
+            MaxMemoryProfile = JavaScriptMemoryProfile.Maximum,
             // Bound a broken cancellation constraint by work, without racing a wall-clock deadline.
             MaxStatements = 1_000
         }, cancellation.Token);
@@ -173,7 +173,7 @@ public sealed class StatementBindingTests
         new JintFeature
         {
             ExecutionTimeout = null,
-            MaxMemoryBytes = null,
+            MaxMemoryProfile = JavaScriptMemoryProfile.Maximum,
             MaxStatements = 1_000
         }.ConfigureServices(services);
 

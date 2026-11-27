@@ -3,6 +3,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Exceptions;
+using Elsa.Expressions.JavaScript.Jint.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -237,9 +238,9 @@ public sealed class HostFunctionArgumentTests
         var session = new Session("{" + members + "}");
 
         var (result, _) = await RunAsync(
-            "variables.order.updatedAt = 1; for (var i = 0; i < 16; i++) { acme.readOrderSize(); acme.size(variables.order); } return 1;",
+            "variables.order.updatedAt = 1; for (var i = 0; i < 64; i++) { acme.readOrderSize(); acme.size(variables.order); } return 1;",
             session: session,
-            configure: feature => feature.MaxMemoryBytes = 64 * 1024 * 1024);
+            configure: feature => { feature.MaxMemoryProfile = JavaScriptMemoryProfile.Low; feature.ExecutionTimeout = null; });
 
         Assert.Equal(1, result!.Value.GetInt32());
         Assert.Contains("\"updatedAt\":1", session.Written!.Value.GetRawText(), StringComparison.Ordinal);
@@ -260,17 +261,17 @@ public sealed class HostFunctionArgumentTests
     {
         await Assert.ThrowsAsync<global::Jint.Runtime.MemoryLimitExceededException>(() => RunAsync(
             "var keep = []; for (var i = 0; i < 20; i++) acme.echo({ toJSON: function () { keep.push('x'.repeat(20000000) + i); return 1; } }); return keep.length;",
-            configure: feature => { feature.MaxMemoryBytes = 64 * 1024 * 1024; feature.ExecutionTimeout = null; }));
+            configure: feature => { feature.MaxMemoryProfile = JavaScriptMemoryProfile.Low; feature.ExecutionTimeout = null; }));
     }
 
     // A native toJSON runs no statement, and a function's result is built for the script: both are the script's memory.
     [Theory]
-    [InlineData("var src = Array.from({ length: 60000 }); var all = []; for (var i = 0; i < 300; i++) { var k = []; all.push(k); acme.echo({ toJSON: Function.prototype.apply.bind(Array.prototype.push, k, src) }); } return 1;")]
-    [InlineData("var s = 'x'.repeat(400000); var keep = []; for (var i = 0; i < 300; i++) keep.push(acme.echo(s)); return 1;")]
+    [InlineData("var src = Array.from({ length: 60000 }); var all = []; for (var i = 0; i < 1200; i++) { var k = []; all.push(k); acme.echo({ toJSON: Function.prototype.apply.bind(Array.prototype.push, k, src) }); } return 1;")]
+    [InlineData("var s = 'x'.repeat(400000); var keep = []; for (var i = 0; i < 1200; i++) keep.push(acme.echo(s)); return 1;")]
     public async Task Memory_the_script_keeps_from_host_work_counts(string source)
     {
         await Assert.ThrowsAsync<global::Jint.Runtime.MemoryLimitExceededException>(() =>
-            RunAsync(source, configure: feature => { feature.MaxMemoryBytes = 64 * 1024 * 1024; feature.ExecutionTimeout = null; }));
+            RunAsync(source, configure: feature => { feature.MaxMemoryProfile = JavaScriptMemoryProfile.Low; feature.ExecutionTimeout = null; }));
     }
 
     // An error a function call raises can be caught and kept by the script, stack text and all: counted.
@@ -280,7 +281,7 @@ public sealed class HostFunctionArgumentTests
         await Assert.ThrowsAsync<global::Jint.Runtime.MemoryLimitExceededException>(() => RunAsync(
             "var name = 'n'.repeat(100000); var o = { [name]: function () { try { acme.echo(function () { }); } catch (e) { return e; } } };" +
             " var keep = []; for (var i = 0; i < 3000; i++) keep.push(o[name]()); return 1;",
-            configure: feature => { feature.MaxMemoryBytes = 64 * 1024 * 1024; feature.ExecutionTimeout = null; }));
+            configure: feature => { feature.MaxMemoryProfile = JavaScriptMemoryProfile.Low; feature.ExecutionTimeout = null; }));
     }
 
     // A changed value that is not plain (a getter) inside a written variable makes the whole write go through the engine,

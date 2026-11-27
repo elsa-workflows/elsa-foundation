@@ -46,8 +46,11 @@ public class JintFeature : IShellFeature
     [ManifestSetting(DisplayName = "Max recursion depth", Description = "Maximum call-stack recursion depth for a single script evaluation; empty or zero disables the limit.", Category = "Security", Advanced = true)]
     public int? MaxRecursionDepth { get; set; } = 300;
 
-    [ManifestSetting(DisplayName = "Max memory bytes", Description = "Maximum managed memory Jint may allocate during one evaluation; empty or zero disables the limit.", Category = "Security", Advanced = true)]
-    public long? MaxMemoryBytes { get; set; } = 64 * 1024 * 1024;
+    /// <summary>
+    /// Sandbox limit: how many bytes one evaluation may allocate. Low 256 MiB, Medium 512 MiB (default), Maximum 1 GiB.
+    /// </summary>
+    [ManifestSetting(DisplayName = "Memory profile", Description = "How many bytes one script evaluation may allocate, garbage included: Low 256 MiB, Medium 512 MiB, Maximum 1 GiB. The limit cannot be switched off.", Category = "Security", Advanced = true)]
+    public JavaScriptMemoryProfile MaxMemoryProfile { get; set; } = JavaScriptMemoryProfile.Medium;
 
     [ManifestSetting(DisplayName = "Max array length", Description = "Maximum JavaScript array length, including sparse arrays; empty or zero disables the limit.", Category = "Security", Advanced = true)]
     public uint? MaxArrayLength { get; set; } = 100_000;
@@ -79,7 +82,7 @@ public class JintFeature : IShellFeature
             options.ExecutionTimeout = ExecutionTimeout;
             options.MaxStatements = MaxStatements;
             options.MaxRecursionDepth = MaxRecursionDepth;
-            options.MaxMemoryBytes = MaxMemoryBytes;
+            options.MaxMemoryProfile = MaxMemoryProfile;
             options.MaxArrayLength = MaxArrayLength;
             options.MaxInputBytes = MaxInputBytes;
             options.MaxInputDepth = MaxInputDepth;
@@ -91,6 +94,8 @@ public class JintFeature : IShellFeature
         services.AddOptions<FeatureOptions>()
             .Validate(JintEvaluationThreads.ValidSettings,
                 "Jint evaluation thread stack must be 16–64 MiB and evaluation stack budget must be 64–512 KiB.")
+            .Validate(options => JavaScriptMemoryBudget.IsDefined(options.MaxMemoryProfile),
+                "The JavaScript memory profile must be Low, Medium or Maximum.")
             .ValidateOnStart();
 
         // The built-in functions are part of every JavaScript surface (spec 1223 FR-003, FR-006, FR-007, FR-026); host

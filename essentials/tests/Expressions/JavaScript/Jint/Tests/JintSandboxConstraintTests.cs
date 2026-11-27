@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint;
+using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint.Runtime;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
@@ -21,7 +23,7 @@ public class JintSandboxConstraintTests
             f.ExecutionTimeout = TimeSpan.FromMilliseconds(200);
             f.MaxStatements = null;
             f.MaxRecursionDepth = null;
-            f.MaxMemoryBytes = null;
+            f.MaxMemoryProfile = JavaScriptMemoryProfile.Maximum;
         });
         using var scope = provider.CreateScope();
         var evaluator = scope.ScriptEvaluator();
@@ -52,46 +54,91 @@ public class JintSandboxConstraintTests
         {
             f.ExecutionTimeout = null;
             f.MaxStatements = null;
-            f.MaxMemoryBytes = 4 * 1024 * 1024;
+            f.MaxMemoryProfile = JavaScriptMemoryProfile.Low;
+            f.MaxInputBytes = 8 * 1024 * 1024;
+            f.MaxInputNodes = 1_000_000;
         });
         using var scope = provider.CreateScope();
+        // Converting 20,000 small objects allocates about 30 MiB, so ten lists of them allocate more than Low's 256 MiB.
         var items = Enumerable.Range(0, 20_000).Select(index => new { i = index }).ToArray();
+        var lists = Enumerable.Range(0, 10).ToDictionary(index => "items" + index, _ => items);
 
         var result = await EvaluateAsync(
             scope.ScriptEvaluator(),
             "return 1;",
-            arguments: JsonSerializer.SerializeToElement(new { items }));
+            arguments: JsonSerializer.SerializeToElement(lists));
 
         Assert.Equal(1, result!.Value.GetInt32());
     }
 
-    // Issue #5818: a script that waits by polling the clock creates a little garbage on every pass and keeps none of it.
-    // How much garbage depends on how fast the machine runs the loop, so a short wait must not fault on the default limits.
+    // Issue #5818: a script that waits by polling the clock creates a little garbage on every pass and keeps none of it,
+    // more the faster the machine runs the loop. The Workbench reached 64 MiB within a 500 ms wait; the default profile
+    // leaves room for such waits up to the execution timeout.
     [Fact]
-    public async Task GarbageTheScriptDropsDoesNotCountAgainstTheMemoryLimit()
+    public async Task GarbageOfAShortWaitRunsOnTheDefaultProfile()
     {
         await using var provider = JintTestHost.Build();
         using var scope = provider.CreateScope();
 
-        // About 100 MB of strings, each dropped on the next pass: the script never holds more than one.
-        var result = await EvaluateAsync(
-            scope.ScriptEvaluator(),
-            "var last = ''; for (var i = 0; i < 50000; i++) { last = 'x'.repeat(1000) + i; } return last.length;");
+        // About 200 MiB of strings, each dropped on the next pass: the script never holds more than one.
+        var result = await EvaluateAsync(scope.ScriptEvaluator(), GarbageScript(passes: 5_000));
 
-        Assert.Equal(1005, result!.Value.GetInt32());
+        Assert.Equal(10_004, result!.Value.GetInt32());
     }
 
-    // The same strings, kept: the script holds more than the limit and faults.
-    [Fact]
-    public async Task MemoryTheScriptHoldsBeyondTheLimitFaults()
+    // The budget counts bytes allocated, garbage included, so the profile alone decides where the same script stops.
+    [Theory]
+    [InlineData(JavaScriptMemoryProfile.Low, true)]
+    [InlineData(JavaScriptMemoryProfile.Medium, false)]
+    [InlineData(JavaScriptMemoryProfile.Maximum, false)]
+    public async Task TheMemoryProfileSetsTheBudget(JavaScriptMemoryProfile profile, bool faults)
     {
-        await using var provider = JintTestHost.Build(f => f.ExecutionTimeout = null);
+        await using var provider = JintTestHost.Build(f =>
+        {
+            f.ExecutionTimeout = null;
+            f.MaxMemoryProfile = profile;
+        });
+        using var scope = provider.CreateScope();
+
+        // About 400 MiB allocated: over Low's 256 MiB, under Medium's 512 MiB.
+        var evaluation = EvaluateAsync(scope.ScriptEvaluator(), GarbageScript(passes: 10_000)).AsTask();
+
+        if (faults)
+            await Assert.ThrowsAsync<MemoryLimitExceededException>(() => evaluation);
+        else
+            Assert.Equal(10_004, (await evaluation)!.Value.GetInt32());
+    }
+
+    // A script that keeps what it builds still faults: the limit is never off.
+    [Fact]
+    public async Task MemoryTheScriptHoldsBeyondTheProfileFaults()
+    {
+        await using var provider = JintTestHost.Build(f =>
+        {
+            f.ExecutionTimeout = null;
+            f.MaxMemoryProfile = JavaScriptMemoryProfile.Low;
+        });
         using var scope = provider.CreateScope();
 
         await Assert.ThrowsAsync<MemoryLimitExceededException>(() => EvaluateAsync(
             scope.ScriptEvaluator(),
-            "var keep = []; for (var i = 0; i < 50000; i++) { keep.push('x'.repeat(1000) + i); } return keep.length;").AsTask());
+            "var keep = []; for (var i = 0; i < 15000; i++) { keep.push('x'.repeat(10000) + i); } return keep.length;").AsTask());
     }
+
+    // The profile is the only way to set the budget. A number bound from configuration is still an enum value, so a value
+    // outside the named profiles (an attempt to raise the cap) fails at start instead of lifting the limit.
+    [Fact]
+    public async Task AnUnknownMemoryProfileFailsValidation()
+    {
+        await using var provider = JintTestHost.Build(f => f.MaxMemoryProfile = (JavaScriptMemoryProfile)4096);
+
+        var exception = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<FeatureOptions>>().Value);
+
+        Assert.Contains("memory profile", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static string GarbageScript(int passes) =>
+        "var last = ''; for (var i = 0; i < " + passes + "; i++) { last = 'x'.repeat(10000) + i; } return last.length;";
 
     [Fact]
     public async Task RecursionLimitAborts()

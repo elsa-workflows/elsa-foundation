@@ -3,6 +3,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Primitives.Models;
 using Jint.Runtime;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,7 @@ public sealed class JintCallDepthTests
             {
                 feature.ExecutionTimeout = null;
                 feature.MaxStatements = null;
-                feature.MaxMemoryBytes = null;
+                feature.MaxMemoryProfile = JavaScriptMemoryProfile.Maximum;
             }
         });
         using var scope = provider.CreateScope();

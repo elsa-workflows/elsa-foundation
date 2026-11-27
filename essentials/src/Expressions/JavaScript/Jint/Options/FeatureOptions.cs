@@ -46,8 +46,15 @@ public sealed class FeatureOptions
     /// </remarks>
     public int? MaxRecursionDepth { get; set; } = 300;
 
-    /// <summary>Maximum managed memory, in bytes, that Jint may allocate during one evaluation.</summary>
-    public long? MaxMemoryBytes { get; set; } = 64 * 1024 * 1024;
+    /// <summary>
+    /// Sandbox limit: how many bytes one evaluation may allocate, as a profile (<see cref="JavaScriptMemoryProfile"/>).
+    /// Default <see cref="JavaScriptMemoryProfile.Medium"/>, 512 MiB. The limit is always on and cannot exceed 1 GiB.
+    /// </summary>
+    /// <remarks>
+    /// It counts every byte allocated, garbage included, so it bounds what a script can grab within its time, not what it
+    /// holds; see <see cref="JavaScriptMemoryProfile"/>.
+    /// </remarks>
+    public JavaScriptMemoryProfile MaxMemoryProfile { get; set; } = JavaScriptMemoryProfile.Medium;
 
     /// <summary>Maximum length of a JavaScript array, including sparse arrays.</summary>
     public uint? MaxArrayLength { get; set; } = 100_000;
