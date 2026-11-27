@@ -19,19 +19,20 @@ const categories = [["WorkflowLifecycle", "Run lifecycle"], ["ActivityLifecycle"
   ["OperationalLifecycle", "Operations"], ["ValueLifecycle", "Value observations"]];
 
 export function RunHistoryTimeline({ context, workflowExecutionId, filters, onFiltersChange, selectedActivityExecutionId,
-  selectedActivityLabel, selectedEventId, selectedEvent, onSelectEvent, labelForEvent, enabled = true, onManualNavigation, headerActions, overviewContent, embedded = false }: {
+  selectedActivityLabel, selectedEventId, selectedEvent, onSelectEvent, labelForEvent, enabled = true, onManualNavigation, onCommittedAdvance, headerActions, overviewContent, embedded = false }: {
   context: StudioEndpointContext; workflowExecutionId: string; filters: RunHistoryFilters;
   onFiltersChange(filters: RunHistoryFilters): void; selectedActivityExecutionId?: string | null; selectedActivityLabel?: string;
   selectedEventId?: string | null; onSelectEvent(event: RuntimeHistoryEvent): void;
   selectedEvent?: RuntimeHistoryEvent;
   labelForEvent?(event: RuntimeHistoryEvent): string | null; enabled?: boolean;
   onManualNavigation?(): void;
+  onCommittedAdvance?(): void;
   headerActions?: ReactNode;
   overviewContent?: ReactNode;
   embedded?: boolean;
 }) {
   const history = useRunHistory(context, workflowExecutionId, { activityExecutionId: filters.activityExecutionId,
-    includeDescendants: filters.includeDescendants, category: filters.category, name: filters.name, search: filters.search }, enabled);
+    includeDescendants: filters.includeDescendants, category: filters.category, name: filters.name, search: filters.search }, enabled, onCommittedAdvance);
   const [search, setSearch] = useState(filters.search);
   const [followEnd, setFollowEnd] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);

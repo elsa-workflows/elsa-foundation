@@ -11,7 +11,8 @@ const context = { baseUrl: "https://history.example" } as StudioEndpointContext;
 let root: Root, container: HTMLDivElement;
 let request: RuntimeHistoryRequest;
 let observed: ReturnType<typeof useRunHistory>;
-function Probe() { observed = useRunHistory(context, "run", request); return null; }
+const committedAdvance = vi.fn();
+function Probe() { observed = useRunHistory(context, "run", request, true, committedAdvance); return null; }
 function render() { flushSync(() => root.render(<Probe />)); }
 async function settle() { for (let i = 0; i < 30; i++) await Promise.resolve(); render(); }
 beforeEach(() => {
@@ -32,6 +33,21 @@ it("continues bounded catch-up after a settled prefix and queues late events wit
   expect(api.getWorkflowHistoryPage.mock.calls[1][2].continuationToken).toBe("tail-3");
   await vi.advanceTimersByTimeAsync(2000); await settle(); expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(3);
   flushSync(() => observed.showNew()); await settle(); expect(observed.value?.items.map(item => item.sequence)).toEqual([1, 4]);
+});
+it("invalidates the run summary once when the committed kernel head advances, before reveal", async () => {
+  const coverage = { ...historyPage().coverage, policyId: "kernel-activity-journal-v1" };
+  api.getWorkflowHistoryPage.mockResolvedValueOnce(historyPage([historyEvent(1)], { coverage }))
+    .mockResolvedValueOnce(historyPage([], { coverage }))
+    .mockResolvedValue(historyPage([historyEvent(4)], { coverage, upperSequence: 4, scannedThroughSequence: 4, catchUpToken: "tail-4" }));
+  render(); await settle();
+  await vi.advanceTimersByTimeAsync(2000); await settle();
+  expect(committedAdvance).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(2000); await settle();
+  expect(committedAdvance).toHaveBeenCalledTimes(1);
+  expect(observed.value?.items.map(item => item.sequence)).toEqual([1]);
+  expect(observed.value?.pending.map(item => item.sequence)).toEqual([4]);
+  await vi.advanceTimersByTimeAsync(2000); await settle();
+  expect(committedAdvance).toHaveBeenCalledTimes(1);
 });
 it("accepts empty searched windows with an advancing next cursor and retains incomplete ancestry across later pages", async () => {
   api.getWorkflowHistoryPage.mockResolvedValueOnce(historyPage([], { nextContinuationToken: "window-2", scopeComplete: false, scopeLimitation: "Ancestry unavailable" }))
