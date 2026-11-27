@@ -25,5 +25,7 @@ internal sealed class RuntimeKernelScheduleOccurrenceEntityConfiguration : IEnti
             .HasDatabaseName("IX_KernelScheduleOccurrence_Pending");
         builder.HasIndex(row => new { row.ScopeKeyHash, row.RetiredAtUtcTicks, row.ArtifactId })
             .HasDatabaseName("IX_KernelScheduleOccurrence_ArtifactPin");
+        builder.HasIndex(row => new { row.ScopeKeyHash, row.TenantKeyHash, row.RetiredAtUtcTicks, row.AcceptedAtUtcTicks, row.Id })
+            .HasDatabaseName("IX_KernelScheduleOccurrence_Open");
     }
 }

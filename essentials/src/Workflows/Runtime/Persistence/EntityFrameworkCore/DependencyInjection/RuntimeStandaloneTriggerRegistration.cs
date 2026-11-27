@@ -48,6 +48,7 @@ internal static class RuntimeStandaloneTriggerRegistration
         services.TryAddScoped<EfRuntimeKernelScheduleOccurrenceStore>();
         services.TryAddScoped<IRuntimeKernelScheduleOccurrenceStore>(provider => provider.GetRequiredService<EfRuntimeKernelScheduleOccurrenceStore>());
         services.TryAddScoped<IRuntimeKernelScheduleOccurrenceDeliveryStore>(provider => provider.GetRequiredService<EfRuntimeKernelScheduleOccurrenceStore>());
+        services.TryAddScoped<IRuntimeKernelScheduleOccurrenceRetirementStore>(provider => provider.GetRequiredService<EfRuntimeKernelScheduleOccurrenceStore>());
         services.TryAddScoped<IRuntimeKernelScheduleRetentionRoots>(provider => provider.GetRequiredService<EfRuntimeKernelScheduleOccurrenceStore>());
         services.TryAddScoped<IRuntimeKernelScheduleControlReader, EfRuntimeKernelScheduleControlStore>();
         services.AddSingleton(new StandaloneTriggerProviderRegistration("EntityFrameworkCore", resource, ingress) { Reservations = reader, SourceCommit = sourceCommit });

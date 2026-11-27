@@ -199,6 +199,34 @@ internal static class KernelScheduleOccurrenceContract
         Assert.Equal(replacement, Assert.Single(await relay.ListPendingAsync(scope, null, 2)).Occurrence);
         Assert.True(await store.TryAcceptAsync(original, _ => throw new InvalidOperationException("Replays need no schedule clock.")));
         Assert.Equal(new[] { first.ArtifactId, second.ArtifactId }, (await relay.ListPinnedExecutableArtifactIdsAsync()).Order(StringComparer.Ordinal));
+
+        var openFirst = Assert.Single(await relay.ListMaterializedAsync(scope, null, 1));
+        var openSecond = Assert.Single(await relay.ListMaterializedAsync(scope, openFirst.Cursor, 1));
+        Assert.Empty(await relay.ListMaterializedAsync(scope, openSecond.Cursor, 1));
+        Assert.Equal(delayed, openFirst.Occurrence);
+        Assert.Equal(original, openSecond.Occurrence);
+        static ValueTask<bool> MustNotReadProof(RuntimeKernelScheduleOccurrence _, string __, CancellationToken ___) =>
+            throw new InvalidOperationException("This call cannot request a retirement proof.");
+        await Assert.ThrowsAsync<InvalidDataException>(() => relay.TryRetireAsync(original, new string('C', 64), MustNotReadProof).AsTask());
+        Assert.False(await relay.TryRetireAsync(original, actorReference, (_, _, _) => ValueTask.FromResult(false)));
+        Assert.Contains(first.ArtifactId, await relay.ListPinnedExecutableArtifactIdsAsync());
+        Assert.True(await relay.TryRetireAsync(original, actorReference, (proofOccurrence, proofReference, _) =>
+        {
+            Assert.Equal(original, proofOccurrence);
+            Assert.Equal(actorReference, proofReference);
+            return ValueTask.FromResult(true);
+        }));
+        Assert.Equal(delayed, Assert.Single(await relay.ListMaterializedAsync(scope, null, 2)).Occurrence);
+        Assert.Equal(second.ArtifactId, Assert.Single(await relay.ListPinnedExecutableArtifactIdsAsync()));
+        var retired = await context.KernelScheduleOccurrences.AsNoTracking().SingleAsync(row => row.ActorReference == actorReference);
+        Assert.NotNull(retired.RetiredAtUtcTicks);
+        Assert.Empty(retired.ArtifactId);
+        Assert.DoesNotContain("PinnedStart", retired.ContentJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(first.ArtifactId, retired.ContentJson);
+        Assert.True(await relay.TryRetireAsync(original, actorReference, MustNotReadProof));
+        Assert.True(await store.TryAcceptAsync(original, _ => throw new InvalidOperationException("Retired replays need no schedule clock.")));
+        await relay.MarkMaterializedAsync(original, actorReference);
+        await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
         Assert.Equal(3, await context.KernelScheduleOccurrences.CountAsync());
         await CheckDefaultAliasHandoffAsync(open);
     }

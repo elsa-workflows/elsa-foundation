@@ -12,14 +12,15 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRun
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
+internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor access,
     IWorkflowExecutableStore executables,
     IWorkflowExecutableSourceReferenceStore sourceReferences,
     IWorkflowTriggerBindingStore triggerBindings,
     IWorkflowExecutableRootWriteLeaseManager leases,
-    TimeProvider clock) : IRuntimeKernelScheduleOccurrenceStore, IRuntimeKernelScheduleOccurrenceDeliveryStore, IRuntimeKernelScheduleRetentionRoots
+    TimeProvider clock) : IRuntimeKernelScheduleOccurrenceStore, IRuntimeKernelScheduleOccurrenceDeliveryStore,
+        IRuntimeKernelScheduleOccurrenceRetirementStore, IRuntimeKernelScheduleRetentionRoots
 {
     public async ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence,
         Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
@@ -96,7 +97,7 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
         {
             var row = await FindAsync(id, token);
             if (row is null) return false;
-            if (Read(row, scope) != occurrence)
+            if (!MatchesOccurrence(row, scope, occurrence))
                 throw new InvalidDataException("A schedule occurrence cannot change its accepted workflow or delivery identity.");
             return true;
         }
@@ -107,13 +108,21 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
     public async ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,
         RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default)
     {
+        var page = await ReadPageAsync(scope, after, limit, materialized: false, cancellationToken);
+        return page.Select(row => new RuntimeKernelScheduleOccurrenceDelivery(ReadScoped(row, scope), new(row.AcceptedAtUtcTicks, row.Id))).ToArray();
+    }
+
+    private async Task<RuntimeKernelScheduleOccurrenceEntity[]> ReadPageAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, int limit, bool materialized, CancellationToken token)
+    {
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
         var scopeKey = Bind(scope);
         var scopeHash = Hash(scopeKey);
         var tenantHash = Hash(JsonSerializer.Serialize(scope.TenantId));
         var query = context.KernelScheduleOccurrences.AsNoTracking().Where(row =>
-            row.ScopeKeyHash == scopeHash && row.TenantKeyHash == tenantHash && row.ActorReference == null);
+            row.ScopeKeyHash == scopeHash && row.TenantKeyHash == tenantHash && row.RetiredAtUtcTicks == null);
+        query = materialized ? query.Where(row => row.ActorReference != null) : query.Where(row => row.ActorReference == null);
         if (after is not null)
         {
             if (after.AcceptedAtUtcTicks <= 0 || !IsReference(after.Id))
@@ -121,14 +130,15 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
             query = query.Where(row => row.AcceptedAtUtcTicks > after.AcceptedAtUtcTicks ||
                 row.AcceptedAtUtcTicks == after.AcceptedAtUtcTicks && string.Compare(row.Id, after.Id) > 0);
         }
-        var page = await query.OrderBy(row => row.AcceptedAtUtcTicks).ThenBy(row => row.Id).Take(limit).ToArrayAsync(cancellationToken);
-        return page.Select(row =>
-        {
-            var occurrence = Read(row, scopeKey);
-            if (occurrence.Scope != scope)
-                throw new InvalidDataException("A pending occurrence differs from the requested tenant.");
-            return new RuntimeKernelScheduleOccurrenceDelivery(occurrence, new(row.AcceptedAtUtcTicks, row.Id));
-        }).ToArray();
+        return await query.OrderBy(row => row.AcceptedAtUtcTicks).ThenBy(row => row.Id).Take(limit).ToArrayAsync(token);
+    }
+
+    private static RuntimeKernelScheduleOccurrence ReadScoped(RuntimeKernelScheduleOccurrenceEntity row, TriggerScope scope)
+    {
+        var occurrence = Read(row, scope.Persistence.Value);
+        if (occurrence.Scope != scope)
+            throw new InvalidDataException("A schedule occurrence differs from the requested tenant.");
+        return occurrence;
     }
 
     public async ValueTask MarkMaterializedAsync(RuntimeKernelScheduleOccurrence occurrence, string actorReference, CancellationToken cancellationToken = default)
@@ -137,7 +147,7 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
         if (!IsReference(actorReference)) throw new ArgumentException("Invalid scheduled actor reference.", nameof(actorReference));
         var scope = Bind(occurrence.Scope);
         var id = CompositeId(scope, occurrence.Id);
-        var current = await RequireOccurrenceAsync();
+        var current = await RequireOccurrenceAsync(scope, id, occurrence, cancellationToken);
         if (current.ActorReference is null)
         {
             var updated = await context.KernelScheduleOccurrences.Where(row => row.Id == id && row.Revision == current.Revision &&
@@ -145,18 +155,20 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
                 .ExecuteUpdateAsync(set => set.SetProperty(row => row.ActorReference, actorReference)
                     .SetProperty(row => row.Revision, row => row.Revision + 1), cancellationToken);
             if (updated == 1) return;
-            current = await RequireOccurrenceAsync();
+            current = await RequireOccurrenceAsync(scope, id, occurrence, cancellationToken);
         }
         if (!StringComparer.Ordinal.Equals(current.ActorReference, actorReference))
             throw new InvalidDataException("The occurrence could not acknowledge the same scheduled workflow birth.");
 
-        async Task<RuntimeKernelScheduleOccurrenceEntity> RequireOccurrenceAsync()
-        {
-            var row = await FindAsync(id, cancellationToken);
-            if (row is null || Read(row, scope) != occurrence)
-                throw new InvalidDataException("Only the exact accepted occurrence can acknowledge a scheduled workflow birth.");
-            return row;
-        }
+    }
+
+    private async Task<RuntimeKernelScheduleOccurrenceEntity> RequireOccurrenceAsync(string scope, string id,
+        RuntimeKernelScheduleOccurrence occurrence, CancellationToken token)
+    {
+        var row = await FindAsync(id, token);
+        if (row is null || !MatchesOccurrence(row, scope, occurrence))
+            throw new InvalidDataException("The operation requires the exact accepted schedule occurrence.");
+        return row;
     }
 
     private Task<RuntimeKernelScheduleOccurrenceEntity?> FindAsync(string id, CancellationToken token) =>
