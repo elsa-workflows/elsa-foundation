@@ -1065,8 +1065,10 @@ public sealed class Elsa3ExpressionRewriter(
         /// <summary>
         /// Whether a scope that encloses the block of the block function <paramref name="name"/> (the node whose children
         /// <see cref="Collect"/> visits, with its switch statement for a case) declares that name too, with var, let, const,
-        /// function or class, in this function or an outer one. A parameter of that name of the function whose body is
-        /// <paramref name="body"/> stops Annex B in Elsa 3 too, so then nothing differs.
+        /// function or class, in this function or an outer one, while Elsa 3's Annex B still hoisted the function: a parameter
+        /// of that name of the function whose body is <paramref name="body"/>, or a let, const or class of that name (or a
+        /// function in a block) between the block and that body, stopped the hoisting in Elsa 3 too, so then nothing differs
+        /// (FR-026: only changed behaviour is refused).
         /// </summary>
         private bool DeclaredOutsideBlock(string name, Node body)
         {
@@ -1080,6 +1082,15 @@ public sealed class Elsa3ExpressionRewriter(
                 foreach (var parameter in enclosing.Params)
                     CollectBindings(parameter, parameters);
                 if (parameters.Contains(name))
+                    return false;
+            }
+
+            // Annex B hoisted the function only where a var of its name would not clash with a lexical declaration in a
+            // scope from the block's parent up to its var scope (the body).
+            var bodyIndex = _collectPath.FindLastIndex(block, node => ReferenceEquals(node, body));
+            for (var index = Math.Max(bodyIndex, 0); index < block; index++)
+            {
+                if (LexicalNames(_collectPath[index], varScope: index == bodyIndex).Contains(name))
                     return false;
             }
 
@@ -1100,6 +1111,37 @@ public sealed class Elsa3ExpressionRewriter(
                     return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// The names a scope declares lexically, which a var of the same name in its var scope would clash with: in a var
+        /// scope (a script or function body) its top-level let, const and class declarations, whose function declarations
+        /// are var-like; in a block, switch or loop head every declaration it scopes. A catch parameter does not clash (Annex B).
+        /// </summary>
+        private static HashSet<string> LexicalNames(Node scope, bool varScope)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            if (varScope)
+            {
+                var statements = scope switch
+                {
+                    Script script => script.Body.Cast<Node>(),
+                    BlockStatement block => block.Body.Cast<Node>(),
+                    _ => [],
+                };
+                foreach (var statement in statements)
+                {
+                    if (statement is VariableDeclaration { Kind: not VariableDeclarationKind.Var } declaration)
+                        CollectLexicalDeclaration(declaration, names);
+                    else if (statement is ClassDeclaration { Id: { } classId })
+                        CollectBindings(classId, names);
+                }
+                return names;
+            }
+
+            if (scope is not CatchClause && ScopeOf(scope) is { } scoped)
+                names.UnionWith(scoped);
+            return names;
         }
 
         /// <summary>

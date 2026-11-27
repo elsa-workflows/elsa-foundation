@@ -1466,7 +1466,8 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("(() => { function outer() { if (true) { function h() {} } return () => h; } const h = 1; return outer()(); })()")]
     [InlineData("(() => { function outer() { if (true) { function h() {} } return h; } function h() {} return outer(); })()")]
     [InlineData("(() => { function outer() { if (true) { function h() {} } return h; } class h {} return outer(); })()")]
-    [InlineData("(() => { function outer() { let h = 1; { { function h() {} } return h; } } return outer(); })()")]
+    [InlineData("(() => { function outer() { var h = 1; { { function h() {} } } return h; } return outer(); })()")]
+    [InlineData("(() => { function outer() { function h() { return 1; } if (true) { function h() {} } return h; } return outer(); })()")]
     [InlineData("((h) => { function outer() { if (true) { function h() {} } return h; } return outer(); })(1)")]
     public async Task A_block_function_over_an_outer_declaration_of_its_name_is_refused_with_the_move(string expression)
     {
@@ -1478,12 +1479,39 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [Theory]
     [InlineData("function outer(c) { if (c) { function h() {} } return h; } var h = 1; return outer(true);")]
     [InlineData("function outer(c) { switch (c) { case 1: function h() {} } return h; } let h = 1; return outer(1);")]
-    [InlineData("const h = 1; if (true) { function h() {} } return h;")]
+    [InlineData("function h() { return 1; } if (true) { function h() {} } return h;")]
     public async Task A_block_function_over_an_outer_declaration_in_a_script_is_refused_with_the_move(string script)
     {
         var result = await ConvertScriptAsync(script);
 
         AssertBlockFunctionOverOuterDeclaration(result);
+    }
+
+    /// <summary>
+    /// A let, const or class of the block function's name in its enclosing body (or a block between) stopped Annex B in
+    /// Elsa 3 too: a use outside the block read that declaration in both engines, so it converts (FR-026).
+    /// </summary>
+    [Theory]
+    [InlineData("const h = 1; if (true) { function h() {} } return h;")]
+    [InlineData("let h = 1; if (true) { function h() {} } return h;")]
+    [InlineData("class h {} if (true) { function h() {} } return typeof h;")]
+    [InlineData("function outer() { let h = 1; { { function h() {} } return h; } } return outer();")]
+    public async Task A_block_function_over_a_lexical_declaration_in_its_body_in_a_script_converts(string script)
+    {
+        var result = await ConvertScriptAsync(script);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("(() => { const h = 1; if (true) { function h() {} } return h; })()")]
+    [InlineData("(() => { let h = 1; if (true) { function h() {} } return h; })()")]
+    [InlineData("(() => { function outer() { let h = 1; { { function h() {} } return h; } } return outer(); })()")]
+    public async Task A_block_function_over_a_lexical_declaration_in_its_body_converts(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
     /// <summary>A block function used only inside its block is the same function in Elsa 3 and Elsa 4, whatever an outer scope declares.</summary>
