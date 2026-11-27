@@ -67,6 +67,8 @@ public sealed partial class EfStore
         }
         else if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
             await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
+        if (postgres && db.UsesRootLiveEventWaits && waits.Count != 0)
+            await RootEventAdmission.LockPostgresKeysAsync(db, waits.Keys.Select(wait => wait.Key).Distinct(StringComparer.Ordinal).ToArray(), cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = checkedMarkTime is null };
         if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);

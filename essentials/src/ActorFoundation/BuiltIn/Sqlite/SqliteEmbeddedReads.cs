@@ -20,7 +20,8 @@ public static partial class SqliteEmbeddedHosting
     {
         public bool SupportsSequencedJournal => qualificationFormat is null
             ? TakesSequencedJournal
-            : qualificationFormat == StoreFormat.RootSequencedJournalQualification;
+            : qualificationFormat is { } format &&
+                (format == StoreFormat.RootSequencedJournalQualification || format == StoreFormat.RootLiveEventQualification);
 
         public ValueTask<Contract.ActorSequencedJournalPage?> ReadSequencedJournalAsync(Contract.BoundScope scope,
             Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit, CancellationToken cancellationToken = default) =>

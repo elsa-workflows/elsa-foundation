@@ -43,6 +43,7 @@ public sealed class HttpRouteTemplate
 
     public static HttpRouteTemplate Parse(string template)
     {
+        if (template.Contains('\0')) throw new HttpRouteTemplateException("An HTTP route template cannot contain a NUL character.");
         var trimmed = template.Trim().Trim('/');
         if (trimmed.Length == 0) return new([]);
         var parts = trimmed.Split('/');

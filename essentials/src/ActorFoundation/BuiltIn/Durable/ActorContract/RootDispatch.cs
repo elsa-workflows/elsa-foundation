@@ -17,6 +17,7 @@ internal interface IRootDispatchHeaders
     bool KeepsParkArrivals { get; }
     bool KeepsPrivateParkInputs { get; }
     bool RecoversPark { get; }
+    bool TakesLiveEventWaits => false;
     bool RefusesParkedOperators { get; }
     bool SettlesEndedMailbox { get; }
 }
@@ -75,12 +76,13 @@ internal sealed partial class ActorAdapter
         var message = recover.Message;
         var facts = message.Operator!.RootParkFacts!;
         var rearms = new List<Durable.ParkTimerRecipe>();
+        var subscriptions = new List<Durable.SubscriptionRow>();
         var reason = message.Target.Id != row.Id || row.Creation != 1 ? "target"
             : row is not { Status: Durable.InstanceStatus.Faulted, Retired: false, Suspended: false } ||
                 facts.Mark != message.Operator.RootParkMark ? "selection"
             : facts.Clearing is not null ? "clearing"
             : roots?.KeepsPrivateParkInputs == true && !facts.FitsPage ? "page"
-            : !CanRecoverRootWaits(row, facts, rearms) ? "plan" : !facts.FitsPage ? "page" : null;
+            : !CanRecoverRootWaits(row, facts, rearms, subscriptions) ? "plan" : !facts.FitsPage ? "page" : null;
         var proposed = Outcome(reason, reason is null && rearms.Count != 0 ? rearms.ToArray() : null);
         if (proposed.FoundationRootTimerRearms is { } recipes && issueSelf?.CheckTimerRearms is { } check)
             proposed.PrepareCommand = async token =>
@@ -97,6 +99,7 @@ internal sealed partial class ActorAdapter
             {
                 Expected = row.Revision, Row = next, Revision = revision, Status = next.Status, Consumed = [recover],
                 FoundationRootTimerRearms = recipes,
+                Subscribed = refusal is null ? subscriptions : [],
                 Journal = refusal is null
                     ? Durable.Json.Write(new { Outcome = "recovered", Operation = message.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
                     : Durable.Json.Write(new { Outcome = "refused", Operation = message.Id, Reason = refusal })
@@ -260,19 +263,36 @@ internal sealed partial class ActorAdapter
         return refused;
     }
 
-    private bool CanRecoverRootWaits(Durable.InstanceRow row, Durable.FoundationRootParkFacts facts, List<Durable.ParkTimerRecipe> rearms)
+    private bool CanRecoverRootWaits(Durable.InstanceRow row, Durable.FoundationRootParkFacts facts,
+        List<Durable.ParkTimerRecipe> rearms, List<Durable.SubscriptionRow> subscriptions)
     {
         if (row.Jobs != facts.RecoverableJobRegistry) return false;
         try
         {
-            var plan = actor.RestoreWaits(RootHeader(row), row.State);
-            if (plan.Subscriptions.Count != 0 || !CanRecoverTimers(row, facts, plan.Timers, plan.Jobs.Count, rearms, out var timerBytes))
+            var header = RootHeader(row);
+            var plan = actor.RestoreWaits(header, row.State);
+            if (!CanRecoverTimers(row, facts, plan.Timers, plan.Jobs.Count, rearms, out var timerBytes))
                 return false;
+            var subscriptionBytes = (long)plan.Subscriptions.Count * Durable.InMemoryStore.SubscriptionRestoreAllowance;
+            if (plan.Subscriptions.Count != 0)
+            {
+                if (roots?.TakesLiveEventWaits != true || plan.Subscriptions.Count > Durable.InMemoryStore.MaxRestoreWaits - plan.Timers.Count - plan.Jobs.Count ||
+                    timerBytes + subscriptionBytes > Durable.InMemoryStore.MaxRestoreBytes) return false;
+                var distinct = new HashSet<(string Key, string Wait)>();
+                foreach (var subscription in plan.Subscriptions)
+                {
+                    if (subscription.Keep || subscription.Key is null || subscription.Wait is null ||
+                        !Durable.FoundationMetadataLimits.FitsLiveWaitName(subscription.Key) || !Durable.FoundationMetadataLimits.FitsLiveWaitName(subscription.Wait) ||
+                        !distinct.Add((subscription.Key, subscription.Wait))) return false;
+                    subscriptions.Add(new(header.Tenant + "_" + subscription.Key, row.Id, subscription.Wait, Creation: row.Creation)
+                        { FoundationTenant = header.Tenant });
+                }
+            }
             var registered = Durable.JobRegistry.Read(row.Jobs);
             return registered.Count == 0 ? plan.Jobs.Count == 0 :
                 registered is [var job] && plan.Jobs is [var recipe] && job.Key == recipe.Key &&
                 job.Generation >= 0 && job.Generation < (row.NextJobGeneration ?? 1) &&
-                Durable.InMemoryStore.FitsSingleParkJobRecipe(row, new(recipe.Key, recipe.Arguments, recipe.Deadline), timerBytes);
+                Durable.InMemoryStore.FitsSingleParkJobRecipe(row, new(recipe.Key, recipe.Arguments, recipe.Deadline), timerBytes + subscriptionBytes);
         }
         catch (Exception) { return false; }
     }
@@ -455,7 +475,8 @@ internal sealed partial class ActorAdapter
             next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated && !faulted ||
             !SupportsSends(next) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
-            outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
+            roots?.TakesLiveEventWaits != true && (outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0) ||
+            outcome.Replied.Count != 0 ||
             // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
             // their delivery, and drops it when it holds none (Worker.Release), as the in-memory reference does.
             outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory)
