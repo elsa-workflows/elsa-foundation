@@ -1603,7 +1603,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     internal (Message Creator, Task<InlineRootResult> Receipt)? TryPlaceQualifiedInlineStart(string name, StartSpec start,
-        object material, object? issuer, RootAdmissionPressure? pressure, Func<InstanceRef, Message> bind)
+        object material, object? issuer, RootAdmissionPressure? pressure, Func<InstanceRef, Message> bind,
+        HeldRootRequest? held = null)
     {
         ArgumentNullException.ThrowIfNull(material);
         if (!_type.AcceptsQualifiedInlineStart(start, material, issuer)) return null;
@@ -1617,7 +1618,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (creator.Target != target || creator.Start is not { } bound || !ReferenceEquals(bound.Input, start.Input) ||
                 (bound with { Creation = null }) != start)
                 return null;
-            return QueueQualifiedInlineStart(creator, material, issuer) is { } receipt ? (creator, receipt) : null;
+            return QueueQualifiedInlineStart(creator, material, issuer, held) is { } receipt ? (creator, receipt) : null;
         }
     }
 
@@ -1630,7 +1631,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // Only an owner that can commit the first promotion may register a creator. Under _turnSync, keep its receipt
     // and its memory reservation until the disposition, including while the actor waits in memory.
-    private Task<InlineRootResult>? QueueQualifiedInlineStart(Message creator, object material, object? issuer)
+    private Task<InlineRootResult>? QueueQualifiedInlineStart(Message creator, object material, object? issuer, HeldRootRequest? held = null)
     {
         if (creator.Start is not { Ephemeral: true, Parent: null, Creation: { Generation: 1, Previous: 0 } creation } start ||
             creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id ||
@@ -1638,8 +1639,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             creator.Target.GeneratedAddress || StoreBatchRules.AddressPartition(creator.Target.Id) is not { } partition || partition < 0 ||
             creator.InboxKey != new InboxKey("root:" + binding.Actor) ||
             creator.Payload != start.Input || creation.Intent != FoundationRootCreator.OperationDigest(creator.Id) ||
-            creator is not { Kind: Kinds.Start, TargetCreation: 1, Sender: null, ReplyTo: null, Due: null, KeepUntil: null,
-                Operator: null, ActorAuthored: false, BindFoundationChild: false })
+            creator is not { Kind: Kinds.Start, TargetCreation: 1, Sender: null, Due: null, KeepUntil: null,
+                Operator: null, ActorAuthored: false, BindFoundationChild: false } || creator.ReplyTo != held?.Address ||
+            held is not null && (issuer is null || !held.IsOpen || held.Tenant != binding.Tenant || held.ReleaseBeforeCommit))
             return null;
         var generation = _generation;
         if (_releasing || _handingOver.Contains(partition) || !CanStartGeneration(generation) ||
@@ -1648,7 +1650,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
         // Charge the retained UTF-16 creator text once plus the bounded envelope, capture and receipt.
         // The native capture references an immutable mapped workflow shared with the registry.
-        var bytes = InlineRootCaptureOverheadBytes + 2L * (start.Input?.Length ?? 0) + 2L * start.Definition.Length;
+        var bytes = InlineRootCaptureOverheadBytes + 2L * (start.Input?.Length ?? 0) + 2L * start.Definition.Length +
+            2L * (creator.ReplyTo?.Length ?? 0);
         if (!ReferenceEquals(creator.Payload, start.Input)) bytes += 2L * (creator.Payload?.Length ?? 0);
         if (bytes > MaxPendingInlineRootBytes - _pendingInlineRootBytes) return null;
         var receipt = new TaskCompletionSource<InlineRootResult>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -4106,8 +4109,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // checkpoint lands; identity refusals have no row and must not activate that authored input.
         if (unit.Row is not null && unit.Consumed is [var completion] && _type.RevisitsHeld(unit.Row.Model, unit.Row, completion))
             foreach (var held in slot.Inbox.Where(i => i.Held && i.InboxOrder < completion.InboxOrder)) held.Held = false;
-        if (!Has(Flaw.EmitBeforeCommit)) Release(unit, release);
-        ReleaseExplicit(unit, early: false);
         if (inlineReceipt is not null)
         {
             var disposition = (unit.CreationRefused, release, unit.Row, unit.Status) switch
@@ -4119,6 +4120,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             };
             CompleteInlineRoot(unit.Instance, new(disposition, unit.Status), inlineReceipt, slot);
         }
+        if (!Has(Flaw.EmitBeforeCommit)) Release(unit, release);
+        ReleaseExplicit(unit, early: false);
         // A load, poll or gate release can encounter any of this actor's jobs while its checkpoint is busy.
         foreach (var ticket in slot.Inbox.Where(i => i.Key is not null).ToArray()) StartJob(ticket, cancellationToken);
         if (slot.Row is null && slot.Inbox.Count == 0) RemoveSlot(unit.Instance);

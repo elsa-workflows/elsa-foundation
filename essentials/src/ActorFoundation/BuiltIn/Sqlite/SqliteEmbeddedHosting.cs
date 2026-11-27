@@ -182,7 +182,8 @@ public static partial class SqliteEmbeddedHosting
             try
             {
                 await runtime.StartAsync(host, cancellationToken);
-                inlineStarts?.Attach(store, host.NodeWorker ?? throw new InvalidOperationException("Inline starts need an owned Worker."), runtime.WakeLocal);
+                inlineStarts?.Attach(store, host.NodeWorker ?? throw new InvalidOperationException("Inline starts need an owned Worker."),
+                    runtime.WakeLocal, requests?.HeldEdge);
                 return runtime;
             }
             catch

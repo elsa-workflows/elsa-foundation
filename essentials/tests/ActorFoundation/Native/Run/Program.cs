@@ -66,6 +66,8 @@ if (args is ["ephemeral-test-run-profile", var ephemeralTestRunProvider and ("po
     return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(ephemeralTestRunProvider == "postgres", ProfileCapabilityChecks.TestRunProfile.Ephemeral);
 if (args is ["attached-test-run-profile", var attachedTestRunProvider and ("postgres" or "sqlite")])
     return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(attachedTestRunProvider == "postgres", ProfileCapabilityChecks.TestRunProfile.Attached);
+if (args is ["held-ephemeral-http-profile", var heldEphemeralProvider and ("postgres" or "sqlite")])
+    return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(heldEphemeralProvider == "postgres", ProfileCapabilityChecks.TestRunProfile.HeldEphemeralHttp);
 if (args is ["qualified-inline-root-core"]) return await QualifiedInlineRootCoreChecks.RunAsync();
 if (args is ["inline-root-promotion", var inlineProvider and ("postgres" or "sqlite"), var inlineFence and ("checked" or "in-batch")])
     return await InlineRootPromotionChecks.RunAsync(inlineProvider == "postgres", inlineFence == "in-batch");

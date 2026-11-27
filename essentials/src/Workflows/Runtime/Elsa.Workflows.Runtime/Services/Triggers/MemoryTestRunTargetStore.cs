@@ -189,7 +189,8 @@ internal sealed class MemoryTestRunTargetStore(TimeProvider timeProvider) : ITes
     {
         var dispatch = result.Dispatch;
         var projection = new WorkflowExecutionStartDispatchResult(dispatch.WorkflowExecutionId, dispatch.PinnedExecutable,
-            dispatch.CommandDispatch, dispatch.Agent, dispatch.PinnedSource) { TestRunHttpReply = reply };
+            dispatch.CommandDispatch, dispatch.Agent, dispatch.PinnedSource)
+            { TestRunHttpReply = reply, TestRunCompletedWithoutRecord = dispatch.TestRunCompletedWithoutRecord };
         return result with { Dispatch = projection };
     }
 }

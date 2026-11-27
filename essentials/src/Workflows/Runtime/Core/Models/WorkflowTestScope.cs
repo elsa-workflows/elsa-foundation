@@ -129,6 +129,9 @@ public sealed record WorkflowTestScopeRecord
     public WorkflowTestRunActorBinding? IsolatedActor { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowTestRunInlineState? InlineStart { get; init; }
+    /// <summary>The exact reservation used for a held inline attempt.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? HeldInlineAttempt { get; init; }
 }
 
 public sealed record WorkflowTestScopeCloseRequest
@@ -263,7 +266,8 @@ public static class WorkflowTestScopeTransitions
             WorkflowTestScopeState.Closing,
             existing.CreatedAt,
             request.RequestedAt,
-            closeReason: request.Reason) { IsolatedActor = existing.IsolatedActor, InlineStart = existing.InlineStart };
+            closeReason: request.Reason)
+            { IsolatedActor = existing.IsolatedActor, InlineStart = existing.InlineStart, HeldInlineAttempt = existing.HeldInlineAttempt };
         return new WorkflowTestScopeCloseResult(WorkflowTestScopeCloseDisposition.Accepted, closing);
     }
 
@@ -281,6 +285,7 @@ public static class WorkflowTestScopeTransitions
             existing.CreatedAt,
             existing.ClosingAt,
             completedAt,
-            existing.CloseReason) { IsolatedActor = existing.IsolatedActor, InlineStart = existing.InlineStart };
+            existing.CloseReason)
+            { IsolatedActor = existing.IsolatedActor, InlineStart = existing.InlineStart, HeldInlineAttempt = existing.HeldInlineAttempt };
     }
 }
