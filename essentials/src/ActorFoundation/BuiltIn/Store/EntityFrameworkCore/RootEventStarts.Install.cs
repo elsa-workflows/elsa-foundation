@@ -88,7 +88,8 @@ internal static partial class RootEventStarts
         {
             if (createPublicAuthority)
                 await db.Database.ExecuteSqlRawAsync($"""
-                    CREATE TABLE "{RootPublicEventDispatch.Table}" ({RootPublicEventDispatch.Columns(sqlite: false)})
+                    CREATE TABLE "{RootPublicEventDispatch.Table}" ({RootPublicEventDispatch.Columns(sqlite: false)});
+                    CREATE INDEX "{RootPublicEventStarts.PendingTargetIndex}" ON "{RootPublicEventStarts.Targets}" {RootPublicEventStarts.PendingTargetColumns};
                     """, token);
             else
                 await db.Database.ExecuteSqlRawAsync("""
@@ -144,7 +145,8 @@ internal static partial class RootEventStarts
 
         if (dispatch)
             await db.Database.ExecuteSqlRawAsync($"""
-                CREATE TABLE "{publicDispatch}" ({RootPublicEventDispatch.Columns(sqlite: false)})
+                CREATE TABLE "{publicDispatch}" ({RootPublicEventDispatch.Columns(sqlite: false)});
+                CREATE INDEX "{publicTargets}_p" ON "{publicTargets}" {RootPublicEventStarts.PendingTargetColumns};
                 """, token);
 
         var same = await db.Database.SqlQuery<bool>($"""

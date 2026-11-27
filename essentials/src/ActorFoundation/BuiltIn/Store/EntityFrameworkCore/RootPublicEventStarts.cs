@@ -14,6 +14,8 @@ internal static partial class RootPublicEventStarts
     internal const string Source = "/*public-event-start-source*/";
     internal const string CatchUpIndex = "IX_FoundationPublicEventStarts_CatchUp";
     internal const string CatchUpColumns = """("Tenant","Key","Wait") WHERE "CatchAfter" < "CatchThrough" """;
+    internal const string PendingTargetIndex = "IX_FoundationPublicEventTargets_Pending";
+    internal const string PendingTargetColumns = """("Tenant", "Publication", "Wait") WHERE "Reference" IS NULL """;
 
     internal static string RegistrationColumns(bool sqlite)
     {

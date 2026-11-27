@@ -5,7 +5,7 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private ValueTask<Committed> CommitRootPublicationAsync(CommitBatch batch, long sentAt, CancellationToken token)
+    private async ValueTask<Committed> CommitRootPublicationAsync(CommitBatch batch, long sentAt, CancellationToken token)
     {
         if (_ordinaryRoots is not { PagesPublicEvents: true } || !OwnedCommit || batch.Fenced is not [var fence])
             throw PublicationShape();
@@ -17,7 +17,11 @@ public sealed partial class EfStore
             : RootPublicationCheckpoint.ForTurn(fence, batch.Turns.Single());
         if (work.Key is not { Scope: RootPublicEventTicket.Scope, Match: null } || work.Sequence <= 0 || work.Attempts < 0)
             throw PublicationShape();
-        return CommitAsync(batch with { HandOver = false, Trial = [], Turns = [], PublicationReservation = null }, work, sentAt, token);
+        var committed = await CommitAsync(batch with { HandOver = false, Trial = [], Turns = [], PublicationReservation = null },
+            work, sentAt, token);
+        if (committed.Landed && work.Exhausted == false)
+            KernelMetrics.Add(KernelMetrics.EventTicketFailures, 1, new("kind", "publish"));
+        return committed;
     }
 
     private sealed record RootPublicationCheckpoint(PartitionFence Fence, InboxKey Key, long Sequence, int Attempts,
