@@ -73,7 +73,8 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
     internal async ValueTask<(string TypeData, string? State, ActorStatus Status)?> ReadCommittedStateAsync(BoundScope scope,
         ActorRef actor, CancellationToken cancellationToken)
     {
-        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
+        ArgumentNullException.ThrowIfNull(scope);
+        if (!scope.IsHostIsolated || !PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
         var read = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken, requireIsolatedTestRunProfile: true);
         return read is { } found ? (found.TypeData, found.State, (ActorStatus)found.Status) : null;
     }

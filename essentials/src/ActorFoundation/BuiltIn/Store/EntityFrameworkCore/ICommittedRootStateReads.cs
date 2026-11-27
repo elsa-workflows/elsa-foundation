@@ -4,7 +4,7 @@ namespace Kernel.Foundation.Hosting;
 
 /// <summary>Reads a committed root checkpoint for host-owned isolated TestRun controls.</summary>
 /// <remarks>The caller must authorize the scope and verify the returned start against the exact TestRun.
-/// Providers without the isolated TestRun profile return no checkpoint.</remarks>
+/// Ordinary scopes and providers without the isolated TestRun profile return no checkpoint.</remarks>
 public interface ICommittedRootStateReads
 {
     /// <summary>Reads the exact checkpoint addressed by the supplied scope and actor reference.</summary>

@@ -32,6 +32,6 @@ public static class EmbeddedTenant
             throw new ArgumentException("The configured tenant uses the private actor namespace.", nameof(configured));
         var identity = Encoding.UTF8.GetBytes($"{configured.Tenant}/{purpose}");
         var digest = SHA256.HashData(identity);
-        return new BoundScope(IsolatedPrefix + Convert.ToHexStringLower(digest.AsSpan(0, 25)));
+        return new BoundScope(IsolatedPrefix + Convert.ToHexStringLower(digest.AsSpan(0, 25)), isHostIsolated: true);
     }
 }
