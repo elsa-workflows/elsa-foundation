@@ -105,9 +105,6 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             source.ArtifactVersion, KernelPublishedRunDispatcher.SourceDigest(source), subject);
         var native = NativeExecutionModel.Start(workflow.Id, mode.ToString(), input, request.TriggerNodeId, stimulus, workflow.Definition)
             with { ExecutableSelection = workflow.ExecutableSelection };
-        if (triggered && stimulus is null)
-            native = native with { Input = JsonSerializer.Serialize(new NativeStart(mode.ToString(), input, request.TriggerNodeId)
-                { SelectedTestTrigger = true }) };
         var spec = WorkflowActor.Start(native, null, selection);
         if (http && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync")
         {
