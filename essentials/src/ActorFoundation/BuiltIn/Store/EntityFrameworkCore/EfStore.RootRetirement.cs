@@ -265,7 +265,7 @@ public sealed partial class EfStore
                         "KeepUntil" = floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {Command.Operator!.RootParkWindow!.Value}
                     WHERE "Id" = ANY({ids}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND "InboxScope" = -4 AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" IS NOT NULL
-                    """, token) == ids.Length;
+                    """, token) == ids.Length && await AbandonParkPublicationsAsync(db, Root, token);
             }
         }
     }

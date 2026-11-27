@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
-using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
@@ -42,22 +41,12 @@ public sealed partial class EfStore
     private static async Task<bool> AbandonParkPublicationsAsync(KernelDb db, WorkerRoot root, CancellationToken token)
     {
         if (!db.UsesRootPagedPublicEvents) return true;
-        foreach (var row in await ReadParkPublicationsAsync(db, root, token))
-        {
-            var ticket = row.Decode();
-            if (!ticket.Initial && await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "FoundationPublicEventDispatch" SET "Status" = {(int)Contract.PublicationStatus.DeadLettered}
-                    WHERE "Occurrence" = {ticket.Occurrence} AND "Ticket" = {ticket.Id} AND "Target" = {root.Actor}
-                        AND "Partition" = {root.Partition} AND "Status" = {(int)Contract.PublicationStatus.Pending}
-                    """, token) != 1) return false;
-            if (await ChangeParkPublicationAsync(db, row, """
-                    "FoundationKeptBy" = NULL, "Payload" = NULL, "Start" = NULL, "KeepUntil" = 0
-                    """, token) != 1) return false;
-        }
-        return true;
+        var rows = await ReadParkPublicationsAsync(db, root, token);
+        return rows is not [var row] ||
+            await row.Decode().DeadLetterAuthoredAsync(db, row.Seq, row.Attempts, fromPark: true, bind: null, token);
     }
 
-    private sealed record KeptPublication(string Id, string Target, int Partition, long Seq, string Start, string? Payload)
+    private sealed record KeptPublication(string Id, string Target, int Partition, long Seq, int Attempts, string Start, string? Payload)
     {
         internal RootPublicEventTicket Decode() => RootPublicEventTicket.Decode(new MessageEntity
         {
@@ -69,9 +58,10 @@ public sealed partial class EfStore
     private static async Task<List<KeptPublication>> ReadParkPublicationsAsync(KernelDb db, WorkerRoot root, CancellationToken token)
     {
         var rows = await db.Database.SqlQuery<KeptPublication>($"""
-            SELECT "Id", "Target", "Partition", "Seq", "Start", "Payload"
+            SELECT "Id", "Target", "Partition", "Seq", "Attempts", "Start", "Payload"
             FROM "Messages" WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "InboxScope" = {RootPublicEventTicket.Scope}
                 AND "Kind" = {Kinds.Publish} AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+            LIMIT 2
             """).ToListAsync(token);
         if (rows.Count > 1 || rows.Any(row => row.Decode().Author?.Tenant != root.Tenant)) throw PublicationShape();
         return rows;

@@ -72,11 +72,11 @@ public sealed partial class EfStore
                 return await ChangeTicketAsync(RootPublicEventTicket.Change.Reserve, Fence.Epoch);
             if (Exhausted == false)
                 return await ChangeTicketAsync(RootPublicEventTicket.Change.RecordFailure, Fence.Epoch);
+            if (Exhausted == true && ticket.Author is not null)
+                return await ticket.DeadLetterAuthoredAsync(db, Sequence, Attempts, fromPark: false, _bind, token);
 
             if (ticket.Initial)
             {
-                if (Exhausted == true)
-                    return await ChangeTicketAsync(RootPublicEventTicket.Change.Settle, epoch: null);
                 await RequireWindowAsync();
                 var author = ticket.Author!;
                 var accepted = author.AcceptedAt!.Value;

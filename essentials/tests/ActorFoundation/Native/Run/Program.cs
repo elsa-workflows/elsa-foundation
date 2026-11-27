@@ -125,6 +125,8 @@ if (args is ["kernel-paged-authored-event", var pagedAuthoredProvider and ("post
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedAuthoredProvider, pagedAuthoredFence == "in-batch", authored: true);
 if (args is ["kernel-paged-authored-park", var pagedParkProvider and ("postgres" or "sqlite"), var pagedParkFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedParkProvider, pagedParkFence == "in-batch", parkPublication: true);
+if (args is ["kernel-paged-authored-dead-letter", var deadLetterProvider and ("postgres" or "sqlite"), var deadLetterFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedAuthoredDeadLettersAsync(deadLetterProvider, deadLetterFence == "in-batch");
 if (args is ["kernel-physical-event-pages", var eventPageProvider and ("postgres" or "sqlite"), var eventPageFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(eventPageProvider, eventPageFence == "in-batch", physicalPages: true);
 if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])
