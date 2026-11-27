@@ -316,7 +316,7 @@
   `exportedTo`. It leaves out refused and blocked
   definitions. It always creates `migrated/workflows/` and always writes `migrated/activities/activities.json`, as
   `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.
-- [ ] T023 [US4] Add the output swap: write to a hidden `.staging-<guid>` folder inside `--out`, rename `report.json`,
+- [x] T023 [US4] Add the output swap: write to a hidden `.staging-<guid>` folder inside `--out`, rename `report.json`,
   `report.html` and `migrated/` into place last, and touch no other file. A failed run removes the staging folder and
   leaves the previous output intact. Test both paths, and test it again in the T034 smoke run.
 - [ ] T024 [US4] Add the loadability test (SC-004). Compose the migration host's committed composition in-process, with
