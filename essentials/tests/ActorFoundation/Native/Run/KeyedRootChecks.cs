@@ -71,21 +71,24 @@ internal static class KeyedRootChecks
                 .Select(FoundationRootCreator.OperationDigest)),
                 "exactly three operations persist as digests with no raw caller token");
 
-            await using var owner = await fixture.StartAsync(token);
-            var running = await UntilAsync(async () => await fixture.Reads.GetAsync(scope, reference, token), actor =>
-                actor is { Header.Status: Contract.ActorStatus.Finished });
-            var journal = await fixture.Reads.TailAsync(scope, reference, cancellationToken: token);
-            Require(journal.Items.Count(item => item.Entry.Contains("first", StringComparison.Ordinal)) == 1 &&
-                journal.Items.Count(item => item.Entry.Contains("second", StringComparison.Ordinal)) == 1,
-                "the normal owner consumes the keyed creator and each keyed occurrence once");
+            await using (var owner = await fixture.StartAsync(token))
+            {
+                var running = await UntilAsync(async () => await fixture.Reads.GetAsync(scope, reference, token), actor =>
+                    actor is { Header.Status: Contract.ActorStatus.Finished });
+                var journal = await fixture.Reads.TailAsync(scope, reference, cancellationToken: token);
+                Require(journal.Items.Count(item => item.Entry.Contains("first", StringComparison.Ordinal)) == 1 &&
+                    journal.Items.Count(item => item.Entry.Contains("second", StringComparison.Ordinal)) == 1,
+                    "the normal owner consumes the keyed creator and each keyed occurrence once");
 
-            var delete = JsonSerializer.Serialize(new Contract.OperatorCommand(running!.Selection, ExpectedTarget: reference));
-            var removed = await SendAsync(scope, new Contract.Target.Ref(reference), "delete", Contract.Kinds.Delete, delete);
-            Require(removed.Outcome == Contract.AdmissionOutcome.Accepted, "the keyed root uses the normal exact-delete route");
-            await UntilAsync(async () => await fixture.Reads.GetAsync(scope, reference, token), actor => actor is null);
-            await VerifyReuseAsync();
-            await VerifyHeldAsync();
-            await VerifyParkArrivalAsync();
+                var delete = JsonSerializer.Serialize(new Contract.OperatorCommand(running!.Selection, ExpectedTarget: reference));
+                var removed = await SendAsync(scope, new Contract.Target.Ref(reference), "delete", Contract.Kinds.Delete, delete);
+                Require(removed.Outcome == Contract.AdmissionOutcome.Accepted, "the keyed root uses the normal exact-delete route");
+                await UntilAsync(async () => await fixture.Reads.GetAsync(scope, reference, token), actor => actor is null);
+                await VerifyReuseAsync();
+                await VerifyHeldAsync();
+                await VerifyParkArrivalAsync();
+            }
+            await VerifyMissingAuthorityAsync();
             return 0;
 
             Task<Contract.Admission> SendAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind, string? payload = null) =>
@@ -226,6 +229,24 @@ internal static class KeyedRootChecks
                     "Recover releases the keyed arrival to the same life once");
             }
 
+            async Task VerifyMissingAuthorityAsync()
+            {
+                var before = await ReadInstalledFormatAsync();
+                await db.Database.ExecuteSqlRawAsync("""DROP TABLE "FoundationKeyReceipts" """, token);
+                await ExpectAsync<StoreFormatException>(() => fixture.ReinstallAsync(token),
+                    postgres ? "missing an authoritative binding or receipt table" : "installed SQLite store definitions differ");
+                var stillMissing = postgres
+                    ? await db.Database.SqlQueryRaw<bool>("""SELECT pg_catalog.to_regclass('"FoundationKeyReceipts"') IS NULL AS "Value" """).SingleAsync(token)
+                    : await db.Database.SqlQueryRaw<bool>("""
+                        SELECT NOT EXISTS (SELECT 1 FROM main.sqlite_schema WHERE name = 'FoundationKeyReceipts') AS "Value"
+                        """).SingleAsync(token);
+                Require(stillMissing && before == db.RequiredFormat && await ReadInstalledFormatAsync() == before,
+                    "reinstallation refuses a missing receipt table on an initialized keyed store");
+
+                async Task<StoreFormat> ReadInstalledFormatAsync() =>
+                    (await db.StoreVersions.AsNoTracking().SingleAsync(row => row.Id == StoreVersionEntity.MarkerId, token)).Format;
+            }
+
             async Task<Contract.Reply> RequestAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind,
                 string? payload = null, int timeoutMs = 4_000) =>
                 await fixture.Ingress.RequestAsync(tenant, target, id, kind, payload, keep,
@@ -245,7 +266,7 @@ internal static class KeyedRootChecks
     }
 
     private sealed record Fixture(Func<KernelDb> Open, Contract.IIngress Ingress, Contract.IActorReads Reads,
-        Func<CancellationToken, ValueTask<long>> ReadClockAsync,
+        Func<CancellationToken, ValueTask<long>> ReadClockAsync, Func<CancellationToken, Task> ReinstallAsync,
         Func<CancellationToken, Task<IAsyncDisposable>> StartAsync);
 
     private sealed record KeyedImage(long Creation, long Generation, string KeyActor, string Actor, int Partition, string Creator,
@@ -264,6 +285,16 @@ internal static class KeyedRootChecks
             KernelDb Open() => PostgresPreviewHosting.CreateKeyedStartsQualificationContext(options);
             await using (var empty = Open())
                 Require(await PostgresFixtureDatabase.IsEmptyAsync(empty, token), "the keyed fixture requires a fresh PostgreSQL store");
+            if (inBatch)
+            {
+                await new EfStore(Open, postgres: true).CreateAsync();
+                await using var interrupted = Open();
+                await EfStore.RequireStoreVersionsAsync(interrupted, token);
+                Require(await interrupted.Database.SqlQueryRaw<bool>("""
+                    SELECT pg_catalog.to_regclass('"FoundationRootIssuer"') IS NULL
+                        AND pg_catalog.to_regclass('"FoundationKeyReceipts"') IS NULL AS "Value"
+                    """).SingleAsync(token), "an interrupted base install only seeded the exact format");
+            }
             await PostgresPreviewHosting.InstallKeyedStartsQualificationAsync(options, token);
             var requests = PostgresPreviewHosting.CreateRequests(Open, Node, ActorType);
             KernelDb OpenSeparately() => PostgresPreviewHosting.CreateKeyedStartsQualificationContext(options);
@@ -290,7 +321,9 @@ internal static class KeyedRootChecks
             Require(true, "the PostgreSQL facade rejects a crossed keyed request edge or profile");
             var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, ActorType, Authorize, requests,
                 cancellationToken: token);
-            return new(Open, foundation, foundation, requests.ReadClockAsync, async ct => await PostgresPreviewHosting.StartAsync(Open, Node, new Probe(),
+            return new(Open, foundation, foundation, requests.ReadClockAsync,
+                ct => PostgresPreviewHosting.InstallKeyedStartsQualificationAsync(options, ct),
+                async ct => await PostgresPreviewHosting.StartAsync(Open, Node, new Probe(),
                 EndProcess, options: null, cancellationToken: ct, onFault: null, replies: requests, fenceInBatch: inBatch));
         }
 
@@ -304,7 +337,7 @@ internal static class KeyedRootChecks
         var sqliteOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
             { DataSource = file, ForeignKeys = true, Pooling = false }.ToString()).Options;
         return new(() => KernelDb.ForSqliteRootShipped(sqliteOptions, StoreFormat.RootKeyedStartsQualification), ingress, sqlite.CreateReads(),
-            sqlite.ReadClockAsync,
+            sqlite.ReadClockAsync, sqlite.InstallShippedAsync,
             async ct =>
             {
                 var owner = sqlite.CreateHostedService(new Probe(), EndProcess, fenceInBatch: inBatch);

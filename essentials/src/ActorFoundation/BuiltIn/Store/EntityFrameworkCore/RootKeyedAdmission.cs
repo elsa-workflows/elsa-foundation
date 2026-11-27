@@ -11,6 +11,7 @@ internal static class RootKeyedAdmission
     internal const string BindingTable = "FoundationKeyBindings";
     internal const string ReceiptTable = "FoundationKeyReceipts";
     internal const string Source = "/*key-source*/";
+    private const int AuthorityMarkerId = 3;
 
     internal sealed record Request(string Tenant, string Key, string Operation, string Kind, string? Payload,
         StartSpec? Start, long? Due, long Window);
@@ -20,6 +21,7 @@ internal static class RootKeyedAdmission
     internal sealed record Life(InstanceRef Address, long Generation, string Reference);
     private sealed record Receipt(bool SourceReady, string? Fingerprint, long? Generation, string? Reference);
     private sealed record Predecessor(bool SourceReady, bool Retired, bool HasCascadeObligation);
+    private sealed record PostgresInstallState(bool Bindings, bool Receipts, bool RootSchema, bool AuthorityMarker);
 
     internal static string BindingColumns(bool sqlite) => $$"""
         "Tenant" text {{Collation(sqlite)}} NOT NULL,
@@ -44,17 +46,37 @@ internal static class RootKeyedAdmission
 
     private static string Collation(bool sqlite) => sqlite ? "COLLATE BINARY" : """ COLLATE "C" """;
 
-    internal static async Task InstallPostgresAsync(KernelDb db, CancellationToken token)
+    // The base format marker is seeded before the root install starts. The authority marker commits with the keyed
+    // tables; existing root relations also identify an initialized store from before the authority marker was added.
+    internal static async Task<bool> MayCreatePostgresAuthorityAsync(KernelDb db, CancellationToken token)
+    {
+        var state = await db.Database.SqlQuery<PostgresInstallState>($"""
+            SELECT pg_catalog.to_regclass('"FoundationKeyBindings"') IS NOT NULL AS "Bindings",
+                pg_catalog.to_regclass('"FoundationKeyReceipts"') IS NOT NULL AS "Receipts",
+                (pg_catalog.to_regclass('"FoundationRootIssuer"') IS NOT NULL OR
+                    pg_catalog.to_regclass('"FoundationRootBirths"') IS NOT NULL OR
+                    pg_catalog.to_regclass('"FoundationRootReceipts"') IS NOT NULL) AS "RootSchema",
+                EXISTS (SELECT 1 FROM "KernelStoreVersions" WHERE "Id" = {AuthorityMarkerId}) AS "AuthorityMarker"
+            """).SingleAsync(token);
+        if (state is { Bindings: true, Receipts: true }) return false;
+        if (state is { Bindings: false, Receipts: false, RootSchema: false, AuthorityMarker: false }) return true;
+        throw new StoreFormatException("The initialized PostgreSQL caller-key store is missing an authoritative binding or receipt table.");
+    }
+
+    internal static async Task InstallPostgresAsync(KernelDb db, bool createAuthority, CancellationToken token)
     {
         var transaction = db.Database.CurrentTransaction ?? throw new InvalidOperationException("Caller-key definitions require the install transaction.");
-        await db.Database.ExecuteSqlRawAsync(RenderPostgresTables(BindingTable, ReceiptTable, "IF NOT EXISTS "), token);
+        if (createAuthority)
+            await db.Database.ExecuteSqlRawAsync(RenderPostgresTables(BindingTable, ReceiptTable), token);
+        else
+            await db.Database.ExecuteSqlRawAsync("""LOCK TABLE "FoundationKeyBindings", "FoundationKeyReceipts" IN ACCESS SHARE MODE""", token);
         // PostgreSQL renders both schemas from the same DDL, including the indexes that implement primary and unique keys.
         var suffix = Guid.NewGuid().ToString("N");
         var twinBinding = BindingTable + "_" + suffix;
         var twinReceipt = ReceiptTable + "_" + suffix;
         const string savepoint = "kernel_keyed_definition_twin";
         await transaction.CreateSavepointAsync(savepoint, token);
-        await db.Database.ExecuteSqlRawAsync(RenderPostgresTables(twinBinding, twinReceipt, ""), token);
+        await db.Database.ExecuteSqlRawAsync(RenderPostgresTables(twinBinding, twinReceipt), token);
         var valid = await db.Database.SqlQuery<bool>($"""
             WITH relation(layout, installed, oid) AS (
                 VALUES ('binding', true, pg_catalog.to_regclass('"FoundationKeyBindings"')),
@@ -87,11 +109,17 @@ internal static class RootKeyedAdmission
             """).SingleAsync(token);
         await transaction.RollbackToSavepointAsync(savepoint, token);
         if (!valid) throw new StoreFormatException("The installed PostgreSQL caller-key tables or indexes differ from the profile definitions.");
+        var format = db.RequiredFormat;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")
+            VALUES ({AuthorityMarkerId}, {format.StoreSchema}, {format.MessageProtocol}, {format.JournalCodec})
+            ON CONFLICT ("Id") DO NOTHING
+            """, token);
     }
 
-    private static string RenderPostgresTables(string bindings, string receipts, string createGuard) => $$"""
-        CREATE TABLE {{createGuard}}"{{bindings}}" ({{BindingColumns(sqlite: false)}});
-        CREATE TABLE {{createGuard}}"{{receipts}}" ({{ReceiptColumns(sqlite: false, bindings)}});
+    private static string RenderPostgresTables(string bindings, string receipts) => $$"""
+        CREATE TABLE "{{bindings}}" ({{BindingColumns(sqlite: false)}});
+        CREATE TABLE "{{receipts}}" ({{ReceiptColumns(sqlite: false, bindings)}});
         """;
 
     internal static Request? Prepare(string tenant, Contract.Target.Key target, string id, string kind, string? payload, long? due,
