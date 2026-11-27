@@ -157,6 +157,18 @@ another node, started again. So during a rolling deploy an occurrence that falls
 new node and start twice, and an old node that crashes mid-fire still loses its occurrence. Roll every node
 that runs the recurring-trigger pump before relying on the guarantee, or stop the pump on old nodes first.
 
+### Managed kernel qualification
+
+The built-in managed Timer and Cron owner has only written schedule state in the private qualification
+profile. The shared Actor Foundation profile has no managed schedule controls or lineage. Direct
+schedule adapters keep their logical publication claims and their existing scheduling behavior.
+
+Run managed qualification on fresh Foundation and Runtime stores when moving from an earlier private
+build. Its existing managed controls and armed timers have no continuity stamp. Carrying a due
+occurrence requires a stamped original control and the first compatible successor's cutover, measured
+by the bound Foundation provider clock after the Runtime slot write. Existing legacy recurring cursors
+remain owned by the recurring-trigger pump.
+
 ## Known limits
 
 - **Atomic timer registration (proposed).** Registering the timer via a post-commit

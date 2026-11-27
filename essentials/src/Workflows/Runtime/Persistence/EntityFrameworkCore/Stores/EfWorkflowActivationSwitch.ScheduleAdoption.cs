@@ -56,9 +56,9 @@ public sealed partial class EfWorkflowActivationSwitch
 
             if (repair && await StageRepairAsync(scope, plan, cancellationToken)) return Step.Moved<bool>();
             await _bindings.StageScheduleAdoptionAsync(scope, plan.ActivationId, desired, cancellationToken);
-            await StageReservationsAsync(slot, cancellationToken, desired, repair);
+            var afterSave = await StageReservationsAsync(slot, cancellationToken, desired, repair, slotFenced: true);
             if (!effectiveSource.IsLive(_timeProvider.GetUtcNow())) return Step.Discard(false);
-            return Step.Commit(true);
+            return Step.Commit(true, afterSave);
         }, cancellationToken, retryStageConflicts: true);
     }
 }

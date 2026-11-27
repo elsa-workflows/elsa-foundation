@@ -713,7 +713,8 @@ public sealed class KernelActivationCoordinator(
         string activationId, DateTimeOffset createdAt) =>
         schedules.RequiresPublicationClaims
             ? plan.State.Schedules.All.Where(schedule => schedule.Workflow == identity.ArtifactId)
-                .Select(schedule => KernelScheduleClaim.Create(identity, activationId, plan.SlotId, schedule, createdAt))
+                .Select(schedule => KernelScheduleClaim.Create(identity, activationId, plan.SlotId, schedule, createdAt,
+                    managed: schedules is RuntimeManagedScheduleActors))
                 .ToArray()
             : [];
 

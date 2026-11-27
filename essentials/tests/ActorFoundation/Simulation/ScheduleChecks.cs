@@ -227,6 +227,7 @@ internal static class ScheduleChecks
         check((await Runs("tick")).Running == 0 && (await Runs("flow-tick")).Running == 0 && (await Runs("cron-tick")).Running == 0 && (await Runs("deep-start")).Running == 0, "every scheduled run finished");
         await ManagedOccurrences(check);
         await RecoverManagedOffer(check);
+        await RepublishManagedSchedule(check);
     }
 
     private static async Task ManagedOccurrences(Action<bool, string> check)
@@ -356,6 +357,72 @@ internal static class ScheduleChecks
         await driver.PassAll(6);
         check(acceptor.Offered.Count == 6 && (await driver.Reads.GetAsync(scope, reference))?.Header.Status == Contract.ActorStatus.Cancelled,
             "Terminate ends a managed actor with a future arm and the timer cannot offer afterward");
+    }
+
+    private static async Task RepublishManagedSchedule(Action<bool, string> check)
+    {
+        var acceptor = new RepublishAcceptor();
+        var actor = new ObservedSchedule(new ScheduleActor(null, acceptor));
+        await using var driver = new ContractWorkload.InMemoryDriver(4, Flaw.None,
+            new PublicWorkflow([new NativeExecutionModel(Registry())]), alsoTypes: [actor]);
+        var scope = ContractScopes.Bind("republished-schedule");
+        await driver.TakeAll();
+        var initial = new ScheduleHeader(new(RecurringSchedule.Interval, "PT10S"), "unused", 1)
+        {
+            Authority = "initial", Continuity = "compatible", Cutover = driver.Now
+        };
+        var born = await driver.Ingress.SendAsync(scope, new Contract.Target.Key("republished", new(actor.Type,
+            JsonSerializer.Serialize(initial))), "republished-birth", ScheduleActor.SetKind);
+        var target = new Contract.Target.Ref(born.Actor!.Value);
+        await driver.PassAll(4);
+        var pending = actor.Plans.Last().Timers.Single();
+
+        await Publish(initial with { Authority = "compatible-replacement", Revision = 2, Cutover = pending.Due });
+        check(actor.Plans.Last().Timers.Single() == pending,
+            "a compatible publication at the recorded due time keeps the original authenticated timer and recovery recipe");
+        driver.Advance(pending.Due - driver.Now + 40_000);
+        await driver.TakeOver();
+        await driver.PassAll(8);
+        var offer = acceptor.Offered.Single();
+        var next = actor.Plans.Last().Timers.Single();
+        check(offer is { ArmGeneration: 1, Authority: "initial" } && offer.TimerDeliveryId == pending.Id &&
+              offer.DueAtUnixMilliseconds == pending.Due && next.Due > driver.Now + 9_000,
+            "the original timer is offered once after takeover, and no intervening occurrence is replayed");
+
+        var futureCutover = driver.Now;
+        await Publish(initial with { Authority = "early-replacement", Revision = 3, Cutover = futureCutover });
+        var reset = actor.Plans.Last().Timers.Single();
+        check(reset.Id != next.Id && reset.Due == futureCutover + 10_000,
+            "a compatible republish before the old timer was due computes its own first due time from cutover");
+
+        await Publish(initial with { Schedule = new(RecurringSchedule.Interval, "PT20S"), Authority = "changed", Revision = 4,
+            Continuity = "changed-trigger", Cutover = reset.Due });
+        var changed = actor.Plans.Last().Timers.Single();
+        check(changed.Id != reset.Id && changed.Due == reset.Due + 20_000,
+            "a changed trigger disarms the old timer even when it was due at cutover");
+        await driver.Ingress.SendAsync(scope, target, "republished-stop", ScheduleActor.StopKind, JsonSerializer.Serialize(new ScheduleStop(5)));
+        await driver.PassAll(4);
+        driver.Advance(changed.Due - driver.Now + 10_000);
+        await driver.TakeOver();
+        await driver.PassAll(8);
+        check(acceptor.Offered.Count == 1 && actor.Plans.Last().Timers.Count == 0, "Stop revokes the active timer and leaves no recurring redelivery");
+
+        async Task Publish(ScheduleHeader header)
+        {
+            await driver.Ingress.SendAsync(scope, target, "republish-" + header.Revision, ScheduleActor.SetKind, JsonSerializer.Serialize(header));
+            await driver.PassAll(4);
+        }
+    }
+
+    private sealed class RepublishAcceptor : IScheduleOccurrenceAcceptor
+    {
+        public ConcurrentQueue<ScheduleOccurrence> Offered { get; } = new();
+
+        public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken)
+        {
+            Offered.Enqueue(occurrence);
+            return ValueTask.FromResult(true);
+        }
     }
 
     private static async Task CheckForeignJob(ObservedSchedule actor, Contract.JobSpec recipe, ScheduleOccurrence offer, ManagedAcceptor acceptor, Action<bool, string> check)
