@@ -13,11 +13,9 @@ using global::Nuplane.Abstractions;
 using global::Nuplane.Admin;
 using global::Nuplane.Builder;
 using global::Nuplane.Feeds.Configuration;
-using global::Nuplane.Feeds.Registration;
-using global::Nuplane.Loading.Hosting.Builder;
+using global::Nuplane.Loading;
 using global::Nuplane.Reconciliation.LockFile;
 using global::Nuplane.Sources.Directory.Builder;
-using global::Nuplane.Sources.Directory.Configuration;
 using global::Nuplane.Store.State;
 
 namespace Elsa.Studio.Hosting.Nuplane;
@@ -65,7 +63,6 @@ public static class NuplaneHostingExtensions
         studio.Services.AddNuplane(configuration, nuplane =>
         {
             nuplane.UseBasePath(contentRoot);
-            nuplane.AddDirectoryFeedsFromConfiguration(configuration);
             nuplane.AutoloadPackages(configuration.GetSection("Loading"), loading =>
             {
                 // Studio features must use the host's contract identities instead of private package copies.
@@ -141,15 +138,30 @@ public static class NuplaneHostingExtensions
     {
         // Only final options know whether callback-created feeds include a directory. The fallback source delegates
         // to Nuplane's native-aware source only when that final selection uses it; no second discovery algorithm.
-        if (NuplaneFeedRegistrationServices.HasRegisteredFeed(studio.Services, StudioNuplaneSettings.FallbackFeedName))
-            throw new ArgumentException($"Feed name '{StudioNuplaneSettings.FallbackFeedName}' is reserved for Studio's fallback.");
-        var before = studio.Services.ToHashSet();
+        var name = StudioNuplaneSettings.FallbackFeedName;
+        var collision = $"Feed name '{name}' is reserved for Studio's fallback.";
+        if (StudioNuplaneSettings.ReadFeeds(studio.Configuration.GetSection(ModuleManagementEndpoints.FeedPrefix))
+            .Any(feed => string.Equals(feed.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException(collision);
+
+        // Directory registration replaces same-name feeds. Inspect earlier options before the fallback does so.
+        studio.Services.PostConfigure<FeedResolutionOptions>(options =>
+        {
+            if (options.Feeds.Any(feed => string.Equals(feed.Name, name, StringComparison.OrdinalIgnoreCase)))
+                throw new ArgumentException(collision);
+        });
+        var before = studio.Services.Where(service => service.ServiceType == typeof(IDesiredPackageSource)).ToHashSet();
         nuplane.AddDirectoryFeed(StudioNuplaneSettings.FallbackFeedName, Path.Combine(studio.Environment.ContentRootPath, "packages"), directory =>
         {
+            directory.Trust = FeedTrustLevel.Trusted;
             directory.Watch = false; // Uploads reconcile; direct copies need manual or configured periodic reconciliation.
             directory.IncludeAll();
         });
-        var source = studio.Services.Single(service => !before.Contains(service) && service.ServiceType == typeof(IDesiredPackageSource));
+        // A same-name desired-only feed contributes a source but no resolver entry.
+        var sources = studio.Services.Where(service => service.ServiceType == typeof(IDesiredPackageSource)).ToArray();
+        if (!before.IsSubsetOf(sources))
+            throw new ArgumentException(collision);
+        var source = sources.Single(service => !before.Contains(service));
         var index = studio.Services.IndexOf(source);
         studio.Services[index] = ServiceDescriptor.Singleton<IDesiredPackageSource>(provider => new FallbackPackageSource(
             (IDesiredPackageSource)source.ImplementationFactory!(provider),

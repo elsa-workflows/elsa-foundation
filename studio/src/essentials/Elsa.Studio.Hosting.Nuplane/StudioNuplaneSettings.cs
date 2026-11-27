@@ -34,10 +34,21 @@ internal sealed record StudioNuplaneSettings(string ManagementFile, string Direc
     }
 
     public static HashSet<string> ReadCacheOnlyFeedNames(IConfigurationSection nuplane) =>
-        NuplaneFeedSetupDeclarationReader.Read(nuplane.GetSection("Setup")).Declarations
-            .Where(feed => !string.IsNullOrWhiteSpace(feed.Options.DirectoryPath) && feed.Options.Directory.Role == DirectoryFeedRole.Cache)
+        ReadFeeds(nuplane.GetSection("Setup:Feeds"))
+            .Where(feed => !string.IsNullOrWhiteSpace(feed.Section["DirectoryPath"]) && IsCacheRole(feed.Section["Directory:Role"]))
             .Select(feed => feed.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    internal sealed record FeedSection(string Name, IConfigurationSection Section, bool IsArray);
+
+    internal static IReadOnlyList<FeedSection> ReadFeeds(IConfigurationSection feeds) =>
+        feeds.GetChildren().Select(section =>
+        {
+            var indexed = section.Key.All(char.IsAsciiDigit);
+            return new FeedSection(indexed ? section["Name"] ?? "" : section.Key, section, indexed);
+        }).GroupBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase)
+          .SelectMany(group => group.Any(feed => !feed.IsArray) ? group.Where(feed => !feed.IsArray).Take(1) : group)
+          .ToArray();
 
     public static bool IsCacheRole(string? role) =>
         Enum.TryParse<DirectoryFeedRole>(role, ignoreCase: true, out var parsed) && parsed == DirectoryFeedRole.Cache;
