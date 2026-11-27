@@ -231,6 +231,28 @@ public sealed class Elsa3BulkDispatchConversionTests
     }
 
     [Fact]
+    public async Task A_branch_read_of_ChildInstanceId_is_refused_even_when_the_parent_declares_that_variable()
+    {
+        // Elsa 3 put ChildInstanceId into the branch's own scope, so the branch never read the parent's variable.
+        var branch = Activity("done-branch", "Elsa.WriteLine", ("text", Expression("JavaScript", "return getVariable('ChildInstanceId');")));
+
+        var result = await ConvertAsync(Bulk(("childCompleted", Port(branch))), variables: [Variable("ChildInstanceId")]);
+
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead, "not available in the branch");
+    }
+
+    [Fact]
+    public async Task A_branch_read_of_WorkflowStatus_is_refused_even_when_the_parent_declares_that_input()
+    {
+        var branch = Activity("done-branch", "Elsa.WriteLine", ("text", Expression("JavaScript", "return getInput('WorkflowStatus');")));
+
+        var result = await ConvertAsync(Bulk(("childCompleted", Port(branch))),
+            inputs: [new Elsa3WorkflowArgumentDefinition { Name = "WorkflowStatus", Type = "String" }]);
+
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead, "not available in the branch");
+    }
+
+    [Fact]
     public async Task The_same_read_outside_a_branch_keeps_its_ordinary_refusal()
     {
         var result = await ConvertAsync(Sequence("root",
@@ -290,6 +312,15 @@ public sealed class Elsa3BulkDispatchConversionTests
                                                           diagnostic.Message.Contains("'Completed'", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Completed_of_a_bulk_dispatch_that_never_waits_into_a_WaitAll_join_is_refused()
+    {
+        // Elsa 3 never followed this edge; dropping it would let the WaitAll join run where Elsa 3 never ran it.
+        var result = await ConvertFlowchartAsync("WaitAll", ["Done", "Completed"], ("waitForCompletion", Literal("false", "Boolean")));
+
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, "'Done'");
+    }
+
     // ── Correlation function (FR-015) ───────────────────────────────────────────────────────────────────────────────
 
     [Theory]
@@ -329,6 +360,38 @@ public sealed class Elsa3BulkDispatchConversionTests
         var source = Source(Input(Node(result.Value!.State, "bulk.dispatch"), "CorrelationId"));
         Assert.Contains("variables.Item", source, StringComparison.Ordinal);
         Assert.DoesNotContain("currentItem", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_target_id_is_carried_trimmed_as_it_was_looked_up()
+    {
+        var result = await ConvertAsync(Bulk(("workflowDefinitionId", Literal($"  {Child} "))));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal(Child, Text(Input(Node(result.Value!.State, "bulk.dispatch"), "WorkflowDefinitionId")));
+    }
+
+    [Fact]
+    public async Task A_target_declaring_inputs_that_differ_only_in_letter_case_is_refused()
+    {
+        var targets = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal) { [Child] = ["Sku", "Item", "item"] };
+
+        var result = await ConvertAsync(Bulk(), targets);
+
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.LiteralKeyAmbiguous, "differ only in letter case", "Rename the inputs");
+    }
+
+    [Fact]
+    public async Task A_variable_named_like_the_item_key_does_not_change_the_item_in_Inputs()
+    {
+        // Elsa 3 merged the item in C#, never through a getter, so the item wins in Inputs whatever the workflow declares.
+        var result = await ConvertAsync(Bulk(), variables: [Variable("Item")]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var inputs = ReadExpression(Input(Node(result.Value!.State, "bulk.dispatch"), "Inputs"));
+        Assert.Contains("variables.currentItem", inputs.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("variables.Item", inputs.Source, StringComparison.Ordinal);
+        Assert.Equal("""{"Item":7}""", (await EvaluateInputsAsync(inputs, "7")).GetRawText());
     }
 
     [Fact]
@@ -574,9 +637,11 @@ public sealed class Elsa3BulkDispatchConversionTests
     private static async Task<Elsa3MigrationResult<Elsa3ConvertedDefinition>> ConvertAsync(
         Elsa3Activity root,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? targets = null,
-        Elsa3Variable[]? variables = null)
+        Elsa3Variable[]? variables = null,
+        Elsa3WorkflowArgumentDefinition[]? inputs = null)
     {
         var definition = ConversionServices.Definition(root, variables: [Variable("Lines"), .. variables ?? []]);
+        definition.Inputs = (inputs ?? []).ToList();
         return await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, bulkDispatchTargetInputs: targets ?? Targets);
     }
 

@@ -54,7 +54,7 @@ internal sealed class Elsa3BulkDispatchChildRewrite : IElsa3NodeRewrite
         var properties = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         var sourceNames = new Dictionary<string, string>(StringComparer.Ordinal);
         if (targetId is not null && context.TryGetProperty("WorkflowDefinitionId", out var targetProperty, out var target))
-            Set("WorkflowDefinitionId", targetProperty, target);
+            Set("WorkflowDefinitionId", targetProperty, Elsa3TypedValues.WithLiteral(Normalize(target), targetId)); // the trimmed id the lookup used
         if (context.TryGetProperty("CorrelationIdFunction", out var correlationProperty, out var correlation) &&
             Normalize(correlation) is { ValueKind: not JsonValueKind.Null } correlationValue && Elsa3TypedValues.IsBound(correlationValue))
             Set("CorrelationId", correlationProperty, correlationValue);
@@ -211,7 +211,20 @@ internal sealed class Elsa3BulkDispatchChildRewrite : IElsa3NodeRewrite
     private static IReadOnlyList<string>? Declared(Elsa3RewriteContext context, string targetId)
     {
         if (context.Plan.Request.BulkDispatchTargetInputs.TryGetValue(targetId, out var declared))
-            return declared;
+        {
+            // Members are matched to declared names in any letter case, so two declared names that differ only in case
+            // would both take the same item member, and the item key could name either.
+            var clashes = declared.GroupBy(name => name, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1)
+                .Select(group => group.ToArray()).ToArray();
+            if (clashes.Length == 0)
+                return declared;
+
+            context.Error(LiteralKeyAmbiguous,
+                $"Workflow '{targetId}' declares inputs that differ only in letter case ({string.Join("; ", clashes.Select(Elsa3ActivityNormalizer.Describe))}). Elsa 3 matched item members to inputs in any letter case, so the conversion cannot tell which input each member fills.",
+                $"Rename the inputs of '{targetId}' so that no two differ only in letter case, then convert again.",
+                Elsa3ConversionDiagnostics.JsonName("WorkflowDefinitionId"));
+            return null;
+        }
 
         context.Error(BulkDispatchTargetUnknown,
             $"Bulk dispatch starts workflow '{targetId}', which is neither in this import nor published in Elsa 4, so the conversion cannot tell which inputs it declares.",

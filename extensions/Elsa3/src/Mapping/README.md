@@ -338,12 +338,15 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - `Inputs` is generated per item: the literal `Input` map's entries, then a map item's members that the target
     declares (matched in any letter case, passed in the declared spelling), or any other item under the item key when
     the target declares it. The item wins a clash. `ParentInstanceId` is not passed. The target's declared inputs come
-    from the same import or from a workflow already published in Elsa 4; a target in neither is
-    `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`. A literal `Items`, an expression `DefaultItemInputKey` and an
+    from the same import or from a workflow already published in Elsa 4 (read by the reusable-activity materializer
+    from the newest live published executable, when the host registers the runtime's executable and source-reference
+    stores; a Design-only host knows same-import targets only); a target in neither is
+    `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`. A target declaring two inputs that differ only in letter case is
+    `ELS3-LITERAL-KEY-AMBIGUOUS`. A literal `Items`, an expression `DefaultItemInputKey` and an
     expression `Input` are `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
   - `Completed` is dropped where `Done` already reaches its target (not a WaitAll join), and with a literal-false wait;
-    `Canceled` (never emitted) is dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Any other route, and one into a
-    WaitAll join, is `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`: connect the follow-up to `Done`. With a literal-false
+    `Canceled` (never emitted) is dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Any other route, and any
+    connection Elsa 3 never followed into a WaitAll join, is `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`: connect the follow-up to `Done`. With a literal-false
     wait the branches never ran in Elsa 3 and are dropped with the same warning.
   - A branch reading what Elsa 3 passed it about the child (`ChildInstanceId`, `WorkflowOutput`, `WorkflowInstanceId`,
     `WorkflowStatus`, `WorkflowSubStatus`) is `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`.

@@ -372,8 +372,10 @@ and on-completed-callbacks suites pass.
     - for any other item: `{DefaultItemInputKey: item}` when the target declares that name, matched regardless of
       letter case and passed in the declared spelling;
     - on a name clash between the item and the static `Input`, the item wins, for both kinds of item.
-  - **`DefaultItemInputKey`** must be a literal, null or absent (null and absent mean `Item`). Anything else is refused
-    with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+  - **`DefaultItemInputKey`** must be a non-blank literal, null or absent (null and absent mean `Item`). Anything else,
+    a blank literal included, is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+  - **A target that declares two inputs differing only in letter case** is refused with `ELS3-LITERAL-KEY-AMBIGUOUS`:
+    item members match declared names in any letter case, so the conversion cannot tell which input a member fills.
   - **The static `Input`**: a literal or Object map is checked with the #5808 rules and embedded as constant entries.
     An `Input` in any expression language, JavaScript included, is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
     Guidance: put those values in the items, or use a literal map. The converter lowers Elsa 3 scripts only after the
@@ -392,11 +394,14 @@ and on-completed-callbacks suites pass.
   - `Done` maps to `Done`.
   - `Completed` (Elsa 3 emitted it with `Done` when it waited and had items):
     - dropped without a diagnostic when `Done` reaches every one of its targets and none is a `WaitAll` join;
-    - dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` when the wait is a literal false;
+    - dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` when the wait is a literal false, unless it leads to a
+      `WaitAll` join;
     - otherwise refused with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`. Guidance: connect the follow-up to `Done`.
-  - `Canceled` (never emitted): dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, or refused with
-    `…-OUTCOME-ROUTE` when it leads to a `WaitAll` join, because dropping that edge would make the join run where Elsa
-    3 never ran it.
+  - `Canceled` (never emitted): dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, unless it leads to a `WaitAll`
+    join.
+  - A connection Elsa 3 never followed (`Canceled`, or `Completed` with a literal-false wait) that leads to a `WaitAll`
+    join is refused with `…-OUTCOME-ROUTE`, because dropping that edge would make the join run where Elsa 3 never ran
+    it (amended during implementation).
 
   For the corpus root (Done, Canceled and Completed into one `WaitAny` join) this leaves one edge, and the join
   collapses.
@@ -416,7 +421,7 @@ and on-completed-callbacks suites pass.
 | `DefaultItemInputKey` not a literal, or a static `Input` that is an expression (JavaScript or another language) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: put the values in the items, or use a literal map |
 | Target workflow neither in the import nor published in Elsa 4 | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target first, or in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
-| A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
+| A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution, also when the parent declares a variable or input of that name (Elsa 3 shadowed it in the branch). Guidance: remove the read; the child's result is not available in the branch yet |
 
 - **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`, as an entry-level behaviour
   warning on the map entry. It says that more than 1,000

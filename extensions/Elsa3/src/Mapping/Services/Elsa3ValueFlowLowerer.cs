@@ -1171,9 +1171,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         AccessorScope accessors,
         Elsa3AmbientReference ambient)
     {
-        var resolution = ResolveAmbientCore(definition, consumer, outputs, nodeOrder, accessors, ambient);
-        return resolution.Succeeded || !accessors.InBulkDispatchBranch(consumer.Activity) || !IsBulkDispatchChildResult(ambient)
-            ? resolution
+        // Elsa 3 put these into the branch's own scope, shadowing a parent variable or input of the same name, so a read
+        // that would resolve against the parent is refused too: it would silently read the parent's value.
+        return !accessors.InBulkDispatchBranch(consumer.Activity) || !IsBulkDispatchChildResult(ambient)
+            ? ResolveAmbientCore(definition, consumer, outputs, nodeOrder, accessors, ambient)
             : Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
                 Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead,
                 $"A bulk dispatch branch reads '{ambient.Name}', which Elsa 3 passed the branch about the child that ended. An Elsa 4 branch does not get the child's result.",
