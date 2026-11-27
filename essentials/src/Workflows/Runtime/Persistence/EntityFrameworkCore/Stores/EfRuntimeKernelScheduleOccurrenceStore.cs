@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
+using AttemptOutcome = Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
@@ -23,10 +24,21 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
     TimeProvider clock) : IRuntimeKernelScheduleOccurrenceStore, IRuntimeKernelScheduleOccurrenceDeliveryStore,
         IRuntimeKernelScheduleOccurrenceRetirementStore, IRuntimeKernelScheduleRetentionRoots, IRuntimeMaterialRetentionRootSource
 {
+    private sealed record RenewedAcceptance(RuntimeKernelScheduleOccurrence Occurrence, long AttemptDeadlineUtcTicks);
+
     public async ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence,
         Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(occurrence);
+        return await TryAcceptAttemptAsync(occurrence, occurrence.AcceptBefore, readScheduleClock, cancellationToken) == AttemptOutcome.Accepted;
+    }
+
+    public async ValueTask<AttemptOutcome> TryAcceptAttemptAsync(RuntimeKernelScheduleOccurrence occurrence, DateTimeOffset attemptDeadline,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
+    {
         Validate(occurrence);
+        if (attemptDeadline < occurrence.AcceptBefore)
+            throw new ArgumentOutOfRangeException(nameof(attemptDeadline), "A renewed attempt cannot shorten the original offer.");
         ArgumentNullException.ThrowIfNull(readScheduleClock);
         var scope = Bind(occurrence.Scope);
         if (!context.Database.IsRelational() ||
@@ -37,10 +49,10 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
             throw new NotSupportedException("Schedule acceptance requires one clean, scoped Runtime database and its physical publication stores.");
 
         var id = CompositeId(scope, occurrence.Id);
-        if (await ReplayAsync(cancellationToken)) return true;
-        if (!IsDue(await readScheduleClock(cancellationToken))) return false;
+        if (await ReplayAsync(cancellationToken)) return AttemptOutcome.Accepted;
+        if (!IsDue(await readScheduleClock(cancellationToken))) return AttemptOutcome.Retry;
 
-        var accepted = false;
+        var outcome = AttemptOutcome.Retry;
         try
         {
             await leases.ExecuteFencedAsync([occurrence.Executable], $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
@@ -50,16 +62,23 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
                 {
                     if (await ReplayAsync(token))
                     {
-                        accepted = true;
+                        outcome = AttemptOutcome.Accepted;
                         return;
                     }
                     var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token);
-                    var published = await FencePublicationAsync(scope, occurrence, sources, bindings, token);
+                    var slot = await new EfWorkflowActivationAuthority(context, access).FindAsync(occurrence.Executable.DefinitionId, occurrence.SlotName, token);
+                    if (slot is null || slot.ActiveActivationId != occurrence.ActivationId || slot.Revision != occurrence.PublicationRevision)
+                    {
+                        outcome = AttemptOutcome.Refused;
+                        return;
+                    }
+                    var published = await FencePublicationAsync(scope, occurrence, slot, sources, bindings, token);
                     if (published is null) return;
                     var acceptedAt = await readScheduleClock(token);
                     if (!IsDue(acceptedAt)) return;
 
                     var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
+                    var renewed = attemptDeadline > occurrence.AcceptBefore;
                     context.KernelScheduleOccurrences.Add(new()
                     {
                         Id = id,
@@ -68,9 +87,10 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
                         TenantKey = Encode(tenant),
                         TenantKeyHash = Hash(tenant),
                         ArtifactId = Encode(occurrence.Executable.ArtifactId),
-                        ContentJson = RuntimeArtifactJson.Serialize(occurrence),
+                        ContentJson = renewed ? RuntimeArtifactJson.Serialize(new RenewedAcceptance(occurrence, attemptDeadline.UtcTicks))
+                            : RuntimeArtifactJson.Serialize(occurrence),
                         SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily,
-                            RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion),
+                            renewed ? RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion : RuntimeKernelScheduleOccurrenceEfModule.RetirementSchemaVersion),
                         Revision = 1,
                         AcceptedAtUtcTicks = acceptedAt.UtcTicks
                     });
@@ -80,7 +100,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
                         if (clock.GetUtcNow() >= deadline.ExpiresAt)
                             throw new WorkflowExecutableRootWriteLeaseLostException(deadline.Grant.ArtifactId, deadline.Grant.LeaseId);
                     await transaction.CommitAsync(token);
-                    accepted = true;
+                    outcome = AttemptOutcome.Accepted;
                 }
                 finally { context.ChangeTracker.Clear(); }
             }, cancellationToken);
@@ -90,9 +110,9 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         {
             // Reconcile a concurrent identical acceptance or a lost acknowledgement after its transaction was disposed.
             if (!await ReplayAsync(cancellationToken)) throw;
-            return true;
+            return AttemptOutcome.Accepted;
         }
-        return accepted;
+        return outcome;
 
         async Task<bool> ReplayAsync(CancellationToken token)
         {
@@ -103,7 +123,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
             return true;
         }
 
-        bool IsDue(DateTimeOffset now) => occurrence.Due <= now && occurrence.AcceptBefore > now;
+        bool IsDue(DateTimeOffset now) => occurrence.Due <= now && attemptDeadline > now;
     }
 
     public ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadPendingTailAsync(TriggerScope scope, CancellationToken cancellationToken = default) =>
@@ -222,12 +242,10 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
     }
 
     private async ValueTask<WorkflowExecutableSourceReference?> FencePublicationAsync(string scope, RuntimeKernelScheduleOccurrence occurrence,
-        EfWorkflowExecutableSourceReferenceStore sources, EfWorkflowTriggerBindingStore bindings, CancellationToken token)
+        WorkflowActivationSlot slot, EfWorkflowExecutableSourceReferenceStore sources, EfWorkflowTriggerBindingStore bindings, CancellationToken token)
     {
         var identity = occurrence.Executable;
-        var slot = await new EfWorkflowActivationAuthority(context, access).FindAsync(identity.DefinitionId, occurrence.SlotName, token);
-        if (slot is null || slot.ActiveActivationId != occurrence.ActivationId || slot.Revision != occurrence.PublicationRevision ||
-            !await EfAdmissionTargetFence.LockSlotAsync(context, scope, identity.DefinitionId, occurrence.SlotName, slot, token))
+        if (!await EfAdmissionTargetFence.LockSlotAsync(context, scope, identity.DefinitionId, occurrence.SlotName, slot, token))
             return null;
 
         var publication = await sources.ReadPhysicalMaintenanceSourceAsync(scope, WorkflowActivationReferenceIdentity.Create(occurrence.ActivationId), token);
@@ -279,7 +297,9 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         return roots;
     }
 
-    private static RuntimeKernelScheduleOccurrence Read(RuntimeKernelScheduleOccurrenceEntity row, string scope)
+    private static RuntimeKernelScheduleOccurrence Read(RuntimeKernelScheduleOccurrenceEntity row, string scope) => Read(row, scope, out _);
+
+    private static RuntimeKernelScheduleOccurrence Read(RuntimeKernelScheduleOccurrenceEntity row, string scope, out long attemptDeadlineUtcTicks)
     {
         var validState = row switch
         {
@@ -289,15 +309,31 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         };
         if (!validState || row.AcceptedAtUtcTicks <= 0 || EfSchemaVersion.NotReadable(RuntimeKernelScheduleOccurrenceEfModule.Chain, row.SchemaVersion))
             throw new InvalidDataException("The accepted schedule occurrence has an invalid revision or schema.");
-        var occurrence = RuntimeArtifactJson.Deserialize<RuntimeKernelScheduleOccurrence>(row.ContentJson);
+        using var document = JsonDocument.Parse(row.ContentJson);
+        var renewed = document.RootElement.TryGetProperty("occurrence", out _)
+            ? RuntimeArtifactJson.Deserialize<RenewedAcceptance>(row.ContentJson)
+            : null;
+        if (renewed is not null && row.SchemaVersion != RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion)
+            throw new InvalidDataException("The stored schedule receipt does not support renewed acceptance.");
+        var occurrence = renewed is null
+            ? RuntimeArtifactJson.Deserialize<RuntimeKernelScheduleOccurrence>(row.ContentJson)
+            : renewed.Occurrence;
         Validate(occurrence);
+        attemptDeadlineUtcTicks = renewed?.AttemptDeadlineUtcTicks ?? occurrence.AcceptBefore.UtcTicks;
         var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
         if (occurrence.Scope.Persistence.Value != scope || row.Id != CompositeId(scope, occurrence.Id) ||
             row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.TenantKey != Encode(tenant) ||
             row.TenantKeyHash != Hash(tenant) || row.ArtifactId != Encode(occurrence.Executable.ArtifactId) ||
-            row.AcceptedAtUtcTicks < occurrence.Due.UtcTicks || row.AcceptedAtUtcTicks >= occurrence.AcceptBefore.UtcTicks)
+            !MatchesAcceptanceTime(row.AcceptedAtUtcTicks, occurrence, renewed?.AttemptDeadlineUtcTicks))
             throw new InvalidDataException("The accepted schedule occurrence differs from its physical identity.");
         return occurrence;
+    }
+
+    private static bool MatchesAcceptanceTime(long acceptedAt, RuntimeKernelScheduleOccurrence occurrence, long? renewedBefore)
+    {
+        var originalDeadline = occurrence.AcceptBefore.UtcTicks;
+        return (renewedBefore is null || renewedBefore > originalDeadline && renewedBefore <= DateTimeOffset.MaxValue.UtcTicks) &&
+            acceptedAt >= occurrence.Due.UtcTicks && acceptedAt < (renewedBefore ?? originalDeadline);
     }
 
     private static void Validate(RuntimeKernelScheduleOccurrence occurrence)

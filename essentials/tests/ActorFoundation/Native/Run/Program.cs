@@ -159,10 +159,13 @@ if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch"
     return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");
 if (args is ["sqlite-child-workflows", var sqliteChildFence and ("checked" or "in-batch")])
     return await SqliteChildWorkflowChecks.RunAsync(sqliteChildFence == "in-batch");
-if (args is ["shipped-child-workflows", var childProvider and ("postgres" or "sqlite"), var childFence and ("checked" or "in-batch")])
+if (args is [var childRun and ("shipped-child-workflows" or "protected-child-workflows"),
+        var childProvider and ("postgres" or "sqlite"), var childFence and ("checked" or "in-batch" or "default")])
     return childProvider == "postgres"
-        ? await PostgresChildWorkflowChecks.RunAsync(childFence == "in-batch", shipped: true)
-        : await SqliteChildWorkflowChecks.RunAsync(childFence == "in-batch", shipped: true);
+        ? await PostgresChildWorkflowChecks.RunAsync(childFence == "default" ? null : childFence == "in-batch",
+            shipped: true, protectBirths: childRun == "protected-child-workflows")
+        : await SqliteChildWorkflowChecks.RunAsync(childFence != "checked",
+            shipped: true, protectBirths: childRun == "protected-child-workflows");
 if (args is ["pg-shipped-format"]) return await PostgresShippedFormatChecks.RunAsync();
 if (args is ["pg-shipped-format", var shippedFence and ("checked" or "in-batch")])
     return await PostgresShippedFormatChecks.RunAsync(shippedFence == "in-batch");

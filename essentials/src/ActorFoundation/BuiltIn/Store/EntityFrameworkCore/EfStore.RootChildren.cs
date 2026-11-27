@@ -1,10 +1,14 @@
 using System.Runtime.CompilerServices;
+using Kernel.Foundation.Hosting;
+using Contract = Kernel.Foundation.Contracts;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    internal ProtectChildBirthsAsync? ProtectChildBirths { get; init; }
+    private byte[]? _rootChildIssuanceKey;
     private Func<string, CreationAddress, string>? _rootChildReference;
     private Func<string, string>? _rootChildMessageHandle;
     private const string RootChildNoticePrefix = "!kernel-child-notice/1:";
@@ -15,7 +19,12 @@ public sealed partial class EfStore
     internal async Task EnableRootChildrenAsync(CancellationToken token)
     {
         await using var db = create();
-        if (!db.UsesRootChildren) return;
+        if (!db.UsesRootChildren || ProtectChildBirths is not null && !db.UsesRootRetirement)
+        {
+            if (ProtectChildBirths is not null)
+                throw new NotSupportedException("Child birth protection requires a profile with owned child births and retirement.");
+            return;
+        }
         byte[] key;
         if (db.UsesSqliteRootRuntime)
         {
@@ -28,19 +37,22 @@ public sealed partial class EfStore
             if (pinned is null) await RequireStoreVersionsAsync(db, token);
             key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
         }
+        if (ProtectChildBirths is not null) _rootChildIssuanceKey = key;
         _rootChildReference = (tenant, address) => FoundationRootCreator.ReferenceFor(key, tenant, address);
         _rootChildMessageHandle = seed => FoundationSelfSend.Handle(key, "child-" + seed);
     }
 
     private sealed record RootChildStart(string Reference, Message Creator);
 
-    private sealed record RootChildEffects(string ParentReference, string? Children, RootChildStart[] Starts, Message[] Inputs, Message? Notice)
+    private sealed record RootChildEffects(string ParentReference, string? Children, RootChildStart[] Starts, Message[] Inputs, Message? Notice,
+        IReadOnlyList<PendingChildBirth>? PendingBirths)
     {
         internal RootChildCascade? Cascade { get; init; }
+        internal bool BirthsProtected { private get; set; }
 
         internal async Task<bool> BindAsync(KernelDb db, string tenant, CancellationToken token)
         {
-            if (!db.UsesRootChildren) return false;
+            if (!db.UsesRootChildren || PendingBirths is not null && !BirthsProtected) return false;
             if (Starts.Length != 0)
             {
                 if (!await BindRootChildStartsAsync(db, tenant, Starts, token)) return false;
@@ -147,7 +159,8 @@ public sealed partial class EfStore
             """, token);
     }
 
-    private RootChildEffects? PrepareRootChildEffects(WorkerRoot root, InstanceRow row, IReadOnlyList<Message> sends)
+    private RootChildEffects? PrepareRootChildEffects(WorkerRoot root, InstanceRow row, IReadOnlyList<Message> sends,
+        PartitionFence? fence = null)
     {
         if (_rootChildReference is not { } reference) return null;
         var starts = new List<RootChildStart>();
@@ -197,7 +210,56 @@ public sealed partial class EfStore
             }
             else throw RootShape();
         }
-        return new(root.Reference, row.Children, starts.ToArray(), inputs.ToArray(), notice);
+        var pending = ProtectChildBirths is not null && starts.Count > 0
+            ? PrepareChildBirthProtection(root, row.Revision, fence ?? throw RootShape(), starts)
+            : null;
+        return new(root.Reference, row.Children, starts.ToArray(), inputs.ToArray(), notice, pending);
+    }
+
+    private PendingChildBirth[] PrepareChildBirthProtection(WorkerRoot parent, long revision, PartitionFence fence, List<RootChildStart> starts)
+    {
+        var key = _rootChildIssuanceKey ?? throw RootShape();
+        return starts.Select(child =>
+        {
+            var creator = child.Creator;
+            var spec = creator.Start!;
+            var fingerprint = CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload) ?? throw RootShape();
+            var birth = new FoundationChildIssuance(parent.Tenant, parent.Actor, parent.Fingerprint, revision, creator.Target.Id, fingerprint);
+            return new PendingChildBirth(parent.Tenant, new Contract.ActorRef(child.Reference), spec.Model, spec.Definition,
+                FoundationChildIssuance.Issue(key, birth, fence));
+        }).ToArray();
+    }
+
+    private async Task<bool> ProtectPreparedChildBirthsAsync(RootCheckpoints checkpoints, CancellationToken token)
+    {
+        if (ProtectChildBirths is not { } protect) return true;
+        var prepared = checkpoints.Commands.Select(command => command switch
+        {
+            FirstRootCheckpoint first => first.ChildEffects,
+            RootTurnCheckpoint turn => turn.ChildEffects,
+            RootParkOpening park => park.ChildEffects,
+            _ => null
+        }).OfType<RootChildEffects>().Where(children => children.PendingBirths is not null).ToArray();
+        if (prepared.Length == 0) return true;
+
+        // Preparation has disposed its read transactions. No Foundation locks span this host callback.
+        var births = Array.AsReadOnly(prepared.SelectMany(children => children.PendingBirths!).ToArray());
+        var result = await protect(births, token);
+        token.ThrowIfCancellationRequested();
+        switch (result)
+        {
+            case ChildBirthProtectionOutcome.Protected:
+                foreach (var children in prepared) children.BirthsProtected = true;
+                return true;
+            case ChildBirthProtectionOutcome.Stale:
+                return false;
+            case ChildBirthProtectionOutcome.Refused:
+                throw new StoreException(Failure.Definite, "The host could not protect a child executable selection.");
+            case ChildBirthProtectionOutcome.Retry:
+                throw new StoreException(Failure.Transient, "The host will retry child executable protection.");
+            default:
+                throw new InvalidOperationException("The child birth protector returned an unknown outcome.");
+        }
     }
 
     private static PreparedRoot WithRootChildEffects(PreparedRoot prepared, RootChildEffects? children, string? parent)

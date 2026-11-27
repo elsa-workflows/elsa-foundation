@@ -330,21 +330,31 @@ internal static class ScheduleChecks
         await driver.TakeOver();
         await driver.PassAll(6);
         var expiring = acceptor.Offered.Last();
-        check(expiring is { ArmGeneration: 5, Authority: "expiry" } && actor.Plans.Last().Timers.Single().Kind != ScheduleActor.FireKind,
-            "a higher revision re-arms a stopped schedule and an unknown outcome schedules a retry");
+        check(expiring is { ArmGeneration: 5, Authority: "expiry" } &&
+              actor.Plans.Last().Jobs.Single().Deadline == expiring.OfferUntilUnixMilliseconds,
+            "a higher revision re-arms a stopped schedule and offers one unsettled timed job");
         driver.Advance(expiring.OfferUntilUnixMilliseconds - driver.Now);
         await driver.TakeOver();
         await driver.PassAll(6);
-        check(acceptor.Offered.Count == 5 && actor.Plans.Last().Timers.Single() is { Kind: ScheduleActor.FireKind } next &&
-              next.Due > expiring.OfferUntilUnixMilliseconds,
-            "the retry matures after its deadline without calling the host or extending its offer");
+        var recovery = actor.Plans.Last().Timers.Single();
+        check(recovery.Kind != ScheduleActor.FireKind && recovery.Due > expiring.OfferUntilUnixMilliseconds,
+            "an expired acceptance releases its job slot and keeps the original due occurrence queued for retry");
+        driver.Advance(recovery.Due - driver.Now);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        var renewed = actor.Plans.SelectMany(plan => plan.Jobs).Last();
+        check(acceptor.Offered.TakeLast(2).SequenceEqual([expiring, expiring]) &&
+              acceptor.Accepted.Keys.Count(offer => offer == expiring) == 1 && acceptor.Offered.Count == 6 &&
+              renewed.Deadline - recovery.Due is >= 60_000 and <= 60_100 &&
+              actor.Plans.Last().Timers.Single() is { Kind: ScheduleActor.FireKind } next && next.Due > recovery.Due,
+            "the new owner accepts the exact due occurrence once in a fresh bounded attempt, then skips intervening due times");
 
         await driver.Ingress.SendAsync(scope, target, "managed-terminate", Contract.Kinds.Terminate);
         await driver.PassAll(4);
         driver.Advance(80_000);
         await driver.TakeOver();
         await driver.PassAll(6);
-        check(acceptor.Offered.Count == 5 && (await driver.Reads.GetAsync(scope, reference))?.Header.Status == Contract.ActorStatus.Cancelled,
+        check(acceptor.Offered.Count == 6 && (await driver.Reads.GetAsync(scope, reference))?.Header.Status == Contract.ActorStatus.Cancelled,
             "Terminate ends a managed actor with a future arm and the timer cannot offer afterward");
     }
 
@@ -426,11 +436,15 @@ internal static class ScheduleChecks
 
     private sealed class ManagedAcceptor : IScheduleOccurrenceAcceptor
     {
+        private readonly TaskCompletionSource<bool> _untilDeadline = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public ConcurrentQueue<ScheduleOccurrence> Offered { get; } = new();
         public ConcurrentDictionary<ScheduleOccurrence, byte> Accepted { get; } = new();
         public TaskCompletionSource<bool> ReleaseSecond { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken)
+        public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken) =>
+            TryAcceptAttemptAsync(occurrence, occurrence.OfferUntilUnixMilliseconds, cancellationToken);
+
+        public ValueTask<bool> TryAcceptAttemptAsync(ScheduleOccurrence occurrence, long attemptDeadline, CancellationToken cancellationToken)
         {
             Offered.Enqueue(occurrence);
             if (occurrence is { ArmGeneration: 1, Authority: "blue" })
@@ -439,7 +453,12 @@ internal static class ScheduleChecks
                 return ValueTask.FromResult(true);
             }
             if (occurrence is { ArmGeneration: 2, Authority: "blue" }) return new(ReleaseSecond.Task.WaitAsync(cancellationToken));
-            if (occurrence.Authority == "expiry") throw new IOException("acceptance is still unavailable");
+            if (occurrence.Authority == "expiry")
+            {
+                if (attemptDeadline == occurrence.OfferUntilUnixMilliseconds) return new(_untilDeadline.Task.WaitAsync(cancellationToken));
+                Accepted.TryAdd(occurrence, 0);
+                return ValueTask.FromResult(true);
+            }
             return ValueTask.FromResult(false);
         }
     }

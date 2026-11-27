@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using Kernel.EntityFramework;
 using Kernel.Runtime.Hosting;
 using Microsoft.Extensions.Logging;
@@ -101,14 +102,25 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return CreateHostedServiceCore(actor, endProcess, retentionWindow, options, fenceInBatch, logger, auxiliaryActor);
     }
 
+    /// <summary>Creates an owner that protects every prepared child birth before committing its parent checkpoint.</summary>
+    public SqliteEmbeddedHostedService CreateHostedServiceWithChildBirthProtection(Contract.IActorType actor,
+        ProtectChildBirthsAsync protectChildBirths, Action<string> endProcess,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, LoopOptions? options = null,
+        bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null, Contract.IActorType? auxiliaryActor = null)
+    {
+        ArgumentNullException.ThrowIfNull(protectChildBirths);
+        if (auxiliaryActor is not null) Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return CreateHostedServiceCore(actor, endProcess, retentionWindow, options, fenceInBatch, logger, auxiliaryActor, protectChildBirths);
+    }
+
     private SqliteEmbeddedHostedService CreateHostedServiceCore(Contract.IActorType actor, Action<string> endProcess,
         Func<Contract.ActorHeader, TimeSpan?>? retentionWindow, LoopOptions? options, bool fenceInBatch,
-        ILogger<SqliteEmbeddedHostedService>? logger, Contract.IActorType? auxiliaryActor)
+        ILogger<SqliteEmbeddedHostedService>? logger, Contract.IActorType? auxiliaryActor, ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (actor.Type != actorType) throw new ArgumentException("The actor type must match the Embedded foundation.", nameof(actor));
         return SqliteEmbeddedHostedService.ForShipped(node, actor, endProcess, options, fenceInBatch, logger,
-            () => (InstalledPath, requests.Value), retentionWindow, auxiliaryActor);
+            () => (InstalledPath, requests.Value), retentionWindow, auxiliaryActor, protectChildBirths);
     }
 
     /// <summary>Opens durable ingress and held requests routed to this foundation's owner.</summary>

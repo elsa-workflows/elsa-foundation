@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Runtime;
@@ -331,7 +332,8 @@ public static partial class PostgresPreviewHosting
     internal static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
         Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null,
-        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null)
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null,
+        ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -376,7 +378,8 @@ public static partial class PostgresPreviewHosting
         }
 
         var pressure = (replies as PostgresDirectRequests)?.Pressure;
-        var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch) { AdmissionPressure = pressure };
+        var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch)
+            { AdmissionPressure = pressure, ProtectChildBirths = protectChildBirths };
         if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
         await store.EnableRootChildrenAsync(cancellationToken);

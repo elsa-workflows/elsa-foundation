@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
 using Kernel.Runtime;
 using Kernel.Runtime.Hosting;
 using Microsoft.Data.Sqlite;
@@ -68,7 +69,8 @@ public static partial class SqliteEmbeddedHosting
     internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null,
-        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null)
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null,
+        ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
@@ -79,12 +81,13 @@ public static partial class SqliteEmbeddedHosting
                 retentionWindow: retentionWindow,
                 rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor),
             actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests,
-            hostsAuxiliaryActor: auxiliaryActor is not null);
+            hostsAuxiliaryActor: auxiliaryActor is not null, protectChildBirths: protectChildBirths);
     }
 
     private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, int, IActorType> createActor,
         string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
-        Action<Exception>? onFault, SqliteDirectRequests? requests, bool hostsAuxiliaryActor = false)
+        Action<Exception>? onFault, SqliteDirectRequests? requests, bool hostsAuxiliaryActor = false,
+        ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -134,7 +137,7 @@ public static partial class SqliteEmbeddedHosting
 
             var pressure = requests?.Pressure;
             var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch)
-                { CommitSql = CommitSql.Owned, AdmissionPressure = pressure };
+                { CommitSql = CommitSql.Owned, AdmissionPressure = pressure, ProtectChildBirths = protectChildBirths };
             if (shipped)
             {
                 if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);

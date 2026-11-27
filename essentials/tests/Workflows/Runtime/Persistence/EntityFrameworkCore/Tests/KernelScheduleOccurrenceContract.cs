@@ -103,6 +103,9 @@ internal static partial class KernelScheduleOccurrenceContract
         Assert.True(await repairing.TryRepairAsync(secondSlot, []));
         Assert.Equal(secondControl, await controls.FindAsync(scope, scheduleKey));
         Assert.False(await AcceptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" }));
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Refused,
+            await store.TryAcceptAttemptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" },
+                original.AcceptBefore, _ => ValueTask.FromResult(Now)));
         await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
 
         var replacement = original with { ActivationId = "schedule-b", PublicationRevision = 2, ArmGeneration = 2,
@@ -236,9 +239,48 @@ internal static partial class KernelScheduleOccurrenceContract
         Assert.DoesNotContain(first.ArtifactId, retired.ContentJson);
         Assert.True(await relay.TryRetireAsync(original, actorReference, MustNotReadProof));
         Assert.True(await store.TryAcceptAsync(original, _ => throw new InvalidOperationException("Retired replays need no schedule clock.")));
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(original,
+            original.AcceptBefore.AddMinutes(3), _ => throw new InvalidOperationException("Old retirement receipts replay across attempt renewal.")));
         await relay.MarkMaterializedAsync(original, actorReference);
         await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
         Assert.Equal(3, await context.KernelScheduleOccurrences.CountAsync());
+
+        var owner = reclaimed.Owner!;
+        var outage = original with
+        {
+            SlotName = winningSlot.SlotName, ActivationId = owner.ActivationId, PublicationRevision = owner.PublicationRevision,
+            ArmGeneration = 10, TimerDeliveryId = "outage-timer", Executable = owner.Executable
+        };
+        var recoveredAt = outage.AcceptBefore.AddMinutes(3);
+        var recoveryDeadline = recoveredAt.AddMinutes(1);
+        clock.Advance(recoveredAt - clock.GetUtcNow());
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Retry, await store.TryAcceptAttemptAsync(outage, outage.AcceptBefore,
+            _ => ValueTask.FromResult(recoveredAt)));
+        var renewedReadCount = 0;
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Retry, await store.TryAcceptAttemptAsync(outage, recoveryDeadline,
+            _ => ValueTask.FromResult(++renewedReadCount == 3 ? recoveryDeadline : recoveredAt)));
+        Assert.DoesNotContain(await relay.ListPendingAsync(scope, null, 10), item => item.Occurrence == outage);
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(outage, recoveryDeadline,
+            _ => ValueTask.FromResult(recoveredAt)));
+        var accepted = Assert.Single(await relay.ListPendingAsync(scope, null, 10), item => item.Occurrence == outage);
+        Assert.Equal(recoveredAt.UtcTicks, accepted.Cursor.AcceptedAtUtcTicks);
+        Assert.Equal("1.2.0", (await context.KernelScheduleOccurrences.AsNoTracking().SingleAsync(row => row.Id == accepted.Cursor.Id)).SchemaVersion);
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(outage, recoveryDeadline.AddMinutes(1),
+            _ => throw new InvalidOperationException("A renewed accepted occurrence replays without reading the clock.")));
+        var outageActor = new string('E', 64);
+        await relay.MarkMaterializedAsync(outage, outageActor);
+        Assert.True(await relay.TryRetireAsync(outage, outageActor, (proofOccurrence, proofReference, _) =>
+        {
+            Assert.Equal(outage, proofOccurrence);
+            Assert.Equal(outageActor, proofReference);
+            return ValueTask.FromResult(true);
+        }));
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(outage, recoveryDeadline.AddMinutes(2),
+            _ => throw new InvalidOperationException("A renewed retired occurrence replays without reading the clock.")));
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.TryAcceptAttemptAsync(outage with { Due = outage.Due.AddSeconds(1) },
+            recoveryDeadline, _ => ValueTask.FromResult(recoveredAt)).AsTask());
+        Assert.Equal(4, await context.KernelScheduleOccurrences.CountAsync());
+
         await CheckDefaultAliasHandoffAsync(open);
         await CheckScheduleAdoptionAsync(open);
         await CheckControlScanAsync(open, intercepted);

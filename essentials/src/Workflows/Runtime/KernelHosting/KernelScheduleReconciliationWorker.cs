@@ -64,9 +64,9 @@ internal sealed class KernelScheduleReconciliationWorker
     }
 
     internal IScheduleOccurrenceAcceptor CreateAcceptor() =>
-        new KernelScheduleOccurrenceAcceptor(_controlScope, _actors, _readScheduleClock, (occurrence, readClock, token) =>
+        new KernelScheduleOccurrenceAcceptor(_controlScope, _actors, _readScheduleClock, (occurrence, attemptDeadline, readClock, token) =>
             WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleOccurrenceStore>()
-                .TryAcceptAsync(occurrence, readClock, token)));
+                .TryAcceptAttemptAsync(occurrence, attemptDeadline, readClock, token)));
 
     internal async Task RunAsync(CancellationToken token)
     {
