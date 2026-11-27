@@ -89,11 +89,6 @@ public sealed partial class EfStore
                     OR "Reference" IN (SELECT value FROM json_each({Json.Write(references)})))
             """).ToListAsync(token);
 
-    private sealed record SqliteWorkerLoad(string Tenant, string Reference, string Actor, int Partition, string Fingerprint,
-        string? Id, long Creation, string? State, byte[]? Wire, int? StateVersion, long? Revision, string? Header,
-        History? History, InstanceStatus? Status, bool? Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
-        string? Jobs, long? NextJobGeneration, string? Fault, long? ParkAt, string? Parent, string? Children);
-
     private async Task<IReadOnlyList<InstanceRow>> LoadSqliteWorkerRootsAsync(KernelDb db, WorkerRoots scope,
         IReadOnlyCollection<string> ids, CancellationToken token)
     {
@@ -103,7 +98,7 @@ public sealed partial class EfStore
         if (actors.Length == 0) return [];
         // One bounded lookup ties each requested birth to that life's checkpoint. A pending or retired life
         // still has its birth and returns no checkpoint. A missing birth is a malformed worker request.
-        var rows = await db.Database.SqlQuery<SqliteWorkerLoad>(UseSqliteRootClock($"""
+        var rows = await db.Database.SqlQuery<WorkerRootLoad>(UseSqliteRootClock($"""
             SELECT b."Tenant", b."Reference", b."Actor", b."Partition", b."Fingerprint",
                 i."Id", b."Creation", i."State", i."FoundationStateWire" AS "Wire", i."StateVersion", i."Revision",
                 i."FoundationHeader" AS "Header", i."History", i."Status", i."Suspended",
@@ -116,21 +111,7 @@ public sealed partial class EfStore
                 AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant" AND NOT i."Retired"
             ORDER BY request.key
             """)).ToListAsync(token);
-        if (rows.Count != actors.Length) throw RootShape();
-        var result = new List<InstanceRow>(rows.Count);
-        foreach (var row in rows)
-        {
-            if (!scope.Includes(row.Partition) || new InstanceRef(row.Actor).Partition != row.Partition) throw RootShape();
-            if (row.Id is not { } id) continue;
-            if (row is not { State: { } state, StateVersion: { } version, Revision: { } revision, Header: { } header,
-                    History: { } history, Status: { } status, Suspended: { } suspended }) throw RootShape();
-            var binding = new WorkerRoot(row.Tenant, row.Reference, row.Actor, row.Partition, row.Fingerprint);
-            var physical = new PhysicalRoot(id, row.Creation, state, row.Wire, version, revision, header, history, status,
-                suspended, row.TerminalRevision, row.TerminalAt, row.AsOf, row.Jobs, row.NextJobGeneration, row.Fault, row.ParkAt,
-                row.Parent, row.Children);
-            result.Add(WorkerRow(binding, DecodePhysicalRoot(db, physical)));
-        }
-        return result;
+        return MaterializeWorkerRoots(db, scope, rows, actors.Length);
     }
 
     private async Task<Message?> ReadSqlitePendingCreatorAsync(string tenant, string reference, CancellationToken token)
