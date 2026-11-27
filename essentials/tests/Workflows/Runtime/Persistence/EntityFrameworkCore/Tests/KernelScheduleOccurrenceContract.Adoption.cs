@@ -74,6 +74,9 @@ internal static partial class KernelScheduleOccurrenceContract
         Assert.Equal(active.Other.TriggerBindingId, Assert.Single(await bindings.ListAllByActivationAsync(active.Source.ActivationId!)).TriggerBindingId);
         Assert.True((await activationSwitch.TryDeactivateAsync(new(legacy.Slot.WorkflowDefinitionId, legacy.Slot.SlotName,
             WorkflowActivationSource.Publishing, legacy.Slot.Revision, Now), [])).Succeeded);
+        var resource = RecurringTriggerSchedule.ForResource(new("standalone-timer", 1, 1, "timer", "Elsa.StandaloneTimer",
+            explicitDefault.Persistence, explicitDefault.TenantId), RecurringScheduleKind.Interval, "PT5M", Now.AddMinutes(5), Now);
+        await schedules.SaveAsync(resource);
 
         await using var restarted = open();
         var restoredSource = new EfWorkflowExecutableSourceReferenceStore(restarted, access, new Codec(), clock);
@@ -90,6 +93,7 @@ internal static partial class KernelScheduleOccurrenceContract
         start.SetResult();
         Assert.All(await Task.WhenAll(peer, restoring.TryAdoptSchedulesAsync(active.Slot, active.Source, [active.Claim], []).AsTask()), result => Assert.True(result));
         Assert.Equal(active.Slot, await restoredAuthority.FindAsync(active.Slot.WorkflowDefinitionId, active.Slot.SlotName));
+        Assert.Equal(resource, await schedules.FindAsync(resource.ScheduleId));
         var currentSource = Assert.IsType<WorkflowExecutableSourceReference>(await restoredSource.FindAsync(active.Source.SourceReferenceId));
         Assert.True(WorkflowExecutableSourceReferenceComparer.SameSnapshot(currentSource, active.Source));
         var restoredControls = new EfRuntimeKernelScheduleControlStore(restarted, access);

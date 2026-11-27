@@ -548,7 +548,7 @@ public sealed class KernelActivationCoordinator(
         var repaired = false;
         var adopted = false;
         RestorePlan? restore = null;
-        var adoption = schedules.RequiresPublicationClaims ? activationSwitch as IWorkflowScheduleAdoption : null;
+        var adoption = schedules is RuntimeManagedScheduleActors ? activationSwitch as IWorkflowScheduleAdoption : null;
         try
         {
             for (var repairs = 0; ; repairs++)

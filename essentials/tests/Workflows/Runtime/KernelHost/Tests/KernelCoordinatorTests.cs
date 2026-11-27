@@ -434,6 +434,13 @@ public sealed class KernelCoordinatorTests
         Assert.Empty(await host.Bindings.ListAllByActivationAsync("legacy-ticks"));
 
         host.Restart();
+        var direct = host.NewCoordinator(new AdoptingScheduleSwitch(host.Bindings));
+        var refused = Assert.Single(await direct.ServeActiveSlotsAsync());
+        Assert.False(refused.Succeeded);
+        Assert.Contains("need publication claims", refused.Diagnostic, StringComparison.Ordinal);
+        Assert.Empty(host.Schedules.Calls);
+        Assert.Empty(await host.Bindings.ListAllByActivationAsync("legacy-ticks"));
+
         var coordinator = host.NewCoordinator(new AdoptingScheduleSwitch(host.Bindings), new RuntimeManagedScheduleActors());
         var restored = Assert.Single(await coordinator.ServeActiveSlotsAsync());
 
