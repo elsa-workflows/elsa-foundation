@@ -200,6 +200,25 @@ internal static class RootScheduleInventoryChecks
         var next = await AdmitAsync(tenant, occurrence with { ArmGeneration = 2 }, pinned);
         Require(next.Outcome == Contract.AdmissionOutcome.Accepted && next.Actor != first.Actor &&
             await db.Messages.CountAsync(token) == before + 2, "the next arm generation has a distinct occurrence even with the same timer identity");
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "Messages" WHERE "Target" = (SELECT "Actor" FROM "FoundationRootBirths" WHERE "Reference" = {first.Actor?.Id})
+            """, token);
+        Require((await AdmitAsync(tenant, occurrence, pinned)).Actor == first.Actor &&
+            await db.Messages.CountAsync(token) == before + 1, "replay does not require or recreate the original inbox row");
+        if (postgres)
+        {
+            var blocked = occurrence with { ArmGeneration = 3 };
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE FUNCTION schedule_reject_creator() RETURNS trigger LANGUAGE plpgsql AS $body$
+                BEGIN RETURN NULL; END; $body$;
+                CREATE TRIGGER schedule_reject_creator BEFORE INSERT ON "Messages"
+                FOR EACH ROW EXECUTE FUNCTION schedule_reject_creator();
+                """, token);
+            try { await MustRefuseAsync(blocked, pinned); }
+            finally { await db.Database.ExecuteSqlRawAsync("""DROP TRIGGER schedule_reject_creator ON "Messages"; DROP FUNCTION schedule_reject_creator();""", token); }
+            Require((await AdmitAsync(tenant, blocked, pinned)).Outcome == Contract.AdmissionOutcome.Accepted &&
+                await db.Messages.CountAsync(token) == before + 2, "a suppressed PostgreSQL creator rolls back its birth and the exact retry can enqueue it");
+        }
 
         Task<Contract.Admission> AdmitAsync(string tenantId, RootScheduleOccurrence item, StartSpec spec) => postgres
             ? pg.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token)

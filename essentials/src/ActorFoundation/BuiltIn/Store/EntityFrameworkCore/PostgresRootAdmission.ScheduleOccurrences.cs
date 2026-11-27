@@ -6,8 +6,6 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
-    private sealed record OccurrenceWrite(bool SourceReady, bool Enqueued);
-
     internal async Task<Contract.Admission> AdmitScheduledOccurrenceAsync(string tenant, RootScheduleOccurrence occurrence,
         StartSpec pinnedWorkflow, CancellationToken token)
     {
@@ -37,7 +35,7 @@ internal sealed partial class PostgresRootAdmission
         }
         var (header, payload) = EncodeCreator(creator);
         if (!FitsEnvelope(header, payload)) throw new MetadataLimitExceeded(nameof(pinnedWorkflow), EfStore.RootContentBytes);
-        var result = (await db.Database.SqlQuery<OccurrenceWrite>(Bind($"""
+        var result = (await db.Database.SqlQuery<ScheduleWrite>(Bind($"""
             /* accepted schedule occurrence */
             WITH source AS MATERIALIZED (/*schedule-source*/), birth AS (
                 INSERT INTO "FoundationRootBirths" ("Tenant", "Reference", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
@@ -50,10 +48,15 @@ internal sealed partial class PostgresRootAdmission
                 SELECT birth."Creator", 0, birth."Actor", birth."Partition", {creator.Kind}, 0, {payload}::text, {header},
                     false, 0, 0, 0, 0 FROM birth RETURNING "Id"
             )
-            SELECT source."SourceReady", EXISTS (SELECT 1 FROM creator) AS "Enqueued" FROM source
+            SELECT source."SourceReady", EXISTS (SELECT 1 FROM birth) AS "Claimed",
+                EXISTS (SELECT 1 FROM creator) AS "Enqueued" FROM source
             """)).ToListAsync(token)).Single();
         if (!result.SourceReady) throw new StoreFormatException("The pinned schedule store changed during occurrence admission.");
-        if (result.Enqueued) return await CompleteAsync(Contract.AdmissionOutcome.Accepted);
+        if (result.Claimed)
+        {
+            if (!result.Enqueued) throw new StoreFormatException("The scheduled workflow birth has no queued creator.");
+            return await CompleteAsync(Contract.AdmissionOutcome.Accepted);
+        }
         if (!await birth.ReadReceiptAsync(db, tenant, token, Bind))
             throw new StoreFormatException("A concurrent scheduled start has no committed birth.");
         return await CompleteAsync(Contract.AdmissionOutcome.Duplicate);
