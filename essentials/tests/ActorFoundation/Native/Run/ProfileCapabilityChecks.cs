@@ -65,7 +65,8 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.OperatorProtocol | RootCapabilities.Termination | RootCapabilities.StableBody | RootCapabilities.TerminalSelection | RootCapabilities.Retirement | RootCapabilities.TerminateThenDelete | RootCapabilities.Retention | RootCapabilities.OperatorReplies |
                 RootCapabilities.JobProtocol | RootCapabilities.TimedJobSettlement | RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol |
                 RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery |
-                RootCapabilities.SelfProtocol | RootCapabilities.Timers | RootCapabilities.TimerRearm | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput)
+                RootCapabilities.SelfProtocol | RootCapabilities.Timers | RootCapabilities.TimerRearm | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput |
+                RootCapabilities.Children)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -92,7 +93,7 @@ internal static class ProfileCapabilityChecks
             ["root-park-inspection"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-arrivals"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
-            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootComposedParkRecovery", "UsesRootDueBacklog", "UsesRootJobProtocol",
+            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootChildren", "UsesRootComposedParkRecovery", "UsesRootDueBacklog", "UsesRootJobProtocol",
                 "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening",
                 "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootPrivateParkInputs", "UsesRootReplyProtocol", "UsesRootRetention",
                 "UsesRootRetirement", "UsesRootSelfProtocol", "UsesRootStableBody", "UsesRootTerminalOutput", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
@@ -181,7 +182,7 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(children) is { StoreSchema: 1, MessageProtocol: 10, JournalCodec: 0 } &&
             children.UsesRootChildren && !children.UsesRootDueBacklog &&
             children.Capabilities == (RootProfiles.TimerRearmQualification | RootCapabilities.Children) &&
-            !RootProfiles.Formats.ContainsKey(children.RequiredFormat) && !mapped.HasFlag(RootCapabilities.Children),
+            !RootProfiles.Formats.ContainsKey(children.RequiredFormat),
             "the private PostgreSQL child profile keeps its full format, definition and capability sets");
         var sqliteOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite("Data Source=:memory:").Options;
         using var sqliteBacklog = KernelDb.ForRootDueBacklogQualification(sqliteOptions, new SqliteAdmissionDefinitions());
@@ -215,11 +216,11 @@ internal static class ProfileCapabilityChecks
         using var sharedPostgres = KernelDb.ForPostgresRootShipped(options);
         using var sharedSqlite = KernelDb.ForSqliteRootShipped(sqliteOptions);
         Check(sharedPostgres.RequiredFormat == StoreFormat.RootShipped && sharedSqlite.RequiredFormat == StoreFormat.RootShipped &&
-            sharedPostgres.Capabilities == (s6TerminalOutput.Capabilities | RootCapabilities.DueBacklog) &&
+            sharedPostgres.Capabilities == (s6TerminalOutput.Capabilities | RootCapabilities.DueBacklog | RootCapabilities.Children) &&
             sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
-            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, JournalCodec: 0 } &&
-            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, JournalCodec: 0 },
-            "the shipped format composes admission pressure and terminal output under distinct provider definitions");
+            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 10, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 13, JournalCodec: 0 },
+            "the shipped format composes owned children, admission pressure and terminal output under distinct provider definitions");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");

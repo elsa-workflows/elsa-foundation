@@ -106,6 +106,10 @@ if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch"
     return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");
 if (args is ["sqlite-child-workflows", var sqliteChildFence and ("checked" or "in-batch")])
     return await SqliteChildWorkflowChecks.RunAsync(sqliteChildFence == "in-batch");
+if (args is ["shipped-child-workflows", var childProvider and ("postgres" or "sqlite"), var childFence and ("checked" or "in-batch")])
+    return childProvider == "postgres"
+        ? await PostgresChildWorkflowChecks.RunAsync(childFence == "in-batch", shipped: true)
+        : await SqliteChildWorkflowChecks.RunAsync(childFence == "in-batch", shipped: true);
 if (args is ["pg-shipped-format"]) return await PostgresShippedFormatChecks.RunAsync();
 if (args is ["pg-held-callers"]) return await PostgresHeldCallerChecks.RunAsync();
 if (args is ["pg-held-reply-order", var orderCallers, var orderStarts] && int.TryParse(orderCallers, out var callerCount) &&

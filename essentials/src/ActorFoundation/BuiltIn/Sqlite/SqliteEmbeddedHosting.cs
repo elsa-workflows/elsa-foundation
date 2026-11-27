@@ -21,6 +21,9 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Whether the shipped SQLite format takes durable actor-owned timers.</summary>
     public static bool TakesTimers => RootProfiles.Shipped.HasFlag(RootCapabilities.Timers);
 
+    /// <summary>Whether the shipped format takes attached and detached workflow starts from an owned turn.</summary>
+    public static bool TakesChildren => RootProfiles.Shipped.HasFlag(RootCapabilities.Children);
+
     /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
     /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
     public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>

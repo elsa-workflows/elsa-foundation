@@ -13,6 +13,7 @@ internal abstract class KernelShellStorage
 {
     public abstract bool TakesSelfSends { get; }
     public abstract bool TakesTimers { get; }
+    public abstract bool TakesChildren { get; }
     public abstract Task InstallAsync(CancellationToken token);
     public abstract ValueTask<(IIngress Ingress, IActorReads Reads)> OpenAsync(CancellationToken token);
     public abstract ValueTask<long> ReadClockAsync(CancellationToken token);
@@ -39,6 +40,7 @@ internal abstract class KernelShellStorage
 
         public override bool TakesSelfSends => SqliteEmbeddedHosting.TakesSelfSends;
         public override bool TakesTimers => SqliteEmbeddedHosting.TakesTimers;
+        public override bool TakesChildren => SqliteEmbeddedHosting.TakesChildren;
         public override Task InstallAsync(CancellationToken token) => _foundation.InstallShippedAsync(token);
         public override ValueTask<long> ReadClockAsync(CancellationToken token) => _foundation.ReadClockAsync(token);
 
@@ -67,6 +69,7 @@ internal abstract class KernelShellStorage
 
         public override bool TakesSelfSends => PostgresPreviewHosting.TakesSelfSends(OpenDatabase);
         public override bool TakesTimers => PostgresPreviewHosting.TakesTimers(OpenDatabase);
+        public override bool TakesChildren => PostgresPreviewHosting.TakesChildren(OpenDatabase);
         public override Task InstallAsync(CancellationToken token) => PostgresPreviewHosting.InstallShippedAsync(_options, token);
         public override ValueTask<long> ReadClockAsync(CancellationToken token) => _requests.ReadClockAsync(token);
 

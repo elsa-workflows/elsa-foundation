@@ -12,7 +12,7 @@ namespace Kernel.Native.Run;
 
 internal static class SqliteChildWorkflowChecks
 {
-    internal static async Task<int> RunAsync(bool fenceInBatch)
+    internal static async Task<int> RunAsync(bool fenceInBatch, bool shipped = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var token = deadline.Token;
@@ -21,7 +21,7 @@ internal static class SqliteChildWorkflowChecks
         var connection = new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false };
         var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection.ToString()).Options;
         var definitions = new SqliteAdmissionDefinitions();
-        KernelDb Open() => KernelDb.ForSqliteRootRuntime(options, definitions, StoreFormat.SqliteRootChildrenQualification);
+        KernelDb Open() => KernelDb.ForSqliteRootRuntime(options, definitions, shipped ? null : StoreFormat.SqliteRootChildrenQualification);
         var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch);
         var tenant = EmbeddedTenant.Bind("workflow-children");
         const string creatorFaultChild = "creator-fault-child";
@@ -52,8 +52,10 @@ internal static class SqliteChildWorkflowChecks
 
         try
         {
-            var foundation = SqliteEmbeddedFoundation.ForChildQualification(path, "child-owner", model.Type);
+            var foundation = OpenFoundation("child-owner");
             await foundation.InstallShippedAsync(token);
+            if (shipped)
+                Check(SqliteEmbeddedHosting.TakesChildren, "the SQLite shipped host advertises owned child starts");
             await using var service = foundation.CreateHostedService(model, Escalate, loop, fenceInBatch);
             await service.StartAsync(token);
             var ingress = await foundation.OpenIngressAsync(token);
@@ -84,7 +86,7 @@ internal static class SqliteChildWorkflowChecks
                 "another tenant cannot see the child");
             await service.StopAsync(token);
 
-            var replacement = SqliteEmbeddedFoundation.ForChildQualification(path, "replacement-child-owner", model.Type);
+            var replacement = OpenFoundation("replacement-child-owner");
             await replacement.InstallShippedAsync(token);
             await using var successor = replacement.CreateHostedService(model, Escalate, loop, fenceInBatch);
             await successor.StartAsync(token);
@@ -194,12 +196,18 @@ internal static class SqliteChildWorkflowChecks
             await successor.StopAsync(token);
             await CheckRegistryGuardAsync(guardParent, guardRunning, guardEnded);
 
-            var shipped = new SqliteEmbeddedFoundation(path, "other-format", model.Type);
+            var mismatched = shipped
+                ? SqliteEmbeddedFoundation.ForChildQualification(path, "other-format", model.Type)
+                : new SqliteEmbeddedFoundation(path, "other-format", model.Type);
             var refused = false;
-            try { await shipped.InstallShippedAsync(token); }
+            try { await mismatched.InstallShippedAsync(token); }
             catch (StoreFormatException) { refused = true; }
-            Check(refused, "the shipped SQLite installer refuses the private child profile");
+            Check(refused, "the SQLite installer refuses a child store from a different protocol");
             return 0;
+
+            SqliteEmbeddedFoundation OpenFoundation(string node) => shipped
+                ? new SqliteEmbeddedFoundation(path, node, model.Type)
+                : SqliteEmbeddedFoundation.ForChildQualification(path, node, model.Type);
 
             async Task<Contract.ActorRef> StartAsync(string definition, string operation)
             {
