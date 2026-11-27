@@ -147,7 +147,7 @@ internal static class RootScheduleInventory
         return new(entries.Take(limit).ToArray(), entries.Length > limit ? entries[limit - 1].Key : null);
     }
 
-    private static FormattableString Bind(FormattableString query, Func<FormattableString, FormattableString>? bindSource) =>
+    internal static FormattableString Bind(FormattableString query, Func<FormattableString, FormattableString>? bindSource) =>
         bindSource?.Invoke(query) ?? FormattableStringFactory.Create(
             query.Format.Replace("/*schedule-source*/", """SELECT true AS "SourceReady" """, StringComparison.Ordinal), query.GetArguments());
 
