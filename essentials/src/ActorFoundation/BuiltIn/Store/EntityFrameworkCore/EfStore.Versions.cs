@@ -79,6 +79,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootDirectTestRunQualification => new(3, 131, 1);
     internal static StoreFormat RootPublicEventStartsQualification => new(3, 132, 1);
     internal static StoreFormat RootKeyedStartsQualification => new(3, 133, 1);
+    internal static StoreFormat RootPagedPublicEventsQualification => new(3, 137, 1);
     internal static StoreFormat RootEphemeralTestRunQualification => new(3, 134, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
@@ -142,7 +143,8 @@ internal enum RootCapabilities : long
     EventStartScan = 1L << 39,
     PublicEventStarts = 1L << 40,
     DirectTestRuns = 1L << 41,
-    KeyedStarts = 1L << 43
+    KeyedStarts = 1L << 43,
+    PagedPublicEvents = 1L << 45
 }
 
 internal static class RootProfiles
@@ -193,6 +195,7 @@ internal static class RootProfiles
     internal const RootCapabilities EventStartScanQualification = EventStartReceiptsQualification | RootCapabilities.EventStartScan;
     internal const RootCapabilities SharedActivationQualification = EventStartScanQualification | InlinePromotionQualification;
     internal const RootCapabilities PublicEventStartsQualification = SharedActivationQualification | RootCapabilities.PublicEventStarts;
+    internal const RootCapabilities PagedPublicEventsQualification = PublicEventStartsQualification | RootCapabilities.PagedPublicEvents;
     internal const RootCapabilities DirectTestRunQualification = PreparedStartsQualification | RootCapabilities.DirectTestRuns;
     internal const RootCapabilities KeyedStartsQualification = SharedActivationQualification | RootCapabilities.KeyedStarts;
     internal const RootCapabilities EphemeralTestRunQualification = SharedActivationQualification | RootCapabilities.DirectTestRuns;
@@ -553,6 +556,7 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootDirectTestRunQualification =>
                     sqlite ? SqliteDirectTestRunRevision : PostgreSqlDirectTestRunRevision,
                 _ when db.RequiredFormat == StoreFormat.RootKeyedStartsQualification => sqlite ? 31 : 28,
+                _ when db.RequiredFormat == StoreFormat.RootPagedPublicEventsQualification => sqlite ? 33 : 30,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision
             },
             JournalCodec = 0

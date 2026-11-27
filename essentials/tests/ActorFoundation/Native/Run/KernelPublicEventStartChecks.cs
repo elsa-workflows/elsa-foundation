@@ -449,7 +449,7 @@ internal static partial class KernelAuthoredEventChecks
 
                 var previous = await RootPublicEventPublications.ReadReplayAsync(db, scope.Tenant, scope.Tenant + "_" + key, "event\0id",
                     FoundationRootCreator.OperationDigest("event\0id"), 50, sql => RootPublicEventStarts.Bind(sql, bind), token);
-                Check(previous == recreated.Publication!.Incarnation, "a clock backstep after id reuse returns the newest receipt");
+                Check(previous?.Incarnation == recreated.Publication!.Incarnation, "a clock backstep after id reuse returns the newest receipt");
                 var olderPayload = await db.Database.SqlQuery<bool>($"""
                     SELECT "ReceiptUntil" IS NULL AND "KeepUntil" IS NOT NULL AND "Payload" = {"outside payload"} AS "Value"
                     FROM "FoundationPublicEventPublications" WHERE "Incarnation" = {outside.Publication!.Incarnation.ToString("N")}

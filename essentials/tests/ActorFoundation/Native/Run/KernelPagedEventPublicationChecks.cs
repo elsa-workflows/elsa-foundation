@@ -1,6 +1,7 @@
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -18,7 +19,7 @@ internal static partial class KernelAuthoredEventChecks
         try
         {
             var (open, ingress, reads, owner, _, restart) = await OpenAsync(model, provider,
-                Path.Combine(directory.FullName, "store.db"), inBatch, token, publicStarts: true);
+                Path.Combine(directory.FullName, "store.db"), inBatch, token, publicStarts: true, pagedPublicEvents: !physicalPages);
             await using var initialOwner = owner;
             var actors = new List<Contract.ActorRef>();
             for (var index = 0; index < 3; index++)
@@ -57,7 +58,12 @@ internal static partial class KernelAuthoredEventChecks
                 "a duplicate before matching sees the original pending publication");
 
             await using var resumed = await restart(token);
-            await UntilAsync(DeliveredAsync);
+            await UntilAsync(async () =>
+            {
+                if (resumed is SqliteEmbeddedHostedService { LastError: { } fault })
+                    throw new InvalidOperationException("The SQLite publication owner reported a fault.", fault);
+                return await DeliveredAsync();
+            });
             var settled = await ingress.SendAsync(scope, target, publicationId, "ignored", null, options, token);
             Check(settled is { Outcome: Contract.AdmissionOutcome.Duplicate, Publication.Status: Contract.PublicationStatus.Matched } &&
                 settled.Publication.Incarnation == accepted.Publication!.Incarnation,

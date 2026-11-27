@@ -42,6 +42,7 @@ public sealed partial class EfStore
         internal bool TakesLiveEventWaits { get; set; }
         internal bool KeepsEventWaits { get; set; }
         internal bool SupportsPublicEventRequests { get; set; }
+        internal bool PagesPublicEvents { get; set; }
         internal bool PublishesAuthoredEvents { get; set; }
         internal bool MeasuresDueBacklog { get; set; }
         internal bool RefusesParkedOperators { get; set; }
@@ -166,6 +167,7 @@ public sealed partial class EfStore
             scope.TakesLiveEventWaits = db.UsesRootLiveEventWaits;
             scope.KeepsEventWaits = db.UsesRootPublicEventStarts;
             scope.SupportsPublicEventRequests = db.UsesRootPublicEventStarts;
+            scope.PagesPublicEvents = db.UsesRootPagedPublicEvents;
             scope.PublishesAuthoredEvents = db.UsesRootAuthoredEvents;
             if (scope.PublishesAuthoredEvents && RootSelfIssuer is null)
                 throw new StoreFormatException("Authored event publication requires the bound root issuer.");

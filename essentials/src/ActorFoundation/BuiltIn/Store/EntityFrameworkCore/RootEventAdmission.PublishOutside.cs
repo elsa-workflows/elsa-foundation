@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 using Contract = Kernel.Foundation.Contracts;
 using static Kernel.EntityFramework.RootAdmissionWire;
@@ -41,7 +42,7 @@ internal static partial class RootEventAdmission
         var operation = FoundationRootCreator.OperationDigest(id);
         FormattableString BindPublic(FormattableString sql) => RootPublicEventStarts.Bind(sql, bind);
         if (await RootPublicEventPublications.ReadReplayAsync(db, tenant, qualified, id, operation, now, BindPublic, token) is { } replay)
-            return (HeldRootAdmission.Duplicate, new(key, id, replay, Contract.PublicationStatus.Matched));
+            return (HeldRootAdmission.Duplicate, replay);
         if (caller is null) attempt?.RequireCapacity();
 
         var incarnation = Guid.NewGuid();
@@ -50,6 +51,22 @@ internal static partial class RootEventAdmission
         long? keepThrough = caller is null ? checked(now + (long)retention.TotalMilliseconds) : null;
         var receiptThrough = checked(now + (long)receiptWindow.TotalMilliseconds);
         var keepInputsThrough = keepThrough ?? receiptThrough;
+        if (caller is null && db.UsesRootPagedPublicEvents)
+        {
+            var partitions = await db.Database.SqlQuery<int>(BindPublic($"""
+                WITH source AS MATERIALIZED (/*public-event-start-source*/)
+                SELECT "Partitions" AS "Value" FROM "FoundationRootIssuer", source WHERE "SourceReady"
+                """)).ToListAsync(token);
+            if (partitions is not [> 0 and var count]) throw new StoreFormatException("The public Event publisher has no installed partition source.");
+            var publication = new EventRow(qualified, id, payload, keepInputsThrough);
+            var dispatch = RootPublicEventTicket.Outside(publication, incarnation, occurrence, count, receiptThrough);
+            attempt?.Require(dispatch.Target.Partition);
+            await RootPublicEventPublications.InsertAsync(db, tenant, qualified, id, operation, incarnation, occurrence,
+                payload, now, receiptThrough, keepThrough, BindPublic, token);
+            await RootPublicEventDispatch.AddAsync(db, occurrence, dispatch.Id, dispatch.Target.Id, dispatch.Target.Partition, bind, token);
+            await dispatch.EnqueueAsync(db, bind, token);
+            return (HeldRootAdmission.Accepted, new(key, id, incarnation, Contract.PublicationStatus.Pending));
+        }
         var waits = await ReadWaitsAsync(db, tenant, qualified, BindLive, bind is not null, token);
         if (waits.Count > FoundationMetadataLimits.MaxTurnSends) throw FanoutFull();
         var recipients = caller is null ? null : waits.Select(wait => wait.Actor!).Distinct(StringComparer.Ordinal)

@@ -72,6 +72,7 @@ public static partial class SqliteEmbeddedHosting
               qualificationFormat == StoreFormat.RootEventStartReceiptsQualification || qualificationFormat == StoreFormat.RootEventStartScanQualification ||
               qualificationFormat == StoreFormat.RootDirectTestRunQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
               qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||
+              qualificationFormat == StoreFormat.RootPagedPublicEventsQualification ||
               qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat == StoreFormat.RootEphemeralTestRunQualification;
 
         public ValueTask<Contract.ActorPlaybackPage?> ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,

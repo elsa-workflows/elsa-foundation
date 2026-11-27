@@ -163,6 +163,7 @@ public static partial class SqliteEmbeddedHosting
                   format == StoreFormat.RootEventStartReceiptsQualification || format == StoreFormat.RootEventStartScanQualification ||
                   format == StoreFormat.RootDirectTestRunQualification || format == StoreFormat.RootSharedActivationQualification ||
                   format == StoreFormat.RootPublicEventStartsQualification ||
+                  format == StoreFormat.RootPagedPublicEventsQualification ||
                   format == StoreFormat.RootKeyedStartsQualification || format == StoreFormat.RootEphemeralTestRunQualification
                 : TakesHttpWaits;
 
@@ -171,7 +172,7 @@ public static partial class SqliteEmbeddedHosting
                     admission.PublishRequestAsync(request, key, payload, ct, attempt), token);
 
             public bool SupportsPublicEvents => owner.QualificationFormat is { } format
-                ? format == StoreFormat.RootPublicEventStartsQualification
+                ? format == StoreFormat.RootPublicEventStartsQualification || format == StoreFormat.RootPagedPublicEventsQualification
                 : RootProfiles.Shipped.HasFlag(RootCapabilities.PublicEventStarts);
 
             public bool SupportsKeys => owner.QualificationFormat == StoreFormat.RootKeyedStartsQualification;

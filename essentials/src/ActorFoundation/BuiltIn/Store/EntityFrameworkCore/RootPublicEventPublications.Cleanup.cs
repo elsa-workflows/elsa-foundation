@@ -29,7 +29,7 @@ internal static partial class RootPublicEventPublications
                 ORDER BY p."CleanupAt", p."Ordinal" LIMIT 1
             )
             SELECT source."SourceReady", expired.* FROM source LEFT JOIN expired ON true
-            """, bind)).SingleAsync(token);
+            """, db.UsesRootPagedPublicEvents, bind)).SingleAsync(token);
         RequireCleanupSource(next.SourceReady);
         return next.Ordinal is null ? null : next;
     }
@@ -47,7 +47,7 @@ internal static partial class RootPublicEventPublications
                     AND p."CleanupAt" < {now} AND (SELECT "SourceReady" FROM source) /*uncovered*/
             )
             SELECT source."SourceReady", expired.* FROM source LEFT JOIN expired ON true
-            """, bind)).SingleAsync(token);
+            """, db.UsesRootPagedPublicEvents, bind)).SingleAsync(token);
         RequireCleanupSource(expired.SourceReady);
         if (expired.Occurrence is null) return false;
         if (expired.ClosedKeepUntil is { } closedKeepUntil)
@@ -83,9 +83,15 @@ internal static partial class RootPublicEventPublications
         return true;
     }
 
-    private static FormattableString CleanupSql(FormattableString query, Func<FormattableString, FormattableString>? bind) =>
-        RootPublicEventStarts.Bind(FormattableStringFactory.Create(query.Format.Replace("/*uncovered*/", Uncovered, StringComparison.Ordinal),
+    private static FormattableString CleanupSql(FormattableString query, bool paged, Func<FormattableString, FormattableString>? bind)
+    {
+        var uncovered = paged ? Uncovered + """
+            AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventDispatch" d
+                WHERE d."Occurrence" = p."Occurrence" AND d."Status" = 0)
+            """ : Uncovered;
+        return RootPublicEventStarts.Bind(FormattableStringFactory.Create(query.Format.Replace("/*uncovered*/", uncovered, StringComparison.Ordinal),
             query.GetArguments()), bind);
+    }
 
     private static void RequireCleanupSource(bool ready)
     {

@@ -87,6 +87,8 @@ public sealed partial class EfStore
         }
         IReadOnlyList<SubscriptionRow> newKeeping = keeping.Length == 0 ? [] :
             await RootPublicEventLiveWaits.NewAsync(db, keeping, bindEventSource, cancellationToken);
+        if (root is RootPublicationCheckpoint publication)
+            await publication.PrepareAsync(db, marker, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = checkedMarkTime is null };
         if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);

@@ -183,7 +183,7 @@ internal static partial class KernelAuthoredEventChecks
         IAsyncDisposable Owner, EventStartPort? Events, Func<CancellationToken, Task<IAsyncDisposable>> Restart)>
         OpenAsync(Contract.IActorType model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
             bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false,
-            Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null)
+            Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null, bool pagedPublicEvents = false)
     {
         if (eventStarts) authorizeOperator ??= Authorize;
         const string node = "authored-event-owner";
@@ -196,7 +196,8 @@ internal static partial class KernelAuthoredEventChecks
 
         if (provider == "sqlite")
         {
-            var sqlite = publicStarts ? SqliteEmbeddedFoundation.ForPublicEventStartsQualification(path, node, model.Type) :
+            var sqlite = pagedPublicEvents ? SqliteEmbeddedFoundation.ForPagedPublicEventsQualification(path, node, model.Type) :
+                publicStarts ? SqliteEmbeddedFoundation.ForPublicEventStartsQualification(path, node, model.Type) :
                 orderedScan ? SqliteEmbeddedFoundation.ForEventStartScanQualification(path, node, model.Type, (_, _) => ValueTask.FromResult(true)) :
                 retainReceipts ? SqliteEmbeddedFoundation.ForEventStartReceiptsQualification(path, node, model.Type, (_, _) => ValueTask.FromResult(true)) :
                 eventStarts ? SqliteEmbeddedFoundation.ForEventStartsQualification(path, node, model.Type) :
@@ -205,6 +206,7 @@ internal static partial class KernelAuthoredEventChecks
             var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
                 { DataSource = path, Pooling = false }.ConnectionString).Options;
             KernelDb Open() => KernelDb.ForSqliteRootShipped(options,
+                pagedPublicEvents ? StoreFormat.RootPagedPublicEventsQualification :
                 publicStarts ? StoreFormat.RootPublicEventStartsQualification : orderedScan ? StoreFormat.RootEventStartScanQualification :
                 retainReceipts ? StoreFormat.RootEventStartReceiptsQualification :
                 eventStarts ? StoreFormat.RootEventStartsQualification : StoreFormat.RootAuthoredEventsQualification);
@@ -227,7 +229,8 @@ internal static partial class KernelAuthoredEventChecks
 
         var pg = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
             throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).Options;
-        KernelDb OpenPostgres() => publicStarts ? KernelDb.ForPostgresRootPublicEventStartsQualification(pg) :
+        KernelDb OpenPostgres() => pagedPublicEvents ? KernelDb.ForPostgresRootPagedPublicEventsQualification(pg) :
+            publicStarts ? KernelDb.ForPostgresRootPublicEventStartsQualification(pg) :
             orderedScan ? KernelDb.ForPostgresRootEventStartScanQualification(pg) :
             retainReceipts ? KernelDb.ForPostgresRootEventStartReceiptsQualification(pg) :
             eventStarts ? KernelDb.ForPostgresRootEventStartsQualification(pg) :
