@@ -28,7 +28,7 @@ cannot do this itself, since runtime projects take no design reference.
 - **Kind:** Replacement (one coordinator owns the activation lifecycle of every slot in a shell).
 - **Implementation:** `KernelActivationCoordinator`, scoped. It maps the executable (`NativeExecutableMapper`), checks
   routes and schedules over the serving set (`KernelServing`), moves the slot through `IWorkflowActivationSwitch` with
-  empty projections, then serves. A mapping refusal fails at `Mapping`, a serving refusal at `ServingCheck`.
+  schedule claims for adapters that require them, then serves. A mapping refusal fails at `Mapping`, a serving refusal at `ServingCheck`.
   `ServeActiveSlotsAsync` serves every active slot when a host starts.
 - **Replaces:** `WorkflowActivationCoordinator`, the [Runtime catalog's](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md) default, through the feature only.
 
@@ -42,8 +42,13 @@ cannot do this itself, since runtime projects take no design reference.
 
 ### `IScheduleActors` *(Feature contract — `Elsa.Workflows.Runtime.KernelHost`)*
 - **Kind:** Replacement owned by the host (one per host, shared with its shells by instance).
-- **Signature:** `RegisterRunAsync(startKey, run)`, `SetAsync(key, revision, schedule, startKey)`, `StopAsync(key, revision)`.
+- **Signature:** `RequiresPublicationClaims` (default `false`), `RegisterRunAsync(startKey, run)`,
+  `SetAsync(key, revision, schedule, startKey)`, `StopAsync(key, revision)`.
 - **Usage:** how `KernelActivationCoordinator` reaches the kernel's schedule actors for a served Timer or Cron.
+  An adapter that requires claims needs a switch that reserves each schedule key in the activation transaction.
+  The coordinator verifies exact active claim bindings before it registers or arms the schedule. Existing active
+  slots need those bindings before such an adapter can serve them. Provider occurrence fencing is tracked in
+  [#5774](https://github.com/elsa-workflows/elsa-foundation/issues/5774).
 - **Implementations:** `IngressScheduleActors`, on a host whose foundation hosts the schedule actor, through its
   ingress. `UnavailableScheduleActors`, on a host that runs none: setting a schedule or registering a run throws its
   reason, and stopping and unregistering do nothing. Such a host also says `Schedules: false` in its

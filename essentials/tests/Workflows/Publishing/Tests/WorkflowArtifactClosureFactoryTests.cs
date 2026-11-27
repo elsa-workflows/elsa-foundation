@@ -108,6 +108,12 @@ public sealed class WorkflowArtifactClosureFactoryTests
             dependencies: WorkflowArtifactExportFixture.DependencyOn(child, "p-root"));
         await fixture.PublishAsync(parent);
         await fixture.AddTriggerBindingAsync(parent, "p-root");
+        await fixture.TriggerBindings.PrepareActivationAsync("schedule-activation",
+            [new("schedule-claim", parent.Identity.ArtifactId, parent.Identity.DefinitionId, parent.Identity.ArtifactVersion,
+                parent.Identity.ArtifactHash, "p-root", "kernel-schedule-publication-v1", "schedule-key", null,
+                new Dictionary<string, string>(), DateTimeOffset.UnixEpoch, "schedule-activation", "schedule-slot",
+                TriggerCardinality.ReservationOnly)]);
+        await fixture.TriggerBindings.ActivateAsync("schedule-activation", null);
 
         var closure = await fixture.CreateFactory().CreateAsync(parent.Identity.DefinitionVersionId);
 

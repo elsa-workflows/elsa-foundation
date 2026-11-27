@@ -11,6 +11,9 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 /// </summary>
 public interface IScheduleActors
 {
+    /// <summary>Whether the adapter requires the host to own each schedule at the publication transaction boundary.</summary>
+    bool RequiresPublicationClaims => false;
+
     /// <summary>Registers the run each occurrence starts on the trigger's start key; null removes it.</summary>
     ValueTask RegisterRunAsync(string startKey, Models.WorkflowStart? run, CancellationToken cancellationToken = default);
 
