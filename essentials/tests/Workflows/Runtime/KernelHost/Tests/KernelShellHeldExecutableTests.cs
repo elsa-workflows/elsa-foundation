@@ -246,6 +246,7 @@ public sealed class KernelShellHeldExecutableTests
                 (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(sp, pinStore.ImplementationType!), unavailable));
             new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = foundationPath, PostgresConnectionString = foundation }
                 .ConfigureServices(services);
+            services.AddPersistenceModes();
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }
