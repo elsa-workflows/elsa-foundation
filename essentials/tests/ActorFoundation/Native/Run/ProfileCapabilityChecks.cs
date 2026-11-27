@@ -316,8 +316,22 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(lineagePostgres) is { StoreSchema: 1, MessageProtocol: 17, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(lineageSqlite) is { StoreSchema: 2, MessageProtocol: 20, JournalCodec: 0 },
             "the occurrence lineage has a closed private profile and provider-specific definitions");
+        using var authoredPostgres = KernelDb.ForPostgresRootAuthoredEventsQualification(options);
+        using var authoredSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootAuthoredEventsQualification);
+        Check(authoredPostgres.RequiredFormat == new StoreFormat(3, 126, 1) && authoredSqlite.RequiredFormat == authoredPostgres.RequiredFormat &&
+            authoredPostgres.Capabilities == (RootProfiles.PreparedStartsQualification | RootCapabilities.AuthoredEvents) &&
+            authoredSqlite.Capabilities == authoredPostgres.Capabilities &&
+            authoredPostgres.UsesRootAuthoredEvents && authoredSqlite.UsesRootAuthoredEvents &&
+            !sharedPostgres.UsesRootAuthoredEvents && !sharedSqlite.UsesRootAuthoredEvents &&
+            RootScheduleOwnerMode.Applies(authoredPostgres) && RootScheduleOwnerMode.Applies(authoredSqlite) &&
+            RootProfiles.MissingPrerequisites(authoredPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(authoredPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(authoredPostgres) is { StoreSchema: 1, MessageProtocol: 20, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(authoredSqlite) is { StoreSchema: 2, MessageProtocol: 23, JournalCodec: 0 },
+            "private authored events only widen the protocol-35 wire and write path on both physical providers");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
-            playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities;
+            playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
+            authoredPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -351,6 +365,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
             [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
             [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
+            [RootCapabilities.AuthoredEvents] = RootCapabilities.LiveEventWaits | RootCapabilities.SelfProtocol,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
             [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
