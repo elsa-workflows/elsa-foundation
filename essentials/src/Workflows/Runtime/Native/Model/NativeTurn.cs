@@ -1,7 +1,15 @@
+using Models = Kernel.Model.Contracts;
 using System.Text.Json.Nodes;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
+
+internal readonly record struct ChildWorkflowTarget(string Id, Workflow? Selected = null)
+{
+    internal Models.WorkflowStart Start(string mode, JsonObject? input) => Selected is { } workflow
+        ? NativeExecutionModel.Start(workflow, mode, input)
+        : NativeExecutionModel.Start(Id, mode, input);
+}
 
 internal interface INativeTurn
 {
@@ -23,8 +31,8 @@ internal interface INativeTurn
     void Hold(Contract.Message message);
     void Reply(Contract.Message message, object? reply);
     string SendToSelf(string kind, object? payload = null, long? dueAt = null);
-    WaitEntry StartChild(string frame, string workflow, string mode, JsonObject? input);
-    Contract.ActorRef StartDetached(string workflow, string mode, JsonObject? input);
+    WaitEntry StartChild(string frame, ChildWorkflowTarget workflow, string mode, JsonObject? input);
+    Contract.ActorRef StartDetached(ChildWorkflowTarget workflow, string mode, JsonObject? input);
     void CancelChild(WaitEntry child);
     void StartJob(string key, BackgroundArgs arguments, TimeSpan? timeout);
     void CancelJob(string key);

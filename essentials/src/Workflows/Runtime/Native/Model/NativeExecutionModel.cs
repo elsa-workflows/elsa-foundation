@@ -31,7 +31,7 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
 
     /// <summary>A start of a registered workflow, under its definition.</summary>
     public static Models.WorkflowStart Start(Workflow workflow, string mode = Modes.Balanced, JsonObject? input = null) =>
-        Start(workflow.Id, mode, input, definition: workflow.Definition);
+        Start(workflow.Id, mode, input, definition: workflow.Definition) with { ExecutableSelection = workflow.ExecutableSelection };
 
     public object CreateState(Models.WorkflowStart start) => NewState(start.Input);
 
@@ -79,12 +79,10 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
 
     private ValueTask RunTurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
     {
-        var bridge = new ContractTurn(turn, outbound, definitionOf: DefinitionOf, structuralJournal: _options.UseStructuralJournal);
+        var bridge = new ContractTurn(turn, outbound, structuralJournal: _options.UseStructuralJournal);
         bridge.RecordClock();
         return new Burst(registry, _options, bridge, cancellationToken).RunAsync();
     }
-
-    private string? DefinitionOf(string workflow) => registry.TryGet(workflow, out var found) ? found.Definition : null;
 
     /// <summary>Whether <paramref name="workflow"/> is one the registry lacks and the host may load (<see cref="NativeExecutionOptions.ResolveWorkflow"/>).</summary>
     private bool Resolves(string workflow) => _options.ResolveWorkflow is not null && !registry.Contains(workflow);

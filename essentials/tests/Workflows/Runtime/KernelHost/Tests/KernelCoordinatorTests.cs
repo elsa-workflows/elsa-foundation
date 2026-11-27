@@ -965,6 +965,31 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
+    public async Task A_matched_start_selects_the_served_executable_even_when_the_historical_registry_has_a_same_id_replacement()
+    {
+        var host = new Host(capabilities: StartRoutesOnly);
+        var published = Orders("orders@1");
+        Assert.True((await host.ActivateAsync(published, "orders-1")).Succeeded);
+        var original = host.Serving.Registry.Get("orders@1");
+        var match = Assert.IsType<Native.NativeHttpRouteMatch>(KernelHttpEdge.Route(host.Serving, "POST", "/orders"));
+        var different = Orders("orders@1", "replacement");
+        var replacement = NativeExecutableMapper.Map(new WorkflowExecutable(
+            published.Identity with { ArtifactHash = "sha256:replacement" }, different.RootActivity,
+            different.ResumeTargets, different.CreatedAt, different.CompatibilityMetadata, different.IncidentStrategy));
+        Assert.Equal(original.Id, replacement.Id);
+        Assert.NotNull(original.ExecutableSelection);
+        Assert.NotEqual(original.ExecutableSelection, replacement.ExecutableSelection);
+        host.Serving.Registry.Add(replacement);
+        Assert.Same(replacement, host.Serving.Registry.Get("orders@1"));
+
+        var start = Assert.IsType<KernelHttpStart>(
+            KernelHttpEdge.Start(host.Serving, match, new Native.HttpRequest("POST", "/workflows/http/orders")));
+
+        using var header = System.Text.Json.JsonDocument.Parse(start.Spec.TypeData);
+        Assert.Equal(original.ExecutableSelection, header.RootElement.GetProperty("ExecutableSelection").GetString());
+    }
+
+    [Fact]
     public async Task The_edge_resolves_a_served_wait_and_refuses_another_method_or_unknown_path()
     {
         var host = new Host();
