@@ -6,9 +6,11 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -118,16 +120,65 @@ internal static class KernelExecutablePinContract
         Assert.Equal(2, (await collector.SweepAsync()).DeletedArtifactCount);
         Assert.False(await roots.TryPinAsync([first, second]));
 
+        await RefuseReplacementAsync(Artifact("replacement-root"), dependencyToReplace: null);
+        var racedDependency = Artifact("replacement-dependency");
+        var dependent = Artifact("replacement-parent",
+            new WorkflowExecutableDependency(racedDependency.Identity.ArtifactId, racedDependency.Identity.ArtifactHash, ["root"]));
+        await RefuseReplacementAsync(dependent, racedDependency);
+
+        async Task RefuseReplacementAsync(WorkflowExecutable root, WorkflowExecutable? dependencyToReplace)
+        {
+            var old = dependencyToReplace ?? root;
+            var replacement = Material(old.Identity with { ArtifactHash = old.Identity.ArtifactHash + "-new" }, []);
+            if (dependencyToReplace is not null) await material.SaveAsync(dependencyToReplace);
+            await material.SaveAsync(root);
+            await using var replacingScope = app.CreateAsyncScope();
+            var replacing = replacingScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+            var hook = new BeforeLeaseStore(material, old.Identity.ArtifactId, async token =>
+            {
+                var deletion = Assert.IsType<WorkflowExecutableDeletionGuard>(await replacing.TryBeginDeletionAsync(old.Identity.ArtifactId,
+                    "replace-before-lease", now.AddMinutes(1), now, token));
+                Assert.True(await replacing.DeleteAsync(deletion, now, token));
+                await replacing.SaveAsync(replacement, token);
+            });
+            var manager = new WorkflowExecutableRootWriteLeaseManager(hook, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), clock);
+            var racedPins = new EfRuntimeKernelExecutablePinStore(db, new Access(tenant), material, manager, clock);
+            var pin = new RuntimeKernelExecutablePin(tenant, tenant.Value, root.Identity.ArtifactId, root.Identity, "race-issuance");
+            await Assert.ThrowsAsync<WorkflowExecutableDependencyGraphException>(() => racedPins.TryPinAsync([pin]).AsTask());
+            Assert.Equal(replacement.Identity, (await replacing.FindMaterialAsync(old.Identity.ArtifactId))?.Identity);
+            Assert.Empty(await racedPins.ListPinnedExecutableArtifactIdsAsync());
+        }
+
         static ValueTask<RuntimeKernelExecutablePinProof> UnexpectedProof(RuntimeKernelExecutablePin _, CancellationToken __) =>
             throw new InvalidOperationException("The store must not ask for a proof of this pin.");
 
-        WorkflowExecutable Artifact(string id, params WorkflowExecutableDependency[] dependencies) => new(
-            new(id, "definition-" + id, "version-" + id, "1", "hash-" + id),
+        WorkflowExecutable Artifact(string id, params WorkflowExecutableDependency[] dependencies) =>
+            Material(new(id, "definition-" + id, "version-" + id, "1", "hash-" + id), dependencies);
+
+        WorkflowExecutable Material(WorkflowExecutableIdentity identity, WorkflowExecutableDependency[] dependencies) => new(identity,
             new ExecutableNode("root", "authored", "test/activity", "1.0.0",
                 new RuntimeActivityDescriptor("test", "1.0.0", JsonSerializer.SerializeToElement(new { })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
             new Dictionary<string, WorkflowExecutableResumeTarget>(), now.AddHours(-1), new Dictionary<string, string>(),
             inputContract: null, dependencies: dependencies, incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+    }
+
+    private sealed class BeforeLeaseStore(IWorkflowExecutableStore inner, string target, Func<CancellationToken, Task> beforeLease)
+        : WorkflowExecutableStoreDecorator(inner), IWorkflowExecutableStore
+    {
+        private int _ran;
+
+        bool IWorkflowExecutableStore.SupportsModelMaterial => Inner.SupportsModelMaterial;
+        ValueTask<RuntimeStorePage<RuntimeExecutionMaterial>> IWorkflowExecutableStore.ListMaterialPageAsync(
+            RuntimeStorePageRequest request, CancellationToken cancellationToken) => Inner.ListMaterialPageAsync(request, cancellationToken);
+
+        public override async ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(string artifactId,
+            string leaseId, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default)
+        {
+            if (artifactId == target && Interlocked.Exchange(ref _ran, 1) == 0)
+                await beforeLease(cancellationToken);
+            return await base.TryAcquireRootWriteLeaseAsync(artifactId, leaseId, expiresAt, now, cancellationToken);
+        }
     }
 
     private sealed class Access(PersistenceScope scope) : IPersistenceAccessContextAccessor

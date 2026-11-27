@@ -62,7 +62,8 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
                                 accepted = true;
                                 return;
                             }
-                            var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token);
+                            var roots = current.Missing.Select(pin => pin.Executable).Distinct().ToArray();
+                            var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token, expectedRoots: roots);
                             context.KernelExecutablePins.AddRange(current.Missing.Select(Create));
                             await context.SaveChangesAsync(token);
                             foreach (var (grant, expires) in deadlines)
