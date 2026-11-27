@@ -64,8 +64,12 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
 
         var provenance = WorkflowExecutableSourceProvenance.From(source);
         var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable);
-        if (mode == PersistenceMode.Ephemeral && (!runtime.TakesEphemeralTestRuns || triggered))
+        var inline = mode == PersistenceMode.Ephemeral;
+        if (inline && (!runtime.TakesEphemeralTestRuns || triggered))
             return Refused("EphemeralTestRunUnavailable");
+        var admissions = inline ? services.GetRequiredService<IWorkflowTestScopeAdmissionStore>() : null;
+        if (admissions is not null && !await admissions.BeginInlineStartAsync(test, clock.GetUtcNow, cancellationToken))
+            return UnknownInlineResult();
 
         Workflow workflow;
         try
@@ -76,6 +80,8 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         }
         catch (NativeMappingRefusedException error)
         {
+            if (admissions is not null && !await SettleInlineStartAsync(admissions, WorkflowTestRunInlineState.Refused))
+                return UnknownInlineResult();
             return Refused(error.Message);
         }
 
@@ -109,7 +115,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         var native = NativeExecutionModel.Start(workflow.Id, mode.ToString(), input, request.TriggerNodeId, stimulus, workflow.Definition)
             with { ExecutableSelection = workflow.ExecutableSelection };
         var spec = WorkflowActor.Start(native, null, selection);
-        if (mode == PersistenceMode.Ephemeral) return await StartInlineAsync();
+        if (admissions is not null) return await StartInlineAsync(admissions);
         if (http && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync")
         {
             if (dispatchOptions?.TestRunHttpBudget is not { } budget)
@@ -146,14 +152,13 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         WorkflowExecutionStartDispatchResult Refused(string reason) => KernelPublishedRunDispatcher.Result(
             test.ScopeId, executable.Identity, provenance, new(AdmissionOutcome.Refused), clock.GetUtcNow(), reason);
 
-        async ValueTask<WorkflowExecutionStartDispatchResult> StartInlineAsync()
-        {
-            var admissions = services.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
-            WorkflowExecutionStartDispatchResult Result(InlineStartOutcome outcome) => KernelPublishedRunDispatcher.InlineResult(
-                test.ScopeId, executable.Identity, provenance, outcome, clock.GetUtcNow(), testRun: true);
-            var unknown = new InlineStartOutcome(InlineStartDisposition.Unknown);
-            if (!await admissions.BeginInlineStartAsync(test, clock.GetUtcNow, cancellationToken)) return Result(unknown);
+        WorkflowExecutionStartDispatchResult InlineResult(InlineStartOutcome outcome) => KernelPublishedRunDispatcher.InlineResult(
+            test.ScopeId, executable.Identity, provenance, outcome, clock.GetUtcNow(), testRun: true);
 
+        WorkflowExecutionStartDispatchResult UnknownInlineResult() => InlineResult(new(InlineStartDisposition.Unknown));
+
+        async ValueTask<WorkflowExecutionStartDispatchResult> StartInlineAsync(IWorkflowTestScopeAdmissionStore admissionStore)
+        {
             var outcome = await runtime.StartInlineTestAsync(test.ScopeId, spec, workflow, cancellationToken);
             var settlement = outcome switch
             {
@@ -164,17 +169,22 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
                 { Disposition: InlineStartDisposition.Unavailable } => WorkflowTestRunInlineState.Unavailable,
                 _ => (WorkflowTestRunInlineState?)null
             };
-            if (settlement is not { } definite) return Result(outcome);
+            if (settlement is { } definite && !await SettleInlineStartAsync(admissionStore, definite))
+                return UnknownInlineResult();
+            return InlineResult(outcome);
+        }
 
-            // A disconnected HTTP caller does not undo an outcome already returned by the owner.
+        async ValueTask<bool> SettleInlineStartAsync(IWorkflowTestScopeAdmissionStore admissionStore, WorkflowTestRunInlineState outcome)
+        {
+            // A disconnected HTTP caller does not undo a definite outcome.
             using var record = new CancellationTokenSource(OutcomeBudget, clock);
             try
             {
-                return await admissions.SettleInlineStartAsync(test, definite, record.Token) ? Result(outcome) : Result(unknown);
+                return await admissionStore.SettleInlineStartAsync(test, outcome, record.Token);
             }
             catch (OperationCanceledException) when (record.IsCancellationRequested)
             {
-                return Result(unknown);
+                return false;
             }
         }
     }

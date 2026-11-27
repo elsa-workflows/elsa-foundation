@@ -172,6 +172,9 @@ public sealed partial class KernelPublishedExecuteTests
             SetOutput("first-output", "message", Expression("value", "JavaScript", "'recovered'", "String")))));
         var uncertain = Ephemeral(ExecutableOf("inline-uncertain", "inline-uncertain", Sequence("sequence",
             Node("blocked-script", Types.RunJavaScript, [Literal("Script", "return 1;", "String")]))));
+        var refusedInlineTest = Ephemeral(ExecutableOf("inline-test-refused", "inline-test-refused", Sequence("sequence",
+            Node("child", Types.Dispatch, [Literal("WorkflowDefinitionId", canonical.Identity.DefinitionId, "String"),
+                Literal("WaitForCompletion", true, "Boolean")]))));
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
@@ -272,7 +275,11 @@ public sealed partial class KernelPublishedExecuteTests
         await PublishAsync(recoverableFlowchart, "default");
         await materials.SaveAsync(pure, token);
         await PublishAsync(pure, "default");
-        if (recordEphemeralTestCompletion.HasValue) await materials.SaveAsync(slow, token);
+        if (recordEphemeralTestCompletion.HasValue)
+        {
+            await materials.SaveAsync(slow, token);
+            await materials.SaveAsync(refusedInlineTest, token);
+        }
         if (inline)
         {
             foreach (var candidate in new[] { slow, retractedInline, initialFault, uncertain })
@@ -291,6 +298,7 @@ public sealed partial class KernelPublishedExecuteTests
             var isolatedActors = new List<Contract.ActorRef>();
             if (recordEphemeralTestCompletion is { } recordCompletion)
             {
+                await VerifyEphemeralMappingRefusalAsync(refusedInlineTest);
                 await VerifyEphemeralTestAsync(pure, recordCompletion);
                 if (!recordCompletion) await VerifyEphemeralTestAsync(slow, expectActor: true);
                 return;
@@ -759,6 +767,39 @@ public sealed partial class KernelPublishedExecuteTests
                 return actor.Id;
             }
 
+            async Task VerifyEphemeralMappingRefusalAsync(WorkflowExecutable executable)
+            {
+                var before = await DurableRowCountAsync();
+                string scopeId;
+                await using (var authoring = await scopes.CreateAsyncScopeAsync(Scope))
+                {
+                    var (test, source, receipt) = await SubmitEphemeralTestAsync(authoring.ServiceProvider, executable);
+                    scopeId = test.ScopeId;
+                    Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, receipt.CommandDispatch.Status);
+                    Assert.Contains(KernelHostCapabilities.DispatchUnavailable, receipt.CommandDispatch.Reason);
+                    Assert.Equal(source.SourceReferenceId, receipt.PinnedSource?.SourceReferenceId);
+
+                    // Publishing closes the scope for a rejected dispatch. Do not carry its presentation into the new scope.
+                    var store = authoring.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>();
+                    var now = DateTimeOffset.UtcNow;
+                    await store.CloseAsync(new(scopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, now), token);
+                    await store.CompleteAsync(scopeId, now, token);
+                }
+
+                await using var recovered = await scopes.CreateAsyncScopeAsync(Scope);
+                var services = recovered.ServiceProvider;
+                var durable = Assert.IsType<WorkflowTestScopeRecord>(await services.GetRequiredService<IWorkflowTestScopeStore>()
+                    .FindAsync(scopeId, token));
+                var persistedSource = Assert.IsType<WorkflowExecutableSourceReference>(await services
+                    .GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(scopeId, token));
+                Assert.Equal(WorkflowTestScopeState.Closed, durable.State);
+                Assert.Null(durable.IsolatedActor);
+                Assert.Equal(WorkflowTestRunInlineState.Refused, durable.InlineStart);
+                Assert.Equal(WorkflowDirectTestRunObservation.Refused, await services.GetRequiredService<IWorkflowDirectTestRunDispatcher>()
+                    .ObserveAsync(durable, persistedSource, token));
+                Assert.Equal(before, await DurableRowCountAsync());
+            }
+
             async Task VerifyEphemeralTestAsync(WorkflowExecutable executable, bool expectActor)
             {
                 var isolated = app.Services.GetRequiredService<KernelTestRuns>().Reads;
@@ -767,15 +808,14 @@ public sealed partial class KernelPublishedExecuteTests
                 await using var authoring = await scopes.CreateAsyncScopeAsync(Scope);
                 var author = authoring.ServiceProvider;
                 var scopeStore = author.GetRequiredService<IWorkflowTestScopeStore>();
-                var dispatcher = author.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
-                var (test, source, receipt) = await SubmitAsync();
+                var (test, source, receipt) = await SubmitEphemeralTestAsync(author, executable);
                 while (receipt.CommandDispatch.Metadata.GetValueOrDefault("elsa.kernel.start.persistence-outcome") == "Unavailable" &&
                     System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(8))
                 {
                     // An owner may still be acquiring its partitions. A definitive shed response did not enter the queue.
                     await Task.Delay(100, token);
-                    (test, source, receipt) = await SubmitAsync();
+                    (test, source, receipt) = await SubmitEphemeralTestAsync(author, executable);
                 }
                 Assert.True(receipt.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted, receipt.CommandDispatch.Reason);
                 Assert.Equal(source.SourceReferenceId, receipt.PinnedSource?.SourceReferenceId);
@@ -803,28 +843,30 @@ public sealed partial class KernelPublishedExecuteTests
                 Assert.NotNull(read);
                 Assert.Equal(test.ScopeId, read.Value.Run.TestStart?.ScopeId);
                 Assert.True(read.Value.Run.Ephemeral);
+            }
 
-                async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Receipt)> SubmitAsync()
-                {
-                    var now = DateTimeOffset.UtcNow;
-                    var selected = new WorkflowTestScope(Guid.NewGuid().ToString("N"), now.AddMinutes(30), Scope.Value, new(Scope.Value));
-                    await scopeStore.CreateAsync(selected, now, token);
-                    var id = executable.Identity;
-                    var reference = new WorkflowExecutableSourceReference(selected.ScopeId, id.ArtifactId, "workflow-draft-snapshot", "draft:witness",
-                        id.ArtifactVersion, id.DefinitionId, id.DefinitionVersionId, id.ArtifactVersion, now, null,
-                        WorkflowExecutableReferenceScope.TestRun, ExpiresAt: selected.ExpiresAt, TenantId: selected.TenantId);
-                    await author.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference, token);
-                    var start = new WorkflowExecutionStartDispatchRequest(id.ArtifactId, "workflow-designer-test-run",
-                        workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null, inputs: null,
-                        stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.TestRun,
-                        sourceSelection: new(sourceReferenceId: reference.SourceReferenceId),
-                        provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
-                        parentWorkflowExecutionId: null, correlationId: null, tenantId: Scope.Value, partition: selected.Partition,
-                        authority: WorkflowExecutionAuthoritySnapshot.CreateRoot("workflow-designer-test-run",
-                            new Dictionary<string, string> { ["elsa.identity.subject-id"] = "accepted", ["elsa.identity.subject-kind"] = "persisted-user" }),
-                        startAuthority: null, dispatchNestingDepth: 0, testScope: selected);
-                    return (selected, reference, await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token));
-                }
+            async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Receipt)>
+                SubmitEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable)
+            {
+                var now = DateTimeOffset.UtcNow;
+                var selected = new WorkflowTestScope(Guid.NewGuid().ToString("N"), now.AddMinutes(30), Scope.Value, new(Scope.Value));
+                await author.GetRequiredService<IWorkflowTestScopeStore>().CreateAsync(selected, now, token);
+                var id = executable.Identity;
+                var reference = new WorkflowExecutableSourceReference(selected.ScopeId, id.ArtifactId, "workflow-draft-snapshot", "draft:witness",
+                    id.ArtifactVersion, id.DefinitionId, id.DefinitionVersionId, id.ArtifactVersion, now, null,
+                    WorkflowExecutableReferenceScope.TestRun, ExpiresAt: selected.ExpiresAt, TenantId: selected.TenantId);
+                await author.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference, token);
+                var start = new WorkflowExecutionStartDispatchRequest(id.ArtifactId, "workflow-designer-test-run",
+                    workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null, inputs: null,
+                    stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.TestRun,
+                    sourceSelection: new(sourceReferenceId: reference.SourceReferenceId),
+                    provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+                    parentWorkflowExecutionId: null, correlationId: null, tenantId: Scope.Value, partition: selected.Partition,
+                    authority: WorkflowExecutionAuthoritySnapshot.CreateRoot("workflow-designer-test-run",
+                        new Dictionary<string, string> { ["elsa.identity.subject-id"] = "accepted", ["elsa.identity.subject-kind"] = "persisted-user" }),
+                    startAuthority: null, dispatchNestingDepth: 0, testScope: selected);
+                var dispatcher = author.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
+                return (selected, reference, await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token));
             }
 
             async Task VerifyDirectTestAsync(WorkflowExecutable executable, string sourceKind, string version, bool closeBeforePin,
