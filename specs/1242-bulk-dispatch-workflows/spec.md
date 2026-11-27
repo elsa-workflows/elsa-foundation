@@ -361,7 +361,8 @@ and on-completed-callbacks suites pass.
     A target in neither place is refused with `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (Q2).
   - **Contents**: the static `Input` first, then, for a map item, each declared input the item has, in the declared
     spelling. Members match declared names regardless of letter case, as in the #5808 rules. When two members differ
-    only in case and match one declared name, the script faults that pass with a clear message rather than pick one; for any other item, `{DefaultItemInputKey: item}` when the target declares that name. The item wins on a
+    only in case and match one declared name, the script faults that pass with a clear message rather than pick one; for any other item, `{DefaultItemInputKey: item}` when the target declares that name, matched regardless of
+    letter case and passed in the declared spelling. The item wins on a
     clash.
   - **`DefaultItemInputKey`** must be a literal, null or absent (null and absent mean `Item`). Anything else is refused
     with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.

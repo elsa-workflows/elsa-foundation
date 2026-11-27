@@ -13,7 +13,9 @@ converter) needs the activity in the catalog.
   and window constants and the `Done` outcome in `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`
   (FR-001–FR-003, FR-009).
 - [ ] T003 [US1] Add the structure handler: the three slots, `ProjectIterationVariables` for `currentItem` and
-  `currentIndex`, `CompletesAfterItsChildren` true, and `Unordered` for every child pair. Add the `BulkDispatch/DispatchSlot` draft validator, with a
+  `currentIndex`, `CompletesAfterItsChildren` true, `Unordered` for every child pair, and `AssessChildResult` per plan
+  §1: different children → `Unknown`, `MayRunConcurrently = true`, `EarlierProducerRunCanReachConsumer = true`; a child
+  with itself → `EarlierProducerRunCanReachConsumer = false`. Add the `BulkDispatch/DispatchSlot` draft validator, with a
   Validations.Core reference (FR-003, plan §1). Register both in the DispatchWorkflow features. `DispatchPinSource` is
   not changed.
 - [ ] T004 [US1] [US2] Scheduling and completion:
@@ -54,7 +56,7 @@ converter) needs the activity in the catalog.
 - [ ] T011 [US4] Child-result reads in the slots (FR-019). Add `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ` here.
   Also add the outer-write behaviour warning (FR-020a) and `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE` here. Test both cases: a branch writing a workflow variable warns, and a branch `Flowchart` writing its own variable
   does not.
-- [ ] T012 [P] [US3] [US4] Converter tests (plan, Test scope: Converter), including item members matched to declared names regardless of case, and two members that differ only in case. Remove `no-counterpart:BulkDispatchWorkflows`
+- [ ] T012 [P] [US3] [US4] Converter tests (plan, Test scope: Converter), including item members matched to declared names regardless of case, and two members that differ only in case, and a `DefaultItemInputKey` matched to a declared name in another case. Remove `no-counterpart:BulkDispatchWorkflows`
   from `Elsa3ConversionDiagnosticsTests` and keep ParallelForEach.
 - [ ] T013 [P] Update the converter README and the spec 236 member map and diagnostic-code contract (FR-021, FR-023). The README states the outer-write rule (FR-010a).
 - [ ] T014 Convert `performance-concurrency.json` (with its child) and the composition root locally, and hand FR-022
