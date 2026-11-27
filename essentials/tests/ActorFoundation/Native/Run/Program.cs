@@ -19,10 +19,10 @@ if (args is ["workbench-shipped-flowcharts", var graphProvider and ("sqlite" or 
     return 0;
 }
 if (args is ["workbench-shipped-history", var historyProvider and ("sqlite" or "postgres"), var historyWorkbench, .. var historyMode] &&
-    historyMode is ([] or ["playback"]))
+    historyMode is ([] or ["playback"] or ["descendants"]))
 {
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedHistoryAsync(historyWorkbench, historyProvider == "postgres",
-        playback: historyMode is ["playback"]);
+        playback: historyMode is ["playback"] or ["descendants"], descendants: historyMode is ["descendants"]);
     return 0;
 }
 if (args is ["workbench-http-waits", var waitsProvider and ("sqlite" or "postgres"), var waitsWorkbench, .. var waitsMode] &&
@@ -395,7 +395,7 @@ if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.P
 Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | " +
     "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | root-sequenced-journal <sqlite|postgres> <checked|in-batch> | " +
     "shipped-foreach-budget <sqlite|postgres> <balanced|durable> <100|1000> | " +
-    "workbench-shipped-history <sqlite|postgres> <executable> [playback] | workbench-shipped-flowcharts <sqlite|postgres> <executable> | " +
+    "workbench-shipped-history <sqlite|postgres> <executable> [playback|descendants] | workbench-shipped-flowcharts <sqlite|postgres> <executable> | " +
     "memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 

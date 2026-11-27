@@ -89,6 +89,7 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     bool Contract.IActorSequencedJournalReads.SupportsSequencedJournal => reads.SupportsSequencedJournal;
 
     bool Contract.IActorPlaybackReads.SupportsPlayback => reads.SupportsPlayback;
+    bool Contract.IActorPlaybackReads.SupportsDescendantPlayback => reads.SupportsDescendantPlayback;
 
     ValueTask<Contract.ActorPlaybackPage?> Contract.IActorPlaybackReads.ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         Contract.ActorPlaybackQuery query, CancellationToken cancellationToken) => reads.ReadPlaybackAsync(scope, actor, query, cancellationToken);

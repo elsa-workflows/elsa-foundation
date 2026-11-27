@@ -36,6 +36,10 @@ public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
     public static SqliteEmbeddedFoundation ForPlaybackQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootPlaybackQualification);
 
+    /// <summary>Composes the dedicated preview format for qualifying descendant playback.</summary>
+    public static SqliteEmbeddedFoundation ForPlaybackDescendantsQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootPlaybackDescendantsQualification);
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat)
     {
         path = Path.GetFullPath(databasePath);

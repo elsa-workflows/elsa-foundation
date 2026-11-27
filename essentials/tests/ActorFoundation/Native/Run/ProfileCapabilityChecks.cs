@@ -252,11 +252,23 @@ internal static class ProfileCapabilityChecks
             playbackPostgres.Capabilities == (sequencedPostgres.Capabilities | RootCapabilities.Children | RootCapabilities.Playback) &&
             playbackSqlite.Capabilities == playbackPostgres.Capabilities && !sharedPostgres.UsesRootPlayback &&
             !sharedSqlite.UsesRootPlayback && !playbackPostgres.UsesRootLiveEventWaits && !playbackSqlite.UsesRootLiveEventWaits &&
+            !playbackPostgres.UsesRootPlaybackDescendants && !playbackSqlite.UsesRootPlaybackDescendants &&
             RootProfiles.MissingPrerequisites(playbackPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(playbackPostgres.RequiredFormat) &&
             StoreDefinitionsRevision.Seed(playbackPostgres) is { StoreSchema: 1, MessageProtocol: 12, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(playbackSqlite) is { StoreSchema: 2, MessageProtocol: 15, JournalCodec: 0 },
             "private playback retains exactly protocol 31 plus indexed occurrences and its own provider definitions");
+        using var descendantsPostgres = KernelDb.ForPostgresRootPlaybackDescendantsQualification(options);
+        using var descendantsSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootPlaybackDescendantsQualification);
+        Check(descendantsPostgres.RequiredFormat == new StoreFormat(3, 118, 1) && descendantsSqlite.RequiredFormat == descendantsPostgres.RequiredFormat &&
+            descendantsPostgres.Capabilities == (playbackPostgres.Capabilities | RootCapabilities.LiveEventWaits |
+                RootCapabilities.RetentionPolicy | RootCapabilities.PlaybackDescendants) &&
+            descendantsSqlite.Capabilities == descendantsPostgres.Capabilities &&
+            RootProfiles.MissingPrerequisites(descendantsPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(descendantsPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(descendantsPostgres) is { StoreSchema: 1, MessageProtocol: 14, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(descendantsSqlite) is { StoreSchema: 2, MessageProtocol: 17, JournalCodec: 0 },
+            "private descendant Playback composes protocol 33, indexed scopes and independent provider definitions");
         using var schedulePostgres = KernelDb.ForPostgresRootScheduleInventoryQualification(options);
         using var scheduleSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootScheduleInventoryQualification);
         Check(schedulePostgres.RequiredFormat == new StoreFormat(3, 119, 1) && scheduleSqlite.RequiredFormat == schedulePostgres.RequiredFormat &&
@@ -277,7 +289,7 @@ internal static class ProfileCapabilityChecks
             !RootProfiles.Formats.ContainsKey(settlementPostgres.RequiredFormat),
             "scheduled occurrence settlement has a private protocol and retains the installed inventory definitions");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
-            playbackPostgres.Capabilities | settlementPostgres.Capabilities;
+            playbackPostgres.Capabilities | descendantsPostgres.Capabilities | settlementPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -312,6 +324,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
             [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
+            [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
             [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening,
             [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol
