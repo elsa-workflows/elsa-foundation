@@ -43,7 +43,8 @@ the design side), and converter rules.
   - Per-item iteration ids and scopes follow ADR 0028, and BPMN multi-instance already schedules one node per
     iteration.
   - The runtime and designer synthesize no node. Only the converter generates the `Dispatch` child, with its
-    existing child-adding mechanism (§3), so there is no new pattern.
+    existing synthesized-node pattern (`Elsa3TerminalPlacementRewrite`, `Elsa3HttpTriggerResponseModeRewrite`; §3), so there
+    is no new pattern.
   - The window of 16 stays within large-fan-out.md's bound on outstanding children. The rejected option B would have
     needed an ADR.
 
@@ -143,6 +144,11 @@ the design side), and converter rules.
   - **One rewrite**: `Elsa3NodeRewriteKind.BulkDispatchChild` (the entry takes exactly one) builds the `Dispatch`
     child, an Elsa 4 `DispatchWorkflow` with id `{elsa3NodeId}.dispatch`.
     - The child is a ready-made plan registered in `plan.Nodes`, so `VisitAsync` skips it (`Elsa3ActivityNormalizer`).
+      It is also attached to the bulk node: added to its `Activity.Activities` and to `Node.Slots` under `Dispatch`, as
+      `Elsa3HttpTriggerResponseModeRewrite` attaches its node. Lowering, the inventory and the mapper walk those lists,
+      so without this the child's `CorrelationId` and `WaitForCompletion` are never lowered and the child is never
+      emitted. It is not added through `context.AddChild`, which would normalize it through the Elsa 3
+      `DispatchWorkflow` entry.
       Its type is resolved with `Elsa3ActivityResolver.ResolveCatalogTypeKeyAsync`, and its properties are already
       keyed for Elsa 4.
     - It uses the bulk node's `JsonPath`, and it maps its source names back for diagnostics:

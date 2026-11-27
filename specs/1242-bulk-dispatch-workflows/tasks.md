@@ -26,7 +26,9 @@ converter) needs the activity in the catalog.
 - [ ] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
 - [ ] T006 [P] [US1] Check in Studio that the designer shows the three slots through the generic rendering, and that
   the instance view shows the per-item `Dispatch` executions. Add no Studio-specific code (FR-003).
-- [ ] T007 [P] Write the README section and update `EXTENSION_POINTS.md` (FR-023).
+- [ ] T007 [P] Write the README section and update the DispatchWorkflow `EXTENSION_POINTS.md` (FR-023). Also update
+  `essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, whose `ProjectIterationVariables` entry says only the
+  ForEach and For handlers implement it.
 
 ## Phase 2: Converter (US3, US4)
 
@@ -34,7 +36,8 @@ converter) needs the activity in the catalog.
   - `Items` (FR-014), and the two ports as `Structure(…, Port)`, added to the surface fixture as ports;
   - every dispatch member as `Structure`;
   - `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` as the entry's behaviour warning (FR-011, FR-020). Add that code here.
-- [ ] T009 [US3] The one rewrite, `BulkDispatchChild`, builds the `{elsa3NodeId}.dispatch` child as a ready-made plan,
+- [ ] T009 [US3] The one rewrite, `BulkDispatchChild`, builds the `{elsa3NodeId}.dispatch` child as a ready-made plan, attached to the bulk node's
+  `Activities` and `Slots` under `Dispatch`,
   with every member set explicitly and the source names mapped back (FR-012, FR-013, FR-015, FR-016, plan §3). It also:
   - refuses a non-null literal `Items` (FR-014);
   - adds the branches with `AddChild`, except on a literal-false wait (FR-018);
