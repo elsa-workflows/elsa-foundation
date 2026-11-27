@@ -67,7 +67,7 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
         var current = await policies.ReadRetentionPolicyAsync(tenant, token);
         var status = Status;
         var enabled = current.Windows != Indefinite;
-        if (current.Revision != status.Revision)
+        if (current.Revision != status.Revision || current.Windows != status.Effective)
         {
             Volatile.Write(ref _status, new(enabled ? "active" : "disabled", current.Windows, proposed, current.Revision,
                 null, null, ConfirmationThreshold, null));
@@ -79,11 +79,11 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
     {
         var current = await policies.ReadRetentionPolicyAsync(tenant, token);
         var status = Status;
-        return current.Revision == status.Revision || status.State == "evaluating"
+        return current.Revision == status.Revision && current.Windows == status.Effective
             ? status
             : status with
             {
-                State = status.State == "unavailable" ? "unavailable" : "policy-changed",
+                State = status.State is "evaluating" or "unavailable" ? status.State : "policy-changed",
                 Effective = current.Windows,
                 Revision = current.Revision,
                 AsOf = null,

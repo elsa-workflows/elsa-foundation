@@ -111,12 +111,16 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
         endpoints.MapGet("/runtime/workflows/retention", static async (HttpContext context, KernelRetentionActivation retention,
-                KernelShellRuntime runtime, NormalizedPrincipalValidator principalValidator, CancellationToken token) =>
+                KernelShellRuntime runtime, NormalizedPrincipalValidator principalValidator,
+                IPermissionAuthorizationService authorization, CancellationToken token) =>
             {
                 if (!principalValidator.TryGetNormalizedPrincipal(context.User, out var principal)) return Results.NotFound();
                 var tenants = principal.FindAll(IdentityClaimTypes.TenantId).Take(2).Select(claim => claim.Value).ToArray();
                 var tenant = tenants switch { [] => "default", [var single] => single, _ => null };
                 if (!StringComparer.Ordinal.Equals(tenant, retention.Tenant)) return Results.NotFound();
+                var permission = await authorization.AuthorizeAsync(
+                    new PermissionEvaluationContext(principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, retention.Tenant, context), token);
+                if (!permission.Succeeded) return Results.NotFound();
 
                 context.Response.Headers.CacheControl = "no-store";
                 return Results.Ok(await runtime.ReadRetentionStatusAsync(token));
