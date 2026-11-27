@@ -238,7 +238,7 @@ public sealed class KernelCoordinatorTests
 
         Assert.True((await host.DeactivateAsync(Ticks("ticks@2"))).Succeeded);
         Assert.Empty(host.Serving.Schedules.All);
-        Assert.False(Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-2")).IsActive);
+        Assert.Empty(await host.Bindings.ListAllByActivationAsync("ticks-2"));
     }
 
     [Fact]
