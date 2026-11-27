@@ -23,6 +23,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
     internal async Task RequireAsync(CancellationToken token)
     {
         await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
+        _ = runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinScanStore>();
         _ = await runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>().ReadOpenTailAsync(scope, token);
     }
 
@@ -100,7 +101,6 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
 
     internal async Task RunAsync(CancellationToken token)
     {
-        string? through = null, after = null;
         try
         {
             using var timer = new PeriodicTimer(CleanupCadence, clock);
@@ -112,17 +112,17 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
                     using var pageBudget = Limit(token);
                     await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
                     var store = runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>();
-                    through ??= await store.ReadOpenTailAsync(scope, pageBudget.Token);
-                    if (through is null) continue;
-                    var page = await store.ListOpenAsync(scope, after, through, PageSize, pageBudget.Token);
+                    var scan = runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinScanStore>();
+                    var page = await scan.ReadScanPageAsync(scope, PageSize, pageBudget.Token);
+                    if (page is null) continue;
                     foreach (var pin in page.Items)
                     {
                         token.ThrowIfCancellationRequested();
                         if (pin.Scope != scope || pin.Tenant != actors.Tenant) continue;
                         await ReleaseAsync(store, pin, token);
                     }
-                    after = page.Next;
-                    if (after is null) through = null;
+                    using var checkpointBudget = Limit(token);
+                    await scan.TryAdvanceScanAsync(scope, page, checkpointBudget.Token);
                 }
                 catch (Exception error) when (!token.IsCancellationRequested)
                 {

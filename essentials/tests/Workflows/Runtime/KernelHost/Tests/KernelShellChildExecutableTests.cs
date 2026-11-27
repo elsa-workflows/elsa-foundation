@@ -9,10 +9,7 @@ using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
-using Kernel.EntityFramework;
 using Kernel.Foundation.Hosting;
-using Kernel.Foundation.Postgres;
-using Kernel.Foundation.Sqlite;
 using Kernel.Native;
 using KernelWorkflowActor = Kernel.WorkflowActor.WorkflowActor;
 using Microsoft.Data.Sqlite;
@@ -172,9 +169,12 @@ public sealed class KernelShellChildExecutableTests
                 Check(registry.Get(child.Identity.ArtifactId).ExecutableSelection == JsonSerializer.Serialize(material.Identity),
                     "the cold owner replaced the stale same-ID plan with the exact retained executable before resuming");
                 await WaitAsync(() => reads.GetAsync(scope, parentRef, token), item => item?.Header.Status == Contract.ActorStatus.Finished, token);
-                var operators = await OpenOperatorsAsync();
-                var retired = await operators.SendAsync(scope, new Contract.Target.Ref(childRef), "retire-protected-child", Contract.Kinds.Delete,
-                    JsonSerializer.Serialize(new Contract.OperatorCommand(terminal!.Selection)), cancellationToken: token);
+                var foundationStore = await services.GetRequiredService<KernelShellStorage>().OpenAsync(token);
+                var policy = await foundationStore.RetentionPolicies.ReadRetentionPolicyAsync(scope, token);
+                var applied = await foundationStore.RetentionPolicies.TryApplyRetentionPolicyAsync(scope, policy.Revision,
+                    new(Finished: TimeSpan.Zero), long.MaxValue, cancellationToken: token);
+                Check(applied.Outcome == Contract.ActorRetentionPolicyChangeOutcome.Applied, "the prepared profile configures terminal retirement");
+                var retired = await foundationStore.AdmitRetentionDelete(scope, childRef, terminal!.Selection!, token);
                 Check(retired.Outcome == Contract.AdmissionOutcome.Accepted, "the selected Delete admitted the exact terminal child");
                 await WaitAsync(() => reads.GetAsync(scope, childRef, token), item => item is null, token);
 
@@ -203,22 +203,10 @@ public sealed class KernelShellChildExecutableTests
                 Provider = provider, ConnectionString = runtime,
                 RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
             });
-            new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, KernelShellStorage.Create(provider, path, foundation),
+            new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, KernelShellStorage.CreatePreparedStartsQualification(provider, path, foundation),
                 protectChildExecutables: true);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        }
-
-        async Task<Contract.IIngress> OpenOperatorsAsync()
-        {
-            if (foundation is null)
-                return await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(path!, KernelWorkflowActor.ActorType, Authorize, cancellationToken: token);
-            var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(foundation).Options;
-            return await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(() => PostgresPreviewHosting.CreateShippedContext(options),
-                KernelWorkflowActor.ActorType, Authorize, cancellationToken: token);
-
-            bool Authorize(Contract.BoundScope selectedScope, Contract.ActorRef selected, string kind) =>
-                ReferenceEquals(selectedScope, scope) && selected == childRef && kind == Contract.Kinds.Delete;
         }
 
         async Task PublishAsync(IServiceProvider services, WorkflowExecutable executable)

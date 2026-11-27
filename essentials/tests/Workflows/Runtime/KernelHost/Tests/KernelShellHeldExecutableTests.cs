@@ -190,7 +190,7 @@ public sealed class KernelShellHeldExecutableTests
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }
 
-        async Task<HttpResponse> RequestAsync(KernelHttpRequestHandler handler, string path)
+        async Task<Microsoft.AspNetCore.Http.HttpResponse> RequestAsync(KernelHttpRequestHandler handler, string path)
         {
             using var body = new MemoryStream();
             var context = new DefaultHttpContext { RequestAborted = token };
