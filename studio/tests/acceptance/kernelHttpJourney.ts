@@ -77,8 +77,10 @@ export async function kernelHttpJourney(page: Page, request: APIRequestContext, 
   await expect(response).toContainText(body);
   const link = response.getByRole("link", { name: "Inspect run", exact: true });
   await expect(link).toHaveAttribute("href", new RegExp("/workflows/instances/" + encodeURIComponent(run!) + "(?:\\?|$)"));
+  await link.focus();
+  await expect(link).toBeFocused();
   await capture(page, info, "kernel-http-result");
-  await link.click();
+  await link.press("Enter");
   await expect(page).toHaveURL(new RegExp("/workflows/instances/" + encodeURIComponent(run!) + "(?:\\?|$)"));
   const runDetails = "/runtime/workflows/instances/" + encodeURIComponent(run!);
   await expect.poll(async () => {
