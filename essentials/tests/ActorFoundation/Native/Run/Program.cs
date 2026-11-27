@@ -154,6 +154,9 @@ if (args is ["pg-write-budget", var budgetWriter and ("owned" or "ef"), var budg
     budgetOptions is [] or ["--require-budget"])
     return await PostgresWriteBudget.RunAsync(budgetWriter == "owned" ? CommitSql.Owned : CommitSql.EntityFramework,
         budgetFence == "in-batch", budgetOptions.Length != 0);
+if (args is ["shipped-write-budget", var shippedBudgetProvider and ("postgres" or "sqlite"),
+    var shippedBudgetFence and ("checked" or "in-batch")])
+    return await ShippedWriteBudget.RunAsync(shippedBudgetProvider == "postgres", shippedBudgetFence == "in-batch");
 if (args is ["pg-root-value-check", var valueFence and ("checked" or "in-batch"), "birth"])
     return await PostgresRootValueChecks.RunAsync(valueFence == "in-batch", null);
 if (args is ["pg-root-value-check", var valueRestartFence and ("checked" or "in-batch"), "restart", var valueActor, var valueEpoch] &&
