@@ -382,7 +382,7 @@
 
 ## Phase 8: Polish and acceptance
 
-- [ ] T032 Start the actual migration host (`dotnet run --project apps/Elsa.Migration.Host`) with its two folder
+- [x] T032 Start the actual migration host (`dotnet run --project apps/Elsa.Migration.Host`) with its two folder
   settings pointing at the fixture run's `migrated/`, and record that every exported version loads (SC-004).
 - [ ] T033 Run `inventory --all-versions` over the specification 1235 acceptance set (34 definitions) from the clone
   with `dotnet run`. Check that every definition has one bucket, and that the published versions equal what startup
@@ -391,6 +391,10 @@
   `Elsa3MigrationImportRun` for `Elsa3JsonReconciliation` (its `SourceId` set and a `Files` list of the same `*.json`
   files the CLI's `ExportInputReader` reads, because the folder reader is not recursive and reads no zip), and
   compare its published versions with the CLI run's. Record the result in the PR evidence, and check the two-minute goal.
+  **Partly done (2026-11-28)**: the CLI run is done from the clone against the corpus of the open S-15 PR #5662
+  (36 definitions, the 34 of the acceptance set plus the 2 excluded performance-baseline ones): every definition has
+  one bucket, in 92 s. The committed baseline comparison waits for the corpus to land on the initiative branch with
+  #5662.
 - [x] T034 Add the smoke test (SC-003). From a clean build, run
   `dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows inventory` with the fixture export and a
   relative `--out`. Expect exit 1, the printed path and the same `report.json` as the in-process run, after
@@ -399,4 +403,4 @@
 - [x] T035 [P] Write `Tooling/README.md`, covering the commands, how to add a feature project to the migration host for
   `assess`, the database rule and redaction. Link it from `extensions/Elsa3/src/Mapping/README.md` and from the
   migration host's README.
-- [ ] T036 Set this specification's status to Implemented in the finishing PR.
+- [x] T036 Set this specification's status to Implemented in the finishing PR.
