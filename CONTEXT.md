@@ -6,8 +6,8 @@ composes into a running server. Term definitions are authoritative in [`docs/glo
 
 ## Entry point
 
-The process starts in [`Essentials/apps/Elsa.Workbench/Program.cs`](Essentials/apps/Elsa.Workbench/Program.cs). It builds one
-or more CShells shells from [`Essentials/apps/Elsa.Workbench/shells.json`](Essentials/apps/Elsa.Workbench/shells.json); every
+The process starts in [`apps/Elsa.Workbench.Host/Program.cs`](apps/Elsa.Workbench.Host/Program.cs). It builds one
+or more CShells shells from [`apps/Elsa.Workbench.Host/shells.json`](apps/Elsa.Workbench.Host/shells.json); every
 key under `CShells:Shells:default:Features` names an `IShellFeature` class that registers services. A library
 whose feature is not listed there is not running. [How a workflow executes](docs/how-a-workflow-executes.md)
 traces one request from `Program.cs` to a durable checkpoint.

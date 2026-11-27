@@ -558,7 +558,7 @@ for (const theme of ["light", "dark"]) {
       await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
       const header = page.locator(".ad-workbench .studio-page-header");
       await expect(header.getByRole("heading", { name: detail.definition.displayName })).toBeVisible();
-      await expect(header.getByRole("button", { name: "Edit draft", exact: true })).toBeEnabled();
+      await expect(header.getByRole("button", { name: "Edit", exact: true })).toBeEnabled();
       await expect(header.locator(".ad-kicker")).toHaveCount(0);
       const geometry = await page.evaluate(() => {
         const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
@@ -1158,7 +1158,9 @@ test("Activity Definition draft management keeps parallel labels and supports bl
   });
 
   await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
-  await page.getByRole("button", { name: "Create draft from this exact version" }).click();
+  await expect(page.getByRole("button", { name: "Edit this version", exact: true })).toBeEnabled();
+
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1&createDraftFrom=version-1");
   const dialog = page.getByRole("dialog", { name: "Create parallel draft" });
   await expect(dialog.getByRole("radio", { name: /Clone exact version/ })).toBeChecked();
   await dialog.getByRole("textbox", { name: /Draft label/ }).fill("Review");
@@ -2133,7 +2135,7 @@ for (const theme of ["light", "dark"]) {
       await openMoreActions(page);
       await page.locator("details.ad-authoring-advanced > summary").click();
       const toolbar = page.locator(".ad-authoring-toolbar-actions");
-      const actions = [toolbar.getByRole("button", { name: "Save", exact: true }), toolbar.locator(".studio-split-button-primary"), toolbar.getByRole("button", { name: "Test Run", exact: true }), toolbar.getByRole("button", { name: "More activity actions", exact: true })];
+      const actions = [toolbar.locator(".wf-save-button"), toolbar.locator(".studio-split-button-primary"), toolbar.locator(".wf-run-button"), toolbar.locator(".ad-authoring-more-actions > summary")];
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
       const observations = [];
@@ -2278,13 +2280,16 @@ test("Activity Definition publication keeps first and later recommendation seman
 
   await firstPublicationToast.getByRole("button", { name: "View version" }).click();
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=versions.*version=published-version-1/);
-  await expect(page.getByRole("button", { name: "Create draft from this exact version" })).toBeEnabled();
-  await page.getByRole("button", { name: "Create draft from this exact version" }).click();
-  const cloneDialog = page.getByRole("dialog", { name: "Create parallel draft" });
-  await expect(cloneDialog.getByRole("radio", { name: /Clone exact version/ })).toBeChecked();
-  await cloneDialog.getByRole("button", { name: "Clone exact version" }).click();
+  await expect(page.getByRole("button", { name: "Edit this version", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Edit this version", exact: true }).click();
+  await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*version=published-version-1/);
+  expect(state.draftCreationRequests).toHaveLength(0);
+  await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Inputs/ }).click();
+  await page.getByRole("button", { name: "Add input", exact: true }).click();
+  await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Follow up note");
+  await page.getByRole("button", { name: "Add input", exact: true }).last().click();
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser-follow-up/);
-  await expectSavedRevision(page, 1);
+  await expectSavedRevision(page, 2);
   expect(state.draftCreationRequests).toEqual([{ sourceVersionId: "published-version-1", presentationLabel: null }]);
 
   await page.getByRole("button", { name: "Review & publish" }).click();

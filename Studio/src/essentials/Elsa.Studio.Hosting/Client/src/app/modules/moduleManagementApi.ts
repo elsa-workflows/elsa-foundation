@@ -183,7 +183,7 @@ export function createModuleManagementHosts(api: ElsaStudioModuleApi, canManageS
     {
       id: "studio",
       label: "Studio",
-      runtime: "Elsa.Studio.Web",
+      runtime: "Elsa.Studio.Workbench.Host",
       context: api.host,
       // Studio mutates its OWN host through the Studio-origin gate — available when the user holds manage.
       mutationsAvailable: canManageStudioHost,

@@ -149,6 +149,36 @@ public sealed class PublicationActivationTests
         Assert.Equal(PublicationStatus.Failed, failed!.Status);
     }
 
+    [Theory]
+    [InlineData(WorkflowActivationStep.Mapping, "definition_unsupported", "activity-unsupported: Node 'compensate': CompensationScope does not run on this host in release 1.")]
+    [InlineData(WorkflowActivationStep.ServingCheck, "trigger_conflict", "Definitions 'orders' and 'billing' both start on POST /orders; a route starts one workflow.")]
+    public async Task A_kernel_hosts_refusal_fails_the_candidate_with_its_own_code(WorkflowActivationStep step, string code, string diagnostic)
+    {
+        var candidate = Candidate("publication-refused", expectedSlotRevision: 0);
+        var activator = new PublicationActivator(new RefusingCoordinator(NewCoordinator(), step, diagnostic), _publications, _authority, _references, new FakeTimeProvider(_now));
+
+        var result = await activator.ActivateAsync(await RequestAsync(candidate));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal((code, diagnostic), (result.Failure?.Code, result.Failure?.Message));
+        Assert.Equal(PublicationStatus.Failed, (await _publications.FindAsync(candidate.PublicationId))!.Status);
+    }
+
+    /// <summary>A coordinator that refuses each activation at <paramref name="step"/>, as a kernel host's does before anything is minted.</summary>
+    private sealed class RefusingCoordinator(IWorkflowActivationCoordinator inner, WorkflowActivationStep step, string diagnostic) : IWorkflowActivationCoordinator
+    {
+        public async ValueTask<WorkflowActivationResult> ActivateAsync(WorkflowActivationCommand command, CancellationToken cancellationToken = default) =>
+            new(false, WorkflowActivationOutcome.Failed,
+                await inner.EnsureServingAsync(command.Executable.Identity.DefinitionId, command.SlotName, cancellationToken) is { } current ? current.Slot : null!,
+                Diagnostic: diagnostic, FailedStep: step);
+
+        public ValueTask<WorkflowActivationResult> DeactivateAsync(WorkflowDeactivationCommand command, CancellationToken cancellationToken = default) =>
+            inner.DeactivateAsync(command, cancellationToken);
+
+        public ValueTask<WorkflowActivationResult> EnsureServingAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
+            inner.EnsureServingAsync(workflowDefinitionId, slotName, cancellationToken);
+    }
+
     [Fact]
     public async Task UnpublishClearsAuthorityRetiresJournalAndReference()
     {

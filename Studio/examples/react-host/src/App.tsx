@@ -37,7 +37,7 @@ export default function App() {
         <header className="example-header">
           <h1>Elsa Studio packages — React host</h1>
           <p>
-            A plain Vite + React 19 app (not Elsa.Studio.Web) consuming the four published Studio
+            A plain Vite + React 19 app (not Elsa.Studio.Workbench.Host) consuming the four published Studio
             packages. Each section below is powered by one of them.
           </p>
         </header>

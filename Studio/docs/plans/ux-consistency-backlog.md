@@ -129,7 +129,7 @@ The narrow viewport table above also records the A2 menu, dock, activity authori
 | `WF` | `studio/src/essentials/Elsa.Studio.Workflows/Client/src` |
 | `H` | `studio/src/essentials/Elsa.Studio.Hosting/Client/src/app` |
 | `KIT` | `studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/ui` |
-| `DASH` | `studio/src/essentials/Elsa.Studio.Dashboard/Client/src` |
+| `DASH` | `extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src` |
 | `BACK` | `studio/src/essentials/Elsa.Studio.Backends/Client/src` |
 | `EXT/<Name>` | `extensions/<Name>/studio/Elsa.Studio.<Name>/Client/src` |
 

@@ -20,7 +20,7 @@ import {
  * every registry is a real registry, `dialogs` is a real dialog controller, and `backend` is
  * a real endpoint context.
  *
- * This mirrors what Elsa.Studio.Web's own host does in `Client/src/app/registry.ts`
+ * This mirrors what Elsa.Studio.Workbench.Host's own host does in `Client/src/app/registry.ts`
  * (`createStudioRegistry`). That host factory is intentionally NOT part of the published SDK
  * surface — assembling the API is the HOST's job — so an external host builds it like this.
  *
@@ -53,6 +53,7 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
     routes,
     dashboardWidgets,
     homeWidgets: dashboardWidgets,
+    homeSections: createContributionRegistry({ slot: studioSlots.homeSections }),
     diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),

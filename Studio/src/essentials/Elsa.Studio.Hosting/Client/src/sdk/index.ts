@@ -363,6 +363,11 @@ export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSetting
   settings?: StudioDashboardWidgetSettings<TSettings>;
   load?(context: StudioDashboardWidgetLoadContext<TSettings>): Promise<TSnapshot>;
   isEmpty?(snapshot: TSnapshot | undefined, settings: TSettings): boolean;
+  /**
+   * For checklist widgets. When it returns true for a loaded snapshot, Home hides the widget once and marks it
+   * auto-hidden; the user can add it back from Add widget. Such a widget offers Dismiss in place of Hide.
+   */
+  isComplete?(snapshot: TSnapshot | undefined): boolean;
   emptyState?: StudioDashboardWidgetEmptyState;
   component: ComponentType<StudioDashboardWidgetBodyProps<TSnapshot, TSettings>>;
 }
@@ -388,6 +393,63 @@ export function registerHomeWidget<TSnapshot = unknown, TSettings = unknown>(
     supportedSizes
   };
   (api.homeWidgets ?? api.dashboardWidgets).add(widget);
+}
+
+/**
+ * True when every feature a Home contribution lists in `requiresFeature` is enabled. A missing `enabledFeatures`
+ * list fails closed for gated contributions; an ungated contribution is always enabled.
+ */
+export function isHomeWidgetFeatureEnabled(
+  contribution: { requiresFeature?: string | readonly string[] },
+  enabledFeatures: Iterable<string> | undefined
+): boolean {
+  const required = typeof contribution.requiresFeature === "string"
+    ? [contribution.requiresFeature]
+    : [...(contribution.requiresFeature ?? [])];
+  if (required.length === 0) return true;
+  if (!enabledFeatures) return false;
+  const available = [...enabledFeatures];
+  return required.every(feature => available.some(enabled => homeFeatureTokensMatch(feature, enabled)));
+}
+
+const studioModulePrefix = "elsa.studio.";
+
+/** Slugs match only `Elsa.Studio.*` assembly ids. `workflows` matches `Elsa.Studio.Workflows`, not `Contoso.Workflows`. */
+export function homeFeatureTokensMatch(required: string, enabled: string): boolean {
+  const want = required.trim();
+  const have = enabled.trim();
+  if (!want || !have) return false;
+  if (want.toLowerCase() === have.toLowerCase()) return true;
+  const wantSlug = studioFeatureSlug(want);
+  const haveSlug = studioFeatureSlug(have);
+  return wantSlug != null && haveSlug != null && wantSlug === haveSlug;
+}
+
+function studioFeatureSlug(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!trimmed.includes(".")) return kebabToken(trimmed);
+  if (!trimmed.toLowerCase().startsWith(studioModulePrefix)) return null;
+  const rest = trimmed.slice(studioModulePrefix.length);
+  if (!rest || rest.includes(".")) return null;
+  return kebabToken(rest);
+}
+
+function kebabToken(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+}
+
+/**
+ * Content the shell renders on Home above the widget grid, in `order`. Sections are fixed: users cannot hide,
+ * move or resize them, and they are not part of the saved Home layout. Use a widget for anything a user arranges.
+ */
+export interface StudioHomeSectionContribution extends StudioBackendAwareContribution {
+  id: string;
+  moduleId: string;
+  order?: number;
+  /** Hide the section unless every listed feature/capability is enabled on the host. */
+  requiresFeature?: string | readonly string[];
+  component: ComponentType;
 }
 
 export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
@@ -960,12 +1022,37 @@ export interface StudioTriggerConfigurationEditorProps {
   /** Reports the full configuration; preserved fields must remain in the returned value. */
   onChange(configuration: Record<string, StudioTriggerConfigurationValue>): void;
 }
+/** Props accepted by a module-contributed standalone trigger type icon. Use `currentColor` so theme tokens apply. */
+export type StudioTriggerTypeIconComponent = ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
+/** Semantic accent token key for standalone trigger type UI cards and badges. */
+export type StudioTriggerTypeAccent = "blue" | "violet" | "teal" | "amber" | "pink" | "neutral";
+/** Pure UI presentation metadata for a standalone trigger type (card icon, summary, category, ordering). */
+export interface StudioTriggerTypePresentationMetadata {
+  displayName?: string;
+  description?: string;
+  icon?: StudioTriggerTypeIconComponent;
+  accent?: StudioTriggerTypeAccent;
+  category?: string;
+  order?: number;
+}
+/** Pure UI presentation only. Supplies no trigger, schema, graph or execution authority. */
+export interface StudioTriggerTypePresentationContribution extends StudioBackendAwareContribution, StudioTriggerTypePresentationMetadata {
+  id: string;
+  /** Matches the backend TriggerTypeDescriptor.typeKey when targeting a concrete trigger type. */
+  typeKey?: string;
+  /** Optional schemaVersion filter when presentation differs across schema versions. */
+  schemaVersion?: string;
+  /** Optional family fallback matcher (e.g. "Http", "Event", "Timer", "Cron") when typeKey is omitted. */
+  family?: string;
+}
 /** Pure configuration authoring only. This contribution supplies no trigger, graph or execution authority. */
 export interface StudioTriggerConfigurationEditorContribution extends StudioBackendAwareContribution {
   id: string;
   typeKey: string;
   schemaVersion: string;
   component: ComponentType<StudioTriggerConfigurationEditorProps>;
+  /** Optional UI presentation metadata co-located with this trigger configuration editor. */
+  presentation?: StudioTriggerTypePresentationMetadata;
 }
 
 /** A backend-discovered trigger mode available while driving a workflow Test Run. */
@@ -1827,6 +1914,8 @@ export const studioSlotIds = {
   navigation: "studio.navigation",
   routes: "studio.routes",
   dashboardWidgets: "studio.dashboard.widgets",
+  dashboardRecordLinks: "studio.dashboard.record-links",
+  homeSections: "studio.home.sections",
   panels: "studio.panels",
   toolbarActions: "studio.toolbar.actions",
   activityEditors: "workflow.activity.editors",
@@ -1836,6 +1925,7 @@ export const studioSlotIds = {
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
   triggerConfigurationEditors: "workflow.trigger.configuration-editors",
+  triggerTypePresentations: "workflow.trigger.type-presentations",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   workflowRunRelatedLinks: "workflow.run.related-links",
   incidentRootCauseProviders: "workflow.incident.root-cause-providers",
@@ -1924,6 +2014,8 @@ export const studioSlots = {
   navigation: defineStudioSlot({ id: studioSlotIds.navigation, kind: "navigation", title: "Navigation", owner: hostSlotOwner() }),
   routes: defineStudioSlot({ id: studioSlotIds.routes, kind: "route", title: "Routes", owner: hostSlotOwner() }),
   dashboardWidgets: defineStudioSlot({ id: studioSlotIds.dashboardWidgets, kind: "dashboard-widget", title: "Dashboard widgets", owner: hostSlotOwner() }),
+  dashboardRecordLinks: defineStudioSlot({ id: studioSlotIds.dashboardRecordLinks, kind: "dashboard-record-link", title: "Dashboard record links", owner: hostSlotOwner() }),
+  homeSections: defineStudioSlot({ id: studioSlotIds.homeSections, kind: "home-section", title: "Home sections", owner: hostSlotOwner() }),
   panels: defineStudioSlot({ id: studioSlotIds.panels, kind: "panel", title: "Panels", owner: hostSlotOwner() }),
   toolbarActions: defineStudioSlot({ id: studioSlotIds.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: hostSlotOwner() }),
   activityEditors: defineStudioSlot({ id: studioSlotIds.activityEditors, kind: "activity-editor", title: "Activity editors", owner: hostSlotOwner() }),
@@ -1933,6 +2025,7 @@ export const studioSlots = {
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
   triggerConfigurationEditors: defineStudioSlot({ id: studioSlotIds.triggerConfigurationEditors, kind: "trigger-configuration-editor", title: "Trigger configuration editors", owner: hostSlotOwner() }),
+  triggerTypePresentations: defineStudioSlot({ id: studioSlotIds.triggerTypePresentations, kind: "trigger-type-presentation", title: "Trigger type presentations", owner: hostSlotOwner() }),
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
   incidentRootCauseProviders: defineStudioSlot({ id: studioSlotIds.incidentRootCauseProviders, kind: "incident-root-cause-provider", title: "Incident root cause providers", owner: hostSlotOwner() }),
@@ -2284,6 +2377,48 @@ export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendA
   getLinks(context: StudioWorkflowRunRelatedLinkContext): readonly StudioWorkflowRunRelatedLink[];
 }
 
+export interface StudioDashboardRecordLinkCell {
+  type: string;
+  value: string | null;
+  nullReason?: string;
+}
+
+export interface StudioDashboardRecordLinkColumn {
+  id: string;
+  label: string;
+  type: string;
+  unit?: string;
+}
+
+export interface StudioDashboardRecordLinkContext {
+  /** Dataset identifier when known (e.g. "elsa.workflows.runs"); undefined when withheld or unspecified. */
+  datasetId?: string;
+  column: StudioDashboardRecordLinkColumn;
+  cell: StudioDashboardRecordLinkCell;
+  /** Authorized row values already rendered for the current viewer. */
+  row: Readonly<Record<string, StudioDashboardRecordLinkCell>>;
+}
+
+export interface StudioDashboardRecordLink {
+  /** App-relative Studio path (must start with "/", never a protocol or external URL). */
+  path: string;
+  /** Optional descriptive tooltip (e.g. "Open workflow run"). */
+  title?: string;
+  /** Optional short label for secondary actions; cell links keep the exact cell text. */
+  label?: string;
+}
+
+export interface StudioDashboardRecordLinkContribution extends StudioBackendAwareContribution {
+  id: string;
+  order?: number;
+  /** Optional dataset IDs this contributor handles. Omitting matches any dataset. */
+  datasetIds?: readonly string[];
+  /** Optional column IDs this contributor handles. Omitting matches any column. */
+  columnIds?: readonly string[];
+  /** Pure synchronous projection from already-authorized cell/row values; the target route reauthorizes all reads. */
+  resolveLink(context: StudioDashboardRecordLinkContext): StudioDashboardRecordLink | null | undefined;
+}
+
 export interface ElsaStudioModuleApi {
   readonly connection?: StudioConnectionController;
   readonly shell?: StudioContributionRegistry<StudioShellContribution>;
@@ -2298,6 +2433,10 @@ export interface ElsaStudioModuleApi {
   readonly dashboardWidgets: StudioDashboardWidgetRegistry;
   /** Alias of {@link dashboardWidgets}. Modules should prefer {@link registerHomeWidget}. */
   readonly homeWidgets: StudioDashboardWidgetRegistry;
+  /** Fixed Home content above the widget grid. See {@link StudioHomeSectionContribution}. */
+  readonly homeSections: StudioContributionRegistry<StudioHomeSectionContribution>;
+  /** Optional on older hosts. Modules resolve already-authorized dashboard query cells to Studio deep-links. */
+  readonly dashboardRecordLinks?: StudioContributionRegistry<StudioDashboardRecordLinkContribution>;
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
@@ -2311,6 +2450,8 @@ export interface ElsaStudioModuleApi {
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
   /** Optional on older hosts; generic backend metadata remains the configuration fallback. */
   readonly triggerConfigurationEditors?: StudioContributionRegistry<StudioTriggerConfigurationEditorContribution>;
+  /** Optional on older hosts; modules contribute trigger card icons, descriptions and grouping metadata here. */
+  readonly triggerTypePresentations?: StudioContributionRegistry<StudioTriggerTypePresentationContribution>;
   /** Available on hosts that support module-owned workflow Test Run stimulus editors. */
   readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
   /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */

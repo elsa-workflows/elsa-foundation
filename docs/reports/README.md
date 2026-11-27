@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [GA test drive: Core Preview map](ga-test-drive-2026-11-24/core-preview-map.md) - 24 November 2026 source reading: which steps of a seven-workflow HTTP test drive can run on the Core Preview, the milestone each waits on, and three gaps that had no acceptance case (designed workflows on the kernel, the release 1 activity list, the Native HTTP surface). Program #4229.
 - [Clean-slate execution kernel: design record](clean-slate-kernel/README.md) - design sketch draft 5 (12 November 2026) of the proposed actor kernel, with every owner decision taken so far, and the interactive walkthrough. Proposed, not approved; program #4229.
 - [Execution-core SC-005: HTTP-level BPMN authorization on the Owned Workbench](exec-core-sc005-authz.md) - test-only hosted non-admin refusal on every registered BPMN HTTP endpoint (SQLite / one host). Tenant half and Studio half explicitly deferred. Does not complete #3650 or Program #2892.
 - [Execution-core S8: native and direct-BPMN migration and rollback](exec-core-migration-rollback.md) - docs-only statement on `a9771131c`: publish stores/tables re-verified vs `60d28493`, zero Runtime/Bpmn migrations since that SHA, ApiCompat of last-published Runtime.Core / Bpmn.Core, FR-015/016/SC-004 status, and the named unsupported list. Does not complete Program #2892.

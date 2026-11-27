@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
+
+  <PropertyGroup>
+    <Description>
+      Opt-in, host-composed Entity Framework Core token store for Elsa's OpenIddict feature: OpenIddict's own EF Core
+      model in a companion context with migrations for SQLite, SQL Server and PostgreSQL, Elsa's migration policy and
+      token pruning. A host composes it once on its root container (AddOpenIddictEntityFrameworkCoreStore); it is not
+      a shell feature, so every shell reads one token store. Elsa.Foundation.Identity.OpenIddict stays free of EF.
+    </Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Behavior\Elsa.Foundation.Identity.OpenIddict.Behavior.csproj" />
+    <ProjectReference Include="..\..\..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+  <!-- The store's registrations, initializer, migrator, pruner and notices are internal; the Foundation domain's tests reach them. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Foundation.Identity.Tests" />
+    <InternalsVisibleTo Include="Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests" />
+  </ItemGroup>
+
+</Project>

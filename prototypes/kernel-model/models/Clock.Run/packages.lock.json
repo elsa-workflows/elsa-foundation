@@ -2,84 +2,99 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
-      "kernel.durable": {
+      "elsa.actorfoundation.builtin.durable": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Runtime": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.foundation.contracts": {
+      "elsa.actorfoundation.builtin.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.actorfoundation.builtin.runtime": {
         "type": "Project"
       },
-      "kernel.foundation.inmemory": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
-        }
-      },
-      "kernel.graph": {
+      "elsa.actorfoundation.contracts": {
         "type": "Project"
       },
-      "kernel.model.contracts": {
+      "elsa.actorfoundation.model.contracts": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.native": {
+      "elsa.actorfoundation.testsupport": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
-          "Kernel.Graph": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )",
-          "Kernel.Native.Activities": "[1.0.0, )"
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.native.activities": {
+      "elsa.workflows.runtime.graph": {
+        "type": "Project"
+      },
+      "elsa.workflows.runtime.native.activities": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.native.legacy": {
+      "elsa.workflows.runtime.native.model": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Native": "[1.0.0, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Graph": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Native.Activities": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
+        }
+      },
+      "Kernel.Foundation.InMemory": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
+      "Kernel.Native.Legacy": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
           "Kernel.Workflows": "[1.0.0, )"
         }
       },
-      "kernel.runtime": {
-        "type": "Project"
-      },
-      "kernel.sim": {
+      "Kernel.Sim": {
         "type": "Project",
         "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.TestSupport": "[1.0.0, )",
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
           "Kernel.Native.Legacy": "[1.0.0, )",
           "Kernel.Statecharts": "[1.0.0, )",
-          "Kernel.WorkflowActor": "[1.0.0, )",
           "Kernel.Workflows": "[1.0.0, )"
         }
       },
       "kernel.statecharts": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Model.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.workflowactor": {
+      "Kernel.Workflows": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )"
-        }
-      },
-      "kernel.workflows": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       }
     }

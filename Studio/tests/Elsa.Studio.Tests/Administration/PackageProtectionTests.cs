@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,11 +9,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
-using Nuplane.Loading;
-using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Operational;
 using Nuplane.Reconciliation;
-using Nuplane.Store.State;
 using Nuplane.Sources.Directory.Builder;
 using Microsoft.Extensions.Options;
 
@@ -23,47 +19,6 @@ namespace Elsa.Studio.Tests.Administration;
 public sealed class PackageProtectionTests
 {
     private static string AssetUrl => $"/_content/{PackageAssetTests.PackageId}/probe.txt";
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Native_admission_excludes_reconcile_and_confirmed_prune_between_preflight_and_read(bool assemblyAlias)
-    {
-        using var logs = new ContentLog { PausePreflight = true };
-        await using var host = await AdministrationHost.StartAsync(nativeStore: true, loadPackages: assemblyAlias,
-            configureNuplane: nuplane =>
-            {
-                if (assemblyAlias) nuplane.AutoloadPackages(loading => loading.WithDefaultLoadMode(PackageLoadMode.Collectible));
-            },
-            afterStudio: builder => Observe(builder, logs));
-        PackageAssetTests.Pack(host, "1.0.0", "package payload", assembly: assemblyAlias ? "First" : null);
-        await PackageAssetTests.Reconcile(host);
-        var maintenance = host.App.Services.GetRequiredService<INuplanePackageStoreMaintenanceOperations>();
-        var retention = new PackageStoreRetentionPolicy(0);
-        var preview = await maintenance.PruneAsync(new(Retention: retention));
-        Assert.True(preview.InventoryComplete);
-        var state = host.App.Services.GetRequiredService<IOptions<StoreRegistryOptions>>().Value.StateFilePath!;
-        var before = await File.ReadAllBytesAsync(state);
-        using var request = new HttpRequestMessage(HttpMethod.Get, assemblyAlias ? "/_content/First/probe.txt" : AssetUrl);
-        request.Headers.Range = new RangeHeaderValue(0, 2);
-        var pending = host.Client.SendAsync(request);
-        try
-        {
-            await logs.PreflightEntered.Task.WaitAsync(TimeSpan.FromSeconds(30));
-            var blocked = await host.App.Services.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(CancellationToken.None);
-            Assert.Equal(ManualReconcileOutcomeCode.Unavailable, blocked.OutcomeCode);
-            var prune = await maintenance.PruneAsync(new(preview.RootLabel, retention, PackageStorePruneMode.Execute,
-                new(preview.RootLabel, preview.RootIdentity!, preview.EnrollmentEpoch!.Value, retention)));
-            Assert.NotEqual("Completed", prune.Status);
-            Assert.All(prune.Candidates, candidate => Assert.Equal("NotAttempted", candidate.Attempt));
-            Assert.Equal(before, await File.ReadAllBytesAsync(state));
-        }
-        finally { logs.ReleasePreflight(); }
-        using var response = await pending;
-        Assert.Equal(HttpStatusCode.PartialContent, response.StatusCode);
-        Assert.Equal("pac", await response.Content.ReadAsStringAsync());
-        await PackageAssetTests.Reconcile(host);
-    }
 
     [Fact]
     public async Task Slow_responses_keep_the_payload_limit_while_queue_cancellation_releases_admission()
@@ -127,7 +82,7 @@ public sealed class PackageProtectionTests
     [InlineData("file-link")]
     [InlineData("directory-link")]
     [InlineData("hard-link")]
-    public async Task Guarded_reads_reject_linked_outside_payloads(string kind)
+    public async Task Archive_reads_ignore_links_in_the_extracted_install(string kind)
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: true);
         PackageAssetTests.Pack(host, "1.0.0", "inside");
@@ -157,12 +112,13 @@ public sealed class PackageProtectionTests
     }
 
     [Fact]
-    public async Task A_static_provider_cannot_bypass_ordinary_store_admission()
+    public async Task A_static_provider_cannot_bypass_archive_verification()
     {
         await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
         PackageAssetTests.Pack(host, "1.0.0", "unprotected-package-sentinel");
         await PackageAssetTests.Reconcile(host);
         var package = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);
+        File.Delete(Path.Combine(package.InstallPath, ".nuplane-archive"));
         using var physical = new PhysicalFileProvider(Path.Combine(package.InstallPath, "staticwebassets"));
         host.App.Environment.WebRootFileProvider = new MappedFile(physical.GetFileInfo("probe.txt"));
         using var response = await host.Client.GetAsync(AssetUrl);
@@ -171,7 +127,7 @@ public sealed class PackageProtectionTests
     }
 
     [Fact]
-    public async Task A_deployed_file_alias_cannot_bypass_ordinary_store_admission()
+    public async Task A_deployed_file_alias_cannot_bypass_archive_verification()
     {
         await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
         PackageAssetTests.Pack(host, "1.0.0", "aliased-unprotected-package-sentinel");
@@ -181,6 +137,7 @@ public sealed class PackageProtectionTests
         var alias = Path.Combine(host.Root, "install-alias");
         Directory.CreateSymbolicLink(alias, installRoot);
         var relative = Path.GetRelativePath(installRoot, package.InstallPath);
+        File.Delete(Path.Combine(package.InstallPath, ".nuplane-archive"));
         using var physical = new PhysicalFileProvider(Path.Combine(alias, relative, "staticwebassets"));
         host.App.Environment.WebRootFileProvider = new MappedFile(physical.GetFileInfo("probe.txt"));
         using var response = await host.Client.GetAsync(AssetUrl);
@@ -189,7 +146,7 @@ public sealed class PackageProtectionTests
     }
 
     [Fact]
-    public async Task Archive_install_shapes_refuse_instead_of_using_an_ordinary_reader()
+    public async Task A_custom_archive_install_path_cannot_supply_unverified_bytes()
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: true, afterStudio: builder =>
         {
@@ -239,13 +196,9 @@ public sealed class PackageProtectionTests
 
 internal sealed class ContentLog : ILoggerProvider
 {
-    private readonly ManualResetEventSlim _release = new();
     private readonly ConcurrentDictionary<int, TaskCompletionSource> _queue = new();
     private int _queued;
-    public bool PausePreflight { get; init; }
-    public TaskCompletionSource PreflightEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    public void ReleasePreflight() => _release.Set();
     public Task WaitQueued(int count)
     {
         var signal = _queue.GetOrAdd(count, _ => new(TaskCreationOptions.RunContinuationsAsynchronously));
@@ -253,7 +206,7 @@ internal sealed class ContentLog : ILoggerProvider
         return signal.Task;
     }
     public ILogger CreateLogger(string categoryName) => new Capture(this);
-    public void Dispose() { _release.Set(); }
+    public void Dispose() { }
     private sealed class Capture(ContentLog owner) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
@@ -266,11 +219,7 @@ internal sealed class ContentLog : ILoggerProvider
                 if (owner._queue.TryGetValue(count, out var signal)) signal.TrySetResult();
             }
             if (id.Name == "PackageContentRequestCancelled") owner.Cancelled.TrySetResult();
-            if (id.Name == "PackageContentPreflight" && owner.PausePreflight)
-            {
-                owner.PreflightEntered.TrySetResult();
-                if (!owner._release.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("Protected preflight was not released by the test.");
-            }
+
         }
     }
 }

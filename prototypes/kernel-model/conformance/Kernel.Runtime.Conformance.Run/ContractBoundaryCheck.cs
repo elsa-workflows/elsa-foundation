@@ -24,7 +24,7 @@ internal static class ContractBoundaryCheck
         if (typeof(BoundScope).GetConstructors().Length != 0 || typeof(BoundScope).GetProperty(nameof(BoundScope.Tenant))?.CanWrite != false)
             faults.Add("BoundScope must have no public constructor or tenant setter");
         var issuers = foundation.GetCustomAttributes<InternalsVisibleToAttribute>().Select(a => a.AssemblyName).ToHashSet(StringComparer.Ordinal);
-        if (!issuers.SetEquals(["Kernel.Runtime.Hosting", "Kernel.Store.Conformance", "Kernel.Sim"]))
+        if (!issuers.SetEquals(["Elsa.ActorFoundation.Hosting", "Elsa.ActorFoundation.TestSupport"]))
             faults.Add("The set of assemblies authorized to construct BoundScope changed");
         BoundScopeChecks.Check(faults);
         foreach (var fault in faults)
