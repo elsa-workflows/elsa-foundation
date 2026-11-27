@@ -35,16 +35,20 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
         while (!finished)
         {
             var page = await runs.TailAsync(actor, from, cancellationToken);
-            if (page.Items.Count == 0) break;
             if (from is null)
             {
-                var head = page.JournalHeadRevision ?? throw new NotSupportedException("The kernel journal reader does not expose its committed revision.");
-                upperRevision ??= head;
-                if (upperRevision > head) return null;
-                // A retained termination can bypass the model and therefore has no per-frame cancel entries.
-                if (page.JournalCancellation is { } cancellation && cancellation.Revision <= upperRevision)
-                    cancelledAt = ReadTime(cancellation.At);
+                if (page.JournalHeadRevision is { } head)
+                {
+                    upperRevision ??= head;
+                    if (upperRevision > head) return null;
+                    // A retained termination can bypass the model and therefore has no per-frame cancel entries.
+                    if (page.JournalCancellation is { } cancellation && cancellation.Revision <= upperRevision)
+                        cancelledAt = ReadTime(cancellation.At);
+                }
+                else if (page.Items.Count > 0)
+                    throw new NotSupportedException("The kernel journal reader does not expose its committed revision.");
             }
+            if (page.Items.Count == 0) break;
             foreach (var entry in page.Items)
             {
                 if (entry.Revision > upperRevision)

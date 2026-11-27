@@ -20,11 +20,8 @@ public sealed partial class EfStore
         db.UsesSqliteRootRuntime ? RequireSqliteWorkerFormatAsync(db, token)
         : db.Database.IsSqlite() ? RequireStoreVersionsAsync(db, token) : Task.CompletedTask;
 
-    private static async Task RequireSqliteWorkerFormatAsync(KernelDb db, CancellationToken token)
-    {
-        await RequireSqliteRootAdmissionAsync(db, token);
-        await db.SqliteRuntimeDefinitions!.RequireAsync(db, token);
-    }
+    private static Task RequireSqliteWorkerFormatAsync(KernelDb db, CancellationToken token) =>
+        RequireSqliteRootAdmissionAsync(db, db.SqliteRuntimeDefinitions!, token);
 
     private sealed record SqliteDefinition(string Type, string Name, string Table, string Sql);
 
@@ -75,12 +72,45 @@ public sealed partial class EfStore
         finally { await db.Database.CloseConnectionAsync(); }
     }
 
-    internal static async Task RequireSqliteRootAdmissionAsync(KernelDb db, CancellationToken token)
+    private sealed record SqliteOperationalStamp(bool SafeConnection, long SchemaVersion, int? StoreSchema,
+        int? MessageProtocol, int? JournalCodec, string? Definitions);
+
+    private static readonly string SqliteOperationalStampSql = FormattableString.Invariant($"""
+        SELECT ({SqliteConnectionPolicy}) AS "SafeConnection", schema.schema_version AS "SchemaVersion",
+            version."StoreSchema", version."MessageProtocol", version."JournalCodec",
+            definitions."StoreSchema" || '/' || definitions."MessageProtocol" || '/' || definitions."JournalCodec" AS "Definitions"
+        FROM pragma_schema_version AS schema
+        LEFT JOIN main."{StoreVersionEntity.Table}" AS version ON version."Id" = {StoreVersionEntity.MarkerId}
+        LEFT JOIN main."{StoreVersionEntity.Table}" AS definitions ON definitions."Id" = {StoreDefinitionsRevision.MarkerId}
+        """);
+
+    internal static async Task RequireSqliteRootAdmissionAsync(KernelDb db, SqliteAdmissionDefinitions definitions, CancellationToken token)
     {
         if (!db.UsesSqliteShippedInstall)
             throw new NotSupportedException("Root admission requires the SQLite shipped context.");
-        await RequireSqliteInstallConnectionAsync(db, token);
-        await RequireInstalledStoreVersionsAsync(db, FormatLock.None, token);
+
+        // Keep the grouped check and any full catalog reread on the same connection, including outside a transaction.
+        await db.Database.OpenConnectionAsync(token);
+        try
+        {
+            SqliteOperationalStamp stamp;
+            try
+            {
+                stamp = await db.Database.SqlQueryRaw<SqliteOperationalStamp>(SqliteOperationalStampSql).SingleAsync(token);
+            }
+            catch (SqliteException error) when (error.SqliteErrorCode == 1 &&
+                error.Message.Contains("no such table: main." + StoreVersionEntity.Table, StringComparison.Ordinal))
+            {
+                // Preserve the connection-policy refusal even on an invalid database without a marker table.
+                await RequireSqliteInstallConnectionAsync(db, token);
+                throw new StoreFormatException("The kernel store version marker table is missing.", error);
+            }
+
+            if (!stamp.SafeConnection) throw new StoreFormatException(SqliteConnectionRefusal);
+            RequireSnapshotFormat(db, stamp.StoreSchema, stamp.MessageProtocol, stamp.JournalCodec, stamp.Definitions);
+            await definitions.RequireAsync(db, stamp.SchemaVersion, token);
+        }
+        finally { await db.Database.CloseConnectionAsync(); }
     }
 
     internal static async Task RequireSqliteRootAdmissionDefinitionsAsync(KernelDb db, CancellationToken token)
@@ -97,17 +127,21 @@ public sealed partial class EfStore
             throw new StoreFormatException("The installed SQLite store definitions differ from this build. Recreate or migrate the database.");
     }
 
+    private const string SqliteConnectionPolicy = """
+        (SELECT foreign_keys FROM pragma_foreign_keys) = 1
+            AND (SELECT ignore_check_constraints FROM pragma_ignore_check_constraints) = 0
+            AND (SELECT journal_mode FROM pragma_journal_mode) IN ('delete', 'truncate', 'persist', 'wal')
+            AND NOT EXISTS (SELECT 1 FROM temp.sqlite_schema)
+            AND NOT EXISTS (SELECT 1 FROM pragma_database_list WHERE name NOT IN ('main', 'temp'))
+        """;
+
+    private const string SqliteConnectionRefusal =
+        "The SQLite shipped store requires a durable journal, foreign keys and CHECK constraints, and a dedicated database without temporary objects or attachments.";
+
     private static async Task RequireSqliteInstallConnectionAsync(KernelDb db, CancellationToken token)
     {
-        if (!await db.Database.SqlQueryRaw<bool>("""
-            SELECT (SELECT foreign_keys FROM pragma_foreign_keys) = 1
-                AND (SELECT ignore_check_constraints FROM pragma_ignore_check_constraints) = 0
-                AND (SELECT journal_mode FROM pragma_journal_mode) IN ('delete', 'truncate', 'persist', 'wal')
-                AND NOT EXISTS (SELECT 1 FROM temp.sqlite_schema)
-                AND NOT EXISTS (SELECT 1 FROM pragma_database_list WHERE name NOT IN ('main', 'temp'))
-                AS "Value"
-            """).SingleAsync(token))
-            throw new StoreFormatException("The SQLite shipped store requires a durable journal, foreign keys and CHECK constraints, and a dedicated database without temporary objects or attachments.");
+        if (!await db.Database.SqlQueryRaw<bool>("SELECT " + SqliteConnectionPolicy + """ AS "Value" """).SingleAsync(token))
+            throw new StoreFormatException(SqliteConnectionRefusal);
     }
 
     private static Task<List<SqliteDefinition>> ReadSqliteDefinitionsAsync(KernelDb db, CancellationToken token) =>
@@ -383,11 +417,8 @@ internal sealed class SqliteAdmissionDefinitions
     // A validation lives for one file lease interval. SQLite changes this schema version with DDL.
     private long _verifiedVersion = long.MinValue;
 
-    internal async Task RequireAsync(KernelDb db, CancellationToken token)
+    internal async Task RequireAsync(KernelDb db, long version, CancellationToken token)
     {
-        var version = await db.Database.SqlQueryRaw<long>("""
-            SELECT schema_version AS "Value" FROM pragma_schema_version
-            """).SingleAsync(token);
         if (version == Volatile.Read(ref _verifiedVersion)) return;
         await EfStore.RequireSqliteRootAdmissionDefinitionsAsync(db, token);
         Volatile.Write(ref _verifiedVersion, version);

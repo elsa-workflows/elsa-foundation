@@ -94,6 +94,24 @@ internal static class PostgresRootParkOpeningChecks
         var mixed = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "park_shadow," + quoting.QuoteIdentifier(source) };
         var mixedOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(mixed.ConnectionString).AddInterceptors(recoveryQuote).Options;
         KernelDb OpenMixed() => Profile(mixedOptions);
+        await using (var db = OpenMixed())
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(stop);
+            await PostgresRootAdmission.PinRootNamespaceAsync(db, stop);
+            string[] tables = ["FoundationRootIssuer", "FoundationRootBirths", "Instances", "Messages", "Partitions", "Nodes",
+                "Journal", "Subscriptions", "FoundationDirectReceipts", "FoundationActorList", "FoundationRootReceipts", "Events"];
+            if (db.UsesRootOperatorProtocol) tables = [.. tables, "FoundationOperatorReceipts"];
+            var locked = await db.Database.SqlQuery<string>($"""
+                SELECT ns.nspname || '.' || c.relname AS "Value"
+                FROM pg_catalog.pg_locks l JOIN pg_catalog.pg_class c ON c.oid = l.relation
+                JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace
+                WHERE l.pid = pg_catalog.pg_backend_pid() AND l.granted AND l.mode = 'AccessShareLock'
+                    AND c.relname::text = ANY({tables})
+                """).ToListAsync(stop);
+            Check(locked.Count == tables.Length && locked.ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(tables.Select(table => source + "." + table)),
+                "the live pin transaction locks every required source relation and leaves the shadow relations unlocked");
+        }
         var admission = new PostgresRootAdmission(OpenMixed, TimeSpan.FromHours(1), lockOrdinaryWrites: true);
         var tenant = ContractScopes.Bind("park-preview");
         var probe = new Probe(original, fault);

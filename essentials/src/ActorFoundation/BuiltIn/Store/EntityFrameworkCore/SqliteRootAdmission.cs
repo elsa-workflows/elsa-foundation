@@ -9,6 +9,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     RootAdmissionPressure? pressure = null)
 {
     private sealed record Issuer(byte[] Key, int Partitions);
+    private sealed record StartAdmission(long Now, string? Reference, byte[]? Key, int? Partitions);
     private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending, bool Parked);
 
     internal Task<int> VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
@@ -40,22 +41,30 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         var digest = FoundationRootCreator.OperationDigest(operation);
         using var localAttempt = reserved is null ? pressure?.Begin(tenant, RootAdmissionKind.Start) : null;
         var attempt = reserved ?? localAttempt;
-        return await WriteAsync<Contract.Admission?>(async (db, now, ct) =>
+        return await WriteAsync<Contract.Admission?>(async (db, ct) =>
         {
+            // One clock sample, after taking the admission transaction, drives both the deadline and receipt boundary.
+            var admission = await db.Database.SqlQuery<StartAdmission>(EfStore.UseSqliteRootClock($"""
+                WITH clock AS MATERIALIZED (SELECT /*sqlite-root-clock*/ AS "Now")
+                SELECT clock."Now", receipt."Reference", issuer."Key", issuer."Partitions"
+                FROM clock
+                LEFT JOIN "FoundationRootReceipts" receipt ON receipt."Tenant" = {tenant}
+                    AND receipt."Operation" = {digest} AND receipt."Until" >= clock."Now"
+                LEFT JOIN "FoundationRootIssuer" issuer ON receipt."Reference" IS NULL
+                    AND issuer."Singleton" = 1 AND length(issuer."Key") = 32 AND issuer."Partitions" > 0
+                """)).SingleAsync(ct);
+            var now = admission.Now;
             if (reply is not null && reply.Caller.Deadline <= now) return null;
-            var existing = await db.Database.SqlQuery<string>($"""
-                SELECT "Reference" AS "Value" FROM "FoundationRootReceipts"
-                WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= {now}
-                """).SingleOrDefaultAsync(ct);
-            if (existing is not null)
+            if (admission.Reference is { } existing)
                 return new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(existing));
 
             attempt?.RequireCapacity();
-            var issuer = await ReadIssuerAsync(db, ct);
+            if (admission is not { Key: { } key, Partitions: { } partitions })
+                throw new StoreFormatException("The SQLite root issuer is missing or invalid.");
             var name = tenant + "_" + Guid.NewGuid().ToString("N");
-            var preferred = InstanceRef.Spread(name, issuer.Partitions);
-            var actor = InstanceRef.In(attempt?.Place(preferred, issuer.Partitions) ?? preferred, name);
-            var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
+            var preferred = InstanceRef.Spread(name, partitions);
+            var actor = InstanceRef.In(attempt?.Place(preferred, partitions) ?? preferred, name);
+            var reference = FoundationRootCreator.ReferenceFor(key, tenant, new(actor.Id, 1));
             var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, reply?.Address);
             var (header, payload) = EncodeCreator(creator);
             if (!FitsEnvelope(header, payload, creator.ReplyTo))
@@ -148,8 +157,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     {
         await using var db = create();
         await db.Database.OpenConnectionAsync(token);
-        await EfStore.RequireSqliteRootAdmissionAsync(db, token);
-        await definitions.RequireAsync(db, token);
+        await EfStore.RequireSqliteRootAdmissionAsync(db, definitions, token);
         return await ReadClockAsync(db, token);
     }
 
@@ -157,7 +165,11 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         db.Database.SqlQueryRaw<long>(
             "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token);
 
-    private async Task<T> WriteAsync<T>(Func<KernelDb, long, CancellationToken, Task<T>> write, CancellationToken token,
+    private Task<T> WriteAsync<T>(Func<KernelDb, long, CancellationToken, Task<T>> write, CancellationToken token,
+        RootAdmissionPressure.Attempt? attempt = null) =>
+        WriteAsync(async (db, ct) => await write(db, await ReadClockAsync(db, ct), ct), token, attempt);
+
+    private async Task<T> WriteAsync<T>(Func<KernelDb, CancellationToken, Task<T>> write, CancellationToken token,
         RootAdmissionPressure.Attempt? attempt = null)
     {
         await using var db = create();
@@ -172,10 +184,8 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             .BeginTransaction(deferred: attempt?.IsBusy == true);
         token.ThrowIfCancellationRequested();
         await using var enlistment = await db.Database.UseTransactionAsync(transaction, token);
-        await EfStore.RequireSqliteRootAdmissionAsync(db, token);
-        await definitions.RequireAsync(db, token);
-        var now = await ReadClockAsync(db, token);
-        var result = await write(db, now, token);
+        await EfStore.RequireSqliteRootAdmissionAsync(db, definitions, token);
+        var result = await write(db, token);
         token.ThrowIfCancellationRequested();
         await transaction.CommitAsync(token);
         attempt?.Committed();

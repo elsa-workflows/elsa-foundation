@@ -90,6 +90,50 @@ public sealed partial class EfStore
                     OR "Reference" IN (SELECT value FROM json_each({Json.Write(references)})))
             """).ToListAsync(token);
 
+    private sealed record SqliteWorkerLoad(string Tenant, string Reference, string Actor, int Partition, string Fingerprint,
+        string? Id, long Creation, string? State, byte[]? Wire, int? StateVersion, long? Revision, string? Header,
+        History? History, InstanceStatus? Status, bool? Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
+        string? Jobs, long? NextJobGeneration, string? Fault, long? ParkAt, string? Parent, string? Children);
+
+    private async Task<IReadOnlyList<InstanceRow>> LoadSqliteWorkerRootsAsync(KernelDb db, WorkerRoots scope,
+        IReadOnlyCollection<string> ids, CancellationToken token)
+    {
+        await db.Database.OpenConnectionAsync(token);
+        await RequireSqliteOperationalFormatAsync(db, token);
+        var actors = ids.Distinct(StringComparer.Ordinal).ToArray();
+        if (actors.Length == 0) return [];
+        // One bounded lookup ties each requested birth to that life's checkpoint. A pending or retired life
+        // still has its birth and returns no checkpoint. A missing birth is a malformed worker request.
+        var rows = await db.Database.SqlQuery<SqliteWorkerLoad>(UseSqliteRootClock($"""
+            SELECT b."Tenant", b."Reference", b."Actor", b."Partition", b."Fingerprint",
+                i."Id", b."Creation", i."State", i."FoundationStateWire" AS "Wire", i."StateVersion", i."Revision",
+                i."FoundationHeader" AS "Header", i."History", i."Status", i."Suspended",
+                i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
+                /*sqlite-root-clock*/ AS "AsOf", i."Jobs", i."NextJobGeneration", i."Fault", i."FoundationParkAt" AS "ParkAt",
+                i."Parent", i."Children"
+            FROM json_each({Json.Write(actors)}) request
+            JOIN "FoundationRootBirths" b ON b."Actor" = request.value AND b."Creation" = 1
+            LEFT JOIN "Instances" i ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
+                AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant" AND NOT i."Retired"
+            ORDER BY request.key
+            """)).ToListAsync(token);
+        if (rows.Count != actors.Length) throw RootShape();
+        var result = new List<InstanceRow>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (!scope.Includes(row.Partition) || new InstanceRef(row.Actor).Partition != row.Partition) throw RootShape();
+            if (row.Id is not { } id) continue;
+            if (row is not { State: { } state, StateVersion: { } version, Revision: { } revision, Header: { } header,
+                    History: { } history, Status: { } status, Suspended: { } suspended }) throw RootShape();
+            var binding = new WorkerRoot(row.Tenant, row.Reference, row.Actor, row.Partition, row.Fingerprint);
+            var physical = new PhysicalRoot(id, row.Creation, state, row.Wire, version, revision, header, history, status,
+                suspended, row.TerminalRevision, row.TerminalAt, row.AsOf, row.Jobs, row.NextJobGeneration, row.Fault, row.ParkAt,
+                row.Parent, row.Children);
+            result.Add(WorkerRow(binding, DecodePhysicalRoot(db, physical)));
+        }
+        return result;
+    }
+
     private async Task<Message?> ReadSqlitePendingCreatorAsync(string tenant, string reference, CancellationToken token)
     {
         await using var db = create();
@@ -126,18 +170,13 @@ public sealed partial class EfStore
         var creator = checkpoint.Creator;
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload);
         if (fingerprint is null) return false;
-        var pending = await ReadSqliteCreatorAsync(db, checkpoint.Tenant, checkpoint.Reference, fingerprint, token);
-        if (pending is null || !checkpoint.MatchesCreator(DecodeSqliteCreator(pending, db.UsesRootChildren))) return false;
         var parked = checkpoint.Row is { Status: InstanceStatus.Faulted, Fault: not null };
-        if (parked)
-        {
-            if (!await KeepSqliteParkInputsAsync(db, pending.Target, pending.Partition, 0, [pending.Id], ParkKeepReason.Consumed, token))
-                return false;
-        }
-        else if (await db.Database.ExecuteSqlInterpolatedAsync($"""
-            DELETE FROM "Messages" WHERE "Id" = {pending.Id} AND "InboxScope" = 0
-                AND "Target" = {pending.Target} AND "Partition" = {pending.Partition} AND NOT "Done"
-            """, token) != 1) return false;
+        var pending = parked
+            ? await ReadSqliteCreatorAsync(db, checkpoint.Tenant, checkpoint.Reference, fingerprint, token)
+            : await ConsumeSqliteCreatorAsync(db, checkpoint, fingerprint, token);
+        if (pending is null || !checkpoint.MatchesCreator(DecodeSqliteCreator(pending, db.UsesRootChildren))) return false;
+        if (parked && !await KeepSqliteParkInputsAsync(db, pending.Target, pending.Partition, 0, [pending.Id], ParkKeepReason.Consumed, token))
+            return false;
 
         var ended = !parked && db.RootStateFamily.Ends(checkpoint.Row.Status);
         var family = RootStatePrefix(db);
@@ -156,6 +195,25 @@ public sealed partial class EfStore
         return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1 &&
             (!parked || await VerifySqliteParkProjectionAsync(db, checkpoint.Tenant, checkpoint.Reference, revision, checkpoint.Row.Fault!, token)) &&
             (checkpoint.ChildEffects is null || await checkpoint.ChildEffects.BindAsync(db, checkpoint.Tenant, token));
+    }
+
+    private static async Task<MessageEntity?> ConsumeSqliteCreatorAsync(KernelDb db, FirstRootCheckpoint checkpoint, string fingerprint,
+        CancellationToken token)
+    {
+        var creator = checkpoint.Creator;
+        // This runs under the write fence. A changed returned envelope refuses the checkpoint and rolls back its deletion.
+        var rows = await db.Messages.FromSqlInterpolated(UseSqliteRootClock($"""
+            DELETE FROM "Messages" AS m
+            WHERE m."Id" = {creator.InboxKey.Id} AND m."Target" = {creator.Target.Id} AND m."Partition" = {creator.Target.Partition}
+                AND m."InboxScope" = 0 AND NOT m."Done" AND m."KeepUntil" IS NULL AND m."EventMatch" IS NULL
+                AND m."Due" <= /*sqlite-root-clock*/
+                AND EXISTS (SELECT 1 FROM "FoundationRootBirths" b
+                    WHERE b."Tenant" = {checkpoint.Tenant} AND b."Reference" = {checkpoint.Reference}
+                        AND b."Creation" = 1 AND b."Fingerprint" = {fingerprint}
+                        AND b."Creator" = m."Id" AND b."Actor" = m."Target" AND b."Partition" = m."Partition")
+            RETURNING *
+            """)).AsNoTracking().ToListAsync(token);
+        return rows is [var message] ? message : null;
     }
 
     private static async Task<bool> BindSqliteRootTurnAsync(KernelDb db, RootTurnCheckpoint turn, CancellationToken token)
@@ -311,7 +369,7 @@ public sealed partial class EfStore
                 AND i."FoundationTerminalRevision" = i."Revision"
             """).ToListAsync(token);
 
-    private static FormattableString UseSqliteRootClock(FormattableString sql) =>
+    internal static FormattableString UseSqliteRootClock(FormattableString sql) =>
         FormattableStringFactory.Create(
             sql.Format.Replace("/*sqlite-root-clock*/", SqliteCommitDialect.MillisecondClock, StringComparison.Ordinal), sql.GetArguments());
 

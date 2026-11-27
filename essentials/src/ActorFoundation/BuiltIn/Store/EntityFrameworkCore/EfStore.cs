@@ -1127,6 +1127,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        if (db.UsesSqliteRootRuntime && _ordinaryRoots is { Discover: true } sqliteRoots)
+            return await LoadSqliteWorkerRootsAsync(db, sqliteRoots, ids, cancellationToken);
         await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (_ordinaryRoots is { } root)
         {

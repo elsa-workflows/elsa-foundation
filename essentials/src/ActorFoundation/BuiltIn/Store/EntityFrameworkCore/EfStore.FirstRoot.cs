@@ -230,8 +230,9 @@ public sealed partial class EfStore
         await using var db = create();
         // The model's protection decision must see the same physical checkpoint as retirement.
         await using var transaction = await BeginPinnedRootOperationAsync(db, cancellationToken);
-        var family = RootStatePrefix(db);
-        if (transaction is null && (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody))
+        // The SQLite runtime verified the marker and catalog in BeginPinnedRootOperationAsync.
+        if (transaction is null && !db.UsesSqliteRootRuntime &&
+            (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody))
             await RequireStoreVersionsAsync(db, cancellationToken);
         FormattableString query = $"""
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
@@ -249,7 +250,12 @@ public sealed partial class EfStore
                 .Replace("/*root-read-clock*/", db.UsesSqliteRootRuntime ? SqliteCommitDialect.MillisecondClock : "floor(extract(epoch from statement_timestamp()) * 1000)::bigint",
                     StringComparison.Ordinal),
             query.GetArguments())).SingleOrDefaultAsync(cancellationToken);
-        if (physical is null) return null;
+        return physical is null ? null : DecodePhysicalRoot(db, physical);
+    }
+
+    private static RootImage DecodePhysicalRoot(KernelDb db, PhysicalRoot physical)
+    {
+        var family = RootStatePrefix(db);
         if (!physical.State.StartsWith(family, StringComparison.Ordinal))
             throw new StoreException(Failure.Definite, "Unsupported qualified actor checkpoint.");
         var header = DurableKeyJson.Read<RootHeader>(physical.Header);

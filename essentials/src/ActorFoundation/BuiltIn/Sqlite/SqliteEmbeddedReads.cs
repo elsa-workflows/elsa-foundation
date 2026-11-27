@@ -42,8 +42,7 @@ public static partial class SqliteEmbeddedHosting
             using var file = AcquireFile(path);
             KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
             await using var db = Open();
-            await EfStore.RequireSqliteRootAdmissionAsync(db, token);
-            await file.AdmissionDefinitions.RequireAsync(db, token);
+            await EfStore.RequireSqliteRootAdmissionAsync(db, file.AdmissionDefinitions, token);
             var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
             var store = new EfStore(Open, postgres: false, fenceInBatch: true);
             return await read(new GeneratedRootReads(store, cursor, pageSize, provider: "sqlite"));
