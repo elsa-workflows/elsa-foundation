@@ -14,6 +14,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     private readonly string node;
     private readonly string actorType;
     private readonly StoreFormat? qualificationFormat;
+    private readonly RootPublicEventHost? publicEventHost;
     private readonly Lazy<SqliteEmbeddedHosting.SqliteDirectRequests> requests;
     private readonly SemaphoreSlim installation = new(1, 1);
     private string? installedPath;
@@ -47,7 +48,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal SqliteEmbeddedHosting.SqliteDirectRequests EventStarts =>
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
-        qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||
+        qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat is { SupportsIsolatedInlineQualification: true } ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
@@ -127,6 +128,8 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         this.node = node;
         this.actorType = actorType;
         this.qualificationFormat = qualificationFormat;
+        if (qualificationFormat == StoreFormat.RootPublicEventHostQualification)
+            publicEventHost = new(actorType, protectRootStart is not null);
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
             qualificationFormat: qualificationFormat, protectRootStart: protectRootStart), LazyThreadSafetyMode.PublicationOnly);
     }
@@ -138,7 +141,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat is { SupportsIsolatedInlineQualification: true } ||
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
-        qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||
+        qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
@@ -148,7 +151,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         await installation.WaitAsync(cancellationToken);
         try
         {
-            var verified = await SqliteEmbeddedHosting.InstallShippedFileAsync(installedPath ?? path, cancellationToken, qualificationFormat);
+            var verified = await SqliteEmbeddedHosting.InstallShippedFileAsync(installedPath ?? path, cancellationToken, qualificationFormat, publicEventHost);
             Volatile.Write(ref installedPath, verified);
         }
         finally { installation.Release(); }

@@ -163,7 +163,7 @@ internal static partial class KernelAuthoredEventChecks
         finally { directory.Delete(recursive: true); }
     }
 
-    internal static async Task<int> RunRemotePublicEventReplyAsync(bool inBatch)
+    internal static async Task<int> RunRemotePublicEventReplyAsync(bool inBatch, bool protectedObserver = false)
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(55));
         var token = stop.Token;
@@ -173,18 +173,19 @@ internal static partial class KernelAuthoredEventChecks
         var remote = new ReplyEventActor(turns, RemoteReplyNode);
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
             throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).Options;
-        KernelDb Open() => KernelDb.ForPostgresRootPublicEventStartsQualification(options);
+        KernelDb Open() => protectedObserver
+            ? PostgresPreviewHosting.CreatePublicEventHostQualificationContext(options, local.Type, protectsStarts: true)
+            : KernelDb.ForPostgresRootPublicEventStartsQualification(options);
         await using var db = Open();
         Check(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the remote Event witness uses a dedicated PostgreSQL store");
         var store = new EfStore(Open, postgres: true);
         await store.CreateAsync(2);
         await store.InstallPreviewRootSchemaAsync(token);
         var loops = new LoopOptions { BalanceEvery = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(25) };
-        var localEdge = PostgresPreviewHosting.CreateRequests(Open, LocalReplyNode, local.Type);
-        var remoteEdge = PostgresPreviewHosting.CreateRequests(Open, RemoteReplyNode, remote.Type);
+        var localEdge = CreateEdge(LocalReplyNode, local.Type);
+        var remoteEdge = CreateEdge(RemoteReplyNode, remote.Type);
         var ingress = await PostgresPreviewHosting.OpenFoundationAsync(Open, local.Type, localEdge, cancellationToken: token);
-        await using var localOwner = await PostgresPreviewHosting.StartAsync(Open, LocalReplyNode, local, Fatal, loops, token,
-            Console.Error.WriteLine, localEdge, fenceInBatch: inBatch);
+        await using var localOwner = await StartLocalOwnerAsync();
         await using var remoteOwner = await PostgresPreviewHosting.StartAsync(Open, RemoteReplyNode, remote, Fatal, loops, token,
             Console.Error.WriteLine, remoteEdge, fenceInBatch: inBatch);
         await UntilReplyAsync(async () => await db.Partitions.AsNoTracking().CountAsync(p => p.Owner == LocalReplyNode, token) == 1 &&
@@ -221,6 +222,21 @@ internal static partial class KernelAuthoredEventChecks
             (await ingress.GetAsync(scope, remoteTurn.Actor, token))?.Header.TypeData == "remote-wins",
             "a remote explicit Reply crosses the real relay after commit while only the local waiter sees Ambient");
         return 0;
+
+        PostgresDirectRequests CreateEdge(string node, string actorType) => protectedObserver
+            ? PostgresPreviewHosting.CreateRequestsWithRootStartProtection(Open, node, actorType, (_, _) => ValueTask.FromResult(true))
+            : PostgresPreviewHosting.CreateRequests(Open, node, actorType);
+
+        async Task<IAsyncDisposable> StartLocalOwnerAsync()
+        {
+            if (!protectedObserver)
+                return await PostgresPreviewHosting.StartAsync(Open, LocalReplyNode, local, Fatal, loops, token,
+                    Console.Error.WriteLine, localEdge, fenceInBatch: inBatch);
+            var host = new PostgresPreviewHostedService(Open, LocalReplyNode, local, Fatal, loops, requests: localEdge)
+                { ObserveReplies = edge => new EventReplyObserver(edge) };
+            await host.StartAsync(token);
+            return host;
+        }
 
         static void Fatal(string message) => throw new InvalidOperationException(message);
     }
