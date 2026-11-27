@@ -5,7 +5,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
-internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenant, Func<CancellationToken, ValueTask<bool>> activate, Action unavailable,
+internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenant, Func<CancellationToken, ValueTask<bool>> activate, Func<CancellationToken, ValueTask<bool>> refresh,
+    Action unavailable,
     ILogger<KernelRetentionWorker> logger)
 {
     private static readonly TimeSpan BetweenPages = TimeSpan.FromSeconds(1);
@@ -27,6 +28,8 @@ internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenan
                         if (!await activate(token)) return;
                         activated = true;
                     }
+                    else if (!await refresh(token)) return;
+
                     next = (await pass.RunAsync(tenant, next, token)).Next;
                     pause = next is null ? BetweenSweeps : BetweenPages;
                 }

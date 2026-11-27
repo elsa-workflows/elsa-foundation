@@ -71,6 +71,19 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
         throw new InvalidOperationException("The retention policy changed while the host evaluated its effect.");
     }
 
+    internal async ValueTask<bool> RefreshAsync(IActorRetentionPolicies policies, CancellationToken token)
+    {
+        var current = await policies.ReadRetentionPolicyAsync(tenant, token);
+        var status = Status;
+        var enabled = current.Windows != Indefinite;
+        if (current.Revision != status.Revision)
+        {
+            Volatile.Write(ref _status, new(enabled ? "active" : "disabled", current.Windows, proposed, current.Revision,
+                null, null, ConfirmationThreshold, null));
+        }
+        return enabled;
+    }
+
     internal void Unavailable() =>
         Volatile.Write(ref _status, new("unavailable", Indefinite, proposed, null, null, null, ConfirmationThreshold, null));
 
