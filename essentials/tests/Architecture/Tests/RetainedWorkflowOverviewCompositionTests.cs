@@ -11,6 +11,7 @@ using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Attention.Api;
 using Elsa.Attention.Core;
+using Elsa.Cluster.Readability;
 using Elsa.Events;
 using Elsa.Foundation.Hosting;
 using Elsa.Foundation.Identity;
@@ -28,6 +29,7 @@ using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -36,6 +38,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Nuplane.Admin;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -72,9 +75,14 @@ public sealed class RetainedWorkflowOverviewCompositionTests
                 link => Assert.Equal(("workflow-portfolio", PortfolioPath[1..]), (link.Rel, link.Href)),
                 link => Assert.Equal(("workflow-run-health", "_elsa/workflows/dashboard/runs"), (link.Rel, link.Href)));
 
+            const string definitionId = "retained-definition";
             var design = provider.GetRequiredService<WorkflowsDesignDbContext>();
-            design.Definitions.Add(new() { Id = "retained-definition", TenantId = Tenant, Name = "Retained definition" });
+            design.Definitions.Add(new() { Id = definitionId, TenantId = Tenant, Name = "Retained definition" });
             await design.SaveChangesAsync();
+            var publishedAt = DateTimeOffset.UtcNow;
+            await provider.GetRequiredService<IWorkflowExecutableSourceReferenceWriter>().SaveAsync(new(
+                "retained-reference", "retained-artifact", "WorkflowDefinitionVersion", "retained-version", "1",
+                definitionId, "retained-version", "1", publishedAt, publishedAt, WorkflowExecutableReferenceScope.Published, TenantId: Tenant));
 
             using var client = app.GetTestClient();
             using var anonymous = await client.GetAsync(PortfolioPath);
@@ -88,7 +96,7 @@ public sealed class RetainedWorkflowOverviewCompositionTests
             var portfolio = await client.GetFromJsonAsync<WorkflowPortfolioSnapshot>(PortfolioPath);
             Assert.Equal(WorkflowPortfolioStatus.Ready, portfolio!.Status);
             Assert.Equal(1, portfolio.ActiveDefinitionCount);
-            Assert.Equal(0, portfolio.PublishedDefinitionCount);
+            Assert.Equal(1, portfolio.PublishedDefinitionCount);
 
             var health = await client.GetFromJsonAsync<WorkflowRunHealthSnapshot>(RunHealthPath);
             Assert.Equal(WorkflowRunHealthStatus.Unavailable, health!.Status);
@@ -128,6 +136,8 @@ public sealed class RetainedWorkflowOverviewCompositionTests
             [$"{features}:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey"] = "retained-overview-fixture-signing-key"
         });
         builder.AddNuplaneHostIntegration();
+        builder.Services.AddNuplaneAdmin();
+        builder.Services.ShareWithShells<INuplaneAdminOperations>();
         builder.Services.AddSingleton<IDistributedLockProvider, OverviewLockProvider>();
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(typeof(WorkflowsDashboardRetainedFeature).Assembly, typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly,

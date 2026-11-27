@@ -179,8 +179,8 @@ public sealed class StudioEssentialsDriftGuardTests
 
     /// <summary>
     /// The server scan counts a project's capabilities as served when any of its features is enabled. That holds only while a
-    /// project that declares a capability has every feature it holds enabled; otherwise a disabled feature's capability would
-    /// count as served and the guard would demand a Studio module the server does not advertise.
+    /// project that declares a capability has every feature it holds enabled, or has an explicitly mapped shared capability.
+    /// Otherwise a disabled feature's capability would count as served.
     /// </summary>
     [Fact]
     public void Capability_declaring_server_projects_enable_every_feature_they_hold()
@@ -188,6 +188,10 @@ public sealed class StudioEssentialsDriftGuardTests
         var enabled = EnabledServerFeatures();
         var mixed = ServerProjects()
             .Where(project => project.Capabilities.Length > 0 && project.Features.Any(enabled.Contains) && !project.Features.All(enabled.Contains))
+            // The two Dashboard selectors map the same routes and share one capability registration.
+            .Where(project => Path.GetFileName(project.Path) != "Elsa.Workflows.Dashboard.csproj" ||
+                              project.Capabilities is not ["elsa.api.workflow-dashboard"] ||
+                              !project.Features.ToHashSet(StringComparer.Ordinal).SetEquals(["WorkflowsDashboard", "WorkflowsDashboardRetained"]))
             .Select(project => $"{Path.GetRelativePath(RepoRoot, project.Path)} (disabled: {string.Join(", ", project.Features.Where(feature => !enabled.Contains(feature)))})")
             .ToArray();
 
