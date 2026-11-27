@@ -50,14 +50,15 @@ public sealed partial class RuntimeModelMigrationTests
         await upgraded.Database.MigrateAsync();
         var history = await History(connection);
         Assert.Equal(previousHistory, history.Take(previousHistory.Length));
-        Assert.Equal(["StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership", "KernelScheduleOccurrences", "KernelScheduleControls", "KernelScheduleOccurrenceRetirement", "KernelExecutablePins"],
+        Assert.Equal(["StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership", "KernelScheduleOccurrences", "KernelScheduleControls", "KernelScheduleOccurrenceRetirement", "KernelExecutablePins", "KernelScheduleControlOrder"],
             history.Skip(previousHistory.Length).Select(id => id[(id.LastIndexOf('_') + 1)..]));
         var after = await LegacyRows(connection);
         foreach (var (table, bytes) in before) Assert.Equal(bytes, after[table]);
-        Assert.Equal(before.Count + 15, after.Count);
+        Assert.Equal(before.Count + 16, after.Count);
         Assert.Empty(await upgraded.KernelScheduleOccurrences.ToListAsync());
         Assert.Empty(await upgraded.KernelScheduleControls.ToListAsync());
         Assert.Empty(await upgraded.KernelExecutablePins.ToListAsync());
+        Assert.Empty(await upgraded.KernelScheduleControlScans.ToListAsync());
         var retained = await upgraded.RecurringTriggerSchedules.AsNoTracking().SingleAsync();
         Assert.Equal("1.0.0", retained.SchemaVersion); Assert.NotNull(retained.ClaimOwnerId); Assert.Equal(claim.FencingToken, retained.ClaimToken);
         var reader = new EfRecurringTriggerScheduleStore(upgraded, access, new MigrationCodec());

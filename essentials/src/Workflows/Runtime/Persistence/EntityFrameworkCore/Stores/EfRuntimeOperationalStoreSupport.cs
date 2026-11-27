@@ -50,10 +50,13 @@ internal static class EfRuntimeOperationalStoreSupport
     private sealed record ProjectionGeneration(long Revision, string ProjectionFingerprint);
 
     /// <summary>Saves the context's changes, unless there are none, commits the store's own transaction, and clears the tracker.</summary>
-    public static async Task CommitAndClearAsync(this DbContext context, IDbContextTransaction transaction, CancellationToken ct, bool noChanges = false)
+    public static async Task CommitAndClearAsync(this DbContext context, IDbContextTransaction transaction, CancellationToken ct,
+        bool noChanges = false, Func<CancellationToken, Task>? afterSave = null)
     {
         if (!noChanges)
             await context.SaveChangesAsync(ct);
+        if (afterSave is not null)
+            await afterSave(ct);
         await transaction.CommitAsync(ct);
         context.ChangeTracker.Clear();
     }
@@ -70,11 +73,12 @@ internal static class EfRuntimeOperationalStoreSupport
     /// if <paramref name="retry"/> retries it, so the attempt can ask for another, and otherwise throws it as
     /// <paramref name="operation"/>'s <see cref="CommitFailure"/>.
     /// </summary>
-    public static async Task<Exception?> TryCommitAndClearAsync(this DbContext context, IDbContextTransaction transaction, EfWriteRetry? retry, string operation, CancellationToken ct)
+    public static async Task<Exception?> TryCommitAndClearAsync(this DbContext context, IDbContextTransaction transaction, EfWriteRetry? retry,
+        string operation, CancellationToken ct, Func<CancellationToken, Task>? afterSave = null)
     {
         try
         {
-            await context.CommitAndClearAsync(transaction, ct);
+            await context.CommitAndClearAsync(transaction, ct, afterSave: afterSave);
             return null;
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))

@@ -107,7 +107,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         if (!serving.Capabilities.Schedules) return null;
         await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
         var services = runtime.ServiceProvider;
-        _ = services.GetRequiredService<IRuntimeKernelScheduleControlReader>();
+        _ = services.GetRequiredService<IRuntimeKernelScheduleControlScanStore>();
         _ = services.GetRequiredService<IRuntimeKernelScheduleOccurrenceStore>();
         _ = services.GetRequiredService<IRuntimeKernelScheduleOccurrenceDeliveryStore>();
         _ = services.GetRequiredService<IRuntimeKernelScheduleOccurrenceRetirementStore>();

@@ -260,7 +260,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                     return step.HasMoved ? EfWriteAttempt<T>.Retry() : step.Value;
                 }
 
-                return await _context.TryCommitAndClearAsync(transaction, Commits, operation, cancellationToken) is { } conflict
+                return await _context.TryCommitAndClearAsync(transaction, Commits, operation, cancellationToken,
+                        EfRuntimeKernelScheduleControlStore.AssignOrdinalsAfterSave(_context, scope)) is { } conflict
                     ? EfWriteAttempt<T>.Retry(conflict)
                     : step.Value;
             },

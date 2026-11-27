@@ -21,6 +21,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     internal DbSet<RuntimeIngressReservationEntity> IngressReservations => Set<RuntimeIngressReservationEntity>();
     internal DbSet<RuntimeKernelScheduleOccurrenceEntity> KernelScheduleOccurrences => Set<RuntimeKernelScheduleOccurrenceEntity>();
     internal DbSet<RuntimeKernelScheduleControlEntity> KernelScheduleControls => Set<RuntimeKernelScheduleControlEntity>();
+    internal DbSet<RuntimeKernelScheduleControlScanEntity> KernelScheduleControlScans => Set<RuntimeKernelScheduleControlScanEntity>();
     internal DbSet<RuntimeKernelExecutablePinEntity> KernelExecutablePins => Set<RuntimeKernelExecutablePinEntity>();
 
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
@@ -68,6 +69,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new RuntimeIngressReservationConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeKernelScheduleOccurrenceEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeKernelScheduleControlEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeKernelScheduleControlScanEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeKernelExecutablePinEntityConfiguration());
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());

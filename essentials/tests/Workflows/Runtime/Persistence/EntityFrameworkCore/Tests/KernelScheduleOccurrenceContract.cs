@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -17,7 +18,7 @@ internal static partial class KernelScheduleOccurrenceContract
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 26, 1, 0, 0, TimeSpan.Zero);
 
-    internal static async Task RunAsync(Func<RuntimeDbContext> open)
+    internal static async Task RunAsync(Func<RuntimeDbContext> open, Func<IInterceptor, RuntimeDbContext> intercepted)
     {
         const string slotName = "Blue";
         const string scheduleKey = "schedule:material-producer:node";
@@ -282,6 +283,7 @@ internal static partial class KernelScheduleOccurrenceContract
 
         await CheckDefaultAliasHandoffAsync(open);
         await CheckScheduleAdoptionAsync(open);
+        await CheckControlScanAsync(open, intercepted);
     }
 
     private static async Task CheckDefaultAliasHandoffAsync(Func<RuntimeDbContext> open)
