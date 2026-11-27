@@ -3,16 +3,24 @@ namespace Kernel.Foundation.Contracts;
 /// <summary>The tenant selected by the trusted host for an ingress operation.</summary>
 public sealed class BoundScope
 {
-    internal BoundScope(string tenant)
+    internal BoundScope(string tenant) : this(tenant, isHostIsolated: false)
+    {
+    }
+
+    internal BoundScope(string tenant, bool isHostIsolated)
     {
         ArgumentNullException.ThrowIfNull(tenant);
         if (tenant.Length is < 1 or > 64 || tenant.Any(c => c is not (>= 'a' and <= 'z' or >= '0' and <= '9' or '-')))
             throw new ArgumentException("A tenant id must contain 1 to 64 lowercase ASCII letters, digits or hyphens.", nameof(tenant));
 
         Tenant = tenant;
+        IsHostIsolated = isHostIsolated;
     }
 
     public string Tenant { get; }
+
+    /// <summary>Whether the trusted host derived this scope for isolated work.</summary>
+    public bool IsHostIsolated { get; }
 }
 
 /// <summary>What the bound ingress operation addresses.</summary>
