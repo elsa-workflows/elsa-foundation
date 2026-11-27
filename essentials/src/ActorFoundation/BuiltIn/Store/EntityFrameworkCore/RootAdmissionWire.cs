@@ -24,6 +24,7 @@ internal static class RootAdmissionWire
     internal const string HeldDirectPrefix = "!kernel-held-direct/1:";
     internal const string AuthoredEventDirectPrefix = "!kernel-authored-event/1:";
     internal const string KeyedDirectPrefix = "!kernel-keyed-direct/1:";
+    internal const string HeldKeyedDirectPrefix = "!kernel-held-keyed-direct/1:";
 
     internal static string AuthoredEventOccurrence(string reference, string id, string wait) =>
         $"{reference}/{FoundationRootCreator.OperationDigest(id)}/{FoundationRootCreator.OperationDigest(wait)}";
@@ -73,7 +74,14 @@ internal static class RootAdmissionWire
     {
         var escaped = RequiresEnvelope(payload);
         var escapedKind = kind.Contains('\0') ? kind : null;
-        var prefix = authoredEvent ? AuthoredEventDirectPrefix : keyed ? KeyedDirectPrefix : held ? HeldDirectPrefix : DirectPrefix;
+        var prefix = (authoredEvent, keyed, held) switch
+        {
+            (true, _, _) => AuthoredEventDirectPrefix,
+            (_, true, true) => HeldKeyedDirectPrefix,
+            (_, true, false) => KeyedDirectPrefix,
+            (_, false, true) => HeldDirectPrefix,
+            _ => DirectPrefix
+        };
         var header = new StoredDirect(id, creation, escaped, due == 0, escapedKind)
             { EventWait = eventWait, ScheduleControl = scheduleControl };
         return (prefix + DurableKeyJson.Write(header),

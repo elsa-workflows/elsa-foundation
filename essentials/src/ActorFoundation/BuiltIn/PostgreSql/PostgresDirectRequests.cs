@@ -35,7 +35,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         _startType = startType;
         _protectRootStart = protectRootStart;
         Node = node;
-        edge = new(new Admission(admission, store, protectRootStart), node, startType);
+        edge = new(new Admission(admission, store, protectRootStart, startType), node, startType);
     }
 
     /// <summary>The node whose callers these are: a reply addressed to another node is not this edge's.</summary>
@@ -122,9 +122,15 @@ public sealed class PostgresDirectRequests : IReplyTransport
         edge.RequestOperatorAsync(scope, id, request, add?.KeepFor, admit,
             async ct => (Contract.ActorStatus?)(await _store.ReadFirstRootAsync(scope.Tenant, actor.Id, ct))?.Status, token);
 
-    private sealed class Admission(PostgresRootAdmission admission, EfStore store, ProtectRootStartAsync? protectRootStart) : IHeldRootAdmission
+    private sealed class Admission(PostgresRootAdmission admission, EfStore store, ProtectRootStartAsync? protectRootStart,
+        string? startType) : IHeldRootAdmission
     {
         public bool SupportsEvents { get; } = admission.SupportsLiveEventWaits();
+        public bool SupportsKeys { get; } = admission.SupportsKeyedStarts();
+
+        public Task<Contract.Admission?> AdmitKeyAsync(HeldRootRequest request, Contract.Target.Key key, string kind,
+            string? payload, CancellationToken token) =>
+            admission.AdmitKeyedRequestAsync(request, key, kind, payload, startType, token);
 
         public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
             admission.PublishRequestAsync(request, key, payload, token);

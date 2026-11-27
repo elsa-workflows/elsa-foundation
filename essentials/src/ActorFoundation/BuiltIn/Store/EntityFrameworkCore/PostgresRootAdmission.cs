@@ -230,8 +230,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal Task<Receipt?> AdmitRootRequestAsync(string tenant, string operation, StartSpec spec, string node, Request request,
         bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null, ProtectRootStartAsync? protectRootStart = null)
     {
-        if (request.Tenant != tenant || request.Done || string.IsNullOrWhiteSpace(node) || node.Length > 256 ||
-            node.Contains('|') || node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(node))
+        if (request.Tenant != tenant || request.Done || !IsValidReplyNode(node))
             throw new ArgumentException("A held root start needs an open request of its tenant and an issued reply node.", nameof(request));
         var reply = new DirectReply(request.ReplyAddress(node, early), request.Deadline);
         return protectRootStart is null

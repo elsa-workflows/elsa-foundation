@@ -7,8 +7,26 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
+    internal bool SupportsKeyedStarts()
+    {
+        using var db = create();
+        return db.UsesRootKeyedStarts;
+    }
+
     internal async Task<Contract.Admission> AdmitKeyedAsync(string tenant, Contract.Target.Key target, string id, string kind,
-        string? payload, long? due, TimeSpan? keepFor, string actorType, CancellationToken token)
+        string? payload, long? due, TimeSpan? keepFor, string actorType, CancellationToken token) =>
+        (await AdmitKeyedCoreAsync(tenant, target, id, kind, payload, due, keepFor, actorType, null, token))!;
+
+    internal Task<Contract.Admission?> AdmitKeyedRequestAsync(HeldRootRequest caller, Contract.Target.Key target, string kind,
+        string? payload, string? actorType, CancellationToken token)
+    {
+        if (!IsValidReplyNode(caller.Node))
+            return Task.FromResult<Contract.Admission?>(new(Contract.AdmissionOutcome.Refused));
+        return AdmitKeyedCoreAsync(caller.Tenant, target, caller.Caller.Id, kind, payload, null, caller.KeepFor, actorType, caller, token);
+    }
+
+    private async Task<Contract.Admission?> AdmitKeyedCoreAsync(string tenant, Contract.Target.Key target, string id, string kind,
+        string? payload, long? due, TimeSpan? keepFor, string? actorType, HeldRootRequest? caller, CancellationToken token)
     {
         await using var db = create();
         if (!db.UsesRootKeyedStarts) throw new NotSupportedException("Caller keys require their PostgreSQL qualification profile.");
@@ -29,12 +47,9 @@ internal sealed partial class PostgresRootAdmission
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended({keyLock}, 48602345))
             """, token);
-        var now = await db.Database.SqlQueryRaw<long>("""
-            SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
-            """).SingleAsync(token);
-        var result = await RootKeyedAdmission.ApplyAsync(db, request, issuer.Key, issuer.Partitions, now, Fence, CanReceiveAsync, attempt, token);
+        var result = await RootKeyedAdmission.ApplyAsync(db, request, issuer.Key, issuer.Partitions, caller, Fence, CanReceiveAsync, attempt, token);
         await transaction.CommitAsync(token);
-        if (result.Outcome == Contract.AdmissionOutcome.Accepted) attempt?.Committed();
+        if (result?.Outcome == Contract.AdmissionOutcome.Accepted) attempt?.Committed();
         return result;
 
         FormattableString Fence(FormattableString sql) => WithAdmissionSource(sql, pin, RootKeyedAdmission.Source, 5,
@@ -45,7 +60,8 @@ internal sealed partial class PostgresRootAdmission
         {
             var address = await GuardedRootAddressAsync(db, tenant, binding.Reference!, ct);
             if (address is not { Creation: 1 } || address.Id != binding.Actor) return false;
-            return await AdmissionStatusAsync(db, address, tenant, binding.Reference!, ct) == InstanceStatus.Running;
+            return await AdmissionStatusAsync(db, address, tenant, binding.Reference!, ct,
+                requireCheckpoint: caller is not null) == InstanceStatus.Running;
         }
     }
 }

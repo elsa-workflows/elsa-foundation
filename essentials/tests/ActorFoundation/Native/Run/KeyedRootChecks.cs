@@ -91,10 +91,53 @@ internal static class KeyedRootChecks
             var old = await SendAsync(scope, command, exactOperation, "append", "first");
             Require(blocked.Reason == Contract.RefusalReason.Repeat && old.Outcome == Contract.AdmissionOutcome.Duplicate && old.Actor == reference,
                 "retirement keeps the binding and old receipts while physical generation reuse remains disabled");
+            await VerifyHeldAsync();
             return 0;
 
             Task<Contract.Admission> SendAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind, string? payload = null) =>
                 fixture.Ingress.SendAsync(tenant, target, id, kind, payload, keep, token).AsTask();
+
+            async Task VerifyHeldAsync()
+            {
+                var keyedStart = new Contract.Target.Key("Held", start with { TypeData = "held" });
+                var keyedInput = new Contract.Target.Key("Held");
+                const string heldOperation = "held|early\0\uD800";
+                var started = await RequestAsync(scope, keyedStart, heldOperation, Contract.Kinds.Start);
+                Require(started is { Channel: "started", Item: "ready", Error: null, Actor: not null },
+                    "the held keyed creator replies through its opaque registration and reports the committed actor");
+                var heldActor = started.Actor!.Value;
+                Require((await fixture.Reads.GetAsync(scope, heldActor, token))?.Header.Status == Contract.ActorStatus.Running,
+                    "a committed held start reply names a readable exact actor");
+
+                var answered = await RequestAsync(scope, keyedInput, heldOperation + "-input", "answer", "first response");
+                Require(answered is { Channel: "answer", Item: "first response", Error: null },
+                    "a held keyed input receives its own committed response from the existing exact life");
+
+                var oneWayReplay = await SendAsync(scope, keyedStart, heldOperation, Contract.Kinds.Start);
+                var conflict = await RequestAsync(scope, keyedInput, heldOperation + "-input", "answer", "changed response");
+                var repeatedStart = await RequestAsync(scope, keyedStart, heldOperation + "-other", Contract.Kinds.Start);
+                var foreign = await RequestAsync(other, keyedInput, heldOperation + "-input", "answer", "first response");
+                Require(oneWayReplay is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var original } && original == heldActor &&
+                    conflict.Error == "conflict" && repeatedStart.Error == "repeat" && foreign.Error == "missing",
+                    "held and one-way admission share exact receipts while conflicts, repeated starts and foreign keys keep their own outcomes");
+
+                var retry = await RequestAsync(scope, keyedInput, heldOperation + "-input", "answer", "first response", timeoutMs: 750);
+                var tail = await fixture.Reads.TailAsync(scope, heldActor, cancellationToken: token);
+                Require(retry is { Error: "timeout", Status: Contract.ActorStatus.Running } &&
+                    tail.Items.Count(item => item.Entry.Contains("first response", StringComparison.Ordinal)) == 1,
+                    "a duplicate waits on its own registration and consults the original receipt without delivering twice");
+
+                var expiredKey = new Contract.Target.Key("Expired", start with { TypeData = "held" });
+                var expired = await RequestAsync(scope, expiredKey, "expired", Contract.Kinds.Start, timeoutMs: -1);
+                var afterExpiry = await SendAsync(scope, expiredKey, "expired", Contract.Kinds.Start);
+                Require(expired.Error == "timeout" && afterExpiry.Outcome == Contract.AdmissionOutcome.Accepted,
+                    "an expired keyed wait leaves no creator or receipt");
+            }
+
+            async Task<Contract.Reply> RequestAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind,
+                string? payload = null, int timeoutMs = 4_000) =>
+                await fixture.Ingress.RequestAsync(tenant, target, id, kind, payload, keep,
+                    new(null, await fixture.ReadClockAsync(token) + timeoutMs), token);
 
             async Task<T> UntilAsync<T>(Func<Task<T>> next, Func<T, bool> matches)
             {
@@ -110,6 +153,7 @@ internal static class KeyedRootChecks
     }
 
     private sealed record Fixture(Func<KernelDb> Open, Contract.IIngress Ingress, Contract.IActorReads Reads,
+        Func<CancellationToken, ValueTask<long>> ReadClockAsync,
         Func<CancellationToken, Task<IAsyncDisposable>> StartAsync);
 
     private sealed record KeyedImage(long Creation, string Actor, int Partition, string Creator, byte[] KeyBytes);
@@ -131,7 +175,7 @@ internal static class KeyedRootChecks
             var requests = PostgresPreviewHosting.CreateRequests(Open, Node, ActorType);
             var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, ActorType, Authorize, requests,
                 cancellationToken: token);
-            return new(Open, foundation, foundation, async ct => await PostgresPreviewHosting.StartAsync(Open, Node, new Probe(),
+            return new(Open, foundation, foundation, requests.ReadClockAsync, async ct => await PostgresPreviewHosting.StartAsync(Open, Node, new Probe(),
                 EndProcess, options: null, cancellationToken: ct, onFault: null, replies: requests, fenceInBatch: inBatch));
         }
 
@@ -141,6 +185,7 @@ internal static class KeyedRootChecks
         var sqliteOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
             { DataSource = file, ForeignKeys = true, Pooling = false }.ToString()).Options;
         return new(() => KernelDb.ForSqliteRootShipped(sqliteOptions, StoreFormat.RootKeyedStartsQualification), ingress, sqlite.CreateReads(),
+            sqlite.ReadClockAsync,
             async ct =>
             {
                 var owner = sqlite.CreateHostedService(new Probe(), EndProcess, fenceInBatch: inBatch);
@@ -166,12 +211,24 @@ internal static class KeyedRootChecks
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
         {
-            if (turn.StartSettings is not null) turn.State = "[]";
-            var items = JsonSerializer.Deserialize<List<string>>(turn.State)!;
-            foreach (var item in turn.Inbox.Where(item => item.Kind == "append"))
+            if (turn.StartSettings is not null)
             {
-                items.Add(item.Payload!);
-                turn.Record(new { item.Payload });
+                turn.State = "[]";
+                if (turn.Header.TypeData == "held") turn.Emit("started", "ready");
+            }
+            var items = JsonSerializer.Deserialize<List<string>>(turn.State)!;
+            foreach (var item in turn.Inbox)
+            {
+                if (item.Kind == "append")
+                {
+                    items.Add(item.Payload!);
+                    turn.Record(new { item.Payload });
+                }
+                if (item.Kind == "answer")
+                {
+                    turn.Record(new { item.Payload });
+                    turn.Emit("answer", item.Payload);
+                }
             }
             turn.State = JsonSerializer.Serialize(items);
             if (items.Count == 2) turn.End(Contract.ActorStatus.Finished);

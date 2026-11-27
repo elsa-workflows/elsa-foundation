@@ -46,7 +46,7 @@ internal static class RootKeyedAdmission
             """, token);
 
     internal static Request? Prepare(string tenant, Contract.Target.Key target, string id, string kind, string? payload, long? due,
-        long window, string actorType)
+        long window, string? actorType)
     {
         StartSpec? start = null;
         if (target.Spec is { } publicStart)
@@ -61,8 +61,8 @@ internal static class RootKeyedAdmission
         return new(tenant, target.CallerKey, id, kind, payload, start, due, window);
     }
 
-    internal static async Task<Contract.Admission> ApplyAsync(KernelDb db, Request request, byte[] issuer, int partitions, long now,
-        Func<FormattableString, FormattableString> fence, Func<Binding, CancellationToken, Task<bool>> canReceive,
+    internal static async Task<Contract.Admission?> ApplyAsync(KernelDb db, Request request, byte[] issuer, int partitions,
+        HeldRootRequest? caller, Func<FormattableString, FormattableString> fence, Func<Binding, CancellationToken, Task<bool>> canReceive,
         RootAdmissionPressure.Attempt? attempt, CancellationToken token)
     {
         var keyBytes = DurableKeyJson.CodeUnits(request.Key);
@@ -107,16 +107,23 @@ internal static class RootKeyedAdmission
                 : new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.Conflict);
         }
 
+        // Consult the exact life while still holding the binding before reading the clock for a new write.
+        if (request.Start is null && !await canReceive(binding, token))
+            return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
+        if (request.Start is not null && binding.KeyBytes is not null)
+            return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.Repeat);
+
+        var sqlite = db.Database.IsSqlite();
+        var now = sqlite ? await SqliteRootAdmission.ReadClockAsync(db, token) : await RootEventAdmission.ReadPostgresClockAsync(db, token);
+        if (caller is not null && (!caller.IsOpen || caller.Caller.Deadline <= now)) return null;
+        var replyTo = caller?.Address;
         var until = checked(now + request.Window);
         if (request.Start is { } spec)
         {
-            // The current physical owner accepts generation one. Keep the binding even after retirement.
-            if (binding.KeyBytes is not null)
-                return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.Repeat);
             var creator = FoundationRootCreator.Create(actor, wire.WireId, FoundationRootCreator.OperationDigest(wire.WireId),
-                spec, request.Due, replyTo: null);
+                spec, request.Due, replyTo);
             var (header, body) = EncodeCreator(creator);
-            if (!FitsEnvelope(header, body)) return new(Contract.AdmissionOutcome.Refused);
+            if (!FitsEnvelope(header, body, replyTo)) return new(Contract.AdmissionOutcome.Refused);
             attempt?.Require(partition);
             var birth = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload);
             await WriteAsync($"""
@@ -133,10 +140,9 @@ internal static class RootKeyedAdmission
         }
         else
         {
-            if (!await canReceive(binding, token))
-                return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
-            var (header, body, kind) = EncodeDirect(wire.WireId, 1, request.Kind, request.Payload, request.Due, held: false, keyed: true);
-            if (!FitsEnvelope(header, body)) return new(Contract.AdmissionOutcome.Refused);
+            var (header, body, kind) = EncodeDirect(wire.WireId, 1, request.Kind, request.Payload, request.Due,
+                held: replyTo is not null, keyed: true);
+            if (!FitsEnvelope(header, body, replyTo)) return new(Contract.AdmissionOutcome.Refused);
             attempt?.Require(partition);
             var occurrence = $"{reference}/{FoundationRootCreator.OperationDigest(wire.WireId)}/{Guid.NewGuid():N}";
             await EnqueueAsync(occurrence, InboxKey.FoundationOccurrenceScope, kind, header, body, until);
@@ -151,13 +157,13 @@ internal static class RootKeyedAdmission
             RequireSource(await db.Database.ExecuteSqlInterpolatedAsync(fence(sql), token) == 1);
 
         Task EnqueueAsync(string id, long scope, string kind, string header, string? payload, long? keepUntil) =>
-            db.Database.IsSqlite()
+            sqlite
                 ? SqliteRootAdmission.EnqueueAsync(db, actor.Id, partition, id, scope, kind, header, payload, request.Due,
-                    keepUntil, replyTo: null, token)
+                    keepUntil, replyTo, token)
                 : WriteAsync($"""
-                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Due", "Payload", "Start",
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Due", "Payload", "Start", "ReplyTo",
                         "Done", "Seen", "Attempts", "Trial", "JobGeneration", "KeepUntil")
-                    SELECT {id}, {scope}, {actor.Id}, {partition}, {kind}, {request.Due ?? 0}, {payload}, {header},
+                    SELECT {id}, {scope}, {actor.Id}, {partition}, {kind}, {request.Due ?? 0}, {payload}, {header}, {replyTo},
                         false, 0, 0, 0, 0, {keepUntil} WHERE (/*key-source*/)
                     """);
     }

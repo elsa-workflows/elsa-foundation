@@ -20,7 +20,9 @@ internal sealed partial class PostgresRootAdmission
         IsHeldDirect(value) || IsAuthoredEvent(value) || value?.StartsWith(KeyedDirectPrefix, StringComparison.Ordinal) == true;
 
     private static bool IsAuthoredEvent(string? value) => value?.StartsWith(AuthoredEventDirectPrefix, StringComparison.Ordinal) == true;
-    private static bool IsHeldDirect(string? value) => value?.StartsWith(HeldDirectPrefix, StringComparison.Ordinal) == true;
+    private static bool IsHeldKeyedDirect(string? value) => value?.StartsWith(HeldKeyedDirectPrefix, StringComparison.Ordinal) == true;
+    private static bool IsHeldDirect(string? value) => value?.StartsWith(HeldDirectPrefix, StringComparison.Ordinal) == true ||
+        IsHeldKeyedDirect(value);
 
     internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget, Expired }
 
@@ -97,8 +99,7 @@ internal sealed partial class PostgresRootAdmission
     internal Task<DirectResult> AdmitDirectRequestAsync(string tenant, string reference, string kind, string? payload,
         string node, Request request, bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null, long? dueAt = null)
     {
-        if (request.Tenant != tenant || request.Done || string.IsNullOrWhiteSpace(node) || node.Length > 256 ||
-            node.Contains('|') || node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(node))
+        if (request.Tenant != tenant || request.Done || !IsValidReplyNode(node))
             return Task.FromResult(DirectResult.Refused);
         return AdmitDirectCoreAsync(tenant, reference, request.Id, kind, payload, dueAt, keepFor,
             new(request.ReplyAddress(node, early), request.Deadline), cancellationToken);
@@ -115,6 +116,9 @@ internal sealed partial class PostgresRootAdmission
     }
 
     private sealed record DirectReply(string Address, long Deadline);
+
+    private static bool IsValidReplyNode(string node) => !string.IsNullOrWhiteSpace(node) && node.Length <= 256 &&
+        !node.Contains('|') && !node.Contains('\0') && !DurableKeyJson.HasUnpairedSurrogate(node);
 
     private async Task<DirectResult> AdmitDirectCoreAsync(string tenant, string reference, string id, string kind, string? payload,
         long? due, TimeSpan? keepFor, DirectReply? reply, CancellationToken cancellationToken)
@@ -324,6 +328,8 @@ internal sealed partial class PostgresRootAdmission
         if (row.JobGeneration != 0)
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
         var header = ReadDirectHeader(row.Start, reference, row.Id, authoredEvent, keyedStarts);
+        if (IsHeldKeyedDirect(row.Start) && (row.Due != 0 || header.ExplicitZeroDue || row.Sender is not null))
+            throw new StoreException(Failure.Definite, "Unsupported held keyed input envelope.");
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
         var kind = header.EscapedKind ?? row.Kind;
         if (header.ScheduleControl is { } control)
@@ -357,10 +363,12 @@ internal sealed partial class PostgresRootAdmission
     {
         if (!IsStoredDirect(wire))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-        var keyed = wire!.StartsWith(KeyedDirectPrefix, StringComparison.Ordinal);
+        var heldKeyed = IsHeldKeyedDirect(wire);
+        var keyed = heldKeyed || wire!.StartsWith(KeyedDirectPrefix, StringComparison.Ordinal);
         if (keyed && !keyedStarts)
             throw new StoreException(Failure.Definite, "Unsupported keyed root delivery.");
-        var prefix = authoredEvent ? AuthoredEventDirectPrefix : keyed ? KeyedDirectPrefix : IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
+        var prefix = authoredEvent ? AuthoredEventDirectPrefix : heldKeyed ? HeldKeyedDirectPrefix :
+            keyed ? KeyedDirectPrefix : IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
         var header = DurableKeyJson.Read<StoredDirect>(wire![prefix.Length..]);
         if (header is not { Creation: 1 } || keyed && (header.EventWait is not null || header.ScheduleControl is not null) || !(authoredEvent
                 ? header.Operation is { } id && FoundationSelfSend.IsHandle(id) &&
@@ -380,6 +388,8 @@ internal sealed partial class PostgresRootAdmission
         if (authoredEvent && !db.UsesRootAuthoredEvents)
             throw new StoreException(Failure.Definite, "Unsupported authored root event delivery.");
         var header = ReadDirectHeader(wire, reference, occurrence, authoredEvent, db.UsesRootKeyedStarts);
+        if (IsHeldKeyedDirect(wire) && (due != 0 || header.ExplicitZeroDue))
+            throw new StoreException(Failure.Definite, "Unsupported held keyed input envelope.");
         if (header.ScheduleControl is not null && !db.UsesRootScheduleControls)
             throw new StoreException(Failure.Definite, "Unsupported trusted schedule control envelope.");
         return (header.Operation, header.EscapedKind ?? kind, due != 0 || header.ExplicitZeroDue ? due : null);

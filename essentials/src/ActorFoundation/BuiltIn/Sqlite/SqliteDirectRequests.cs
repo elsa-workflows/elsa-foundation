@@ -168,6 +168,13 @@ public static partial class SqliteEmbeddedHosting
                 WriteAsync(request.Tenant, RootAdmissionKind.Input, (admission, attempt, ct) =>
                     admission.PublishRequestAsync(request, key, payload, ct, attempt), token);
 
+            public bool SupportsKeys => owner.QualificationFormat == StoreFormat.RootKeyedStartsQualification;
+
+            public Task<Contract.Admission?> AdmitKeyAsync(HeldRootRequest request, Contract.Target.Key key, string kind,
+                string? payload, CancellationToken token) =>
+                WriteAsync(request.Tenant, key.Spec is null ? RootAdmissionKind.Input : RootAdmissionKind.Start,
+                    (admission, attempt, ct) => admission.AdmitKeyedRequestAsync(request, key, kind, payload, owner.actorType, ct, attempt), token);
+
             public async ValueTask<long> ReadClockAsync(CancellationToken token)
             {
                 using var file = AcquireFile(path);

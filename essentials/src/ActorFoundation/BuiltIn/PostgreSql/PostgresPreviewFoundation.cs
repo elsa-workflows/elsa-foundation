@@ -118,9 +118,9 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default)
     {
-        if (directRequests is null || target is not (Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event))
+        if (directRequests is null || target is not (Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event or Contract.Target.Key))
             throw new NotSupportedException("This preview holds requests only with a reply-capable store and its direct requests.");
-        // Route Start and Event targets before classifying exact-reference commands.
+        // Classify operator commands only when addressed to an exact reference.
         if (target is not Contract.Target.Ref exact || authorizeExactOperator is null || !Contract.Kinds.IsCommand(kind))
             return directRequests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken);
 
