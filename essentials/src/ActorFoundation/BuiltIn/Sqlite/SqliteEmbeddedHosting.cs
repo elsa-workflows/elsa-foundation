@@ -94,7 +94,8 @@ public static partial class SqliteEmbeddedHosting
                 store.WorkerHeaders(store.BindSqliteWorkerNode(ActorAdapter.RootWithholding(actor, auxiliaryActor))), actor, store.RootSelfIssuer,
                 rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true,
                 retentionWindow: retentionWindow,
-                rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor),
+                rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor,
+                local: requests is null ? null : (requests.Pending, node)),
             actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests,
             auxiliaryActorType: auxiliaryActor?.Type, protectChildBirths: protectChildBirths, inlineStarts: inlineStarts);
     }

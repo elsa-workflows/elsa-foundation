@@ -37,11 +37,11 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false,
         Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null, bool rootHeldReplies = false,
         Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, int rootTerminalOutputLimit = 0,
-        Contract.IActorType? auxiliaryActor = null) =>
+        Contract.IActorType? auxiliaryActor = null, (Durable.Requests Requests, string Node)? local = null) =>
         (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock, this.rootHeldReplies,
-            this.retentionWindow, this.rootTerminalOutputLimit, this.auxiliaryActor) =
+            this.retentionWindow, this.rootTerminalOutputLimit, this.auxiliaryActor, this.local) =
             (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies, retentionWindow,
-                rootTerminalOutputLimit, auxiliaryActor);
+                rootTerminalOutputLimit, auxiliaryActor, local);
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, RootValueReader rootValueReader)
         : this(roots, actor) => this.rootValueReader = rootValueReader;
@@ -415,12 +415,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             ? input.Row is { } row ? Header(store.FoundationTurnHeader(row)) : StartHeader(input)
             : input.Row is { } running ? RootHeader(running) : RootStartHeader(input);
         var delivery = input.Taken[input.From];
-        var ambient = roots?.SupportsInlineStarts == true &&
-            (delivery.Message.Start?.FoundationInlineTenant is not null || input.Row?.FoundationInlineBirth is not null)
-            ? input.Ambient
-            : local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
-            ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
-            : null;
+        var ambient = TurnAmbient(input, header, delivery);
         var turn = new ActorTurn(inMemory, roots, input, header, ambient, issueSelf, rootJobHandle,
             rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader, rootTerminalOutputLimit,
             auxiliaryActor is null ? null : actor.Type);
@@ -518,6 +513,16 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         return growth;
 
         static long Bytes(string? value) => value is null ? 0 : Encoding.UTF8.GetByteCount(value);
+    }
+
+    private object? TurnAmbient(Durable.TurnInput input, Contract.ActorHeader header, Durable.Delivery delivery)
+    {
+        if (local is { } host && input.Taken.Count - input.From == 1 &&
+            (roots is null || HasPublicEventReplyRoute(delivery)) && delivery.Message.ReplyTo is { } address)
+            return host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message));
+        return roots?.SupportsInlineStarts == true &&
+            (delivery.Message.Start?.FoundationInlineTenant is not null || input.Row?.FoundationInlineBirth is not null)
+            ? input.Ambient : null;
     }
 
     private static Durable.InboxKey AmbientDelivery(Durable.Message message) => message.EventMatch is { } match

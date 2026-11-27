@@ -79,17 +79,30 @@ public sealed class Request(string id, long deadline)
     internal object? Ambient { get; init; }
     internal HashSet<InboxKey> AmbientGiven { get; } = [];
     private TaskCompletionSource<Reply>? _completion;
-    private int _eventRecipientCount;
+    private sealed record EventRecipients(int Live, int Total);
+
+    private EventRecipients? _eventRecipients;
     private HashSet<int>? _endedEventRecipients;
     private Reply? _firstEventEnd;
 
-    internal int EventRecipientCount => Volatile.Read(ref _eventRecipientCount);
+    internal int EventRecipientCount => Volatile.Read(ref _eventRecipients)?.Total ?? 0;
+    internal bool StartsEventRecipient(int recipient) => Volatile.Read(ref _eventRecipients) is { } recipients &&
+        recipient >= recipients.Live && recipient < recipients.Total;
 
-    // Event admission binds the exact count before its transaction makes any of the aliases deliverable.
-    internal void ExpectEventRecipients(int count) => Volatile.Write(ref _eventRecipientCount, count);
+    // Event admission binds the exact recipients before its transaction makes any of the aliases deliverable.
+    internal void ExpectEventRecipients(int live, int starts) => Volatile.Write(ref _eventRecipients, new(live, live + starts));
 
     internal string EventRegistration(int recipient) =>
         FormattableString.Invariant($"{Registration}{EventRecipientSeparator}{recipient}");
+
+    internal static int EventRecipientSeparatorIndex(string registration, out int recipient)
+    {
+        var separator = registration.LastIndexOf(EventRecipientSeparator);
+        recipient = -1;
+        return separator > 0 &&
+            int.TryParse(registration.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out recipient)
+            ? separator : -1;
+    }
 
     internal Task<Reply> Completion() => Done
         ? Task.FromResult(AcceptedResponse ?? new Reply(Registration, Key: "", Channel: null, Item: null, Status: Status, Error: Error))
@@ -150,10 +163,8 @@ public sealed class Requests
     {
         eventRecipient = null;
         if (_open.TryGetValue(registration, out var single)) return single.EventRecipientCount == 0 ? single : null;
-        var separator = registration.LastIndexOf(Request.EventRecipientSeparator);
-        if (separator < 0 || !_open.TryGetValue(registration[..separator], out var group) ||
-            !int.TryParse(registration.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var recipient) ||
-            recipient < 0 || recipient >= group.EventRecipientCount)
+        var separator = Request.EventRecipientSeparatorIndex(registration, out var recipient);
+        if (separator < 0 || !_open.TryGetValue(registration[..separator], out var group) || recipient >= group.EventRecipientCount)
             return null;
         eventRecipient = recipient;
         return group;
@@ -182,8 +193,15 @@ public sealed class Requests
         var route = ReplyTo.Parse(address);
         if (route.Node != node || route.Deadline <= now) return null;
         lock (_gate)
-            return _open.GetValueOrDefault(route.Request) is { Done: false, Ambient: { } ambient } request &&
-                request.Tenant == tenant && request.Deadline == route.Deadline && request.AmbientGiven.Add(delivery) ? ambient : null;
+        {
+            if (FindReplyRecipient(route.Request, out var recipient) is not { Done: false, Ambient: { } ambient } request ||
+                request.Tenant != tenant || request.Deadline != route.Deadline)
+                return null;
+            // A start subscription's creator and its companion Event share one first turn for Ambient.
+            if (recipient is { } index && request.StartsEventRecipient(index))
+                delivery = new(route.Request, InboxKey.EventCreatorScope);
+            return request.AmbientGiven.Add(delivery) ? ambient : null;
+        }
     }
 
     internal Task<Reply> CompletionOf(Request request)
