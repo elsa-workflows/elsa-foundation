@@ -127,10 +127,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private long _jobEntryEpoch; // A scheduler callback submitted before shutdown cannot enter after a host restart.
     private TaskCompletionSource? _drainBeat; // set while the node's job drain keeps ownership: a heartbeat answer wakes it
     private readonly HashSet<Delivery> _schedulerRetries = [];
-    private readonly record struct QueuedInlineStart(long Generation, Message Creator, long? Epoch = null, object? Material = null,
-        TaskCompletionSource<InlineRootResult>? Receipt = null);
+    private sealed record QueuedInlineRoot(long Generation, Message Creator, int Partition, long Epoch, object Material,
+        TaskCompletionSource<InlineRootResult> Receipt);
     private sealed record PendingInlineRoot(int Partition, TaskCompletionSource<InlineRootResult> Receipt);
-    private readonly ConcurrentQueue<QueuedInlineStart> _inlineStarts = new();
+    private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
+    private readonly Queue<QueuedInlineRoot> _queuedInlineRoots = new(); // protected by _turnSync with their pending receipts
     private readonly Dictionary<string, PendingInlineRoot> _pendingInlineRoots = new(StringComparer.Ordinal);
     private int _jobsDeferredByCancellation;
     private long _lastReceivedJob; // owner-side observation order of the latest result moved into an inbox
@@ -543,11 +544,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         while (_inlineStarts.TryDequeue(out var inline))
         {
-            if (inline.Generation != _generation ||
-                inline.Epoch is { } epoch && EpochOf(inline.Creator.Target.Partition) != epoch ||
-                !Post(inline.Creator, fresh: true, ambient: inline.Material))
-                LoseInlineStart(inline);
+            if (inline.Generation != _generation || !Post(inline.Creator, fresh: true))
+                LoseInlineStart(inline.Creator);
         }
+        lock (_turnSync)
+            while (_queuedInlineRoots.TryDequeue(out var inline))
+                if (inline.Generation != _generation || EpochOf(inline.Partition) != inline.Epoch ||
+                    !Post(inline.Creator, fresh: true, ambient: inline.Material))
+                    CompleteInlineRoot(inline.Creator.Target.Id, new(InlineRootDisposition.OwnershipLost), inline.Receipt);
         // Retry once per pass. A scheduler that keeps refusing cannot make the publication drain spin.
         if (_schedulerRetries.Count > 0)
             foreach (var ticket in _schedulerRetries.ToArray())
@@ -1173,7 +1177,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal long Monotonic => _options.Monotonic();
 
     /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
-    internal bool PassWanted => _woken || AnswerWaiting || !_inlineStarts.IsEmpty || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
+    internal bool PassWanted => _woken || AnswerWaiting || !_inlineStarts.IsEmpty || QueuedInlineRootCount != 0 ||
+        !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
+
+    internal int QueuedInlineRootCount { get { lock (_turnSync) return _queuedInlineRoots.Count; } }
 
     internal async Task<bool> GainAsync(int partition, CancellationToken cancellationToken = default)
     {
@@ -1402,6 +1409,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // Rows sent to these partitions that the poll would have read back: it no longer reads them, so they must not
         // keep the worker from catching up (F1).
         var gone = leaving.Select(f => f.Partition).ToHashSet();
+        for (var remaining = _queuedInlineRoots.Count; remaining > 0; remaining--)
+        {
+            var inline = _queuedInlineRoots.Dequeue();
+            if (!gone.Contains(inline.Partition)) _queuedInlineRoots.Enqueue(inline);
+        }
         foreach (var pending in _pendingInlineRoots.Where(entry => gone.Contains(entry.Value.Partition)).ToArray())
             CompleteInlineRoot(pending.Key, new(InlineRootDisposition.OwnershipLost));
         foreach (var key in _behind.Where(b => gone.Contains(b.Value)).Select(b => b.Key).ToList()) _behind.Remove(key);
@@ -1437,7 +1449,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Interlocked.Increment(ref _generation);
             _jobPublications = new();
             _schedulerRetries.Clear();
-            while (_inlineStarts.TryDequeue(out var inline)) LoseInlineStart(inline);
+            while (_inlineStarts.TryDequeue(out var inline)) LoseInlineStart(inline.Creator);
+            _queuedInlineRoots.Clear();
             foreach (var pending in _pendingInlineRoots.Values)
                 pending.Receipt.TrySetResult(new(InlineRootDisposition.OwnershipLost));
             _pendingInlineRoots.Clear();
@@ -1579,7 +1592,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var generation = Volatile.Read(ref _generation);
         if (_releasing || !CanStartGeneration(generation) ||
             creator.Start is not { } start || !_type.SupportsFoundationInlineStart(start.Model)) return false;
-        _inlineStarts.Enqueue(new(generation, creator));
+        _inlineStarts.Enqueue((generation, creator));
         return true;
     }
 
@@ -1589,14 +1602,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         ArgumentNullException.ThrowIfNull(material);
         if (creator.Start is not { Ephemeral: true, Parent: null, Creation: { Generation: 1, Previous: 0 } creation } start ||
-            !_type.SupportsQualifiedInlineStart(start.Model) ||
             creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id ||
             !FoundationRootCreator.IsGeneratedReference(binding.Reference) ||
             creator.Target.GeneratedAddress || StoreBatchRules.AddressPartition(creator.Target.Id) is not { } partition || partition < 0 ||
             creator.InboxKey != new InboxKey("root:" + binding.Actor) ||
             creator.Payload != start.Input || creation.Intent != FoundationRootCreator.OperationDigest(creator.Id) ||
             creator is not { Kind: Kinds.Start, TargetCreation: 1, Sender: null, ReplyTo: null, Due: null, KeepUntil: null,
-                Operator: null, ActorAuthored: false, BindFoundationChild: false })
+                Operator: null, ActorAuthored: false, BindFoundationChild: false } ||
+            !_type.AcceptsQualifiedInlineStart(start, material))
             return null;
         lock (_turnSync)
         {
@@ -1607,16 +1620,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var receipt = new TaskCompletionSource<InlineRootResult>(TaskCreationOptions.RunContinuationsAsynchronously);
             if (!_pendingInlineRoots.TryAdd(binding.Actor, new(partition, receipt))) return null;
             var local = creator with { Start = start with { FoundationInlineTenant = binding.Tenant } };
-            _inlineStarts.Enqueue(new(generation, local, fence.Epoch, material, receipt));
+            _queuedInlineRoots.Enqueue(new(generation, local, partition, fence.Epoch, material, receipt));
             return receipt.Task;
         }
     }
 
-    private void LoseInlineStart(QueuedInlineStart inline)
+    private void LoseInlineStart(Message creator)
     {
-        var creator = inline.Creator;
-        if (inline.Receipt is { } receipt)
-            CompleteInlineRoot(creator.Target.Id, new(InlineRootDisposition.OwnershipLost), receipt);
         if (creator.ReplyTo is { } route) Send(new(route, creator.Start?.FoundationInlineTenant), "lost", null, null, error: "lost");
     }
 

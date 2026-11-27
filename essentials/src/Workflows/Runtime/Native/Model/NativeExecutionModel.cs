@@ -89,24 +89,24 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         return new InlineMaterial(this, executable);
     }
 
+    /// <summary>Checks an opaque local capture against the exact executable and definition in an admitted start.</summary>
+    public bool MatchesInlineMaterial(object material, string workflow, string definition, string? selection) =>
+        material is InlineMaterial local && ReferenceEquals(this, local.Owner) &&
+        selection is not null && MatchesSelection(local.Workflow, selection) &&
+        local.Workflow.Id == workflow && local.Workflow.Definition == definition;
+
     public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
     {
         if (turn.Ambient is InlineMaterial local)
-            return ReferenceEquals(this, local.Owner)
-                ? RunInlineTurnAsync(turn, local.Workflow, cancellationToken)
-                : throw SelectionUnavailable();
+        {
+            var instance = turn.Instance;
+            if (!MatchesInlineMaterial(local, instance.Workflow, instance.Definition ?? instance.Workflow, instance.ExecutableSelection))
+                throw SelectionUnavailable();
+            return RunTurnAsync(turn, cancellationToken, local.Workflow);
+        }
         return turn.Instance.ExecutableSelection is { } selection
             ? SelectedTurnAsync(turn, selection, cancellationToken)
             : Resolves(turn.Instance.Workflow) ? ResolvedTurnAsync(turn, cancellationToken) : RunTurnAsync(turn, cancellationToken);
-    }
-
-    private ValueTask RunInlineTurnAsync(Models.ITurn turn, Workflow executable, CancellationToken cancellationToken)
-    {
-        var instance = turn.Instance;
-        if (instance.ExecutableSelection is not { } selection || !MatchesSelection(executable, selection) ||
-            executable.Id != instance.Workflow || executable.Definition != (instance.Definition ?? instance.Workflow))
-            throw SelectionUnavailable();
-        return RunTurnAsync(turn, cancellationToken, executable);
     }
 
     private async ValueTask SelectedTurnAsync(Models.ITurn turn, string selection, CancellationToken cancellationToken)

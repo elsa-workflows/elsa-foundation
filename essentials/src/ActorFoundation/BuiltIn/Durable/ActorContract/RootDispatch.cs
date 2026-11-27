@@ -9,7 +9,8 @@ internal interface IRootDispatchHeaders
 {
     (string Tenant, string Reference) Creator(Durable.Message creator);
     Durable.FoundationDispatchHeader Checkpoint(Durable.InstanceRow row);
-    bool SupportsInlineStarts => false;
+    Func<Durable.StartSpec, object, bool>? ValidateInlineMaterial => null;
+    bool SupportsInlineStarts => ValidateInlineMaterial is not null;
     bool SupportsChildren => false;
     Func<string, string>? ChildMessageHandle => null;
     string? ChildReference(string tenant, Durable.CreationAddress address) => null;
