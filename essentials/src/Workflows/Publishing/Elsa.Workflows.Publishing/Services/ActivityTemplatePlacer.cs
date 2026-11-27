@@ -9,6 +9,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -64,8 +65,22 @@ public sealed class ActivityTemplatePlacer(
     IActivityPlacementHasher placementHasher,
     IActivityStructureService activityStructureService,
     RuntimeInputBindingCompiler inputBindingCompiler,
-    RuntimeOutputCaptureCompiler outputCaptureCompiler)
+    RuntimeOutputCaptureCompiler outputCaptureCompiler,
+    IGlobalClrActivityMaterialReader? globalClrMaterials = null)
 {
+    public ActivityTemplatePlacer(
+        IActivityDefinitionVersionPublicationStore publications,
+        IExecutableActivityTemplateReader templates,
+        IWorkflowExecutableSourceReferenceReader sourceReferences,
+        IActivityPlacementHasher placementHasher,
+        IActivityStructureService activityStructureService,
+        RuntimeInputBindingCompiler inputBindingCompiler,
+        RuntimeOutputCaptureCompiler outputCaptureCompiler)
+        : this(publications, templates, sourceReferences, placementHasher, activityStructureService,
+            inputBindingCompiler, outputCaptureCompiler, null)
+    {
+    }
+
     private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
@@ -292,10 +307,18 @@ public sealed class ActivityTemplatePlacer(
                 var dependency = frame.Dependencies[frame.NextDependencyIndex++];
                 var publication = await publications.FindAsync(dependency.DefinitionVersionId, cancellationToken)
                                   ?? throw new InvalidOperationException($"Exact activity dependency version '{dependency.DefinitionVersionId}' was not found during placement.");
-                var template = await templates.FindAsync(dependency.TemplateId, cancellationToken)
-                               ?? throw new InvalidOperationException($"Exact activity dependency template '{dependency.TemplateId}' was not found during placement.");
-                var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
-                                      ?? throw new InvalidOperationException($"Exact activity dependency Source Reference '{publication.SourceReferenceId}' was not found during placement.");
+                var template = await templates.FindAsync(dependency.TemplateId, cancellationToken);
+                var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken);
+                if ((template is null || sourceReference is null) && globalClrMaterials is not null &&
+                    await globalClrMaterials.FindAsync(publication, cancellationToken) is { } global)
+                {
+                    template ??= global.Template;
+                    sourceReference ??= global.Reference;
+                }
+                if (template is null)
+                    throw new InvalidOperationException($"Exact activity dependency template '{dependency.TemplateId}' was not found during placement.");
+                if (sourceReference is null)
+                    throw new InvalidOperationException($"Exact activity dependency Source Reference '{publication.SourceReferenceId}' was not found during placement.");
                 // This exact child was already closed into the immutable selected parent template. Retirement
                 // blocks new direct catalog selection but does not invalidate that retained closure; revocation
                 // remains the stronger placement-time policy fact.

@@ -143,6 +143,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
         services.TryAddScoped<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();
         services.TryAddSingleton<IActivityPlacementHasher, Sha256ActivityPlacementHasher>();
+        services.TryAddScoped<IGlobalClrActivityMaterialReader, GlobalClrActivityMaterialReader>();
         services.TryAddScoped<ActivityTemplatePlacer>();
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
         services.TryAddScoped<IActivityPublicationReadiness, ActivityPublicationReadiness>();
