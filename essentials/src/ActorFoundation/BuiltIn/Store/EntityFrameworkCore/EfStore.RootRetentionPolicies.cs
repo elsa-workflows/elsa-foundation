@@ -184,13 +184,13 @@ public sealed partial class EfStore
 
     private static async Task<ActorRetentionPolicy> ReadSqliteRetentionPolicyAsync(KernelDb db, string tenant, string type,
         byte[] key, CancellationToken token)
-    {
-        var row = await db.Database.SqlQuery<RetentionPolicyRow>($"""
+        => DecodeRetentionPolicy(tenant, type, await ReadSqliteRetentionPolicyRowAsync(db, tenant, token), key);
+
+    private static Task<RetentionPolicyRow?> ReadSqliteRetentionPolicyRowAsync(KernelDb db, string tenant, CancellationToken token) =>
+        db.Database.SqlQuery<RetentionPolicyRow>($"""
             SELECT "ActorType", "Revision", "FinishedTicks", "CancelledTicks", "FaultedTicks", "Authentication"
             FROM "FoundationRetentionPolicies" WHERE "Tenant" = {tenant}
             """).SingleOrDefaultAsync(token);
-        return DecodeRetentionPolicy(tenant, type, row, key);
-    }
 
     private static async Task<PostgresPolicyRow> ReadPostgresRetentionPolicyAsync(KernelDb db, long marker, string tenant,
         CancellationToken token, string? requiredLock = null)

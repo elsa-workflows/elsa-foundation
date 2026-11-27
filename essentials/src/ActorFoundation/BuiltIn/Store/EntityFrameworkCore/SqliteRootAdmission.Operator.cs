@@ -45,7 +45,10 @@ internal sealed partial class SqliteRootAdmission
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
             if (reply is not null && reply.Caller.Deadline <= now)
                 throw new PostgresRootAdmission.OperatorReplyExpired();
-            var idKey = retentionDelete ? PostgresRootAdmission.RetentionOperationFor(tenant, reference.Id, 1, terminal!) : operation;
+            var policy = retentionDelete && db.UsesRootRetentionPolicy
+                ? await EfStore.ReadRetentionAdmissionPolicyAsync(db, tenant, marker: null, now, ct) : null;
+            var idKey = retentionDelete
+                ? PostgresRootAdmission.RetentionOperationFor(tenant, reference.Id, 1, terminal!, policy?.Policy.Revision) : operation;
             var digest = FoundationRootCreator.OperationDigest(idKey);
             var prior = await db.Database.SqlQuery<string>($"""
                 SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
@@ -56,7 +59,8 @@ internal sealed partial class SqliteRootAdmission
                 : terminal is not null ? target.Terminal && await MatchesTerminalAsync(db, tenant, reference.Id, target, terminal, ct)
                 : target.Status == (int)InstanceStatus.Running ||
                     thenDelete && target.Terminal && await MatchesTerminalAsync(db, tenant, reference.Id, target, null, ct);
-            if (prior is not null || !eligible)
+            if (prior is not null || !eligible || policy is not null && (target.Model is null || target.Status is not { } status ||
+                !policy.Allows(target.Model, (InstanceStatus)status, terminal!.At)))
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
             attempt?.RequireCapacity();
             if (reply is not null && await EfStore.SqliteHeldOperatorCapacityReachedAsync(db, target.Actor, target.Partition, ct))

@@ -5,6 +5,47 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    internal sealed record RetentionAdmissionPolicy(ActorRetentionPolicy Policy, string? EncodedType, long AsOf)
+    {
+        internal bool Allows(string model, InstanceStatus status, long endedAt) =>
+            EncodedType == EncodeRetentionActorType(model) && Elapsed(RetentionMillis.From(Policy.Windows), status, endedAt, AsOf);
+    }
+
+    internal sealed record RetentionAdmissionTarget(string Model, InstanceStatus Status);
+
+    internal static async Task<RetentionAdmissionPolicy> ReadRetentionAdmissionPolicyAsync(KernelDb db, string tenant,
+        long? marker, long? now, CancellationToken token)
+    {
+        if (db.UsesSqliteRootRuntime)
+        {
+            var key = await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
+            var row = await ReadSqliteRetentionPolicyRowAsync(db, tenant, token);
+            return new(DecodeRetentionPolicy(tenant, row?.ActorType ?? "", row, key), row?.ActorType, now!.Value);
+        }
+
+        await LockPostgresRetentionPolicyAsync(db, marker, token);
+        var stored = await ReadPostgresRetentionPolicyAsync(db, marker!.Value, tenant, token, "ShareLock");
+        return new(DecodePostgresRetentionPolicy(tenant, stored.ActorType ?? "", stored), stored.ActorType, stored.AsOf);
+    }
+
+    private static Task<int> LockPostgresRetentionPolicyAsync(KernelDb db, long? marker, CancellationToken token)
+    {
+        if (marker is null) throw new StoreFormatException("Retention requires the pinned physical store.");
+        return db.Database.ExecuteSqlRawAsync("""LOCK TABLE "FoundationRetentionPolicies" IN SHARE MODE""", token);
+    }
+
+    private static bool Elapsed(RetentionMillis windows, InstanceStatus status, long endedAt, long asOf)
+    {
+        var window = status switch
+        {
+            InstanceStatus.Finished => windows.Finished,
+            InstanceStatus.Cancelled => windows.Cancelled,
+            InstanceStatus.Faulted => windows.Faulted,
+            _ => null
+        };
+        return endedAt > 0 && window is { } finite && endedAt <= asOf - finite;
+    }
+
     private static async ValueTask<(CommitBatch Batch, QualifiedRootCheckpoint? Root, IReadOnlySet<string>? Refusals)> BindRetentionPoliciesAsync(
         KernelDb db, CommitBatch batch, QualifiedRootCheckpoint? root, uint? marker, CancellationToken token)
     {
@@ -15,11 +56,7 @@ public sealed partial class EfStore
         // Lock policy before the fence or any projection write. Activation locks in the same order.
         // SQLite already reserves the writer for the enclosing commit.
         var sqlite = db.UsesSqliteRootRuntime;
-        if (!sqlite)
-        {
-            if (marker is null) throw new StoreFormatException("Retention settlement requires the pinned physical store.");
-            await db.Database.ExecuteSqlRawAsync("""LOCK TABLE "FoundationRetentionPolicies" IN SHARE MODE""", token);
-        }
+        if (!sqlite) await LockPostgresRetentionPolicyAsync(db, marker, token);
         var sqliteKey = sqlite ? await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token) : null;
         var now = sqlite ? await ReadSqliteRetentionClockAsync(db, token) : 0L;
         var policies = new Dictionary<(string Tenant, string Model), (RetentionMillis Windows, long AsOf)>();
@@ -51,15 +88,8 @@ public sealed partial class EfStore
                 }
                 policies.Add(identity, policy);
             }
-            var window = current.Status switch
-            {
-                InstanceStatus.Finished => policy.Windows.Finished,
-                InstanceStatus.Cancelled => policy.Windows.Cancelled,
-                InstanceStatus.Faulted => policy.Windows.Faulted,
-                _ => null
-            };
-            var eligible = retirement.Park is null && current.TerminalAt is > 0 && window is { } finite &&
-                current.TerminalAt.Value <= policy.AsOf - finite;
+            var eligible = retirement.Park is null && current.TerminalAt is { } endedAt &&
+                Elapsed(policy.Windows, current.Status, endedAt, policy.AsOf);
             if (!eligible) refused.Add(retirement.Root.Actor);
             commands.Add(retirement with { RetentionEligible = eligible, RetentionMarker = marker });
         }

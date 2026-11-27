@@ -103,9 +103,11 @@ internal static class RetentionPolicyChecks
         }
         Require(await admit() is { Outcome: Contract.AdmissionOutcome.Accepted } && await inbox.CountAsync(input => !input.Done, token) == 1,
             "the trusted retention delete is pending while the preceding owner is stopped");
-        Require(await policies.TryApplyRetentionPolicyAsync(tenant, active.Revision, extended, 0, token) is
-            { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied, Quote.NewlyEligible: 0 },
+        var extension = await policies.TryApplyRetentionPolicyAsync(tenant, active.Revision, extended, 0, token);
+        Require(extension is { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied, Quote.NewlyEligible: 0 },
             "a later durable retention policy extends eligibility before the pending command can settle");
+        Require(await admit() is { Outcome: Contract.AdmissionOutcome.Refused } && await inbox.CountAsync(token) == 1,
+            "a stale sweep cannot reserve the new policy revision while the actor is ineligible");
 
         await freshOwner(async () =>
         {
@@ -115,6 +117,17 @@ internal static class RetentionPolicyChecks
                 retained.Revision == image.Revision && await position.SingleAsync(token) == before &&
                 !await db.Journal.AnyAsync(entry => entry.Instance == image.Actor.Id && entry.Revision < 0, token),
                 "a restarted owner with a stale immediate window consumes the command without retiring the actor or moving the journal");
+
+            Require(await policies.TryApplyRetentionPolicyAsync(tenant, extension.Current.Revision, immediate, long.MaxValue, token) is
+                { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied },
+                "a newer durable policy makes the same terminal selection eligible again");
+            Require(await admit() is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the new policy revision admits the same terminal stamp without waiting for the earlier receipt");
+            while (!await db.Instances.AnyAsync(row => row.Id == image.Actor.Id && row.Retired, token)) await Task.Delay(20, token);
+            Require(await inbox.CountAsync(input => input.Done, token) == 2 && await position.SingleAsync(token) == before + 1 &&
+                await db.Journal.CountAsync(entry => entry.Instance == image.Actor.Id && entry.Revision == -1, token) == 1 &&
+                await admit() is { Outcome: Contract.AdmissionOutcome.Duplicate },
+                "the new revision retires once and keeps same-revision duplicates idempotent after retirement");
         });
     }
 
