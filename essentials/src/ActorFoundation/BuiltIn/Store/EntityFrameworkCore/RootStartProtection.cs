@@ -18,7 +18,7 @@ public delegate ValueTask<bool> ProtectRootStartAsync(PendingRootStart start, Ca
 public interface IProtectedRootStarts
 {
     /// <summary>Returns after durable admission without holding a caller or waiting for the actor to answer.</summary>
-    ValueTask<Admission> StartAsync(string operationId, StartSpec spec, CancellationToken cancellationToken = default);
+    ValueTask<Admission> StartAsync(string operationId, Kernel.Foundation.Contracts.StartSpec spec, CancellationToken cancellationToken = default);
 }
 
 /// <summary>What the durable Foundation state establishes about the exact prepared root.</summary>
