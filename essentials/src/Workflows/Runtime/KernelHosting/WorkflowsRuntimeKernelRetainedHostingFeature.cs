@@ -1,6 +1,11 @@
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
@@ -18,6 +23,16 @@ public sealed class WorkflowsRuntimeKernelRetainedHostingFeature : WorkflowsRunt
     public new const string FeatureName = "WorkflowsRuntimeKernelRetainedHosting";
 
     protected override string HostingFeatureName => FeatureName;
+
+    public override void ConfigureServices(IServiceCollection services)
+    {
+        base.ConfigureServices(services);
+        services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
+        services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
+        services.TryAddSingleton<IRuntimeExecutionIdGenerator, RuntimeExecutionIdGenerator>();
+        services.AddWorkflowTestRunTransport();
+        services.TryAddScoped<IWorkflowStartDispatcher>(provider => provider.GetRequiredService<IWorkflowDirectTestRunDispatcher>());
+    }
 
     public void PostConfigureServices(IServiceCollection services)
     {
