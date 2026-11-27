@@ -19,8 +19,14 @@ internal static partial class SqliteHostLifetimeChecks
         try
         {
             var file = Path.Combine(temp.FullName, "retirement.db");
-            await InstallFoundationAsync(file, token);
+            var foundation = new SqliteEmbeddedFoundation(file, "retirement-policy", RetirementKind);
+            await foundation.InstallShippedAsync(token);
+            var policies = (Contract.IActorRetentionPolicies)foundation;
             var scope = EmbeddedTenant.Bind(RetirementKind);
+            var immediate = new Contract.ActorRetentionWindows(Finished: TimeSpan.Zero);
+            Require(await policies.TryApplyRetentionPolicyAsync(scope, 0, immediate, 0, token) is
+                { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied, Current.Revision: 1 },
+                "the shipped SQLite fixture activates immediate Finished retention before any actor ends");
             var replies = SqliteEmbeddedHosting.CreateRequests(file, "retirement-owner", RetirementKind);
             var ingress = await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(file, RetirementKind,
                 (_, _, kind) => kind is Contract.Kinds.Terminate or Contract.Kinds.Delete, requests: replies, cancellationToken: token);
@@ -61,19 +67,27 @@ internal static partial class SqliteHostLifetimeChecks
                 Require(await RetainAsync(expired, eligible) is { Outcome: Contract.AdmissionOutcome.Duplicate },
                     "retention derives the same operation from the same terminal mark");
 
-                foreach (var kept in new[] { protectedActor, fresh })
-                {
-                    var prior = (await reader.ReadFirstRootAsync(scope.Tenant, kept.Id, token))!;
-                    Require(await RetainAsync(kept, prior) is { Outcome: Contract.AdmissionOutcome.Accepted },
-                        "retention stages the candidate for the owner to check");
-                    while (!await db.Messages.AnyAsync(message => message.Target == prior.Actor.Id && message.Kind == Kinds.Delete && message.Done, token))
-                        await Task.Delay(25, token);
-                    Require(await reader.ReadFirstRootAsync(scope.Tenant, kept.Id, token) is { Revision: 1, Status: InstanceStatus.Finished },
-                        "the owner preserves protected actors and actors within their retention window");
-                }
+                var prior = (await reader.ReadFirstRootAsync(scope.Tenant, protectedActor.Id, token))!;
+                Require(await RetainAsync(protectedActor, prior) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                    "retention stages the candidate for the owner to check");
+                while (!await db.Messages.AnyAsync(message => message.Target == prior.Actor.Id && message.Kind == Kinds.Delete && message.Done, token))
+                    await Task.Delay(25, token);
+                Require(await reader.ReadFirstRootAsync(scope.Tenant, protectedActor.Id, token) is { Revision: 1, Status: InstanceStatus.Finished },
+                    "the owner preserves an authored deletion-protected actor under immediate durable retention");
                 await host.StopAsync(token);
                 Require(host.LastError is null, "the retirement owner stops cleanly");
             }
+
+            var freshImage = (await reader.ReadFirstRootAsync(scope.Tenant, fresh.Id, token))!;
+            await RetentionPolicyChecks.CheckPendingAcrossExtensionAsync(policies, scope, freshImage, () => OpenFoundationDb(file),
+                () => RetainAsync(fresh, freshImage), freshOwner: async check =>
+                {
+                    await using var restart = OpenHost(cachedWindow: TimeSpan.Zero);
+                    await restart.StartAsync(token);
+                    await check();
+                    await restart.StopAsync(token);
+                    Require(restart.LastError is null, "the restarted SQLite owner drains cleanly after the policy refusal");
+                }, extended: immediate with { Finished = TimeSpan.FromHours(1) }, token);
 
             var before = (await reader.ReadFirstRootAsync(scope.Tenant, compound.Id, token))!;
             var running = PostgresRootSelection.SealRunning(cursor, scope.Tenant, compound.Id);
@@ -125,9 +139,10 @@ internal static partial class SqliteHostLifetimeChecks
             Require(successor.LastError is null, "the successor stops cleanly");
             return 0;
 
-            SqliteEmbeddedHostedService OpenHost() => SqliteEmbeddedHostedService.ForFoundation(file, "retirement-owner",
-                executor, reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, requests: replies,
-                retentionWindow: header => header.TypeData == "fresh" ? TimeSpan.FromHours(1) : TimeSpan.Zero);
+            SqliteEmbeddedHostedService OpenHost(TimeSpan? cachedWindow = null) =>
+                SqliteEmbeddedHostedService.ForFoundation(file, "retirement-owner",
+                    executor, reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, requests: replies,
+                    retentionWindow: _ => cachedWindow);
 
             async Task<Contract.ActorRef> AdmitAsync(string definition)
             {

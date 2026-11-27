@@ -160,6 +160,7 @@ internal static class PostgresShippedFormatChecks
         await using var service = new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message),
             new() { PollInterval = TimeSpan.FromMilliseconds(20) }, requests: foundation.Requests);
         await service.StartAsync(stop);
+        Contract.ActorRef retainedAcrossExtension;
         try
         {
             // A held start answered from its own turn; the job it runs afterwards settles and the root finishes.
@@ -198,6 +199,7 @@ internal static class PostgresShippedFormatChecks
             var stuck = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("stuck")), "stuck-1", Contract.Kinds.Start,
                 cancellationToken: stop)).Actor!.Value;
             var timedOut = await SettledAsync(stuck);
+            retainedAcrossExtension = stuck;
             Require(timedOut is { Status: InstanceStatus.Finished } && Variable(timedOut, "outcome") == SendHttpRequest.TimeoutOutcome,
                 "a timed job that passes its deadline settles on Timeout and the root finishes");
 
@@ -244,6 +246,20 @@ internal static class PostgresShippedFormatChecks
         {
             await service.StopAsync(CancellationToken.None);
         }
+        var retainedImage = (await store.ReadFirstRootAsync(scope.Tenant, retainedAcrossExtension.Id, stop))!;
+        var selection = (await foundation.GetAsync(scope, retainedAcrossExtension, stop))!.Selection!;
+        await RetentionPolicyChecks.CheckPendingAcrossExtensionAsync(foundation, scope, retainedImage, Open,
+            () => foundation.AdmitRetentionDeleteAsync(scope, retainedAcrossExtension, selection, stop),
+            freshOwner: async check =>
+            {
+                const string successor = "shipped-retention-successor";
+                var replies = PostgresPreviewHosting.CreateRequests(Open, successor, WorkflowActor.WorkflowActor.ActorType);
+                await using var restart = await PostgresPreviewHosting.StartAsync(Open, successor, actor,
+                    error => throw new InvalidOperationException(error), new() { PollInterval = TimeSpan.FromMilliseconds(20) }, stop,
+                    onFault: null, replies, fenceInBatch: inBatch, retentionWindow: static _ => TimeSpan.Zero);
+                await check();
+                await restart.StopAsync(stop);
+            }, extended: new(), stop);
         return 0;
 
         async Task<Contract.ActorRef> StartAsync(string workflow, string id) =>

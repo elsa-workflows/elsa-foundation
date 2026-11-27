@@ -1,3 +1,4 @@
+using Kernel.Durable;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -80,6 +81,41 @@ internal static class RetentionPolicyChecks
         }
         Require(await policies.ReadRetentionPolicyAsync(tenant, token) == new Contract.ActorRetentionPolicy(2, keep),
             "provider policy reads and writes refuse an unauthenticated committed row without changing the policy");
+    }
+
+    internal static async Task CheckPendingAcrossExtensionAsync(Contract.IActorRetentionPolicies policies, Contract.BoundScope tenant,
+        EfStore.RootImage image, Func<KernelDb> open, Func<ValueTask<Contract.Admission>> admit, Func<Func<Task>, Task> freshOwner,
+        Contract.ActorRetentionWindows extended, CancellationToken token)
+    {
+        await using var db = open();
+        var partition = new InstanceRef(image.Actor.Id).Partition;
+        var inbox = db.Messages.AsNoTracking().Where(input => input.Partition == partition && input.Target == image.Actor.Id &&
+            input.InboxScope == InboxKey.FoundationOccurrenceScope && input.Kind == Kinds.Delete);
+        var position = db.Partitions.AsNoTracking().Where(row => row.Id == partition).Select(row => row.Position);
+        var before = await position.SingleAsync(token);
+        var immediate = new Contract.ActorRetentionWindows(Finished: TimeSpan.Zero);
+        var active = await policies.ReadRetentionPolicyAsync(tenant, token);
+        if (active.Windows != immediate)
+        {
+            var enabled = await policies.TryApplyRetentionPolicyAsync(tenant, active.Revision, immediate, long.MaxValue, token);
+            Require(enabled.Outcome == Contract.ActorRetentionPolicyChangeOutcome.Applied, "the fixture activates immediate retention");
+            active = enabled.Current;
+        }
+        Require(await admit() is { Outcome: Contract.AdmissionOutcome.Accepted } && await inbox.CountAsync(input => !input.Done, token) == 1,
+            "the trusted retention delete is pending while the preceding owner is stopped");
+        Require(await policies.TryApplyRetentionPolicyAsync(tenant, active.Revision, extended, 0, token) is
+            { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied, Quote.NewlyEligible: 0 },
+            "a later durable retention policy extends eligibility before the pending command can settle");
+
+        await freshOwner(async () =>
+        {
+            while (!await inbox.AnyAsync(input => input.Done, token)) await Task.Delay(20, token);
+            Require(await db.Instances.AsNoTracking().SingleAsync(row => row.Id == image.Actor.Id, token) is
+                { Retired: false, Status: InstanceStatus.Finished } retained &&
+                retained.Revision == image.Revision && await position.SingleAsync(token) == before &&
+                !await db.Journal.AnyAsync(entry => entry.Instance == image.Actor.Id && entry.Revision < 0, token),
+                "a restarted owner with a stale immediate window consumes the command without retiring the actor or moving the journal");
+        });
     }
 
     private static async Task ExpectUntrustedAsync(Func<Task> operation)
