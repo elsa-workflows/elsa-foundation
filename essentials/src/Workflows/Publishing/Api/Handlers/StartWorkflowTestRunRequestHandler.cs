@@ -272,9 +272,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
 
         var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
         if (scopeRecord?.Scope.IsExpired(timeProvider.GetUtcNow()) == true) return null;
-        if (testRun is null || FindDirectDispatcher(testRun, scopeRecord) is not null &&
+        var usesDirectDispatcher = testRun is not null && FindDirectDispatcher(testRun, scopeRecord) is not null;
+        if (testRun is null || usesDirectDispatcher &&
             testRun.Status is not (WorkflowTestRunStatus.Rejected or WorkflowTestRunStatus.DispatchRejected) &&
-            (scopeRecord!.State != WorkflowTestScopeState.Open || testRun.WorkflowExecutionId is null && scopeRecord.IsolatedActor is not null))
+            (scopeRecord!.State != WorkflowTestScopeState.Open ||
+             testRun.WorkflowExecutionId != scopeRecord.IsolatedActor?.ActorReference))
             return await RecoverDirectRunAsync(scopeRecord, testRun, cancellationToken) is { } recovered
                 ? WorkflowTestRunView.From(recovered.Run, recovered.Command) : null;
 
@@ -305,7 +307,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var command = result.Dispatch.CommandDispatch;
         var refreshed = testRun with
         {
-            WorkflowExecutionId = result.Dispatch.WorkflowExecutionId,
+            WorkflowExecutionId = TestRunActorId(result.Dispatch, usesDirectDispatcher),
             Status = MapStatus(command.Status),
             Reason = command.Reason,
             DriverAction = null
@@ -670,7 +672,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             DefinitionId: executable.Identity.DefinitionId,
             DefinitionVersionId: executable.Identity.DefinitionVersionId,
             ArtifactId: executable.Identity.ArtifactId,
-            WorkflowExecutionId: dispatch.Dispatch.WorkflowExecutionId,
+            WorkflowExecutionId: TestRunActorId(dispatch.Dispatch, reference.SourceReferenceId == testScope.ScopeId),
             Status: status,
             RequestedBy: RequestedBy,
             RequestedAt: now,
@@ -886,7 +888,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             DefinitionId: executable.Identity.DefinitionId,
             DefinitionVersionId: executable.Identity.DefinitionVersionId,
             ArtifactId: executable.Identity.ArtifactId,
-            WorkflowExecutionId: dispatch.WorkflowExecutionId,
+            WorkflowExecutionId: TestRunActorId(dispatch, directTestRunDispatcher is not null),
             Status: status,
             RequestedBy: RequestedBy,
             RequestedAt: now,
@@ -1283,6 +1285,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
         new Dictionary<string, JsonElement>(StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, object?> EmptyInputs = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+    private static string? TestRunActorId(WorkflowExecutionStartDispatchResult dispatch, bool usesDirectDispatcher) =>
+        !usesDirectDispatcher || dispatch.CommandDispatch.Status is WorkflowExecutionCommandDispatchStatus.Accepted or
+            WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted or WorkflowExecutionCommandDispatchStatus.Duplicate
+            ? dispatch.WorkflowExecutionId : null;
 
     private static WorkflowTestRunStatus MapStatus(WorkflowExecutionCommandDispatchStatus status) =>
         status switch

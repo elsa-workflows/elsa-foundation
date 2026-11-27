@@ -345,6 +345,22 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         Assert.Null(await _testScopeStore.FindAsync(rejected.TestRunId));
     }
 
+    [Theory]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.Deferred)]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.Rejected)]
+    public async Task DirectTestRunWithoutAdmissionDoesNotExposeTheScopeAsAnActor(WorkflowExecutionCommandDispatchStatus status)
+    {
+        using var services = new ServiceCollection()
+            .AddSingleton<IWorkflowDirectTestRunDispatcher>(new UnadmittedTestRunDispatcher(_executableStore, status))
+            .BuildServiceProvider();
+        var handler = DraftSnapshotHandler(ambientServices: services);
+        var run = await handler.StartDraftAsync(new("definition-1", "snapshot-unadmitted", DraftState()), CancellationToken.None);
+
+        Assert.Equal(status.ToString(), run.CommandDispatchStatus);
+        Assert.Null(run.WorkflowExecutionId);
+        Assert.Null((await handler.GetAsync(run.TestRunId, CancellationToken.None))!.WorkflowExecutionId);
+    }
+
     [Fact]
     public async Task DraftTestRunWithInputContractFailsClosedWhenInputValidatorIsUnavailable()
     {
@@ -1280,6 +1296,33 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
             Requests.Add(request);
             return inner.DispatchAsync(request, requiredScope, dispatchOptions, cancellationToken);
         }
+    }
+
+    private sealed class UnadmittedTestRunDispatcher(IWorkflowExecutableStore executables, WorkflowExecutionCommandDispatchStatus status)
+        : IWorkflowDirectTestRunDispatcher
+    {
+        public bool SupportsTrigger(string driverId) => false;
+
+        public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope, WorkflowExecutionCommandDispatchOptions? dispatchOptions,
+            CancellationToken cancellationToken)
+        {
+            var id = request.TestScope!.ScopeId;
+            var executable = (await executables.FindAsync(request.ArtifactId, cancellationToken))!;
+            var recordedAt = DateTimeOffset.UtcNow;
+            return new(id, executable.Identity, new(id, id, status, recordedAt, "Fixture"),
+                new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt));
+        }
+
+        public ValueTask<WorkflowDirectTestRunObservation?> ObserveAsync(WorkflowTestScopeRecord scope,
+            WorkflowExecutableSourceReference source, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<WorkflowDirectTestRunObservation?>(WorkflowDirectTestRunObservation.Prepared);
+
+        public ValueTask RequestStopAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> IsStoppedAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class TestRunRuntime : IDisposable

@@ -34,7 +34,7 @@ internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore 
                 var test = await isolated.GetAsync(actor, cancellationToken);
                 if (!test.Missing)
                 {
-                    if (test.Run is not { } selected || !await HasTestScopeAsync(selected.Run.TestStart, tenant, cancellationToken))
+                    if (test.Run is not { } selected || !await HasTestScopeAsync(actor, selected.Run.TestStart, tenant, cancellationToken))
                         return null;
                     var testExecutable = await executables.FindAsync(selected.Run.Workflow, cancellationToken);
                     return new Run(KernelRunStates.From(selected.View, selected.Run, testExecutable?.Identity, tenant),
@@ -58,7 +58,7 @@ internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore 
         }
     }
 
-    private async ValueTask<bool> HasTestScopeAsync(WorkflowTestStart? test, string tenant, CancellationToken token)
+    private async ValueTask<bool> HasTestScopeAsync(ActorRef actor, WorkflowTestStart? test, string tenant, CancellationToken token)
     {
         if (test is null || testScopes is null || test.ScopeId != test.SourceReferenceId ||
             (test.Tenant ?? PersistenceScope.DefaultValue) != tenant ||
@@ -66,7 +66,7 @@ internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore 
             test.ExpiresAt <= (clock ?? TimeProvider.System).GetUtcNow())
             return false;
         var stored = await testScopes.FindAsync(test.ScopeId, token);
-        return stored is not null && WorkflowTestScope.ContextEquals(stored.Scope,
-            new(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition)));
+        return stored is { IsolatedActor: { } binding } && binding.ActorReference == actor.Id &&
+            WorkflowTestScope.ContextEquals(stored.Scope, new(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition)));
     }
 }
