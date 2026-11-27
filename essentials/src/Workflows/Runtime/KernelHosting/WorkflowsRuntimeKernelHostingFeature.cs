@@ -109,8 +109,10 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         if (storage.TakesPreparedStarts)
             services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionStartService>(sp =>
             {
+                var runtime = sp.GetRequiredService<KernelShellRuntime>();
                 var dispatcher = new KernelPublishedRunDispatcher(sp.GetRequiredService<IServiceScopeFactory>(),
-                    sp.GetRequiredService<KernelServing>(), persistenceScope, sp.GetRequiredService<KernelShellRuntime>().StartPublishedAsync);
+                    sp.GetRequiredService<KernelServing>(), persistenceScope, runtime.StartPublishedAsync,
+                    storage.TakesInlineStarts ? runtime.StartInlinePublishedAsync : null);
                 return new WorkflowExecutionStartService(dispatcher, tenant.Tenant, sp.GetService<IHttpContextAccessor>(),
                     sp.GetService<NormalizedPrincipalValidator>());
             }));

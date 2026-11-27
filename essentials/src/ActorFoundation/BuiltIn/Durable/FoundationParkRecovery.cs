@@ -8,6 +8,21 @@ internal readonly record struct ParkRecoveryCredit(bool GateReady, int Rows, lon
 
     // The in-memory projection charges the full metadata allowance until providers report stored sizes.
     internal static long StoredBytes(int payloadBytes) => payloadBytes + 24L * 1024;
+
+    internal static bool FitsInlineMailbox(IEnumerable<Message> messages)
+    {
+        int count = 0;
+        long bytes = 0;
+        foreach (var message in messages)
+        {
+            // The private self codec may escape unusual code units. Reserve room above the raw envelope size.
+            var body = message.Payload;
+            var size = body is null ? 0 : System.Text.Encoding.UTF8.GetByteCount(body);
+            bytes += StoredBytes(body is not null && (body.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(body)) ? 3 * size : size);
+            if (++count > InMemoryStore.ParkPageLimit || count > 1 && bytes > LimitBytes) return false;
+        }
+        return true;
+    }
 }
 
 public sealed partial class InMemoryStore

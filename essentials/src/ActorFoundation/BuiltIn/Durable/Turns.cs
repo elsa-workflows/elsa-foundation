@@ -20,6 +20,7 @@ public interface IActorType
     internal bool AcceptsFoundationOperator(InstanceRow? row, Message message) => SupportsFoundationOperator(row);
 
     internal bool SupportsFoundationInlineStart(string type) => false;
+    internal bool AcceptsQualifiedInlineStart(StartSpec spec, object material, object? issuer) => false;
 
     /// <summary>Whether this actor type can verify the operator or parent authority of a terminate.</summary>
     internal bool SupportsTrialWithdrawal => false;
@@ -232,6 +233,7 @@ public sealed class TurnInput
     internal bool RecoveryHandedOff(InboxKey key) => _worker.RecoveryHandedOff(key);
 
     internal Message? VolatileMessage(InboxKey id) => _volatile?.GetValueOrDefault(id);
+    internal IEnumerable<Message> VolatileMessages => _volatile?.Values ?? Enumerable.Empty<Message>();
 
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
     public long CheckpointTime => _worker.Now;
@@ -252,6 +254,7 @@ public sealed class TurnOutcome(string instance)
     internal bool ClearsPrivateTimersOnEnd;
     internal ParkKeepReason? FoundationKeep;
     internal ParkPageClear? FoundationParkClear;
+    internal InlineJobWinner? FoundationInlineJob;
     internal ParkRecoveryPage? FoundationRecoveryPage;
     internal ParkRetryOpen? FoundationRetry;
     internal ParkTimerOpen? FoundationRecoveryTimers;
@@ -462,7 +465,7 @@ public sealed class DurableTurn
         var ordinal = _ordinal++;
         var id = FoundationSelfSend.Issue(issue, Origin, Revision, ordinal, dueAt);
         var message = FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt);
-        if (recordOrdinal) FoundationSelfSend.RememberOrdinal(message, ordinal);
+        if (recordOrdinal) FoundationSelfSend.RememberIssuance(message, Revision, ordinal);
         _sent.Add(message);
         return id;
     }
@@ -694,7 +697,7 @@ public sealed class DurableTurn
                 TargetCreation: _input.Creation, SenderCreation: _input.Creation)
                 { FoundationPublish = new(key, id, Guid.Empty, Authored: new(tenant, duration)) };
             var authored = ticket.AsIssued().AsKernelTicket();
-            if (issue is not null) FoundationSelfSend.RememberOrdinal(authored, _ordinal);
+            if (issue is not null) FoundationSelfSend.RememberIssuance(authored, Revision, _ordinal);
             _sent.Add(authored);
             _ordinal++;
         }
@@ -714,6 +717,17 @@ public sealed class DurableTurn
             (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable) &&
             _sent.TrueForAll(m => m.Target == Actor && !m.ActorControl && m.Kind is not (Kinds.Publish or Kinds.Meet) &&
                 (m.Kind == Kinds.Job || (m.Due ?? now) <= until));
+    }
+
+    internal bool CanKeepInlineMailbox()
+    {
+        var consumed = _input.Taken.Select(item => item.Message.InboxKey).ToHashSet();
+        var mailbox = _input.VolatileMessages.Where(message =>
+            !consumed.Contains(message.InboxKey) && !_cancelled.Contains(message.InboxKey)).Concat(_sent).ToArray();
+        // With a job and independent local inputs, those inputs may open a Park while the job is active.
+        // Commit the mixed mailbox first so ordinary recovery can keep the job's durable registration.
+        return (!mailbox.Any(RootJobTicket.IsTimedSend) || mailbox.All(RootJobTicket.IsTimedSend)) &&
+            ParkRecoveryCredit.FitsInlineMailbox(mailbox);
     }
 
     /// <summary>Everything this turn sends stays in memory: none of it is a row.</summary>

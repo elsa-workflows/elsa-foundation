@@ -61,7 +61,7 @@ public sealed partial class EfStore
     }
 
     private sealed record FirstRootCheckpoint(string Tenant, string Reference, Message Creator, InstanceRow Row, string Header,
-        byte[]? Wire, long Growth) : QualifiedRootCheckpoint(1)
+        byte[]? Wire, long Growth) : QualifiedRootCheckpoint(Row.Revision)
     {
         internal RootChildEffects? ChildEffects { get; init; }
         internal (long BirthTableOid, long Sequence)? CreatorSource { get; init; }
@@ -139,10 +139,10 @@ public sealed partial class EfStore
     private PreparedRoot PrepareFirstRoot(string tenant, string reference, Message creator,
         PartitionFence fence, string? state, int stateVersion, string typeData,
         IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null, InstanceStatus status = InstanceStatus.Running, long terminalGrowth = 0,
-        string? creatorFault = null, (long BirthTableOid, long Sequence)? creatorSource = null)
+        string? creatorFault = null, (long BirthTableOid, long Sequence)? creatorSource = null, long revision = 1)
     {
         RequireQualifiedRootWriter();
-        if (creator.Start is not { Creation: { Generation: 1, Previous: 0 } } start ||
+        if (revision < 1 || creator.Start is not { Creation: { Generation: 1, Previous: 0 } } start ||
             creator.TargetCreation != 1 || creator.Kind != Kinds.Start || creator.Target.Partition != fence.Partition ||
             creator.InboxKey != new InboxKey("root:" + creator.Target.Id) || creator.Payload != start.Input ||
             (creator.BindFoundationChild ? _rootChildReference is null || creator.Sender is null || creator.SenderCreation != 1
@@ -152,7 +152,7 @@ public sealed partial class EfStore
         var (storedState, header) = EncodeRootContent(start.Model, start.Definition, stable && state is not null ? StableBodyMarker : state, stateVersion, typeData, labels, journal);
         var wire = stable && state is not null ? RootSelfContent.Encode(state) : null;
         // Model and definition are in the qualified header, including values that PostgreSQL text cannot carry.
-        var row = new InstanceRow(creator.Target.Id, "", "", status, "null", 1, null,
+        var row = new InstanceRow(creator.Target.Id, "", "", status, "null", revision, null,
             Fault: creatorFault is null ? null : DurableKeyJson.Write(creatorFault), History: start.History, StateVersion: stateVersion, Jobs: jobState?.Jobs).WithFoundationState(storedState)
             with { NextJobGeneration = jobState?.NextGeneration };
         // BindCheckpointAsync settles the exact, due creator before this same transaction lands.

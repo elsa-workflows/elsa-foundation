@@ -634,13 +634,13 @@ internal static class ActivityExecutionInspectionDisclosure
 }
 
 public sealed record WorkflowExecutionStartDispatchView(
-    string WorkflowExecutionId,
+    string? WorkflowExecutionId,
     string ArtifactId,
     string ArtifactVersion,
     string ArtifactHash,
     string CommandDispatchStatus,
     string EnvelopeId,
-    string AgentId,
+    string? AgentId,
     string AgentProviderName,
     string? Reason,
     string? SourceReferenceId = null,
@@ -649,15 +649,29 @@ public sealed record WorkflowExecutionStartDispatchView(
     bool Shed = false,
     int? RetryAfterSeconds = null)
 {
-    public static WorkflowExecutionStartDispatchView From(WorkflowExecutionStartDispatchResult result) =>
-        new(
-            result.WorkflowExecutionId,
+    internal const string PersistenceOutcomeKey = "elsa.kernel.start.persistence-outcome";
+    internal const string StartActorStatusKey = "elsa.kernel.start.actor-status";
+    internal const string PersistenceOutcomeUnknown = "Unknown";
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? PersistenceOutcome { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ActorStatus { get; init; }
+
+    public static WorkflowExecutionStartDispatchView From(WorkflowExecutionStartDispatchResult result)
+    {
+        var metadata = result.CommandDispatch.Metadata;
+        var outcome = metadata.GetValueOrDefault(PersistenceOutcomeKey);
+        var hasAddress = outcome is null or "Committed";
+        return new(
+            hasAddress ? result.WorkflowExecutionId : null,
             result.PinnedExecutable.ArtifactId,
             result.PinnedSource?.ArtifactVersion ?? result.PinnedExecutable.ArtifactVersion,
             result.PinnedExecutable.ArtifactHash,
             result.CommandDispatch.Status.ToString(),
             result.CommandDispatch.EnvelopeId,
-            result.Agent.AgentId,
+            hasAddress ? result.Agent.AgentId : null,
             result.Agent.ProviderName,
             result.CommandDispatch.Reason,
             result.PinnedSource?.SourceReferenceId,
@@ -666,8 +680,12 @@ public sealed record WorkflowExecutionStartDispatchView(
             // Deferred alone does not identify backpressure — the distributed leaf returns it for "forwarded to the
             // owning node" — so the shed marker is lifted out of the dispatch metadata rather than inferred from the
             // status. The endpoint needs it to choose 429 over 200 (RB1, #1235).
-            IsShed(result.CommandDispatch.Metadata),
-            ReadRetryAfterSeconds(result.CommandDispatch.Metadata));
+            IsShed(metadata), ReadRetryAfterSeconds(metadata))
+        {
+            PersistenceOutcome = outcome,
+            ActorStatus = metadata.GetValueOrDefault(StartActorStatusKey)
+        };
+    }
 
     private static bool IsShed(IReadOnlyDictionary<string, string> metadata) =>
         metadata.TryGetValue(RuntimeMetadataKeys.DispatchShed, out var shed) &&

@@ -353,7 +353,7 @@ public static partial class PostgresPreviewHosting
         Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
         Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null,
         Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null,
-        ProtectChildBirthsAsync? protectChildBirths = null)
+        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -403,6 +403,7 @@ public static partial class PostgresPreviewHosting
         if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
         await store.EnableRootChildrenAsync(cancellationToken);
+        if (inlineStarts is not null) await inlineStarts.PrepareAsync(store, cancellationToken);
         var scope = store.BindWorkerNode(ActorAdapter.RootWithholding(actor, auxiliaryActor));
         await store.PrimeAdmissionPressureAsync(cancellationToken);
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
@@ -440,6 +441,7 @@ public static partial class PostgresPreviewHosting
                 await relay.ReadyAsync(cancellationToken);
             }
             await runtime.StartAsync(host, cancellationToken);
+            inlineStarts?.Attach(store, host.NodeWorker ?? throw new InvalidOperationException("Inline starts need an owned Worker."), runtime.WakeLocal);
             return runtime;
         }
         catch

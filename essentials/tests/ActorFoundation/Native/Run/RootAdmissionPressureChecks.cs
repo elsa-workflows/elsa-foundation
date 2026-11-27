@@ -287,7 +287,7 @@ internal static class RootAdmissionPressureChecks
         throw new InvalidOperationException("A rolled-back reservation incorrectly credited the bucket.");
     }
 
-    private sealed class RateClock : TimeProvider
+    internal sealed class RateClock : TimeProvider
     {
         private long ticks;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;

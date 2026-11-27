@@ -316,7 +316,8 @@ internal sealed partial class ActorAdapter
                     outcome.Held.Count == 0 && outcome.Consumed.TrueForAll(item => !item.Durable))
                     return outcome;
 
-                if (!ended && outcome.Held.Count == 0 && _turn.CanWaitInMemory(until))
+                if (!ended && outcome.Held.Count == 0 && _turn.CanWaitInMemory(until) &&
+                    (_roots?.SupportsInlineStarts != true || _turn.CanKeepInlineMailbox()))
                 {
                     _turn.WaitInMemory();
                     outcome.InMemory = true;
@@ -335,9 +336,10 @@ internal sealed partial class ActorAdapter
 
         private long InlineUntil()
         {
-            var configured = (long)_input.Services.ShortWait.TotalMilliseconds;
-            var deadline = Durable.ReplyTo.Parse(_input.Taken[_input.From].Message.ReplyTo!).Deadline;
-            return Math.Min(checked(Now + configured), deadline);
+            var configured = checked(Now + (long)_input.Services.ShortWait.TotalMilliseconds);
+            return _input.Taken[_input.From].Message.ReplyTo is { } reply
+                ? Math.Min(configured, Durable.ReplyTo.Parse(reply).Deadline)
+                : configured;
         }
 
         private Durable.Message Received(Contract.Message message) =>
@@ -352,6 +354,9 @@ internal sealed partial class ActorAdapter
 
         private Contract.Message Project(Durable.Message message)
         {
+            if (_roots?.RecoversInlineInitialRoots == true && _issueSelf is { } issuer &&
+                Durable.FoundationInlineRetry.Matches(issuer, _row, message))
+                return new(message.Id, Contract.Kinds.Start, message.Payload);
             var sender = message.Sender == _row.Id && message.SenderCreation == _row.Creation ? Header.Ref
                 : message.Sender is { } source && SenderReference(source, message.SenderCreation) is { } reference
                     ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;

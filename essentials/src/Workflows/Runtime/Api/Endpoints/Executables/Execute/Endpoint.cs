@@ -31,6 +31,8 @@ public sealed class Endpoint(IWorkflowExecutionStartService starter) : ApiEndpoi
             HttpContext.Response.Headers.RetryAfter = Math.Max(1, result.RetryAfterSeconds ?? 1).ToString(CultureInfo.InvariantCulture);
             return EndpointResult.Status(StatusCodes.Status429TooManyRequests, result);
         }
+        if (result.PersistenceOutcome == WorkflowExecutionStartDispatchView.PersistenceOutcomeUnknown)
+            return EndpointResult.Status(StatusCodes.Status504GatewayTimeout, result);
 
         var status = string.Equals(result.CommandDispatchStatus, nameof(WorkflowExecutionCommandDispatchStatus.Rejected), StringComparison.Ordinal)
             ? StatusCodes.Status409Conflict

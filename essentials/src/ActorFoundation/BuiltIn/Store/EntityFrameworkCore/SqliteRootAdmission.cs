@@ -315,7 +315,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         return await ReadClockAsync(db, token);
     }
 
-    private static Task<long> ReadClockAsync(KernelDb db, CancellationToken token) =>
+    internal static Task<long> ReadClockAsync(KernelDb db, CancellationToken token) =>
         db.Database.SqlQueryRaw<long>(
             "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token);
 

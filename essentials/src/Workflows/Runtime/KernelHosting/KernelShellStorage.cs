@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal abstract class KernelShellStorage
 {
-    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, EventStarts, EventStartReceipts, EventStartScan, DirectTestRuns }
+    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, InlineStarts, EventStarts, EventStartReceipts, EventStartScan, DirectTestRuns }
 
     public abstract bool TakesSelfSends { get; }
     public abstract bool TakesTimers { get; }
@@ -25,6 +25,7 @@ internal abstract class KernelShellStorage
     public abstract ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token);
     public abstract bool TakesPreparedStarts { get; }
     internal abstract bool TakesDirectTestRuns { get; }
+    public abstract bool TakesInlineStarts { get; }
     internal virtual bool TakesEventStarts => false;
     internal virtual bool RetainsEventStartReceipts => false;
     internal virtual bool TakesOrderedEventScan => false;
@@ -42,7 +43,7 @@ internal abstract class KernelShellStorage
         CancellationToken token);
     public abstract (IHostedService Service, IAsyncDisposable Lifetime) CreateOwner(IActorType actor, ILoggerFactory logs,
         Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null,
-        ProtectChildBirthsAsync? protectChildBirths = null);
+        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null);
 
     public static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.Shipped);
@@ -52,6 +53,9 @@ internal abstract class KernelShellStorage
 
     internal static KernelShellStorage CreatePreparedStartsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.PreparedStarts);
+
+    internal static KernelShellStorage CreateInlineStartsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
+        Create(provider, sqlitePath, postgresConnectionString, Profile.InlineStarts);
 
     internal static KernelShellStorage CreateEventStartsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.EventStarts);
@@ -116,7 +120,7 @@ internal abstract class KernelShellStorage
         private SqliteEmbeddedFoundation? _foundation = profile switch
         {
             Profile.ManagedSchedules => SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.ActorType),
-            Profile.PreparedStarts or Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan or Profile.DirectTestRuns => null,
+            Profile.PreparedStarts or Profile.InlineStarts or Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan or Profile.DirectTestRuns => null,
             Profile.Shipped when SqliteEmbeddedHosting.TakesPreparedStarts => null,
             _ => new(path, node, WorkflowActor.ActorType)
         };
@@ -129,9 +133,10 @@ internal abstract class KernelShellStorage
         public override bool TakesChildren => SqliteEmbeddedHosting.TakesChildren;
         public override bool TakesHttpWaits => SqliteEmbeddedHosting.TakesHttpWaits;
         public override bool TakesManagedSchedules => TakesPreparedStarts || Foundation.TakesManagedSchedules;
-        public override bool TakesPreparedStarts => profile is Profile.PreparedStarts or Profile.DirectTestRuns || TakesEventStarts ||
+        public override bool TakesPreparedStarts => profile is Profile.PreparedStarts or Profile.InlineStarts or Profile.DirectTestRuns || TakesEventStarts ||
             profile == Profile.Shipped && SqliteEmbeddedHosting.TakesPreparedStarts;
         internal override bool TakesDirectTestRuns => profile == Profile.DirectTestRuns;
+        public override bool TakesInlineStarts => profile == Profile.InlineStarts;
         internal override bool TakesEventStarts => profile is Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan;
         internal override bool RetainsEventStartReceipts => profile is Profile.EventStartReceipts or Profile.EventStartScan;
         internal override bool TakesOrderedEventScan => profile == Profile.EventStartScan;
@@ -148,6 +153,7 @@ internal abstract class KernelShellStorage
                 ArgumentNullException.ThrowIfNull(protectRootStart);
                 _foundation ??= profile switch
                 {
+                    Profile.InlineStarts => SqliteEmbeddedFoundation.ForInlineStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     Profile.EventStarts => SqliteEmbeddedFoundation.ForEventStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     Profile.EventStartReceipts => SqliteEmbeddedFoundation.ForEventStartReceiptsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     Profile.EventStartScan => SqliteEmbeddedFoundation.ForEventStartScanQualification(path, node, WorkflowActor.ActorType, protectRootStart),
@@ -176,9 +182,16 @@ internal abstract class KernelShellStorage
             CancellationToken token) => Foundation.ConfirmChildBirthAsync(scope, actor, issuance, token);
 
         public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
-            Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null, ProtectChildBirthsAsync? protectChildBirths = null)
+            Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null, ProtectChildBirthsAsync? protectChildBirths = null,
+            InlineRootRequests? inlineStarts = null)
         {
             var logger = logs.CreateLogger<SqliteEmbeddedHostedService>();
+            if (inlineStarts is not null)
+            {
+                var inlineOwner = Foundation.CreateInlineQualification(actor, schedule, protectChildBirths!, inlineStarts,
+                    Environment.FailFast, retentionWindow, logger);
+                return (inlineOwner, inlineOwner);
+            }
             if (protectChildBirths is not null)
             {
                 var protectedOwner = Foundation.CreateHostedServiceWithChildBirthProtection(actor, protectChildBirths,
@@ -214,6 +227,7 @@ internal abstract class KernelShellStorage
         public override bool TakesManagedSchedules => PostgresPreviewHosting.TakesManagedSchedules(OpenDatabase);
         public override bool TakesPreparedStarts => PostgresPreviewHosting.TakesPreparedStarts(OpenDatabase);
         internal override bool TakesDirectTestRuns => _profile == Profile.DirectTestRuns;
+        public override bool TakesInlineStarts => _profile == Profile.InlineStarts;
         internal override bool TakesEventStarts => _profile is Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan;
         internal override bool RetainsEventStartReceipts => _profile is Profile.EventStartReceipts or Profile.EventStartScan;
         internal override bool TakesOrderedEventScan => _profile == Profile.EventStartScan;
@@ -226,6 +240,9 @@ internal abstract class KernelShellStorage
         {
             switch (_profile)
             {
+                case Profile.InlineStarts:
+                    await PostgresPreviewHosting.InstallInlineStartsQualificationAsync(_options, token);
+                    break;
                 case Profile.EventStarts:
                     await PostgresPreviewHosting.InstallEventStartsQualificationAsync(_options, token);
                     break;
@@ -285,9 +302,16 @@ internal abstract class KernelShellStorage
             CancellationToken token) => PostgresPreviewHostedService.ConfirmChildBirthAsync(OpenDatabase, scope, actor, issuance, token);
 
         public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
-            Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null, ProtectChildBirthsAsync? protectChildBirths = null)
+            Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null, ProtectChildBirthsAsync? protectChildBirths = null,
+            InlineRootRequests? inlineStarts = null)
         {
             var logger = logs.CreateLogger<PostgresPreviewHostedService>();
+            if (inlineStarts is not null)
+            {
+                var inlineOwner = PostgresPreviewHostedService.CreateInlineQualification(OpenDatabase, _node, actor, schedule,
+                    Requests, protectChildBirths!, inlineStarts, Environment.FailFast, retentionWindow, logger);
+                return (inlineOwner, inlineOwner);
+            }
             if (protectChildBirths is not null)
             {
                 var protectedOwner = PostgresPreviewHostedService.CreateWithChildBirthProtection(OpenDatabase, _node, actor,
@@ -306,6 +330,7 @@ internal abstract class KernelShellStorage
         {
             Profile.ManagedSchedules => PostgresPreviewHosting.CreateManagedSchedulesQualificationContext(_options),
             Profile.PreparedStarts => PostgresPreviewHosting.CreatePreparedStartsQualificationContext(_options),
+            Profile.InlineStarts => PostgresPreviewHosting.CreateInlineStartsQualificationContext(_options),
             Profile.EventStarts => PostgresPreviewHosting.CreateEventStartsQualificationContext(_options),
             Profile.EventStartReceipts => PostgresPreviewHosting.CreateEventStartReceiptsQualificationContext(_options),
             Profile.EventStartScan => PostgresPreviewHosting.CreateEventStartScanQualificationContext(_options),

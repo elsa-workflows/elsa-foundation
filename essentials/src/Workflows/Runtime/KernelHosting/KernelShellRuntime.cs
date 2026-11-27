@@ -29,6 +29,8 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private KernelShellFoundation? _foundation;
     private IProtectedRootStarts? _publishedStarts;
     private IProtectedRootStarts? _testStarts;
+    private sealed record InlineStarts(InlineRootRequests Requests, NativeExecutionModel Model);
+    private InlineStarts? _publishedInlineStarts;
     private readonly CancellationTokenSource _maintenanceStop = new();
     private Task? _maintenance;
 
@@ -62,12 +64,17 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
+        var inline = storage.TakesInlineStarts ? new InlineRootRequests(tenant, WorkflowActor.ActorType,
+            (spec, material) => WorkflowActor.DescribeStart(spec.Type, spec.TypeData) is { } selected &&
+                model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection),
+            protection!.ProtectHeldStartAsync) : null;
         var auxiliary = schedules is null ? null : new ScheduleActor(schedules.Value.Calendar, schedules.Value.Worker.CreateAcceptor());
         (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary,
-            protectChildExecutables ? protection!.ProtectAsync : null);
+            protectChildExecutables || inline is not null ? protection!.ProtectAsync : null, inline);
         await _owner.StartAsync(token);
         if (storage.TakesPreparedStarts) Volatile.Write(ref _publishedStarts, storage.BindPublishedStarts(tenant));
         if (testTenant is not null) Volatile.Write(ref _testStarts, storage.BindPublishedStarts(testTenant));
+        if (inline is not null) Volatile.Write(ref _publishedInlineStarts, new(inline, model));
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,
             token => retention.InitializeAsync(Foundation.RetentionPolicies, token),
@@ -91,6 +98,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     {
         Volatile.Write(ref _publishedStarts, null);
         Volatile.Write(ref _testStarts, null);
+        Interlocked.Exchange(ref _publishedInlineStarts, null)?.Requests.Close();
         using var maintenanceDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         maintenanceDeadline.CancelAfter(MaintenanceStopBudget);
         try { await StopMaintenanceAsync(maintenanceDeadline.Token); }
@@ -151,6 +159,15 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         testTenant is null ? Task.FromResult(RootStartProof.Unresolved) :
             storage.ConfirmPreparedStartAsync(testTenant, actor, issuance, token);
 
+    internal ValueTask<InlineStartOutcome> StartInlinePublishedAsync(string operationId, StartSpec start, Workflow executable,
+        CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        return Volatile.Read(ref _publishedInlineStarts) is { } inline
+            ? inline.Requests.StartAsync(operationId, start, inline.Model.CaptureInlineMaterial(executable), token)
+            : ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Unavailable));
+    }
+
     public ValueTask<IActorReads> ReadAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Reads);
 
     public ValueTask<KernelRetentionStatus> ReadRetentionStatusAsync(CancellationToken token) =>
@@ -204,6 +221,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     {
         Volatile.Write(ref _publishedStarts, null);
         Volatile.Write(ref _testStarts, null);
+        Interlocked.Exchange(ref _publishedInlineStarts, null)?.Requests.Close();
         using var stop = new CancellationTokenSource(MaintenanceStopBudget);
         try
         {

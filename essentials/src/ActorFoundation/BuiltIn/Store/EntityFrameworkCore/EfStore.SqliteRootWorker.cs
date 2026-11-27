@@ -174,7 +174,7 @@ public sealed partial class EfStore
                 AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {pending.Target}))
             """;
         return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1 &&
-            (!parked || await VerifySqliteParkProjectionAsync(db, checkpoint.Tenant, checkpoint.Reference, revision, checkpoint.Row.Fault!, token)) &&
+            (!parked || await VerifyRootParkProjectionAsync(db, checkpoint.Tenant, checkpoint.Reference, revision, checkpoint.Row.Fault!, token)) &&
             (checkpoint.ChildEffects is null || await checkpoint.ChildEffects.BindAsync(db, checkpoint.Tenant, token));
     }
 

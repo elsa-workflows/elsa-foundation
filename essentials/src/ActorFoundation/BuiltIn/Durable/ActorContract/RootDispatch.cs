@@ -9,6 +9,10 @@ internal interface IRootDispatchHeaders
 {
     (string Tenant, string Reference) Creator(Durable.Message creator);
     Durable.FoundationDispatchHeader Checkpoint(Durable.InstanceRow row);
+    Func<Durable.StartSpec, object, bool>? ValidateInlineMaterial => null;
+    object? InlineIssuer => null;
+    bool SupportsInlineStarts => ValidateInlineMaterial is not null;
+    bool RecoversInlineInitialRoots => false;
     bool SupportsChildren => false;
     Func<string, string>? ChildMessageHandle => null;
     string? ChildReference(string tenant, Durable.CreationAddress address) => null;
@@ -269,6 +273,8 @@ internal sealed partial class ActorAdapter
         List<Durable.ParkTimerRecipe> rearms, List<Durable.SubscriptionRow> subscriptions)
     {
         if (row.Jobs != facts.RecoverableJobRegistry) return false;
+        if (roots?.RecoversInlineInitialRoots == true && row is { FoundationNullState: true, Parent: null })
+            return facts.InlineRetry is { } retry && issueSelf is { } issuer && Durable.FoundationInlineRetry.Matches(issuer, row, retry);
         try
         {
             var header = RootHeader(row);
@@ -405,7 +411,16 @@ internal sealed partial class ActorAdapter
         foreach (var delivery in input.Taken)
         {
             var message = delivery.Message;
-            if (issueSelf is not null && issueSelf.Allows(message.Due) && delivery.Durable && input.Row is { } issuer &&
+            if (!auxiliary && roots?.SupportsInlineStarts == true && !delivery.Durable && input.Row is null &&
+                input.Taken.Count == 1 && message.Start?.FoundationInlineTenant is { } tenant &&
+                message.FoundationRootBinding is { } identity && tenant == identity.Tenant && identity.Actor == input.Actor &&
+                message.Target.Id == input.Actor && message.InboxKey == new Durable.InboxKey("root:" + input.Actor) &&
+                message.Start is { Ephemeral: true, Parent: null, Creation: { Generation: 1, Previous: 0 } } &&
+                message is { Kind: Durable.Kinds.Start, TargetCreation: 1, Sender: null, ReplyTo: null, Due: null, KeepUntil: null,
+                    Operator: null, ActorAuthored: false, BindFoundationChild: false })
+                continue;
+            if (issueSelf is not null && issueSelf.Allows(message.Due) && input.Row is { } issuer &&
+                (delivery.Durable || roots?.SupportsInlineStarts == true && issuer.FoundationInlineBirth is not null) &&
                 Durable.FoundationSelfSend.IsSelfInput(message, issuer.Id, issuer.Creation)) continue;
             if (!auxiliary && roots?.SupportsChildren == true && message.FoundationRootChildNotice && delivery.Durable)
             {
@@ -456,6 +471,11 @@ internal sealed partial class ActorAdapter
 
     private void RequireRootOutcome(Durable.TurnOutcome outcome, Durable.InstanceRow? previous, Durable.Message input)
     {
+        var inline = roots?.SupportsInlineStarts == true &&
+            (input.Start?.FoundationInlineTenant is not null || previous?.FoundationInlineBirth is not null);
+        if (inline && outcome.Row is null && !outcome.Durable &&
+            outcome.Status is Durable.InstanceStatus.Finished or Durable.InstanceStatus.Faulted or Durable.InstanceStatus.Cancelled)
+            return;
         if (roots?.PublishesAuthoredEvents == true && outcome.Sent.Any(IsAuthoredPublication))
         {
             // The store binds these effects in the same transaction as the checkpoint, using the qualified wait rows.
@@ -512,7 +532,7 @@ internal sealed partial class ActorAdapter
             outcome.Replied.Count != 0 ||
             // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
             // their delivery, and drops it when it holds none (Worker.Release), as the in-memory reference does.
-            outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory)
+            outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory && !inline)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
 
@@ -539,9 +559,12 @@ internal sealed partial class ActorAdapter
     private Durable.TurnOutcome? SettleRootTimedJob(Durable.TurnInput input)
     {
         if (!rootTimedJobSettlement || input.Row is not { Status: Durable.InstanceStatus.Running, Creation: 1 } row ||
-            input.Taken is not [var item] || !item.Durable) return null;
-        if (Durable.RootJobTicket.IsCompletion(item, row, timed: true))
+            input.Taken is not [var item]) return null;
+        var inline = !item.Durable && roots?.SupportsInlineStarts == true && input.Unwritten && row.FoundationInlineBirth is not null;
+        if (!inline && !item.Durable) return null;
+        if (Durable.RootJobTicket.IsCompletion(item, row, timed: true, allowVolatile: inline))
         {
+            if (inline) return WriteInlineWinner();
             var original = item.Original!;
             return SettleJob(input, row, item.Message.Read<Durable.JobFinished>(), original.JobGeneration,
                 original.Read<Durable.JobTicket>().Timer, cancel: false, root: true);
@@ -549,7 +572,15 @@ internal sealed partial class ActorAdapter
         if (item.Message is { Kind: Durable.Kinds.JobDeadline, Due: { } due } deadline &&
             deadline.Read<Durable.JobDeadline>() is { Key: var key } && Durable.JobRegistry.Generation(row, key) is { } generation &&
             deadline.WithoutTicketAuthority() == Durable.RootJobTicket.Deadline(row.Id, key, generation, due))
-            return SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), generation, null, cancel: true, root: true);
+            return inline ? WriteInlineWinner() :
+                SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), generation, null, cancel: true, root: true);
         return null;
+
+        Durable.TurnOutcome WriteInlineWinner()
+        {
+            var outcome = Write(row, input.State, input.Pending);
+            outcome.Consumed.Add(item);
+            return outcome;
+        }
     }
 }
