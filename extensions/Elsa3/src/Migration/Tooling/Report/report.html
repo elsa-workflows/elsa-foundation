@@ -49,7 +49,7 @@
   var findingHeaders = ["Code", "Category", "Severity", "Remedy", "Component", "Stage", "Path", "Node", "Message", "Guidance"];
 
   add(app, el("h1", "Elsa 3 migration report"));
-  add(app, el("p", report.tool.name + " " + report.tool.version + " · command " + report.command + " · exit code " + report.exitCode + " · schema version " + report.schemaVersion + (report.options.allVersions ? " · all versions" : ""), "muted"));
+  add(app, el("p", report.tool.name + " " + report.tool.version + " · command " + report.command + " · exit code " + report.exitCode + " · schema version " + report.schemaVersion + (report.options.allVersions ? " · all versions" : "") + (report.redacted ? " · redacted" : " · not redacted"), "muted"));
 
   add(app, el("h2", "Summary"));
   var cards = add(app, el("div", null, "cards"));

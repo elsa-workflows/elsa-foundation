@@ -175,9 +175,13 @@ internal static class ExportInputReader
     }
 
     /// <summary>macOS archive metadata: <c>__MACOSX/</c> entries and <c>._name</c> resource-fork sidecars, never definitions.</summary>
-    private static bool IsPlatformSidecar(string relativePath) =>
-        relativePath.StartsWith("__MACOSX/", StringComparison.Ordinal)
-        || relativePath.Split('/')[^1].StartsWith("._", StringComparison.Ordinal);
+    private static bool IsPlatformSidecar(string relativePath)
+    {
+        // Older Windows tools write zip entry names with backslashes.
+        var path = relativePath.Replace('\\', '/');
+        return path.StartsWith("__MACOSX/", StringComparison.Ordinal)
+               || path.Split('/')[^1].StartsWith("._", StringComparison.Ordinal);
+    }
 
     /// <summary>What a run writes into its output folder: report.json, migrated/ and its staging folder.</summary>
     private static bool IsRunOutput(string relativePath, StringComparison comparison) =>
