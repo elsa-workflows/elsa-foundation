@@ -167,6 +167,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (db.UsesRootScheduleControls) await RootScheduleControls.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootScheduleLineage) await RootScheduleLineage.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootPreparedStarts) await RootPreparedStarts.InstallPostgresAsync(db, cancellationToken);
+        if (db.UsesRetainedRootResponse) await EfStore.InstallRetainedRootResponsesAsync(db, cancellationToken);
         if (db.UsesRootEventStarts)
             await RootEventStarts.InstallPostgresAsync(db, createPublicEventAuthority, cancellationToken);
         if (db.UsesRootChildren) await EfStore.InstallRootChildCascadeAsync(db, cancellationToken);

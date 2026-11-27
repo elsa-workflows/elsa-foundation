@@ -37,18 +37,29 @@ public interface IPreparedRootStartHandoff
 {
     ValueTask<Admission> StartAsync(string operationId, Kernel.Foundation.Contracts.StartSpec spec, ProtectRootStartAsync protect, CancellationToken cancellationToken = default);
     ValueTask<PreparedRootStartDisposition> ObserveAsync(ActorRef actor, string issuance, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads the first retained response for an exact signed birth and its private response key.</summary>
+    ValueTask<PreparedRootResponse?> ReadResponseAsync(ActorRef actor, string issuance, string key,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult<PreparedRootResponse?>(null);
 }
 
 internal sealed class BoundPreparedRootStartHandoff(
     Func<ProtectRootStartAsync, IProtectedRootStarts> bind,
     Func<ActorRef, string, CancellationToken, Task<bool>> accepted,
-    Func<ActorRef, string, CancellationToken, Task<RootStartProof>> lifetime) : IPreparedRootStartHandoff
+    Func<ActorRef, string, CancellationToken, Task<RootStartProof>> lifetime,
+    Func<ActorRef, string, string, CancellationToken, Task<PreparedRootResponse?>> readResponse) : IPreparedRootStartHandoff
 {
     public ValueTask<Admission> StartAsync(string operationId, Kernel.Foundation.Contracts.StartSpec spec, ProtectRootStartAsync protect, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(protect);
         return bind(protect).StartAsync(operationId, spec, cancellationToken);
     }
+
+    public ValueTask<PreparedRootResponse?> ReadResponseAsync(ActorRef actor, string issuance, string key,
+        CancellationToken cancellationToken = default) =>
+        key is { Length: 64 } && key.All(char.IsAsciiHexDigitLower)
+            ? new(readResponse(actor, issuance, key, cancellationToken))
+            : ValueTask.FromResult<PreparedRootResponse?>(null);
 
     public async ValueTask<PreparedRootStartDisposition> ObserveAsync(ActorRef actor, string issuance, CancellationToken cancellationToken = default)
     {
@@ -61,3 +72,7 @@ internal sealed class BoundPreparedRootStartHandoff(
         };
     }
 }
+
+/// <summary>The first committed response for an exact prepared root.</summary>
+/// <remarks>A present response with no payload exceeded the provider's bound. An absent response is a committed end.</remarks>
+public sealed record PreparedRootResponse(long CapturedAt, bool Present, byte[]? Payload);

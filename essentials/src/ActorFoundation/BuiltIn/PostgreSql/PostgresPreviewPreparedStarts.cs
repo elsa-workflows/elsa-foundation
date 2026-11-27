@@ -19,7 +19,32 @@ public static partial class PostgresPreviewHosting
         _ = requests.BindProtectedRootStarts(scope);
         return new BoundPreparedRootStartHandoff(protect => requests.BindProtectedRootStarts(scope, protect),
             (actor, issuance, token) => HasAcceptedPreparedStartAsync(open, scope, actor, issuance, token),
-            (actor, issuance, token) => ConfirmPreparedStartAsync(open, scope, actor, issuance, token));
+            (actor, issuance, token) => ConfirmPreparedStartAsync(open, scope, actor, issuance, token),
+            (actor, issuance, key, token) => ReadRetainedRootResponseAsync(open, scope, actor, issuance, key, token));
+    }
+
+    /// <summary>Creates the private PostgreSQL profile for retaining the first response of a prepared root.</summary>
+    public static KernelDb CreateRetainedResponseQualificationContext(DbContextOptions<KernelDb> options, string actorType)
+    {
+        RootPublicEventHost.RequireConfiguredActorType(actorType);
+        return KernelDb.ForPostgresRetainedRootResponseQualification(options, new(actorType, true));
+    }
+
+    /// <summary>Installs the private PostgreSQL retained response profile.</summary>
+    public static Task InstallRetainedResponseQualificationAsync(DbContextOptions<KernelDb> options, string actorType,
+        CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreateRetainedResponseQualificationContext(options, actorType), cancellationToken);
+
+    private static async Task<PreparedRootResponse?> ReadRetainedRootResponseAsync(Func<KernelDb> open, Contract.BoundScope scope,
+        Contract.ActorRef actor, string issuance, string responseKey, CancellationToken token)
+    {
+        await using var db = open();
+        if (!db.UsesRetainedRootResponse) return null;
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", token);
+        var (key, _) = await PostgresRootAdmission.PinRootPreparedStartProofAsync(db, token);
+        var birth = RootPreparedStarts.Verify(key, scope, actor, issuance);
+        return birth is null ? null : await EfStore.ReadRetainedRootResponseAsync(db, birth, responseKey, token);
     }
 
     /// <summary>Creates a private PostgreSQL context that qualifies prepared held starts and managed schedules.</summary>

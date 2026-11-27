@@ -49,7 +49,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
-        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification ||
+        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification || qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat is { SupportsIsolatedInlineQualification: true } ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
@@ -122,6 +122,14 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootHeldEphemeralHttpQualification, protectRootStart);
     }
 
+    /// <summary>Binds a SQLite owner that can retain the first response of a qualified prepared root.</summary>
+    public static SqliteEmbeddedFoundation ForRetainedResponseQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootRetainedResponseQualification, protectRootStart);
+    }
+
     /// <summary>Binds the private SQLite inline start qualification profile with its executable protection.</summary>
     public static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
         ProtectRootStartAsync protectRootStart)
@@ -140,7 +148,8 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         this.node = node;
         this.actorType = actorType;
         this.qualificationFormat = qualificationFormat;
-        if (qualificationFormat is null || qualificationFormat == StoreFormat.RootPublicEventHostQualification)
+        if (qualificationFormat is null || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
+            qualificationFormat == StoreFormat.RootRetainedResponseQualification)
             publicEventHost = new(actorType, protectRootStart is not null);
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
             qualificationFormat: qualificationFormat, protectRootStart: protectRootStart), LazyThreadSafetyMode.PublicationOnly);
@@ -154,7 +163,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
-        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification ||
+        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification || qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
@@ -244,7 +253,8 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         _ = BindProtectedRootStarts(scope);
         return new BoundPreparedRootStartHandoff(protect => requests.Value.BindProtectedRootStarts(scope, protect),
             (actor, issuance, token) => HasAcceptedPreparedStartAsync(scope, actor, issuance, token),
-            (actor, issuance, token) => ConfirmPreparedStartAsync(scope, actor, issuance, token));
+            (actor, issuance, token) => ConfirmPreparedStartAsync(scope, actor, issuance, token),
+            (actor, issuance, key, token) => requests.Value.ReadRetainedRootResponseAsync(scope, actor, issuance, key, token));
     }
 
     /// <summary>Confirms an exact protected held start under the installed root source.</summary>

@@ -302,6 +302,7 @@ public sealed class TurnOutcome(string instance)
     internal IReadOnlyList<Message>? FoundationRootChildSends;
     internal IReadOnlyList<Message>? FoundationRootPublications;
     internal TerminalOutput? FoundationTerminalOutput;
+    internal RetainedRootResponse? FoundationRetainedResponse;
     public List<Message> Sent = [];
     public HashSet<InboxKey> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];

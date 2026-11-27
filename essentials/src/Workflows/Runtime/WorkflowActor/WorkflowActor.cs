@@ -54,10 +54,12 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     public static StartSpec Start(WorkflowStart start) => Start(start, null);
 
-    internal static StartSpec Start(WorkflowStart start, WorkflowPublishedStart? publishedStart, WorkflowTestStart? testStart = null) =>
+    internal static StartSpec Start(WorkflowStart start, WorkflowPublishedStart? publishedStart, WorkflowTestStart? testStart = null,
+        string? retainedResponseKey = null) =>
         new(ActorType, JsonSerializer.Serialize(new WorkflowHeader(start.Model, start.Workflow, null,
             Ephemeral: start.Ephemeral, History: start.History, Definition: start.Definition == start.Workflow ? null : start.Definition,
-            ExecutableSelection: start.ExecutableSelection, PublishedStart: publishedStart, TestStart: testStart)),
+            ExecutableSelection: start.ExecutableSelection, PublishedStart: publishedStart, TestStart: testStart,
+            RetainedResponseKey: retainedResponseKey)),
             start.Input, start.Ephemeral, start.History);
 
     internal static (string Model, string Workflow, string Definition, string? ExecutableSelection,
@@ -108,7 +110,11 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
                 turn.State = JsonSerializer.Serialize(state, terminatingModel.StateType);
                 WriteHeader(turn, workflow, workflow with { Version = terminatingModel.StateVersion });
             }
-            if (header.Status == ActorStatus.Running) turn.End(ActorStatus.Cancelled);
+            if (header.Status == ActorStatus.Running)
+            {
+                RetainResponse(turn, workflow.RetainedResponseKey, null);
+                turn.End(ActorStatus.Cancelled);
+            }
             return;
         }
 
@@ -141,7 +147,10 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion, StartedAt = modelTurn.Workflow.StartedAt ?? turn.Now },
             modelLabels: modelTurn.LabelsChanged ? modelTurn.Labels : null);
         if (header.Status == ActorStatus.Running && modelTurn.Status != ActorStatus.Running)
+        {
+            RetainResponse(turn, workflow.RetainedResponseKey, null);
             turn.End(modelTurn.Status, modelTurn.Output);
+        }
     }
 
     public ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
@@ -258,6 +267,14 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
             TestScopeId = workflow.TestStart?.ScopeId
         };
 
+    private static void RetainResponse(IActorTurn turn, string? key, object? value)
+    {
+        if (key is null) return;
+        if (turn is not IRetainedRootResponseTurn retained)
+            throw new NotSupportedException("This workflow start requires the qualified retained response provider.");
+        retained.RetainFirstResponse(key, SerializeValue(value));
+    }
+
     private static string? SerializeValue(object? value) => value is null ? null : JsonSerializer.Serialize(value, value.GetType());
 
     private static string JobArguments(string model, string? arguments) => JsonSerializer.Serialize(new WorkflowJobArguments(model, arguments));
@@ -274,7 +291,9 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         WorkflowPublishedStart? PublishedStart = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-        WorkflowTestStart? TestStart = null);
+        WorkflowTestStart? TestStart = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        string? RetainedResponseKey = null);
 
     /// <summary>
     /// What a workflow actor's header says about its run, for reads that list runs: the workflow it runs (an artifact on a
@@ -317,7 +336,12 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         public object State { get; set; } = state;
         public object? Ambient => turn.Ambient;
 
-        public void Emit(string channel, object? item) => turn.Emit(channel, item);
+        public void Emit(string channel, object? item)
+        {
+            if (channel == "response" && item is not null)
+                RetainResponse(turn, Workflow.RetainedResponseKey, item);
+            turn.Emit(channel, item);
+        }
         public void Reply(Message message, string channel, object? item) => turn.Reply(message, channel, item);
         public string Send(ActorRef target, string kind, object? payload, long? dueAt) => turn.Send(target, kind, SerializeValue(payload), dueAt);
         public void Recall(string id) => turn.Recall(id);
