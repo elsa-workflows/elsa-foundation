@@ -10,52 +10,49 @@ internal static class RootScheduleOwnerMode
 
     internal static bool Applies(KernelDb db) => db.RequiredFormat == StoreFormat.RootShipped && db.UsesRootScheduleControls;
 
-    internal static string Columns(bool sqlite)
+    // Seed only as part of creating the store. A missing row on an existing store is damage, not an unbound owner.
+    internal static void ConfigureModel(ModelBuilder model, bool sqlite)
     {
-        var integer = sqlite ? "INTEGER" : "integer";
-        var text = sqlite ? "TEXT COLLATE BINARY" : """text COLLATE "C" """;
-        return $"""
-            "Singleton" {integer} PRIMARY KEY CHECK ("Singleton" = 1),
-            "ScheduleActor" {text} NOT NULL
-            """;
+        model.Entity<OwnerModeRow>(entity =>
+        {
+            entity.ToTable(Table, table => table.HasCheckConstraint("CK_FoundationScheduleOwnerMode_Singleton", """ "Singleton" = 1 """));
+            entity.HasKey(row => row.Singleton);
+            entity.Property(row => row.Singleton).ValueGeneratedNever();
+            entity.Property(row => row.ScheduleActor).UseCollation(sqlite ? "BINARY" : "C");
+            entity.HasData(new OwnerModeRow { Singleton = 1 });
+        });
     }
 
-    internal static Task InstallPostgresAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync($"""
-            CREATE TABLE IF NOT EXISTS "{Table}" ({Columns(sqlite: false)})
-            """, token);
+    internal static Task SeedSqliteAsync(KernelDb db, CancellationToken token) =>
+        db.Database.ExecuteSqlRawAsync("""INSERT INTO "FoundationScheduleOwnerMode" ("Singleton") VALUES (1)""", token);
 
     internal static async Task BindAsync(KernelDb db, string? auxiliaryActor, CancellationToken token,
         Func<FormattableString, FormattableString>? bindSource = null)
     {
-        // The empty type denotes a standalone owner. A contender never overwrites the winner's choice.
+        // Null is unbound; an empty actor type is a bound standalone owner. A contender never overwrites the winner.
         var expected = auxiliaryActor ?? "";
         await db.Database.ExecuteSqlInterpolatedAsync(BindSource(db, $"""
             WITH source AS MATERIALIZED (/*schedule-source*/)
-            INSERT INTO "FoundationScheduleOwnerMode" ("Singleton", "ScheduleActor")
-            SELECT 1, {expected} FROM source WHERE "SourceReady"
-                AND NOT EXISTS (SELECT 1 FROM /*direct*/"FoundationScheduleRoots")
-                AND NOT EXISTS (SELECT 1 FROM /*direct*/"FoundationScheduleControls")
-            ON CONFLICT ("Singleton") DO NOTHING
+            UPDATE /*direct*/"FoundationScheduleOwnerMode" SET "ScheduleActor" = {expected}
+            WHERE "Singleton" = 1 AND "ScheduleActor" IS NULL AND EXISTS (SELECT 1 FROM source WHERE "SourceReady")
             """, bindSource), token);
-        await RequireAsync(db, expected, token, bindSource, binding: true);
+        await RequireAsync(db, expected, token, bindSource);
     }
 
     internal static async Task RequireAsync(KernelDb db, string expected, CancellationToken token,
-        Func<FormattableString, FormattableString>? bindSource = null, bool binding = false)
+        Func<FormattableString, FormattableString>? bindSource = null)
     {
         var saved = await db.Database.SqlQuery<OwnerMode>(BindSource(db, $"""
             WITH source AS MATERIALIZED (/*schedule-source*/)
-            SELECT source."SourceReady", mode."ScheduleActor"
+            SELECT source."SourceReady", mode."Singleton", mode."ScheduleActor"
             FROM source LEFT JOIN /*direct*/"FoundationScheduleOwnerMode" mode ON source."SourceReady" AND mode."Singleton" = 1
             """, bindSource)).SingleAsync(token);
         if (!saved.SourceReady)
             throw new StoreFormatException("The schedule owner mode differs from the selected physical root store.");
+        if (saved.Singleton is null)
+            throw new StoreFormatException("The schedule owner mode is missing from the installed root store.");
         if (saved.ScheduleActor is null)
-        {
-            if (binding) throw new StoreFormatException("The schedule owner mode is missing from a store with durable schedule work.");
             throw new NotSupportedException("Start the managed schedule owner before admitting schedule work.");
-        }
         if (!StringComparer.Ordinal.Equals(saved.ScheduleActor, expected))
             throw new NotSupportedException("This root store is bound to a different schedule owner mode or actor type.");
     }
@@ -68,5 +65,11 @@ internal static class RootScheduleOwnerMode
         return RootScheduleInventory.Bind(FormattableStringFactory.Create(format, query.GetArguments()), bindSource);
     }
 
-    private sealed record OwnerMode(bool SourceReady, string? ScheduleActor);
+    private sealed class OwnerModeRow
+    {
+        public int Singleton { get; init; }
+        public string? ScheduleActor { get; init; }
+    }
+
+    private sealed record OwnerMode(bool SourceReady, int? Singleton, string? ScheduleActor);
 }

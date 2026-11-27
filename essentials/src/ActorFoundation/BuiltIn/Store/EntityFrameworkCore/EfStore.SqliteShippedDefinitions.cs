@@ -167,6 +167,7 @@ public sealed partial class EfStore
             INSERT INTO "FoundationRootIssuer" ("Singleton", "Key", "Partitions")
             VALUES (1, {RandomNumberGenerator.GetBytes(32)}, {partitions})
             """, token);
+        if (RootScheduleOwnerMode.Applies(db)) await RootScheduleOwnerMode.SeedSqliteAsync(db, token);
     }
 
     private static IEnumerable<SqliteDefinition> SqliteBaseDefinitions(KernelDb db)
@@ -193,7 +194,7 @@ public sealed partial class EfStore
                     }
                     yield return new("index", index.Name, index.Table, Render(index));
                     break;
-                case InsertDataOperation { Table: StoreVersionEntity.Table }:
+                case InsertDataOperation { Table: StoreVersionEntity.Table or RootScheduleOwnerMode.Table }:
                     break; // Seeding stays in this install transaction with the issuer and partitions.
                 default:
                     throw new InvalidOperationException($"Unsupported SQLite schema operation {operation.GetType().Name}.");
@@ -315,8 +316,6 @@ public sealed partial class EfStore
         }
         if (db.UsesRootScheduleControls)
             yield return Table(RootScheduleControls.Table, RootScheduleControls.Columns(sqlite: true));
-        if (RootScheduleOwnerMode.Applies(db))
-            yield return Table(RootScheduleOwnerMode.Table, RootScheduleOwnerMode.Columns(sqlite: true));
         if (db.UsesRootScheduleLineage)
         {
             yield return Table(RootScheduleLineage.Table, RootScheduleLineage.Columns(sqlite: true));

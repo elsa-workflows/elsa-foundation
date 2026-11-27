@@ -104,21 +104,23 @@ internal static class ShippedScheduleOwnerModeChecks
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleOwnerMode" SET LOGGED""", token);
             Check(true, "PostgreSQL refuses an unlogged replacement of the durable mode table");
 
-            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleControls" ENABLE ROW LEVEL SECURITY""", token);
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleOwnerMode" ENABLE ROW LEVEL SECURITY""", token);
             await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-row-security", managed), "selected physical root store");
-            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleControls" DISABLE ROW LEVEL SECURITY""", token);
-            Check(true, "PostgreSQL refuses schedule storage whose rows could be hidden by policy");
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleOwnerMode" DISABLE ROW LEVEL SECURITY""", token);
+            Check(true, "PostgreSQL refuses schedule storage whose owner record could be hidden by policy");
         }
 
-        if (managed)
+        var scheduled = await CountControlsAsync();
+        await using (var db = Open())
         {
-            var scheduled = await CountControlsAsync();
-            await using var db = Open();
             await db.Database.ExecuteSqlRawAsync("""DELETE FROM "FoundationScheduleOwnerMode" WHERE "Singleton" = 1""", token);
-            await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-incomplete", wantsManaged: false), "missing from a store with durable schedule work");
-            await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-incomplete", wantsManaged: true), "missing from a store with durable schedule work");
+            if (postgres) await PostgresPreviewHosting.InstallShippedAsync(options.Options, token);
+            else await sqlite!.InstallShippedAsync(token);
+
+            await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-incomplete", wantsManaged: false), "missing from the installed root store");
+            await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-incomplete", wantsManaged: true), "missing from the installed root store");
             var modes = await db.Database.SqlQueryRaw<long>("""SELECT count(*) AS "Value" FROM "FoundationScheduleOwnerMode" """).SingleAsync(token);
-            Check(modes == 0 && await CountControlsAsync() == scheduled, "an incomplete owner-mode restore is refused without changing schedule state");
+            Check(modes == 0 && await CountControlsAsync() == scheduled, "a missing owner mode refuses either owner even after reinstall");
         }
 
         KernelDb Open() => postgres ? PostgresPreviewHosting.CreateShippedContext(options.Options) :
