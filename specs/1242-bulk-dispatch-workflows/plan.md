@@ -181,9 +181,9 @@ the design side), and converter rules.
   - Declared names appear as literals, and item members are reached via `Object.entries`/`filter`/`Object.fromEntries`,
     never `item[name]`, because the read analysis treats computed member access as possible state access (the comment
   in `Elsa3HttpTriggerResponseModeRewrite`).
-  - The static `Input` follows the #5808 rules (literal or Object). A JavaScript `Input` is lowered on its own by the
-    existing JavaScript rewrite; Elsa 3 evaluated it without the item. Its lowered text and bindings are embedded as
-    the first operand.
+  - The static `Input` follows the #5808 rules (literal or Object) and is embedded as constant entries. An expression
+    `Input`, JavaScript included, is refused (spec FR-016). Node rewrites run inside `NormalizeAsync`, and JavaScript
+    is lowered later in `LowerAsync`, so the rewrite cannot merge a script into `Inputs`.
   - **Target declarations**: a separate, bulk-only field on `Elsa3ConversionRequest`, `BulkDispatchTargetInputs`. It
     stays separate so that the #5808 check for plain dispatches, which reads `DispatchTargetInputs`, keeps its
     same-import scope.

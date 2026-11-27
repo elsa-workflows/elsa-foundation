@@ -363,15 +363,17 @@ and on-completed-callbacks suites pass.
     clash.
   - **`DefaultItemInputKey`** must be a literal, null or absent (null and absent mean `Item`). Anything else is refused
     with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
-  - **The static `Input`**: a literal or Object map is checked with the #5808 rules. A JavaScript map is embedded. Any
-    other language is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+  - **The static `Input`**: a literal or Object map is checked with the #5808 rules and embedded as constant entries.
+    An `Input` in any expression language, JavaScript included, is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+    Guidance: put those values in the items, or use a literal map. The converter lowers Elsa 3 scripts only after the
+    node rewrite that builds `Inputs`, so it cannot merge a script there. No corpus definition uses a static
+    `Input`.
   - **Script form**: the generated script names declared inputs literally and reads item members only through
     `Object.entries`/`filter`/`Object.fromEntries`, never by computed member access, which the Elsa 4 read analysis
     treats as possible workflow-state access.
   - **`ParentInstanceId`** is not passed, because the parent link lives in the dispatch record.
   - **Warning**: a conversion raises warning `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. It says that only declared
-    inputs are passed, that a child-declared `ParentInstanceId` is no longer filled, that the static `Input` is now
-    evaluated per item, and that `ChildFaulted` now also runs for cancelled and undispatchable children (FR-018). It
+    inputs are passed, that a child-declared `ParentInstanceId` is no longer filled, and that `ChildFaulted` now also runs for cancelled and undispatchable children (FR-018). It
     also says that without a correlation function the child now inherits the parent's correlation id, where Elsa 3
     bulk dispatch gave it none. It also says that an expression `WaitForCompletion` is now evaluated once per pass on
     the `Dispatch` node, where Elsa 3 evaluated it once.
@@ -400,7 +402,7 @@ and on-completed-callbacks suites pass.
 | `WorkflowDefinitionId` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` |
 | `Items` a non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: Elsa 3 read it as text and dispatched no child |
-| `DefaultItemInputKey` not a literal, or static `Input` in another language | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
+| `DefaultItemInputKey` not a literal, or a static `Input` that is an expression (JavaScript or another language) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: put the values in the items, or use a literal map |
 | Target workflow neither in the import nor published in Elsa 4 | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target first, or in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |

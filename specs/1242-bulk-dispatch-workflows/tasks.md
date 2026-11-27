@@ -38,8 +38,8 @@ converter) needs the activity in the catalog.
   with every member set explicitly and the source names mapped back (FR-012, FR-013, FR-015, FR-016, plan §3). It also:
   - refuses a non-null literal `Items` (FR-014);
   - adds the branches with `AddChild`, except on a literal-false wait (FR-018);
-  - builds `Inputs` as an Elsa 4 expression bound to `currentItem`, with the static `Input` lowered on its own
-    (plan §3);
+  - builds `Inputs` as an Elsa 4 expression bound to `currentItem`, with a literal or Object static `Input` as
+    constant entries, and refuses an expression `Input` (plan §3);
   - records the wait classification in the plan field.
 
   Add the plan field for the item key, the item-read resolution in `Elsa3ValueFlowLowerer`, the `args.<key>`
