@@ -31,7 +31,7 @@ public sealed class JintCallDepthTests
             {
                 feature.ExecutionTimeout = null;
                 feature.MaxStatements = null;
-                feature.MaxMemoryProfile = JavaScriptMemoryProfile.Maximum;
+                feature.MaxMemoryProfile = MemoryProfile.Maximum;
             }
         });
         using var scope = provider.CreateScope();

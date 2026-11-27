@@ -15,6 +15,11 @@ public static class JintScriptEvaluators
     /// </remarks>
     public static IJavaScriptScriptEvaluator Create(FeatureOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        // Outside a shell no options validation runs: an unknown profile (a number bound from configuration) fails here,
+        // when the host composes the evaluator, not on every script it later runs.
+        if (!MemoryBudget.IsDefined(options.MaxMemoryProfile))
+            throw new ArgumentException("The JavaScript memory profile must be Low, Medium or Maximum.", nameof(options));
         var featureOptions = Microsoft.Extensions.Options.Options.Create(options);
         return new JintJavaScriptScriptEvaluator(
             featureOptions,

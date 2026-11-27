@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Expressions.JavaScript.Jint.Options;
+using Elsa.Expressions.JavaScript.Jint.Services;
 using Jint.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -23,7 +24,7 @@ public class JintSandboxConstraintTests
             f.ExecutionTimeout = TimeSpan.FromMilliseconds(200);
             f.MaxStatements = null;
             f.MaxRecursionDepth = null;
-            f.MaxMemoryProfile = JavaScriptMemoryProfile.Maximum;
+            f.MaxMemoryProfile = MemoryProfile.Maximum;
         });
         using var scope = provider.CreateScope();
         var evaluator = scope.ScriptEvaluator();
@@ -54,14 +55,14 @@ public class JintSandboxConstraintTests
         {
             f.ExecutionTimeout = null;
             f.MaxStatements = null;
-            f.MaxMemoryProfile = JavaScriptMemoryProfile.Low;
+            f.MaxMemoryProfile = MemoryProfile.Low;
             f.MaxInputBytes = 8 * 1024 * 1024;
-            f.MaxInputNodes = 1_000_000;
+            f.MaxInputNodes = 2_000_000;
         });
         using var scope = provider.CreateScope();
-        // Converting 20,000 small objects allocates about 30 MiB, so ten lists of them allocate more than Low's 256 MiB.
+        // Converting a list of 20,000 small objects allocates about 18 MiB, so 24 lists allocate well over Low's 256 MiB.
         var items = Enumerable.Range(0, 20_000).Select(index => new { i = index }).ToArray();
-        var lists = Enumerable.Range(0, 10).ToDictionary(index => "items" + index, _ => items);
+        var lists = Enumerable.Range(0, 24).ToDictionary(index => "items" + index, _ => items);
 
         var result = await EvaluateAsync(
             scope.ScriptEvaluator(),
@@ -86,12 +87,37 @@ public class JintSandboxConstraintTests
         Assert.Equal(10_004, result!.Value.GetInt32());
     }
 
+    // The two waits of issue #5818 (JTest corpus shapes): polling the clock through new Date(), and through Date.now() inside
+    // a Promise in an async function. Both run to the end on the default profile.
+    [Theory]
+    [InlineData("function wait(ms) { var start = new Date().getTime(); var end = start; while (end < start + ms) { end = new Date().getTime(); } } wait(500); return 1;")]
+    [InlineData("const delay = ms => new Promise(resolve => { for (let start = Date.now(); Date.now() - start < ms;); resolve(); }); (async () => { await delay(1500); })(); return 1;")]
+    public async Task ClockPollingWaitsRunOnTheDefaultProfile(string source)
+    {
+        await using var provider = JintTestHost.Build();
+        using var scope = provider.CreateScope();
+
+        var result = await EvaluateAsync(scope.ScriptEvaluator(), source);
+
+        Assert.Equal(1, result!.Value.GetInt32());
+    }
+
+    // A host that composes the evaluator outside a shell gets no options validation: an unknown profile fails at Create.
+    [Fact]
+    public void AnUnknownMemoryProfileFailsWhenAHostComposesTheEvaluator()
+    {
+        var exception = Assert.Throws<ArgumentException>(() =>
+            JintScriptEvaluators.Create(new FeatureOptions { MaxMemoryProfile = (MemoryProfile)4096 }));
+
+        Assert.Contains("memory profile", exception.Message, StringComparison.Ordinal);
+    }
+
     // The budget counts bytes allocated, garbage included, so the profile alone decides where the same script stops.
     [Theory]
-    [InlineData(JavaScriptMemoryProfile.Low, true)]
-    [InlineData(JavaScriptMemoryProfile.Medium, false)]
-    [InlineData(JavaScriptMemoryProfile.Maximum, false)]
-    public async Task TheMemoryProfileSetsTheBudget(JavaScriptMemoryProfile profile, bool faults)
+    [InlineData(MemoryProfile.Low, true)]
+    [InlineData(MemoryProfile.Medium, false)]
+    [InlineData(MemoryProfile.Maximum, false)]
+    public async Task TheMemoryProfileSetsTheBudget(MemoryProfile profile, bool faults)
     {
         await using var provider = JintTestHost.Build(f =>
         {
@@ -109,14 +135,15 @@ public class JintSandboxConstraintTests
             Assert.Equal(10_004, (await evaluation)!.Value.GetInt32());
     }
 
-    // A script that keeps what it builds still faults: the limit is never off.
+    // The limit is never off: a script that keeps about 300 MiB faults on Low. (Anything kept was allocated first, so the
+    // same volume of garbage would fault too; the budget cannot tell them apart.)
     [Fact]
     public async Task MemoryTheScriptHoldsBeyondTheProfileFaults()
     {
         await using var provider = JintTestHost.Build(f =>
         {
             f.ExecutionTimeout = null;
-            f.MaxMemoryProfile = JavaScriptMemoryProfile.Low;
+            f.MaxMemoryProfile = MemoryProfile.Low;
         });
         using var scope = provider.CreateScope();
 
@@ -130,7 +157,7 @@ public class JintSandboxConstraintTests
     [Fact]
     public async Task AnUnknownMemoryProfileFailsValidation()
     {
-        await using var provider = JintTestHost.Build(f => f.MaxMemoryProfile = (JavaScriptMemoryProfile)4096);
+        await using var provider = JintTestHost.Build(f => f.MaxMemoryProfile = (MemoryProfile)4096);
 
         var exception = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<FeatureOptions>>().Value);
 

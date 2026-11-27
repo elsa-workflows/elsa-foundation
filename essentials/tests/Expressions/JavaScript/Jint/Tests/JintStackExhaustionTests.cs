@@ -74,7 +74,7 @@ public sealed class JintStackExhaustionTests
         var exception = await EvaluateScriptFromSmallStackAsync(source, feature =>
         {
             feature.ExecutionTimeout = TimeSpan.FromMilliseconds(200);
-            feature.MaxMemoryProfile = JavaScriptMemoryProfile.Maximum;
+            feature.MaxMemoryProfile = MemoryProfile.Maximum;
         });
 
         Assert.IsType<TimeoutException>(exception);
@@ -143,7 +143,7 @@ public sealed class JintStackExhaustionTests
         var exception = await EvaluateScriptFromSmallStackAsync(source, feature =>
         {
             feature.ExecutionTimeout = TimeSpan.FromMilliseconds(200);
-            feature.MaxMemoryProfile = JavaScriptMemoryProfile.Maximum;
+            feature.MaxMemoryProfile = MemoryProfile.Maximum;
         });
 
         Assert.IsType<TimeoutException>(exception);

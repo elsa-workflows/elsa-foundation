@@ -6,11 +6,12 @@ namespace Elsa.Expressions.JavaScript.Jint.Options;
 /// </summary>
 /// <remarks>
 /// The budget counts every byte the script's thread allocates, garbage included: neither .NET nor Jint can tell how much
-/// memory one script holds. A script that polls the clock creates a little garbage on every pass, more on a faster
-/// machine, so the profiles are sized against the execution timeout: <see cref="Maximum"/> covers polling for the whole
-/// default 5-second timeout on a fast machine, <see cref="Medium"/> most of it.
+/// memory one script holds. A script that polls the clock creates about 100–200 bytes of garbage on every pass, more per
+/// second on a faster machine. The Workbench measured at least 128 MiB a second (64 MiB within a 500 ms wait, issue
+/// #5818); at that rate <see cref="Medium"/> allows about 4 seconds of polling and <see cref="Maximum"/> the whole default
+/// 5-second execution timeout.
 /// </remarks>
-public enum JavaScriptMemoryProfile
+public enum MemoryProfile
 {
     /// <summary>256 MiB.</summary>
     Low,

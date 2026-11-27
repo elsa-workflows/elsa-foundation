@@ -51,7 +51,7 @@ internal static class IsolatedJintEngine
         var timeout = configured.ExecutionTimeout is { } interval && interval > TimeSpan.Zero ? interval : (TimeSpan?)null;
         var maxStatements = configured.MaxStatements is { } statements && statements > 0 ? statements : (int?)null;
         // The memory limit is always on, set by a profile rather than a free number (issue #5818).
-        options.Constraint(new EvaluationLimits(timeout, maxStatements, JavaScriptMemoryBudget.Bytes(configured.MaxMemoryProfile)));
+        options.Constraint(new EvaluationLimits(timeout, maxStatements, MemoryBudget.Bytes(configured.MaxMemoryProfile)));
         if (configured.MaxArrayLength is { } maxArrayLength && maxArrayLength > 0)
             options.Constraints.MaxArraySize = maxArrayLength;
         if (cancellationToken.CanBeCanceled)

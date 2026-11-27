@@ -47,14 +47,14 @@ public sealed class FeatureOptions
     public int? MaxRecursionDepth { get; set; } = 300;
 
     /// <summary>
-    /// Sandbox limit: how many bytes one evaluation may allocate, as a profile (<see cref="JavaScriptMemoryProfile"/>).
-    /// Default <see cref="JavaScriptMemoryProfile.Medium"/>, 512 MiB. The limit is always on and cannot exceed 1 GiB.
+    /// Sandbox limit: how many bytes one evaluation may allocate, as a profile (<see cref="MemoryProfile"/>).
+    /// Default <see cref="MemoryProfile.Medium"/>, 512 MiB. The limit is always on and cannot exceed 1 GiB.
     /// </summary>
     /// <remarks>
     /// It counts every byte allocated, garbage included, so it bounds what a script can grab within its time, not what it
-    /// holds; see <see cref="JavaScriptMemoryProfile"/>.
+    /// holds; see <see cref="MemoryProfile"/>.
     /// </remarks>
-    public JavaScriptMemoryProfile MaxMemoryProfile { get; set; } = JavaScriptMemoryProfile.Medium;
+    public MemoryProfile MaxMemoryProfile { get; set; } = MemoryProfile.Medium;
 
     /// <summary>Maximum length of a JavaScript array, including sparse arrays.</summary>
     public uint? MaxArrayLength { get; set; } = 100_000;
