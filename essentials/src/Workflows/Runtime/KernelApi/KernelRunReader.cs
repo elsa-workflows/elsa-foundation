@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access,
     IWorkflowExecutionStateStore? legacyRuns = null)
 {
-    internal sealed record Run(WorkflowExecutionState State, WorkflowRunHeader? Header, WorkflowExecutable? Executable);
+    internal sealed record Run(WorkflowExecutionState State, WorkflowRunHeader? Header, WorkflowExecutable? Executable, ActorView? View = null);
 
     internal ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(Run run, bool includeValues, CancellationToken cancellationToken) =>
         run.Header is not null && run.State is { Status: WorkflowExecutionStatus.Completed, CompletedAt: { } ended }
@@ -28,7 +28,7 @@ internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore 
 
         var (view, run) = kernel;
         var executable = await executables.FindAsync(run.Workflow, cancellationToken);
-        return new Run(KernelRunStates.From(view, run, executable?.Identity, tenant), run, executable);
+        return new Run(KernelRunStates.From(view, run, executable?.Identity, tenant), run, executable, view);
 
         async ValueTask<Run?> FindTestRunAsync()
         {

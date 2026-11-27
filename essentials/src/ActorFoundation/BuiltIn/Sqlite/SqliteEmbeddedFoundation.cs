@@ -165,7 +165,8 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public Task<int> PrunePreparedStartsAsync(Contract.BoundScope scope, CancellationToken cancellationToken = default) =>
         requests.Value.PruneHeldStartsAsync(scope, cancellationToken);
 
-    internal Task<Contract.IIngress> OpenIngressWithOperatorsAsync(Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorize,
+    /// <summary>Opens installed ingress with the host's authorization for each exact operator target.</summary>
+    public Task<Contract.IIngress> OpenIngressWithOperatorsAsync(Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorize,
         CancellationToken cancellationToken) =>
         SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(InstalledPath, actorType, authorize, requests.Value, cancellationToken);
 

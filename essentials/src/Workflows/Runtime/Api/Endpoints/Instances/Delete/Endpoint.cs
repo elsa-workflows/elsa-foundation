@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints.Instances.Delete;
 [Delete("runtime/workflows/instances/{workflowExecutionId}")]
 [RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)]
 [RuntimeProblems("deleting workflow instance")]
-public sealed class Endpoint(WorkflowInstanceDeletionService deletion) : ApiEndpoint<DeleteWorkflowInstance, WorkflowInstanceDeletionView>
+public sealed class Endpoint(IWorkflowInstanceDeletionService deletion) : ApiEndpoint<DeleteWorkflowInstance, WorkflowInstanceDeletionView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "DeleteInstance";
 

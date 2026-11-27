@@ -28,10 +28,21 @@ public static partial class SqliteEmbeddedHosting
         return OpenFoundationCoreAsync(databasePath, actorType, null, deduplicationWindow, cancellationToken, authorizeOperator);
     }
 
-    internal static Task<Contract.IIngress> OpenFoundationWithOperatorsAsync(string databasePath, string actorType,
+    internal static async Task<Contract.IIngress> OpenFoundationWithOperatorsAsync(string databasePath, string actorType,
         Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, SqliteDirectRequests requests,
-        CancellationToken cancellationToken = default) =>
-        OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow, cancellationToken, authorizeOperator);
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow,
+                cancellationToken, authorizeOperator);
+        }
+        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException("SQLite operator ingress could not acquire its verification lock.", error);
+        }
+    }
 
     internal static async ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(string databasePath, Contract.BoundScope scope,
         Contract.ActorRef actor, string selection, TimeSpan deduplicationWindow, CancellationToken token, StoreFormat? format = null)
