@@ -245,6 +245,16 @@ the user:
   CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__FolderPath=<output>/migrated/workflows
   CShells__Shells__default__Features__JsonActivityReconciliation__Options__FilePath=<output>/migrated/activities/activities.json
   ```
+
+  In `shells.Local.json` the same settings are
+  `{ "CShells": { "Shells": { "default": { "Features": { "JsonWorkflowReconciliation": { "Options": { "FolderPath": "<output>/migrated/workflows" } }, "JsonActivityReconciliation": { "Options": { "FilePath": "<output>/migrated/activities/activities.json" } } } } } } }`.
+  The host listens on `http://localhost:5096` and is ready when `GET /health/ready` returns 200. It refuses to start
+  when a folder or file is missing or a listed feature is unknown, and its log names the cause. HTTP-triggered
+  workflows answer under `/workflows/http/`. The host's README (`apps/Elsa.Migration.Host/README.md` in the clone)
+  has more, including signing in and connecting Studio.
+- **Changing a migrated workflow** on the host: change the Elsa 3 definition and run the assessment again, so the
+  migrated files and the report stay in step. The converted workflow keeps its version number, so delete the host's
+  `data/` folder before restarting it, or the host keeps the version it loaded first.
 - This local setup is a temporary development setup, not the production go-live. The go-live comes with an Elsa 3
   migration app profile once Elsa 4's distribution channels are decided, and this guide will be updated then.
 - Moving the clone to another commit means running the assessment again before trying the result.
