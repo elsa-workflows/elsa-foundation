@@ -6,7 +6,7 @@ namespace Elsa.Workbench.Qualification;
 
 internal static partial class WorkbenchPostgresPreview
 {
-    internal static async Task RunShippedHistoryAsync(string executable, bool postgres)
+    internal static async Task RunShippedHistoryAsync(string executable, bool postgres, bool playback = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var token = deadline.Token;
@@ -17,7 +17,8 @@ internal static partial class WorkbenchPostgresPreview
             : "";
         try
         {
-            using var host = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace);
+            using var host = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace,
+                diagnosticHistoryDisabled: true, playbackQualification: playback);
             await host.WaitReadyAsync(token);
             await host.WaitForKernelServingAsync(token);
             var address = new Uri(await host.ListeningAsync(token));
@@ -25,6 +26,21 @@ internal static partial class WorkbenchPostgresPreview
             using var client = new HttpClient(new HttpClientHandler { CookieContainer = new(), AllowAutoRedirect = false }) { BaseAddress = address };
             using (var login = await client.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" }, token))
                 Require(login.IsSuccessStatusCode, "the administrator signs in through the normal identity route");
+            var capabilities = await ReadAsync("/capabilities");
+            var occurrencesAdvertised = capabilities.GetProperty("capabilities").EnumerateArray()
+                .SelectMany(capability => capability.GetProperty("links").EnumerateArray())
+                .Any(link => link.GetProperty("rel").GetString() == "workflow-history-occurrences");
+            Require(occurrencesAdvertised == playback, "only the selected playback store advertises the occurrence relation");
+            using (var wait = await client.PostAsync("/workflows/http/core-preview/wait", null, token))
+                Require(wait.StatusCode == (playback ? HttpStatusCode.NotFound : HttpStatusCode.Accepted),
+                    playback ? "private Playback retains the protocol-31 HTTP capability set" :
+                        "the shipped profile opens the live HTTP wait");
+            if (!playback)
+            {
+                using var resumed = await client.PostAsync("/workflows/http/core-preview/decision", null, token);
+                Require(resumed.StatusCode == HttpStatusCode.OK && await resumed.Content.ReadAsStringAsync(token) == "decided",
+                    "the shipped host delivers the HTTP event and returns the workflow response");
+            }
 
             await PublishAsync("native-history", flowchart: false);
             await PublishAsync("flowchart-history", flowchart: true);
@@ -36,9 +52,15 @@ internal static partial class WorkbenchPostgresPreview
             using (var wrongRun = await client.GetAsync(HistoryPath(runs[1].Run, runs[0].CatchUp), token))
                 Require(wrongRun.StatusCode == HttpStatusCode.BadRequest, "the standard route refuses a cursor from another run");
             using (var anonymous = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = address })
-            using (var denied = await anonymous.GetAsync(HistoryPath(runs[0].Run), token))
+            {
+                using var denied = await anonymous.GetAsync(HistoryPath(runs[0].Run), token);
                 Require(denied.StatusCode == HttpStatusCode.Unauthorized, "the standard History route requires read authorization");
+                using var deniedPlayback = await anonymous.GetAsync(OccurrencesPath(runs[0].Run), token);
+                Require(deniedPlayback.StatusCode == HttpStatusCode.Unauthorized, "the standard Playback route requires read authorization");
+            }
             await host.StopAsync();
+            if (playback)
+                await VerifyPlaybackProviderAsync(connection, sqlite, runs[0].Run, token);
 
             async Task<(string Run, string CatchUp)> CheckHistoryAsync(string name)
             {
@@ -49,6 +71,10 @@ internal static partial class WorkbenchPostgresPreview
                 Require(upper > 3 && first.GetProperty("nextContinuationToken").ValueKind == JsonValueKind.String &&
                     first.GetProperty("coverage").GetProperty("policyId").GetString() == "kernel-activity-journal-v1",
                     $"the published {name} opens a bounded window in the standard History route");
+                var admitted = await ReadAsync(OccurrencesPath(run));
+                if (!playback)
+                    Require(Text(admitted, "state") == "unavailable" && Text(admitted, "reason") == "occurrence-facet-unsupported",
+                        $"the shipped {name} reports unavailable Playback on a history-only provider");
 
                 while (true)
                 {
@@ -75,7 +101,53 @@ internal static partial class WorkbenchPostgresPreview
                     item.GetProperty("occurredAt").ValueKind == JsonValueKind.String && item.GetProperty("recordedAt").ValueKind == JsonValueKind.String &&
                     !item.GetRawText().Contains("private-history-fixture-value", StringComparison.Ordinal)),
                     $"the published {name} exposes committed structural facts with timestamps and ancestry");
+                if (playback) await CheckPlaybackAsync(name, run, admitted, prefix.Concat(later));
                 return (run, catchUp);
+            }
+
+            async Task CheckPlaybackAsync(string name, string run, JsonElement admitted, IEnumerable<JsonElement> events)
+            {
+                Require(Text(admitted, "state") == "partial" && Text(admitted, "selectedPosition") == "0" &&
+                    admitted.GetProperty("items").GetArrayLength() == 2,
+                    $"the published {name} admits a bounded Playback window");
+                var originalTotal = Text(admitted, "totalCount");
+                var sequence = Text(admitted, "sequenceToken");
+                var last = (long.Parse(originalTotal, System.Globalization.CultureInfo.InvariantCulture) - 1)
+                    .ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var frozenPath = OccurrencesPath(run) + "&sequenceToken=" + Uri.EscapeDataString(sequence);
+                var ranked = await ReadAsync(frozenPath + "&position=" + last);
+                var row = ranked.GetProperty("items").EnumerateArray().Last();
+                var activity = Text(row, "activityExecutionId");
+                Require(Text(ranked, "selectedPosition") == last && Text(row, "position") == last &&
+                    Text(ranked, "upperSequence") == Text(admitted, "upperSequence") && Text(ranked, "totalCount") == originalTotal &&
+                    ranked.GetProperty("hasNewerHistory").GetBoolean() && Text(row, "observationKind") == "ActivityStarted" &&
+                    Text(row, "executableNodeId") == "delay" && row.GetProperty("nextActivityExecutionId").ValueKind == JsonValueKind.Null,
+                    $"the published {name} seeks the final frozen rank after later activity commits");
+                Require(events.Any(item => Text(item, "historyEventId") == Text(row, "historyEventId")),
+                    $"the published {name} Playback anchor retains the History observation identity");
+
+                var encoded = Uri.EscapeDataString(activity);
+                var anchored = await ReadAsync(frozenPath + "&anchorActivityExecutionId=" + encoded);
+                Require(Text(anchored, "selectedPosition") == last && Text(anchored, "sequenceToken") == sequence,
+                    $"the published {name} resolves its exact anchor inside the same frozen window");
+                var laterActivity = events.First(item => Activity(item, "ActivityStarted", "result"));
+                var tooNew = await ReadAsync(frozenPath + "&anchorActivityExecutionId=" + Uri.EscapeDataString(Text(laterActivity, "activityExecutionId")));
+                Require(Text(tooNew, "state") == "target-unavailable" && Text(tooNew, "reason") == "anchor-outside-range",
+                    $"the published {name} refuses an exact anchor committed after the frozen window");
+                var refreshed = await ReadAsync(OccurrencesPath(run) + "&anchorActivityExecutionId=" + encoded);
+                Require(Text(refreshed, "totalCount") != originalTotal && Text(refreshed, "upperSequence") != Text(admitted, "upperSequence") &&
+                    Text(refreshed, "selectedPosition") == last,
+                    $"the published {name} admits newer membership only on an explicit anchor refresh");
+                var exact = OccurrencesPath(run) + "&activityExecutionId=" + encoded;
+                var scoped = await ReadAsync(exact + "&anchorActivityExecutionId=" + encoded);
+                Require(Text(scoped, "totalCount") == "1" && Text(scoped, "selectedPosition") == "0" &&
+                    Text(scoped.GetProperty("items").EnumerateArray().Single(), "activityExecutionId") == activity,
+                    $"the published {name} limits Playback to the exact activity scope");
+                var descendants = await ReadAsync(exact + "&includeDescendants=true");
+                Require(Text(descendants, "state") == "unavailable" && Text(descendants, "reason") == "scope-descendants-unsupported",
+                    $"the published {name} reports unqualified descendant membership as unavailable");
+                using var mismatched = await client.GetAsync(frozenPath + "&activityExecutionId=" + encoded, token);
+                Require(mismatched.StatusCode == HttpStatusCode.BadRequest, "a Playback sequence token cannot change its scope");
             }
 
             async Task<IReadOnlyList<JsonElement>> CollectAsync(string run, JsonElement page)
@@ -163,6 +235,8 @@ internal static partial class WorkbenchPostgresPreview
         static string RunPath(string run) => $"/runtime/workflows/instances/{Uri.EscapeDataString(run)}";
         static string HistoryPath(string run, string? cursor = null) =>
             RunPath(run) + "/history?limit=3" + (cursor is null ? "" : "&cursor=" + Uri.EscapeDataString(cursor));
+        static string OccurrencesPath(string run) => RunPath(run) + "/history/occurrences?limit=2";
+        static string Text(JsonElement value, string field) => value.GetProperty(field).GetString()!;
         static bool Activity(JsonElement item, string eventName, string node) =>
             item.GetProperty("name").GetString() == eventName && item.GetProperty("executableNodeId").GetString() == node;
         static object Literal(object value) => new { expressionType = "Literal", value };

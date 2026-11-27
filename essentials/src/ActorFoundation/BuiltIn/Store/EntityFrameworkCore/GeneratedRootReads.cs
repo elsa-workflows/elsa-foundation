@@ -7,7 +7,7 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 namespace Kernel.EntityFramework;
 
 internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider)
-    : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads
+    : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
@@ -72,6 +72,15 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
     }
 
     public bool SupportsSequencedJournal => store.SupportsSequencedJournal();
+    public bool SupportsPlayback => store.SupportsPlayback();
+
+    public ValueTask<ActorPlaybackPage?> ReadPlaybackAsync(BoundScope scope, ActorRef actor, ActorPlaybackQuery query,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var reference = PostgresRootAdmission.IsIssuedReferenceShape(actor.Id) ? actor.Id : "";
+        return new(store.ReadRootPlaybackAsync(scope.Tenant, reference, query, cancellationToken));
+    }
 
     public async ValueTask<ActorSequencedJournalPage?> ReadSequencedJournalAsync(BoundScope scope, ActorRef actor,
         long afterSequence, long? upperSequence, int limit, CancellationToken cancellationToken = default)

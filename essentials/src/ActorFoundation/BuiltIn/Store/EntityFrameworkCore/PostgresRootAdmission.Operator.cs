@@ -330,6 +330,10 @@ internal sealed partial class PostgresRootAdmission
     internal static Task PinRootNamespaceAsync(KernelDb db, CancellationToken token, bool writesJournal = false) =>
         PinRootNamespaceAsync(db, false, token, writesJournal);
 
+    internal static async Task<uint> PinPlaybackReadSourcesAsync(KernelDb db, CancellationToken token) =>
+        (await PinRootNamespaceAsync(db, false, token, writesJournal: true))?.Marker
+            ?? throw new StoreFormatException("Playback requires a qualified physical root source.");
+
     private static async Task<PinnedRootSource?> PinRootNamespaceAsync(KernelDb db, bool loadIssuer, CancellationToken token,
         bool writesJournal = false)
     {
@@ -468,7 +472,8 @@ internal sealed partial class PostgresRootAdmission
             WHERE v."Id" = $1
             """);
         pin.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
-        var journalReady = pinSequencedJournal ? ", " + EfStore.PostgresSequencedJournalReady("marker.oid") : "";
+        var journalReady = pinSequencedJournal ? ", " + EfStore.PostgresSequencedJournalReady("marker.oid") +
+            (db.UsesRootPlayback ? " AND " + EfStore.PostgresPlaybackReady("marker.oid") : "") : "";
         var validate = new NpgsqlBatchCommand($$"""
             SELECT marker.oid, marker.relnamespace, (
                 SELECT count(*) = $1
@@ -492,7 +497,9 @@ internal sealed partial class PostgresRootAdmission
         // Keep trigger state stable until the fenced write commits. ROW EXCLUSIVE permits other
         // writers but conflicts with ALTER TABLE ... ENABLE/DISABLE TRIGGER.
         if (pinSequencedJournal)
-            commands.Add(new("""LOCK TABLE "Journal", "FoundationSequencedJournal" IN ROW EXCLUSIVE MODE"""));
+            commands.Add(new(db.UsesRootPlayback
+                ? """LOCK TABLE "Journal", "FoundationSequencedJournal", "FoundationJournalPlayback", "FoundationJournalPlaybackInvalid" IN ROW EXCLUSIVE MODE"""
+                : """LOCK TABLE "Journal", "FoundationSequencedJournal" IN ROW EXCLUSIVE MODE"""));
         commands.Add(validate);
         if (loadIssuer) commands.Add(new("""SELECT issuer."Key", issuer."Partitions", marker.oid """ + RootIssuerSource));
         if (markRead is not null)

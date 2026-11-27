@@ -173,6 +173,7 @@ public class KernelDb : DbContext
     internal bool UsesRootTerminalOutput => Has(RootCapabilities.TerminalOutput);
     internal bool UsesRootSequencedJournal => Has(RootCapabilities.SequencedJournal);
     internal bool UsesRootLiveEventWaits => Has(RootCapabilities.LiveEventWaits);
+    internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
     internal bool UsesRootComposedParkRecovery =>
@@ -191,6 +192,8 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
     internal static KernelDb ForPostgresRootSequencedJournalQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSequencedJournalQualification, RootProfiles.SequencedJournalQualification);
+    internal static KernelDb ForPostgresRootPlaybackQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPlaybackQualification, RootProfiles.PlaybackQualification);
     internal static KernelDb ForPostgresRootLiveEventQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootLiveEventQualification, RootProfiles.LiveEventQualification);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
@@ -219,6 +222,9 @@ public class KernelDb : DbContext
             return new(options, qualificationFormat.Value, RootProfiles.ChildQualification, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootSequencedJournalQualification)
             return new(options, qualificationFormat.Value, RootProfiles.SequencedJournalQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPlaybackQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PlaybackQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootLiveEventQualification)
             return new(options, qualificationFormat.Value, RootProfiles.LiveEventQualification,

@@ -243,7 +243,18 @@ internal static class ProfileCapabilityChecks
             RootProfiles.MissingPrerequisites(liveEventsPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(liveEventsPostgres.RequiredFormat),
             "the private live-event profile retains its isolated format and the qualified capability set");
-        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities;
+        using var playbackPostgres = KernelDb.ForPostgresRootPlaybackQualification(options);
+        using var playbackSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootPlaybackQualification);
+        Check(playbackPostgres.RequiredFormat == new StoreFormat(3, 116, 1) && playbackSqlite.RequiredFormat == playbackPostgres.RequiredFormat &&
+            playbackPostgres.Capabilities == (sequencedPostgres.Capabilities | RootCapabilities.Children | RootCapabilities.Playback) &&
+            playbackSqlite.Capabilities == playbackPostgres.Capabilities && !sharedPostgres.UsesRootPlayback &&
+            !sharedSqlite.UsesRootPlayback && !playbackPostgres.UsesRootLiveEventWaits && !playbackSqlite.UsesRootLiveEventWaits &&
+            RootProfiles.MissingPrerequisites(playbackPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(playbackPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(playbackPostgres) is { StoreSchema: 1, MessageProtocol: 12, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(playbackSqlite) is { StoreSchema: 2, MessageProtocol: 15, JournalCodec: 0 },
+            "private playback retains exactly protocol 31 plus indexed occurrences and its own provider definitions");
+        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities | playbackPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -276,7 +287,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.TimerRearm] = RootProfiles.ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery,
             [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
             [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
-            [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery
+            [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
+            [RootCapabilities.Playback] = RootCapabilities.SequencedJournal
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
             expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),

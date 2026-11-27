@@ -135,6 +135,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
             }
         });
         services.TryAddScoped<IRuntimeHistoryPageReader>(sp => sp.GetRequiredService<RuntimeHistoryInspectionService>());
+        services.TryAddScoped<IRuntimeHistoryOccurrencePageReader>(sp => sp.GetRequiredService<RuntimeHistoryInspectionService>());
         services.TryAddScoped<ActivityExecutionInspectionService>();
         services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
         services.TryAddScoped<IActivityExecutionBrowseSource, ActivityExecutionBrowseSource>();

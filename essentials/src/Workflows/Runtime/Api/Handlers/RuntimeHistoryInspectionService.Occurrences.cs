@@ -7,6 +7,12 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
+/// <summary>Serves the selected, authorized activity occurrence reader for the shell.</summary>
+public interface IRuntimeHistoryOccurrencePageReader
+{
+    Task<RuntimeHistoryOccurrencePageView?> ReadAsync(GetRuntimeHistoryOccurrences request, CancellationToken cancellationToken = default);
+}
+
 public sealed partial class RuntimeHistoryInspectionService
 {
     internal Func<WorkflowExecutionState, string, CancellationToken, ValueTask<string?>>? OccurrenceAccessBinding { get; init; }
@@ -21,8 +27,7 @@ public sealed partial class RuntimeHistoryInspectionService
             request.IncludeDescendants, requestBinding);
         if (history is not IRuntimeHistoryOccurrenceStore occurrences)
             return EmptyOccurrences("occurrence-facet-unsupported", await CoverageAsync(workflow, null, token));
-        var binding = OccurrenceAccessBinding is { } bind
-            ? await bind(workflow, requestBinding, token) : null;
+        var binding = await BindOccurrencesAsync(workflow, requestBinding, token);
         if (binding is null) return EmptyOccurrences("current-authorization-unsupported", await CoverageAsync(workflow, null, token));
         query = new(request.WorkflowExecutionId, request.Limit, request.SequenceToken, request.Position,
             request.AnchorActivityExecutionId, request.ActivityExecutionId, request.IncludeDescendants, binding);
@@ -33,31 +38,39 @@ public sealed partial class RuntimeHistoryInspectionService
             var coverage = await CoverageAsync(workflow, page.Head, token);
             // Coverage also awaits native-source reads; recheck after every read before disclosure.
             workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
-            var currentBinding = await OccurrenceAccessBinding!(workflow, await BindingAsync(token), token);
+            var currentBinding = await BindOccurrencesAsync(workflow, await BindingAsync(token), token);
             if (currentBinding != query.AccessBinding) throw new RuntimeResourceMissingSignal();
-            var state = page.Availability switch
-            {
-                RuntimeHistoryOccurrenceAvailability.Available => coverage.State == "partial" ? "partial" : "available",
-                RuntimeHistoryOccurrenceAvailability.Partial => "partial",
-                RuntimeHistoryOccurrenceAvailability.Invalidated => "range-invalidated",
-                RuntimeHistoryOccurrenceAvailability.TargetUnavailable => "target-unavailable",
-                _ => "unavailable"
-            };
-            return new(state, SafeOccurrenceReason(page.Reason), RuntimeHistoryOccurrenceCoverageView.From(coverage),
-                RuntimeHistoryOccurrenceCoverageView.Decimal(page.UpperSequence),
-                RuntimeHistoryOccurrenceCoverageView.Decimal(page.RetainedAfterSequence),
-                page.TotalCount is { } count ? RuntimeHistoryOccurrenceCoverageView.Decimal(count) : null,
-                page.SelectedPosition is { } position ? RuntimeHistoryOccurrenceCoverageView.Decimal(position) : null,
-                page.Items.Select(RuntimeHistoryOccurrenceView.From).ToArray(), page.SequenceToken,
-                page.HasNewerHistory, time.GetUtcNow());
+            return PresentOccurrences(page, coverage, time.GetUtcNow());
         }
         catch (RuntimeHistoryIntegrityException)
         {
             workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
-            var currentBinding = await OccurrenceAccessBinding!(workflow, await BindingAsync(token), token);
+            var currentBinding = await BindOccurrencesAsync(workflow, await BindingAsync(token), token);
             if (currentBinding != query.AccessBinding) throw new RuntimeResourceMissingSignal();
             return EmptyOccurrences("history-invalid", InvalidCoverage());
         }
+    }
+
+    internal ValueTask<string?> BindOccurrencesAsync(WorkflowExecutionState workflow, string requestBinding, CancellationToken token) =>
+        OccurrenceAccessBinding?.Invoke(workflow, requestBinding, token) ?? ValueTask.FromResult<string?>(null);
+
+    internal static RuntimeHistoryOccurrencePageView PresentOccurrences(RuntimeHistoryOccurrencePage page,
+        RuntimeHistoryCoverageView coverage, DateTimeOffset readAt)
+    {
+        var state = page.Availability switch
+        {
+            RuntimeHistoryOccurrenceAvailability.Available => coverage.State == "partial" ? "partial" : "available",
+            RuntimeHistoryOccurrenceAvailability.Partial => "partial",
+            RuntimeHistoryOccurrenceAvailability.Invalidated => "range-invalidated",
+            RuntimeHistoryOccurrenceAvailability.TargetUnavailable => "target-unavailable",
+            _ => "unavailable"
+        };
+        return new(state, SafeOccurrenceReason(page.Reason), RuntimeHistoryOccurrenceCoverageView.From(coverage),
+            RuntimeHistoryOccurrenceCoverageView.Decimal(page.UpperSequence),
+            RuntimeHistoryOccurrenceCoverageView.Decimal(page.RetainedAfterSequence),
+            page.TotalCount is { } count ? RuntimeHistoryOccurrenceCoverageView.Decimal(count) : null,
+            page.SelectedPosition is { } position ? RuntimeHistoryOccurrenceCoverageView.Decimal(position) : null,
+            page.Items.Select(RuntimeHistoryOccurrenceView.From).ToArray(), page.SequenceToken, page.HasNewerHistory, readAt);
     }
 
     private RuntimeHistoryOccurrencePageView EmptyOccurrences(string reason, RuntimeHistoryCoverageView coverage) =>
@@ -68,12 +81,12 @@ public sealed partial class RuntimeHistoryInspectionService
         null => null,
         "retained-range-changed" or "history-unavailable" or "history-gap-unlocated" or
         "occurrence-recording-unavailable" or "occurrence-observation-unknown" or "scope-unavailable" or
-        "scope-ancestry-unknown" or "anchor-outside-range" or "anchor-outside-scope" or
+        "scope-ancestry-unknown" or "scope-descendants-unsupported" or "anchor-outside-range" or "anchor-outside-scope" or
         "position-outside-range" or "retained-prefix-purged" or "capture-not-from-start" => reason,
         _ => "occurrence-limitation-unknown"
     };
 
-    private static void ValidateOccurrences(RuntimeHistoryOccurrenceQuery query, RuntimeHistoryOccurrencePage page)
+    internal static void ValidateOccurrences(RuntimeHistoryOccurrenceQuery query, RuntimeHistoryOccurrencePage page)
     {
         void Invalid() => throw new RuntimeHistoryIntegrityException(query.WorkflowExecutionId,
             "occurrence page disagrees with its authorized committed window");

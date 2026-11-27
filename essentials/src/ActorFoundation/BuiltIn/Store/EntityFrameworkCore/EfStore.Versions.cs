@@ -61,6 +61,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootS6TerminalOutputQualification => new(3, 113, 1);
     internal static StoreFormat SqliteRootChildrenQualification => new(3, 114, 1);
     internal static StoreFormat RootSequencedJournalQualification => new(3, 115, 1);
+    internal static StoreFormat RootPlaybackQualification => new(3, 116, 1);
     internal static StoreFormat RootLiveEventQualification => new(3, 117, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
@@ -108,7 +109,8 @@ internal enum RootCapabilities
     Children = 1 << 23,
     TerminalOutput = 1 << 24,
     SequencedJournal = 1 << 25,
-    LiveEventWaits = 1 << 26
+    LiveEventWaits = 1 << 26,
+    Playback = 1 << 27
 }
 
 internal static class RootProfiles
@@ -143,6 +145,7 @@ internal static class RootProfiles
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
     internal const RootCapabilities Shipped = Shipped31 | RootCapabilities.LiveEventWaits;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
+    internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities LiveEventQualification = Shipped31 | RootCapabilities.LiveEventWaits;
 
     internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
@@ -208,7 +211,8 @@ internal static class RootProfiles
         [RootCapabilities.TimerRearm] = ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery,
         [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
         [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
-        [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery
+        [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
+        [RootCapabilities.Playback] = RootCapabilities.SequencedJournal
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -399,6 +403,8 @@ internal static class StoreDefinitionsRevision
     private const int SqliteSequencedJournalRevision = 14;
     private const int PostgreSqlShippedRevision = 11;
     private const int SqliteShippedRevision = 14;
+    private const int PostgreSqlPlaybackRevision = 12;
+    private const int SqlitePlaybackRevision = 15;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -427,6 +433,8 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.SqliteRootChildrenQualification => SqliteChildrenRevision,
                 _ when db.RequiredFormat == StoreFormat.RootSequencedJournalQualification =>
                     sqlite ? SqliteSequencedJournalRevision : PostgreSqlSequencedJournalRevision,
+                _ when db.RequiredFormat == StoreFormat.RootPlaybackQualification =>
+                    sqlite ? SqlitePlaybackRevision : PostgreSqlPlaybackRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootShipped || db.RequiredFormat == StoreFormat.RootLiveEventQualification =>

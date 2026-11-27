@@ -751,7 +751,7 @@ internal static partial class WorkbenchPostgresPreview
 
         internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile,
             string? sqlitePath = null, DirectoryInfo? retainedWorkspace = null, bool terminalOutputQualification = false, bool terminalOutputsWithTimers = false,
-            bool diagnosticHistoryDisabled = false)
+            bool diagnosticHistoryDisabled = false, bool playbackQualification = false)
         {
             var binary = Path.GetFullPath(executable);
             var workspace = retainedWorkspace ?? Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
@@ -791,6 +791,8 @@ internal static partial class WorkbenchPostgresPreview
             }
             if (terminalOutputQualification)
                 start.Environment["Elsa__CorePreview__TerminalOutputQualification"] = terminalOutputsWithTimers ? "s6" : "true";
+            if (playbackQualification)
+                start.Environment["Elsa__CorePreview__PlaybackQualification"] = "true";
             if (terminalOutputQualification || diagnosticHistoryDisabled)
                 start.Environment["CShells__Shells__default__Features__WorkflowsRuntimeHistory__Enabled"] = "false";
             if (profile is "timed" or "timeout" or "takeover" or "takeover-complete")

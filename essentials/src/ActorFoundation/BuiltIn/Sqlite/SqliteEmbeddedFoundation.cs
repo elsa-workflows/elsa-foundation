@@ -32,6 +32,10 @@ public sealed class SqliteEmbeddedFoundation
     internal static SqliteEmbeddedFoundation ForLiveEventQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootLiveEventQualification);
 
+    /// <summary>Composes the dedicated preview format for qualifying indexed playback.</summary>
+    public static SqliteEmbeddedFoundation ForPlaybackQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootPlaybackQualification);
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat)
     {
         path = Path.GetFullPath(databasePath);

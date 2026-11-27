@@ -24,6 +24,17 @@ public static class PostgresPreviewHosting
     /// </summary>
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
 
+    /// <summary>Selects the dedicated preview format for qualifying indexed playback.</summary>
+    public static KernelDb CreatePlaybackQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootPlaybackQualification(options);
+
+    /// <summary>Installs or verifies a dedicated playback qualification database.</summary>
+    public static Task InstallPlaybackQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreatePlaybackQualificationContext(options), cancellationToken);
+    }
+
     /// <summary>Uses the dedicated preview store format for qualifying retained terminal output.</summary>
     public static KernelDb CreateTerminalOutputQualificationContext(DbContextOptions<KernelDb> options, bool withTimers = false) =>
         KernelDb.ForRootTerminalOutputQualification(options, format: withTimers

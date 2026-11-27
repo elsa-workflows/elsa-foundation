@@ -22,7 +22,11 @@ internal static class KernelHistoryJournal
 
     internal static IReadOnlyList<string> SupportedKinds { get; } = EventNames.Values.Order(StringComparer.Ordinal).ToArray();
 
-    internal static RuntimeHistoryEventView? Project(string run, long sequence, long revision, int ordinal, string entry, long recordedAt)
+    internal static RuntimeHistoryEventView? Project(string run, long sequence, long revision, int ordinal, string entry, long recordedAt) =>
+        ReadObservation(run, sequence, revision, ordinal, entry, recordedAt) is { } observation
+            ? RuntimeHistoryEventView.From(observation) : null;
+
+    internal static RuntimeHistoryEvent? ReadObservation(string run, long sequence, long revision, int ordinal, string entry, long recordedAt)
     {
         using var document = JsonDocument.Parse(entry);
         if (!NativeStructuralJournal.Read(document.RootElement, out var record)) return null;
@@ -31,13 +35,14 @@ internal static class KernelHistoryJournal
 
         var commit = RuntimeHistoryIdentity.CreateId(run, Policy, revision.ToString(CultureInfo.InvariantCulture));
         var eventId = RuntimeHistoryIdentity.CreateId(commit, name, sequence.ToString(CultureInfo.InvariantCulture));
-        return new(eventId, run, sequence, SchemaVersion: 1, name, Category,
-            nameof(RuntimeHistoryAuthority.CommittedTransition), DateTimeOffset.FromUnixTimeMilliseconds(record.At),
-            DateTimeOffset.FromUnixTimeMilliseconds(recordedAt), record.Frame, record.Node,
-            CheckpointId: commit, CheckpointOrdinal: ordinal, PhysicalCommitId: commit,
-            BookmarkId: null, IncidentId: null, AttemptId: null, ParentActivityExecutionId: record.Parent,
-            ExecutionScopeId: null, IterationId: null, Causation: null, FrozenDictionary<string, string>.Empty)
+        return new(eventId, run, sequence, RuntimeHistoryEventCategory.ActivityLifecycle, name,
+            DateTimeOffset.FromUnixTimeMilliseconds(record.At), record.Frame, record.Node, commit)
         {
+            Authority = RuntimeHistoryAuthority.CommittedTransition,
+            RecordedAt = DateTimeOffset.FromUnixTimeMilliseconds(recordedAt),
+            CheckpointOrdinal = ordinal,
+            PhysicalCommitId = commit,
+            ParentActivityExecutionId = record.Parent,
             OccurredAtKnown = true,
             ActivityAncestryKnown = true
         };
