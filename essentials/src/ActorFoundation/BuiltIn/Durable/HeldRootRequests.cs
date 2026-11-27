@@ -3,7 +3,7 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Durable;
 
-internal enum HeldRootAdmission { Accepted, Duplicate, Refused, Expired }
+internal enum HeldRootAdmission { Accepted, Duplicate, Refused, Expired, NoWaiter }
 
 internal sealed record HeldRootRequest(string Tenant, string Node, Request Caller, bool ReleaseBeforeCommit, TimeSpan? KeepFor)
 {
@@ -16,6 +16,9 @@ internal interface IHeldRootAdmission
     ValueTask<long> ReadClockAsync(CancellationToken token);
     Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token);
     Task<HeldRootAdmission> SendAsync(HeldRootRequest request, string reference, string kind, string? payload, CancellationToken token);
+    bool SupportsEvents => false;
+    Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
+        throw new NotSupportedException("This held reply edge has no event admission.");
     ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token);
 }
 
@@ -112,6 +115,8 @@ internal sealed class HeldRootRequests : IReplyTransport
         {
             case Contract.Target.Ref:
                 break;
+            case Contract.Target.Event when admission.SupportsEvents:
+                break;
             case Contract.Target.Start start:
                 if (startType is null)
                     throw new NotSupportedException("This edge starts no roots: open it with the actor type it starts.");
@@ -122,7 +127,7 @@ internal sealed class HeldRootRequests : IReplyTransport
                 spec = new(start.Spec.Type, start.Spec.TypeData, start.Spec.Input, History: (History)start.Spec.History);
                 break;
             default:
-                throw new NotSupportedException("Held requests must start a root or address an exact root reference.");
+                throw new NotSupportedException("The held reply edge does not support this request target.");
         }
 
         Contract.ActorRef? actor = target is Contract.Target.Ref exact ? exact.Actor : null;
@@ -142,9 +147,12 @@ internal sealed class HeldRootRequests : IReplyTransport
             }
             else
             {
-                var result = await admission.SendAsync(caller, actor!.Value.Id, kind, payload, token);
+                var result = target is Contract.Target.Event publish
+                    ? await admission.PublishAsync(caller, publish.CorrelationKey, payload, token)
+                    : await admission.SendAsync(caller, actor!.Value.Id, kind, payload, token);
                 if (result == HeldRootAdmission.Expired) return new(null, null, Error: "timeout");
                 if (result == HeldRootAdmission.Refused) return new(null, null, Error: "missing");
+                if (result == HeldRootAdmission.NoWaiter) return new(null, null, Error: "no waiter");
             }
             // A duplicate does not attach this new registration to an earlier operation.
             return null;
