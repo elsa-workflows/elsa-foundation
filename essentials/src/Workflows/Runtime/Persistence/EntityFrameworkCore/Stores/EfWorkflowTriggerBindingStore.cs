@@ -357,13 +357,13 @@ public sealed class EfWorkflowTriggerBindingStore(
     }
 
     public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) =>
-        QueryPageAsync(query, $"exact\0{query.StimulusType}\0{query.StimulusHash}", x => x.StimulusType == Encode(query.StimulusType) && x.StimulusHash == Encode(query.StimulusHash) && x.IsActive, cancellationToken);
+        QueryPageAsync(query, $"exact\0{query.StimulusType}\0{query.StimulusHash}", x => x.StimulusType == Encode(query.StimulusType) && x.StimulusHash == Encode(query.StimulusHash) && x.IsActive && x.Cardinality != (int)TriggerCardinality.ReservationOnly, cancellationToken);
 
     public ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(WorkflowTriggerBindingArtifactPageQuery query, CancellationToken cancellationToken = default) =>
         QueryPageAsync(query, query.ArtifactId, x => x.ArtifactId == Encode(query.ArtifactId), cancellationToken);
 
     public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) =>
-        QueryPageAsync(query, $"type\0{query.StimulusType}", x => x.StimulusType == Encode(query.StimulusType) && x.IsActive, cancellationToken);
+        QueryPageAsync(query, $"type\0{query.StimulusType}", x => x.StimulusType == Encode(query.StimulusType) && x.IsActive && x.Cardinality != (int)TriggerCardinality.ReservationOnly, cancellationToken);
 
     /// <summary>
     /// The population <see cref="ListByStimulusTypeAsync"/> pages, projected to its stimulus identities in the database
@@ -380,7 +380,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         // the last refresh's and so cause a rebuild, never a wrong route: the rebuild reads through ListByStimulusTypeAsync,
         // which leaves a colliding row out by its encoded columns and validates every row it reads (Read).
         var identities = await context.WorkflowTriggerBindings.AsNoTracking()
-            .Where(x => x.ScopeKeyHash == Hash(scope) && x.StimulusTypeLookupKey == Lookup(stimulusType) && x.IsActive)
+            .Where(x => x.ScopeKeyHash == Hash(scope) && x.StimulusTypeLookupKey == Lookup(stimulusType) && x.IsActive && x.Cardinality != (int)TriggerCardinality.ReservationOnly)
             .Select(x => new { x.StimulusLookupKey, x.StimulusHash })
             .Distinct()
             .ToArrayAsync(cancellationToken);

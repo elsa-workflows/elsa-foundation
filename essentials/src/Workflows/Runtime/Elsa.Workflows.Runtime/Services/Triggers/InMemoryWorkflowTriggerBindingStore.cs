@@ -188,7 +188,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         {
             var matches = _bindings.Values
                 .Where(binding =>
-                    binding.IsActive &&
+                    binding.IsActive && binding.Cardinality != TriggerCardinality.ReservationOnly &&
                     StringComparer.Ordinal.Equals(binding.StimulusType, query.StimulusType) &&
                     StringComparer.Ordinal.Equals(binding.StimulusHash, query.StimulusHash))
                 .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
@@ -226,7 +226,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         {
             var matches = _bindings.Values
                 .Where(binding =>
-                    binding.IsActive &&
+                    binding.IsActive && binding.Cardinality != TriggerCardinality.ReservationOnly &&
                     StringComparer.Ordinal.Equals(binding.StimulusType, query.StimulusType))
                 .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
@@ -244,7 +244,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         lock (_syncRoot)
         {
             return ValueTask.FromResult(StimulusHashes.DistinctOrdinal(_bindings.Values
-                .Where(binding => binding.IsActive && StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
+                .Where(binding => binding.IsActive && binding.Cardinality != TriggerCardinality.ReservationOnly && StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
                 .Select(binding => binding.StimulusHash)));
         }
     }

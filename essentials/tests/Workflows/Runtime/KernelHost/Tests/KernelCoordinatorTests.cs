@@ -23,6 +23,7 @@ public sealed class KernelCoordinatorTests
 {
     private sealed class RecordingSchedules : IScheduleActors
     {
+        public bool RequiresPublicationClaims { get; set; } = true;
         public List<string> Calls { get; } = [];
         public Dictionary<string, Models.WorkflowStart?> Runs { get; } = new(StringComparer.Ordinal);
         public string? FailSet { get; set; }
@@ -208,10 +209,13 @@ public sealed class KernelCoordinatorTests
             host.Schedules.Calls);
         // The run each occurrence starts carries its definition and begins at the trigger.
         Assert.Equal(("ticks@1", "ticks"), (host.Schedules.Runs["schedule-start:ticks:tick"]!.Workflow, host.Schedules.Runs["schedule-start:ticks:tick"]!.Definition));
-        // The switch committed the slot with empty projections, so the activation serves through every store.
         Assert.Equal(WorkflowActivationProjectionState.Active, await host.Bindings.FindActivationStateAsync("orders-1"));
         Assert.Equal(WorkflowActivationProjectionState.Active, await host.RecurringSchedules.FindActivationStateAsync("ticks-1"));
-        Assert.Empty((await host.Bindings.ListAllByActivationAsync("orders-1")));
+        Assert.Empty(await host.Bindings.ListAllByActivationAsync("orders-1"));
+        var claim = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1"));
+        Assert.Equal(TriggerCardinality.ReservationOnly, claim.Cardinality);
+        Assert.True(claim.IsActive);
+        Assert.Empty(await host.Bindings.ListAllByStimulusAsync(claim.StimulusType, claim.StimulusHash));
     }
 
     [Fact]
@@ -523,6 +527,8 @@ public sealed class KernelCoordinatorTests
     {
         var host = new Host();
         await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
+        var claim = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1"));
+        host.Schedules.RequiresPublicationClaims = false;
         host.Observer.Fail = true;
 
         var failed = await host.DeactivateAsync(Ticks("ticks@1"));
@@ -531,6 +537,29 @@ public sealed class KernelCoordinatorTests
         Assert.Equal("ticks-1", failed.Slot.ActiveActivationId);
         Assert.Equal("ticks@1", host.Serving.ServedWorkflow("ticks").Workflow);
         Assert.Equal("ticks@1", host.Schedules.Runs["schedule-start:ticks:tick"]!.Workflow);
+        Assert.Equal(claim, Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1")));
+    }
+
+    [Fact]
+    public async Task A_managed_schedule_refuses_to_serve_an_existing_activation_without_claims()
+    {
+        var host = new Host();
+        host.Schedules.RequiresPublicationClaims = false;
+        Assert.True((await host.ActivateAsync(Ticks("ticks@1"), "ticks-1")).Succeeded);
+        Assert.Empty(await host.Bindings.ListAllByActivationAsync("ticks-1"));
+
+        host.Restart();
+        var result = Assert.Single(await host.Coordinator.ServeActiveSlotsAsync());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("need publication claims", result.Diagnostic, StringComparison.Ordinal);
+        Assert.Empty(host.Schedules.Calls);
+
+        host.Observer.Fail = true;
+        var failedDeactivation = await host.DeactivateAsync(Ticks("ticks@1"));
+        Assert.Equal("ticks-1", failedDeactivation.Slot.ActiveActivationId);
+        Assert.Contains("need publication claims", failedDeactivation.CompensationDiagnostic, StringComparison.Ordinal);
+        Assert.DoesNotContain(host.Schedules.Calls, call => call.StartsWith("set ", StringComparison.Ordinal));
     }
 
     [Fact]

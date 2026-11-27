@@ -5751,6 +5751,7 @@ Elsa.Workflows.Runtime.Core.Models.TestRunWaitPrepareContext.Wait.init -> void
 Elsa.Workflows.Runtime.Core.Models.TriggerCardinality
 Elsa.Workflows.Runtime.Core.Models.TriggerCardinality.Exclusive = 0 -> Elsa.Workflows.Runtime.Core.Models.TriggerCardinality
 Elsa.Workflows.Runtime.Core.Models.TriggerCardinality.FanOut = 1 -> Elsa.Workflows.Runtime.Core.Models.TriggerCardinality
+Elsa.Workflows.Runtime.Core.Models.TriggerCardinality.ReservationOnly = 2 -> Elsa.Workflows.Runtime.Core.Models.TriggerCardinality
 Elsa.Workflows.Runtime.Core.Models.TriggerStimulusDescriptor
 Elsa.Workflows.Runtime.Core.Models.TriggerStimulusDescriptor.CorrelationScope.get -> string?
 Elsa.Workflows.Runtime.Core.Models.TriggerStimulusDescriptor.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
