@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-26
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: Issue #5838 (part of initiative #3052, a row of #1152). On 2026-11-26 the coordinator chose an awaited
 Dispatch Workflow that returns the child's output, rather than inlining the child as a reusable graph activity. Elsa 3's
