@@ -164,9 +164,11 @@ internal static class NativeMigrationApplyChecks
         var edge = foundation.Ingress;
         var reads = foundation.Reads;
         var runtime = new PublicRuntime(edge, reads);
+        var sourceDefinition = Definition("source", "ready", "source tail", "exact-source");
+        var targetDefinition = Definition("target", "ready", "target tail", "exact-target");
         var registry = new WorkflowRegistry()
-            .Add(Definition("source", "ready", "source tail"))
-            .Add(Definition("target", "ready", "target tail"))
+            .Add(sourceDefinition)
+            .Add(targetDefinition)
             .Add(Definition("bad-wait", "other", "unexpected"));
         var type = new PublicWorkflow([new NativeExecutionModel(registry), new PlanSink()]);
         var loseMigration = false;
@@ -182,7 +184,7 @@ internal static class NativeMigrationApplyChecks
         var history = loseAfterLanding
             ? mode == Modes.Balanced ? Contract.History.State : Contract.History.Minimal
             : Contract.History.Full;
-        var actor = await StartAsync("workflow", NativeExecutionModel.Start("source", mode) with { History = history });
+        var actor = await StartAsync("workflow", NativeExecutionModel.Start(sourceDefinition, mode) with { History = history });
         var target = new Contract.Target.Ref(actor);
         var refuse = await StartPlanAsync("refuse");
         var apply = await StartPlanAsync("apply");
@@ -194,7 +196,8 @@ internal static class NativeMigrationApplyChecks
         await PumpAsync(owner);
         var source = Checkpoint(actor);
         var waits = Json.Read<NativeState>(source).Waits;
-        check(waits.Values.Single().Key == "event:ready" && await BoundDefinition() == "source",
+        check(waits.Values.Single().Key == "event:ready" && await BoundDefinition() == "source" &&
+            await BoundSelection() == sourceDefinition.ExecutableSelection,
             "the real model awaits the original event under the source definition");
 
         await MigrateAsync("cross-tenant", "source", "target", foreign);
@@ -229,14 +232,16 @@ internal static class NativeMigrationApplyChecks
         if (loseAfterLanding)
         {
             var queued = await reads.InboxAsync(scope, apply);
-            check(lost == 1 && await BoundDefinition() == "target" && Checkpoint(actor) == source &&
+            check(lost == 1 && await BoundDefinition() == "target" && await BoundSelection() == targetDefinition.ExecutableSelection &&
+                Checkpoint(actor) == source &&
                 pending.Items.All(item => item.Id != "apply") &&
                 queued.Items is [{ Kind: MigrationPlanResult.Kind, Sender: var answeringLife }] && answeringLife == actor,
                 "a landed commit with a lost answer keeps the new definition and one pending plan result");
         }
         else
         {
-            check(lost == 1 && await BoundDefinition() == "source" && Checkpoint(actor) == source &&
+            check(lost == 1 && await BoundDefinition() == "source" && await BoundSelection() == sourceDefinition.ExecutableSelection &&
+                Checkpoint(actor) == source &&
                 Answers(apply).Length == 0 && pending.Items.Any(item => item.Id == "apply"),
                 "an unlanded commit leaves the old checkpoint and original command with no plan outcome");
         }
@@ -244,9 +249,10 @@ internal static class NativeMigrationApplyChecks
         now += 20_000;
         await using var successor = await ActivateAsync("migration-next");
         await PumpAsync(successor);
-        check(await BoundDefinition() == "target" && Checkpoint(actor) == source &&
+        check(await BoundDefinition() == "target" && await BoundSelection() == targetDefinition.ExecutableSelection &&
+            Checkpoint(actor) == source &&
             Answers(apply) is [{ Actor: var migrated, Result.Outcome: MigrationPlanOutcome.Migrated }] && migrated == actor,
-            "a cold successor commits the new definition, same waiting state and one migrated outcome");
+            "a cold successor commits the new definition and exact selection, same waiting state and one migrated outcome");
 
         await MigrateAsync("apply-after-retention", "source", "target", apply);
         await PumpAsync(successor);
@@ -294,6 +300,8 @@ internal static class NativeMigrationApplyChecks
                 ?? throw new InvalidOperationException("The witness checkpoint is missing.");
         PlanAnswer[] Answers(Contract.ActorRef plan) => Json.Read<PlanAnswer[]>(Checkpoint(plan));
         async Task<string?> BoundDefinition() => (await reads.GetAsync(scope, actor))?.Header.Labels.GetValueOrDefault("definition");
+        async Task<string?> BoundSelection() => await reads.GetAsync(scope, actor) is { } view &&
+            Json.Read<JsonElement>(view.Header.TypeData).TryGetProperty("ExecutableSelection", out var value) ? value.GetString() : null;
         async Task<IScopeActivation> ActivateAsync(string node)
         {
             var worker = new Worker(node, 0, wire, foundation.Bind(type), new WorkerOptions { Monotonic = () => now - initial });
@@ -338,8 +346,9 @@ internal static class NativeMigrationApplyChecks
             sender == actor, "a full existing header refuses an expanding target and remembers the answer on replay");
     }
 
-    private static Workflow Definition(string id, string eventName, string tail) => Wf.Workflow(id,
-        Wf.Sequence("sequence", Wf.Event("wait", eventName), Wf.Set("tail", "output", tail)), ("output", null));
+    private static Workflow Definition(string id, string eventName, string tail, string? selection = null) => new(id,
+        Wf.Sequence("sequence", Wf.Event("wait", eventName), Wf.Set("tail", "output", tail)),
+        new Dictionary<string, System.Text.Json.Nodes.JsonNode?> { ["output"] = null }) { ExecutableSelection = selection };
 
     private static async Task PumpAsync(IScopeActivation owner, Func<bool>? until = null)
     {

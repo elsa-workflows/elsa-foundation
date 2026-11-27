@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Kernel.Foundation.Contracts;
 
 namespace Kernel.Model.Contracts;
@@ -7,4 +8,12 @@ namespace Kernel.Model.Contracts;
 public sealed record InstanceInfo(ActorRef Ref, string Tenant, string Model, string Workflow, ActorRef? Parent)
 {
     public string Tenant { get; } = Tenant;
+
+    /// <summary>The run's logical definition when the start records one separately from the artifact.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Definition { get; init; }
+
+    /// <summary>The publishing host's optional exact executable identity for this run.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutableSelection { get; init; }
 }

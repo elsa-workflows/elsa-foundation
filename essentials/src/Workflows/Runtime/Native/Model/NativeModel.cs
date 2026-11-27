@@ -53,7 +53,12 @@ public sealed record TimerFired(string Wait);
 public sealed record ResumeStimulus(string Event, JsonNode? Payload = null);
 
 /// <summary>A background job's ticket. Its iteration path and effect key are computed in the turn that starts it and committed with it (round 5 C).</summary>
-public sealed record BackgroundArgs(string Workflow, string Node, string Frame, JsonObject Inputs, string? IterationPath = null, string? EffectKey = null);
+public sealed record BackgroundArgs(string Workflow, string Node, string Frame, JsonObject Inputs, string? IterationPath = null, string? EffectKey = null)
+{
+    /// <summary>The exact executable remembered when this job was issued, when the run selected one.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutableSelection { get; init; }
+}
 
 public sealed record BackgroundResult(TransitionKind Kind, JsonNode? Result, string Outcome, ActivityFault? Fault);
 
@@ -113,9 +118,9 @@ public class NativeExecutionOptions
     /// <summary>
     /// The workflow for an id the registry does not hold, which the host loads (null when it has none). A publishing host's
     /// registry holds, after a restart, the versions its slots serve, and an instance started on an earlier version still runs
-    /// that version: the host loads it from its artifacts. Consulted before a turn or a job whose workflow the registry lacks;
-    /// what it returns joins the registry. A migration's check reads the registry only, and a Dispatch never starts a child
-    /// through it (<see cref="ServedWorkflow"/>).
+    /// that version: the host loads it from its artifacts. Also consulted when a cached workflow differs from a turn or
+    /// job's exact selection. A matching result joins the registry. A migration's check reads the registry only, and a
+    /// Dispatch never starts a child through it (<see cref="ServedWorkflow"/>).
     /// </summary>
     public Func<string, CancellationToken, ValueTask<Workflow?>>? ResolveWorkflow { get; init; }
 }
@@ -210,11 +215,11 @@ public sealed record WaitEntry(string Frame, string Kind, string Key, long Creat
 
 /// <summary>One turn: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
 internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOptions options, INativeTurn turn, CancellationToken cancellationToken,
-    Contract.ActorStatus? ended = null)
+    Contract.ActorStatus? ended = null, Workflow? executable = null)
 {
     internal bool HasExactIdentity => turn.HasExactIdentity;
     private readonly NativeState _s = turn.State;
-    private Workflow _wf => registry.Get(turn.Workflow); // metadata-only turns never resolve authored definitions
+    private Workflow _wf => executable ?? registry.Get(turn.Workflow); // metadata-only turns never resolve authored definitions
     private Contract.ActorStatus _status = Contract.ActorStatus.Running;
     private int _executed;
     private long? _burstStart;
@@ -420,7 +425,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             _s.Frames[frame.Id] = frame;
             var wait = NewId("w");
             var path = IterationPath(frame);
-            var arguments = new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope)), path, EffectKeyOf(frame, path));
+            var arguments = new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope)), path, EffectKeyOf(frame, path))
+            {
+                ExecutableSelection = executable?.ExecutableSelection
+            };
             var jobTimeout = node.JobTimeout ?? TimeoutInput(node, arguments.Inputs);
             _s.Waits[wait] = new WaitEntry(frame.Id, "job", wait)
             {

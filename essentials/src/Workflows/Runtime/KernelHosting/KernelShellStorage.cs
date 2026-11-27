@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
+using Kernel.Foundation.Hosting;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
 using Kernel.WorkflowActor;
@@ -23,8 +24,11 @@ internal abstract class KernelShellStorage
     public abstract Task InstallAsync(CancellationToken token);
     public abstract ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token);
     public abstract ValueTask<long> ReadClockAsync(CancellationToken token);
+    public abstract ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(BoundScope scope, ActorRef actor, string issuance,
+        CancellationToken token);
     public abstract (IHostedService Service, IAsyncDisposable Lifetime) CreateOwner(IActorType actor, ILoggerFactory logs,
-        Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null);
+        Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null,
+        ProtectChildBirthsAsync? protectChildBirths = null);
 
     public static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, qualifySchedules: false);
@@ -99,10 +103,19 @@ internal abstract class KernelShellStorage
         public override async ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token) =>
             new(await _foundation.OpenIngressAsync(token), _foundation.CreateReads(), _foundation, _foundation.AdmitRetentionDeleteAsync);
 
+        public override ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(BoundScope scope, ActorRef actor, string issuance,
+            CancellationToken token) => _foundation.ConfirmChildBirthAsync(scope, actor, issuance, token);
+
         public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
-            Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null)
+            Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null, ProtectChildBirthsAsync? protectChildBirths = null)
         {
             var logger = logs.CreateLogger<SqliteEmbeddedHostedService>();
+            if (protectChildBirths is not null)
+            {
+                var protectedOwner = _foundation.CreateHostedServiceWithChildBirthProtection(actor, protectChildBirths,
+                    Environment.FailFast, retentionWindow, logger: logger, auxiliaryActor: schedule);
+                return (protectedOwner, protectedOwner);
+            }
             var owner = schedule is null
                 ? _foundation.CreateHostedServiceWithRetention(actor, Environment.FailFast, retentionWindow, logger: logger)
                 : _foundation.CreateHostedServiceWithAuxiliaryActor(actor, schedule, Environment.FailFast, retentionWindow, logger: logger);
@@ -149,10 +162,19 @@ internal abstract class KernelShellStorage
             return new(foundation, foundation, foundation, foundation.AdmitRetentionDeleteAsync);
         }
 
+        public override ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(BoundScope scope, ActorRef actor, string issuance,
+            CancellationToken token) => PostgresPreviewHostedService.ConfirmChildBirthAsync(OpenDatabase, scope, actor, issuance, token);
+
         public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
-            Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null)
+            Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null, ProtectChildBirthsAsync? protectChildBirths = null)
         {
             var logger = logs.CreateLogger<PostgresPreviewHostedService>();
+            if (protectChildBirths is not null)
+            {
+                var protectedOwner = PostgresPreviewHostedService.CreateWithChildBirthProtection(OpenDatabase, _node, actor,
+                    protectChildBirths, Environment.FailFast, retentionWindow, logger: logger, requests: _requests, auxiliaryActor: schedule);
+                return (protectedOwner, protectedOwner);
+            }
             var owner = schedule is null
                 ? new PostgresPreviewHostedService(OpenDatabase, _node, actor, Environment.FailFast, logger: logger, requests: _requests)
                     { RetentionWindow = retentionWindow }
