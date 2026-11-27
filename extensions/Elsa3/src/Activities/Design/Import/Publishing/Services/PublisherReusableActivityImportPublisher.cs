@@ -62,8 +62,8 @@ internal sealed class PublisherReusableActivityImportPublisher(
         }
         catch (Exception exception) when (Find<SchemaWriteRefusedException>(exception) is { } refusal)
         {
-            // The store refused a write to a schema family: the value needs a version this host may not write yet, the family
-            // is finalized at one this host cannot read, or the operation needs a dormant one (#5972). Studio's publish
+            // The store refused a write to a schema family: the value needs a version this host may not write yet, or the
+            // family is finalized at one this host cannot read; a dormancy refusal is one too (#5972). Studio's publish
             // endpoint answers it with its code, family and both versions; so does the import, not "failed unexpectedly".
             return ReusableActivityImportPublishOutcome.Refused(refusal.Code, [FromSchemaRefusal(refusal, request)]);
         }
@@ -106,10 +106,11 @@ internal sealed class PublisherReusableActivityImportPublisher(
             ActivityDiagnosticSeverity.Error,
             refusal.Message,
             new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision),
-            Remediation: $"Nothing was published for this version; the imported rows are kept. This host refused to write schema " +
-                         $"family '{refusal.Family}'; the message says why and what the host needs. Once that is resolved, upload " +
-                         "the same export again and apply it under a new idempotency key; only the versions that are not yet " +
-                         "published publish.",
+            // The refused write may be the publication's receipt, written after the version itself committed, so this does not
+            // claim that nothing was published.
+            Remediation: $"This host refused to write schema family '{refusal.Family}'; the message says why and what the host " +
+                         "needs. Once that is resolved, upload the same export again and apply it under a new idempotency key: " +
+                         "a version that did publish is then reported as already published, and only the others publish.",
             Metadata: metadata);
     }
 

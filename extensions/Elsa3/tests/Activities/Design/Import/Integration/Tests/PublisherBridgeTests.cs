@@ -147,7 +147,8 @@ public sealed class PublisherBridgeTests
     [Fact]
     public async Task A_dormant_schema_refuses_with_its_own_code_feature_and_reason()
     {
-        // A dormancy refusal is a schema write refusal with its own stable code; the preflight raises it unwrapped.
+        // A dormancy refusal is a schema write refusal with its own stable code and its feature and reason; should a publish
+        // path raise one, the import reports those too.
         var refusal = new SchemaDormancyRefusedException(
             "activity-definitions", "3", "4", "ActivityGraphs", "Version '4' is not finalized yet.");
         var publisher = new FakeActivityPublisher { PreflightFailure = refusal };
@@ -162,7 +163,7 @@ public sealed class PublisherBridgeTests
         Assert.Equal(
             ["family=activity-definitions", "feature=ActivityGraphs", "reason=Version '4' is not finalized yet.", "requiredVersion=4", "writeVersion=3"],
             diagnostic.Metadata.Select(entry => $"{entry.Key}={entry.Value}").Order(StringComparer.Ordinal));
-        Assert.False(string.IsNullOrWhiteSpace(diagnostic.Remediation));
+        Assert.Contains("'activity-definitions'", diagnostic.Remediation);
         Assert.Equal(0, publisher.PublishCalls);
     }
 
