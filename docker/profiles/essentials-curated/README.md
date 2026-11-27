@@ -13,6 +13,12 @@ If you mount a volume at `/app/data`, set `ConnectionStrings__Elsa` and
 `CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString` to database paths on that
 volume. Use the same connection settings for the migration CLI and the running containers.
 
+For Production, supply the existing recovery continuation signing key under
+`CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey`.
+Move the value from `WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` when updating an
+existing Curated deployment. Use at least 32 UTF-8 bytes and the same value on every node. The other Docker profiles
+have their own [feature settings](../README.md#configure-a-deployment).
+
 ## Workflow execution
 
 The default shell runs Native and Flowchart workflows on the built-in Actor Foundation. Its dedicated

@@ -155,9 +155,7 @@
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256
           },
-          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
-          },
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {},
           "KernelActivitiesScheduling": {},
           "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
           "WorkflowsDashboardRetained": {},
