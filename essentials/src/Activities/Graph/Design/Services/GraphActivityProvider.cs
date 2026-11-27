@@ -1063,7 +1063,8 @@ public sealed class GraphActivityProvider(
         var structure = activityStructureService.CompileExecutableStructure(node.Activity);
         var variables = activityStructureService.ProjectScopedVariables(node.Activity);
         var iterationValues = activityStructureService.ProjectIterationVariables(node.Activity).Select(value => value.ReferenceKey).ToArray();
-        if (structure is null || variables.Count == 0 && iterationValues.Length == 0 && !structure.Payload.TryGetProperty(CompiledStructureFields.IterationValues, out _)) return structure;
+        if (structure is null || variables.Count == 0 && iterationValues.Length == 0 &&
+            (structure.Payload.ValueKind != JsonValueKind.Object || !structure.Payload.TryGetProperty(CompiledStructureFields.IterationValues, out _))) return structure;
         var payload = structure.Payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
         // Publishing owns this field: only the loop's projected iteration values may appear in it, never an owner's own.
         payload.Remove(CompiledStructureFields.IterationValues);
