@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Kernel.Foundation.Contracts;
+using Kernel.Foundation.Hosting;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,16 +16,14 @@ using Admission = Kernel.Foundation.Contracts.Admission;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
-internal delegate ValueTask<Admission> StartDirectKernelTestRun(string operationId, StartSpec start, CancellationToken token);
-
 /// <summary>Admits the exact material and Runtime scope of an ordinary direct authoring Test Run.</summary>
 internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes, KernelServing serving, PersistenceScope persistence,
-    StartDirectKernelTestRun start, KernelTestRuns testRuns, KernelOperatorIngress operators, TimeProvider time) : IWorkflowDirectTestRunDispatcher
+    KernelShellRuntime runtime, KernelTestRuns testRuns, KernelOperatorIngress operators, TimeProvider time) : IWorkflowDirectTestRunDispatcher
 {
     private static readonly TimeSpan StopBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
 
-    public bool SupportsTrigger(string driverId) => driverId == "Elsa.Event";
+    public bool SupportsTrigger(string driverId) => driverId is "Elsa.Event" or "Elsa.HttpEndpoint";
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.TestRun,
@@ -78,18 +77,43 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
 
         var input = new JsonObject();
         foreach (var (name, value) in inputs) input.Add(name, JsonNode.Parse(value.GetRawText()));
-        if (triggered && !NativeStartTriggers.StartEvents(workflow).Any(node => node.Id == request.TriggerNodeId))
-            return Refused("The selected node is not a startable named-event trigger in this executable.");
+        JsonNode? stimulus = request.StimulusInput is { } payload ? JsonNode.Parse(payload.GetRawText()) : null;
+        var http = triggered && NativeStartTriggers.StartEndpoints(workflow).Any(node => node.Id == request.TriggerNodeId);
+        if (http)
+        {
+            if (request.StimulusInput?.Deserialize<HttpTestRequest>() is not { } wire)
+                return Refused("The selected HTTP Test Run is missing its request.");
+            try { stimulus = Values.From(wire.ToNative()); }
+            catch (HttpFieldsException error) { return Refused(error.Message); }
+        }
+        else if (triggered && !NativeStartTriggers.StartEvents(workflow).Any(node => node.Id == request.TriggerNodeId))
+            return Refused("The selected node is not a startable HTTP or named-event trigger in this executable.");
         var subject = request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-kind") == "persisted-user"
             ? request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-id") : null;
         var selection = new WorkflowTestStart(test.ScopeId, test.ExpiresAt, test.TenantId, test.Partition.Value,
             source.SourceReferenceId, source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionVersionId,
             source.ArtifactVersion, KernelPublishedRunDispatcher.SourceDigest(source), subject);
-        var stimulus = request.StimulusInput is { } payload ? JsonNode.Parse(payload.GetRawText()) : null;
         var native = NativeExecutionModel.Start(workflow.Id, mode.ToString(), input, request.TriggerNodeId, stimulus, workflow.Definition)
             with { ExecutableSelection = workflow.ExecutableSelection };
         var spec = WorkflowActor.Start(native, null, selection);
-        var admission = await start(test.ScopeId, spec, cancellationToken);
+        if (http && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync")
+        {
+            var reply = await runtime.StartHeldTestAsync(test.ScopeId, spec, cancellationToken);
+            if (reply.Error == "duplicate")
+            {
+                var existing = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, cancellationToken);
+                if (existing?.IsolatedActor is { } selectedActor)
+                    return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance,
+                        new(AdmissionOutcome.Duplicate, new(selectedActor.ActorReference)), clock.GetUtcNow());
+            }
+            var response = KernelHttpEdge.Answer(reply);
+            var heldAdmission = reply.Actor is { } actor
+                ? new Admission(AdmissionOutcome.Accepted, actor)
+                : new Admission(AdmissionOutcome.Refused, Reason: reply.RefusalReason, RetryAfter: reply.RetryAfter);
+            return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance, heldAdmission, clock.GetUtcNow(),
+                reply.Error, new(response.StatusCode, response.ContentType, response.Body, response.Headers));
+        }
+        var admission = await runtime.StartDirectTestAsync(test.ScopeId, spec, cancellationToken);
         return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance, admission, clock.GetUtcNow());
 
         WorkflowExecutionStartDispatchResult Refused(string reason) => KernelPublishedRunDispatcher.Result(
@@ -103,7 +127,8 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         var current = await runtime.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>()
             .FindAsync(scope.ScopeId, cancellationToken);
         if (current is not { State: WorkflowTestScopeState.Closing or WorkflowTestScopeState.Closed } ||
-            !WorkflowTestScope.ContextEquals(current.Scope, scope))
+            !WorkflowTestScope.ContextEquals(current.Scope, scope) ||
+            current.IsolatedActor is { } different && different.ActorReference != workflowExecutionId)
             throw new TestScopeAdmissionException("Only the exact closed Test Run scope can stop its test actor.");
 
         var actor = new ActorRef(workflowExecutionId);
@@ -119,6 +144,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             {
                 var view = await FindActorAsync(scope, actor, token);
                 if (IsStopped(view)) return;
+                if (view is null && await IsRetiredAsync(actor, current.IsolatedActor, token)) return;
                 if (view?.Selection is { } selection)
                 {
                     var deadline = checked(await operators.ReadClock(token) + (long)StopBudget.TotalMilliseconds);
@@ -137,8 +163,16 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
     }
 
     public async ValueTask<bool> IsStoppedAsync(WorkflowTestScope scope, string workflowExecutionId,
-        CancellationToken cancellationToken = default) =>
-        IsStopped(await FindActorAsync(scope, new(workflowExecutionId), cancellationToken));
+        CancellationToken cancellationToken = default)
+    {
+        var actor = new ActorRef(workflowExecutionId);
+        var view = await FindActorAsync(scope, actor, cancellationToken);
+        if (view is not null) return IsStopped(view);
+        await using var bound = await scopes.CreateAsyncScopeAsync(persistence);
+        var current = await bound.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(scope.ScopeId, cancellationToken);
+        return current is not null && WorkflowTestScope.ContextEquals(current.Scope, scope) &&
+            await IsRetiredAsync(actor, current.IsolatedActor, cancellationToken);
+    }
 
     private async ValueTask<ActorView?> FindActorAsync(WorkflowTestScope scope, ActorRef actor, CancellationToken token)
     {
@@ -150,4 +184,39 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
 
     private static bool IsStopped(ActorView? view) =>
         view is { Header.Status: not ActorStatus.Running, Park: null };
+
+    private async ValueTask<bool> IsRetiredAsync(ActorRef actor, WorkflowTestRunActorBinding? binding, CancellationToken token) =>
+        binding is { } bound && bound.ActorReference == actor.Id &&
+        (await runtime.ConfirmPreparedTestAsync(actor, bound.Issuance, token)) is RootStartProof.BirthRetired or RootStartProof.PreparationDisarmed;
+
+    private sealed record HttpTestRequest(string Path, string Method, Dictionary<string, string[]> Headers,
+        Dictionary<string, string[]> Query, string? Body, Dictionary<string, string> RouteData)
+    {
+        internal HttpRequest ToNative() => new(Method, Path, ParsedBody())
+        {
+            Headers = HttpFields.RequestHeaders(Pairs(Headers)),
+            Query = HttpFields.Query(Pairs(Query)),
+            RouteValues = RouteData
+        };
+
+        private JsonNode? ParsedBody()
+        {
+            if (string.IsNullOrEmpty(Body)) return null;
+            var contentType = Headers.FirstOrDefault(field => field.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                .Value?.FirstOrDefault();
+            var mediaType = contentType?.Split(';', 2)[0].Trim();
+            if (mediaType is null) return null;
+            if (mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase) ||
+                mediaType.Equals("text/json", StringComparison.OrdinalIgnoreCase) ||
+                mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase))
+            {
+                try { return JsonNode.Parse(Body); }
+                catch (JsonException) { return null; }
+            }
+            return mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) ? JsonValue.Create(Body) : null;
+        }
+
+        private static IEnumerable<KeyValuePair<string, string>> Pairs(Dictionary<string, string[]> fields) =>
+            fields.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value)));
+    }
 }

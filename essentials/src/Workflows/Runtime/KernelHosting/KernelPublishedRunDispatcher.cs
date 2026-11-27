@@ -98,7 +98,8 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(source)));
 
     internal static WorkflowExecutionStartDispatchResult Result(string operationId, WorkflowExecutableIdentity material,
-        WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt, string? refusal = null)
+        WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt, string? refusal = null,
+        WorkflowTestRunHttpReply? httpReply = null)
     {
         var pressure = admission is { Outcome: AdmissionOutcome.Refused,
             Reason: RefusalReason.RateLimited or RefusalReason.NodeBusy or RefusalReason.InboxFull };
@@ -118,6 +119,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
                 .ToString(CultureInfo.InvariantCulture)
         } : null;
         return new(id, material, new(operationId, id, status, recordedAt, reason, metadata),
-            new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt), source);
+            new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt), source)
+            { TestRunHttpReply = httpReply };
     }
 }

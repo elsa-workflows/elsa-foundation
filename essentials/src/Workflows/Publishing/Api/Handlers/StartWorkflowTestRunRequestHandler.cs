@@ -341,8 +341,15 @@ public sealed class StartWorkflowTestRunRequestHandler(
                                   (targetBeforeStop?.State == TestRunTargetState.Dispatching ? targetBeforeStop.WorkflowExecutionId : null) ??
                                   testRun.WorkflowExecutionId;
         var direct = FindDirectDispatcher(testRun, scopeRecord);
-        if (direct is not null && testRun.Status is WorkflowTestRunStatus.DispatchDeferred or WorkflowTestRunStatus.DispatchRejected)
-            workflowExecutionId = null; // A refused Foundation admission returns an operation ID, with no actor to stop.
+        if (direct is not null)
+        {
+            var closed = await FindCurrentTestScopeAsync(testRunId, cancellationToken);
+            // The provider pins its actual actor under the same scope fence. A target may still be dispatching or may
+            // have returned an operation ID on refusal, so its preallocated legacy identity cannot select a kernel root.
+            workflowExecutionId = closed?.IsolatedActor?.ActorReference ??
+                (testRun.Status is WorkflowTestRunStatus.DispatchAccepted or WorkflowTestRunStatus.DispatchDuplicate or WorkflowTestRunStatus.StopRequested
+                    ? testRun.WorkflowExecutionId : null);
+        }
         if (workflowExecutionId is not null && scopeRecord is not null)
         {
             if (direct is not null)

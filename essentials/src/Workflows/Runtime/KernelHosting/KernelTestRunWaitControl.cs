@@ -1,17 +1,18 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
+using Kernel.EntityFramework;
 using Kernel.Native;
+using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
-internal sealed class KernelTestRunWaitControl(KernelTestRuns tests, KernelShellRuntime runtime, KernelShellStorage storage,
+internal sealed class KernelTestRunWaitControl(KernelTestRuns tests, KernelShellRuntime runtime,
     IServiceScopeFactory scopes, PersistenceScope persistence, TimeProvider time) : IWorkflowTestRunWaitControl
 {
     private const int RequestMilliseconds = 5_000;
@@ -19,10 +20,10 @@ internal sealed class KernelTestRunWaitControl(KernelTestRuns tests, KernelShell
     public async ValueTask<IReadOnlyList<WorkflowTestRunActiveWait>> ReadAsync(WorkflowTestScope scope, string workflowExecutionId,
         CancellationToken cancellationToken = default)
     {
-        var request = new NativeTestRunWaitQuery(scope.ScopeId);
-        var page = await RequestAsync<NativeTestRunWaitPage>(scope, new(workflowExecutionId), NativeTestRunWaitControl.Read,
-            JsonSerializer.Serialize(request), cancellationToken);
-        return page?.Waits.Select(wait => new WorkflowTestRunActiveWait(wait.WaitId, wait.FrameId, wait.NodeId, wait.Event)).ToArray() ?? [];
+        var snapshot = await ReadSnapshotAsync(scope, new(workflowExecutionId), cancellationToken);
+        if (snapshot is not { Status: ActorStatus.Running } active) return [];
+        return NativeTestRunWaitControl.ReadActive(active.State)
+            .Select(wait => new WorkflowTestRunActiveWait(wait.WaitId, wait.FrameId, wait.NodeId, wait.Event)).ToArray();
     }
 
     public async ValueTask<string> DeliverAsync(WorkflowTestScope scope, string workflowExecutionId, TestRunDeliveryReceipt receipt,
@@ -35,17 +36,29 @@ internal sealed class KernelTestRunWaitControl(KernelTestRuns tests, KernelShell
         var token = linked.Token;
         try
         {
-            if (receipt.StimulusDigest is not null)
+            var actor = new ActorRef(workflowExecutionId);
+            var deliveryId = Guid.Parse(receipt.DeliveryId);
+            var snapshot = await ReadSnapshotAsync(scope, actor, token);
+            var previous = Lookup(snapshot, receipt, deliveryId, delivered: false);
+            if (previous != "Unseen" || receipt.StimulusDigest is null) return previous;
+
+            await using var runtimeScope = await scopes.CreateAsyncScopeAsync(persistence);
+            await runtimeScope.ServiceProvider.GetRequiredService<IWorkflowTestScopeAdmissionStore>()
+                .AssertOpenAsync(scope, time.GetUtcNow(), token);
+            var request = new NativeTestRunEvent(scope.ScopeId, receipt.WaitId, deliveryId, receipt.ConfigurationDigest,
+                receipt.StimulusDigest, stimulus);
+            var ingress = await runtime.IngressAsync(token);
+            var admission = await ingress.SendAsync(tests.Reads.Tenant, new Target.Ref(actor), Guid.NewGuid().ToString("N"),
+                NativeTestRunWaitControl.Deliver, JsonSerializer.Serialize(request), cancellationToken: token);
+            if (admission.Outcome == AdmissionOutcome.Refused)
+                return admission.Reason is RefusalReason.NodeBusy or RefusalReason.InboxFull or RefusalReason.RateLimited
+                    ? "Pending" : "NoLongerWaiting";
+            while (true)
             {
-                await using var runtimeScope = await scopes.CreateAsyncScopeAsync(persistence);
-                await runtimeScope.ServiceProvider.GetRequiredService<IWorkflowTestScopeAdmissionStore>()
-                    .AssertOpenAsync(scope, time.GetUtcNow(), token);
+                var observed = Lookup(await ReadSnapshotAsync(scope, actor, token), receipt, deliveryId, delivered: true);
+                if (observed != "Unseen") return observed;
+                await Task.Delay(TimeSpan.FromMilliseconds(100), time, token);
             }
-            var request = new NativeTestRunEvent(scope.ScopeId, receipt.WaitId, Guid.Parse(receipt.DeliveryId),
-                receipt.ConfigurationDigest, receipt.StimulusDigest, stimulus);
-            var result = await RequestAsync<NativeTestRunEventResult>(scope, new(workflowExecutionId), NativeTestRunWaitControl.Deliver,
-                JsonSerializer.Serialize(request), token);
-            return result?.Status ?? "Pending";
         }
         catch (TestScopeAdmissionException)
         {
@@ -57,19 +70,30 @@ internal sealed class KernelTestRunWaitControl(KernelTestRuns tests, KernelShell
         }
     }
 
-    private async ValueTask<T?> RequestAsync<T>(WorkflowTestScope scope, ActorRef actor, string kind, string payload,
-        CancellationToken token) where T : class
+    private sealed record Snapshot(NativeState State, ActorStatus Status);
+
+    private static string Lookup(Snapshot? snapshot, TestRunDeliveryReceipt receipt, Guid deliveryId, bool delivered)
+    {
+        if (snapshot?.State.TestRunEvents?.GetValueOrDefault(deliveryId) is { } prior)
+            return prior.WaitId != receipt.WaitId || prior.ConfigurationDigest != receipt.ConfigurationDigest
+                ? "Conflict" : delivered ? "Delivered" : "AlreadyDelivered";
+        if (snapshot?.State.TestRunEvents?.Count >= NativeTestRunWaitControl.ReceiptLimit) return "Limit";
+        if (snapshot is not { Status: ActorStatus.Running } active ||
+            !NativeTestRunWaitControl.ReadActive(active.State).Any(wait => wait.WaitId == receipt.WaitId))
+            return "NoLongerWaiting";
+        return "Unseen";
+    }
+
+    private async ValueTask<Snapshot?> ReadSnapshotAsync(WorkflowTestScope scope, ActorRef actor, CancellationToken token)
     {
         if (scope.IsExpired(time.GetUtcNow()) || (scope.TenantId ?? PersistenceScope.DefaultValue) != persistence.Value)
             return null;
-        var current = await tests.Reads.GetAsync(actor, token);
-        if (current.Run?.Run.TestStart is not { } selected || selected.ScopeId != scope.ScopeId || selected.Tenant != scope.TenantId ||
+        if (await runtime.ReadAsync(token) is not GeneratedRootReads reads ||
+            await reads.ReadCommittedStateAsync(tests.Reads.Tenant, actor, token) is not { State: { } state } checkpoint ||
+            WorkflowActor.DescribeStart(WorkflowActor.ActorType, checkpoint.TypeData) is not { Model: NativeExecutionModel.ModelKey, TestStart: { } selected } ||
+            selected.ScopeId != scope.ScopeId || selected.Tenant != scope.TenantId ||
             selected.Partition != scope.Partition.Value || selected.ExpiresAt != scope.ExpiresAt)
             return null;
-        var ingress = await runtime.IngressAsync(token);
-        var deadline = checked(await storage.ReadClockAsync(token) + RequestMilliseconds);
-        var reply = await ingress.RequestAsync(tests.Reads.Tenant, new Target.Ref(actor), Guid.NewGuid().ToString("N"), kind,
-            payload, null, new(null, deadline), token);
-        return reply.Item is JsonNode body ? body.Deserialize<T>() : reply.Item as T;
+        return JsonSerializer.Deserialize<NativeState>(state) is { } native ? new(native, checkpoint.Status) : null;
     }
 }

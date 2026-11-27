@@ -244,6 +244,15 @@ internal sealed class HttpTestRunIngressMiddleware(
             return;
         }
 
+        if (dispatchResult.Dispatch.TestRunHttpReply is { } held)
+        {
+            context.Response.StatusCode = held.StatusCode;
+            context.Response.ContentType = held.ContentType;
+            foreach (var (key, value) in held.Headers) context.Response.Headers[key] = value;
+            if (held.Body is { } body)
+                await context.Response.WriteAsync(body, cancellationToken);
+            return;
+        }
         if (authoredOptions.ResponseMode == ResponseMode.Sync
             && context.RequestServices.GetService<HttpResponseInstructionDelivery>() is { } delivery
             && await delivery.TryDeliverAsync(context.Response, [dispatchResult.Dispatch.WorkflowExecutionId], cancellationToken))

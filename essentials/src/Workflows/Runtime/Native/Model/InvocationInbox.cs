@@ -83,8 +83,6 @@ internal sealed partial class Burst
             { result = new("", "", "Invalid", Actor: turn.Actor.Id); }
             turn.Reply(message, result);
         }
-        foreach (var message in turn.Items.Where(message => NativeTestRunWaitControl.Handles(message.Kind)))
-            HandleTestRunWait(message);
         return ValueTask.CompletedTask;
     }
 

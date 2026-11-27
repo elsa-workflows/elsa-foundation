@@ -811,4 +811,11 @@ public sealed class WorkflowExecutionStartDispatchResult
     public WorkflowExecutionCommandDispatchResult CommandDispatch { get; }
     public WorkflowExecutionActorDescriptor Agent { get; }
     public WorkflowExecutableSourceProvenance? PinnedSource { get; }
+
+    /// <summary>The response from a synchronous HTTP Test Run, available only to its authenticated request.</summary>
+    [JsonIgnore]
+    public WorkflowTestRunHttpReply? TestRunHttpReply { get; init; }
 }
+
+public sealed record WorkflowTestRunHttpReply(int StatusCode, string ContentType, string? Body,
+    IReadOnlyDictionary<string, string> Headers);

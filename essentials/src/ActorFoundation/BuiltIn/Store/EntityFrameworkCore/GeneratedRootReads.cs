@@ -13,6 +13,14 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
 
+    internal async ValueTask<(string TypeData, string? State, ActorStatus Status)?> ReadCommittedStateAsync(BoundScope scope,
+        ActorRef actor, CancellationToken cancellationToken)
+    {
+        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
+        var read = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken);
+        return read is { } found ? (found.TypeData, found.State, (ActorStatus)found.Status) : null;
+    }
+
     internal ValueTask<ActorRetentionPolicy> ReadRetentionPolicyAsync(BoundScope scope, string actorType, CancellationToken token) =>
         new(store.ReadRootRetentionPolicyAsync(scope, actorType, token));
 

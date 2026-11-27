@@ -116,10 +116,10 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             services.AddSingleton(sp => new KernelTestRuns(new(testTenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync)));
             services.AddScoped<IWorkflowDirectTestRunDispatcher>(sp => new KernelDirectTestRunDispatcher(
                 sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<KernelServing>(), persistenceScope,
-                sp.GetRequiredService<KernelShellRuntime>().StartDirectTestAsync, sp.GetRequiredService<KernelTestRuns>(),
+                sp.GetRequiredService<KernelShellRuntime>(), sp.GetRequiredService<KernelTestRuns>(),
                 sp.GetRequiredService<KernelOperatorIngress>(), sp.GetRequiredService<TimeProvider>()));
             services.AddScoped<IWorkflowTestRunWaitControl>(sp => new KernelTestRunWaitControl(
-                sp.GetRequiredService<KernelTestRuns>(), sp.GetRequiredService<KernelShellRuntime>(), storage,
+                sp.GetRequiredService<KernelTestRuns>(), sp.GetRequiredService<KernelShellRuntime>(),
                 sp.GetRequiredService<IServiceScopeFactory>(), persistenceScope, sp.GetRequiredService<TimeProvider>()));
         }
         services.AddSingleton(sp =>

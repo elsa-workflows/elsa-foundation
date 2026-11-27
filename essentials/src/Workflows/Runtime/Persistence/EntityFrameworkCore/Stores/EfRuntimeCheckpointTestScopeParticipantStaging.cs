@@ -24,9 +24,18 @@ internal static class EfRuntimeCheckpointTestScopeParticipantStaging
             return;
         }
 
-        if (context.Database.CurrentTransaction is null)
-            throw new InvalidOperationException("Checkpoint test-scope admission requires the caller-owned EF transaction.");
+        var (row, current) = await RequireOpenAsync(context, expected, occurredAt, accessScope, cancellationToken);
+        // The revision-only write fences this admission against a concurrent close in the same transaction.
+        WorkflowTestScopeEfSupport.StageAdmission(row);
+        admitted.Add(expected.ScopeId, current);
+    }
 
+    internal static async ValueTask<(Entities.WorkflowTestScopeEntity Row, WorkflowTestScopeRecord Record)> RequireOpenAsync(
+        RuntimeDbContext context, WorkflowTestScope expected, DateTimeOffset occurredAt, string accessScope,
+        CancellationToken cancellationToken)
+    {
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Test-scope admission requires the caller-owned EF transaction.");
         var row = await context.WorkflowTestScopes.SingleOrDefaultAsync(candidate =>
                 candidate.Id == WorkflowTestScopeEfSupport.Id(accessScope, expected.ScopeId) &&
                 candidate.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) &&
@@ -34,11 +43,8 @@ internal static class EfRuntimeCheckpointTestScopeParticipantStaging
                 candidate.ScopeId == EfRelationalIdentity.Encode(expected.ScopeId) &&
                 candidate.ScopeIdHash == EfRelationalIdentity.Hash(expected.ScopeId),
             cancellationToken);
-        persisted = row is null ? null : WorkflowTestScopeEfSupport.Read(row, accessScope, expected.ScopeId);
-        WorkflowTestScopeAdmission.EnsureOpen(persisted, expected, occurredAt);
-
-        // The revision-only write fences this admission against a concurrent close in the same transaction.
-        WorkflowTestScopeEfSupport.StageAdmission(row!);
-        admitted.Add(expected.ScopeId, persisted!);
+        var record = row is null ? null : WorkflowTestScopeEfSupport.Read(row, accessScope, expected.ScopeId);
+        WorkflowTestScopeAdmission.EnsureOpen(record, expected, occurredAt);
+        return (row!, record!);
     }
 }
