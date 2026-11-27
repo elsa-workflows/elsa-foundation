@@ -80,6 +80,40 @@ class CorePreviewCompositionTests(unittest.TestCase):
                 acceptance.sqlite_markers(path, acceptance.sqlite_shipped_markers())
             self.assertFalse(path.exists())
 
+    @staticmethod
+    def marker_source(definitions):
+        return """
+            internal const int StoreSchemaVersion = 3;
+            internal const int JournalCodecVersion = 1;
+            internal static StoreFormat RootShipped => Current with { MessageProtocol = 34 };
+            private const int Sqlite = 2;
+        """ + definitions
+
+    def test_sqlite_markers_accept_a_decimal_or_a_same_file_alias(self):
+        for declarations in (
+            "private const int SqliteShippedRevision = 17;",
+            "private const int SqliteShippedRevision = SqlitePlaybackDescendantsRevision;\n"
+            "private const int SqlitePlaybackDescendantsRevision = 17;",
+            "private const int SqliteShippedRevision = SqlitePlaybackDescendantsRevision;\n"
+            "private const int SqlitePlaybackDescendantsRevision = SqliteDefinitionRevision;\n"
+            "private const int SqliteDefinitionRevision = 17;",
+        ):
+            with self.subTest(declarations=declarations), patch.object(acceptance, "STORE_VERSIONS") as source:
+                source.read_text.return_value = self.marker_source(declarations)
+                self.assertEqual([(1, 3, 34, 1), (2, 2, 17, 0)], acceptance.sqlite_shipped_markers())
+
+    def test_sqlite_markers_refuse_an_unresolved_ambiguous_or_cyclic_alias(self):
+        for declarations in (
+            "",
+            "private const int Revision = 17;\nprivate const int Revision = 18;",
+            "private const int Revision = SqliteShippedRevision;",
+            "private const int Revision = 16 + 1;",
+        ):
+            with self.subTest(declarations=declarations), patch.object(acceptance, "STORE_VERSIONS") as source:
+                source.read_text.return_value = self.marker_source("private const int SqliteShippedRevision = Revision;\n" + declarations)
+                with self.assertRaisesRegex(ValueError, "Cannot derive SQLite shipped markers"):
+                    acceptance.sqlite_shipped_markers()
+
     def test_a_different_sqlite_profile_is_refused_even_with_both_markers(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "kernel.sqlite"
