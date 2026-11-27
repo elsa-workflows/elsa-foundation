@@ -553,6 +553,54 @@ internal static partial class WorkbenchPostgresPreview
     }
 
     // With publications on, the default shell composes the kernel's coordinator, which serves its active slots before the node runs.
+    private static async Task RequireActivityTimelineAsync(HttpClient session, string route, string run, CancellationToken token)
+    {
+        using var timeline = await session.GetAsync($"{route}/activity-executions?limit=20", token);
+        if (!timeline.IsSuccessStatusCode) throw new InvalidOperationException($"The activity timeline returned {(int)timeline.StatusCode}: {await timeline.Content.ReadAsStringAsync(token)}");
+        using var firstPage = JsonDocument.Parse(await timeline.Content.ReadAsStringAsync(token));
+        var activities = firstPage.RootElement.GetProperty("items").EnumerateArray().Select(row => row.GetProperty("execution")).ToArray();
+        var ids = activities.Select(activity => activity.GetProperty("activityExecutionId").GetString()!).ToHashSet(StringComparer.Ordinal);
+        var child = activities.FirstOrDefault(activity => activity.GetProperty("provenance")
+            .TryGetProperty("parentActivityExecutionId", out var parent) && parent.GetString() is { } id && ids.Contains(id));
+        Require(activities.Length == ids.Count && activities.Length > 1 && child.ValueKind != JsonValueKind.Undefined &&
+                firstPage.RootElement.GetProperty("totalCount").GetInt64() == activities.Length &&
+                activities.Select(activity => activity.GetProperty("executionSequence").GetInt64()).SequenceEqual(
+                    Enumerable.Range(1, activities.Length).Select(sequence => (long)sequence)) &&
+                activities.All(activity => activity.GetProperty("workflowExecutionId").GetString() == run &&
+                    activity.GetProperty("status").GetString() == "Completed" &&
+                    activity.GetProperty("scheduledAt").GetDateTimeOffset() <= activity.GetProperty("startedAt").GetDateTimeOffset() &&
+                    activity.GetProperty("startedAt").GetDateTimeOffset() <= activity.GetProperty("completedAt").GetDateTimeOffset()),
+            "the standard activity timeline shows the committed order, nesting and turn times for the exact kernel run");
+
+        var childId = child.GetProperty("activityExecutionId").GetString()!;
+        var encodedChild = Uri.EscapeDataString(childId);
+        using var browse = await session.GetAsync($"{route}/activity-executions?limit=1&anchorActivityExecutionId={encodedChild}", token);
+        var browseBody = await browse.Content.ReadAsStringAsync(token);
+        if (!browse.IsSuccessStatusCode) throw new InvalidOperationException($"Activity browse returned {(int)browse.StatusCode}: {browseBody}");
+        using var page = JsonDocument.Parse(browseBody);
+        Require(page.RootElement.GetProperty("totalCount").GetInt64() == activities.Length &&
+                page.RootElement.GetProperty("items").EnumerateArray().Single().GetProperty("execution")
+                    .GetProperty("activityExecutionId").GetString() == childId,
+            "standard activity browsing anchors on the exact activity execution");
+        var previousCursor = page.RootElement.GetProperty("previousCursor").GetString()!;
+        using var prior = await session.GetAsync($"{route}/activity-executions?limit=1&cursor={Uri.EscapeDataString(previousCursor)}", token);
+        if (!prior.IsSuccessStatusCode) throw new InvalidOperationException($"Activity continuation returned {(int)prior.StatusCode}: {await prior.Content.ReadAsStringAsync(token)}");
+        using var priorPage = JsonDocument.Parse(await prior.Content.ReadAsStringAsync(token));
+        Require(priorPage.RootElement.GetProperty("totalCount").GetInt64() == activities.Length &&
+                priorPage.RootElement.GetProperty("items").EnumerateArray().Single().GetProperty("execution")
+                    .GetProperty("activityExecutionId").GetString() == child.GetProperty("provenance").GetProperty("parentActivityExecutionId").GetString(),
+            "the standard activity continuation returns the prior execution in the committed timeline");
+
+        using var inspection = await session.GetAsync($"{route}/activity-executions/{encodedChild}", token);
+        var inspectionBody = await inspection.Content.ReadAsStringAsync(token);
+        if (!inspection.IsSuccessStatusCode) throw new InvalidOperationException($"Activity inspection returned {(int)inspection.StatusCode}: {inspectionBody}");
+        using var point = JsonDocument.Parse(inspectionBody);
+        Require(point.RootElement.GetProperty("workflowExecutionId").GetString() == run &&
+                point.RootElement.GetProperty("activityExecutionId").GetString() == childId &&
+                point.RootElement.GetProperty("completedAt").GetString() == child.GetProperty("completedAt").GetString(),
+            "standard activity inspection matches the committed activity in the timeline");
+    }
+
     private static async Task RequireKernelServingAsync(WorkbenchProcess workbench, Func<Task<IReadOnlyList<string>>> probeRuns, CancellationToken token)
     {
         Require(workbench.KernelComposed is { } composed && composed.Contains("into shell default", StringComparison.Ordinal),
@@ -607,6 +655,7 @@ internal static partial class WorkbenchPostgresPreview
                     instance.GetProperty("startedAt").ValueKind == JsonValueKind.String &&
                     instance.GetProperty("completedAt").ValueKind == JsonValueKind.String,
                 "the standard run details endpoint shows the completed Native run and its committed times");
+            await RequireActivityTimelineAsync(session, $"{address}/runtime/workflows/instances/{Uri.EscapeDataString(run)}", run, token);
             using var missing = await session.GetAsync($"{address}/runtime/workflows/instances/{Guid.NewGuid():N}", token);
             Require(missing.StatusCode == System.Net.HttpStatusCode.NotFound, "the standard run details endpoint returns 404 for a missing kernel run");
         }

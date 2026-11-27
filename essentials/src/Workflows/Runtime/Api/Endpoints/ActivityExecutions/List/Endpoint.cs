@@ -2,10 +2,12 @@ using Elsa.Workflows.Runtime.Inspection.Core;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -17,7 +19,7 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints.ActivityExecutions.List;
 [Get("runtime/workflows/instances/{workflowExecutionId}/activity-executions")]
 [RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeRead)]
 [ActivityInspectionProblems("browsing activity executions")]
-public sealed class Endpoint(IWorkflowExecutionStateStore workflows, IActivityExecutionInspectionStore inspections,
+public sealed class Endpoint(IActivityExecutionBrowseSource source,
     IActivityInspectionContextAsync authorization, IRuntimeRecoveryContinuationCodec codec)
     : ApiEndpoint<BrowseActivityExecutions, ActivityExecutionBrowsePageView>
 {
@@ -26,10 +28,10 @@ public sealed class Endpoint(IWorkflowExecutionStateStore workflows, IActivityEx
 
     public override async Task<ActivityExecutionBrowsePageView> HandleAsync(BrowseActivityExecutions request, CancellationToken cancellationToken)
     {
-        var workflow = await workflows.FindAsync(request.WorkflowExecutionId, cancellationToken);
-        if (workflow is null || !await authorization.CanInspectStructureAsync(workflow, cancellationToken))
+        var workflow = await source.FindWorkflowAsync(request.WorkflowExecutionId, cancellationToken);
+        if (workflow is null || !await authorization.CanInspectStructureAsync(workflow.State, cancellationToken))
             throw new ActivityExecutionMissingSignal();
-        if (!inspections.SupportsExecutionBrowsing) throw new NotSupportedException("This host does not support activity execution browsing.");
+        if (!workflow.SupportsExecutionBrowsing) throw new NotSupportedException("This host does not support activity execution browsing.");
         RuntimeStorePageRequest.ValidateLimit(request.Limit, nameof(request.Limit));
         RuntimeStorePageRequest.ValidateContinuationToken(request.Cursor, nameof(request.Cursor));
         if (request.Cursor is not null && request.AnchorActivityExecutionId is not null)
@@ -42,23 +44,27 @@ public sealed class Endpoint(IWorkflowExecutionStateStore workflows, IActivityEx
             await authorization.GetAuthorizationProfileAsync(cancellationToken)
         }))));
         long? offset = null;
+        long? journalHeadRevision = null;
         if (request.Cursor is not null)
         {
             try
             {
                 var cursor = JsonSerializer.Deserialize<BrowserCursor>(codec.Decode(Purpose, request.Cursor));
-                if (cursor is null || cursor.Binding != binding || cursor.Offset < 0) throw new FormatException();
+                if (cursor is null || cursor.Binding != binding || cursor.Offset < 0 || cursor.JournalHeadRevision is < 1) throw new FormatException();
                 offset = cursor.Offset;
+                journalHeadRevision = cursor.JournalHeadRevision;
             }
             catch (Exception error) when (error is ArgumentException or FormatException or JsonException or InvalidDataException or InvalidOperationException)
             {
                 throw new ArgumentException("The execution browsing continuation is invalid or belongs to another context.", nameof(request.Cursor));
             }
         }
-        var page = await inspections.BrowseAsync(new ActivityExecutionBrowseQuery(request.WorkflowExecutionId,
+        var result = await workflow.BrowseAsync(new ActivityExecutionBrowseQuery(request.WorkflowExecutionId,
             request.Limit, offset, request.ExecutableNodeId, request.ParentActivityExecutionId,
-            request.AncestorActivityExecutionId, request.AnchorActivityExecutionId), cancellationToken);
-        string Cursor(long position) => codec.Encode(Purpose, JsonSerializer.SerializeToUtf8Bytes(new BrowserCursor(binding, position)));
+            request.AncestorActivityExecutionId, request.AnchorActivityExecutionId), journalHeadRevision, cancellationToken) ??
+                     throw new ActivityExecutionMissingSignal();
+        var page = result.Page;
+        string Cursor(long position) => codec.Encode(Purpose, JsonSerializer.SerializeToUtf8Bytes(new BrowserCursor(binding, position, result.JournalHeadRevision)));
         return new ActivityExecutionBrowsePageView(page.Items.Select(item => new ActivityExecutionBrowseEntryView(
                 ActivityExecutionInspectionSummaryView.From(item.Execution), item.Position,
                 item.PreviousActivityExecutionId, item.NextActivityExecutionId, ActivityExecutionAttemptView.From(item.Execution.Attempt), item.IterationPosition)).ToArray(),
@@ -67,5 +73,6 @@ public sealed class Endpoint(IWorkflowExecutionStateStore workflows, IActivityEx
             page.Items.Count > 0 && page.Offset + page.Items.Count < page.TotalCount ? Cursor(page.Offset + page.Items.Count) : null);
     }
 
-    private sealed record BrowserCursor(string Binding, long Offset);
+    private sealed record BrowserCursor(string Binding, long Offset,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? JournalHeadRevision = null);
 }

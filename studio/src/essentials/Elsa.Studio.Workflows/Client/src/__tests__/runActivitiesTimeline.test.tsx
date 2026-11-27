@@ -152,6 +152,20 @@ describe("buildActivityTimelineEntries", () => {
     expect(meaningfulActivityOutcomes(execution({ outcomeNames: ["True"] }))).toEqual(["True"]);
     expect(meaningfulActivityOutcomes(execution({ outcomeNames: ["Done", "Approved"] }))).toEqual(["Done", "Approved"]);
   });
+
+  it("orders kernel siblings by committed sequence when the wall clock steps backward", () => {
+    const parent = execution({ activityExecutionId: "parent", executionSequence: 1 });
+    const first = execution({ activityExecutionId: "first", parentActivityExecutionId: "parent", executionSequence: 2,
+      startedAt: "2026-11-23T10:00:01Z" });
+    const later = execution({ activityExecutionId: "later", parentActivityExecutionId: "parent", executionSequence: 3,
+      startedAt: "2026-11-23T09:59:59Z" });
+    const activities = [later, parent, first];
+
+    const kernel = buildActivityTimelineEntries(activities, true);
+    expect(kernel.map(item => item.execution.activityExecutionId)).toEqual(["parent", "first", "later"]);
+    expect(kernel[2]!.execution.startedAt).toBe("2026-11-23T09:59:59Z");
+    expect(buildActivityTimelineEntries(activities).map(item => item.execution.activityExecutionId)).toEqual(["parent", "later", "first"]);
+  });
 });
 
 describe("RunActivitiesTimeline", () => {
@@ -265,6 +279,80 @@ describe("RunActivitiesTimeline", () => {
 
     await vi.waitFor(() => expect(container.querySelectorAll(".wf-activity-timeline-row")).toHaveLength(2));
     expect(onLoaded).toHaveBeenCalledWith([extra]);
+  });
+
+  it("keeps a deferred timeline in its cursor snapshot and replaces it on Refresh", async () => {
+    const parent = execution({ activityExecutionId: "exec-parent", executionSequence: 1 });
+    const child = execution({ activityExecutionId: "exec-child", executionSequence: 2, parentActivityExecutionId: "exec-parent", status: "Running" });
+    const completedChild = { ...child, status: "Completed" };
+    const observed = [
+      parent,
+      { ...child, status: "Faulted" },
+      execution({ activityExecutionId: "observed-only", executionSequence: 3 })
+    ];
+    runtimeApi.browseActivityExecutions
+      .mockResolvedValueOnce({ items: [{ execution: child }], totalCount: 2, previousCursor: "older", nextCursor: null })
+      .mockResolvedValueOnce({ items: [{ execution: parent }], totalCount: 2, previousCursor: null, nextCursor: "newer" })
+      .mockResolvedValueOnce({ items: [{ execution: completedChild }], totalCount: 3, previousCursor: "new-older", nextCursor: null });
+    const context = {} as StudioEndpointContext;
+    const onLoaded = vi.fn();
+    flushSync(() => root.render(
+      <RunActivitiesTimeline
+        context={context}
+        workflowExecutionId="run-1"
+        activities={observed}
+        activitiesDeferred
+        labelForActivity={item => item.activityExecutionId}
+        onSelectActivity={() => {}}
+        onRefresh={() => {}}
+        onExecutionsLoaded={onLoaded}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-timeline-row")?.textContent).toContain("exec-child"));
+    expect(container.querySelectorAll(".wf-activity-timeline-row")).toHaveLength(1);
+    expect(container.querySelector(".wf-activity-timeline-row")?.getAttribute("data-status")).toBe("Running");
+    expect(runtimeApi.browseActivityExecutions).toHaveBeenNthCalledWith(1, context, "run-1", { limit: 100 }, expect.any(AbortSignal));
+    const loadMore = container.querySelector<HTMLButtonElement>(".wf-history-more")!;
+    flushSync(() => loadMore.click());
+    await vi.waitFor(() => {
+      expect([...container.querySelectorAll(".wf-activity-timeline-row")].map(item => item.getAttribute("data-activity-execution-id")))
+        .toEqual(["exec-parent", "exec-child"]);
+      expect(container.querySelector(".wf-history-more")).toBeNull();
+    });
+    expect(runtimeApi.browseActivityExecutions).toHaveBeenNthCalledWith(2, context, "run-1", { limit: 100, cursor: "older" }, expect.any(AbortSignal));
+    expect(onLoaded).toHaveBeenNthCalledWith(2, [parent]);
+    flushSync(() => container.querySelector<HTMLButtonElement>("[aria-label='Refresh activities']")!.click());
+    await vi.waitFor(() => {
+      const rows = container.querySelectorAll(".wf-activity-timeline-row");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.getAttribute("data-activity-execution-id")).toBe("exec-child");
+      expect(rows[0]!.getAttribute("data-status")).toBe("Completed");
+    });
+    expect(runtimeApi.browseActivityExecutions).toHaveBeenNthCalledWith(3, context, "run-1", { limit: 100 }, expect.any(AbortSignal));
+    expect(onLoaded).toHaveBeenNthCalledWith(3, [completedChild]);
+  });
+
+  it("reports a deferred browse failure without announcing an empty timeline", async () => {
+    runtimeApi.browseActivityExecutions.mockRejectedValueOnce(new Error("Unavailable"));
+    flushSync(() => root.render(
+      <RunActivitiesTimeline
+        context={{} as StudioEndpointContext}
+        workflowExecutionId="run-1"
+        activities={[]}
+        activitiesDeferred
+        labelForActivity={item => item.activityExecutionId}
+        onSelectActivity={() => {}}
+        onRefresh={() => {}}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-history-message")?.textContent).toBe("Could not load activities."));
+    expect(container.querySelector(".wf-history-empty")).toBeNull();
+    expect(container.querySelector(".wf-history-footer")).toBeNull();
+    flushSync(() => container.querySelector<HTMLButtonElement>("[aria-label='Refresh activities']")!.click());
+    await vi.waitFor(() => expect(container.querySelector(".wf-history-empty")?.textContent).toBe("No activities have been recorded for this run yet."));
+    expect(container.querySelector(".wf-history-message")).toBeNull();
   });
 
   it("collapses and expands container subtrees, flags faulted hidden steps, renders span bars, and auto-expands external selection", async () => {

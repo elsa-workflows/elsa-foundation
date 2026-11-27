@@ -35,10 +35,12 @@ SUITE = 'core-preview'
 PROJECT = 'desktop-light'
 CAPTURES = {
     'core preview stack is ready': ['reference'],
+    'Studio opens the committed kernel activity timeline': ['activity-timeline', 'activity-selection'],
     'kernel HTTP response opens the committed run': ['kernel-http-result', 'kernel-http-run', 'kernel-http-refusal'],
 }
 EVIDENCE = {
     'core preview stack is ready': ['core-preview-smoke.json'],
+    'Studio opens the committed kernel activity timeline': ['activity-timeline.json'],
     'kernel HTTP response opens the committed run': ['kernel-http.json'],
 }
 JOURNEYS = set(CAPTURES)

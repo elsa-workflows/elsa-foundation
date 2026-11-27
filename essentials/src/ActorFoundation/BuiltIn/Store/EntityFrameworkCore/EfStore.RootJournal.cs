@@ -5,9 +5,11 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    internal sealed record RootJournalEntry(long Position, long Revision, string Entries);
+    internal sealed record RootJournalEntry(long Position, long Revision, string Entries, long HeadRevision,
+        long? CancellationRevision, long? CancellationAt);
     internal sealed record RootJournalPage(IReadOnlyList<RootJournalEntry> Rows, long AsOf);
-    private sealed record JournalProjection(long AsOf, long? Position, long? Revision, string? Entries,
+    private sealed record JournalProjection(long AsOf, long? Position, long? Revision, string? Entries, long? HeadRevision,
+        long? CancellationRevision, long? CancellationAt,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec, string? DefinitionStamp);
 
     // The public reader will keep physical positions inside its continuation token.
@@ -31,7 +33,9 @@ public sealed partial class EfStore
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
                     FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
                 ), root AS (
-                    SELECT b."Actor", b."Partition", i."Revision"
+                    SELECT b."Actor", b."Partition", i."Revision",
+                        CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalRevision" END AS "CancellationRevision",
+                        CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalAt" END AS "CancellationAt"
                     FROM "FoundationRootBirths" b JOIN "Instances" i
                         ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                         AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
@@ -39,13 +43,14 @@ public sealed partial class EfStore
                         AND EXISTS (SELECT 1 FROM marker WHERE "StoreSchema" = {expected.StoreSchema}
                             AND "MessageProtocol" = {expected.MessageProtocol} AND "JournalCodec" = {expected.JournalCodec})
                 ), page AS (
-                    SELECT j."Position", j."Revision", j."Entries"
+                    SELECT j."Position", j."Revision", j."Entries", r."Revision" AS "HeadRevision",
+                        r."CancellationRevision", r."CancellationAt"
                     FROM root r JOIN "Journal" j ON j."Partition" = r."Partition" AND j."Instance" = r."Actor"
                     WHERE j."Position" >= {fromPosition} AND j."Revision" BETWEEN 1 AND r."Revision"
                     ORDER BY j."Position" LIMIT {limit}
                 )
                 SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
-                    page."Position", page."Revision", page."Entries",
+                    page."Position", page."Revision", page."Entries", page."HeadRevision", page."CancellationRevision", page."CancellationAt",
                     marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
                 ORDER BY page."Position"
@@ -64,7 +69,8 @@ public sealed partial class EfStore
         var first = sampled[0];
         RequireSnapshotFormat(db, first.StoreSchema, first.MessageProtocol, first.JournalCodec, first.DefinitionStamp);
         var rows = sampled.Where(row => row.Position.HasValue)
-            .Select(row => new RootJournalEntry(row.Position!.Value, row.Revision!.Value, row.Entries!)).ToArray();
+            .Select(row => new RootJournalEntry(row.Position!.Value, row.Revision!.Value, row.Entries!, row.HeadRevision!.Value,
+                row.CancellationRevision, row.CancellationAt)).ToArray();
         return new(rows, first.AsOf);
     }
 }

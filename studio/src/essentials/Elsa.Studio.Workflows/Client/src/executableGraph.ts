@@ -38,6 +38,7 @@ export interface ExecutableGraphNodeFacts {
   authoredActivityId: string;
   activityType: string;
   activityTypeVersion: string;
+  catalogActivityVersionId?: string;
   structureKind: string | null;
   available: boolean;
   inputBindings: WorkflowExecutableInputBinding[];
@@ -126,6 +127,7 @@ export function buildExecutableActivityGraph(
       authoredActivityId: node.authoredActivityId,
       activityType: node.activityType,
       activityTypeVersion: node.activityTypeVersion,
+      catalogActivityVersionId: catalogItem?.activityVersionId,
       structureKind: node.structureKind ?? null,
       available: !!catalogItem,
       inputBindings,

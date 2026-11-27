@@ -5,8 +5,14 @@ namespace Elsa.Workflows.Runtime.Services.ActivityExecutions;
 
 public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
 {
+    private readonly bool _browseByExecutionSequence;
     private readonly object _syncRoot = new();
     private readonly Dictionary<ActivityExecutionInspectionProjectionKey, ActivityExecutionInspectionProjection> _projections = new();
+
+    public InMemoryActivityExecutionInspectionStore() { }
+
+    public InMemoryActivityExecutionInspectionStore(bool browseByExecutionSequence) =>
+        _browseByExecutionSequence = browseByExecutionSequence;
 
     public bool SupportsExecutionBrowsing => true;
 
@@ -31,11 +37,14 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
                 }
                 return false;
             }
-            var matches = workflow.Where(x =>
+            var filtered = workflow.Where(x =>
                 (query.ExecutableNodeId is null || StringComparer.Ordinal.Equals(x.ExecutableNodeId, query.ExecutableNodeId)) &&
                 (query.ParentActivityExecutionId is null || StringComparer.Ordinal.Equals(x.Provenance.ParentActivityExecutionId, query.ParentActivityExecutionId)) &&
-                IsDescendant(x)).OrderBy(x => x.ScheduledAt).ThenBy(x => x.ExecutionSequence)
-                .ThenBy(x => x.ActivityExecutionId, StringComparer.Ordinal).ToArray();
+                IsDescendant(x));
+            var ordered = _browseByExecutionSequence
+                ? filtered.OrderBy(x => x.ExecutionSequence)
+                : filtered.OrderBy(x => x.ScheduledAt).ThenBy(x => x.ExecutionSequence);
+            var matches = ordered.ThenBy(x => x.ActivityExecutionId, StringComparer.Ordinal).ToArray();
             var anchor = query.AnchorActivityExecutionId is null ? -1 : Array.FindIndex(matches, x => x.ActivityExecutionId == query.AnchorActivityExecutionId);
             if (query.AnchorActivityExecutionId is not null && anchor < 0)
                 return ValueTask.FromResult(new ActivityExecutionBrowsePage(matches.LongLength, 0, []));

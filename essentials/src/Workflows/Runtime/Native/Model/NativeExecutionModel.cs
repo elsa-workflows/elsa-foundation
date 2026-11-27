@@ -77,8 +77,11 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         await RunTurnAsync(turn, cancellationToken);
     }
 
-    private ValueTask RunTurnAsync(Models.ITurn turn, CancellationToken cancellationToken) =>
-        new Burst(registry, _options, new ContractTurn(turn, outbound, definitionOf: DefinitionOf), cancellationToken).RunAsync();
+    private ValueTask RunTurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
+    {
+        turn.Record(FormattableString.Invariant($"t:{turn.Now}"));
+        return new Burst(registry, _options, new ContractTurn(turn, outbound, definitionOf: DefinitionOf), cancellationToken).RunAsync();
+    }
 
     private string? DefinitionOf(string workflow) => registry.TryGet(workflow, out var found) ? found.Definition : null;
 

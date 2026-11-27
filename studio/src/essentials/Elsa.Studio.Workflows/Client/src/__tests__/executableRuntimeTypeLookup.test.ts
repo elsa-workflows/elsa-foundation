@@ -26,10 +26,14 @@ describe("executable lookup by declared runtime type", () => {
   it("resolves a node stamped with the declared runtime type to its catalog row", () => {
     const graph = buildExecutableActivityGraph(
       endpointNode("Elsa.HttpEndpoint") as never,
-      [catalogItem({ runtimeActivityType: "Elsa.HttpEndpoint" })]
+      [
+        catalogItem({ runtimeActivityType: "Elsa.HttpEndpoint", activityVersionId: "httpendpoint-v2", version: "2.0.0" }),
+        catalogItem({ runtimeActivityType: "Elsa.HttpEndpoint" })
+      ]
     );
 
     expect(graph.root.activityVersionId).toBe("httpendpoint-v1");
+    expect(graph.factsByNodeId.get("endpoint")?.catalogActivityVersionId).toBe("httpendpoint-v1");
     expect(isGhostFact(graph.factsByNodeId.get("endpoint"))).toBe(false);
   });
 

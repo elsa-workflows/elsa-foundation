@@ -30,7 +30,11 @@ public sealed class KernelRunListTests
     {
         public List<ActorQuery> Queries { get; } = [];
         public List<(BoundScope Scope, ActorRef Actor)> Gets { get; } = [];
+        public List<(BoundScope Scope, ActorRef Actor)> Tails { get; } = [];
         public Func<ActorRef, ActorView?>? PointResult { get; init; }
+        public Action? ReadTail { get; set; }
+        public JournalCancellation? Cancellation { get; set; }
+        public IReadOnlyDictionary<string, JournalEntry[]> Journal { get; init; } = new Dictionary<string, JournalEntry[]>();
 
         public ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default)
         {
@@ -48,8 +52,17 @@ public sealed class KernelRunListTests
             return ValueTask.FromResult(new Page<ActorView>(page, skip + 2 < matching.Length ? new PageToken((skip + 2).ToString()) : null, 1_000));
         }
 
-        public ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null, CancellationToken cancellationToken = default)
+        {
+            Tails.Add((scope, actor));
+            var skip = from is { } token ? int.Parse(token.Value) : 0;
+            var entries = Journal.GetValueOrDefault(actor.Id) ?? [];
+            var items = entries.Skip(skip).Take(2).ToArray();
+            var cancellation = Cancellation;
+            ReadTail?.Invoke();
+            return ValueTask.FromResult(new Page<JournalEntry>(items, items.Length == 0 ? null : new PageToken((skip + items.Length).ToString()), 1_000)
+                { JournalHeadRevision = entries.LastOrDefault()?.Revision, JournalCancellation = cancellation });
+        }
 
         public ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -61,12 +74,12 @@ public sealed class KernelRunListTests
     }
 
     private static ActorView Run(string id, ActorStatus status, string workflow, string definition, long? startedAt, long? endedAt = null,
-        bool suspended = false, string? subStatus = null)
+        bool suspended = false, string? subStatus = null, Kernel.Foundation.Contracts.History history = Kernel.Foundation.Contracts.History.Full)
     {
         var typeData = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
         {
             ["Model"] = "native", ["Workflow"] = workflow, ["Version"] = 14, ["Suspended"] = suspended, ["SubStatus"] = subStatus,
-            ["Ephemeral"] = false, ["History"] = 0, ["Definition"] = definition == workflow ? null : definition, ["StartedAt"] = startedAt
+            ["Ephemeral"] = false, ["History"] = history, ["Definition"] = definition == workflow ? null : definition, ["StartedAt"] = startedAt
         });
         return new ActorView(new ActorHeader(new ActorRef(id), Kernel.WorkflowActor.WorkflowActor.ActorType, Tenant, status, null, null, endedAt,
             typeData, new Dictionary<string, string> { ["definition"] = definition }), null, null, 1_000);
@@ -102,6 +115,7 @@ public sealed class KernelRunListTests
         services.AddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.AddSingleton(new RuntimePersistenceModeInspector([new PersistenceModeOptions()]));
         services.AddScoped<WorkflowInstanceDetailsService>();
+        services.AddScoped<ActivityExecutionInspectionService>();
         services.AddScoped<IWorkflowInstanceDetailsService, WorkflowInstanceDetailsService>();
         new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(services);
         return services.BuildServiceProvider();
@@ -130,11 +144,13 @@ public sealed class KernelRunListTests
 
         Assert.Equal((Scope, new ActorRef("run-1")), Assert.Single(reads.Gets));
         Assert.Empty(reads.Queries);
+        Assert.Empty(reads.Tails);
         Assert.Equal(("run-1", "Completed", executable.Identity.ArtifactHash, Tenant),
             (view.Instance.WorkflowExecutionId, view.Instance.Status, view.Instance.ArtifactHash, view.Instance.TenantId));
         Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1_000), view.Instance.StartedAt);
         Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1_500), view.Instance.CompletedAt);
         Assert.Empty(view.Activities);
+        Assert.True(view.ActivitiesDeferred);
         Assert.Empty(view.Incidents);
         Assert.Empty(view.Outputs);
         Assert.Null(view.ActivityNextContinuationToken);
@@ -168,6 +184,7 @@ public sealed class KernelRunListTests
         Assert.Equal(["run-1"], authorization.StructureChecks);
         Assert.Empty(authorization.ValueChecks);
         Assert.Empty(management.Checks);
+        Assert.Empty(reads.Tails);
 
         reads.Gets.Clear();
         using var other = Shell(reads, PersistenceAccessContext.Scoped(new PersistenceScope("other")));
@@ -182,6 +199,130 @@ public sealed class KernelRunListTests
     }
 
     [Fact]
+    public async Task Browse_and_point_project_one_exact_native_timeline_across_journal_pages()
+    {
+        var entries = new JournalEntry[]
+        {
+            new(1, "\"c:old:before-upgrade\""),
+            new(2, "\"t:1000\""),
+            new(2, "\"b:f1:root:\""),
+            new(2, "\"a:f2:1\""),
+            new(3, "\"t:1100\""),
+            new(3, "\"b:f2:child:with-colon:f1\""),
+            new(4, "\"t:900\""),
+            new(4, "\"b:f3:other:f1\""),
+            new(5, "\"t:1300\""),
+            new(5, "\"f:f2:child:with-colon\""),
+            new(5, "\"x:f3:other\""),
+            new(5, "\"c:f1:root\"")
+        };
+        var journal = new Dictionary<string, JournalEntry[]> { ["run-1"] = entries, ["minimal"] = entries };
+        var reads = new Reads(Run("run-1", ActorStatus.Running, "orders@1", "orders", 1_000),
+            Run("minimal", ActorStatus.Finished, "orders@1", "orders", 1_000, 1_500,
+            history: Kernel.Foundation.Contracts.History.Minimal))
+        {
+            Journal = journal
+        };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var services = scope.ServiceProvider;
+        var browse = services.GetRequiredService<IActivityExecutionBrowseSource>();
+        var run = (await browse.FindWorkflowAsync("run-1", CancellationToken.None))!;
+        // A later turn commits between the first and second physical reads; it must not enter the first browse or its cursor pages.
+        reads.ReadTail = () =>
+        {
+            journal["run-1"] = [.. entries, new(6, "\"t:1400\""), new(6, "\"b:f4:later:f1\"")];
+            reads.ReadTail = null;
+        };
+        var first = (await run.BrowseAsync(new("run-1", 1, offset: 0), null, CancellationToken.None))!;
+        Assert.Equal(5, first.JournalHeadRevision);
+        Assert.Equal(3, first.Page.TotalCount);
+        Assert.Equal("f1", Assert.Single(first.Page.Items).Execution.ActivityExecutionId);
+        var next = (await run.BrowseAsync(new("run-1", 2, offset: 1), first.JournalHeadRevision, CancellationToken.None))!;
+        Assert.Equal(3, next.Page.TotalCount);
+        Assert.Equal(["f2", "f3"], next.Page.Items.Select(item => item.Execution.ActivityExecutionId));
+        var refreshed = (await run.BrowseAsync(new("run-1", 10), null, CancellationToken.None))!;
+        Assert.Equal(6, refreshed.JournalHeadRevision);
+        Assert.Equal(4, refreshed.Page.TotalCount);
+
+        var children = (await run.BrowseAsync(new("run-1", 10, ancestorActivityExecutionId: "f1"), first.JournalHeadRevision,
+            CancellationToken.None))!.Page;
+        Assert.Equal(["f2", "f3"], children.Items.Select(item => item.Execution.ActivityExecutionId));
+        Assert.Equal(["Faulted", "Cancelled"], children.Items.Select(item => item.Execution.Status.ToString()));
+        Assert.Equal(900L, children.Items[1].Execution.StartedAt!.Value.ToUnixTimeMilliseconds());
+        Assert.All(children.Items, item => Assert.Equal("f1", item.Execution.Provenance.ParentActivityExecutionId));
+        Assert.Null(await run.BrowseAsync(new("other-run", 10), null, CancellationToken.None));
+
+        var point = services.GetRequiredService<IActivityExecutionInspectionService>();
+        reads.Tails.Clear();
+        var child = (await point.GetAsync(new("run-1", "f2"), CancellationToken.None))!;
+        Assert.Equal("child:with-colon", child.ExecutableNodeId);
+        Assert.Equal((1_000L, 1_100L, 1_300L), (child.ScheduledAt.ToUnixTimeMilliseconds(),
+            child.StartedAt!.Value.ToUnixTimeMilliseconds(), child.CompletedAt!.Value.ToUnixTimeMilliseconds()));
+        Assert.Equal(5, reads.Tails.Count);
+        Assert.Null(await point.GetAsync(new("run-1", "old"), CancellationToken.None));
+        var minimal = (await browse.FindWorkflowAsync("minimal", CancellationToken.None))!;
+        Assert.Empty((await minimal.BrowseAsync(new("minimal", 10), null, CancellationToken.None))!.Page.Items);
+        Assert.All(reads.Tails, tail => Assert.Equal((Scope, new ActorRef("run-1")), tail));
+    }
+
+    [Fact]
+    public async Task Browse_discards_a_journal_when_its_actor_is_retired_between_pages()
+    {
+        var retired = false;
+        var reads = new Reads
+        {
+            PointResult = _ => retired ? null : Views[0],
+            Journal = new Dictionary<string, JournalEntry[]> { ["run-1"] = [new(1, "\"t:1000\""), new(1, "\"b:f1:root:\"")] },
+            ReadTail = () => retired = true
+        };
+        using var shell = Shell(reads, HostTenant);
+        using var request = shell.CreateScope();
+        var browse = request.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
+        var run = (await browse.FindWorkflowAsync("run-1", CancellationToken.None))!;
+        Assert.Null(await run.BrowseAsync(new("run-1", 10), null, CancellationToken.None));
+        Assert.Equal(2, reads.Gets.Count);
+    }
+
+    [Fact]
+    public async Task A_retained_operator_cancellation_closes_only_the_running_frames_in_its_snapshot()
+    {
+        var journal = new Dictionary<string, JournalEntry[]>
+        {
+            ["run-1"] = [
+                new(1, "\"t:1000\""), new(1, "\"b:f1:root:\""), new(1, "\"b:f2:completed:f1\""), new(1, "\"c:f2:completed\""),
+                new(2, """{"Outcome":"parked"}""")]
+        };
+        var view = Run("run-1", ActorStatus.Faulted, "orders@1", "orders", 1_000);
+        var reads = new Reads { PointResult = _ => view, Journal = journal };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var browse = scope.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
+        var first = (await browse.FindWorkflowAsync("run-1", CancellationToken.None))!;
+        var before = (await first.BrowseAsync(new("run-1", 1, offset: 0), null, CancellationToken.None))!;
+        Assert.Equal(2, before.JournalHeadRevision);
+        Assert.Equal(ActivityExecutionStatus.Running, Assert.Single(before.Page.Items).Execution.Status);
+
+        journal["run-1"] = [.. journal["run-1"], new(3, """{"Outcome":"protected","Disposition":"terminated","Operation":"fixture","Cleared":1}""")];
+        view = view with { Header = view.Header with { Status = ActorStatus.Cancelled, EndedAt = 1_300 } };
+        reads.Cancellation = new JournalCancellation(3, 1_300);
+        var retained = (await browse.FindWorkflowAsync("run-1", CancellationToken.None))!;
+        var previous = (await retained.BrowseAsync(new("run-1", 1, offset: 0), before.JournalHeadRevision, CancellationToken.None))!;
+        Assert.Equal(ActivityExecutionStatus.Running, Assert.Single(previous.Page.Items).Execution.Status);
+        var current = (await retained.BrowseAsync(new("run-1", 10), null, CancellationToken.None))!;
+        Assert.Equal(3, current.JournalHeadRevision);
+        Assert.Collection(current.Page.Items, root =>
+        {
+            Assert.Equal(ActivityExecutionStatus.Cancelled, root.Execution.Status);
+            Assert.Equal(1_300L, root.Execution.CompletedAt!.Value.ToUnixTimeMilliseconds());
+        }, child =>
+        {
+            Assert.Equal(ActivityExecutionStatus.Completed, child.Execution.Status);
+            Assert.Equal(1_000L, child.Execution.CompletedAt!.Value.ToUnixTimeMilliseconds());
+        });
+    }
+
+    [Fact]
     public async Task Details_fall_back_only_to_authorized_legacy_authoring_test_runs()
     {
         var reads = new Reads(Views[0], Views[0] with { Header = Views[0].Header with { Ref = new ActorRef("schedule"), Type = "schedule" } });
@@ -192,14 +333,31 @@ public sealed class KernelRunListTests
         await legacy.SaveAsync(Legacy("old-published", Tenant, WorkflowRunKind.PublishedRun));
         await legacy.SaveAsync(Legacy("other-tenant", "other", WorkflowRunKind.TestRun));
         await legacy.SaveAsync(Legacy("schedule", Tenant, WorkflowRunKind.TestRun));
+        await ((InMemoryActivityExecutionInspectionStore)shell.GetRequiredService<IActivityExecutionInspectionStore>()).SaveAsync(
+            new ActivityExecutionInspectionProjection("legacy-activity", "test", "node", "node", "Sequence", "1",
+                ActivityExecutionStatus.Completed, null, 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
+                "first", "last", DateTimeOffset.UnixEpoch, ActivitySchedulingProvenance.Empty, [], [], [], [],
+                new Dictionary<string, string>()));
         using var scope = shell.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkflowInstanceDetailsService>();
         var preserved = await service.GetAsync(new("test"), CancellationToken.None);
         Assert.NotNull(preserved);
         Assert.Equal(("test", "TestRun"), (preserved.Instance.WorkflowExecutionId, preserved.Instance.RunKind));
+        Assert.False(preserved.ActivitiesDeferred);
+        var browse = scope.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
+        var point = scope.ServiceProvider.GetRequiredService<IActivityExecutionInspectionService>();
+        var test = (await browse.FindWorkflowAsync("test", CancellationToken.None))!;
+        var activity = Assert.Single((await test.BrowseAsync(new("test", 10), null, CancellationToken.None))!.Page.Items);
+        Assert.Equal("legacy-activity", activity.Execution.ActivityExecutionId);
+        Assert.Equal("last", (await point.GetAsync(new("test", "legacy-activity"), CancellationToken.None))!.LastCheckpointId);
         Assert.True(preserved.Permissions!.CanManage);
         foreach (var id in new[] { "old-published", "other-tenant", "schedule" })
+        {
             Assert.Null(await service.GetAsync(new(id), CancellationToken.None));
+            Assert.Null(await browse.FindWorkflowAsync(id, CancellationToken.None));
+            Assert.Null(await point.GetAsync(new(id, "legacy-activity"), CancellationToken.None));
+        }
+        Assert.Empty(reads.Tails);
         Assert.Equal(["test"], management.Checks);
 
         var authorization = new InspectionAccess(structure: false, values: true);
