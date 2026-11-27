@@ -173,7 +173,7 @@ public sealed class EfWorkflowTestScopeStore(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(readClock);
-        return ChangeInlineStartAsync(scope, WorkflowTestRunInlineState.Pending, readClock, cancellationToken);
+        return ChangeInlineStartAsync(scope, WorkflowTestRunInlineState.Pending, readClock, null, cancellationToken);
     }
 
     public ValueTask<bool> SettleInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
@@ -181,11 +181,28 @@ public sealed class EfWorkflowTestScopeStore(
     {
         if (!Enum.IsDefined(outcome) || outcome == WorkflowTestRunInlineState.Pending)
             throw new ArgumentOutOfRangeException(nameof(outcome));
-        return ChangeInlineStartAsync(scope, outcome, null, cancellationToken);
+        return ChangeInlineStartAsync(scope, outcome, null, null, cancellationToken);
     }
 
-    private ValueTask<bool> ChangeInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
-        Func<DateTimeOffset>? readClock, CancellationToken cancellationToken)
+    public ValueTask<bool> BeginHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, Func<DateTimeOffset> readClock,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(readClock);
+        if (attemptId == Guid.Empty) throw new ArgumentException("The held inline attempt requires an identity.", nameof(attemptId));
+        return ChangeInlineStartAsync(scope, WorkflowTestRunInlineState.Pending, readClock, attemptId, cancellationToken);
+    }
+
+    public ValueTask<bool> SettleHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, WorkflowTestRunInlineState? outcome,
+        CancellationToken cancellationToken = default)
+    {
+        if (attemptId == Guid.Empty) throw new ArgumentException("The held inline attempt requires an identity.", nameof(attemptId));
+        if (outcome is { } definite && (!Enum.IsDefined(definite) || definite == WorkflowTestRunInlineState.Pending))
+            throw new ArgumentOutOfRangeException(nameof(outcome));
+        return ChangeInlineStartAsync(scope, outcome, null, attemptId, cancellationToken);
+    }
+
+    private ValueTask<bool> ChangeInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState? outcome,
+        Func<DateTimeOffset>? readClock, Guid? heldAttempt, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
         var accessScope = RequireScope();
@@ -204,11 +221,15 @@ public sealed class EfWorkflowTestScopeStore(
                 if (record.InlineStart is not null || record.State != WorkflowTestScopeState.Open || scope.IsExpired(readClock()))
                     return false;
             }
-            else if (record.InlineStart != WorkflowTestRunInlineState.Pending)
-                return record.InlineStart == outcome;
+            else
+            {
+                if (outcome is null && record.InlineStart is null) return true;
+                if (record.HeldInlineAttempt != heldAttempt) return false;
+                if (record.InlineStart != WorkflowTestRunInlineState.Pending) return record.InlineStart == outcome;
+            }
 
             var revision = checked(row.Revision + 1);
-            var content = RuntimeArtifactJson.Serialize(record with { InlineStart = outcome });
+            var content = RuntimeArtifactJson.Serialize(record with { InlineStart = outcome, HeldInlineAttempt = outcome is null ? null : heldAttempt });
             var schema = RuntimeWorkflowTestScopeEfModule.SchemaVersion;
             await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             if (await exact.Where(x => x.Revision == row.Revision).ExecuteUpdateAsync(update => update

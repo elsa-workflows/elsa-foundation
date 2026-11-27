@@ -83,8 +83,11 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootEphemeralTestRunQualification => new(3, 134, 1);
     internal static StoreFormat RootPublicEventHostQualification => new(3, 135, 1);
     internal static StoreFormat RootAttachedTestRunQualification => new(3, 136, 1);
+    internal static StoreFormat RootHeldEphemeralHttpQualification => new(3, 138, 1);
     internal bool SupportsIsolatedInlineQualification =>
-        this == RootEphemeralTestRunQualification || this == RootAttachedTestRunQualification;
+        this == RootEphemeralTestRunQualification || SupportsAttachedTestRunQualification;
+    internal bool SupportsAttachedTestRunQualification =>
+        this == RootAttachedTestRunQualification || this == RootHeldEphemeralHttpQualification;
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };

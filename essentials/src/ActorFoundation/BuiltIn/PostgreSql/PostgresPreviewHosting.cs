@@ -467,7 +467,8 @@ public static partial class PostgresPreviewHosting
                 await relay.ReadyAsync(cancellationToken);
             }
             await runtime.StartAsync(host, cancellationToken);
-            inlineStarts?.Attach(store, host.NodeWorker ?? throw new InvalidOperationException("Inline starts need an owned Worker."), runtime.WakeLocal);
+            inlineStarts?.Attach(store, host.NodeWorker ?? throw new InvalidOperationException("Inline starts need an owned Worker."),
+                runtime.WakeLocal, requestEdge?.HeldEdge);
             return runtime;
         }
         catch

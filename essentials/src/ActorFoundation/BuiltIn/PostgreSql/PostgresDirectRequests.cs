@@ -60,6 +60,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
     }
 
     internal Requests Pending => edge.Pending;
+    internal HeldRootRequests HeldEdge => edge;
     internal RootAdmissionPressure? Pressure => admission.Pressure;
 
     internal void RequireEventBinding(Func<KernelDb> create)

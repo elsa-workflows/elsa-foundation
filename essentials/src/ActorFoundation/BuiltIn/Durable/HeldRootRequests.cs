@@ -217,6 +217,10 @@ internal sealed class HeldRootRequests : IReplyTransport
             admitted ? observeStatus(token) : ValueTask.FromResult<Contract.ActorStatus?>(null);
     }
 
+    internal ValueTask<Contract.Reply> HoldInlineStartAsync(Contract.BoundScope scope, string id, long deadline,
+        Func<HeldRootRequest, CancellationToken, Task<Contract.Reply?>> issue, CancellationToken token) =>
+        HoldAsync(scope, id, new(null, deadline), null, issue, _ => ValueTask.FromResult<Contract.ActorStatus?>(null), token);
+
     private async ValueTask<Contract.Reply> HoldAsync(Contract.BoundScope scope, string id, Contract.RequestOptions request,
         TimeSpan? keepFor, Func<HeldRootRequest, CancellationToken, Task<Contract.Reply?>> issue,
         Func<CancellationToken, ValueTask<Contract.ActorStatus?>> readStatus, CancellationToken stop)

@@ -590,7 +590,7 @@ internal static class ProfileCapabilityChecks
         return failures == 0 ? 0 : 1;
     }
 
-    internal enum TestRunProfile { Direct, Ephemeral, Attached }
+    internal enum TestRunProfile { Direct, Ephemeral, Attached, HeldEphemeralHttp }
 
     internal static async Task<int> RunDirectTestRunStoreAsync(bool postgres, TestRunProfile profile = TestRunProfile.Direct)
     {
@@ -611,6 +611,7 @@ internal static class ProfileCapabilityChecks
                     throw new InvalidOperationException("The profile check requires an empty PostgreSQL database.");
             await (profile switch
             {
+                TestRunProfile.HeldEphemeralHttp => PostgresPreviewHosting.InstallHeldEphemeralHttpQualificationAsync(options, token),
                 TestRunProfile.Attached => PostgresPreviewHosting.InstallAttachedTestRunQualificationAsync(options, token),
                 TestRunProfile.Ephemeral => PostgresPreviewHosting.InstallEphemeralTestRunQualificationAsync(options, token),
                 _ => PostgresPreviewHosting.InstallDirectTestRunQualificationAsync(options, token)
@@ -628,6 +629,7 @@ internal static class ProfileCapabilityChecks
                 ProtectRootStartAsync refuse = (_, _) => ValueTask.FromResult(false);
                 var privateStore = profile switch
                 {
+                    TestRunProfile.HeldEphemeralHttp => SqliteEmbeddedFoundation.ForHeldEphemeralHttpQualification(path, node, actor.Type, refuse),
                     TestRunProfile.Attached => SqliteEmbeddedFoundation.ForAttachedTestRunQualification(path, node, actor.Type, refuse),
                     TestRunProfile.Ephemeral => SqliteEmbeddedFoundation.ForEphemeralTestRunQualification(path, node, actor.Type, refuse),
                     _ => SqliteEmbeddedFoundation.ForDirectTestRunQualification(path, node, actor.Type, refuse)

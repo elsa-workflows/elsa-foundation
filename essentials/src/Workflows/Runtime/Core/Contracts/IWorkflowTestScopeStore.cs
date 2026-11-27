@@ -62,6 +62,14 @@ public interface IWorkflowTestScopeAdmissionStore
     /// <summary>Records a definite no-actor outcome for a previously reserved inline start.</summary>
     ValueTask<bool> SettleInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
         CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+
+    /// <summary>Reserves a held inline start with an identity that fences retries of proven unqueued attempts.</summary>
+    ValueTask<bool> BeginHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, Func<DateTimeOffset> readClock,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+
+    /// <summary>Settles the exact held attempt, or clears its claim after proving it never entered the owner.</summary>
+    ValueTask<bool> SettleHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, WorkflowTestRunInlineState? outcome,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
 }
 
 /// <summary>
