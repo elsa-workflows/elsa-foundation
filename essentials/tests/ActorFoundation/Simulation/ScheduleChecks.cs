@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using static Kernel.Native.Wf;
@@ -225,6 +226,7 @@ internal static class ScheduleChecks
         check((await Runs("flow-tick")).Finished == flowBefore, $"without its run registered, an occurrence starts nothing ({flowBefore}, {(await Runs("flow-tick")).Finished})");
         check((await Runs("tick")).Running == 0 && (await Runs("flow-tick")).Running == 0 && (await Runs("cron-tick")).Running == 0 && (await Runs("deep-start")).Running == 0, "every scheduled run finished");
         await ManagedOccurrences(check);
+        await RecoverManagedOffer(check);
     }
 
     private static async Task ManagedOccurrences(Action<bool, string> check)
@@ -359,6 +361,63 @@ internal static class ScheduleChecks
         }
     }
 
+    private static async Task RecoverManagedOffer(Action<bool, string> check)
+    {
+        const long initial = 1_703_010_000_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = ContractScopes.Bind("parked-schedule");
+        var acceptor = new ParkedAcceptor();
+        var actor = new ObservedSchedule(new ScheduleActor(null, acceptor))
+        {
+            ObserveJob = job => acceptor.Deadlines.Enqueue(job.Deadline)
+        };
+        var edge = new InMemoryIngress(store, new Requests("schedule-park"), "schedule-park", (_, kind) => kind == Contract.Kinds.Recover);
+        var reads = new ActorList(store, 7);
+        Worker NewWorker(string node) => new(node, 0, store, new ActorAdapter(store, actor),
+            new WorkerOptions { Monotonic = () => now - initial, MaxAttempts = 2 });
+        var first = NewWorker("before-schedule-Park");
+        await using var original = (await new DurableHost([first]).ActivateAsync(0))!;
+        var header = new ScheduleHeader(new(RecurringSchedule.Interval, "PT1S"), "unused", 1) { Authority = "pinned" };
+        var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, JsonSerializer.Serialize(header))),
+            "schedule-birth", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(original);
+        now = actor.Plans.Last().Timers.Single().Due;
+        await Pump(original);
+        var offer = acceptor.Offered.Single();
+        var job = actor.Plans.Last().Jobs.Single();
+
+        await edge.SendAsync(scope, target, "schedule-fault", ObservedSchedule.ParkKind);
+        await Pump(original);
+        var parked = await reads.GetAsync(scope, target.Actor);
+        check(parked is { Park: not null, Selection: not null } && acceptor.Offered.Count == 1,
+            "the schedule Parks after committing its offer while the callback is in flight");
+        if (parked is not { Park: not null, Selection: { } selected }) return;
+        await original.DisposeAsync();
+
+        var next = NewWorker("after-schedule-Park");
+        await using var replacement = (await new DurableHost([next]).ActivateAsync(0))!;
+        await Pump(replacement);
+        var admitted = await edge.SendAsync(scope, target, "recover-schedule", Contract.Kinds.Recover,
+            JsonSerializer.Serialize(new Contract.OperatorCommand(selected)));
+        await Pump(replacement);
+        check(admitted.Outcome == Contract.AdmissionOutcome.Accepted &&
+              (await reads.GetAsync(scope, target.Actor)) is { Header.Status: Contract.ActorStatus.Running, Park: null } &&
+              acceptor.Offered.SequenceEqual([offer, offer]) && acceptor.Deadlines.SequenceEqual([job.Deadline, job.Deadline]),
+            "Recover restarts the exact parked offer with the original timed-job deadline on the replacement owner");
+
+        static async Task Pump(IScopeActivation owner)
+        {
+            for (var i = 0; i < 12; i++)
+            {
+                await owner.WokenAsync(null);
+                await owner.RunAsync();
+                await Task.Yield();
+            }
+        }
+    }
+
     private sealed record TestedJob(Contract.ActorRef Actor, string Key, string? Arguments, long? Deadline) : Contract.IJob
     {
         public string AttemptId => "fixture-attempt";
@@ -385,20 +444,39 @@ internal static class ScheduleChecks
         }
     }
 
+    private sealed class ParkedAcceptor : IScheduleOccurrenceAcceptor
+    {
+        private readonly TaskCompletionSource<bool> _pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ConcurrentQueue<ScheduleOccurrence> Offered { get; } = new();
+        public ConcurrentQueue<long?> Deadlines { get; } = new();
+
+        public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken)
+        {
+            Offered.Enqueue(occurrence);
+            return new(_pending.Task.WaitAsync(cancellationToken));
+        }
+    }
+
     private sealed class ObservedSchedule(ScheduleActor actor) : Contract.IActorType
     {
+        internal const string ParkKind = "fixture.schedule.park";
         public List<Contract.RestorePlan> Plans { get; } = [];
+        public Action<Contract.IJob>? ObserveJob { get; init; }
         public string Type => actor.Type;
         public bool Withholds(Contract.ActorHeader header) => actor.Withholds(header);
 
         public async ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (turn.Inbox.Any(message => message.Kind == ParkKind)) throw new InvalidOperationException("park the managed schedule");
             await actor.TurnAsync(turn, cancellationToken);
             if (turn.State is { } state) Plans.Add(actor.RestoreWaits(turn.Header, state));
         }
 
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
-            actor.ExecuteJobAsync(job, cancellationToken);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            ObserveJob?.Invoke(job);
+            return actor.ExecuteJobAsync(job, cancellationToken);
+        }
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => actor.RestoreWaits(header, state);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => actor.TerminalGrowth(header, state);
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => actor.ProtectsDeletion(header, state, now);
