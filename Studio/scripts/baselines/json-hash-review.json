@@ -1,9 +1,9 @@
 {
   "formatVersion": 1,
-  "sourceSignature": "7fe0ac0daa602e8596223d6d3f763bf2f9b2b8507acc2e2ea12015b4a0debc94",
-  "rootSignature": "8a84053c1d76f4d8413cde4a5b175c47a31ad67408d6a7b03b3d7ba04c5c27f1",
-  "authoritySignature": "ac3db4cb26151340fe26cbfeb2e9ab70ab6daa3c77ddb3443d0ff849cde5f4e4",
-  "moduleSignature": "8beaf0303b954b056ba0abea2467a29d1fe98af150bceb05617d111abdfd4466",
+  "sourceSignature": "8f6a4f83cebfebe64d60659ab3b01ceb6b76844dd0a4bf6bdafa8ee500485837",
+  "rootSignature": "b6da7687d40aea1cb0dfcd0e0e38f66d7bfb1812bf207483ed03f465617b08c2",
+  "authoritySignature": "e78bf28b15cbee34da81266ca03f3472811edd0dbc79c3324b064718a39c12be",
+  "moduleSignature": "a6081f3d7d8764ff15344d761af95f8e7f519f49f1bf39337ff64f959b6c509c",
   "owners": [
     {
       "identity": "extensions/Agent/studio/Elsa.Studio.Agent/Client/src/playgroundApi.ts::newIdempotencyKey",
@@ -1209,9 +1209,29 @@
           "occurrence": 1
         }
       ]
+    },
+    {
+      "identity": "extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs.tsx::addToDashboard",
+      "classification": "random_identity",
+      "reason": "Add-to-dashboard tile id and save idempotency UUID; no question JSON preimage.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
     }
   ],
-  "rootCount": 824,
-  "sourceCount": 1522,
-  "goldenSignature": "0d1e48d482a7b3073ed4ee00d907d497d3abd2191f76bab9a529a0d89def56dc"
+  "rootCount": 831,
+  "sourceCount": 1532,
+  "goldenSignature": "8d4691571071442f51ce1df61e1a31d64067536aacb9498f2ce28665c33f5f1d"
 }
