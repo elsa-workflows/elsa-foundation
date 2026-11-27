@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -48,6 +49,32 @@ public sealed class ReusableActivityImportPublishGuidanceTests
     }
 
     [Fact]
+    public async Task A_schema_refused_draft_write_reports_the_refusal_instead_of_failing_unexpectedly()
+    {
+        // #5972: the phase writes the draft before the publisher runs; a schema refusal there says why too, however deep
+        // the store wrapped it, and the publisher is not called.
+        var refusal = new StoreRefusal("activity-drafts", "2", "3");
+        var publisher = new CountingPublisher();
+        var stores = new EmptyStores { DraftWriteFailure = new InvalidOperationException("Saving failed.", refusal) };
+        var phase = new ReusableActivityImportPublishPhase(stores, stores, stores, stores, publisher);
+
+        var state = Assert.Single(await phase.PublishAsync([Activity("inner")], "receipt-1"));
+
+        Assert.Equal(ReusableActivityPublicationStatus.Refused, state.Status);
+        Assert.Equal("schema-write-refused", state.ErrorCode);
+        var diagnostic = Assert.Single(state.Diagnostics!);
+        Assert.Equal(("schema-write-refused", ActivityDiagnosticSeverity.Error), (diagnostic.Code, diagnostic.Severity));
+        Assert.Equal(refusal.Message, diagnostic.Message);
+        Assert.Equal(("ActivityDefinitionVersion", "inner-version"), (diagnostic.Subject.Kind, diagnostic.Subject.Id));
+        Assert.Equal(
+            ["family=activity-drafts", "requiredVersion=3", "writeVersion=2"],
+            diagnostic.Metadata.Select(entry => $"{entry.Key}={entry.Value}").Order(StringComparer.Ordinal));
+        Assert.Contains("'activity-drafts'", diagnostic.Remediation, StringComparison.Ordinal);
+        Assert.Contains("new idempotency key", diagnostic.Remediation, StringComparison.Ordinal);
+        Assert.Equal(0, publisher.Calls);
+    }
+
+    [Fact]
     public async Task A_version_below_the_minimum_gets_import_advice_instead_of_choosing_a_version()
     {
         var bump = new ActivityDiagnostic(
@@ -89,6 +116,22 @@ public sealed class ReusableActivityImportPublishGuidanceTests
             throw new InvalidOperationException(message);
     }
 
+    private sealed class CountingPublisher : IReusableActivityImportPublisher
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask<ReusableActivityImportPublishOutcome> PublishAsync(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult(ReusableActivityImportPublishOutcome.Applied);
+        }
+    }
+
+    /// <summary>A store-level schema write refusal, as a persistence provider raises it.</summary>
+    private sealed class StoreRefusal(string family, string writeVersion, string requiredVersion)
+        : SchemaWriteRefusedException(family, writeVersion, requiredVersion,
+            $"Writing to schema family '{family}' needs version '{requiredVersion}'; this host may write only '{writeVersion}'.");
+
     private sealed class EmptyStores :
         IActivityDefinitionVersionPublicationStore, IActivityDefinitionAuthoringStore, IActivityDefinitionDraftStore, ICreateActivityDraftCommand
     {
@@ -110,6 +153,9 @@ public sealed class ReusableActivityImportPublishGuidanceTests
         Task<IReadOnlyList<ActivityDefinitionDraft>> IActivityDefinitionDraftStore.ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ActivityDefinitionDraft>>([]);
 
-        public Task ExecuteAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Exception? DraftWriteFailure { get; init; }
+
+        public Task ExecuteAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default) =>
+            DraftWriteFailure is null ? Task.CompletedTask : Task.FromException(DraftWriteFailure);
     }
 }

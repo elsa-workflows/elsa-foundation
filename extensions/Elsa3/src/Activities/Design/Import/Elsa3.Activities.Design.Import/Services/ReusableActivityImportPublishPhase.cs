@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Microsoft.Extensions.Logging;
@@ -110,6 +111,13 @@ public sealed class ReusableActivityImportPublishPhase(
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (Exception exception) when (ReusableActivityImportRefusals.Find<SchemaWriteRefusedException>(exception) is { } refusal)
+        {
+            // The draft write, before the publisher runs, can be refused for its schema family too (#5972); the state says
+            // why, as the publisher's refused outcome does, not "failed unexpectedly".
+            return new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.Refused, refusal.Code,
+                [ReusableActivityImportRefusals.SchemaWriteRefused(refusal, Subject(version))]);
         }
         catch (Exception exception)
         {

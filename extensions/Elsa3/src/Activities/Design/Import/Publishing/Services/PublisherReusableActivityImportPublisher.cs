@@ -6,6 +6,7 @@ using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
+using Elsa3.Activities.Design.Import.Services;
 
 namespace Elsa3.Activities.Design.Import.Publishing.Services;
 
@@ -53,65 +54,21 @@ internal sealed class PublisherReusableActivityImportPublisher(
         {
             return ReusableActivityImportPublishOutcome.Refused(Specific(rejection.ErrorCode, rejection.Diagnostics), rejection.Diagnostics);
         }
-        catch (Exception exception) when (Find<ActivityDataSelectionRejectedException>(exception) is { } rejection)
+        catch (Exception exception) when (ReusableActivityImportRefusals.Find<ActivityDataSelectionRejectedException>(exception) is { } rejection)
         {
             // The graph provider refused the imported manifest with located findings (#5850). They are what Studio's
             // publish endpoint reports for the same refusal, so the import reports them too, not "failed unexpectedly".
             var diagnostics = rejection.Findings.Select(finding => FromFinding(finding, rejection.ProviderKey, request)).ToArray();
             return ReusableActivityImportPublishOutcome.Refused(FirstErrorCode(diagnostics), diagnostics);
         }
-        catch (Exception exception) when (Find<SchemaWriteRefusedException>(exception) is { } refusal)
+        catch (Exception exception) when (ReusableActivityImportRefusals.Find<SchemaWriteRefusedException>(exception) is { } refusal)
         {
             // The store refused a write to a schema family: the value needs a version this host may not write yet, or the
             // family is finalized at one this host cannot read; a dormancy refusal is one too (#5972). Studio's publish
             // endpoint answers it with its code, family and both versions; so does the import, not "failed unexpectedly".
-            return ReusableActivityImportPublishOutcome.Refused(refusal.Code, [FromSchemaRefusal(refusal, request)]);
+            return ReusableActivityImportPublishOutcome.Refused(refusal.Code,
+                [ReusableActivityImportRefusals.SchemaWriteRefused(refusal, new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision))]);
         }
-    }
-
-    /// <summary>
-    /// The exception itself, or the one a compiler or store wrapped it in, following every exception an
-    /// <see cref="AggregateException"/> holds, not only its first.
-    /// </summary>
-    private static T? Find<T>(Exception exception) where T : Exception => exception switch
-    {
-        T match => match,
-        AggregateException aggregate => aggregate.InnerExceptions.Select(Find<T>).FirstOrDefault(found => found is not null),
-        { InnerException: { } inner } => Find<T>(inner),
-        _ => null
-    };
-
-    /// <summary>
-    /// The refusal as one diagnostic carrying what <c>SchemaWriteRefusalProblem</c> gives every API: the code, the family and
-    /// both versions, and for a dormancy refusal its feature and reason. Its message names the family and versions and,
-    /// since the cause differs by refusal, what this host needs before it can write the family.
-    /// </summary>
-    private static ActivityDiagnostic FromSchemaRefusal(SchemaWriteRefusedException refusal, ReusableActivityImportPublishRequest request)
-    {
-        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["family"] = refusal.Family,
-            ["writeVersion"] = refusal.WriteVersion,
-            ["requiredVersion"] = refusal.RequiredVersion
-        };
-        if (refusal is SchemaDormancyRefusedException dormancy)
-        {
-            if (dormancy.FeatureId is { } feature)
-                metadata["feature"] = feature;
-            metadata["reason"] = dormancy.Reason;
-        }
-
-        return new(
-            refusal.Code,
-            ActivityDiagnosticSeverity.Error,
-            refusal.Message,
-            new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision),
-            // The refused write may be the publication's receipt, written after the version itself committed, so this does not
-            // claim that nothing was published.
-            Remediation: $"This host refused to write schema family '{refusal.Family}'; the message says why and what the host " +
-                         "needs. Once that is resolved, upload the same export again and apply it under a new idempotency key: " +
-                         "a version that did publish is then reported as already published, and only the others publish.",
-            Metadata: metadata);
     }
 
     private static ActivityDiagnostic FromFinding(ValidationError finding, string? providerKey, ReusableActivityImportPublishRequest request)
