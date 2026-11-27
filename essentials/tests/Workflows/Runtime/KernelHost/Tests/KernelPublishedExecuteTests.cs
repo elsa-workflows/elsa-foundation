@@ -3,8 +3,11 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using CShells;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
@@ -89,6 +92,19 @@ public sealed class KernelPublishedExecuteTests
 
         var waiting = ExecutableOf("execute-waiting", "waiting", Sequence("sequence",
             Node("delay", Types.Delay, [Literal("Duration", "00:00:45", "TimeSpan")])));
+        const string nativeRoute = "recoverable-native";
+        const string flowchartRoute = "recoverable-flowchart";
+        var recoverable = ExecutableOf("execute-recoverable", "recoverable", Sequence("sequence", RecoveryNodes(nativeRoute)));
+        var recoverableFlowchart = ExecutableOf("execute-recoverable-flow", "recoverable-flow", Node("flow", Types.Flowchart,
+            structure: Structure("elsa.flowchart.structure", new
+            {
+                startNodeId = "wait",
+                connections = new[]
+                {
+                    new { source = new { nodeId = "wait", port = "Done" }, target = new { nodeId = "output" } },
+                    new { source = new { nodeId = "output", port = "Done" }, target = new { nodeId = "reply" } }
+                }
+            }), slots: [Slot("Flowchart.Activities", RecoveryNodes(flowchartRoute))]));
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
@@ -100,8 +116,13 @@ public sealed class KernelPublishedExecuteTests
             { "KernelExecuteFixture" });
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
-        builder.Services.AddSingleton<IPermissionResourceHandler, DeleteResourcePolicy>();
+        builder.Services.AddSingleton<IPermissionResourceHandler, FixtureRunPolicy>();
         builder.Services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
+        builder.Services.AddSingleton(new ShellSettings(new ShellId("default")));
+        var expressions = new FixtureExpressions();
+        builder.Services.AddSingleton<IPortableExpressionEvaluator>(expressions);
+        builder.Services.AddSingleton(new WorkflowHttpEndpointSettings("/fixture/workflows", TimeSpan.FromSeconds(3), 4096,
+            (context, _, _) => { context.Response.StatusCode = 504; return ValueTask.CompletedTask; }));
         builder.Services.AddWorkflowRuntime();
         builder.Services.AddRuntimeEntityFrameworkCore(new()
         {
@@ -115,20 +136,24 @@ public sealed class KernelPublishedExecuteTests
             (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
         var api = new WorkflowsRuntimeApiFeature();
         api.ConfigureServices(builder.Services);
-        new WorkflowsRuntimeKernelHostingFeature
+        var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
         {
             Provider = provider,
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
-        }.ConfigureServices(builder.Services);
+        };
+        kernelHosting.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
-        new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(builder.Services);
+        var kernelApi = new WorkflowsRuntimeKernelApiFeature();
+        kernelApi.PostConfigureServices(builder.Services);
 
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
         WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
+        kernelApi.MapEndpoints(app, app.Environment);
+        kernelHosting.MapEndpoints(app, app.Environment);
         var scopes = app.Services.GetRequiredService<IServiceScopeFactory>();
         await using var publication = await scopes.CreateAsyncScopeAsync(Scope);
         var stores = publication.ServiceProvider;
@@ -137,10 +162,14 @@ public sealed class KernelPublishedExecuteTests
         await materials.SaveAsync(canonical, token);
         await materials.SaveAsync(flowchart, token);
         await materials.SaveAsync(waiting, token);
+        await materials.SaveAsync(recoverable, token);
+        await materials.SaveAsync(recoverableFlowchart, token);
         await PublishAsync(alias, "blue");
         await PublishAsync(sibling, "default");
         await PublishAsync(flowchart, "default");
         await PublishAsync(waiting, "default");
+        await PublishAsync(recoverable, "default");
+        await PublishAsync(recoverableFlowchart, "default");
         var shell = app.Services.GetRequiredService<KernelShellRuntime>();
         await shell.StartAsync(token);
         try
@@ -214,6 +243,101 @@ public sealed class KernelPublishedExecuteTests
             Assert.Equal(HttpStatusCode.NotFound, deniedPurge.StatusCode);
             Assert.Equal(Contract.ActorStatus.Cancelled, (await reads.GetAsync(bound, new(reauthorized), token))?.Header.Status);
             await VerifyDeletedAsync(reauthorized);
+            var nativeParkSelection = await VerifyRecoveryAsync(recoverable, nativeRoute);
+            await VerifyRecoveryAsync(recoverableFlowchart, flowchartRoute, nativeParkSelection);
+
+            async Task<string> VerifyRecoveryAsync(WorkflowExecutable executable, string path, string? otherSelection = null)
+            {
+                expressions.IsAvailable = false;
+                using var start = await ExecuteAsync(executable.Identity.ArtifactId, new { });
+                Assert.Equal(HttpStatusCode.OK, start.StatusCode);
+                var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await start.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
+                var actor = new Contract.ActorRef(receipt.WorkflowExecutionId);
+                while ((await reads.TailAsync(bound, actor, cancellationToken: token)).JournalHeadRevision is not > 0)
+                    await Task.Delay(40, token);
+                var waitRoute = "/fixture/workflows/" + path;
+                using var first = await http.PostAsync(waitRoute, null, token);
+                var route = $"/runtime/workflows/instances/{actor.Id}/recovery";
+
+                using var forbidden = await RecoveryAsync(HttpMethod.Get, manage: false);
+                Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+                using var hidden = await RecoveryAsync(HttpMethod.Get, tenant: "another-tenant");
+                Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+                using var parked = await RecoveryAsync(HttpMethod.Get);
+                Assert.Equal(HttpStatusCode.OK, parked.StatusCode);
+                var status = await parked.Content.ReadFromJsonAsync<JsonElement>(token);
+                Assert.True(status.GetProperty("status").GetString() == "Available",
+                    $"Recovery status {status}; workflow HTTP {(int)first.StatusCode}: {await first.Content.ReadAsStringAsync(token)}");
+                var selected = Assert.IsType<string>(status.GetProperty("token").GetString());
+                Assert.NotEmpty(selected);
+                using var denied = await RecoveryAsync(HttpMethod.Post, selection: selected, subject: "deny-park-recover");
+                Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+                using var stale = await RecoveryAsync(HttpMethod.Post, selection: otherSelection ?? "stale");
+                Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+                Assert.NotNull((await reads.GetAsync(bound, actor, token))?.Park);
+
+                if (directory is not null && otherSelection is null)
+                {
+                    var pathToFoundation = Path.Combine(directory, "foundation.db");
+                    var ingress = await Kernel.Foundation.Sqlite.SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(pathToFoundation,
+                        Kernel.WorkflowActor.WorkflowActor.ActorType,
+                        (scope, target, kind) => scope.Tenant == bound.Tenant && target == actor && kind == Contract.Kinds.Recover,
+                        cancellationToken: token);
+                    await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+                        { DataSource = pathToFoundation, Pooling = false }.ToString());
+                    await connection.OpenAsync(token);
+                    await using var competingWriter = connection.BeginTransaction(deferred: false);
+                    var refused = await ingress.SendAsync(bound, new Contract.Target.Ref(actor), "fixture-writer-held", Contract.Kinds.Recover,
+                        JsonSerializer.Serialize(new Contract.OperatorCommand(selected, ExpectedTarget: actor)), cancellationToken: token);
+                    Assert.Equal(Contract.AdmissionOutcome.Refused, refused.Outcome);
+                    Assert.Equal(Contract.RefusalReason.NodeBusy, refused.Reason);
+                    Assert.Equal(TimeSpan.FromSeconds(1), refused.RetryAfter);
+                }
+
+                using var accepted = await RecoveryAsync(HttpMethod.Post, selection: selected);
+                Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+                while (await reads.GetAsync(bound, actor, token) is not { Park: null }) await Task.Delay(40, token);
+                using var noPark = await RecoveryAsync(HttpMethod.Get);
+                Assert.Equal("NotParked", (await noPark.Content.ReadFromJsonAsync<JsonElement>(token)).GetProperty("status").GetString());
+                using var retiredSelection = await RecoveryAsync(HttpMethod.Post, selection: selected);
+                Assert.Equal(HttpStatusCode.Conflict, retiredSelection.StatusCode);
+
+                using var repark = await http.PostAsync(waitRoute, null, token);
+                using var parkedAgain = await RecoveryAsync(HttpMethod.Get);
+                Assert.Equal(HttpStatusCode.OK, parkedAgain.StatusCode);
+                var newPark = await parkedAgain.Content.ReadFromJsonAsync<JsonElement>(token);
+                Assert.Equal("Available", newPark.GetProperty("status").GetString());
+                var freshSelection = Assert.IsType<string>(newPark.GetProperty("token").GetString());
+                using var previousPark = await RecoveryAsync(HttpMethod.Post, selection: selected);
+                Assert.Equal(HttpStatusCode.Conflict, previousPark.StatusCode);
+                Assert.NotNull((await reads.GetAsync(bound, actor, token))?.Park);
+                expressions.IsAvailable = true;
+                using var acceptedAgain = await RecoveryAsync(HttpMethod.Post, selection: freshSelection);
+                Assert.Equal(HttpStatusCode.Accepted, acceptedAgain.StatusCode);
+                while (await reads.GetAsync(bound, actor, token) is not { Park: null }) await Task.Delay(40, token);
+
+                using var second = await http.PostAsync(waitRoute, null, token);
+                Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+                Assert.Equal("recovered", await second.Content.ReadAsStringAsync(token));
+                var ended = Assert.IsType<Contract.ActorView>(await reads.GetAsync(bound, actor, token));
+                Assert.Equal(Contract.ActorStatus.Finished, ended.Header.Status);
+                var output = await Assert.IsAssignableFrom<Contract.IActorTerminalOutputReads>(reads)
+                    .ReadTerminalOutputAsync(bound, actor, Assert.IsType<long>(ended.Header.EndedAt), includeValues: true, cancellationToken: token);
+                using var values = JsonDocument.Parse(Assert.IsType<byte[]>(output?.Values));
+                Assert.Equal("recovered", values.RootElement.GetProperty("result").GetString());
+                return selected;
+
+                async Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null,
+                    string subject = "accepted")
+                {
+                    using var request = new HttpRequestMessage(method, route);
+                    if (method == HttpMethod.Post) request.Content = JsonContent.Create(new { token = selection });
+                    request.Headers.Add("X-Fixture-Subject", subject);
+                    if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
+                    if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
+                    return await http.SendAsync(request, token);
+                }
+            }
 
             async Task<string> StartWaitingAsync()
             {
@@ -306,6 +430,23 @@ public sealed class KernelPublishedExecuteTests
         }
     }
 
+    private static ExecutableNode[] RecoveryNodes(string path) =>
+    [
+        Node("wait", Types.HttpEndpoint,
+            [Literal("Path", path, "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", false, "Boolean")]),
+        SetOutput("output", "result", Expression("value", "JavaScript", "'recovered'", "String")),
+        Node("reply", Types.WriteHttpResponse, [Literal("Body", "recovered", "String")])
+    ];
+
+    private sealed class FixtureExpressions : IPortableExpressionEvaluator
+    {
+        public volatile bool IsAvailable;
+
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) => IsAvailable
+            ? ValueTask.FromResult(JsonSerializer.SerializeToElement("recovered"))
+            : throw new Kernel.Native.NativeExpressionsUnavailableException("The fixture evaluator is unavailable.");
+    }
+
     private static WorkflowExecutable PublishedAs(WorkflowExecutable canonical, string definition, string version) =>
         new(canonical.Identity with { DefinitionId = definition, DefinitionVersionId = definition + "-v" + version, ArtifactVersion = version },
             canonical.RootActivity, canonical.ResumeTargets, canonical.CreatedAt, canonical.CompatibilityMetadata,
@@ -330,12 +471,13 @@ public sealed class KernelPublishedExecuteTests
         }
     }
 
-    private sealed class DeleteResourcePolicy : IPermissionResourceHandler
+    private sealed class FixtureRunPolicy : IPermissionResourceHandler
     {
         public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
         {
-            var deny = context.Resource is WorkflowExecutionState { Status: WorkflowExecutionStatus.Cancelled } &&
-                context.Principal.FindFirstValue(IdentityClaimTypes.UserId) == "deny-terminal-purge";
+            var deny = (context.Resource, context.Principal.FindFirstValue(IdentityClaimTypes.UserId)) is
+                (WorkflowExecutionState { Status: WorkflowExecutionStatus.Cancelled }, "deny-terminal-purge") or
+                (WorkflowExecutionState { Status: WorkflowExecutionStatus.Faulted }, "deny-park-recover");
             return ValueTask.FromResult<PermissionEvaluationResult?>(deny ? PermissionEvaluationResult.Denied() : null);
         }
     }

@@ -131,6 +131,11 @@ public static partial class SqliteEmbeddedHosting
         {
             try { return await SendCoreAsync(scope, target, id, kind, payload, options, cancellationToken); }
             catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+            catch (SqliteException error) when (kind == Contract.Kinds.Recover && error.SqliteErrorCode is 5 or 6)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1));
+            }
         }
 
         private async ValueTask<Contract.Admission> SendCoreAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
