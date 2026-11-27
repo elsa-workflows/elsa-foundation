@@ -9,6 +9,14 @@ export function supportsWorkflowHistory(context: StudioEndpointContext) {
   return hasCapabilityLink(context, capabilityIds.runtime, "workflow-history-page");
 }
 
+export async function supportsWorkflowHistoryStream(context: StudioEndpointContext) {
+  return !!context.http.requestResponse && await hasCapabilityLink(context, capabilityIds.runtime, "workflow-history-live");
+}
+
+class RuntimeHistoryStreamError extends Error {
+  constructor(readonly status: number) { super(`The committed history stream returned ${status}.`); }
+}
+
 function queryString(request: RuntimeHistoryRequest | RuntimeHistoryBookmarkRequest) {
   const parameters = new URLSearchParams({ limit: String(request.limit ?? 100) });
   for (const [key, value] of Object.entries(request)) {
@@ -28,6 +36,46 @@ export async function getWorkflowHistoryPage(context: StudioEndpointContext, wor
   request: RuntimeHistoryRequest = {}, signal?: AbortSignal): Promise<RuntimeHistoryPage> {
   const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-page", { workflowExecutionId });
   const page = await context.http.getJson<RuntimeHistoryPage>(`${path}?${queryString(request)}`, { signal });
+  return validateHistoryPage(page, workflowExecutionId, request);
+}
+
+export async function* getWorkflowHistoryStream(context: StudioEndpointContext, workflowExecutionId: string,
+  request: RuntimeHistoryRequest, signal: AbortSignal): AsyncGenerator<RuntimeHistoryPage> {
+  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-live", { workflowExecutionId });
+  const response = await context.http.requestResponse!(`${path}?${queryString(request)}`, {
+    headers: { Accept: "application/x-ndjson" }, cache: "no-store", signal
+  });
+  if (!response.ok) throw new RuntimeHistoryStreamError(response.status);
+  if (response.headers.get("content-type")?.split(";")[0] !== "application/x-ndjson" || !response.body)
+    throw new RuntimeHistoryIdentityError("The committed history stream has an unexpected response type.");
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += chunk.value;
+      for (let newline = buffer.indexOf("\n"); newline >= 0; newline = buffer.indexOf("\n")) {
+        signal.throwIfAborted();
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        let frame: { page?: RuntimeHistoryPage; status?: number };
+        try { frame = JSON.parse(line); }
+        catch { throw new RuntimeHistoryIdentityError("A committed history frame could not be read."); }
+        if (frame?.status) throw new RuntimeHistoryStreamError(frame.status);
+        if (!frame?.page) throw new RuntimeHistoryIdentityError("A committed history frame has no page.");
+        yield validateHistoryPage(frame.page, workflowExecutionId, request);
+      }
+    }
+    if (buffer.length) throw new Error("The committed history stream ended partway through a page.");
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+function validateHistoryPage(page: RuntimeHistoryPage, workflowExecutionId: string, request: RuntimeHistoryRequest) {
   validateHistoryCoverage(page.coverage);
   let previous = 0;
   for (const event of page.items) {

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../../api/capabilities";
-import { getWorkflowHistoryPage, RuntimeHistoryIdentityError, supportsWorkflowHistory } from "../../api/runtimeHistory";
+import { getWorkflowHistoryPage, getWorkflowHistoryStream, RuntimeHistoryIdentityError, supportsWorkflowHistory,
+  supportsWorkflowHistoryStream } from "../../api/runtimeHistory";
 import type { RuntimeHistoryEvent, RuntimeHistoryPage, RuntimeHistoryRequest } from "../../runtimeHistoryTypes";
 import { runtimeValueContextId } from "../RuntimeValueEvidence";
 
@@ -110,11 +111,7 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
       const controller = new AbortController(); active.current = controller;
       const current = () => owns() && active.current === controller && !controller.signal.aborted;
       publish({ key, value: previous, loading: true, status: previous ? previousState?.status === "stale" ? "stale" : "ready" : "loading", error: previousState?.error ?? "" });
-      try {
-        if (!previous && !await supportsWorkflowHistory(context)) throw new ApiCapabilityUnavailableError("elsa.api.runtime", "workflow-history-page");
-        const page = await getWorkflowHistoryPage(context, workflowExecutionId,
-          { ...requestRef.current, limit: requestRef.current.limit ?? 100, continuationToken: cursor }, controller.signal);
-        if (!current()) return;
+      const receive = (page: RuntimeHistoryPage, previous: HistoryWindow | null, cursor: string | null | undefined) => {
         if (page.coverage.state === "invalid") throw new RuntimeHistoryIdentityError("History integrity could not be established. Refresh after repair.");
         if (page.nextContinuationToken && page.nextContinuationToken === cursor) throw new RuntimeHistoryIdentityError("History continuation did not advance.");
         let value: HistoryWindow;
@@ -136,6 +133,24 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
             liveNext: page.nextContinuationToken ?? null, catchUp: page.catchUpToken ?? previous.catchUp };
         }
         publish({ key, value, loading: false, status: "ready", error: "" });
+        return value;
+      };
+      try {
+        if (!previous && !await supportsWorkflowHistory(context)) throw new ApiCapabilityUnavailableError("elsa.api.runtime", "workflow-history-page");
+        const query = { ...requestRef.current, limit: requestRef.current.limit ?? 100, continuationToken: cursor };
+        if (kind === "poll" && previous?.page.coverage.policyId === "kernel-activity-journal-v1" && await supportsWorkflowHistoryStream(context)) {
+          let window = previous;
+          for await (const page of getWorkflowHistoryStream(context, workflowExecutionId, query, controller.signal)) {
+            if (!current()) return;
+            window = receive(page, window, window.liveNext ?? window.catchUp);
+            failures = 0;
+            if (window.pending.length + query.limit > 500) return;
+          }
+        } else {
+          const page = await getWorkflowHistoryPage(context, workflowExecutionId, query, controller.signal);
+          if (!current()) return;
+          receive(page, previous, cursor);
+        }
         failures = 0;
       } catch (error) {
         if (!current()) return;
@@ -143,8 +158,9 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
         const unsupported = status === 501 || error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError;
         const forbidden = status === 401 || status === 403;
         const unsafe = error instanceof RuntimeHistoryIdentityError || status === 400 || status === 404 || status === 409;
-        publish({ key, value: forbidden || unsafe || unsupported ? null : previous, loading: false,
-          status: unsupported ? "unsupported" : forbidden ? "denied" : unsafe ? "unavailable" : previous ? "stale" : "failed",
+        const retained = currentState.current?.key === key ? currentState.current.value : previous;
+        publish({ key, value: forbidden || unsafe || unsupported ? null : retained, loading: false,
+          status: unsupported ? "unsupported" : forbidden ? "denied" : unsafe ? "unavailable" : retained ? "stale" : "failed",
           error: unsupported ? "This host does not support durable run history." : forbidden ? "Run history is unavailable with your current access."
             : status === 400 ? "This history continuation is no longer valid. Retry to start a fresh bounded read."
             : status === 404 ? "This run history is unavailable or no longer retained."
