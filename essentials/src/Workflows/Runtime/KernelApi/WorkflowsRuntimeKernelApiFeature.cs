@@ -2,6 +2,7 @@ using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
@@ -30,7 +31,22 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
 
     public virtual void ConfigureServices(IServiceCollection services) => services.AddDataProtection();
 
-    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => MapKernelEndpoints(endpoints);
+
+    internal static void ConfigureRetainedServices(IServiceCollection services)
+    {
+        services.AddWorkflowRuntimeApiHttpServices();
+        services.AddExecutableInspectionServices();
+        services.AddDataProtection();
+    }
+
+    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        WorkflowsRuntimeApi.MapRetainedEndpoints(endpoints);
+        MapKernelEndpoints(endpoints);
+    }
+
+    private static void MapKernelEndpoints(IEndpointRouteBuilder endpoints)
     {
         KernelHistoryStream.Map(endpoints);
         KernelParkRecovery.Map(endpoints);
@@ -62,6 +78,8 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
             services.TryAddScoped<KernelParkRecovery>();
             services.AddApiCapabilitySource<KernelParkRecoveryCapabilitySource>();
         }
+        ReplaceService(typeof(IWorkflowExecutableRetentionReader), typeof(LegacyWorkflowExecutableRetentionReader),
+            typeof(KernelWorkflowExecutableRetentionReader));
 
         void ReplaceService(Type service, Type runtimeImplementation, Type kernelImplementation)
         {

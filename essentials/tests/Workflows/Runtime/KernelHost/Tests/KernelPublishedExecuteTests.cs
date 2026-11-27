@@ -14,6 +14,7 @@ using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -230,6 +231,7 @@ public sealed partial class KernelPublishedExecuteTests
         builder.Services.AddAuthentication("KernelExecuteFixture").AddScheme<AuthenticationSchemeOptions, FixtureAuthentication>("KernelExecuteFixture", _ => { });
         builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
             { "KernelExecuteFixture" });
+        builder.Services.AddPermissionContributor<WorkflowPublishingPermissionContributor>();
         builder.Services.ReplaceCurrentSubjectPermissionAuthorizer<FixtureReadAuthorizer>();
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IWorkflowExecutableStartPolicy>(new FixturePolicy(directTests ? WorkflowRunKind.TestRun : WorkflowRunKind.PublishedRun));
@@ -254,7 +256,11 @@ public sealed partial class KernelPublishedExecuteTests
         builder.Services.AddScoped<IRuntimeKernelExecutablePinStore>(services => new FixturePins(
             (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
         var api = new WorkflowsRuntimeApiFeature();
-        api.ConfigureServices(builder.Services);
+        var mapRetainedRoutes = !directTests && !inline;
+        if (mapRetainedRoutes)
+            WorkflowsRuntimeKernelApiFeature.ConfigureRetainedServices(builder.Services);
+        else
+            api.ConfigureServices(builder.Services);
         if (recordEphemeralTestCompletion is { } record)
             builder.Services.AddPersistenceModeOptions(new PersistenceModeOptions { RecordCompletion = record });
         var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
@@ -318,8 +324,13 @@ public sealed partial class KernelPublishedExecuteTests
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
-        kernelApi.MapEndpoints(app, app.Environment);
+        if (mapRetainedRoutes)
+            WorkflowsRuntimeKernelApiFeature.MapRetainedEndpoints(app);
+        else
+        {
+            WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
+            kernelApi.MapEndpoints(app, app.Environment);
+        }
         kernelHosting.MapEndpoints(app, app.Environment);
         var scopes = app.Services.GetRequiredService<IServiceScopeFactory>();
         await using var publication = await scopes.CreateAsyncScopeAsync(Scope);
@@ -436,6 +447,16 @@ public sealed partial class KernelPublishedExecuteTests
             Assert.Equal(new[] { canonical.Identity.ArtifactId, flowchart.Identity.ArtifactId }.Order(StringComparer.Ordinal),
                 (await pins.ListPinnedExecutableArtifactIdsAsync(token)).Order(StringComparer.Ordinal));
 
+            var coordinator = stores.GetRequiredService<IWorkflowActivationCoordinator>();
+            Assert.True((await coordinator.DeactivateAsync(new(alias, "blue", WorkflowActivationSource.Publishing, 1), token)).Succeeded);
+            var references = stores.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+            await references.RetireAsync(target, DateTimeOffset.UtcNow, "retention-witness", token);
+            Assert.NotNull((await references.FindAsync(target, token))?.DeletedAt);
+            await VerifyExecutableRetentionAsync(http, canonical.Identity.ArtifactId, target, count: 1, HttpStatusCode.OK, token);
+            var otherSource = WorkflowActivationReferenceIdentity.Create("publish-native-sibling");
+            await references.RetireAsync(otherSource, DateTimeOffset.UtcNow, "retention-witness", token);
+            await VerifyExecutableRetentionAsync(http, canonical.Identity.ArtifactId, otherSource, count: 1, HttpStatusCode.NotFound, token);
+
             using var forbiddenDelete = await DeleteAsync(completed, manage: false);
             Assert.Equal(HttpStatusCode.Forbidden, forbiddenDelete.StatusCode);
             using var foreignDelete = await DeleteAsync(completed, manage: true, tenant: "another-tenant");
@@ -457,6 +478,7 @@ public sealed partial class KernelPublishedExecuteTests
                 Assert.NotNull(await reads.GetAsync(bound, new(completed), token));
             }
             await VerifyDeletedAsync(completed);
+            await VerifyExecutableRetentionAsync(http, canonical.Identity.ArtifactId, target, count: 0, HttpStatusCode.NotFound, token);
 
             var delayed = await StartWaitingAsync();
             await VerifyDeletedAsync(delayed);
@@ -1512,6 +1534,8 @@ public sealed partial class KernelPublishedExecuteTests
                             .DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: cancellation);
                         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, duplicate.CommandDispatch.Status);
                         Assert.True((await privateRuns.GetAsync(oldActor, cancellation)).Missing);
+                        await VerifyExecutableRetentionAsync(http, executable.Identity.ArtifactId, source.SourceReferenceId, count: 0,
+                            HttpStatusCode.OK, cancellation);
                         return false;
                     };
                 var result = await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token);
@@ -1578,6 +1602,7 @@ public sealed partial class KernelPublishedExecuteTests
                 using var details = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
                 Assert.Equal(nameof(WorkflowRunKind.TestRun), details.RootElement.GetProperty("instance").GetProperty("runKind").GetString());
                 Assert.Equal("direct-authoring-result", details.RootElement.GetProperty("outputs").GetProperty("message").GetProperty("value").GetString());
+                await VerifyExecutableRetentionAsync(http, executable.Identity.ArtifactId, source.SourceReferenceId, count: 1, HttpStatusCode.OK, token);
                 using var foreign = new HttpRequestMessage(HttpMethod.Get, $"/runtime/workflows/instances/{actor.Id}");
                 foreign.Headers.Add("X-Fixture-Subject", "accepted");
                 foreign.Headers.Add("X-Fixture-Tenant", "another-tenant");
@@ -1731,6 +1756,8 @@ public sealed partial class KernelPublishedExecuteTests
             if (Request.Headers.ContainsKey("X-Fixture-Manage")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:manage"));
             if (Request.Headers.ContainsKey("X-Fixture-Read"))
                 claims.Add(new(IdentityClaimTypes.Permission, WorkflowRuntimePermissions.WorkflowRuntimeRead));
+            if (Request.Headers.ContainsKey("X-Fixture-Publishing-Read"))
+                claims.Add(new(IdentityClaimTypes.Permission, WorkflowRuntimePermissions.WorkflowPublishingRead));
             if (Request.Headers.ContainsKey("X-Fixture-Inspect"))
                 claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission));
             if (Request.Headers.ContainsKey("X-Fixture-Inspect-Values"))

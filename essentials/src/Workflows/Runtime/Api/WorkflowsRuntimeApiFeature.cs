@@ -81,22 +81,13 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
                     options.Keys = new Dictionary<string, string>(WorkflowAlterationPayloadProtectionKeys, StringComparer.Ordinal);
             });
         }
-        services.TryAddScoped<WorkflowExecutableInspector>();
-        services.TryAddScoped<WorkflowActivationSlotInspectionService>();
-
-        // The operation seams the endpoint classes dispatch to. Registered against the concrete
-        // services so a replacement of either registration keeps the other coherent.
-        services.TryAddScoped<IWorkflowExecutableInspector>(sp => sp.GetRequiredService<WorkflowExecutableInspector>());
-        // The exact Executable read for other domains through Workflows Runtime Core (spec 1193 slice F, D4), over the same
-        // inspector the executable endpoint uses. One implementation per shell, rejected at configuration and at startup.
-        WorkflowExecutableInspectionStartupTask.Validate(services);
-        services.TryAddScoped<IWorkflowExecutableInspection, WorkflowExecutableInspection>();
-        AddExecutableInspectionValidator(services);
+        services.TryAddScoped<LegacyWorkflowExecutableRetentionReader>();
+        services.TryAddScoped<IWorkflowExecutableRetentionReader>(sp => sp.GetRequiredService<LegacyWorkflowExecutableRetentionReader>());
+        services.AddExecutableInspectionServices();
         services.TryAddScoped<StimulusDispatchService>();
         services.TryAddScoped<IStimulusDispatchService>(sp => sp.GetRequiredService<StimulusDispatchService>());
         services.TryAddScoped<WorkflowExecutionStartService>();
         services.TryAddScoped<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<WorkflowExecutionStartService>());
-        services.TryAddScoped<RuntimeHistoryOccurrenceAuthorization>();
         services.TryAddScoped<RuntimeHistoryInspectionService>(sp => new(
             sp.GetRequiredService<IWorkflowExecutionStateStore>(),
             sp.GetRequiredService<IActivityInspectionContextAsync>(), sp.GetRequiredService<TimeProvider>(),
@@ -156,7 +147,6 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<ActivityExecutionLayoutReader>();
         services.TryAddScoped<IActivityExecutionLayoutReader>(sp => sp.GetRequiredService<ActivityExecutionLayoutReader>());
         services.TryAddScoped<IActivityExecutionValuePayloadReader, ActivityExecutionValuePayloadReader>();
-        services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IActivityExecutionValuePayloadAuditSink, LoggingActivityExecutionValuePayloadAuditSink>();
         services.TryAddScoped<IWorkflowAlterationRequestContext, HttpContextWorkflowAlterationRequestContext>();
         services.TryAddScoped<IWorkflowAlterationAdmissionGate, AllowWorkflowAlterationAdmissionGate>();
@@ -176,21 +166,6 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
     /// WorkflowsRuntimeCheckpointPersistence feature registered, whichever of the two features CShells composes first.
     /// </summary>
     public virtual void PostConfigureServices(IServiceCollection services) => services.AddPersistenceModes();
-
-    // One validator per configuring collection: a copied child shell rebinds it to its own collection.
-    private static void AddExecutableInspectionValidator(IServiceCollection services)
-    {
-        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowExecutableInspectionStartupTask))
-                ?.ImplementationInstance is not WorkflowExecutableInspectionStartupTask validator || !validator.Owns(services))
-            validator = new WorkflowExecutableInspectionStartupTask(services);
-        services.RemoveAll<WorkflowExecutableInspectionStartupTask>();
-        services.AddSingleton(validator);
-        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
-                     && (item.ImplementationInstance is WorkflowExecutableInspectionStartupTask
-                         || item.ImplementationType == typeof(WorkflowExecutableInspectionStartupTask))).ToArray())
-            services.Remove(previous);
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
-    }
 
     // One validator per configuring collection, as for the Executable inspection.
     private static void AddRunInspectionValidator(IServiceCollection services)

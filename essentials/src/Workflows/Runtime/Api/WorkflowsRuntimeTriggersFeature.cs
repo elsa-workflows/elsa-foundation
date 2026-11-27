@@ -1,11 +1,10 @@
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
-using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Api;
 
@@ -48,8 +47,6 @@ public sealed class WorkflowsRuntimeTriggersFeature : IShellFeature
     {
         // Host-neutral routing owns its default stores/lookup and preserves selected durable replacements.
         services.AddWorkflowStimulusRouter();
-        services.TryAddSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
-        services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
-
+        services.AddWorkflowPublicationTriggers();
     }
 }

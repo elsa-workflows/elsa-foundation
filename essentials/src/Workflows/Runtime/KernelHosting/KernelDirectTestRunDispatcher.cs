@@ -64,7 +64,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         await WorkflowStartAdmission.EnforceStartPolicyAsync(request, executable.Identity, test.Partition, policy, cancellationToken);
 
         var provenance = WorkflowExecutableSourceProvenance.From(source);
-        var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable);
+        var mode = KernelPersistenceMode.Resolve(services, executable);
         var inline = mode == PersistenceMode.Ephemeral;
         var syncHttp = triggered && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync";
         var inlineHeld = inline && syncHttp && runtime.TakesHeldEphemeralHttp;

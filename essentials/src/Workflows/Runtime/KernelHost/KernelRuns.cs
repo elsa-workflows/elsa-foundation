@@ -106,7 +106,13 @@ public sealed class KernelRuns
     /// The workflow runs of the host's tenant, one page after another until the last, filtered by definition when one is
     /// given. Each is the actor's view and what its header says about the run (<see cref="Kernel.WorkflowActor.WorkflowActor.DescribeRun"/>).
     /// </summary>
-    public async IAsyncEnumerable<(ActorView View, Kernel.WorkflowActor.WorkflowRunHeader Run)> ListAsync(string? definition,
+    public IAsyncEnumerable<(ActorView View, Kernel.WorkflowActor.WorkflowRunHeader Run)> ListAsync(string? definition,
+        CancellationToken cancellationToken = default) => ListAsync(definition, isolated: false, cancellationToken);
+
+    internal IAsyncEnumerable<(ActorView View, Kernel.WorkflowActor.WorkflowRunHeader Run)> ListTestRunsAsync(string? definition,
+        CancellationToken cancellationToken) => ListAsync(definition, isolated: true, cancellationToken);
+
+    private async IAsyncEnumerable<(ActorView View, Kernel.WorkflowActor.WorkflowRunHeader Run)> ListAsync(string? definition, bool isolated,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var reads = await _reads(cancellationToken);
@@ -117,7 +123,8 @@ public sealed class KernelRuns
         {
             var page = await reads.ListAsync(Tenant, query, from, cancellationToken);
             foreach (var view in page.Items)
-                if (Kernel.WorkflowActor.WorkflowActor.DescribeRun(view.Header) is { TestStart: null } run)
+                if (view.Header.Tenant == Tenant.Tenant && Kernel.WorkflowActor.WorkflowActor.DescribeRun(view.Header) is { } run &&
+                    (run.TestStart is not null) == isolated)
                     yield return (view, run);
             from = page.Next;
         } while (from is not null);
