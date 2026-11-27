@@ -58,7 +58,8 @@ public static partial class SqliteEmbeddedHosting
             ? RootProfiles.Shipped.HasFlag(RootCapabilities.PlaybackDescendants)
             : qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification ||
               qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
-              qualificationFormat == StoreFormat.RootPreparedStartsQualification;
+              qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
+              qualificationFormat == StoreFormat.RootAuthoredEventsQualification;
 
         public ValueTask<Contract.ActorPlaybackPage?> ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.ActorPlaybackQuery query, CancellationToken cancellationToken = default) =>

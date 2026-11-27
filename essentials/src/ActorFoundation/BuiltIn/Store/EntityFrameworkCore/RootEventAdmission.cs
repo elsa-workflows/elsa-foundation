@@ -41,29 +41,8 @@ internal static class RootEventAdmission
         var postgres = bindPostgresSource is not null;
         if ((await ReadReceiptAsync()).Duplicate) return HeldRootAdmission.Duplicate;
 
-        // One snapshot selects the committed wait, state and exact generated actor address. The admission transaction
-        // retains that selection until it has reserved the operation and enqueued every matching delivery.
-        FormattableString query = $"""
-            WITH source AS MATERIALIZED (/*event-source*/), matches AS MATERIALIZED (
-                SELECT i."Id" AS "Actor", b."Reference", i."Partition", s."Wait"
-                FROM "Subscriptions" s
-                JOIN "Instances" i ON i."Id" = s."Instance" AND i."Partition" = s."Partition"
-                JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
-                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference" AND b."Creation" = 1
-                WHERE s."Key" = {qualified} AND s."Start" IS NULL AND i."FoundationTenant" = {request.Tenant}
-                    AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired" AND i."FoundationParkAt" IS NULL
-                    AND (SELECT "SourceReady" FROM source)
-                ORDER BY i."Partition", i."Id", s."Wait" LIMIT {FoundationMetadataLimits.MaxTurnSends + 1}
-                /*share-waits*/
-            )
-            SELECT source."SourceReady", matches.* FROM source LEFT JOIN matches ON true
-            ORDER BY matches."Partition", matches."Actor", matches."Wait"
-            """;
-        query = FormattableStringFactory.Create(query.Format.Replace("/*share-waits*/", postgres ? "FOR SHARE OF i, s" : "", StringComparison.Ordinal),
-            query.GetArguments());
-        var waits = await db.Database.SqlQuery<WaitTarget>(BindSource(query)).ToListAsync(token);
-        RequireSource(waits[0].SourceReady);
-        if (waits is [{ Actor: null }]) return HeldRootAdmission.NoWaiter;
+        var waits = await ReadWaitsAsync(db, request.Tenant, qualified, BindSource, postgres, token);
+        if (waits.Count == 0) return HeldRootAdmission.NoWaiter;
         if (waits.Count > FoundationMetadataLimits.MaxTurnSends) throw FanoutFull();
         var messages = new List<MessageEntity>(waits.Count);
         var address = request.Address;
@@ -105,9 +84,101 @@ internal static class RootEventAdmission
             return HeldRootAdmission.Duplicate;
         }
 
+        await EnqueueAsync(db, messages, address, until, BindSource, postgres, token);
+        return HeldRootAdmission.Accepted;
+
+        FormattableString BindSource(FormattableString sql) => BindEventSource(sql, bindPostgresSource);
+
+        async Task<ReceiptState> ReadReceiptAsync()
+        {
+            var result = await db.Database.SqlQuery<ReceiptState>(BindSource($"""
+                WITH source AS MATERIALIZED (/*event-source*/)
+                SELECT "SourceReady", "SourceReady" AND EXISTS (
+                    SELECT 1 FROM "Events" WHERE "Key" = {qualified} AND "Id" = {digest} AND "KeepUntil" >= {now}) AS "Duplicate"
+                FROM source
+                """)).SingleAsync(token);
+            RequireSource(result.SourceReady);
+            return result;
+        }
+    }
+
+    internal static async Task PublishAuthoredAsync(KernelDb db, IReadOnlyList<EventRow> publications, long now,
+        Func<FormattableString, FormattableString>? bindPostgresSource, CancellationToken token)
+    {
+        if (!db.UsesRootAuthoredEvents || db.Database.CurrentTransaction is null)
+            throw new StoreFormatException("Authored event publication requires its fenced store format.");
+        var postgres = bindPostgresSource is not null;
+        FormattableString BindSource(FormattableString sql) => BindEventSource(sql, bindPostgresSource);
+
+        var count = 0;
+        long bytes = 0;
+        foreach (var publication in publications)
+        {
+            var waits = await ReadWaitsAsync(db, publication.FoundationTenant!, publication.Key, BindSource, postgres, token);
+            count += waits.Count;
+            if (count > FoundationMetadataLimits.MaxTurnSends) throw AuthoredFanoutFull();
+            var messages = new List<MessageEntity>(waits.Count);
+            foreach (var wait in waits)
+            {
+                if (!FoundationMetadataLimits.FitsLiveWaitName(wait.Wait!))
+                    throw new StoreFormatException("A committed event wait has an invalid identity.");
+                var (header, body, kind) = EncodeDirect(publication.Id, 1, Kinds.Event, publication.Payload, null, held: false,
+                    new(publication.Key, wait.Wait!), authoredEvent: true);
+                bytes += Encoding.UTF8.GetByteCount(header) + (body is null ? 0 : Encoding.UTF8.GetByteCount(body));
+                if (!FitsEnvelope(header, body) || bytes > FoundationMetadataLimits.MessageContentBytes) throw AuthoredFanoutFull();
+                messages.Add(new MessageEntity
+                {
+                    Id = AuthoredEventOccurrence(wait.Reference!, publication.Id, wait.Wait!),
+                    InboxScope = InboxKey.FoundationOccurrenceScope,
+                    Target = wait.Actor!, Partition = wait.Partition!.Value, Kind = kind, Start = header, Payload = body
+                });
+            }
+            var until = checked(now + publication.KeepUntil);
+            var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
+                WITH source AS MATERIALIZED (/*event-source*/)
+                INSERT INTO "Events" ("Key", "Id", "KeepUntil")
+                SELECT {publication.Key}, {publication.Id}, {until} FROM source WHERE "SourceReady"
+                """), token);
+            if (receipt != 1) throw new StoreFormatException("The pinned authored event receipt could not be written.");
+            if (messages.Count != 0) await EnqueueAsync(db, messages, null, until, BindSource, postgres, token);
+        }
+    }
+
+    private static async Task<List<WaitTarget>> ReadWaitsAsync(KernelDb db, string tenant, string qualified,
+        Func<FormattableString, FormattableString> bindSource, bool postgres, CancellationToken token)
+    {
+        // One snapshot selects the committed wait, state and exact generated actor address. The admission transaction
+        // retains that selection until it has reserved the operation and enqueued every matching delivery.
+        FormattableString query = $"""
+            WITH source AS MATERIALIZED (/*event-source*/), matches AS MATERIALIZED (
+                SELECT i."Id" AS "Actor", b."Reference", i."Partition", s."Wait"
+                FROM "Subscriptions" s
+                JOIN "Instances" i ON i."Id" = s."Instance" AND i."Partition" = s."Partition"
+                JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
+                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference" AND b."Creation" = 1
+                WHERE s."Key" = {qualified} AND s."Start" IS NULL AND i."FoundationTenant" = {tenant}
+                    AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired" AND i."FoundationParkAt" IS NULL
+                    AND (SELECT "SourceReady" FROM source)
+                ORDER BY i."Partition", i."Id", s."Wait" LIMIT {FoundationMetadataLimits.MaxTurnSends + 1}
+                /*share-waits*/
+            )
+            SELECT source."SourceReady", matches.* FROM source LEFT JOIN matches ON true
+            ORDER BY matches."Partition", matches."Actor", matches."Wait"
+            """;
+        query = FormattableStringFactory.Create(query.Format.Replace("/*share-waits*/", postgres ? "FOR SHARE OF i, s" : "", StringComparison.Ordinal),
+            query.GetArguments());
+        var waits = await db.Database.SqlQuery<WaitTarget>(bindSource(query)).ToListAsync(token);
+        RequireSource(waits[0].SourceReady);
+        return waits is [{ Actor: null }] ? [] : waits;
+
+    }
+
+    private static async Task EnqueueAsync(KernelDb db, List<MessageEntity> messages, string? address, long until,
+        Func<FormattableString, FormattableString> bindSource, bool postgres, CancellationToken token)
+    {
         if (postgres)
         {
-            var inserted = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
+            var inserted = await db.Database.ExecuteSqlInterpolatedAsync(bindSource($"""
                 WITH source AS MATERIALIZED (/*event-source*/)
                 INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Start", "Payload", "Due", "Seen",
                     "Attempts", "Trial", "Done", "KeepUntil", "ReplyTo", "JobGeneration")
@@ -124,24 +195,14 @@ internal static class RootEventAdmission
             foreach (var message in messages)
                 await SqliteRootAdmission.EnqueueAsync(db, message.Target, message.Partition, message.Id, message.InboxScope,
                     message.Kind, message.Start!, message.Payload, null, until, message.ReplyTo, token);
-
-        return HeldRootAdmission.Accepted;
-
-        FormattableString BindSource(FormattableString sql) => bindPostgresSource?.Invoke(sql) ?? FormattableStringFactory.Create(
-            sql.Format.Replace("/*event-source*/", """SELECT true AS "SourceReady" """, StringComparison.Ordinal), sql.GetArguments());
-
-        async Task<ReceiptState> ReadReceiptAsync()
-        {
-            var result = await db.Database.SqlQuery<ReceiptState>(BindSource($"""
-                WITH source AS MATERIALIZED (/*event-source*/)
-                SELECT "SourceReady", "SourceReady" AND EXISTS (
-                    SELECT 1 FROM "Events" WHERE "Key" = {qualified} AND "Id" = {digest} AND "KeepUntil" >= {now}) AS "Duplicate"
-                FROM source
-                """)).SingleAsync(token);
-            RequireSource(result.SourceReady);
-            return result;
-        }
     }
+
+    private static StoreException AuthoredFanoutFull() =>
+        new(Failure.Definite, "The authored event's live recipients exceed the atomic delivery limit.");
+
+    private static FormattableString BindEventSource(FormattableString sql, Func<FormattableString, FormattableString>? bindPostgresSource) =>
+        bindPostgresSource?.Invoke(sql) ?? FormattableStringFactory.Create(
+            sql.Format.Replace("/*event-source*/", """SELECT true AS "SourceReady" """, StringComparison.Ordinal), sql.GetArguments());
 
     private static void RequireSource(bool sourceReady)
     {
