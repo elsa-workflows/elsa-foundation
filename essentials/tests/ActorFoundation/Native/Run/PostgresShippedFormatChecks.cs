@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
@@ -184,7 +185,7 @@ internal static class PostgresShippedFormatChecks
                 new Contract.ActorRetentionQuote(1, terminalAt) &&
                 await retention.ReadRetentionQuoteAsync(scope, WorkflowActor.WorkflowActor.ActorType, expire, keep, cancellationToken: stop) is { NewlyEligible: 0 },
                 "the PostgreSQL retention quote compares both windows at one clock and excludes extensions");
-            Require(await retention.ReadRetentionQuoteAsync(EmbeddedTenant.Bind("other-retention-tenant"), WorkflowActor.WorkflowActor.ActorType,
+            Require(await retention.ReadRetentionQuoteAsync(ContractScopes.Bind("other-retention-tenant"), WorkflowActor.WorkflowActor.ActorType,
                 keep, expire, cancellationToken: stop) is { NewlyEligible: 0 } &&
                 await retention.ReadRetentionQuoteAsync(scope, "WORKFLOW", keep, expire, cancellationToken: stop) is { NewlyEligible: 0 },
                 "the PostgreSQL quote returns zero for an unmatched tenant or ordinal actor type");
@@ -361,6 +362,7 @@ internal static class PostgresShippedFormatChecks
             await RefusesRevisionAsync(() => store.PartitionCountAsync(token).AsTask());
             await RefusesRevisionAsync(() => store.ReadRootActorAsync("tenant", "missing", token));
             await RefusesRevisionAsync(() => store.ReadRootActorListAsync("tenant", "", null, null, [], null, null, 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootRetentionQuoteAsync("tenant", "workflow", new(), new(), null, null, token));
             await RefusesRevisionAsync(() => store.ReadRootJournalAsync("tenant", "missing", 1, 1, token));
             await RefusesRevisionAsync(() => store.ReadRootInboxAsync("tenant", "missing", 0, "", 1, token));
             await RefusesRevisionAsync(() => store.ReadRootWorkflowHistoryAsync("tenant", "type", null, null, null, null, null, null, 1, token));
