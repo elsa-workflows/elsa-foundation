@@ -2909,7 +2909,7 @@ describe("workflows module", () => {
     }
   });
 
-  it("collects workflow inputs before running from the Executable Inspector", async () => {
+  it.each([false, true])("collects workflow inputs from the Executable Inspector (unknown outcome: %s)", async (outcomeUnknown) => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -2918,7 +2918,9 @@ describe("workflows module", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST" && url.endsWith("/executables/artifact-1/execute")) {
-        return response({ workflowExecutionId: "wfexec-inspector-1" });
+        return outcomeUnknown
+          ? response({ persistenceOutcome: "Unknown", reason: "InlineStartOutcomeUnknown" }, 504)
+          : response({ workflowExecutionId: "wfexec-inspector-1" });
       }
       if (url.includes("/design/workflows/versions/version-2")) {
         const version = workflowDefinitionVersionDetails({ id: "version-2", version: "2.0.0" });
@@ -2948,7 +2950,13 @@ describe("workflows module", () => {
     await waitForText(document.body, "Provide the workflow inputs for this run.");
     await fill(inputByLabel(document.body, "Greeting"), "Hello from inspector");
     await click(buttonByText(document.body, "Run workflow"));
-    await waitForText(container, "Open Run wfexec-inspector-1");
+    if (outcomeUnknown) {
+      await waitForText(container, "Run outcome unavailable. The workflow may still run. Check Runs before starting it again.");
+      expect(container.querySelector(".wf-status-line[role='status']")?.getAttribute("data-severity")).toBe("info");
+      expect(container.textContent).not.toContain("The executable could not be run");
+    } else {
+      await waitForText(container, "Open Run wfexec-inspector-1");
+    }
 
     const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
     expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({
