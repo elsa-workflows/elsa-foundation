@@ -71,7 +71,7 @@ internal static class ShippedWriteBudget
         var definitions = new SqliteAdmissionDefinitions();
         IDisposable? sqliteFile = null;
         DbContextOptions<KernelDb>? hostedOptions = null;
-        KernelDb At(DbContextOptions<KernelDb> settings) => postgres ? PostgresPreviewHosting.CreateShippedContext(settings)
+        KernelDb At(DbContextOptions<KernelDb> settings) => postgres ? PostgresPreviewHosting.CreateShippedContext(settings, PublicActor.ActorType, protectsStarts: false)
             : KernelDb.ForSqliteRootRuntime(settings, definitions);
         KernelDb Open() => At(hostedOptions ?? options.Options);
         KernelDb Observe() => At(observerOptions.Options);
@@ -95,7 +95,7 @@ internal static class ShippedWriteBudget
             }
             else
             {
-                await SqliteEmbeddedHosting.InstallShippedAsync(path!, token);
+                await SqliteEmbeddedHosting.InstallShippedAsync(path!, PublicActor.ActorType, protectsStarts: false, token);
                 (sqliteFile, hostedOptions, definitions) = HoldSqliteFile(path!);
                 await using (var hosted = Open()) sqlite!.Path = hosted.Database.GetDbConnection().DataSource;
                 var requests = SqliteEmbeddedHosting.CreateRequests(path!, Node, PublicActor.ActorType);

@@ -164,7 +164,7 @@ public sealed partial class EfStore
             throw RootShape();
         if (children is { Starts.Length: > 0, PendingBirths: null }) return null;
 
-        List<EventRow>? publications = null;
+        List<AuthoredRootPublication>? publications = null;
         if (turn.FoundationRootPublications is { } authored)
         {
             if (installed is null || witness is null || _ordinaryRoots?.PublishesAuthoredEvents != true || RootSelfIssuer is not { } issuer)
@@ -319,7 +319,7 @@ public sealed partial class EfStore
     private sealed record InlineRootCheckpoint(FirstRootCheckpoint First, Contract.BoundScope Scope, PreparedRootStart Stage, string Issuance,
         (uint Marker, uint Namespace, long Table)? Postgres, long ReceiptWindow, long Position, string Journal, long Epoch,
         Func<TimeSpan>? LeaseRemaining, RootTerminalOutputCheckpoint? Output, InlineParkOpening? Park, InlineJobWinner? Job,
-        IReadOnlyList<EventRow> Publications)
+        IReadOnlyList<AuthoredRootPublication> Publications)
         : QualifiedRootCheckpoint(First.JournalRevision)
     {
         internal override bool WritesJournal(string actor) => actor == Stage.Actor;

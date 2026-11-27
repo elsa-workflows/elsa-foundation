@@ -260,7 +260,7 @@ internal static class WorkbenchCorePreview
                     else if (terminalOutputQualification) await PostgresPreviewHosting.InstallTerminalOutputQualificationAsync(postgresOptions!, terminalOutputsWithTimers, token);
                     else if (playbackDescendants) await PostgresPreviewHosting.InstallPlaybackDescendantsQualificationAsync(postgresOptions!, token);
                     else if (playbackQualification) await PostgresPreviewHosting.InstallPlaybackQualificationAsync(postgresOptions!, token);
-                    else if (publications) await PostgresPreviewHosting.InstallShippedAsync(postgresOptions!, token);
+                    else if (publications) await PostgresPreviewHosting.InstallShippedAsync(postgresOptions!, actor.Type, protectsStarts: false, token);
                     edge?.StoreInstalled();
                     await shells.GetOrActivateAsync(shellName, token);
                     if (edge is not null) await RequireEdgeBasePathAsync(shells, shellName, edge);
@@ -275,7 +275,7 @@ internal static class WorkbenchCorePreview
         KernelDb OpenPostgres() => terminalOutputQualification ? PostgresPreviewHosting.CreateTerminalOutputQualificationContext(postgresOptions!, terminalOutputsWithTimers) :
             playbackDescendants ? PostgresPreviewHosting.CreatePlaybackDescendantsQualificationContext(postgresOptions!) :
             playbackQualification ? PostgresPreviewHosting.CreatePlaybackQualificationContext(postgresOptions!) :
-            publications ? PostgresPreviewHosting.CreateShippedContext(postgresOptions!) :
+            publications ? PostgresPreviewHosting.CreateShippedContext(postgresOptions!, WorkflowActor.ActorType, protectsStarts: false) :
             timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(postgresOptions!) :
             nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(postgresOptions!) : new(postgresOptions!);
 

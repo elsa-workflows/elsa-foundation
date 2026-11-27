@@ -108,8 +108,36 @@ if (args is ["kernel-public-event-starts", var publicEventProvider and ("postgre
 if (args is ["kernel-public-event-host", var eventHostProvider and ("postgres" or "sqlite"),
     var eventHostFence and ("checked" or "in-batch"), var eventHostMode and ("generic" or "protected")])
     return await KernelAuthoredEventChecks.RunPublicEventHostAsync(eventHostProvider, eventHostFence == "in-batch", eventHostMode == "protected");
+if (args is ["kernel-shipped-event-host", var shippedEventProvider and ("postgres" or "sqlite"),
+    var shippedEventFence and ("checked" or "in-batch"), var shippedEventMode and ("generic" or "protected")])
+    return await KernelAuthoredEventChecks.RunPublicEventHostAsync(shippedEventProvider, shippedEventFence == "in-batch", shippedEventMode == "protected", shipped: true);
 if (args is ["kernel-protected-event-observer"])
     return await KernelAuthoredEventChecks.RunPublicEventHostAsync("postgres", inBatch: true, protectedStarts: true, observeReplies: true);
+if (args is ["kernel-sb7-broadcast", var sb7Provider and ("postgres" or "sqlite"), var sb7Fence and ("checked" or "in-batch"),
+    var sb7Source and ("outside" or "authored")])
+    return await KernelAuthoredEventChecks.RunSb7BroadcastAsync(sb7Provider, sb7Fence == "in-batch", sb7Source == "authored");
+if (args is ["kernel-paged-event-publication", var pagedEventProvider and ("postgres" or "sqlite"), var pagedEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedEventProvider, pagedEventFence == "in-batch");
+if (args is ["kernel-paged-event-owner-replacement", var replacementProvider and ("postgres" or "sqlite"),
+    var replacementFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(replacementProvider, replacementFence == "in-batch", replaceOwner: true);
+if (args is ["kernel-paged-event-paused-owner", var pausedProvider and ("postgres" or "sqlite"),
+    var pausedFence and ("checked" or "in-batch"), var pausedPath, var pausedBoundary and ("first-page" or "producer")])
+    return await KernelAuthoredEventChecks.RunPausedPagedEventOwnerAsync(pausedProvider, pausedFence == "in-batch", pausedPath,
+        afterProducer: pausedBoundary == "producer");
+if (args is ["kernel-paged-protected-authority-snapshot", var snapshotProvider and ("postgres" or "sqlite"),
+    var snapshotFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunProtectedSnapshotAsync(snapshotProvider, snapshotFence == "in-batch");
+if (args is ["kernel-paged-event-cleanup", var cleanupProvider and ("postgres" or "sqlite")])
+    return await KernelAuthoredEventChecks.RunPagedEventCleanupAsync(cleanupProvider);
+if (args is ["kernel-paged-authored-event", var pagedAuthoredProvider and ("postgres" or "sqlite"), var pagedAuthoredFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedAuthoredProvider, pagedAuthoredFence == "in-batch", authored: true);
+if (args is ["kernel-paged-authored-park", var pagedParkProvider and ("postgres" or "sqlite"), var pagedParkFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedParkProvider, pagedParkFence == "in-batch", parkPublication: true);
+if (args is ["kernel-paged-authored-dead-letter", var deadLetterProvider and ("postgres" or "sqlite"), var deadLetterFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedAuthoredDeadLettersAsync(deadLetterProvider, deadLetterFence == "in-batch");
+if (args is ["kernel-physical-event-pages", var eventPageProvider and ("postgres" or "sqlite"), var eventPageFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(eventPageProvider, eventPageFence == "in-batch", physicalPages: true);
 if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunAsync(authoredEventProvider, authoredEventFence == "in-batch");
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();

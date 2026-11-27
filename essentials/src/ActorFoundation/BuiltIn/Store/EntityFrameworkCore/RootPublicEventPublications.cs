@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -36,7 +37,7 @@ internal static partial class RootPublicEventPublications
         return $""" "Tenant" {text} NOT NULL PRIMARY KEY, "Through" {number} NOT NULL CHECK ("Through" >= 0) """;
     }
 
-    internal sealed record StoredPublication(bool SourceReady, string? Incarnation, string? EventId);
+    internal sealed record StoredPublication(bool SourceReady, string? Incarnation, string? EventId, int? Status);
 
     internal static Contract.Admission? Validate(string key, string id, string? payload, Contract.AddOptions? add)
     {
@@ -48,23 +49,33 @@ internal static partial class RootPublicEventPublications
                 ? new(Contract.AdmissionOutcome.Refused) : null;
     }
 
-    internal static async Task<Guid?> ReadReplayAsync(KernelDb db, string tenant, string key, string id, string operation, long now,
+    internal static async Task<Contract.PublicationReceipt?> ReadReplayAsync(KernelDb db, string tenant, string key, string id, string operation, long now,
         Func<FormattableString, FormattableString> bind, CancellationToken token)
     {
-        var replay = await db.Database.SqlQuery<StoredPublication>(bind($"""
+        var status = db.UsesRootPagedPublicEvents ? """coalesce(d."Status", 1)""" : "1";
+        var dispatch = db.UsesRootPagedPublicEvents
+            ? """LEFT JOIN "FoundationPublicEventDispatch" d ON d."Occurrence" = p."Occurrence" """
+            : "";
+        FormattableString query = $"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
-            SELECT source."SourceReady", found."Incarnation", found."EventId" FROM source LEFT JOIN (
-                SELECT "Incarnation", "EventId", "ReceiptUntil" FROM "FoundationPublicEventPublications"
-                WHERE "Tenant" = {tenant} AND "Key" = {key} AND "Operation" = {operation} AND "ReceiptUntil" IS NOT NULL
-                ORDER BY "Ordinal" DESC LIMIT 1
-            ) found ON source."SourceReady" AND found."ReceiptUntil" >= {now}
-            """)).ToListAsync(token);
+            SELECT source."SourceReady", found."Incarnation", found."EventId", found."Status" FROM source LEFT JOIN (
+                SELECT p."Incarnation", p."EventId", p."ReceiptUntil", /*status*/ AS "Status"
+                FROM "FoundationPublicEventPublications" p /*dispatch*/
+                WHERE p."Tenant" = {tenant} AND p."Key" = {key} AND p."Operation" = {operation} AND p."ReceiptUntil" IS NOT NULL
+                ORDER BY p."Ordinal" DESC LIMIT 1
+            ) found ON source."SourceReady" AND (found."ReceiptUntil" >= {now} OR found."Status" = {(int)Contract.PublicationStatus.Pending})
+            """;
+        query = FormattableStringFactory.Create(query.Format.Replace("/*status*/", status, StringComparison.Ordinal)
+            .Replace("/*dispatch*/", dispatch, StringComparison.Ordinal), query.GetArguments());
+        var replay = await db.Database.SqlQuery<StoredPublication>(bind(query)).ToListAsync(token);
         if (replay is not [var row] || !row.SourceReady)
             throw new StoreFormatException("The pinned public event receipt is unavailable or no longer unique.");
         if (row.Incarnation is null) return null;
         if (DurableKeyJson.Read<string>(row.EventId!) != id)
             throw new StoreFormatException("The public event receipt operation differs from its admitted identity.");
-        return Guid.ParseExact(row.Incarnation, "N");
+        return row.Status is { } outcome && Enum.IsDefined((Contract.PublicationStatus)outcome)
+            ? new(key[(tenant.Length + 1)..], id, Guid.ParseExact(row.Incarnation, "N"), (Contract.PublicationStatus)outcome)
+            : throw new StoreFormatException("The public Event receipt has no qualified publication status.");
     }
 
     internal static async Task InsertAsync(KernelDb db, string tenant, string key, string id, string operation, Guid incarnation, string occurrence,

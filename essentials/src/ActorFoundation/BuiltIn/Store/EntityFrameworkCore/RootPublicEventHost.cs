@@ -24,13 +24,16 @@ internal sealed record RootPublicEventHost(string ActorType, bool ProtectsStarts
 
     internal static async Task InstallAsync(KernelDb db, RootPublicEventHost? expected, bool create, CancellationToken token)
     {
-        if (expected is null) throw new StoreFormatException("This Event profile requires an installed host authority.");
         if (create)
+        {
+            if (expected is null)
+                throw new StoreFormatException("Set the Event host actor type and root start protection when installing a new shipped store.");
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "FoundationPublicEventHost" ("Singleton", "ActorType", "ProtectsStarts")
                 VALUES (true, {expected.ActorType}, {expected.ProtectsStarts})
                 """, token);
-        await RequireAsync(db, expected, bind: null, token);
+        }
+        await ReadAsync(db, bind: null, token);
     }
 
     internal static async Task RequireAsync(KernelDb db, RootPublicEventHost expected, Func<FormattableString, FormattableString>? bind,

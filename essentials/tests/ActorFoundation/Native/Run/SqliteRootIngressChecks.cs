@@ -24,7 +24,7 @@ internal static class SqliteRootIngressChecks
         {
             DataSource = path, ForeignKeys = true, Pooling = false
         }.ToString()).Options;
-        KernelDb Open() => KernelDb.ForSqliteRootShipped(options);
+        KernelDb Open() => KernelDb.ForSqliteRootShipped(options, publicEventHost: new(ActorType, false));
         var scope = EmbeddedTenant.Bind(Tenant);
 
         try

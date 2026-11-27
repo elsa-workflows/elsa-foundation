@@ -104,6 +104,7 @@ public sealed partial class EfStore
             {
                 (RootSelfScope, RootSelfTimerWire) => "Timer",
                 (RootSelfScope, RootSelfWire) => "Self message",
+                (RootPublicEventTicket.Scope, Kinds.Publish) => "Event publication",
                 _ => metadata.Kind
             };
             return new(row.Sequence.Value, id, scope, publicKind, metadata.Due, row.Attempts.Value, (ParkKeepReason)reason);
@@ -163,6 +164,17 @@ public sealed partial class EfStore
                 CROSS JOIN LATERAL (VALUES {string.Join(", ", pins)}) pin("Id", "Scope", "Kind")
                 JOIN ONLY "Messages" m ON m."Id" = pin."Id" AND m."InboxScope" = pin."Scope" AND m."Kind" = pin."Kind"
                     AND m."Partition" = p."Partition" AND m."Target" = p."Actor"
+                WHERE m."EventMatch" IS NULL AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+                    AND {ParkInboxAfter}
+                """;
+        if (db.UsesRootPagedPublicEvents)
+            page += $"""
+
+                UNION ALL
+                SELECT {ParkInboxProjectionSql}
+                FROM parked p CROSS JOIN boundary b
+                JOIN ONLY "Messages" m ON m."Partition" = p."Partition" AND m."Target" = p."Actor"
+                    AND m."InboxScope" = {RootPublicEventTicket.Scope} AND m."Kind" = '{Kinds.Publish}'
                 WHERE m."EventMatch" IS NULL AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
                     AND {ParkInboxAfter}
                 """;

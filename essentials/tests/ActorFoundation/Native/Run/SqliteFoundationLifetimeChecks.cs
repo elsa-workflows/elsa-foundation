@@ -140,7 +140,7 @@ internal static partial class SqliteHostLifetimeChecks
 
     private static async Task CheckRetiredReplyLeaseAsync(string path, bool fenceInBatch, CancellationToken token)
     {
-        await SqliteEmbeddedHosting.InstallShippedAsync(path, token);
+        await SqliteEmbeddedHosting.InstallShippedAsync(path, FoundationKind, protectsStarts: false, token);
         var oldRequests = SqliteEmbeddedHosting.CreateRequests(path, "reply-owner", FoundationKind);
         using var lease = oldRequests.AcquireReplyLease();
         await ExpectFoundationFailureAsync<ArgumentException>(() => SqliteEmbeddedHosting.InstallShippedAsync(path, token),
@@ -376,7 +376,8 @@ internal static partial class SqliteHostLifetimeChecks
             DataSource = path, ForeignKeys = true, Pooling = false
         }.ToString());
         if (interceptor is not null) builder.AddInterceptors(interceptor);
-        return definitions is not null ? KernelDb.ForSqliteRootRuntime(builder.Options, definitions) : KernelDb.ForSqliteRootShipped(builder.Options);
+        return definitions is not null ? KernelDb.ForSqliteRootRuntime(builder.Options, definitions) :
+            KernelDb.ForSqliteRootShipped(builder.Options, publicEventHost: new(FoundationKind, false));
     }
 
     private static async Task<Contract.ActorRef> AdmitFoundationStartAsync(Contract.IIngress ingress, Contract.BoundScope scope, string id,

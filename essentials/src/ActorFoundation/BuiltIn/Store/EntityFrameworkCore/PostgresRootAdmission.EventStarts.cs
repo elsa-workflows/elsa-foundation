@@ -13,7 +13,7 @@ internal sealed partial class PostgresRootAdmission
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
         var pin = await PinEventStartsAsync(db, token);
-        var result = await RootEventStarts.ApplyAsync(db, tenant, slot, revision, registrations, sql => BindEventStarts(sql, pin), token);
+        var result = await RootEventStarts.ApplyAsync(db, tenant, slot, revision, registrations, sql => BindEventStarts(db, sql, pin), token);
         await transaction.CommitAsync(token);
         return result;
     }
@@ -51,7 +51,7 @@ internal sealed partial class PostgresRootAdmission
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
         var pin = await PinEventStartsAsync(db, token);
-        var result = await read(db, sql => BindEventStarts(sql, pin));
+        var result = await read(db, sql => BindEventStarts(db, sql, pin));
         await transaction.CommitAsync(token);
         return result;
     }
@@ -65,14 +65,22 @@ internal sealed partial class PostgresRootAdmission
         return pin;
     }
 
-    private static Task LockEventStartTablesAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync("""
-            LOCK TABLE ONLY "FoundationEventStartSlots", ONLY "FoundationEventStartRegistrations",
-                ONLY "FoundationEventStartTargets" IN ACCESS SHARE MODE
-            """, token);
+    private static Task LockEventStartTablesAsync(KernelDb db, CancellationToken token)
+    {
+        const string tables = """
+            LOCK TABLE ONLY "FoundationEventStartSlots", ONLY "FoundationEventStartRegistrations", ONLY "FoundationEventStartTargets"
+            """;
+        var staged = db.UsesRootPagedPublicEvents ? """, ONLY "FoundationPagedEventStarts" """ : "";
+        return db.Database.ExecuteSqlRawAsync(tables + staged + " IN ACCESS SHARE MODE", token);
+    }
 
-    private static FormattableString BindEventStarts(FormattableString sql, PinnedRootSource pin) =>
-        WithAdmissionSource(sql, pin, RootEventStarts.Source, 4,
-            """('"FoundationEventStartSlots"'), ('"FoundationEventStartRegistrations"'), ('"FoundationEventStartTargets"'), ('"FoundationRootBirths"')""",
-            requirePermanentDirectRelations: true);
+    private static FormattableString BindEventStarts(KernelDb db, FormattableString sql, PinnedRootSource pin)
+    {
+        const string tables = """
+            ('"FoundationEventStartSlots"'), ('"FoundationEventStartRegistrations"'), ('"FoundationEventStartTargets"'), ('"FoundationRootBirths"')
+            """;
+        var staged = db.UsesRootPagedPublicEvents ? """ , ('"FoundationPagedEventStarts"') """ : "";
+        return WithAdmissionSource(sql, pin, RootEventStarts.Source, db.UsesRootPagedPublicEvents ? 5 : 4,
+            tables + staged, requirePermanentDirectRelations: true);
+    }
 }

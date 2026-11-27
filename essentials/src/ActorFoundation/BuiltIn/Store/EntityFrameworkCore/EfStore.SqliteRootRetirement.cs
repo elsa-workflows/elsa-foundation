@@ -41,7 +41,8 @@ public sealed partial class EfStore
         {
             var page = await BindSqliteParkPageAsync(db, root, current.Revision, current.Suspended, park.Mark, park.Clearing,
                 park.Cleared, park.KeptDigest, park.Count, ends: true, retire.Command, token);
-            if (page is null || !await ClearSqliteParkPageAsync(db, root, page, retire.Command.Operator!.RootParkWindow!.Value, token)) return false;
+            if (page is null || !await ClearSqliteParkPageAsync(db, root, page, retire.Command.Operator!.RootParkWindow!.Value, token) ||
+                !await AbandonParkPublicationsAsync(db, root, token)) return false;
         }
 
         if (retire.RetentionEligible == false) return true;

@@ -49,6 +49,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
+        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat is { SupportsIsolatedInlineQualification: true } ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
@@ -129,6 +130,9 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootInlinePromotionQualification, protectRootStart);
     }
 
+    internal static SqliteEmbeddedFoundation ForPagedPublicEventsQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootPagedPublicEventsQualification);
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat,
         ProtectRootStartAsync? protectRootStart = null)
     {
@@ -136,7 +140,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         this.node = node;
         this.actorType = actorType;
         this.qualificationFormat = qualificationFormat;
-        if (qualificationFormat == StoreFormat.RootPublicEventHostQualification)
+        if (qualificationFormat is null || qualificationFormat == StoreFormat.RootPublicEventHostQualification)
             publicEventHost = new(actorType, protectRootStart is not null);
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
             qualificationFormat: qualificationFormat, protectRootStart: protectRootStart), LazyThreadSafetyMode.PublicationOnly);
@@ -150,6 +154,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
+        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 

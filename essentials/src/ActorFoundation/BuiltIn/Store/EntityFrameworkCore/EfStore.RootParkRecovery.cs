@@ -551,7 +551,8 @@ public sealed partial class EfStore
             if (arrived.Length + cleared.Length != kept.Count) return false;
             var window = Command.Operator.RootParkWindow!.Value;
             if (Recovered && (!await RestoreAsync() ||
-                !await ClearPostgresParkRowsAsync(db, Root, cleared, window, token))) return false;
+                !await ClearPostgresParkRowsAsync(db, Root, cleared, window, token) ||
+                !await RequeueParkPublicationsAsync(db, Root, token))) return false;
             // The worker forgets inputs it read before Recover so the released cohort gets the first poll.
             // Pending calls and controls must become visible again even when they were read before the Park.
             if (Recovered && db.UsesRootComposedParkRecovery)

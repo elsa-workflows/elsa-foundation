@@ -26,7 +26,7 @@ internal static class SqliteShippedInstallChecks
         DbContextOptions<KernelDb> Options(bool foreignKeys = true) =>
             new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
             { DataSource = path, ForeignKeys = foreignKeys, Pooling = false }.ToString()).Options;
-        KernelDb New(bool foreignKeys = true) => KernelDb.ForSqliteRootShipped(Options(foreignKeys));
+        KernelDb New(bool foreignKeys = true) => KernelDb.ForSqliteRootShipped(Options(foreignKeys), publicEventHost: new("workflow", false));
 
         try
         {
@@ -79,7 +79,7 @@ internal static class SqliteShippedInstallChecks
             var verified = new SqliteAdmissionDefinitions();
             Task VerifyOperationalFormatAsync() => EfStore.RequireSqliteRootAdmissionAsync(db, verified, token);
             await VerifyOperationalFormatAsync();
-            await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, 32), token);
+            await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, StoreFormat.RootShipped.MessageProtocol - 1), token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses the previous shipped protocol");
             await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,

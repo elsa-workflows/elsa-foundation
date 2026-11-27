@@ -78,9 +78,14 @@ internal static class RootAdmissionWire
 
     internal static (string Header, string? Payload, string Kind) EncodeDirect(string id, long creation, string kind, string? payload,
         long? due, bool held, StoredEventWait? eventWait = null, StoredScheduleControl? scheduleControl = null,
-        bool authoredEvent = false, string? eventOccurrence = null, bool keyed = false)
+        bool authoredEvent = false, string? eventOccurrence = null, bool keyed = false) =>
+        EncodeDirect(id, creation, kind, EncodePayload(payload), due, held, eventWait, scheduleControl, authoredEvent, eventOccurrence, keyed);
+
+    internal static (string Header, string? Payload, string Kind) EncodeDirect(string id, long creation, string kind,
+        (string? Text, bool Escaped) stored, long? due, bool held, StoredEventWait? eventWait = null,
+        StoredScheduleControl? scheduleControl = null, bool authoredEvent = false, string? eventOccurrence = null, bool keyed = false)
     {
-        var (storedPayload, escaped) = EncodePayload(payload);
+        var (storedPayload, escaped) = stored;
         var escapedKind = kind.Contains('\0') ? kind : null;
         var prefix = (eventOccurrence is not null, authoredEvent, keyed, held) switch
         {
