@@ -1645,7 +1645,9 @@ internal static class PostgresRootParkedOperatorChecks
                 await main.Admission.AdmitRootOperatorAsync(tenant.Tenant, late.Id, "pinned", Contract.Kinds.Terminate, null, null, stop, main.Selections[late]);
                 throw new InvalidOperationException("A Terminate was admitted beside an unpinned receipts relation.");
             }
-            catch (StoreFormatException error) when (error.Message == "Park requires the source tables in the marker schema.")
+            catch (StoreFormatException error) when (error.Message == (shippedSet
+                ? "The child profile requires its source tables in the marker schema."
+                : "Park requires the source tables in the marker schema."))
             {
                 Check(true, "the Park pin refuses a Terminate whose receipts relation is not a marker-schema table");
             }
