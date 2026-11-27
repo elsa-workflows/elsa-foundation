@@ -20,6 +20,21 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
     /// <param name="requests">The held callers the node answers, on a store with held replies (<see cref="PostgresPreviewHosting.StartAsync"/>).</param>
     public PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor, Action<string> endProcess,
         LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null, PostgresDirectRequests? requests = null)
+        : this(create, node, actor, endProcess, options, logger, requests, auxiliaryActor: null)
+    {
+    }
+
+    /// <summary>Creates one owner for the primary actor and a distinct auxiliary actor on a qualified store.</summary>
+    public static PostgresPreviewHostedService CreateWithAuxiliaryActor(Func<KernelDb> create, string node, IActorType actor,
+        IActorType auxiliaryActor, Action<string> endProcess, LoopOptions? options = null,
+        ILogger<PostgresPreviewHostedService>? logger = null, PostgresDirectRequests? requests = null)
+    {
+        Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return new(create, node, actor, endProcess, options, logger, requests, auxiliaryActor);
+    }
+
+    private PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor, Action<string> endProcess,
+        LoopOptions? options, ILogger<PostgresPreviewHostedService>? logger, PostgresDirectRequests? requests, IActorType? auxiliaryActor)
     {
         ArgumentNullException.ThrowIfNull(endProcess);
         if (requests is not null && requests.Node != node)
@@ -32,7 +47,7 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
                 Kernel.Durable.IReplyTransport? replies = requests;
                 if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
                 return PostgresPreviewHosting.StartAsync(create, node, actor, escalate, options, token, fault, replies,
-                    retentionWindow: RetentionWindow);
+                    retentionWindow: RetentionWindow, auxiliaryActor: auxiliaryActor);
             }, logger);
     }
 

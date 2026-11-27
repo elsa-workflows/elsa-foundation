@@ -92,6 +92,10 @@ file static class RuntimeProviderModel
         }
         modelBuilder.Entity<UserTaskEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<UserTaskFormEntity>().Property(row => row.ContentJson).HasColumnType(type);
+        modelBuilder.Entity<RuntimeKernelScheduleOccurrenceEntity>().Property(row => row.ContentJson).HasColumnType(type);
+        modelBuilder.Entity<RuntimeKernelScheduleOccurrenceEntity>().Property(row => row.ScopeKey).HasColumnType(type);
+        modelBuilder.Entity<RuntimeKernelScheduleOccurrenceEntity>().Property(row => row.TenantKey).HasColumnType(type);
+        modelBuilder.Entity<RuntimeKernelScheduleControlEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ScopeKey).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.PayloadJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ContentJson).HasColumnType(type);

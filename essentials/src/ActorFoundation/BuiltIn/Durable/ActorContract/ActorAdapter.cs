@@ -10,6 +10,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 {
     private readonly Durable.InMemoryStore? inMemory;
     private readonly Contract.IActorType actor;
+    private readonly Contract.IActorType? auxiliaryActor;
     private readonly (Durable.Requests Requests, string Node)? local;
     private readonly Func<Contract.ActorHeader, TimeSpan?>? retentionWindow;
     private readonly IRootDispatchHeaders? roots;
@@ -35,13 +36,33 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
         Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false,
         Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null, bool rootHeldReplies = false,
-        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, int rootTerminalOutputLimit = 0) =>
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, int rootTerminalOutputLimit = 0,
+        Contract.IActorType? auxiliaryActor = null) =>
         (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock, this.rootHeldReplies,
-            this.retentionWindow, this.rootTerminalOutputLimit) =
-            (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies, retentionWindow, rootTerminalOutputLimit);
+            this.retentionWindow, this.rootTerminalOutputLimit, this.auxiliaryActor) =
+            (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies, retentionWindow,
+                rootTerminalOutputLimit, auxiliaryActor);
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, RootValueReader rootValueReader)
         : this(roots, actor) => this.rootValueReader = rootValueReader;
+
+    internal static void RequireAuxiliaryActor(Contract.IActorType primary, Contract.IActorType auxiliary)
+    {
+        ArgumentNullException.ThrowIfNull(primary);
+        ArgumentNullException.ThrowIfNull(auxiliary);
+        if (string.IsNullOrWhiteSpace(auxiliary.Type) || !Durable.FoundationMetadataLimits.FitsName(auxiliary.Type) ||
+            auxiliary.Type == primary.Type)
+            throw new ArgumentException("An auxiliary root requires a valid actor type distinct from the primary actor.", nameof(auxiliary));
+    }
+
+    private bool IsAuxiliary(string? type) => auxiliaryActor is not null && type == auxiliaryActor.Type;
+
+    private Contract.IActorType? RootActor(string? type) =>
+        type == actor.Type ? actor : IsAuxiliary(type) ? auxiliaryActor : null;
+
+    internal static Func<Contract.ActorHeader, bool> RootWithholding(Contract.IActorType primary, Contract.IActorType? auxiliary) =>
+        auxiliary is null ? primary.Withholds : header =>
+            header.Type == primary.Type ? primary.Withholds(header) : header.Type == auxiliary.Type && auxiliary.Withholds(header);
 
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
@@ -49,9 +70,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => roots is null && row?.Model == actor.Type;
     bool Durable.IActorType.AcceptsFoundationOperator(Durable.InstanceRow? row, Durable.Message message) =>
-        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type &&
+        roots is null ? SupportsFoundationOperator(row) : row is not null && RootActor(row.Model) is not null &&
             (IsRootControl(message) || IsRootRecover(message) ||
-                roots.SupportsChildren && message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, message));
+                !IsAuxiliary(row.Model) && roots.SupportsChildren && message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, message));
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
@@ -91,7 +112,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     {
         if (roots is not null)
             return roots.KeepsParkInputs && IsRootParked(row) ||
-                (!roots.SettlesEndedMailbox || row.Status == Durable.InstanceStatus.Running) && actor.Withholds(RootHeader(row));
+                (!roots.SettlesEndedMailbox || row.Status == Durable.InstanceStatus.Running) && RootActor(row.Model)?.Withholds(RootHeader(row)) == true;
         if (row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return true;
         var checkpoint = store.FoundationTurnHeader(row);
         if (row.ParkRecovery is not null)
@@ -100,7 +121,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        roots is not null ? CanKeepRootParkArrival(row, delivery) || delivery.Durable && IsRootRecover(delivery.Message) :
+        roots is not null ? CanKeepRootParkArrival(row, delivery) || RefusesAuxiliaryInput(row, delivery) ||
+            delivery.Durable && IsRootRecover(delivery.Message) :
         row.ParkDiscard?.Kind != Durable.ParkClearKind.Terminate &&
         (row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
             ? !delivery.Message.IsControl
@@ -111,9 +133,14 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         message.Kind == Contract.Kinds.ChildFinished && row is
             { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
 
+    // Keep unauthenticated input separate from the auxiliary actor's self timers and job results.
+    private bool RefusesAuxiliaryInput(Durable.InstanceRow? row, Durable.Delivery delivery) =>
+        row is not null && IsAuxiliary(row.Model) &&
+        delivery.Message is { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, Operator: null };
+
     private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
         roots?.KeepsParkArrivals == true && IsRootParked(row) && delivery.Durable &&
-        delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) &&
+        delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) && !RefusesAuxiliaryInput(row, delivery) &&
         (delivery.Message is
         { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null, ActorAuthored: false,
             Sender: null, Operator: null, StorageId: not null, ReplyTo: null } ||
@@ -125,7 +152,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         rootTimedJobSettlement && message.FoundationJobResult;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
-        SettlesEndedChildNotice(row, delivery.Message) ||
+        RefusesAuxiliaryInput(row, delivery) || SettlesEndedChildNotice(row, delivery.Message) ||
         roots?.SupportsChildren == true && delivery.Message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, delivery.Message) ||
         roots is not null && delivery.Message.Operator is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null } ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
@@ -140,6 +167,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var message = delivery.Message;
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
+        if (roots is not null && RootActor(input.Row?.Model ?? input.Spec?.Model) is null)
+            return RefuseRootInput(input, "UnknownActorType");
+        if (RefusesAuxiliaryInput(input.Row, delivery))
+            return RefuseRootInput(input, "RootDispatchUnavailable");
         // Recover of a running or suspended root is a stale selection. Ended roots settle it through the root refusal.
         if (roots is not null && input.Row is { } recoverTarget &&
             (recoverTarget.Status == Durable.InstanceStatus.Running || IsRootParked(recoverTarget)) &&
@@ -159,7 +190,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         }
         if (roots is not null)
             return SettleRootDeletion(input) ?? SettleRootTimedJob(input) ?? (RootRefusal(input) is { } reason
-                ? Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, reason) : null);
+                ? RefuseRootInput(input, reason) : null);
         if (message.Kind == Durable.Kinds.ParkExpiry)
             return ExpirePark(input);
         if (message.Kind == Durable.Kinds.Drain)
@@ -383,9 +414,12 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
         var turn = new ActorTurn(inMemory, roots, input, header, ambient, issueSelf, rootJobHandle,
-            rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader, rootTerminalOutputLimit);
+            rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader, rootTerminalOutputLimit,
+            auxiliaryActor is null ? null : actor.Type);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray(), turn.Now);
-        await actor.TurnAsync(turn, CancellationToken.None);
+        var handler = roots is null ? actor : RootActor(header.Type)
+            ?? throw new InvalidOperationException("The root actor type is not registered on this owner.");
+        await handler.TurnAsync(turn, CancellationToken.None);
         var thenDelete = delivery.Message.Operator?.DeleteTarget is not null;
         if (thenDelete) turn.EnsureTerminated();
         var outcome = turn.Seal();
@@ -400,7 +434,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
                 TypeData = outcome.FoundationHeader?.TypeData ?? header.TypeData,
                 Labels = outcome.FoundationHeader?.Labels ?? header.Labels
             };
-            var growth = ValidateTerminalEnvelope(nextRow, nextHeader);
+            var growth = ValidateTerminalEnvelope(handler, nextRow, nextHeader);
             if (roots is not null)
             {
                 outcome.ClearsPrivateTimersOnEnd = issueSelf is { DistinguishesTimers: true } &&
@@ -421,7 +455,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
                     outcome.Consumed.Exists(input => input.Message.InboxKey == key) || outcome.Cancelled.Contains(key)) is null))
                 outcome.Row = nextRow with { ParkCohort = null };
             if (nextRow.Status == Durable.InstanceStatus.Running && outcome.FoundationHeader is not null)
-                outcome.FoundationWithholds = actor.Withholds(nextHeader);
+                outcome.FoundationWithholds = handler.Withholds(nextHeader);
         }
         if (thenDelete && input.Row is { } prior) return FinishThenDelete(input, delivery, prior, header, outcome);
         if (roots is not null && delivery.Message.Kind == Durable.Kinds.Terminate)
@@ -457,9 +491,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         return outcome;
     }
 
-    private long ValidateTerminalEnvelope(Durable.InstanceRow row, Contract.ActorHeader header)
+    private static long ValidateTerminalEnvelope(Contract.IActorType handler, Durable.InstanceRow row, Contract.ActorHeader header)
     {
-        var growth = row.Status == Durable.InstanceStatus.Running ? actor.TerminalGrowth(header, row.State) : 0;
+        var growth = row.Status == Durable.InstanceStatus.Running ? handler.TerminalGrowth(header, row.State) : 0;
         // This is the built-in in-memory encoding. Keep enough space for the terminal registry even when the live row is smaller.
         var children = row.Children is null ? 0 : Durable.ChildRegistry.Read(row.Children).Count;
         var jobs = Durable.JobRegistry.Read(row.Jobs).Count;
@@ -487,11 +521,11 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     {
         if (roots is not null)
         {
-            if (rootJobHandle is null || type != actor.Type ||
+            if (rootJobHandle is null || RootActor(type) is not { } handler ||
                 job is not Durable.JobContext { FoundationRootReference: { } bound, Creation: 1 } ||
                 (job.Deadline is not null) != rootTimedJobSettlement)
-                throw new NotSupportedException("This root job needs a bound PostgreSQL actor reference.");
-            return actor.ExecuteJobAsync(new Job(new(bound), job), cancellationToken);
+                throw new NotSupportedException("This root job needs a bound, registered actor reference.");
+            return handler.ExecuteJobAsync(new Job(new(bound), job), cancellationToken);
         }
         var reference = job is Durable.JobContext { FoundationInlineTenant: { } tenant }
             ? store.ReferenceFor(tenant, new(job.Instance.Id, job.Creation))

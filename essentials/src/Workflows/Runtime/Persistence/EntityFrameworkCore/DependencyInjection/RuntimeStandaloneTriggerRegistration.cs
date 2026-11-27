@@ -45,6 +45,11 @@ internal static class RuntimeStandaloneTriggerRegistration
         if (services.Any(descriptor => descriptor.ServiceType == typeof(IRuntimeIngressReservationReader) || descriptor.ServiceType == typeof(ITriggerSourceResourceCommitStore)))
             throw new InvalidOperationException("Runtime EF cannot replace an independently selected source projection owner.");
         services.Add(reader); services.Add(sourceCommit);
+        services.TryAddScoped<EfRuntimeKernelScheduleOccurrenceStore>();
+        services.TryAddScoped<IRuntimeKernelScheduleOccurrenceStore>(provider => provider.GetRequiredService<EfRuntimeKernelScheduleOccurrenceStore>());
+        services.TryAddScoped<IRuntimeKernelScheduleOccurrenceDeliveryStore>(provider => provider.GetRequiredService<EfRuntimeKernelScheduleOccurrenceStore>());
+        services.TryAddScoped<IRuntimeKernelScheduleRetentionRoots>(provider => provider.GetRequiredService<EfRuntimeKernelScheduleOccurrenceStore>());
+        services.TryAddScoped<IRuntimeKernelScheduleControlReader, EfRuntimeKernelScheduleControlStore>();
         services.AddSingleton(new StandaloneTriggerProviderRegistration("EntityFrameworkCore", resource, ingress) { Reservations = reader, SourceCommit = sourceCommit });
         var queue = services.Where(x => x.ServiceType == typeof(IAuthoredModelQueue)).ToArray();
         if (queue.Length > 1 || queue.Length == 1 && queue[0].ImplementationType != typeof(EfAuthoredModelQueue))

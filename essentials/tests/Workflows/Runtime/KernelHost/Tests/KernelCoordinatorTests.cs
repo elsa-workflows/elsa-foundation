@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Options;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Kernel.WorkflowActor;
@@ -215,6 +216,9 @@ public sealed class KernelCoordinatorTests
         var claim = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1"));
         Assert.Equal(TriggerCardinality.ReservationOnly, claim.Cardinality);
         Assert.True(claim.IsActive);
+        var scheduleKey = claim.Metadata[RuntimeKernelScheduleControl.ScheduleKeyMetadata];
+        Assert.Equal("schedule:ticks:tick", scheduleKey);
+        Assert.Equal(RuntimeKernelScheduleOccurrence.ReservationKey(scheduleKey), claim.StimulusHash);
         Assert.Empty(await host.Bindings.ListAllByStimulusAsync(claim.StimulusType, claim.StimulusHash));
     }
 

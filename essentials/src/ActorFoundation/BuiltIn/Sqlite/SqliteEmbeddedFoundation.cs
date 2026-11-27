@@ -40,6 +40,9 @@ public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
     public static SqliteEmbeddedFoundation ForPlaybackDescendantsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootPlaybackDescendantsQualification);
 
+    internal static SqliteEmbeddedFoundation ForScheduleQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootScheduleSettlementQualification);
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat)
     {
         path = Path.GetFullPath(databasePath);
@@ -73,12 +76,26 @@ public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
     /// <summary>Creates a hosted owner that rechecks retention eligibility under the supplied host policy.</summary>
     public SqliteEmbeddedHostedService CreateHostedServiceWithRetention(Contract.IActorType actor, Action<string> endProcess,
         Func<Contract.ActorHeader, TimeSpan?>? retentionWindow, LoopOptions? options = null, bool fenceInBatch = true,
-        ILogger<SqliteEmbeddedHostedService>? logger = null)
+        ILogger<SqliteEmbeddedHostedService>? logger = null) =>
+        CreateHostedServiceCore(actor, endProcess, retentionWindow, options, fenceInBatch, logger, auxiliaryActor: null);
+
+    /// <summary>Creates one owner for the primary actor and a distinct auxiliary actor on a qualified store.</summary>
+    public SqliteEmbeddedHostedService CreateHostedServiceWithAuxiliaryActor(Contract.IActorType actor, Contract.IActorType auxiliaryActor,
+        Action<string> endProcess, Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, LoopOptions? options = null,
+        bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null)
+    {
+        Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return CreateHostedServiceCore(actor, endProcess, retentionWindow, options, fenceInBatch, logger, auxiliaryActor);
+    }
+
+    private SqliteEmbeddedHostedService CreateHostedServiceCore(Contract.IActorType actor, Action<string> endProcess,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow, LoopOptions? options, bool fenceInBatch,
+        ILogger<SqliteEmbeddedHostedService>? logger, Contract.IActorType? auxiliaryActor)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (actor.Type != actorType) throw new ArgumentException("The actor type must match the Embedded foundation.", nameof(actor));
         return SqliteEmbeddedHostedService.ForShipped(node, actor, endProcess, options, fenceInBatch, logger,
-            () => (InstalledPath, requests.Value), retentionWindow);
+            () => (InstalledPath, requests.Value), retentionWindow, auxiliaryActor);
     }
 
     /// <summary>Opens durable ingress and held requests routed to this foundation's owner.</summary>
