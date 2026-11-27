@@ -91,9 +91,18 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton<IScheduleActors>(schedules
             ? new RuntimeManagedScheduleActors()
             : new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
+        if (storage.TakesEventStarts)
+        {
+            services.AddSingleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(),
+                new(persistenceScope, tenant.Tenant), tenant, sp.GetRequiredService<KernelServing>().Capabilities,
+                () => storage.BindEventStarts(tenant), sp.GetService<TimeProvider>() ?? TimeProvider.System,
+                sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>()));
+            services.AddSingleton<IKernelEventPublicationRegistration>(sp => sp.GetRequiredService<KernelEventPublicationRelay>());
+        }
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
-            persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables));
+            persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables,
+            sp.GetService<KernelEventPublicationRelay>()));
         if (storage.TakesPreparedStarts)
             services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionStartService>(sp =>
             {

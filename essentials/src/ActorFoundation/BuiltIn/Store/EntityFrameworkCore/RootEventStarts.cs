@@ -1,19 +1,35 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using Kernel.Foundation.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
 /// <summary>The host's exact immutable publication and material selection for one authored entry node.</summary>
-internal sealed record EventStartRegistration(string Node, string Key, string ActivationId, string SourceReferenceId, string ArtifactId,
-    string ExecutableSelection, Contract.StartSpec Template);
+public sealed record EventStartRegistration(string Node, string Key, string ActivationId, string SourceReferenceId, string ArtifactId,
+    string ExecutableSelection, Contract.StartSpec Template)
+{
+    /// <summary>Checks the registration's storage bounds before its upstream publication becomes authoritative.</summary>
+    public static void ValidatePublication(string slot, IReadOnlyList<EventStartRegistration> registrations) =>
+        RootEventStarts.ValidatePublication(slot, registrations);
+}
 
-internal enum EventRegistrationResult { Applied, Duplicate, Stale, Conflict }
+public enum EventRegistrationResult { Applied, Duplicate, Stale, Conflict }
 
-internal sealed record EventStartTarget(string Tenant, string Id, string Slot, long Revision, string EventId, string Key,
+public sealed record EventStartTarget(string Tenant, string Id, string Slot, long Revision, string EventId, string Key,
     string? Payload, EventStartRegistration Registration);
+
+/// <summary>Trusted Event registration and selected-target relay bound to one physical store and tenant.</summary>
+public interface IEventStartAdmissions
+{
+    Task<EventRegistrationResult> ApplyAsync(string slot, long revision, IReadOnlyList<EventStartRegistration> registrations, CancellationToken cancellationToken);
+    Task<IReadOnlyList<EventStartTarget>> ListAsync(string? after, CancellationToken cancellationToken);
+    Task<Contract.Admission> AdmitAsync(string target, Func<EventStartTarget, Contract.StartSpec> start, ProtectRootStartAsync protect,
+        CancellationToken cancellationToken);
+    Task<bool> ConfirmDrainedAsync(string slot, long revision, CancellationToken cancellationToken);
+}
 
 /// <summary>Provider-owned registrations and accepted event starts. Removing a registration leaves its selected targets intact.</summary>
 internal static partial class RootEventStarts
@@ -81,22 +97,8 @@ internal static partial class RootEventStarts
         IReadOnlyList<EventStartRegistration> registrations, Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         RequireTransaction(db, bind);
-        RequireName(slot);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(revision);
-        if (registrations.Count > FoundationMetadataLimits.MaxTurnSends) throw new ArgumentException("Too many event starts for one publication.");
-        var rows = new List<RegistrationRow>(registrations.Count);
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        long bytes = 0;
-        foreach (var registration in registrations.OrderBy(item => item.Node, StringComparer.Ordinal))
-        {
-            Validate(registration);
-            if (!names.Add(registration.Node)) throw new ArgumentException("A publication has more than one event start on the same node.");
-            var authority = DurableKeyJson.Write(registration);
-            bytes += Encoding.UTF8.GetByteCount(authority);
-            if (bytes > FoundationMetadataLimits.MessageContentBytes)
-                throw new ArgumentException("The publication event registrations exceed their storage budget.");
-            rows.Add(new(registration.Node, Qualify(tenant, registration.Key), authority));
-        }
+        var rows = EncodePublication(slot, registrations, tenant);
         var envelope = JsonSerializer.Serialize(rows);
         var fingerprint = FoundationRootCreator.OperationDigest(envelope);
 
@@ -160,6 +162,29 @@ internal static partial class RootEventStarts
                 """;
         if (await db.Database.ExecuteSqlInterpolatedAsync(Bind(insert, bind), token) != rows.Count) throw SourceChanged();
         return EventRegistrationResult.Applied;
+    }
+
+    internal static void ValidatePublication(string slot, IReadOnlyList<EventStartRegistration> registrations) =>
+        EncodePublication(slot, registrations, null);
+
+    private static List<RegistrationRow> EncodePublication(string slot, IReadOnlyList<EventStartRegistration> registrations, string? tenant)
+    {
+        RequireName(slot);
+        if (registrations.Count > FoundationMetadataLimits.MaxTurnSends) throw new ArgumentException("Too many event starts for one publication.");
+        var rows = new List<RegistrationRow>(registrations.Count);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        long bytes = 0;
+        foreach (var registration in registrations.OrderBy(item => item.Node, StringComparer.Ordinal))
+        {
+            Validate(registration);
+            if (!names.Add(registration.Node)) throw new ArgumentException("A publication has more than one event start on the same node.");
+            var authority = DurableKeyJson.Write(registration);
+            bytes += Encoding.UTF8.GetByteCount(authority);
+            if (bytes > FoundationMetadataLimits.MessageContentBytes)
+                throw new ArgumentException("The publication event registrations exceed their storage budget.");
+            rows.Add(new(registration.Node, tenant is null ? registration.Key : Qualify(tenant, registration.Key), authority));
+        }
+        return rows;
     }
 
     internal static async Task<(int Count, long Bytes)> CaptureAsync(KernelDb db, EventRow publication, int available, long availableBytes,

@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal abstract class KernelShellStorage
 {
-    private enum Profile { Shipped, ManagedSchedules, PreparedStarts }
+    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, EventStarts }
 
     public abstract bool TakesSelfSends { get; }
     public abstract bool TakesTimers { get; }
@@ -24,6 +24,9 @@ internal abstract class KernelShellStorage
     public abstract bool TakesManagedSchedules { get; }
     public abstract ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token);
     public abstract bool TakesPreparedStarts { get; }
+    internal virtual bool TakesEventStarts => false;
+    internal virtual IEventStartAdmissions BindEventStarts(BoundScope scope) =>
+        throw new InvalidOperationException("The store does not take Event starts.");
     public abstract IProtectedRootStarts BindPublishedStarts(BoundScope scope);
     public abstract Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null);
     public abstract Task<RootStartProof> ConfirmPreparedStartAsync(BoundScope scope, ActorRef actor, string issuance,
@@ -46,6 +49,9 @@ internal abstract class KernelShellStorage
 
     internal static KernelShellStorage CreatePreparedStartsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.PreparedStarts);
+
+    internal static KernelShellStorage CreateEventStartsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
+        Create(provider, sqlitePath, postgresConnectionString, Profile.EventStarts);
 
     private static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString, Profile profile)
     {
@@ -98,7 +104,7 @@ internal abstract class KernelShellStorage
         private SqliteEmbeddedFoundation? _foundation = profile switch
         {
             Profile.ManagedSchedules => SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.ActorType),
-            Profile.PreparedStarts => null,
+            Profile.PreparedStarts or Profile.EventStarts => null,
             Profile.Shipped when SqliteEmbeddedHosting.TakesPreparedStarts => null,
             _ => new(path, node, WorkflowActor.ActorType)
         };
@@ -111,8 +117,10 @@ internal abstract class KernelShellStorage
         public override bool TakesChildren => SqliteEmbeddedHosting.TakesChildren;
         public override bool TakesHttpWaits => SqliteEmbeddedHosting.TakesHttpWaits;
         public override bool TakesManagedSchedules => TakesPreparedStarts || Foundation.TakesManagedSchedules;
-        public override bool TakesPreparedStarts => profile == Profile.PreparedStarts ||
+        public override bool TakesPreparedStarts => profile is Profile.PreparedStarts or Profile.EventStarts ||
             profile == Profile.Shipped && SqliteEmbeddedHosting.TakesPreparedStarts;
+        internal override bool TakesEventStarts => profile == Profile.EventStarts;
+        internal override IEventStartAdmissions BindEventStarts(BoundScope scope) => Foundation.BindEventStarts(scope);
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Foundation.BindProtectedRootStarts(scope);
 
         public override ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token) =>
@@ -123,9 +131,12 @@ internal abstract class KernelShellStorage
             if (TakesPreparedStarts)
             {
                 ArgumentNullException.ThrowIfNull(protectRootStart);
-                _foundation ??= profile == Profile.PreparedStarts
-                    ? SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart)
-                    : SqliteEmbeddedFoundation.WithRootStartProtection(path, node, WorkflowActor.ActorType, protectRootStart);
+                _foundation ??= profile switch
+                {
+                    Profile.EventStarts => SqliteEmbeddedFoundation.ForEventStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
+                    Profile.PreparedStarts => SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
+                    _ => SqliteEmbeddedFoundation.WithRootStartProtection(path, node, WorkflowActor.ActorType, protectRootStart)
+                };
             }
             return Foundation.InstallShippedAsync(token);
         }
@@ -184,6 +195,8 @@ internal abstract class KernelShellStorage
         public override bool TakesHttpWaits => PostgresPreviewHosting.TakesHttpWaits(OpenDatabase);
         public override bool TakesManagedSchedules => PostgresPreviewHosting.TakesManagedSchedules(OpenDatabase);
         public override bool TakesPreparedStarts => PostgresPreviewHosting.TakesPreparedStarts(OpenDatabase);
+        internal override bool TakesEventStarts => _profile == Profile.EventStarts;
+        internal override IEventStartAdmissions BindEventStarts(BoundScope scope) => PostgresPreviewHosting.BindEventStarts(OpenDatabase, scope);
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Requests.BindProtectedRootStarts(scope);
         private PostgresDirectRequests Requests => _requests ??
             throw new InvalidOperationException("Install the PostgreSQL prepared-start store before opening it.");
@@ -192,6 +205,9 @@ internal abstract class KernelShellStorage
         {
             switch (_profile)
             {
+                case Profile.EventStarts:
+                    await PostgresPreviewHosting.InstallEventStartsQualificationAsync(_options, token);
+                    break;
                 case Profile.PreparedStarts:
                     await PostgresPreviewHosting.InstallPreparedStartsQualificationAsync(_options, token);
                     break;
@@ -260,6 +276,7 @@ internal abstract class KernelShellStorage
         {
             Profile.ManagedSchedules => PostgresPreviewHosting.CreateManagedSchedulesQualificationContext(_options),
             Profile.PreparedStarts => PostgresPreviewHosting.CreatePreparedStartsQualificationContext(_options),
+            Profile.EventStarts => PostgresPreviewHosting.CreateEventStartsQualificationContext(_options),
             _ => PostgresPreviewHosting.CreateShippedContext(_options)
         };
     }

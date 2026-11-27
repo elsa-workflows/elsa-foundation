@@ -19,7 +19,10 @@ public enum WorkflowActivationOutcome
     Failed,
     Deactivated,
     AlreadyInactive,
-    ChannelNotAllowed
+    ChannelNotAllowed,
+
+    /// <summary>The exact slot transition committed and its external serving projection still needs acknowledgment.</summary>
+    CommittedPending
 }
 
 /// <summary>Which step of the activation lifecycle failed.</summary>
