@@ -1,5 +1,7 @@
 using System.Runtime.ExceptionServices;
 using Elsa.Locking.Core;
+using Elsa.Activities.Design.Persistence.Core.Constants;
+using Elsa.Primitives.Versioning;
 using Elsa.Primitives.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Models;
@@ -81,6 +83,30 @@ public sealed class EfReusableActivityImportCommand(
         var tenantId = WritableTenant(mutation);
         var plan = CreatePlan(mutation, tenantId, scoped);
 
+        // Acquire all definition locks before opening a DB transaction, in the same order as activity upgrade.
+        // A concurrent publication must see either the whole set of reservations or none of it.
+        var locks = new Stack<IDistributedSynchronizationHandle>();
+        try
+        {
+            if (plan.PublishImportedActivities.HasValue && plan.Versions.Count > 0)
+            {
+                var provider = draftServices?.Invoke().Locks ?? throw new InvalidOperationException("Draft import requires workflow authoring services.");
+                foreach (var key in plan.Versions.Select(v => ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(v.DefinitionId))
+                             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+                    locks.Push(await provider.AcquireLockAsync(key, null, cancellationToken));
+            }
+            return await CommitPlanAsync(mutation, plan, tenantId, scoped, cancellationToken);
+        }
+        finally
+        {
+            while (locks.TryPop(out var handle))
+                await handle.DisposeAsync();
+        }
+    }
+
+    private async Task<ReusableActivityImportCommitResult> CommitPlanAsync(
+        ReusableActivityImportMutation mutation, ImportPlan plan, string tenantId, bool scoped, CancellationToken cancellationToken)
+    {
         // Every attempt opens its own shared transaction over fresh contexts, so no caller transaction can be in scope.
         return await WriteConflicts.RunUntilSettledAsync<ReusableActivityImportCommitResult>(null, async () =>
         {
@@ -209,6 +235,20 @@ public sealed class EfReusableActivityImportCommand(
 
         // A catalog row under a plan version id exists only once that version is published (spec 246 FR-004).
         var versionRows = await LoadActivityVersionsAsync(activities, plan.Versions.Select(version => version.Id), tenantId, cancellationToken);
+
+        if (plan.PublishImportedActivities.HasValue)
+        {
+            var headIds = authoringRows.Values.Select(state => state.HeadVersionId).OfType<string>();
+            var heads = await LoadActivityVersionsAsync(activities, headIds, tenantId, cancellationToken);
+            foreach (var version in plan.Versions)
+            {
+                if (versionRows.ContainsKey(version.Id) || authoringRows.GetValueOrDefault(version.DefinitionId)?.HeadVersionId is not { } headId)
+                    continue;
+                if (!heads.TryGetValue(headId, out var head) || !SemVer.TryParse(head.Version, out var published) ||
+                    !SemVer.TryParse(version.Version, out var pending) || pending <= published)
+                    throw Collision($"Cannot reserve version {version.Version} for source '{version.SourceVersionId}'. The activity already has a published head ({head?.Version ?? headId}). Review its versions before importing.", scoped);
+            }
+        }
 
         var existingBindings = new HashSet<string>(StringComparer.Ordinal);
         foreach (var binding in plan.Bindings)
@@ -782,7 +822,7 @@ public sealed class EfReusableActivityImportCommand(
     /// resolving to more than one row is refused, and each returned row is decoded under the binding identity that
     /// asked for it, so a drifted row fails closed instead of being reported as a different binding.
     /// </summary>
-    private static async Task<Dictionary<string, ReusableActivityImportDefinitionBinding>> LoadBindingsAsync(
+    internal static async Task<Dictionary<string, ReusableActivityImportDefinitionBinding>> LoadBindingsAsync(
         Elsa3ImportDbContext db,
         IEnumerable<string> bindingIds,
         string tenantId,

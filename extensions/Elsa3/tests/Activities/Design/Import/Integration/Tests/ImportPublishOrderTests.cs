@@ -1,4 +1,6 @@
 using System.Text.Json.Nodes;
+using System.Net;
+using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -126,6 +128,57 @@ public sealed class ImportPublishOrderTests(ImportedDependenciesFixture fixture)
         var workflow = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(sources["outer-v1"], "workflowVersionId"));
         var run = await host.RunAsync(workflow);
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        Assert.Contains(run.Activities, activity => activity.Metadata.GetValueOrDefault("activity.definitionVersionId") == firstId);
+    }
+
+    [Fact]
+    public async Task A_concurrent_publication_that_wins_the_definition_lock_rejects_an_obsolete_new_reservation()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? pauseKey = null;
+        await using var host = await Elsa3ImportHost.StartAsync(beforeAcquireLock: async (key, token) =>
+        {
+            if (key != Volatile.Read(ref pauseKey) || Interlocked.Exchange(ref pauseKey, null) is null)
+                return;
+            entered.TrySetResult();
+            await release.Task.WaitAsync(token);
+        });
+        async Task<HttpResponseMessage> Apply(string key, params string[] selected)
+        {
+            var handle = await host.UploadCollectionAsync("reusable-calls-reusable");
+            var (plan, _) = await host.AnalyzeAsync(handle);
+            return await host.Send(HttpMethod.Post, $"migration/elsa3/reusable-activities/collections/{handle}/apply-drafts", new JsonObject
+            {
+                ["idempotencyKey"] = key, ["planId"] = plan, ["selectedSourceVersionIds"] = new JsonArray(selected.Select(id => (JsonNode?)id).ToArray())
+            });
+        }
+
+        using var initial = await Apply("v2-only", "inner-v2");
+        initial.EnsureSuccessStatusCode();
+        var source = JsonNode.Parse(await initial.Content.ReadAsStringAsync())!["sources"]![0]!;
+        var path = $"design/activities/drafts/{source["activityDraftId"]}";
+        var review = await host.PostAsync($"{path}/publication-preflight", new JsonObject { ["expectedDraftRevision"] = 1 });
+        pauseKey = ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(Elsa3ImportHost.Required(source, "activityDefinitionId"));
+        var addingEarlierDraft = Apply("add-v1", "inner-v1", "inner-v2");
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            var published = await host.PostAsync($"{path}/publish", new JsonObject
+            {
+                ["idempotencyKey"] = "publish-first", ["expectedDraftRevision"] = 1,
+                ["version"] = "2.0.0", ["reviewToken"] = (string?)review["reviewToken"]
+            });
+            Assert.Equal((string?)source["activityDefinitionVersionId"], (string?)published["outcome"]!["definitionVersionId"]);
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+        using var refused = await addingEarlierDraft;
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Contains("already has a published head (2.0.0)", await refused.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.NotFound, (await host.GetImportStatusAsync("add-v1")).StatusCode);
     }
 
     [Fact]

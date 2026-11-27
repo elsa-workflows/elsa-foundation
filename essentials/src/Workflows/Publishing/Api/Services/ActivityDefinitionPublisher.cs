@@ -57,7 +57,7 @@ public interface IActivityDraftPublicationIdentity
 
     /// <summary>The earliest active reservation this publication would overtake within the same definition and tenant.</summary>
     ValueTask<(string DraftId, string Version)?> FindPrecedingReservationAsync(
-        ActivityDefinitionDraft draft, string version, CancellationToken cancellationToken) =>
+        ActivityDefinitionDraft draft, string version, string? publishedHeadVersion, CancellationToken cancellationToken) =>
         ValueTask.FromResult<(string, string)?>(null);
 }
 
@@ -595,7 +595,7 @@ public sealed class ActivityDefinitionPublisher(
         var minimumVersion = _reviewPolicy.MinimumVersion(head?.Version, requiredBump);
         var diagnostics = evaluated.Diagnostics;
         var preceding = reservedIdentities is null ? null :
-            await reservedIdentities.FindPrecedingReservationAsync(draft, version, cancellationToken);
+            await reservedIdentities.FindPrecedingReservationAsync(draft, version, head?.Version, cancellationToken);
         if (preceding is { } earlier)
             diagnostics = [.. diagnostics, new ActivityDiagnostic(
                 "activity.version.pending-reservation",

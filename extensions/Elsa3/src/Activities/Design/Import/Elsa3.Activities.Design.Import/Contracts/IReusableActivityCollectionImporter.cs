@@ -126,6 +126,8 @@ public interface IReusableActivityDraftImport
 public interface IImportedActivityDraftReservations
 {
     ValueTask<(string VersionId, string Version)?> FindReservationAsync(string draftId, CancellationToken cancellationToken);
+    ValueTask<(string DraftId, string Version)?> FindPrecedingReservationAsync(
+        string? draftTenantId, string definitionId, string draftId, string version, string? publishedHeadVersion, CancellationToken cancellationToken);
 }
 
 public interface IReusableActivityImportOperationService
