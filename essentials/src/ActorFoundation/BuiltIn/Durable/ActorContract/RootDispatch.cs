@@ -353,6 +353,15 @@ internal sealed partial class ActorAdapter
             if (outcome.Row is { } childRow) outcome.Row = childRow with { CustomHandles = null };
         }
 
+        var childCascade = roots?.SupportsChildren == true &&
+            outcome.Row is { Status: Durable.InstanceStatus.Cancelled, Jobs: null, Children: null } &&
+            outcome.FoundationCascade is { Entries.Children.IsEmpty: false, Input: null };
+        if (childCascade && outcome.Row is { Cascade: not null } opening)
+        {
+            // This store persists the remaining registry and paging cursor beside the ended checkpoint.
+            outcome.Sent.RemoveAll(message => message.Kind == Durable.Kinds.Cascade);
+            outcome.Row = opening with { Cascade = null };
+        }
         var timedFault = outcome.Row is { Status: Durable.InstanceStatus.Faulted } && rootTimedJobSettlement &&
             previous is not null && !outcome.OpensPark &&
             outcome.Consumed is [{ Durable: true, Message: var result }] &&
@@ -385,12 +394,12 @@ internal sealed partial class ActorAdapter
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
             // their delivery, and drops it when it holds none (Worker.Release), as the in-memory reference does.
-            outcome.FoundationCascade is not null && !settlesJobs || outcome.InMemory)
+            outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
 
         static bool IsChildEffect(Durable.Message message) =>
-            message.BindFoundationChild || message.FoundationRootChildInput || message.Kind == Durable.Kinds.ChildFinished;
+            message.BindFoundationChild || message.FoundationRootChildInput || message.CascadeOrigin || message.Kind == Durable.Kinds.ChildFinished;
 
         bool SupportedSend(Durable.Message message, Durable.InstanceRow row) =>
             rootJobHandle is not null && message.HasIssuedTicket && Durable.RootJobTicket.Read(message, row.Id, row.Model) is not null ||

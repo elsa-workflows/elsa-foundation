@@ -11,7 +11,7 @@ internal static class PostgresChildWorkflowChecks
 {
     internal static async Task<int> RunAsync()
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(70));
         var token = deadline.Token;
         const string node = "child-workflow-check";
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(
@@ -33,7 +33,10 @@ internal static class PostgresChildWorkflowChecks
                  Wf.Set("use-child", "result", Binding.Result("dispatch", "Output.child-value"))],
                 [new Connection("dispatch", "use-child", "Completed")])))
             .Add(Wf.Workflow("cancel-parent",
-                Wf.Parallel("race", 1, Wf.Dispatch("dispatch", "child", wait: true), Wf.Node<ReleaseChild>("win"))));
+                Wf.Parallel("race", 1, Wf.Dispatch("dispatch", "child", wait: true), Wf.Node<ReleaseChild>("win"))))
+            .Add(Wf.Workflow("cascade-parent", Wf.Parallel("cascade", null,
+                Wf.Dispatch("left", "child", wait: true), Wf.Dispatch("right", "child", wait: true))))
+            .Add(Wf.Workflow("bulk-parent", Wf.Node<ReleaseChild>("wait")));
         var actor = new ChildFixtureActor(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases)]));
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, actor.Type,
             PostgresPreviewHosting.CreateRequests(Open, node, actor.Type), cancellationToken: token);
@@ -70,7 +73,8 @@ internal static class PostgresChildWorkflowChecks
 
         const string nextNode = "child-workflow-successor";
         var nextFoundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, actor.Type,
-            (bound, target, kind) => ReferenceEquals(bound, scope) && target == childReference && kind == Contract.Kinds.Recover,
+            (bound, target, kind) => ReferenceEquals(bound, scope) &&
+                (kind == Contract.Kinds.Terminate || target == childReference && kind == Contract.Kinds.Recover),
             PostgresPreviewHosting.CreateRequests(Open, nextNode, actor.Type), cancellationToken: token);
         await using var successor = StartService(nextNode, nextFoundation.Requests);
         await successor.StartAsync(token);
@@ -115,6 +119,47 @@ internal static class PostgresChildWorkflowChecks
             var afterCancel = await WaitForAsync(cancelParent, image => image.Children is null, successor);
             Check(cancelledChild.Revision == 2 && afterCancel.Revision == 2 && afterCancel.Status == InstanceStatus.Finished,
                 "the losing Dispatch cancels its exact child and the ended parent settles the final notice without a new model turn");
+            var cascadeAdmitted = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
+                WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("cascade-parent"))), "cascade-parent-1", Contract.Kinds.Start,
+                cancellationToken: token);
+            var cascadeReference = cascadeAdmitted.Actor!.Value;
+            var cascadeParent = await WaitForAsync(cascadeReference, image => ChildRegistry.Read(image.Children).Count == 2, successor);
+            List<string> children;
+            do
+            {
+                children = await db.Database.SqlQuery<string>($"""
+                    SELECT "FoundationReference" AS "Value" FROM "Instances" WHERE "Parent" = {cascadeParent.Actor.Id}
+                    """).ToListAsync(token);
+                if (children.Count != 2) await Task.Delay(15, token);
+            } while (children.Count != 2);
+            var selected = (await nextFoundation.GetAsync(scope, cascadeReference, token))!.Selection;
+            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(cascadeReference), "terminate-parent", Contract.Kinds.Terminate,
+                Json.Write(new Contract.OperatorCommand(selected)), cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the operator terminates the exact parent while both children are waiting");
+            var terminated = await WaitForAsync(cascadeReference, image => image.Status == InstanceStatus.Cancelled, successor);
+            foreach (var childToCancel in children)
+                await WaitForAsync(new(childToCancel), image => image.Status == InstanceStatus.Cancelled, successor);
+            Check(terminated is { Revision: 2, Children: null }, "the committed parent Terminate cascades to both exact children");
+            var bulkAdmitted = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
+                WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("bulk-parent"))), "bulk-parent-1", Contract.Kinds.Start,
+                cancellationToken: token);
+            var bulkParent = bulkAdmitted.Actor!.Value;
+            await WaitForAsync(bulkParent, image => image.Status == InstanceStatus.Running, successor);
+            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(bulkParent), "bulk-spawn", ChildFixtureActor.Spawn,
+                cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the bounded cascade fixture starts one registry larger than a page");
+            var registry = await WaitForAsync(bulkParent, image => ChildRegistry.Read(image.Children).Count > CascadeProtocol.PageLimit, successor);
+            var last = ChildRegistry.Read(registry.Children)[^1].Id;
+            var lastReference = await db.Database.SqlQuery<string>($"""
+                SELECT "Reference" AS "Value" FROM "FoundationRootBirths" WHERE "Actor" = {last}
+                """).SingleAsync(token);
+            var bulkSelection = (await nextFoundation.GetAsync(scope, bulkParent, token))!.Selection;
+            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(bulkParent), "bulk-terminate", Contract.Kinds.Terminate,
+                Json.Write(new Contract.OperatorCommand(bulkSelection)), cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the operator admits the large parent's Terminate");
+            await WaitForAsync(new(lastReference), image => image.Status == InstanceStatus.Cancelled, successor);
+            Check(!await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "FoundationRootChildCascades" WHERE "Reference" = {bulkParent.Id}) AS "Value"
+                """).SingleAsync(token), "the durable second cascade page reaches its child and clears the ledger");
             Check(service.LastError is null && successor.LastError is null, "both owners stopped and ran without fault");
         }
         finally { await successor.StopAsync(CancellationToken.None); }
@@ -138,6 +183,7 @@ internal static class PostgresChildWorkflowChecks
     private sealed class ChildFixtureActor(Contract.IActorType workflow) : Contract.IActorType
     {
         internal const string Fault = "fault-child";
+        internal const string Spawn = "bulk-spawn";
         public string Type => workflow.Type;
         public bool Withholds(Contract.ActorHeader header) => workflow.Withholds(header);
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => workflow.RestoreWaits(header, state);
@@ -147,7 +193,10 @@ internal static class PostgresChildWorkflowChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
         {
             if (turn.Inbox.Any(message => message.Kind == Fault)) throw new InvalidOperationException(Fault);
-            return workflow.TurnAsync(turn, token);
+            if (!turn.Inbox.Any(message => message.Kind == Spawn)) return workflow.TurnAsync(turn, token);
+            for (var i = 0; i <= CascadeProtocol.PageLimit; i++)
+                turn.Start(WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("child")));
+            return ValueTask.CompletedTask;
         }
     }
 

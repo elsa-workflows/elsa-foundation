@@ -146,6 +146,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             ON CONFLICT DO NOTHING
             """, cancellationToken);
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
+        if (db.UsesRootChildren) await EfStore.InstallRootChildCascadeAsync(db, cancellationToken);
         if (db.UsesRootStableBody)
             await db.Database.ExecuteSqlRawAsync("""
                 ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationStateWire" bytea

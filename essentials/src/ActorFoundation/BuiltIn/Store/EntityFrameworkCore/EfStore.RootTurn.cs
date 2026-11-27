@@ -136,7 +136,7 @@ public sealed partial class EfStore
             DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope} AND "Id" = ANY({consumed})
                  AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
             """, cancellationToken) != consumed.Length) return false;
-        var notices = messages.Where(message => message.FoundationRootChildNotice || message.FoundationRootChildInput).Select(message => message.InboxKey.Id).ToArray();
+        var notices = messages.Where(message => message.FoundationRootChildNotice || message.FoundationRootChildInput || message.Kind == Kinds.Cascade).Select(message => message.InboxKey.Id).ToArray();
         if (notices.Length > 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({notices})
                 AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
@@ -161,6 +161,8 @@ public sealed partial class EfStore
                 DecodeRootChildNotice(row, reference),
             InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && IsStoredRootChildInput(row.Start) =>
                 DecodeRootChildInput(row, reference),
+            InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && row.Start == RootChildCascadeWire =>
+                DecodeChildCascadeControl(row, reference),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? db.UsesSqliteRootRuntime
                     ? PostgresRootAdmission.DecodeOperator(row, reference, terminations: true, retirements: true,

@@ -26,45 +26,14 @@ public sealed partial class EfStore
 
     private sealed record RootChildEffects(string? Children, RootChildStart[] Starts, Message[] Inputs, Message? Notice)
     {
+        internal RootChildCascade? Cascade { get; init; }
+
         internal async Task<bool> BindAsync(KernelDb db, string tenant, CancellationToken token)
         {
             if (!db.UsesRootChildren) return false;
-            foreach (var (reference, creator) in Starts)
-            {
-                var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
-                var (header, payload) = RootAdmissionWire.EncodeCreator(creator);
-                if (!RootAdmissionWire.FitsEnvelope(header, payload))
-                    throw new StoreException(Failure.Definite, "The child creator exceeds its storage budget.");
-                if (await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    WITH birth AS (
-                        INSERT INTO "FoundationRootBirths" ("Tenant","Reference","Actor","Partition","Creation","Creator","Fingerprint")
-                        VALUES ({tenant}, {reference}, {creator.Target.Id}, {creator.Target.Partition}, 1, {creator.InboxKey.Id}, {fingerprint})
-                        RETURNING "Actor", "Partition", "Creator"
-                    )
-                    INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Payload","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
-                    SELECT "Creator", 0, "Actor", "Partition", {Kinds.Start}, 0, {payload}, {header}, {creator.Sender}, false, 0, 0, 0, 0 FROM birth
-                    """, token) != 1) return false;
-            }
-            foreach (var input in Inputs)
-            {
-                var storedInput = RootChildInputPrefix + DurableKeyJson.Write(new StoredChildInput(input.Id, input.Kind, input.Payload));
-                if (!RootAdmissionWire.FitsEnvelope(storedInput, null))
-                    throw new StoreException(Failure.Definite, "The child input exceeds its storage budget.");
-                // The child may still be a creator. A terminal or retired child no longer needs the input.
-                await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
-                    SELECT {input.InboxKey.Id}, {InboxKey.FoundationOccurrenceScope}, b."Actor", b."Partition", {input.Kind}, 0,
-                        {storedInput}, {input.Sender}, false, 0, 0, 0, 0
-                    FROM "FoundationRootBirths" b
-                    LEFT JOIN "Instances" i ON i."Id" = b."Actor" AND i."Partition" = b."Partition" AND i."FoundationReference" = b."Reference"
-                    WHERE b."Tenant" = {tenant} AND b."Actor" = {input.Target.Id} AND b."Partition" = {input.Target.Partition}
-                        AND b."Creation" = {input.TargetCreation}
-                        AND (i."Parent" = {input.Sender} AND i."FoundationTerminalRevision" IS NULL AND NOT i."Retired"
-                            OR i."Id" IS NULL AND EXISTS (SELECT 1 FROM "Messages" creator
-                                WHERE creator."Id" = b."Creator" AND creator."Target" = b."Actor" AND creator."Partition" = b."Partition"
-                                    AND creator."Sender" = {input.Sender} AND creator."InboxScope" = 0 AND NOT creator."Done"))
-                    """, token);
-            }
+            if (Starts.Length != 0 && !await BindRootChildStartsAsync(db, tenant, Starts, token)) return false;
+            await BindRootChildInputsAsync(db, tenant, Inputs, token);
+            if (Cascade is { } cascade && !await OpenRootChildCascadeAsync(db, cascade, token)) return false;
             if (Notice is not { } notice) return true;
             var stored = RootChildNoticePrefix + DurableKeyJson.Write(new StoredChildNotice(notice.Id, notice.Payload!));
             if (!RootAdmissionWire.FitsEnvelope(stored, null))
@@ -86,6 +55,63 @@ public sealed partial class EfStore
         }
     }
 
+    private static async Task<bool> BindRootChildStartsAsync(KernelDb db, string tenant, RootChildStart[] starts, CancellationToken token)
+    {
+        var envelopes = Json.Write(starts.Select((start, ordinal) =>
+        {
+            var (reference, creator) = start;
+            var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
+            var (header, payload) = RootAdmissionWire.EncodeCreator(creator);
+            if (!RootAdmissionWire.FitsEnvelope(header, payload))
+                throw new StoreException(Failure.Definite, "The child creator exceeds its storage budget.");
+            return new
+            {
+                Ordinal = ordinal, Reference = reference, Actor = creator.Target.Id, creator.Target.Partition,
+                Creator = creator.InboxKey.Id, Fingerprint = fingerprint, Header = header, Payload = payload, creator.Sender
+            };
+        }));
+        return await db.Database.ExecuteSqlInterpolatedAsync($"""
+            WITH inputs AS MATERIALIZED (
+                SELECT * FROM jsonb_to_recordset({envelopes}::jsonb) AS input("Ordinal" integer, "Reference" text,
+                    "Actor" text, "Partition" integer, "Creator" text, "Fingerprint" text, "Header" text, "Payload" text, "Sender" text)
+            ), birth AS (
+                INSERT INTO "FoundationRootBirths" ("Tenant","Reference","Actor","Partition","Creation","Creator","Fingerprint")
+                SELECT {tenant}, "Reference", "Actor", "Partition", 1, "Creator", "Fingerprint" FROM inputs
+                RETURNING "Reference", "Actor", "Partition", "Creator"
+            )
+            INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Payload","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
+            SELECT birth."Creator", 0, birth."Actor", birth."Partition", {Kinds.Start}, 0, input."Payload", input."Header",
+                input."Sender", false, 0, 0, 0, 0
+            FROM birth JOIN inputs input ON input."Reference" = birth."Reference" ORDER BY input."Ordinal"
+            """, token) == starts.Length;
+    }
+
+    private static async Task BindRootChildInputsAsync(KernelDb db, string tenant, Message[] inputs, CancellationToken token)
+    {
+        if (inputs.Length == 0) return;
+        var envelopes = Json.Write(inputs.Select((input, ordinal) => new
+        {
+            Ordinal = ordinal, input.InboxKey.Id, Actor = input.Target.Id, input.Target.Partition, input.Sender, input.TargetCreation, input.Kind,
+            Header = EncodeChildInput(input)
+        }));
+        // The child may still be a creator. A terminal or retired child no longer needs the input.
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
+            SELECT input."Id", {InboxKey.FoundationOccurrenceScope}, b."Actor", b."Partition", input."Kind", 0,
+                input."Header", input."Sender", false, 0, 0, 0, 0
+            FROM jsonb_to_recordset({envelopes}::jsonb) AS input("Ordinal" integer, "Id" text, "Actor" text, "Partition" integer,
+                "Sender" text, "TargetCreation" bigint, "Kind" text, "Header" text)
+            JOIN "FoundationRootBirths" b ON b."Tenant" = {tenant} AND b."Actor" = input."Actor"
+                AND b."Partition" = input."Partition" AND b."Creation" = input."TargetCreation"
+            LEFT JOIN "Instances" i ON i."Id" = b."Actor" AND i."Partition" = b."Partition" AND i."FoundationReference" = b."Reference"
+            WHERE i."Parent" = input."Sender" AND i."FoundationTerminalRevision" IS NULL AND NOT i."Retired"
+                OR i."Id" IS NULL AND EXISTS (SELECT 1 FROM "Messages" creator
+                    WHERE creator."Id" = b."Creator" AND creator."Target" = b."Actor" AND creator."Partition" = b."Partition"
+                        AND creator."Sender" = input."Sender" AND creator."InboxScope" = 0 AND NOT creator."Done")
+            ORDER BY input."Ordinal"
+            """, token);
+    }
+
     private RootChildEffects? PrepareRootChildEffects(WorkerRoot root, InstanceRow row, IReadOnlyList<Message> sends)
     {
         if (_rootChildReference is not { } reference) return null;
@@ -104,6 +130,15 @@ public sealed partial class EfStore
                 var child = new CreationAddress(message.Target.Id, 1);
                 starts.Add(new(reference(root.Tenant, child), (message with { StorageId = "root:" + child.Id, Payload = start.Input })
                     .WithInboxScope(0)));
+            }
+            else if (message.CascadeOrigin)
+            {
+                if (message is not { Kind: Kinds.Terminate, HasIssuedTicket: true, TargetCreation: 1, SenderCreation: 1,
+                        Start: null, Payload: null, Due: null, KeepUntil: null, ReplyTo: null } || message.Sender != root.Actor ||
+                    _rootChildMessageHandle is not { } issue) throw RootShape();
+                var receiver = reference(root.Tenant, new(message.Target.Id, 1));
+                var id = issue("cascade:" + message.Id);
+                inputs.Add(message with { Id = id, StorageId = ChildOccurrence(receiver, id) });
             }
             else if (message.FoundationRootChildInput)
             {
@@ -182,21 +217,31 @@ public sealed partial class EfStore
         reference + "/child/" + FoundationRootCreator.OperationDigest(id);
 
     private static string RootChildNoticePredicate(string alias) =>
-        $"""(COALESCE({alias}."Start", '') LIKE '{RootChildNoticePrefix}%' OR COALESCE({alias}."Start", '') LIKE '{RootChildInputPrefix}%')""";
+        $"""(COALESCE({alias}."Start", '') LIKE '{RootChildNoticePrefix}%' OR COALESCE({alias}."Start", '') LIKE '{RootChildInputPrefix}%' OR COALESCE({alias}."Start", '') = '{RootChildCascadeWire}')""";
 
     private static bool IsStoredRootChildInput(string? header) =>
         header?.StartsWith(RootChildInputPrefix, StringComparison.Ordinal) == true;
+
+    private static string EncodeChildInput(Message input)
+    {
+        var storedInput = RootChildInputPrefix + DurableKeyJson.Write(new StoredChildInput(input.Id, input.Kind, input.Payload));
+        if (!RootAdmissionWire.FitsEnvelope(storedInput, null))
+            throw new StoreException(Failure.Definite, "The child input exceeds its storage budget.");
+        return storedInput;
+    }
 
     private static Message DecodeRootChildInput(MessageEntity row, string reference)
     {
         var stored = DurableKeyJson.Read<StoredChildInput>(row.Start![RootChildInputPrefix.Length..]);
         if (row.InboxScope != InboxKey.FoundationOccurrenceScope || row.Kind != stored.Kind ||
-            !FoundationMetadataLimits.IsOrdinaryKind(stored.Kind) || !FoundationSelfSend.IsHandle(stored.Id) ||
+            !(FoundationMetadataLimits.IsOrdinaryKind(stored.Kind) || stored.Kind == Kinds.Terminate && stored.Payload is null) ||
+            !FoundationSelfSend.IsHandle(stored.Id) ||
             row.Sender is null || row.JobGeneration != 0 || row.Due != 0 || row.KeepUntil is not null ||
             row.ReplyTo is not null || row.Payload is not null || row.Id != ChildOccurrence(reference, stored.Id))
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL child input.");
         return (new Message(stored.Id, new(row.Target), stored.Kind, stored.Payload, row.Sender, TargetCreation: 1, SenderCreation: 1)
-            { ActorAuthored = true, FoundationRootChildInput = true, StorageId = row.Id }).WithInboxScope(InboxKey.FoundationOccurrenceScope);
+            { ActorAuthored = stored.Kind != Kinds.Terminate, FoundationRootChildInput = true, StorageId = row.Id })
+            .WithInboxScope(InboxKey.FoundationOccurrenceScope);
     }
 
     private static bool IsStoredRootChildNotice(string? header) =>
