@@ -357,7 +357,8 @@ const textContractSyntaxes = new Set(["object", "secret"]);
 // Scalars keep their JSON type. The backend reads a literal as strict JSON (ADR 0091 decision 2; spec 1207 refuses
 // `"true"` into Boolean and `"5"` into Int32 on every path), so a Boolean or number sent as text would not publish.
 // A string stays a string: for a text input the text is the value. A number JSON can't hold (NaN, Infinity) has no
-// literal form; it is sent as null so the backend's nullability check reports it instead of a silent coercion.
+// literal form and is sent as null, the value JSON.stringify would give it anyway; the numeric editor refuses such
+// input, so this only keeps the wire type honest.
 function toWireValue(value: unknown): string | number | boolean | null {
   if (value == null) return null;
   if (typeof value === "string" || typeof value === "boolean") return value;

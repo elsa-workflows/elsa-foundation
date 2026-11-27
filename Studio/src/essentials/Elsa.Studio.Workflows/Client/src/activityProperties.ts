@@ -199,12 +199,10 @@ export function getLiteralEditorValue(activity: ActivityNode, descriptor: Studio
 
 // --- "Object" demotion -------------------------------------------------------------------------
 //
-// `toWireArgument` (activityInputWire.ts) promotes a Literal holding a structured value to an "Object"
-// expression, because the backend's literal converter only handles scalars — the Object handler is what
-// JSON-deserializes a list into ICollection<T>. That promotion is a *serialization* detail, but nothing
-// reversed it on the way back in, so every saved list input reopened as "Object": the syntax picker read
-// "Object" and, since `editingMode` was then "structured", the checklist/repeater was replaced by the raw
-// JSON summary.
+// A list or dictionary can arrive as an "Object" expression holding JSON text: drafts saved before
+// `toWireArgument` (activityInputWire.ts) kept structured Literals typed, documents authored that way (the HTTP
+// starter's SupportedMethods), and imports. Read as-is, the syntax picker would say "Object" and, since
+// `editingMode` would then be "structured", the checklist/repeater would be replaced by the raw JSON summary.
 //
 // Restore the authored syntax here, at the single seam every reader goes through. Scoped to
 // collection/dictionary inputs, where Literal and Object describe the identical value and Literal is the
@@ -212,8 +210,8 @@ export function getLiteralEditorValue(activity: ActivityNode, descriptor: Studio
 // genuinely want raw JSON keep it persistently via `isRepeaterOptOut` (uiHint json/code), and Object
 // remains selectable per-session for anything else.
 //
-// This is presentation-only: `withLiteralValue` keeps the Literal type and `toWireArgument` re-promotes on
-// save, so the bytes sent to the backend are unchanged.
+// The demotion takes effect on the next save: `withLiteralValue` keeps the Literal type and `toWireArgument`
+// sends the list as a typed Literal, which the backend reads as strict JSON into the same collection.
 function resolveAuthoredExpression(
   expression: ActivityExpression,
   descriptor: StudioActivityInputDescriptor
@@ -262,8 +260,8 @@ function looksLikeJsonText(value: unknown): value is string {
   return trimmed.startsWith("[") || trimmed.startsWith("{");
 }
 
-// Mirrors `toWireArgument`'s `isRecord` test (arrays and plain objects), seeing through the JSON string
-// the wire round-trip leaves behind. `undefined` means "not structured" — leave the expression as Object
+// Arrays and plain objects (the same test `toWireArgument` uses for structured values), seeing through the
+// JSON text an Object expression holds. `undefined` means "not structured" — leave the expression as Object
 // so an unparsable value stays repairable in the JSON editor instead of being silently reshaped.
 function asStructuredValue(value: unknown): unknown {
   if (typeof value === "object" && value !== null) return value;

@@ -564,10 +564,10 @@ describe("descriptor-aware collection/dictionary detection (collectionKind, #945
   });
 });
 
-// `toWireArgument` promotes a structured Literal to an "Object" expression so the backend can deserialize
-// it into ICollection<T>. Nothing reversed that on load, so every saved list input reopened as "Object" —
-// the syntax picker read "Object" and the checklist was replaced by the raw JSON summary. Reading restores
-// the authored syntax for the inputs where Literal and Object describe the identical value.
+// A list input can arrive as an "Object" expression holding JSON text (drafts saved before structured Literals
+// stayed typed on the wire, Object-authored templates, imports). Read as-is, the syntax picker would say "Object"
+// and the checklist would be replaced by the raw JSON summary. Reading restores the Literal syntax for the inputs
+// where Literal and Object describe the identical value.
 describe("Object-to-Literal demotion on read", () => {
   const listInput: StudioActivityInputDescriptor = {
     name: "SupportedMethods",
