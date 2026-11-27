@@ -12,6 +12,7 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Attention.Api;
 using Elsa.Attention.Core;
 using Elsa.Events;
+using Elsa.Foundation.Hosting;
 using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Locking.Core;
@@ -126,6 +127,7 @@ public sealed class RetainedWorkflowOverviewCompositionTests
             [$"{features}:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:ConnectionString"] = $"Data Source={Path.Combine(directory, "runtime.db")};Pooling=False",
             [$"{features}:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey"] = "retained-overview-fixture-signing-key"
         });
+        builder.AddNuplaneHostIntegration();
         builder.Services.AddSingleton<IDistributedLockProvider, OverviewLockProvider>();
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(typeof(WorkflowsDashboardRetainedFeature).Assembly, typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly,

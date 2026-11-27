@@ -32,11 +32,8 @@ public sealed class WorkflowsRuntimeAttentionFeature : IShellFeature
                 ? new InMemoryWorkflowRuntimeAttentionQuery(inMemoryExecutions, inMemoryIncidents, provider.GetService<TimeProvider>())
                 : new UnavailableWorkflowRuntimeAttentionQuery();
         });
-        AddContributor(services);
-    }
-
-    internal static void AddContributor(IServiceCollection services) =>
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAttentionContributor, WorkflowRuntimeAttentionContributor>());
+    }
 }
 
 internal sealed class LegacyWorkflowRuntimeAttentionSelected;

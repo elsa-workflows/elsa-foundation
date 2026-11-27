@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Attention.Core;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -17,11 +18,9 @@ public sealed class WorkflowsRuntimeRetainedAttentionFeature : IShellFeature, IP
 {
     public const string FeatureName = "WorkflowsRuntimeRetainedAttention";
 
-    public void ConfigureServices(IServiceCollection services)
-    {
-        services.TryAddSingleton<IWorkflowRuntimeAttentionQuery, UnavailableWorkflowRuntimeAttentionQuery>();
-        WorkflowsRuntimeAttentionFeature.AddContributor(services);
-    }
+    public void ConfigureServices(IServiceCollection services) => services.TryAddEnumerable(
+        ServiceDescriptor.Scoped<IAttentionContributor, WorkflowRuntimeAttentionContributor>(
+            _ => new(new UnavailableWorkflowRuntimeAttentionQuery())));
 
     public void PostConfigureServices(IServiceCollection services)
     {
