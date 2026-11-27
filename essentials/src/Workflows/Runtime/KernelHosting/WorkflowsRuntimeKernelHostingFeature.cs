@@ -1,3 +1,4 @@
+using System.Data.Common;
 using CShells;
 using CShells.AspNetCore.Features;
 using CShells.Features;
@@ -13,6 +14,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
+using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -123,7 +125,13 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
                 if (!permission.Succeeded) return Results.NotFound();
 
                 context.Response.Headers.CacheControl = "no-store";
-                return Results.Ok(await runtime.ReadRetentionStatusAsync(token));
+                try { return Results.Ok(await runtime.ReadRetentionStatusAsync(token)); }
+                catch (Exception error) when (error is StoreFormatException or DbException or TimeoutException)
+                {
+                    token.ThrowIfCancellationRequested();
+                    return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable,
+                        title: "The durable retention policy is unavailable.");
+                }
             })
             .WithOwner(FeatureName)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
