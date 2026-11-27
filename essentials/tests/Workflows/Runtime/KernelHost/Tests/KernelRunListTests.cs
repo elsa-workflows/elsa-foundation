@@ -314,6 +314,29 @@ public sealed class KernelRunListTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => history.ReadAsync(request));
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Standard_history_normalizes_transient_run_lookup_failures_before_and_after_reading(int failingLookup)
+    {
+        Exception failure = failingLookup == 1 ? new TimeoutException() : new JournalDbException(transient: true);
+        var lookupCount = 0;
+        var reads = new Reads(Views)
+        {
+            Sequence = [new(1, 1, 0, HistoryStart, 1_200)],
+            PointResult = _ => ++lookupCount == failingLookup ? throw failure : Views[0]
+        };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var history = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
+
+        var unavailable = await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() => history.ReadAsync(new("run-1")));
+        Assert.Same(failure, unavailable.InnerException);
+        Assert.Equal("read-run", unavailable.Operation);
+        Assert.Equal(failingLookup, lookupCount);
+        Assert.Equal(failingLookup - 1, reads.SequenceReads);
+    }
+
     private const string HistoryStart = """{"NativeStructure":1,"Kind":2,"At":1000,"Frame":"f1","Node":"branch"}""";
 
     private static void AssertInvalidHistoryPage(RuntimeHistoryPageView page)

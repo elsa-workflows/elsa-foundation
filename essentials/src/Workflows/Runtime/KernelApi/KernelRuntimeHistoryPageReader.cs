@@ -55,7 +55,7 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
             snapshot = await host.ReadSequencedJournalAsync(new ActorRef(query.WorkflowExecutionId),
                 position.AfterSequence, position.UpperSequence, query.Limit, cancellationToken);
         }
-        catch (Exception error) when (error is TimeoutException or DbException { IsTransient: true })
+        catch (Exception error) when (IsTransientReadFailure(error))
         {
             cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeHistoryUnavailableException(query.WorkflowExecutionId, "read-sequenced-journal", error);
@@ -141,9 +141,22 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
             scopeLimitation is null, scopeLimitation, readAt);
     }
 
-    private async ValueTask<KernelRunReader.Run?> AuthorizedRunAsync(string runId, CancellationToken cancellationToken) =>
-        await runs.GetAsync(runId, cancellationToken) is { } run && await authorization.CanInspectStructureAsync(run.State, cancellationToken)
-            ? run : null;
+    private async ValueTask<KernelRunReader.Run?> AuthorizedRunAsync(string runId, CancellationToken cancellationToken)
+    {
+        KernelRunReader.Run? run;
+        try
+        {
+            run = await runs.GetAsync(runId, cancellationToken);
+        }
+        catch (Exception error) when (IsTransientReadFailure(error))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new RuntimeHistoryUnavailableException(runId, "read-run", error);
+        }
+        return run is not null && await authorization.CanInspectStructureAsync(run.State, cancellationToken) ? run : null;
+    }
+
+    private static bool IsTransientReadFailure(Exception error) => error is TimeoutException or DbException { IsTransient: true };
 
     private async ValueTask<string> AccessBindingAsync(CancellationToken cancellationToken) => RuntimeHistoryIdentity.CreateBinding(
         [authorization.TenantScope, authorization.AuditSubject, await authorization.GetAuthorizationProfileAsync(cancellationToken)]);
