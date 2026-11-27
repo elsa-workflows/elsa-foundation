@@ -19,15 +19,35 @@ public static class WorkflowsRuntimeApi
 
     public static void MapWorkflowsRuntimeApi(IEndpointRouteBuilder endpoints)
     {
-        ArgumentNullException.ThrowIfNull(endpoints);
-
-        var api = endpoints.MapEndpointGroup(
-            OwnerId,
-            WorkflowsRuntimeJsonContext.Default,
-            jsonContentType: "application/json; charset=utf-8");
-
         // Endpoint classes are scanned from this module's own assembly: each declares its route,
         // metadata, and permission on itself under Endpoints/<Resource>/<Operation>/Endpoint.cs.
-        api.MapEndpointsFrom(typeof(WorkflowsRuntimeApi).Assembly);
+        MapGroup(endpoints).MapEndpointsFrom(typeof(WorkflowsRuntimeApi).Assembly);
+    }
+
+    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        var api = MapGroup(endpoints);
+        api.MapEndpoint<Endpoints.Executables.List.Endpoint>();
+        api.MapEndpoint<Endpoints.Executables.Get.Endpoint>();
+        api.MapEndpoint<Endpoints.Executables.Provenance.Endpoint>();
+        api.MapEndpoint<Endpoints.Executables.InputSources.Endpoint>();
+        api.MapEndpoint<Endpoints.Executables.Execute.Endpoint>();
+        api.MapEndpoint<Endpoints.ActivationSlots.List.Endpoint>();
+        api.MapEndpoint<Endpoints.ActivationSlots.Get.Endpoint>();
+        api.MapEndpoint<Endpoints.Instances.List.Endpoint>();
+        api.MapEndpoint<Endpoints.Instances.ListPage.Endpoint>();
+        api.MapEndpoint<Endpoints.Instances.Get.Endpoint>();
+        api.MapEndpoint<Endpoints.Instances.Delete.Endpoint>();
+        api.MapEndpoint<Endpoints.ActivityExecutions.List.Endpoint>();
+        api.MapEndpoint<Endpoints.ActivityExecutions.Get.Endpoint>();
+        api.MapEndpoint<Endpoints.History.Page.Endpoint>();
+        api.MapEndpoint<Endpoints.History.Occurrences.Endpoint>();
+    }
+
+    private static EndpointGroup MapGroup(IEndpointRouteBuilder endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        return endpoints.MapEndpointGroup(OwnerId, WorkflowsRuntimeJsonContext.Default,
+            jsonContentType: "application/json; charset=utf-8");
     }
 }

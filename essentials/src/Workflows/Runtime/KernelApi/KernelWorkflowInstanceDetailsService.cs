@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 internal sealed class KernelWorkflowInstanceDetailsService(
     KernelRunReader runs,
     IActivityInspectionContextAsync authorization,
-    WorkflowInstanceDetailsService legacy) : IWorkflowInstanceDetailsService
+    WorkflowInstanceDetailsService? legacy = null) : IWorkflowInstanceDetailsService
 {
     // A kernel turn commits one durable boundary and can execute several activities within it.
     private static readonly RuntimePersistenceModeProjection Balanced = RuntimePersistenceModeProjection.For(PersistenceMode.Balanced);
@@ -23,7 +23,7 @@ internal sealed class KernelWorkflowInstanceDetailsService(
     public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {
         if (await runs.GetAsync(request.WorkflowExecutionId, cancellationToken) is not { } run) return null;
-        if (run.Header is null) return await legacy.GetAsync(run.State, request, cancellationToken);
+        if (run.Header is null) return legacy is null ? null : await legacy.GetAsync(run.State, request, cancellationToken);
         var state = run.State;
         if (!await authorization.CanInspectStructureAsync(state, cancellationToken)) return null;
 

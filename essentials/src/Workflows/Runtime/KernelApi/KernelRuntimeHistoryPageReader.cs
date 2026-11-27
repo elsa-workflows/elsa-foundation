@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Http;
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, KernelRuns host, KernelHistoryCursor cursor,
-    IActivityInspectionContextAsync authorization, RuntimeHistoryInspectionService legacy, TimeProvider time) : IRuntimeHistoryPageReader
+    IActivityInspectionContextAsync authorization, TimeProvider time, RuntimeHistoryInspectionService? legacy = null) : IRuntimeHistoryPageReader
 {
     public async Task<RuntimeHistoryPageView?> ReadAsync(GetRuntimeHistory request, CancellationToken cancellationToken = default) =>
         (await ReadPageAsync(request, currentPermission: null, cancellationToken)).Page;
@@ -27,7 +27,7 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         if (run.Header is not { } header)
         {
             if (currentPermission is not null) return (null, StatusCodes.Status501NotImplemented);
-            if (KernelHistoryCursor.IsKernelCursor(request.Cursor)) return (null, null);
+            if (legacy is null || KernelHistoryCursor.IsKernelCursor(request.Cursor)) return (null, null);
             var legacyPage = await legacy.ReadAsync(request, cancellationToken);
             var current = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
             return (current is { Header: null } && current.State.TenantId == run.State.TenantId &&

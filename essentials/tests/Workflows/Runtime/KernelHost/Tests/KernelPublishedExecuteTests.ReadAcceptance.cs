@@ -13,6 +13,40 @@ namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 
 public sealed partial class KernelPublishedExecuteTests
 {
+    private static async Task VerifyExecutableRetentionAsync(HttpClient http, string artifactId, string sourceId, int count,
+        HttpStatusCode sourceStatus, CancellationToken token)
+    {
+        var executable = $"/runtime/workflows/executables/{Uri.EscapeDataString(artifactId)}";
+        var inputs = $"{executable}/source-references/{Uri.EscapeDataString(sourceId)}/input-sources";
+        using var provenance = await ReadAsync(executable + "/provenance");
+        Assert.Equal(HttpStatusCode.OK, provenance.StatusCode);
+        var retained = Assert.IsType<ExecutableProvenanceView>(await provenance.Content.ReadFromJsonAsync<ExecutableProvenanceView>(token));
+        Assert.Equal(count, retained.RetainedExecutionCount);
+
+        using var selected = await ReadAsync(executable + "?ref=" + Uri.EscapeDataString(sourceId));
+        Assert.Equal(sourceStatus, selected.StatusCode);
+        if (sourceStatus == HttpStatusCode.OK)
+        {
+            var detail = Assert.IsType<WorkflowExecutableDetailsView>(await selected.Content.ReadFromJsonAsync<WorkflowExecutableDetailsView>(token));
+            Assert.Equal(sourceId, detail.ChosenReference?.SourceReferenceId);
+            Assert.Equal("requested", detail.ChosenReference?.Selection);
+        }
+        using var forbidden = await ReadAsync(inputs);
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+        using var authored = await ReadAsync(inputs, publishing: true);
+        Assert.Equal(sourceStatus, authored.StatusCode);
+
+        async Task<HttpResponseMessage> ReadAsync(string url, bool publishing = false)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("X-Fixture-Subject", "accepted");
+            request.Headers.Add("X-Fixture-Tenant", Scope.Value);
+            request.Headers.Add("X-Fixture-Read", "yes");
+            if (publishing) request.Headers.Add("X-Fixture-Publishing-Read", "yes");
+            return await http.SendAsync(request, token);
+        }
+    }
+
     private sealed record ProjectedRun(Contract.IActorReads Reads, Contract.BoundScope Scope, Contract.ActorRef Actor,
         string Definition, Contract.History History)
     {
