@@ -40,6 +40,18 @@ public sealed partial class ActivityTemplateDataSelectionTests
         Assert.Equal("ActivityDataSelection/VariableDeclarationMismatch", Assert.Single(rejected.Findings).Type);
     }
 
+    [Theory]
+    [InlineData("missing-overlay")]
+    [InlineData("malformed-values")]
+    public void A_loop_ancestor_without_one_well_formed_compiled_occurrence_cannot_authorize_the_read(string change)
+    {
+        var (root, source, owner, overlays) = OriginalLoopScope(change == "malformed-values" ? [""] : ["index"]);
+
+        var rejected = Assert.Throws<ActivityDataSelectionRejectedException>(() =>
+            ActivityTemplatePlacer.DescribeTemplateDataSelectionFacts(root, [], source, owner, change == "missing-overlay" ? [] : overlays));
+        Assert.Equal("ActivityDataSelection/VariableDeclarationUnavailable", Assert.Single(rejected.Findings).Type);
+    }
+
     private static (ExecutableNode Root, ActivityDataSelectionDocument Source, IActivityStructureService Owner, ActivityTemplateOccurrenceCompilation[] Overlays)
         OriginalLoopScope(string[] compiledIterationValues)
     {

@@ -991,7 +991,8 @@ public sealed class ActivityTemplatePlacer(
         if (structure is null)
             return null;
 
-        // The variables and iteration-values fields hold Publishing's compiled facts (ExecutableNodeCompiler.CompileStructure),
+        // The variables and iteration-values fields hold Publishing's compiled facts (ExecutableNodeCompiler.CompileStructure,
+        // GraphActivityProvider.CompileBodyStructure for reusable bodies),
         // not the owner's authored payload. The owner's remapper only routes child ids, so it never sees those fields and
         // they are put back unchanged after routing.
         var payload = structure.Payload;

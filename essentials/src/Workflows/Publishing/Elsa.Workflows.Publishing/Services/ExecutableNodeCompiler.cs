@@ -1088,9 +1088,11 @@ public sealed class ExecutableNodeCompiler(
             throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
         var hasVariables = structure.Payload.TryGetProperty("variables", out var variables) && variables.ValueKind != JsonValueKind.Null;
         var iterationValues = activityStructureService.ProjectIterationVariables(activity).Select(value => value.ReferenceKey).ToArray();
-        if (!hasVariables && iterationValues.Length == 0)
+        if (!hasVariables && iterationValues.Length == 0 && !structure.Payload.TryGetProperty(CompiledStructureFields.IterationValues, out _))
             return new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
         var payload = structure.Payload.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+        // Publishing owns this field: only the loop's projected iteration values may appear in it, never an owner's own.
+        payload.Remove(CompiledStructureFields.IterationValues);
         if (hasVariables)
         {
             var authored = variables.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorPayloadSerializer.Options)

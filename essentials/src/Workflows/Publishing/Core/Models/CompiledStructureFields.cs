@@ -1,7 +1,8 @@
 namespace Elsa.Workflows.Publishing.Core.Models;
 
 /// <summary>
-/// Fields Publishing owns inside a compiled executable structure payload, next to the activity-owned fields.
+/// Fields Publishing owns inside a compiled executable structure payload, next to the activity-owned fields. The
+/// structure compilers replace whatever an activity's own structure handler put under these names.
 /// </summary>
 public static class CompiledStructureFields
 {
