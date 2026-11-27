@@ -1161,9 +1161,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     /// <summary>
-    /// A computed name (<c>getVariable(expr)</c>, <c>variables[expr]</c>, a computed <c>setVariable</c>) inside an Elsa 3
-    /// loop body, or where a loop left its last pass's variable behind, could name that per-pass variable, which the Elsa 4 run-time lookup does not know (#5873, spec 1243
-    /// FR-013): refused with guidance to use a literal name, which converts to the loop's own variable.
+    /// A computed name (<c>getVariable(expr)</c>, <c>variables[expr]</c>, a computed <c>setVariable</c>, or the
+    /// <c>variables</c> root used as a value) inside an Elsa 3 loop body, or where a loop left its last pass's variable
+    /// behind, could name that per-pass variable, which the Elsa 4 run-time lookup does not know (#5873, spec 1243 FR-013):
+    /// refused with guidance to use a literal name, which converts to the loop's own variable.
     /// </summary>
     private static bool RefusedComputedPassRead(
         DiagnosticScope input,

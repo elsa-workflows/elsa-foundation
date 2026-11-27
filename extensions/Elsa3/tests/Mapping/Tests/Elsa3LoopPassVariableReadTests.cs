@@ -454,6 +454,7 @@ public sealed class Elsa3LoopPassVariableReadTests
     [Theory]
     [InlineData("getVariable(['Current', 'Value'].join(''))")]
     [InlineData("variables[['Current', 'Index'].join('')]")]
+    [InlineData("Object.keys(variables).length")]
     public async Task A_computed_name_in_a_loop_body_is_refused(string read)
     {
         var result = await ConvertAsync(Sequence("root", ForEach("loop", Read(read))), WorkflowCurrentValue);
