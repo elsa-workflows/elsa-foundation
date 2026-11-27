@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Kernel.Foundation.Contracts;
 using Kernel.Native;
 using Kernel.WorkflowActor;
+using static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl;
 using WorkflowActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Elsa.Workflows.Runtime.KernelHost;
@@ -25,13 +26,13 @@ internal static class KernelScheduleAuthority
         RequireBoundScope(scope, actors);
         if (access.Current.RequireScope() != scope.Persistence)
             throw new InvalidOperationException("A schedule must read its source in the selected Runtime publication scope.");
-        if (control.Scope != scope || control is not { Revision: > 0, Owner: { } owner } ||
+        if (CanonicalScope(control.Scope) != CanonicalScope(scope) || control is not { Revision: > 0, Owner: { } owner } ||
             !MatchesClaim(control.ScheduleKey, control.DefinitionId, control.TriggerNode, owner)) return null;
 
         var source = await references.FindAsync(owner.SourceReferenceId, cancellationToken);
         if (source is not { Scope: WorkflowExecutableReferenceScope.Published } ||
             source.SourceReferenceId != owner.SourceReferenceId || source.ActivationId != owner.ActivationId || source.SlotId != owner.SlotId ||
-            source.TenantId != scope.TenantId || source.PublicationScope is { } publishedScope && publishedScope != scope.Persistence ||
+            source.TenantId != control.Scope.TenantId || source.PublicationScope is { } publishedScope && publishedScope != scope.Persistence ||
             source.ArtifactId != owner.Executable.ArtifactId || source.DefinitionId != owner.Executable.DefinitionId ||
             source.DefinitionVersionId != owner.Executable.DefinitionVersionId || source.ArtifactVersion != owner.Executable.ArtifactVersion ||
             !source.IsLive(timeProvider.GetUtcNow())) return null;
@@ -45,7 +46,7 @@ internal static class KernelScheduleAuthority
         if (schedule is null) return null;
 
         var start = JsonSerializer.Serialize(WorkflowActor.Start(schedule.Start()));
-        var authority = new Authority(AuthorityVersion, scope, actors.Tenant, control.ScheduleKey, control.TriggerNode, owner, start);
+        var authority = new Authority(AuthorityVersion, control.Scope, actors.Tenant, control.ScheduleKey, control.TriggerNode, owner, start);
         var header = new ScheduleHeader(new(schedule.Kind, schedule.Value), schedule.StartKey, control.Revision)
         {
             Authority = JsonSerializer.Serialize(authority)
@@ -65,12 +66,13 @@ internal static class KernelScheduleAuthority
 
         try
         {
-            if (JsonSerializer.Deserialize<Authority>(payload) is not { Version: AuthorityVersion, Owner: { Executable: { } executable } owner } authority ||
-                authority.Scope != scope || authority.FoundationTenant != actors.Tenant ||
+            if (JsonSerializer.Deserialize<Authority>(payload) is not
+                    { Version: AuthorityVersion, Scope: { Persistence: not null } exactScope, Owner: { Executable: { } executable } owner } authority ||
+                CanonicalScope(exactScope) != CanonicalScope(scope) || authority.FoundationTenant != actors.Tenant ||
                 !MatchesClaim(authority.ScheduleKey, executable.DefinitionId, authority.TriggerNode, owner) ||
                 !MatchesStart(authority)) return null;
 
-            return new(scope, authority.ScheduleKey, offer.Schedule.Id, owner.SlotName, owner.ActivationId,
+            return new(exactScope, authority.ScheduleKey, offer.Schedule.Id, owner.SlotName, owner.ActivationId,
                 owner.PublicationRevision, offer.ArmGeneration, timer, DateTimeOffset.FromUnixTimeMilliseconds(offer.DueAtUnixMilliseconds),
                 DateTimeOffset.FromUnixTimeMilliseconds(offer.OfferUntilUnixMilliseconds), executable, authority.TriggerNode, authority.PinnedStart);
         }

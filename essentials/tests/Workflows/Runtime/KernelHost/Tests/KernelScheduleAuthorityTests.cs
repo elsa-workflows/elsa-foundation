@@ -136,13 +136,45 @@ public sealed class KernelScheduleAuthorityTests
         payload["PinnedStart"] = JsonSerializer.Serialize(pinned with { TypeData = typeData.ToJsonString() });
         Assert.False(await acceptor.TryAcceptAsync(original with { Authority = payload.ToJsonString() }));
 
-        // Foundation's default tenant can mean either Runtime default form, but the ledger must retain which one issued it.
-        var explicitDefault = new KernelScheduleOccurrenceAcceptor(fixture.Control.Scope with { TenantId = "default" }, fixture.FoundationTenant,
-            _ => throw new InvalidOperationException(), (_, _, _) => { calls++; return ValueTask.FromResult(true); });
-        Assert.False(await explicitDefault.TryAcceptAsync(original));
         Assert.Equal(0, calls);
         Assert.Throws<ArgumentException>(() => new KernelScheduleOccurrenceAcceptor(new(new("tenant-a"), null), ContractScopes.Bind("tenant-a"),
             _ => ValueTask.FromResult(0L), (_, _, _) => ValueTask.FromResult(true)));
+    }
+
+    [Fact]
+    public async Task One_foundation_actor_key_handles_both_default_aliases_and_preserves_the_exact_ledger_scope()
+    {
+        var fixture = await Publication(null);
+        var control = fixture.Control;
+        var offers = new List<RuntimeKernelScheduleOccurrence>();
+        // Configure the host with the explicit default alias. Each committed source carries its own exact alias.
+        var configured = control.Scope with { TenantId = PersistenceScope.DefaultValue };
+        var acceptor = new KernelScheduleOccurrenceAcceptor(configured, fixture.FoundationTenant,
+            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), (occurrence, _, _) =>
+            {
+                offers.Add(occurrence);
+                return ValueTask.FromResult(true);
+            });
+        var revisions = new List<long>();
+        var keys = new List<string>();
+        var aliases = new[] { null, PersistenceScope.DefaultValue, null };
+        for (var i = 0; i < aliases.Length; i++)
+        {
+            var activation = $"default-{i + 1}";
+            var sourceId = WorkflowActivationReferenceIdentity.Create(activation);
+            var exact = control.Scope with { TenantId = aliases[i] };
+            await fixture.References.SaveAsync(fixture.Source with { SourceReferenceId = sourceId, ActivationId = activation, TenantId = exact.TenantId });
+            var current = control with { Scope = exact, Revision = i + 1, Owner = control.Owner! with
+                { SourceReferenceId = sourceId, ActivationId = activation, PublicationRevision = i + 1 } };
+            var header = Assert.IsType<ScheduleHeader>(await fixture.BindAsync(current));
+            revisions.Add(header.Revision);
+            keys.Add(header.StartKey);
+            Assert.True(await acceptor.TryAcceptAsync(Offer(fixture, header) with { ArmGeneration = i + 1 }));
+        }
+        Assert.Equal([1L, 2L, 3L], revisions);
+        Assert.All(keys, key => Assert.Equal("schedule-start:scheduled-definition:trigger", key));
+        Assert.Equal(aliases, offers.Select(offer => offer.Scope.TenantId).ToArray());
+        Assert.All(offers, offer => { Assert.Equal(Actor.Id, offer.ScheduleReference); Assert.Equal(control.ScheduleKey, offer.ScheduleKey); });
     }
 
     [Fact]
