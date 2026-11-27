@@ -103,6 +103,11 @@ internal static class ShippedScheduleOwnerModeChecks
             await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-unlogged", managed), "selected physical root store");
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleOwnerMode" SET LOGGED""", token);
             Check(true, "PostgreSQL refuses an unlogged replacement of the durable mode table");
+
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleControls" ENABLE ROW LEVEL SECURITY""", token);
+            await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-row-security", managed), "selected physical root store");
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleControls" DISABLE ROW LEVEL SECURITY""", token);
+            Check(true, "PostgreSQL refuses schedule storage whose rows could be hidden by policy");
         }
 
         if (managed)

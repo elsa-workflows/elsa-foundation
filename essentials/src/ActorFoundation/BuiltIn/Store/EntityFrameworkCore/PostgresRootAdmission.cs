@@ -385,6 +385,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var namespaceOid = Placeholder(query.ArgumentCount + 2);
         const string permanentDirect = """
             AND relation.relpersistence = 'p'
+            AND NOT relation.relrowsecurity AND NOT relation.relforcerowsecurity
             AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits i WHERE i.inhparent = relation.oid OR i.inhrelid = relation.oid)
             """;
         var source = $$"""

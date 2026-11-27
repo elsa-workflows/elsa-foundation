@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.EntityFramework;
@@ -29,12 +30,12 @@ internal static class RootScheduleOwnerMode
     {
         // The empty type denotes a standalone owner. A contender never overwrites the winner's choice.
         var expected = auxiliaryActor ?? "";
-        await db.Database.ExecuteSqlInterpolatedAsync(RootScheduleInventory.Bind($"""
+        await db.Database.ExecuteSqlInterpolatedAsync(BindSource(db, $"""
             WITH source AS MATERIALIZED (/*schedule-source*/)
             INSERT INTO "FoundationScheduleOwnerMode" ("Singleton", "ScheduleActor")
             SELECT 1, {expected} FROM source WHERE "SourceReady"
-                AND NOT EXISTS (SELECT 1 FROM "FoundationScheduleRoots")
-                AND NOT EXISTS (SELECT 1 FROM "FoundationScheduleControls")
+                AND NOT EXISTS (SELECT 1 FROM /*direct*/"FoundationScheduleRoots")
+                AND NOT EXISTS (SELECT 1 FROM /*direct*/"FoundationScheduleControls")
             ON CONFLICT ("Singleton") DO NOTHING
             """, bindSource), token);
         await RequireAsync(db, expected, token, bindSource, binding: true);
@@ -43,10 +44,10 @@ internal static class RootScheduleOwnerMode
     internal static async Task RequireAsync(KernelDb db, string expected, CancellationToken token,
         Func<FormattableString, FormattableString>? bindSource = null, bool binding = false)
     {
-        var saved = await db.Database.SqlQuery<OwnerMode>(RootScheduleInventory.Bind($"""
+        var saved = await db.Database.SqlQuery<OwnerMode>(BindSource(db, $"""
             WITH source AS MATERIALIZED (/*schedule-source*/)
             SELECT source."SourceReady", mode."ScheduleActor"
-            FROM source LEFT JOIN "FoundationScheduleOwnerMode" mode ON source."SourceReady" AND mode."Singleton" = 1
+            FROM source LEFT JOIN /*direct*/"FoundationScheduleOwnerMode" mode ON source."SourceReady" AND mode."Singleton" = 1
             """, bindSource)).SingleAsync(token);
         if (!saved.SourceReady)
             throw new StoreFormatException("The schedule owner mode differs from the selected physical root store.");
@@ -57,6 +58,14 @@ internal static class RootScheduleOwnerMode
         }
         if (!StringComparer.Ordinal.Equals(saved.ScheduleActor, expected))
             throw new NotSupportedException("This root store is bound to a different schedule owner mode or actor type.");
+    }
+
+    private static FormattableString BindSource(KernelDb db, FormattableString query,
+        Func<FormattableString, FormattableString>? bindSource)
+    {
+        var direct = db.Database.IsNpgsql() ? "ONLY " : "";
+        var format = query.Format.Replace("/*direct*/", direct, StringComparison.Ordinal);
+        return RootScheduleInventory.Bind(FormattableStringFactory.Create(format, query.GetArguments()), bindSource);
     }
 
     private sealed record OwnerMode(bool SourceReady, string? ScheduleActor);
