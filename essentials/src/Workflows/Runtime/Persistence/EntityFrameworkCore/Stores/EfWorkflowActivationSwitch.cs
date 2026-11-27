@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <c>AddRuntimeEntityFrameworkCore</c> registers together, and refuses any other: nothing else could commit with them.
 /// </para>
 /// </remarks>
-public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwitch, IWorkflowScheduleAdoption
+public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwitch, IWorkflowScheduleAdoption, IWorkflowEventAdoption
 {
     private static readonly EfWriteRetry Commits = new(
         MaximumAttempts,

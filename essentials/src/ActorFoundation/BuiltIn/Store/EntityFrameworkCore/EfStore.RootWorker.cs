@@ -552,6 +552,8 @@ public sealed partial class EfStore
                 }
                 var position = ++positions[fence.Partition];
                 var initial = (InlineRootCheckpoint)promotion.Checkpoint;
+                if (initial.Publications.Count != 0)
+                    (publications ??= []).AddRange(initial.Publications);
                 turns.Add(promotion.JournalTurn!);
                 revisions.Add(turn.Instance, initial.JournalRevision);
                 deferred.Add(turn.Instance);

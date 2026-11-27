@@ -57,7 +57,7 @@ public sealed partial class EfWorkflowActivationSwitch
             inheritEventTenant = tenants.Length == 0;
         }
         var previous = await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId,
-            claims, ct, _reservationPolicies, adoptSchedules: onlySchedules);
+            claims, ct, _reservationPolicies, onlySchedules ? RuntimeKernelScheduleOccurrence.ReservationType : null);
         if (!onlySchedules)
             await new EfRuntimeKernelEventPublicationStore(_context, _accessContextAccessor)
                 .StageAsync(scope, slot, source, eventEntries, inheritEventTenant, ct);

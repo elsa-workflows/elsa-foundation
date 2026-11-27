@@ -55,7 +55,8 @@ public sealed partial class EfWorkflowActivationSwitch
                 throw new InvalidOperationException("The Runtime store has a legacy recurring workflow cursor. Keep the legacy scheduler for this store or use a fresh Runtime database before enabling Kernel Timer and Cron.");
 
             if (repair && await StageRepairAsync(scope, plan, cancellationToken)) return Step.Moved<bool>();
-            await _bindings.StageScheduleAdoptionAsync(scope, plan.ActivationId, desired, cancellationToken);
+            await _bindings.StageBindingAdoptionAsync(scope, plan.ActivationId, RuntimeKernelScheduleOccurrence.ReservationType,
+                desired, cancellationToken);
             var afterSave = await StageReservationsAsync(slot, cancellationToken, desired, repair, slotFenced: true);
             if (!effectiveSource.IsLive(_timeProvider.GetUtcNow())) return Step.Discard(false);
             return Step.Commit(true, afterSave);

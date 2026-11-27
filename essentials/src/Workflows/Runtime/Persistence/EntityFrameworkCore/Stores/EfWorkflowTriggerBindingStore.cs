@@ -231,7 +231,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         return ProjectionStaging.Staged;
     }
 
-    internal async ValueTask StageScheduleAdoptionAsync(string scope, string activationId,
+    internal async ValueTask StageBindingAdoptionAsync(string scope, string activationId, string stimulusType,
         IReadOnlyCollection<WorkflowTriggerBinding> claims, CancellationToken token)
     {
         ValidateActivation(activationId, claims);
@@ -242,10 +242,10 @@ public sealed class EfWorkflowTriggerBindingStore(
 
         var current = rows.Select(row => Read(row, scope)).ToArray();
         var missing = claims.ToDictionary(binding => binding.TriggerBindingId, StringComparer.Ordinal);
-        foreach (var existing in current.Where(binding => binding.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType))
+        foreach (var existing in current.Where(binding => binding.StimulusType == stimulusType))
             if (!missing.Remove(existing.TriggerBindingId, out var expected) ||
                 RuntimeArtifactJson.Serialize(existing) != RuntimeArtifactJson.Serialize(expected with { IsActive = true }))
-                throw new InvalidDataException("The existing Kernel schedule bindings differ from the selected publication.");
+                throw new InvalidDataException("The existing Kernel trigger bindings differ from the selected publication.");
 
         if (missing.Count == 0) return;
         foreach (var claim in missing.Values)
