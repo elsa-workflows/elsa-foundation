@@ -10,15 +10,12 @@ const root = "migration/elsa3/reusable-activities";
 
 export async function uploadElsa3ReusableCollection(
   context: StudioEndpointContext,
-  content: string,
+  files: readonly File[],
   signal?: AbortSignal
 ) {
-  return context.http.requestJson<Elsa3ReusableImportUploadResult>(`${root}/collections`, {
-    method: "POST",
-    body: content,
-    headers: { "Content-Type": "application/json" },
-    signal
-  });
+  const body = new FormData();
+  for (const file of files) body.append("files", file);
+  return context.http.postForm<Elsa3ReusableImportUploadResult>(`${root}/collections`, body, { signal });
 }
 
 export async function analyzeElsa3ReusableCollection(

@@ -13,6 +13,8 @@ namespace Elsa3.Activities.Design.Import.Services;
 public sealed class ReusableActivityImportOptions
 {
     public long MaximumUploadBytes { get; set; } = 16 * 1024 * 1024;
+    public long MaximumExpandedBytes { get; set; } = 32 * 1024 * 1024;
+    public int MaximumArchiveEntries { get; set; } = 2_000;
     public int MaximumSourceVersions { get; set; } = 20_000;
     public int DefaultPageSize { get; set; } = 100;
     public int MaximumPageSize { get; set; } = 500;
@@ -121,6 +123,24 @@ public sealed class ReusableActivityImportOperationService(
         if (definitions.Any(x => x is null))
             throw new ReusableActivityImportPayloadException("The Elsa 3 collection cannot contain null source versions.");
 
+        return await StoreCollectionAsync(definitions, bounded.Length, accessScope, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<ReusableActivityImportUploadResult> UploadExportFilesAsync(
+        Stream body, string boundary, long? contentLength, ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateAccessScope(accessScope);
+        var batch = new Elsa3ExportFileReader(_options);
+        await batch.ReadAsync(body, boundary, contentLength, cancellationToken);
+        return await StoreCollectionAsync(batch.Definitions, batch.UploadedBytes, accessScope, cancellationToken);
+    }
+
+    private async ValueTask<ReusableActivityImportUploadResult> StoreCollectionAsync(
+        IReadOnlyList<Elsa3WorkflowDefinition> definitions, long contentLength,
+        ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken)
+    {
         var now = timeProvider.GetUtcNow();
         for (var attempt = 0; attempt < 5; attempt++)
         {
@@ -135,10 +155,10 @@ public sealed class ReusableActivityImportOperationService(
                 accessScope,
                 now,
                 now.Add(_options.CollectionLifetime),
-                bounded.Length,
+                contentLength,
                 new(handle, definitions));
             if (await store.TryCreateCollectionAsync(persisted, cancellationToken))
-                return new(handle, persisted.CreatedAt, persisted.ExpiresAt, definitions.Length, persisted.ContentLength);
+                return new(handle, persisted.CreatedAt, persisted.ExpiresAt, definitions.Count, persisted.ContentLength);
         }
 
         throw new ReusableActivityImportPersistenceException(
@@ -429,6 +449,8 @@ public sealed class ReusableActivityImportOperationService(
     {
         ArgumentNullException.ThrowIfNull(options);
         if (options.MaximumUploadBytes <= 0 ||
+            options.MaximumExpandedBytes <= 0 ||
+            options.MaximumArchiveEntries <= 0 ||
             options.MaximumSourceVersions <= 0 ||
             options.DefaultPageSize <= 0 ||
             options.MaximumPageSize < options.DefaultPageSize ||

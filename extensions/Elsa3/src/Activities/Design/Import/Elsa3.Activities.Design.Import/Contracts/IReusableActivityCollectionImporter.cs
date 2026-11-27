@@ -113,6 +113,11 @@ public interface IReusableActivityImportOperationService
         ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Reads multipart JSON and ZIP exports as one bounded, immutable collection.</summary>
+    ValueTask<ReusableActivityImportUploadResult> UploadExportFilesAsync(
+        Stream body, string boundary, long? contentLength, ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Returns one deterministic analysis page for a scoped immutable collection.</summary>
     /// <exception cref="ReusableActivityImportNotFoundException">The collection does not exist in the current access scope.</exception>
     /// <exception cref="ReusableActivityImportExpiredException">The immutable collection has expired; the read that finds it expired deletes it.</exception>

@@ -9,23 +9,18 @@ import {
 } from "../api/elsa3ReusableImport";
 
 describe("Elsa 3 reusable import API contract", () => {
-  it("uploads the raw bounded JSON body and never wraps it as multipart", async () => {
+  it("sends JSON and ZIP files together with their original names", async () => {
     const context = endpoint();
     const signal = new AbortController().signal;
-    const content = "[{\"id\":\"source-v1\"}]";
+    const files = [new File(["[]"], "definitions.json"), new File(["zip"], "workflow-definitions.zip")];
 
-    await uploadElsa3ReusableCollection(context, content, signal);
+    await uploadElsa3ReusableCollection(context, files, signal);
 
-    expect(context.http.requestJson).toHaveBeenCalledWith(
-      "migration/elsa3/reusable-activities/collections",
-      {
-        method: "POST",
-        body: content,
-        headers: { "Content-Type": "application/json" },
-        signal
-      }
+    expect(context.http.postForm).toHaveBeenCalledWith(
+      "migration/elsa3/reusable-activities/collections", expect.any(FormData), { signal }
     );
-    expect(context.http.postForm).not.toHaveBeenCalled();
+    const body = vi.mocked(context.http.postForm).mock.calls[0][1];
+    expect(body.getAll("files").map(file => (file as File).name)).toEqual(files.map(file => file.name));
   });
 
   it("uses escaped handles, bounded analysis pages, exact closure, apply, and receipt identities", async () => {

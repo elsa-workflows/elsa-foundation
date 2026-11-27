@@ -147,7 +147,7 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
   expect(overflowOffenders).toEqual([]);
 });
 
-test("Elsa 3 collection upload is raw, bounded, and cancellable without accepting a late handle", async ({ page }) => {
+test("Elsa 3 export upload sends the selected file and is cancellable without accepting a late handle", async ({ page }) => {
   let uploadBody = "";
   await page.route(`**${importRoot}/collections`, async route => {
     uploadBody = route.request().postData() ?? "";
@@ -163,16 +163,17 @@ test("Elsa 3 collection upload is raw, bounded, and cancellable without acceptin
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
   const rawCollection = JSON.stringify([{ id: "source-v1", definitionId: "source" }]);
-  await page.getByLabel("Elsa 3 collection file").setInputFiles({
+  await page.getByLabel("Elsa 3 export files").setInputFiles({
     name: "elsa3.json",
     mimeType: "application/json",
     buffer: Buffer.from(rawCollection)
   });
   await page.getByRole("button", { name: "Upload once" }).click();
+  await expect.poll(() => uploadBody).toContain('filename="elsa3.json"');
   await page.getByRole("button", { name: "Cancel upload" }).click();
 
   await expect(page.getByText("Upload cancelled. No collection handle was accepted by Studio.")).toBeVisible();
-  expect(uploadBody).toBe(rawCollection);
+  expect(uploadBody).toContain(rawCollection);
   await page.waitForTimeout(600);
   await expect(page.getByText("Upload complete")).toHaveCount(0);
 });
