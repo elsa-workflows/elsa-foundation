@@ -4,7 +4,7 @@ import type { WorkflowDefinitionSummary } from "../workflowTypes";
 import { describeExecutableRunError, formatExecutableRunError } from "./executableRunHelpers";
 import { getNotifications, useNotificationGuard } from "./notifications";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { notifyPublishedRunOutcome, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import { notifyPublishedRunOutcome, notifyUnknownRunOutcome, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 
 export function WorkflowDefinitionRunAction({ context, definition, requestId, runInputEditors }: {
   context: StudioEndpointContext;
@@ -25,11 +25,8 @@ export function WorkflowDefinitionRunAction({ context, definition, requestId, ru
       const feedback = pendingRunFeedback.current;
       if (feedback.canNotify?.()) {
         const { outcomeUnknown, message } = describeExecutableRunError(error);
-        getNotifications().notify({
-          level: outcomeUnknown ? "info" : "error",
-          title: outcomeUnknown ? "Run outcome unavailable" : `Couldn't start ${feedback.name}`,
-          message
-        });
+        if (outcomeUnknown) notifyUnknownRunOutcome(message);
+        else getNotifications().notify({ level: "error", title: `Couldn't start ${feedback.name}`, message });
       }
     }
   });

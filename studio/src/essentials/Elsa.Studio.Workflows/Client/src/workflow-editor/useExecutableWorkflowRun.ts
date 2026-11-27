@@ -87,6 +87,10 @@ export function notifyPublishedRunOutcome(name: string, result: WorkflowExecutab
   });
 }
 
+export function notifyUnknownRunOutcome(message: string): void {
+  getNotifications().notify({ level: "info", title: "Run outcome unavailable", message });
+}
+
 export function findPublishedRunReference(
   references: WorkflowExecutableReference[] | undefined,
   now: Date = new Date()
