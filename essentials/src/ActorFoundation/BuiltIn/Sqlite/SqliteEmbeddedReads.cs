@@ -10,7 +10,7 @@ public static partial class SqliteEmbeddedHosting
     internal static async ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(string path, StoreFormat? qualificationFormat,
         Contract.BoundScope scope, Contract.ActorRef child, string issuance, CancellationToken token)
     {
-        using var file = AcquireFile(path, forRuntime: false);
+        using var file = AcquireFile(path);
         KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
         return await EfStore.ConfirmRootChildBirthAsync(Open, scope, child, issuance, token);
     }

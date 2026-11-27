@@ -47,9 +47,10 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal SqliteEmbeddedHosting.SqliteDirectRequests EventStarts =>
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
-        qualificationFormat == StoreFormat.RootKeyedStartsQualification
+        qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
+        qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
-            throw new InvalidOperationException("Event starts require their private qualification profile.");
+            throw new InvalidOperationException("The selected SQLite profile does not support Event starts.");
 
     internal static SqliteEmbeddedFoundation ForAuthoredEventsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootAuthoredEventsQualification);
@@ -158,7 +159,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return CreateHostedServiceCore(actor, endProcess, retentionWindow, options, fenceInBatch, logger, auxiliaryActor, protectChildBirths);
     }
 
-    /// <summary>Creates the SQLite owner for the private inline start qualification profile.</summary>
+    /// <summary>Creates the SQLite owner with inline start promotion.</summary>
     public SqliteEmbeddedHostedService CreateInlineQualification(Contract.IActorType actor, Contract.IActorType? auxiliaryActor,
         ProtectChildBirthsAsync protectChildren, InlineRootRequests inlineStarts, Action<string> endProcess,
         Func<Contract.ActorHeader, TimeSpan?> retentionWindow, ILogger<SqliteEmbeddedHostedService> logger)

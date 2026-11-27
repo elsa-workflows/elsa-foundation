@@ -250,3 +250,9 @@ Agreed by the maintainer on 2026-10-19 and applied to spec.md:
 ## Complexity Tracking
 
 None.
+
+## Draft-first Studio import (#6002)
+
+Extend the collection operation with an explicit draft Apply route. Carry the mode through mutation, scoped request fingerprint and receipt. In the existing shared transaction, clone the newest selected caller version into a workflow draft using the workflow Design command. Preserve a current draft already associated with that version and refuse a conflicting active draft. Create each missing reusable draft from the converted graph. Persist a tenant-scoped draft-to-publication identity binding. The ordinary activity publisher consults the imported binding so manual publication satisfies the same exact dependencies as immediate publication.
+
+Qualify the existing composed Workbench reference using the original archive under both choices. Inspect Review, receipt, activity draft, workflow draft, publication and the resulting run. An unavailable draft endpoint must leave the import unsubmitted. Verify old raw and file upload callers independently.

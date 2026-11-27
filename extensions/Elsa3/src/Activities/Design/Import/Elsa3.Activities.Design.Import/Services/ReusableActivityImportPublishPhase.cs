@@ -126,7 +126,7 @@ public sealed class ReusableActivityImportPublishPhase(
         }
     }
 
-    private static bool SameContent(ActivityDefinitionDraft draft, ImportedReusableActivityVersion version) =>
+    public static bool SameContent(ActivityDefinitionDraft draft, ImportedReusableActivityVersion version) =>
         StringComparer.Ordinal.Equals(draft.DefinitionId, version.DefinitionId) &&
         StringComparer.Ordinal.Equals(draft.State.Provider.ProviderKey, ReusableActivityImportDrafts.GraphProviderKey) &&
         StringComparer.Ordinal.Equals(draft.State.Provider.SchemaVersion, ReusableActivityImportDrafts.GraphProviderSchemaVersion) &&

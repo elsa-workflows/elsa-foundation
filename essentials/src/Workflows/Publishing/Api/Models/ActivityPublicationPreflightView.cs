@@ -35,6 +35,9 @@ public sealed record ActivityPublicationPreflightView(
     IReadOnlyList<ActivityPublicationCapabilityReadinessView> Runtime,
     IReadOnlyList<ActivityDiagnostic> Diagnostics)
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ReservedVersion { get; init; }
+
     public string ReviewedVersion { get; init; } = MinimumVersion;
 }
 

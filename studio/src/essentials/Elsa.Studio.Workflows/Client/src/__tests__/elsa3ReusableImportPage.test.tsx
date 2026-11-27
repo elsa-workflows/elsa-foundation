@@ -102,11 +102,15 @@ describe("Elsa 3 reusable import workbench", () => {
     expect(container.textContent).toContain("Activity Definitions2");
     expect(container.textContent).toContain("Activity Definition versions2");
     expect(container.textContent).toContain("Exact reusable rewrites1");
+    const publish = container.querySelector<HTMLInputElement>("#elsa3-publish-imported")!;
+    expect(publish.checked).toBe(false);
+    click(publish);
 
     click(button(container, "Apply reviewed import"));
     await waitFor(() => expect(container.textContent).toContain("Import results"));
     expect(applyElsa3ReusableImport).toHaveBeenCalledTimes(1);
     expect(getElsa3ReusableImportReceipt).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(applyElsa3ReusableImport).mock.calls[0]?.[6]).toBe(true);
     expect(vi.mocked(applyElsa3ReusableImport).mock.calls[0]?.[3]).toEqual([
       "dependency-v1",
       "owner-v1"

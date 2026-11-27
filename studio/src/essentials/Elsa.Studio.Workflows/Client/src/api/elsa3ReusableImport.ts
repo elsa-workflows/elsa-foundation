@@ -62,11 +62,13 @@ export async function applyElsa3ReusableImport(
   planId: string,
   selectedSourceVersionIds: string[],
   idempotencyKey: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  publishImportedActivities?: boolean
 ) {
+  const operation = publishImportedActivities === undefined ? "apply" : "apply-drafts";
   return context.http.postJson<Elsa3ReusableImportReceipt>(
-    `${root}/collections/${encodeURIComponent(collectionHandle)}/apply`,
-    { planId, selectedSourceVersionIds, idempotencyKey },
+    `${root}/collections/${encodeURIComponent(collectionHandle)}/${operation}`,
+    { planId, selectedSourceVersionIds, idempotencyKey, publishImportedActivities },
     signal ? { signal } : undefined
   );
 }

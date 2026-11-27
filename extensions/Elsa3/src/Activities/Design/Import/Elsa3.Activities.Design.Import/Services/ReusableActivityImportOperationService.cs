@@ -44,7 +44,7 @@ public sealed class ReusableActivityImportOperationService(
     IOptions<ReusableActivityImportOptions> options,
     TimeProvider timeProvider,
     ILogger<ReusableActivityImportOperationService> logger,
-    IActivityDefinitionVersionPublicationStore? publications = null) : IReusableActivityImportOperationService, IReusableActivityExportFileUpload
+    IActivityDefinitionVersionPublicationStore? publications = null) : IReusableActivityImportOperationService, IReusableActivityExportFileUpload, IReusableActivityDraftImport
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly ReusableActivityImportOptions _options = ValidateOptions(options.Value);
@@ -253,13 +253,23 @@ public sealed class ReusableActivityImportOperationService(
     }
 
     /// <inheritdoc />
-    public async ValueTask<ReusableActivityImportReceipt> ApplyAsync(
+    public ValueTask<ReusableActivityImportReceipt> ApplyAsync(
         string collectionHandle,
         string planId,
         IReadOnlyCollection<string> selectedSourceVersionIds,
         string idempotencyKey,
         ReusableActivityImportAccessScope accessScope,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        ApplyCoreAsync(collectionHandle, planId, selectedSourceVersionIds, idempotencyKey, accessScope, null, cancellationToken);
+
+    public ValueTask<ReusableActivityImportReceipt> ApplyDraftsAsync(
+        string collectionHandle, string planId, IReadOnlyCollection<string> selectedSourceVersionIds, string idempotencyKey,
+        ReusableActivityImportAccessScope accessScope, bool publishImportedActivities, CancellationToken cancellationToken) =>
+        ApplyCoreAsync(collectionHandle, planId, selectedSourceVersionIds, idempotencyKey, accessScope, publishImportedActivities, cancellationToken);
+
+    private async ValueTask<ReusableActivityImportReceipt> ApplyCoreAsync(
+        string collectionHandle, string planId, IReadOnlyCollection<string> selectedSourceVersionIds, string idempotencyKey,
+        ReusableActivityImportAccessScope accessScope, bool? publishImportedActivities, CancellationToken cancellationToken)
     {
         ValidateAccessScope(accessScope);
         ValidateIdempotencyKey(idempotencyKey);
@@ -267,7 +277,9 @@ public sealed class ReusableActivityImportOperationService(
         ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         ArgumentNullException.ThrowIfNull(selectedSourceVersionIds);
         var selected = selectedSourceVersionIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        var selectionFingerprint = SelectionFingerprint(collectionHandle, planId, selected, accessScope);
+        var selectionFingerprint = SelectionFingerprint(collectionHandle, planId, selected, accessScope, publishImportedActivities);
+        if (publishImportedActivities.HasValue && (!importer.SupportsDraftImport || store is not IImportedActivityDraftReservations))
+            throw new ReusableActivityDraftImportUnavailableException("The configured importer and store must support current drafts and reserved publication identities.");
         var prior = await store.FindReceiptAsync(idempotencyKey, accessScope, cancellationToken);
         if (prior is not null)
         {
@@ -286,7 +298,7 @@ public sealed class ReusableActivityImportOperationService(
         try
         {
             result = await importer.ApplyAsync(
-                new(planId, collection.Collection, selected, accessScope, idempotencyKey),
+                new(planId, collection.Collection, selected, accessScope, idempotencyKey) { PublishImportedActivities = publishImportedActivities },
                 cancellationToken);
         }
         catch (Exception exception) when (!LeavesUploadUsable(exception))
@@ -301,7 +313,7 @@ public sealed class ReusableActivityImportOperationService(
                           idempotencyKey,
                           new InvalidOperationException("The atomic import adapter did not return a durable receipt."));
         await DiscardCollectionAsync(collectionHandle, accessScope);
-        return receipt;
+        return publishImportedActivities == false ? await WithPublicationsAsync(receipt, cancellationToken) : receipt;
     }
 
     /// <inheritdoc />
@@ -385,6 +397,7 @@ public sealed class ReusableActivityImportOperationService(
     /// upload costs its owner a new upload, keeping one may keep a credential at rest.
     /// </summary>
     private static bool LeavesUploadUsable(Exception exception) => exception is
+        ReusableActivityDraftImportUnavailableException or
         OperationCanceledException or
         ReusableActivityImportValidationException or
         ReusableActivityImportIdempotencyConflictException or
@@ -424,8 +437,13 @@ public sealed class ReusableActivityImportOperationService(
         string planId,
         IReadOnlyCollection<string> selectedSourceVersionIds,
         ReusableActivityImportAccessScope accessScope) =>
+        SelectionFingerprint(collectionHandle, planId, selectedSourceVersionIds, accessScope, null);
+
+    public static string SelectionFingerprint(
+        string collectionHandle, string planId, IReadOnlyCollection<string> selectedSourceVersionIds,
+        ReusableActivityImportAccessScope accessScope, bool? publishImportedActivities) =>
         ReusableActivityImportIdentity.Create(
-            "selection",
+            publishImportedActivities switch { true => "selection-publish-activities", false => "selection-drafts", null => "selection" },
             collectionHandle,
             planId,
             accessScope.TenantScope,

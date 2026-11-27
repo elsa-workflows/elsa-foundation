@@ -187,6 +187,7 @@ export function summarizeImportPublications(
 }
 
 export function importReceiptOutcomeLabel(receipt: Elsa3ReusableImportReceipt) {
+  if (receipt.publishImportedActivities === false) return "Drafts saved";
   const { outcome } = summarizeImportPublications(receipt.publications);
   if (outcome === "partlyPublished") return "Partly published";
   if (outcome === "nonePublished") return "Not published";
@@ -194,10 +195,11 @@ export function importReceiptOutcomeLabel(receipt: Elsa3ReusableImportReceipt) {
 }
 
 export function importReceiptNeedsResume(receipt: Elsa3ReusableImportReceipt) {
-  return summarizeImportPublications(receipt.publications).unpublished > 0;
+  return receipt.publishImportedActivities !== false && summarizeImportPublications(receipt.publications).unpublished > 0;
 }
 
 export function importReceiptApplyMessage(receipt: Elsa3ReusableImportReceipt) {
+  if (receipt.publishImportedActivities === false) return "Open the imported drafts to edit or publish them.";
   const alreadyImported = importReceiptStatus(receipt.status) === "AlreadyImported";
   const { unpublished, published, total } = summarizeImportPublications(receipt.publications);
   if (alreadyImported && unpublished === 0) {

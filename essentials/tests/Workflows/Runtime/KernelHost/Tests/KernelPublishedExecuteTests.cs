@@ -65,10 +65,10 @@ public sealed partial class KernelPublishedExecuteTests
     }
 
     [Fact]
-    public Task Sqlite_private_ephemeral_execute_reports_volatile_completion_and_committed_promotion() => RunAsync(false, inline: true);
+    public Task Sqlite_shipped_ephemeral_execute_reports_volatile_completion_and_committed_promotion() => RunAsync(false, inline: true);
 
     [SkippableFact]
-    public Task PostgreSql_private_ephemeral_execute_reports_volatile_completion_and_committed_promotion()
+    public Task PostgreSql_shipped_ephemeral_execute_reports_volatile_completion_and_committed_promotion()
     {
         Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
             string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
@@ -179,10 +179,7 @@ public sealed partial class KernelPublishedExecuteTests
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
         };
-        if (inline)
-            kernelHosting.ConfigureServices(builder.Services, KernelShellStorage.CreateInlineStartsQualification(provider,
-                kernelHosting.SqlitePath, foundation));
-        else kernelHosting.ConfigureServices(builder.Services);
+        kernelHosting.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
         var kernelApi = new WorkflowsRuntimeKernelApiFeature();
@@ -249,15 +246,8 @@ public sealed partial class KernelPublishedExecuteTests
             using var http = new HttpClient { BaseAddress = new(address) };
             if (inline)
             {
-                await VerifyPrivateInlineAsync();
+                await VerifyInlineAsync();
                 return;
-            }
-            using (var excluded = await ExecuteAsync(pure.Identity.ArtifactId, new { }))
-            {
-                Assert.Equal(HttpStatusCode.Conflict, excluded.StatusCode);
-                var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await excluded.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
-                Assert.Equal("EphemeralPublishedStartUnavailable", receipt.Reason);
-                Assert.Null(receipt.PersistenceOutcome);
             }
             var target = WorkflowActivationReferenceIdentity.Create("publish-native-blue");
             using var ambiguous = await ExecuteAsync(canonical.Identity.ArtifactId, new { });
@@ -359,7 +349,7 @@ public sealed partial class KernelPublishedExecuteTests
                 }
             }
 
-            async Task VerifyPrivateInlineAsync()
+            async Task VerifyInlineAsync()
             {
                 var scope = EmbeddedTenant.Bind(Scope.Value);
                 var read = await shell.ReadAsync(token);

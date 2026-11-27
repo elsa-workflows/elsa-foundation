@@ -46,14 +46,38 @@ public static partial class PostgresPreviewHosting
     public static Task InstallSharedActivationQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
         InstallPreviewFormatAsync(() => CreateSharedActivationQualificationContext(options), cancellationToken);
 
-    /// <summary>Binds trusted Event registration and relay to the selected qualification database and tenant.</summary>
+    /// <summary>Whether the selected PostgreSQL profile supports Event-triggered starts.</summary>
+    public static bool TakesEventStarts(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootEventStarts;
+    }
+
+    /// <summary>Whether the selected PostgreSQL profile supports Event start receipt retention.</summary>
+    public static bool RetainsEventStartReceipts(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootEventStartReceipts;
+    }
+
+    /// <summary>Whether the selected PostgreSQL profile supports ordered Event replay.</summary>
+    public static bool TakesOrderedEventScan(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootEventStartScan;
+    }
+
+    /// <summary>Binds trusted Event registration and relay to the selected database and tenant.</summary>
     public static IEventStartAdmissions BindEventStarts(Func<KernelDb> create, Contract.BoundScope scope, PostgresDirectRequests? requests = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentNullException.ThrowIfNull(scope);
         requests?.RequireEventBinding(create);
         using var db = create();
-        if (!db.UsesRootEventStarts) throw new StoreFormatException("Event starts require their private qualification profile.");
+        if (!db.UsesRootEventStarts) throw new StoreFormatException("The selected PostgreSQL profile does not support Event starts.");
         return new EventStarts(new PostgresRootAdmission(create, TimeSpan.Zero, pressure: requests?.Pressure), scope.Tenant);
     }
 
