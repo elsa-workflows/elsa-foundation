@@ -1,3 +1,4 @@
+import { releaseInventory } from "./vite.release-inventory";
 import { resolve } from "node:path";
 import { defineConfig, searchForWorkspaceRoot, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -42,7 +43,7 @@ export function defineModuleConfig({
         allow: [searchForWorkspaceRoot(root), __dirname, resolve(__dirname, "../extensions")]
       }
     },
-    plugins: [react(), moduleCssContractPlugin()],
+    plugins: [releaseInventory("module"),react(), moduleCssContractPlugin()],
     define: {
       "process.env.NODE_ENV": JSON.stringify("production")
     },

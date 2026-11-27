@@ -3,7 +3,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/../../.." && pwd)"
 output="${LINEN_HOST_OUTPUT:-$(mktemp -d "${TMPDIR:-/tmp}/linen-studio.XXXXXX")}"
 # Publish the standard host; the application receives its own static assets/configuration.
-dotnet publish "$root/Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" -f net10.0 -o "$output"
+dotnet publish "$root/Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj" -f net10.0 -o "$output"
 mkdir -p "$output/wwwroot/branding"
 cp "$root/Studio/examples/branded-host/logo.svg" "$output/wwwroot/branding/logo.svg"
 cd "$output"
@@ -19,4 +19,4 @@ export Studio__Appearance__PaletteId=linen
 export Studio__Appearance__Mode=system
 export Studio__Appearance__Navigation=left
 export Studio__BackendBaseUrl="${LINEN_BACKEND_URL:-https://localhost:7243}"
-exec dotnet Elsa.Studio.Web.dll --urls "${LINEN_STUDIO_URL:-http://127.0.0.1:7086}"
+exec dotnet Elsa.Studio.Workbench.Host.dll --urls "${LINEN_STUDIO_URL:-http://127.0.0.1:7086}"

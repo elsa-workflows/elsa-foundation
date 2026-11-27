@@ -1414,3 +1414,4 @@ static Elsa.Workflows.Publishing.Core.Services.ExecutableActivityTemplateBehavio
 static Elsa.Workflows.Publishing.Core.Services.ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(object! value) -> string!
 Elsa.Workflows.Publishing.Core.Models.CompiledStructureFields
 const Elsa.Workflows.Publishing.Core.Models.CompiledStructureFields.IterationValues = "iterationValues" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.DefinitionUnsupported = "definition_unsupported" -> string!

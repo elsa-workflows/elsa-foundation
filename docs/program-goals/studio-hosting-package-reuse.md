@@ -11,7 +11,7 @@
 ## Purpose
 
 A developer builds and publishes a custom Elsa Studio using NuGet references, application configuration and a
-small composition root, without copying `Elsa.Studio.Web` infrastructure or building the standard browser shell.
+small composition root, without copying `Elsa.Studio.Workbench.Host` infrastructure or building the standard browser shell.
 Consolidate reusable behavior and adopt existing qualified infrastructure before introducing another implementation.
 
 GitHub issues own scope, acceptance, native hierarchy, dependencies and progress. The Project is the scheduling

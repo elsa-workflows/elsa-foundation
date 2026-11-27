@@ -1,7 +1,7 @@
 # `@elsa-workflows/example-react-host`
 
 A minimal **Vite + React 19 + TypeScript** app that consumes all four published Studio
-packages outside `Elsa.Studio.Web`. It proves the packages work in an ordinary host app.
+packages outside `Elsa.Studio.Workbench.Host`. It proves the packages work in an ordinary host app.
 
 ## What it shows
 
@@ -67,7 +67,7 @@ then your theme overrides. The editor stylesheet is exported as
 Registered route components then read `api.backend` / `api.ai` / editor registries at render
 time. `src/stubModuleApi.ts` builds a **real** `ElsaStudioModuleApi` from the SDK's exported
 factories (`createContributionRegistry`, `createAiContributionApi`, `createDialogController`,
-`createEndpointContext`) — nothing is faked. It mirrors what Elsa.Studio.Web's own host does
+`createEndpointContext`) — nothing is faked. It mirrors what Elsa.Studio.Workbench.Host's own host does
 in `Client/src/app/registry.ts` (that host-assembly factory is intentionally not part of the
 published SDK surface).
 

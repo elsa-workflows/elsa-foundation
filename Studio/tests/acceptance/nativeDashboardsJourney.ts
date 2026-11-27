@@ -1,6 +1,6 @@
 import { chromium, expect, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
 import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
-import type { QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import type { QueryResult } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/types";
 import { openQuestionSection as openQuerySection, openQuestionProperties, closeQuestionProperties, selectQuestionTab } from "./questionNavigation";
 import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observeNativeWeaverBoundary, seedDashboardRuns, signInDashboardReader, tag, type Capture, type Resource, type Result } from "./dashboardJourneySupport";
 
@@ -779,10 +779,11 @@ async function captureScrollPosition(page: Page, info: TestInfo, capture: Captur
   await capture(page, info, name);
 }
 
-async function captureNativeResultSections(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator, compactProvenance = false) {
+async function captureNativeResultSections(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator, compactProvenance = true) {
   const details = result.locator(".named-result-details");
-  if (compactProvenance) await details.getByRole("button", { name: "Result details" }).click();
-  const provenance = compactProvenance ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p");
+  const compact = compactProvenance && await details.count() > 0;
+  if (compact) await details.getByRole("button", { name: "Result details" }).click();
+  const provenance = compact ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p");
   await captureScrollPosition(page, info, capture, `${name}-provenance`, provenance.first());
   await captureScrollPosition(page, info, capture, `${name}-coverage-periods`, provenance.last(), "end");
   const series = result.locator(".named-chart-series"); await expect(series).toHaveCount(3);
@@ -793,7 +794,7 @@ async function captureNativeResultSections(page: Page, info: TestInfo, capture: 
   await values.evaluate(element => { element.scrollLeft = element.scrollWidth; });
   await capture(page, info, `${name}-exact-values-end`);
   await values.evaluate(element => { element.scrollLeft = 0; });
-  if (compactProvenance) await details.getByRole("button", { name: "Result details" }).click();
+  if (compact) await details.getByRole("button", { name: "Result details" }).click();
 }
 
 type DashboardAppearance = { style: string; mode: string; navigation: string; layout: string };

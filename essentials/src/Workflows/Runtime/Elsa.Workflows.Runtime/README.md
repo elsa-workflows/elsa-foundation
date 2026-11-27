@@ -9,7 +9,7 @@ existing fenced checkpoint transaction through the Runtime EF provider; native c
 participant retain their wire and fingerprint. The EF artifact provider also stores native/model material with
 actual incarnations, model content hashes, full dependency leases, fenced sources and retention roots.
 The explicit `ActivitiesBpmnHosting` feature supplies the released-library driver and authenticated model commands.
-Its [declared profiles](../../../Activities/Bpmn/Elsa.Activities.Bpmn/README.md) cover human parallel work,
+Its [declared profiles](../../../../../extensions/Bpmn/src/Elsa.Activities.Bpmn/README.md) cover human parallel work,
 one closed native service worker with typed outcomes and bounded incident retry, interrupting duration boundaries,
 and named native Event catches. Native `RunBpmn` uses that same model lifecycle and retains its exact parent result
 until consumption and settlement are proven. New model admission defaults off.

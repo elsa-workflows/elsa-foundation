@@ -1,8 +1,6 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Nuplane.Admin;
-using Nuplane.Reconciliation;
 using Nuplane.Sources.Directory.Builder;
 
 namespace Elsa.Studio.Tests.Administration;
@@ -18,7 +16,7 @@ public sealed class PackageMetadataTests
     [Theory]
     [InlineData("elsa-package.json")]
     [InlineData("build/elsa-package.json")]
-    public async Task Protected_manifests_use_shared_mapping_and_secret_masking(string path)
+    public async Task Archive_manifests_use_shared_mapping_and_secret_masking(string path)
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: true);
         PackageAssetTests.Pack(host, "1.0.0", "asset", manifest: Manifest, manifestPath: path);
@@ -37,16 +35,21 @@ public sealed class PackageMetadataTests
     [InlineData("oversized", "1048576-byte")]
     [InlineData("invalid", "not valid JSON")]
     [InlineData("missing", "not found")]
-    [InlineData("ordinary", "unavailable")]
+    [InlineData("archive-missing", "ArchiveMissing")]
     public async Task Unsupported_or_bad_metadata_is_diagnostic_without_an_unprotected_fallback(string kind, string reason)
     {
-        await using var host = await AdministrationHost.StartAsync(nativeStore: kind != "ordinary", configureNuplane: nuplane =>
+        await using var host = await AdministrationHost.StartAsync(nativeStore: kind != "archive-missing", configureNuplane: nuplane =>
         {
-            if (kind == "ordinary") nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+            if (kind == "archive-missing") nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); });
         });
         var manifest = kind switch { "oversized" => new string(' ', 1024 * 1024 + 1), "invalid" => "{invalid", "missing" => null, _ => Manifest };
         PackageAssetTests.Pack(host, "1.0.0", "asset", manifest: manifest);
         await PackageAssetTests.Reconcile(host);
+        if (kind == "archive-missing")
+        {
+            var package = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);
+            File.Delete(Path.Combine(package.InstallPath, ".nuplane-archive"));
+        }
         var catalog = await Catalog(host);
         var diagnostic = Assert.Single(catalog["features"]!.AsArray(), item => (string?)item!["sourceKind"] == "manifest-error")!;
         Assert.Equal(PackageAssetTests.PackageId + ":1.0.0", (string?)diagnostic["id"]);
@@ -56,27 +59,18 @@ public sealed class PackageMetadataTests
     }
 
     [Fact]
-    public async Task Metadata_is_read_under_native_admission_and_released_after_detachment()
+    public async Task Catalog_reads_verified_manifest_with_an_ordinary_store()
     {
-        using var logs = new ContentLog { PausePreflight = true };
-        await using var host = await AdministrationHost.StartAsync(nativeStore: true, afterStudio: builder =>
-        {
-            builder.Logging.ClearProviders();
-            builder.Logging.SetMinimumLevel(LogLevel.Debug);
-            builder.Logging.AddProvider(logs);
-        });
+        await using var host = await AdministrationHost.StartAsync(nuplane =>
+            nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
         PackageAssetTests.Pack(host, "1.0.0", "asset", manifest: Manifest);
         await PackageAssetTests.Reconcile(host);
-        var pending = Catalog(host);
-        try
-        {
-            await logs.PreflightEntered.Task.WaitAsync(TimeSpan.FromSeconds(30));
-            var outcome = await host.App.Services.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(CancellationToken.None);
-            Assert.Equal(ManualReconcileOutcomeCode.Unavailable, outcome.OutcomeCode);
-        }
-        finally { logs.ReleasePreflight(); }
-        Assert.Contains((await pending)["features"]!.AsArray(), item => (string?)item!["id"] == "PackagedFeature");
-        await PackageAssetTests.Reconcile(host);
+        var package = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);
+        File.Delete(Path.Combine(package.InstallPath, "elsa-package.json"));
+
+        var catalog = await Catalog(host);
+
+        Assert.Contains(catalog["features"]!.AsArray(), item => (string?)item!["id"] == "PackagedFeature");
     }
 
     [Fact]

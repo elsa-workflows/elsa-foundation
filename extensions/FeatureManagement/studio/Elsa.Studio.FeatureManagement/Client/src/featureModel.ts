@@ -363,7 +363,7 @@ export function getFeatureHosts(api: ElsaStudioModuleApi): FeatureHostConfig[] {
       key: JSON.stringify(["studio",api.host.baseUrl,api.hostSession?.subject,api.hostSession?.tenantId]),
       session: api.hostSession,
       label: "Studio",
-      runtime: "Elsa.Studio.Web",
+      runtime: "Elsa.Studio.Workbench.Host",
       context: api.host,
       writable: true
     },

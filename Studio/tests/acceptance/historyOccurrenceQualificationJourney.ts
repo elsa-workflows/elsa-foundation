@@ -118,8 +118,9 @@ export async function historyOccurrenceQualificationJourney(page: Page, info: Te
     await page.goto(`/workflows/instances/${run.workflowExecutionId}?view=timeline`);
     await waitCapturedPlaybackReady(page);
     const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
-    await timeline.getByText("Filter events", { exact: true }).click();
-    await timeline.getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
+    await timeline.getByRole("button", { name: "Filter events", exact: true }).click();
+    await page.getByRole("dialog", { name: "Filter events", exact: true }).getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
+    await page.keyboard.press("Escape");
     await expect(timeline.getByRole("list", { name: "Run history events", exact: true })).toBeVisible();
     const waitingHandle = page.locator(".wf-history-waits button").filter({ hasText: review!.activityExecutionId });
     await expect(waitingHandle).toHaveCount(1);

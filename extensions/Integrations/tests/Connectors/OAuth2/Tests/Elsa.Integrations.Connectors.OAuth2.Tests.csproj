@@ -20,13 +20,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Connectors\OAuth2\Elsa.Integrations.Connectors.OAuth2.csproj" />
     <ProjectReference Include="..\..\..\..\src\Sdk\Elsa.Integrations.Sdk\Elsa.Integrations.Sdk.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Connections\Api\Elsa.Connections.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Secrets\Elsa.Secrets\Elsa.Secrets.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Http\src\Activities\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Connections\src\Api\Elsa.Connections.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Connections\src\Core\Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Connections\src\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Connections\src\Workflows\Elsa.Connections.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Secrets\src\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Secrets\src\Elsa.Secrets\Elsa.Secrets.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />

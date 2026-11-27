@@ -652,6 +652,12 @@ html[data-nav-mode="left"][data-sidebar-backdrop="starfield"]:not([data-theme-ap
   font-size: var(--studio-body-size);
 }
 
+/* The wrapper's :focus-within border is the field's focus indicator; suppress the global input:focus halo. */
+.sidebar-search input:is(:focus, :focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
 .sidebar-search input::placeholder {
   color: var(--muted-foreground);
 }
@@ -3689,6 +3695,10 @@ html[data-theme-material] .sidebar-search {
   background: var(--studio-material-well-bg);
   background-size: var(--studio-material-well-bg-size);
   box-shadow: var(--studio-material-well-shadow);
+}
+
+html[data-theme-material] .sidebar-search:focus-within {
+  border-color: var(--studio-accent);
 }
 
 /* Diagnostics are a dense list — flat row tier (grain, no per-row raised slab). */

@@ -434,6 +434,20 @@
   overflow-wrap: anywhere;
 }
 
+.wf-instance-canvas:has(> .wf-boundary-layout, > .wf-boundary-layout-canvas) {
+  padding: var(--studio-space-4);
+  overflow: auto;
+}
+
+.wf-instance-canvas > .wf-boundary-layout,
+.wf-instance-canvas > .wf-boundary-layout-canvas {
+  padding: var(--studio-space-4);
+}
+
+.wf-instance-canvas > .wf-boundary-layout-list {
+  gap: var(--studio-space-3);
+}
+
 .wf-boundary-layout,
 .wf-boundary-layout-canvas {
   min-width: 0;

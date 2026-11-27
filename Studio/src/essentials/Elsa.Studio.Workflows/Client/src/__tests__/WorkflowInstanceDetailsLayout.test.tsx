@@ -68,6 +68,65 @@ describe("Run detail page layout", () => {
     expect(clampRunDetailInspectorWidth(900, 2000)).toBe(640);
   });
 
+  it("reserves the timeline and both resize handles when sizing a docked inspector", () => {
+    expect(getRunDetailInspectorMaxWidth(1400, 320)).toBe(580);
+    expect(clampRunDetailInspectorWidth(640, 1400, 320)).toBe(580);
+    expect(getRunDetailInspectorMaxWidth(1400, 42)).toBe(640);
+  });
+
+  it("docks the timeline only when the measured workbench has room for three columns", async () => {
+    let resize: ((width: number) => void) | undefined;
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) {
+        resize = width => callback([{ contentRect: { width } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      observe() {}
+      disconnect() {}
+    });
+
+    flushSync(() => root.render(<RunLayoutHarness selectedActivityId={null} />));
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+
+    flushSync(() => resize?.(1400));
+    await vi.waitFor(() => expect(container.firstElementChild?.getAttribute("data-timeline-docked")).toBe("true"));
+    expect(container.firstElementChild?.getAttribute("data-timeline-width")).toBe("320");
+    expect(container.firstElementChild?.getAttribute("data-inspector-max-width")).toBe("580");
+
+    flushSync(() => resize?.(1100));
+    await vi.waitFor(() => expect(container.firstElementChild?.getAttribute("data-timeline-docked")).toBe("false"));
+  });
+
+  it("persists timeline collapse and supports keyboard resizing", async () => {
+    let resize: ((width: number) => void) | undefined;
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) {
+        resize = width => callback([{ contentRect: { width } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      observe() {}
+      disconnect() {}
+    });
+
+    flushSync(() => root.render(<RunLayoutHarness selectedActivityId={null} />));
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => resize?.(1400));
+    await vi.waitFor(() => expect(container.firstElementChild?.getAttribute("data-timeline-docked")).toBe("true"));
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("[data-action='toggle-timeline']")?.click());
+    expect(container.firstElementChild?.getAttribute("data-timeline-collapsed")).toBe("true");
+    expect(container.firstElementChild?.getAttribute("data-timeline-width")).toBe("42");
+    expect(window.localStorage.getItem("elsa-studio-run-detail-timeline-collapsed")).toBe("true");
+    flushSync(() => container.querySelector<HTMLButtonElement>("[data-action='expand-timeline']")?.click());
+    expect(container.firstElementChild?.getAttribute("data-timeline-collapsed")).toBe("false");
+
+    const resizeHandle = container.querySelector<HTMLDivElement>("[data-action='resize-timeline']");
+    flushSync(() => resizeHandle?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+    expect(container.firstElementChild?.getAttribute("data-timeline-width")).toBe("336");
+    flushSync(() => resizeHandle?.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
+    expect(container.firstElementChild?.getAttribute("data-timeline-width")).toBe("260");
+    flushSync(() => resizeHandle?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
+    expect(container.firstElementChild?.getAttribute("data-timeline-width")).toBe("480");
+  });
+
   it("observes the workbench container and exposes the inspector for activity selection", async () => {
     let resize: ((width: number) => void) | undefined;
     vi.stubGlobal("ResizeObserver", class {
@@ -273,9 +332,16 @@ function RunLayoutHarness({ selectedActivityId }: { selectedActivityId: string |
       data-drawer-open={layout.mediumDrawerOpen}
       data-narrow-view={layout.narrowView}
       data-layout-intent={layout.layoutIntent}
+      data-timeline-docked={layout.timelineDocked}
+      data-timeline-collapsed={layout.timelineCollapsed}
+      data-timeline-width={layout.timelineWidth}
+      data-inspector-max-width={layout.inspectorMaxWidth}
     >
       <button type="button" data-action="open" onClick={layout.openInspector}>Open</button>
       <button type="button" data-action="close" onClick={layout.closeInspector}>Close</button>
+      <button type="button" data-action="toggle-timeline" onClick={layout.toggleTimelineCollapsed}>Toggle timeline</button>
+      <button type="button" data-action="expand-timeline" onClick={layout.expandTimeline}>Show timeline</button>
+      <div role="separator" tabIndex={0} data-action="resize-timeline" onKeyDown={layout.handleTimelineResizeKeyDown} />
     </div>
   );
 }

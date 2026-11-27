@@ -57,6 +57,7 @@ function stubApi(): ElsaStudioModuleApi {
     routes: createContributionRegistry({ slot: studioSlots.routes }),
     dashboardWidgets,
     homeWidgets: dashboardWidgets,
+    homeSections: createContributionRegistry({ slot: studioSlots.homeSections }),
     diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),

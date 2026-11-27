@@ -26,7 +26,8 @@ export function apiFixture(response: unknown = {}) {
   const getJson = vi.fn(async (_url: string, _options?: { signal?: AbortSignal }) => response);
   const items: StudioDashboardWidgetContribution[] = [];
   const registry = { add: (item: StudioDashboardWidgetContribution) => items.push(item) };
-  const api = { backend: { http: { getJson } }, dashboardWidgets: registry, homeWidgets: registry } as unknown as ElsaStudioModuleApi;
+  const sections: unknown[] = [];
+  const api = { backend: { http: { getJson } }, dashboardWidgets: registry, homeWidgets: registry, homeSections: { add: (item: unknown) => sections.push(item) } } as unknown as ElsaStudioModuleApi;
   return { api, getJson, items };
 }
 

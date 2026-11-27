@@ -278,21 +278,33 @@ describe("WorkflowActivityExecutionDetails", () => {
     const tabs = [...tablist.querySelectorAll<HTMLButtonElement>("[role=tab]")];
     const panels = tabs.map(tab => document.getElementById(tab.getAttribute("aria-controls")!)!);
 
-    expect(tabs.map(tab => tab.textContent)).toEqual(["Overview", "Inputs", "Outputs"]);
-    expect(tabs.map(tab => tab.getAttribute("aria-selected"))).toEqual(["true", "false", "false"]);
+    expect(tabs.map(tab => tab.textContent)).toEqual(["Overview", "Inputs", "Outputs", "Events"]);
+    expect(tabs.map(tab => tab.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false"]);
     expect(panels.map(panel => panel.getAttribute("aria-labelledby"))).toEqual(tabs.map(tab => tab.id));
-    expect(panels.map(panel => panel.hidden)).toEqual([false, true, true]);
+    expect(panels.map(panel => panel.hidden)).toEqual([false, true, true, true]);
     expect(container.querySelector(".wf-activity-overview")?.closest('[role="tabpanel"]')).toBeNull();
 
     flushSync(() => tablist.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })));
     expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(tabs[1]);
-    expect(panels.map(panel => panel.hidden)).toEqual([true, false, true]);
+    expect(panels.map(panel => panel.hidden)).toEqual([true, false, true, true]);
 
     flushSync(() => tablist.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true })));
-    expect(tabs[2]!.getAttribute("aria-selected")).toBe("true");
-    expect(document.activeElement).toBe(tabs[2]);
-    expect(panels.map(panel => panel.hidden)).toEqual([true, true, false]);
+    expect(tabs[3]!.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tabs[3]);
+    expect(panels.map(panel => panel.hidden)).toEqual([true, true, true, false]);
+  });
+
+  it("shows the Bookmarks tab only when bookmarks exist or the activity is waiting", () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, bookmarkCount: 0, status: "Completed" }} activityCatalog={catalog} />);
+    expect(container.querySelector('[data-tab-id="bookmarks"]')).toBeNull();
+
+    rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, bookmarkCount: 2, status: "Suspended" }} activityCatalog={catalog} />);
+    const bookmarksTab = container.querySelector('[data-tab-id="bookmarks"]');
+    expect(bookmarksTab).toBeTruthy();
+    expect(bookmarksTab?.textContent).toContain("Bookmarks");
+    expect(bookmarksTab?.textContent).toContain("2");
   });
 
   it("uses projected incident counts and falls back only to available legacy IDs", () => {
@@ -321,7 +333,8 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(metadataValue(container, "Incidents")).toBe("0");
     expect(container.querySelector('[aria-label="Activity incidents"]')).toBeNull();
     expect(container.querySelector(".wf-activity-outcomes")?.getAttribute("data-state")).toBe("empty");
-    expect(container.querySelector(".wf-activity-outcome-state")?.textContent).toBe("No records");
+    expect(container.querySelector(".wf-activity-outcome-status")?.textContent).toBe("No runtime outcomes were recorded for this execution.");
+    expect(container.querySelector(".wf-activity-outcome-state")).toBeNull();
   });
 
   it("keeps unavailable incident details distinct from a recorded zero", async () => {
@@ -498,8 +511,8 @@ describe("WorkflowActivityExecutionDetails", () => {
       .find(section => section.querySelector("h4")?.textContent?.includes("Outcomes"));
     expect(outcomes?.querySelectorAll("[role=listitem]")).toHaveLength(2);
     expect(outcomes?.getAttribute("data-state")).toBe("recorded");
-    expect(outcomes?.querySelector(".wf-activity-outcome-state")?.textContent).toBe("Recorded");
-    expect(outcomes?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("2");
+    expect(outcomes?.querySelector(".wf-activity-outcome-state")).toBeNull();
+    expect(outcomes?.querySelector(".wf-runtime-evidence-count")).toBeNull();
     expect(outcomes?.textContent).toContain("Completed");
   });
 
@@ -971,8 +984,9 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} focusInputKey="a-b" />);
     await vi.waitFor(() => expect(document.activeElement).toBe(buttons[1]));
-    expect(container.querySelector('[role="tablist"][aria-label="Activity execution views"] [aria-selected="true"]')?.textContent).toBe("Data");
-    expect(container.querySelector('[role="tablist"][aria-label="Activity execution details"] [aria-selected="true"]')?.textContent).toBe("Inputs");
+    const selectedTab = container.querySelector('[role="tablist"][aria-label="Activity execution details"] [aria-selected="true"]');
+    expect(selectedTab?.getAttribute("data-tab-id")).toBe("inputs");
+    expect(selectedTab?.textContent).toContain("Inputs");
     expect(buttons[1]!.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(ids[1]!)?.hidden).toBe(false);
   });
@@ -1985,14 +1999,14 @@ describe("buildInstanceCanvas", () => {
 });
 
 
-it("keeps captured values behind an explicit Data view while an activity journal is being inspected", async () => {
+it("keeps captured values unmounted while an activity journal is being inspected until Inputs is opened", async () => {
   vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({ name: "Private input preview", captureMode: "DiagnosticSnapshot", accessState: "visible", snapshot: { kind: "string", preview: "permitted preview", length: 17, truncated: false } })]));
-  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} initialView="journal" />);
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} initialView="events" />);
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy());
   expect(container.textContent).not.toContain("Private input preview"); expect(container.textContent).not.toContain("permitted preview");
   expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
-  const data = [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(tab => tab.textContent === "Data");
-  flushSync(() => data!.click());
+  const inputsTab = container.querySelector<HTMLButtonElement>('[data-tab-id="inputs"]');
+  flushSync(() => inputsTab!.click());
   await vi.waitFor(() => expect(container.textContent).toContain("Private input preview"));
   expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });

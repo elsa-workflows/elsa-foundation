@@ -241,7 +241,7 @@ def main():
             shell = (['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass'] if os.name == 'nt'
                      else ['pwsh', '-NoProfile'])
             run([*shell, '-File', ROOT / 'e2e-tests/rules/Test-DurableRules.ps1',
-                 '-AssemblyPath', host_root / 'Elsa.Workbench.dll',
+                 '-AssemblyPath', host_root / 'Elsa.Workbench.Host.dll',
                  '-DeploymentReceiptPath', host['deploymentReceipt'],
                  '-EvidencePath', rest_evidence], cwd=ROOT)
             rest = json.loads(rest_evidence.read_text(encoding='utf-8-sig'))
@@ -251,7 +251,7 @@ def main():
             receipt['nativeRestProofPassed'] = True
             recovery_evidence = evidence / 'native-admission-recovery.json'
             run([*shell, '-File', ROOT / 'e2e-tests/rules/Test-RulesAdmissionRecovery.ps1',
-                 '-AssemblyPath', host_root / 'Elsa.Workbench.dll',
+                 '-AssemblyPath', host_root / 'Elsa.Workbench.Host.dll',
                  '-DeploymentReceiptPath', host['deploymentReceipt'],
                  '-EvidencePath', recovery_evidence], cwd=ROOT)
             recovery = json.loads(recovery_evidence.read_text(encoding='utf-8-sig'))
@@ -261,7 +261,7 @@ def main():
             receipt['nativeAdmissionRecoveryPassed'] = True
             upgrade_evidence = evidence / 'native-installation.json'
             run([*shell, '-File', ROOT / 'e2e-tests/rules/Test-NativeRulesInstallation.ps1',
-                 '-AssemblyPath', host_root / 'Elsa.Workbench.dll',
+                 '-AssemblyPath', host_root / 'Elsa.Workbench.Host.dll',
                  '-DeploymentReceiptPath', host['deploymentReceipt'],
                  '-EvidencePath', upgrade_evidence], cwd=ROOT)
             upgrade = json.loads(upgrade_evidence.read_text(encoding='utf-8-sig'))

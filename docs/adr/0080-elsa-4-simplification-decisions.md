@@ -434,7 +434,7 @@ analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no ex
 - Stimulus is not renamed. Signal collides with BPMN's Signal, the broadcast throw and catch event, which Elsa's BPMN
   engine exposes in the API and in Studio next to the runtime concept. Trigger is taken too: Elsa uses it for start
   triggers. "Stimulus" stays and is not a retired term.
-- `Essentials/src/Activities/Bpmn` is left out of the Activities domain's D3 and D5 work. ADR 0063 is being finished:
+- `extensions/Bpmn/src` is left out of the Activities domain's D3 and D5 work. ADR 0063 is being finished:
   Elsa 4's BPMN token engine is replaced by the `Bpmn.Semantics` package, which Elsa 3 already ships on (3.9.0).
   The BPMN program is parked until 21 November 2026, and whatever survives the switch is made internal and renamed then.
 

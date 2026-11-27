@@ -1,0 +1,426 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace Kernel.EntityFramework;
+
+public sealed partial class EfStore
+{
+    // S5a (#4229): a composed Park set refuses an operator command on a parked root with a journalled reason. The command
+    // settles at the next revision and nothing else of the root, its Park or its inbox changes. S5b: a Terminate that names
+    // the Park is refused only for a stale Park ("selection") or one larger than a page ("page"); otherwise it ends the root.
+    // S5b-3b: a Delete that names the Park is refused for the same reasons.
+    private async Task<PreparedRoot?> PrepareRootParkedRefusalAsync(WorkerRoot root, TurnCommit turn, CancellationToken token)
+    {
+        var command = turn.FoundationRootOperator!;
+        // A clearing's own control is never refused: consuming it would strand the clearing, so its refusal fails closed.
+        // S5b-3b: a Delete is also refused at its Open for a protected root or one whose protection cannot be read. At the
+        // last page of its clearing an unreadable answer is the one refusal of a control: the clearing stays open and the
+        // same commit inserts the next control, due after a backoff (RootParkedRefusal).
+        var retries = command is { Kind: Kinds.Delete, Operator: { RootParkClear: true, RootParkMark: not null, RootParkWindow: >= 0,
+            RootParkFacts: { FitsPage: true } facts } } && facts.Clearing == command.Id && facts.Mark == command.Operator.RootParkMark;
+        string[] reasons = command.Operator?.RootParkMark is null ? ["parked"]
+            : command is { Kind: Kinds.Terminate, Operator: { RootParkFacts: not null, RootParkClear: false } } ? ["selection", "outstanding", "clearing"]
+            : command is { Kind: Kinds.Delete, Operator: { RootParkFacts: not null, RootParkClear: false } }
+                ? ["selection", "outstanding", "clearing", "protected", "unavailable"]
+            : retries ? ["unavailable"] : [];
+        // The refusal keeps the Suspended flag: a Park on a suspended root keeps it, as the in-memory reference does.
+        if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
+            turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
+            !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
+            (command.ReplyTo is not null) != (command.Operator?.RootHeldReply == true) ||
+            command.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) ||
+            !reasons.Any(reason => turn.Journal == Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = reason })) ||
+            turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
+                turn.Journal, Held: turn.Held)
+                { FoundationRootOperator = command } || turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count +
+                turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 })
+            throw RootShape();
+
+        var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
+        if (current is not { Status: InstanceStatus.Faulted, TerminalRevision: null } || current.Revision != expected) return null;
+        // The owner's row may carry the fault text the Park opened with; the refusal writes neither it nor anything but the revision.
+        if (row != WorkerRow(root, current) with { Revision = checked(expected + 1), Fault = row.Fault, FoundationDispatchHeader = header } ||
+            header.Tenant != root.Tenant || header.Reference != root.Reference)
+            throw RootShape();
+        return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
+            new RootParkedRefusal(root, expected, WithoutParkFacts(command)!, row.Suspended, retries));
+    }
+
+    // S5b-3b: the backoff before a Delete's last page runs again after its protection could not be read: one second,
+    // doubling with each earlier refusal of that page, at most thirty seconds.
+    internal static long ParkRetryDelay(int refusals) => Math.Min(1_000L << Math.Min(refusals, 5), 30_000L);
+
+    // The polled envelope carries the Park facts read with it; the stored row does not.
+    private static Message? WithoutParkFacts(Message? message) => message?.Operator is { RootParkFacts: not null } command
+        ? message with { Operator = command with { RootParkFacts = null } } : message;
+
+    // S5b: a Terminate that names the parked root's Park, and whose kept rows fit one page, ends the root in one fenced commit.
+    // S5b-2: a larger Park opens a clearing ("clearing" entry) that clears the first page; each control clears the next page
+    // (no entry), and the page that leaves nothing kept ends the root ("terminated" with the total). S5b-3b: a Delete that
+    // names the Park clears it the same way; its end retires the root (retirement), or, for a protected row, keeps it Faulted
+    // and suspended as it was, under a new terminal mark ("protected", "discarded").
+    private async Task<PreparedRoot?> PrepareRootParkedTerminateAsync(WorkerRoot root, TurnCommit turn, CancellationToken token)
+    {
+        var command = turn.FoundationRootOperator!;
+        if (turn.Row is not { Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
+            turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
+            !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
+            command is not { Kind: Kinds.Terminate or Kinds.Delete, Operator: { RootParkMark: { } mark, RootParkWindow: >= 0, RootParkFacts: { } facts } } ||
+            (command.ReplyTo is not null) != command.Operator.RootHeldReply || facts.Mark != mark ||
+            (facts.Outstanding || (command.Kind == Kinds.Delete || command.Operator.RootThenDelete) && facts.Residue) && !command.Operator.RootParkClear ||
+            facts.Clearing != (command.Operator.RootParkClear ? command.Id : null) || command.Operator.RootParkClear && command.ReplyTo is not null)
+            throw RootShape();
+        var ends = facts.FitsPage;
+        var discards = ends && command.Kind == Kinds.Delete;
+        // A Terminate-then-delete reaches this end only when the row is protected: it is terminated and kept. So does a Delete,
+        // whose protected end discards the Park.
+        var total = facts.Cleared + facts.Arrived + facts.Consumed;
+        var journal = discards ? Json.Write(new { Outcome = "protected", Disposition = "discarded", Operation = command.Id, Cleared = total })
+            : ends ? command.Operator.RootThenDelete
+                ? Json.Write(new { Outcome = "protected", Disposition = "terminated", Operation = command.Id, Cleared = total })
+                : Json.Write(new { Outcome = "terminated", Operation = command.Id, Cleared = total })
+            : command.Operator.RootParkClear ? null : Json.Write(new { Outcome = "clearing", Operation = command.Id, Cleared = facts.Page });
+        // A one-page Delete checked protection at its Open, so only a clearing's last page discards.
+        if (row is not { Status: InstanceStatus.Cancelled or InstanceStatus.Faulted } || (row.Status == InstanceStatus.Cancelled) != (ends && !discards) ||
+            discards && !command.Operator.RootParkClear ||
+            ends && !discards && row.Suspended || turn.Journal != journal ||
+            turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
+                turn.Journal, Unsubscribe: ends, Held: turn.Held) { FoundationRootOperator = command } ||
+            turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 })
+            throw RootShape();
+        var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
+        if (current is not { Status: InstanceStatus.Faulted, TerminalRevision: null } || current.Revision != expected) return null;
+        if (row != WorkerRow(root, current) with
+            {
+                Status = row.Status, Suspended = ends && !discards ? false : current.Suspended, Revision = checked(expected + 1), Fault = row.Fault,
+                FoundationDispatchHeader = header
+            } || header.Tenant != root.Tenant || header.Reference != root.Reference || header.Header.TypeData != current.TypeData ||
+            header.Header.Labels.Count != current.Labels.Count ||
+            current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))
+            throw RootShape();
+        return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
+            new RootParkedTerminate(root, expected, WithoutParkFacts(command)!, mark, facts.KeptDigest, current.Suspended,
+                facts.Clearing, facts.Cleared, ends ? facts.Arrived + facts.Consumed : facts.Page, ends));
+    }
+
+    // The checkpoint writer's branch for that commit: a parked root becomes Cancelled and unsuspended with its Park mark
+    // cleared and its terminal mark written, its fault kept, every kept row already cleared, no jobs, children, custom
+    // handles or subscriptions, and the rest of the row unchanged, beside a "terminated" entry at its revision. The raw command is formatted, so the literal brace is doubled.
+    // S5b-3b: in a set with retirement, the last page of a Delete's clearing that finds the row protected is the same write
+    // with the row left Faulted and its Suspended flag kept, beside a "protected" "discarded" entry.
+    private static string ParkedTerminateCheckpoint(KernelDb db)
+    {
+        var Parked = ParkedClearingRow(db);
+        const string columns = """
+            ROW(_."State", _."StateVersion", _."FoundationHeader", _."Fault", _."History", _."Jobs", _."Children", _."Parent",
+                _."Model", _."Definition", _."NextJobGeneration", _."CustomHandles" /*wire*/)
+            """;
+        string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
+            .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
+        string End(string ended, string entries) => $$$"""
+            ({{{ended}}} AND NOT NEW."Retired"
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL
+                AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
+                AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
+                AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL AND OLD."Fault" IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
+                AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD")}}}
+                AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
+                    AND k."InboxScope" = -4 AND k."FoundationKeptBy" IS NOT NULL)
+                AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                    AND j."Revision" = NEW."Revision" AND ({{{entries}}})))
+            """;
+        // A discard is the last page of a clearing: a single page checked protection at its Open and never discards.
+        var discard = db.UsesRootRetirement ? " OR /*discard-end*/ " + End(
+            """OLD."Status" = 2 AND NEW."Status" = 2 AND NEW."Suspended" = OLD."Suspended" AND OLD."FoundationParkClearing" IS NOT NULL """,
+            """j."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' """) : "";
+        return End("""OLD."Status" = 2 AND NEW."Status" = 3 AND NOT NEW."Suspended" """,
+            """j."Entries" LIKE '{{"Outcome":"terminated",%' OR j."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """) + discard + $$$"""
+
+            OR /*clearing-open*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
+                AND OLD."FoundationParkClearing" IS NULL AND NEW."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkCleared" > 0
+                {{{Parked}}}
+                AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                    AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"clearing",%'))
+            OR /*clearing-page*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
+                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" = OLD."FoundationParkClearing"
+                AND NEW."FoundationParkCleared" > OLD."FoundationParkCleared"
+                {{{Parked}}}
+                AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                    AND j."Revision" = NEW."Revision"))
+            """;
+    }
+
+    // S5b-2: an open clearing's columns stay as they are, and a root whose Park is being cleared moves only beside a refused
+    // entry, so no keep lands while a clearing is open.
+    private const string ParkedClearingPinned = """
+        AND ROW(NEW."FoundationParkClearing", NEW."FoundationParkCleared") IS NOT DISTINCT FROM ROW(OLD."FoundationParkClearing", OLD."FoundationParkCleared")
+        """;
+    private const string ParkedClearingKeeps = """
+        AND (OLD."FoundationParkClearing" IS NULL OR EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition"
+            AND j."Instance" = NEW."Id" AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"refused",%'))
+        """;
+
+    // An Open and a page keep the Park mark and everything but the revision and the clearing's columns.
+    internal static string ParkedClearingRow(KernelDb db) => db.UsesRootStableBody
+        ? ParkedClearingRowSql + """ AND NEW."FoundationStateWire" IS NOT DISTINCT FROM OLD."FoundationStateWire" """ : ParkedClearingRowSql;
+    private const string ParkedClearingRowSql = """
+        AND OLD."FoundationParkAt" IS NOT NULL AND NEW."FoundationParkAt" = OLD."FoundationParkAt"
+                AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision" AND NEW."FoundationTerminalRevision" IS NULL
+                AND NEW."FoundationTerminalAt" IS NULL
+                AND ROW(NEW."State", NEW."StateVersion", NEW."FoundationHeader", NEW."Fault", NEW."History", NEW."Jobs", NEW."Children",
+                    NEW."Parent", NEW."Model", NEW."Definition", NEW."NextJobGeneration", NEW."CustomHandles")
+                IS NOT DISTINCT FROM ROW(OLD."State", OLD."StateVersion", OLD."FoundationHeader", OLD."Fault", OLD."History", OLD."Jobs",
+                    OLD."Children", OLD."Parent", OLD."Model", OLD."Definition", OLD."NextJobGeneration", OLD."CustomHandles")
+        """;
+
+    // The retirement of a parked root by its Terminate-then-delete carries the C# retirement lock's conditions itself (#5746):
+    // no jobs, children, parent, custom handles or subscriptions, no pending row but a direct occurrence, and nothing kept.
+    // S5b-3b: a Delete retires it the same way, still Faulted; a Terminate-then-delete needs its capability.
+    private static string ParkedRetirementCheckpoint(KernelDb db) => ParkedRetirementSql
+        .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal);
+    private static readonly string ParkedRetirementSql = """
+        (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL
+            AND NEW."Status" /*retired-status*/ AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
+            AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
+            AND OLD."Jobs" IS NULL /*retire-children*/ AND OLD."Children" IS NULL /*retire-parent*/ AND OLD."Parent" IS NULL
+            /*retire-handles*/ AND OLD."CustomHandles" IS NULL
+            /*retire-subscriptions*/ AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
+            /*retire-pending*/ AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = NEW."Id" AND m."Partition" = NEW."Partition"
+                AND /*pending-residue*/)
+            /*retire-kept*/ AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
+                AND k."FoundationKeptBy" IS NOT NULL))
+        """.Replace("/*pending-residue*/", PendingResidue, StringComparison.Ordinal);
+
+    // The journal trigger admits a "terminated" entry on the parked root at its next revision.
+    // A protected entry needs a set with Terminate-then-delete (terminated and kept) or retirement (a Delete's discard).
+    private static string ParkedTerminatedJournal(KernelDb db) => """
+        OR NEW."Entries" LIKE '{{"Outcome":"terminated",%' OR NEW."Entries" LIKE '{{"Outcome":"clearing",%'
+        """ + (db.UsesRootTerminateThenDelete ? """ OR NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """ : "")
+        + (db.UsesRootRetirement ? """ OR NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' """ : "");
+
+    // A composed set's refused entry pins the whole row but its revision, as format 22's refused-row rule does, at any status.
+    // Each column of the set's Instances table is compared; the Park revision and the state wire exist only with their capability.
+    private static string ParkedRefusalRow(KernelDb db)
+    {
+        const string columns = """
+            ROW(_."Status", _."Retired", _."Suspended", _."State", _."StateVersion", _."FoundationHeader", _."Fault", _."History",
+                _."Jobs", _."Children", _."Parent", _."FoundationParkAt" /*park-revision*/, _."FoundationTerminalRevision",
+                _."FoundationTerminalAt", _."Model", _."Definition", _."NextJobGeneration", _."CustomHandles" /*wire*/ /*clearing*/)
+            """;
+        string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
+            .Replace("/*park-revision*/", db.RecordsRootParkRevision ? $""", {side}."FoundationParkRevision" """ : "", StringComparison.Ordinal)
+            .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal)
+            .Replace("/*clearing*/", $""", {side}."FoundationParkClearing", {side}."FoundationParkCleared" """, StringComparison.Ordinal);
+        // The raw command is formatted, so the literal brace is doubled.
+        return $$$"""
+            AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                AND j."Revision" = NEW."Revision" AND {{{RootOutcomeEntry}}} AND j."Entries" LIKE '{{"Outcome":"refused",%'
+                AND {{{Row("NEW")}}} IS DISTINCT FROM {{{Row("OLD")}}})
+            """;
+    }
+
+    // A refused or terminated entry commits only with the checkpoint write at its revision, as format 22's outcome constraint
+    // requires; a lone entry would wedge the root. A terminated entry also needs the ended root with its Park mark cleared,
+    // Cancelled, or Faulted for a Delete's discard (S5b-3b). Format 22 installs its own constraint, which also covers recovered entries.
+    internal static Task InstallRootParkedOutcomeAsync(KernelDb db, CancellationToken token) =>
+        db.Database.ExecuteSqlRawAsync("""
+            CREATE INDEX IF NOT EXISTS "IX_FoundationRootJournal_Outcome" ON "Journal" ("Partition", "Instance", "Revision")
+                WHERE {RootOutcomeEntry};
+            CREATE OR REPLACE FUNCTION kernel_require_root_outcome_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
+                    AND NOT (i."Partition" = NEW."Partition" AND i."Revision" = NEW."Revision"
+                        AND (NEW."Entries" NOT LIKE '{{"Outcome":"terminated",%' AND NEW."Entries" NOT LIKE '{{"Outcome":"protected",%'
+                            OR (i."Status" = CASE WHEN NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' THEN 2 ELSE 3 END
+                                AND NOT i."Retired" AND i."FoundationParkAt" IS NULL AND i."FoundationTerminalRevision" = NEW."Revision"))
+                        AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing",%' OR i."FoundationParkClearing" IS NOT NULL)))
+                THEN RAISE EXCEPTION 'An operator outcome entry requires the checkpoint write at its revision' USING ERRCODE = '23514'; END IF;
+                RETURN NULL;
+            END
+            $fn$;
+            DROP TRIGGER IF EXISTS kernel_require_root_outcome_checkpoint ON "Journal";
+            CREATE CONSTRAINT TRIGGER kernel_require_root_outcome_checkpoint AFTER INSERT ON "Journal"
+                DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.{RootOutcomeEntry})
+                EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
+            """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal), token);
+
+    // S5b-2: an open clearing on the parked root: the Terminate's operation and the rows cleared so far. Both are set only on a
+    // Faulted row with its Park mark.
+    internal static Task InstallRootParkClearingAsync(KernelDb db, CancellationToken token) =>
+        db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkClearing" text COLLATE "C",
+                ADD COLUMN IF NOT EXISTS "FoundationParkCleared" bigint;
+            ALTER TABLE "Instances" DROP CONSTRAINT IF EXISTS "CK_FoundationParkClearing";
+            ALTER TABLE "Instances" ADD CONSTRAINT "CK_FoundationParkClearing" CHECK (("FoundationParkClearing" IS NULL) = ("FoundationParkCleared" IS NULL)
+                AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0));
+            """, token);
+
+    private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, bool Clearing);
+
+    private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, bool Retries = false)
+        : QualifiedRootCheckpoint(checked(Expected + 1))
+    {
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
+        {
+            if (!db.UsesRootParkedOperators) return false;
+            var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
+                SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
+                    i."FoundationParkClearing" IS NOT NULL AS "Clearing"
+                FROM "Instances" i JOIN "FoundationRootBirths" b
+                    ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
+                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND i."Suspended" = {Suspended}
+                    AND i."Status" = {(int)InstanceStatus.Faulted} AND i."Revision" = {Expected} AND i."FoundationParkAt" IS NOT NULL
+                    AND i."Fault" IS NOT NULL AND i."FoundationTerminalRevision" IS NULL
+                    AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
+                    AND (NOT {Retries} OR i."FoundationParkClearing" = {Command.Id}
+                        AND i."FoundationParkAt" = {Command.Operator?.RootParkMark?.At} AND i."FoundationParkRevision" = {Command.Operator?.RootParkMark?.Revision})
+                FOR UPDATE OF i
+                """).ToListAsync(token);
+            if (locked is not [var prior]) return false;
+            // Without Park arrivals, or while its Park is being cleared, the parked root withholds its ordinary inputs, so the
+            // settled prefix is its operator rows. The envelope comparison binds a held command's exact reply address.
+            if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
+                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
+            if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}
+                WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
+                """, token) != 1) return false;
+            if (Retries)
+            {
+                // The clearing stays open: its next control is the same last page, due after the backoff for the refusals of
+                // this page so far.
+                var entry = Json.Write(new { Outcome = "refused", Operation = Command.Id, Reason = "unavailable" });
+                var refusals = await db.Database.SqlQuery<int>($"""
+                    SELECT count(*)::integer AS "Value" FROM "Journal"
+                    WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" < {JournalRevision} AND "Entries" = {entry}
+                    """).SingleAsync(token);
+                var (id, header) = PostgresRootAdmission.ClearControl(Root.Reference, Command.Id, Command.Kind, Command.Operator!.RootParkMark!,
+                    Command.Operator.RootParkWindow!.Value, Command.Operator.RootThenDelete);
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
+                    VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {Root.Partition}, {Root.Actor}, {Command.Kind}, {header},
+                        floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {ParkRetryDelay(refusals)},
+                        floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {Command.Operator.RootParkWindow.Value}, false, 0, 0, 0)
+                    """, token);
+            }
+            return await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
+                        AND "Status" = {(int)InstanceStatus.Faulted} AND "Suspended" = {Suspended} AND "Fault" = {prior.Fault}
+                        AND "FoundationParkAt" = {prior.At} AND "FoundationTerminalRevision" IS NULL AND "StateVersion" = {prior.StateVersion}
+                        AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
+                        AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
+                    AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"
+                        WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference} AND "Status" = {(int)InstanceStatus.Faulted}
+                            AND "ParkAt" = {prior.At} AND "ParkFault" = {prior.Fault}))
+                AS "Value"
+                """).SingleAsync(token);
+        }
+    }
+    // One fenced commit: the next page of kept rows (all of them when they fit) is cleared as format 22 clears its fault input
+    // (settled, no kept reason, no content, the ordinary window from now). The commit that leaves nothing kept ends the root
+    // Cancelled and unsuspended with its terminal mark and without its Park mark; any other opens or advances the clearing
+    // and inserts the next control. The Park, the clearing and the kept set must be the ones the command was decided on.
+    private sealed record RootParkedTerminate(WorkerRoot Root, long Expected, Message Command, FoundationParkMark Mark, string KeptDigest,
+        bool Suspended, string? Clearing, long Cleared, int Count, bool Ends) : QualifiedRootCheckpoint(checked(Expected + 1))
+    {
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
+        {
+            if (!db.UsesRootParkedOperators) return false;
+            var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
+                SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
+                    i."FoundationParkClearing" IS NOT NULL AS "Clearing"
+                FROM "Instances" i JOIN "FoundationRootBirths" b
+                    ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
+                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND i."Suspended" = {Suspended}
+                    AND i."Status" = {(int)InstanceStatus.Faulted} AND i."Revision" = {Expected} AND i."FoundationParkAt" = {Mark.At}
+                    AND i."FoundationParkRevision" = {Mark.Revision} AND i."Fault" IS NOT NULL AND i."FoundationTerminalRevision" IS NULL
+                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
+                    AND i."FoundationParkClearing" IS NOT DISTINCT FROM {Clearing}::text
+                    AND coalesce(i."FoundationParkCleared", 0) = {Cleared}
+                    AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
+                FOR UPDATE OF i
+                """).ToListAsync(token);
+            if (locked is not [var prior]) return false;
+            // Nothing is kept while a clearing is open, so a page reads and locks only its rows and one more; Open reads them all.
+            var kept = await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token, Clearing is null ? int.MaxValue : InMemoryStore.ParkPageLimit + 1);
+            var page = kept.Take(PageLength(kept)).ToArray();
+            // While a clearing is open the root receives only operator rows, so the settled prefix is its operator rows.
+            // The digest refuses a row kept since the facts were read (M8): on one page the page count refuses it too, but on a
+            // multi-page Open the page count stays the same, so the digest is the only check there.
+            if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
+                !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
+                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
+            var window = Command.Operator!.RootParkWindow!.Value;
+            var cleared = page.Select(row => row.Id).ToArray();
+            if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "FoundationKeptBy" = NULL, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL,
+                    "KeepUntil" = floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}
+                WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
+                    AND "InboxScope" = -4 AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" IS NOT NULL
+                """, token) != cleared.Length) return false;
+            var total = checked(Cleared + page.Length);
+            // S5b-3b: a protected Delete's end keeps the row Faulted and its Suspended flag.
+            var discards = Ends && Command.Kind == Kinds.Delete;
+            var status = Ends && !discards ? InstanceStatus.Cancelled : InstanceStatus.Faulted;
+            FormattableString end = $"""
+                UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
+                    "Status" = {(int)status}, "Suspended" = {discards} AND "Suspended", "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL,
+                    "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL, "FoundationTerminalRevision" = {JournalRevision},
+                    "FoundationTerminalAt" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
+                    AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor})
+                """;
+            FormattableString advance = $"""
+                UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
+                    "FoundationParkClearing" = {Command.Id}, "FoundationParkCleared" = {total}
+                WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
+                """;
+            if (await db.Database.ExecuteSqlInterpolatedAsync(Ends ? end : advance, token) != 1) return false;
+            // An Open withholds the root's inputs until the end: one the owner read ahead is marked unseen, and the owner forgets
+            // its copy by the same predicate (Worker), so the next poll reads it again under the clearing's filter.
+            if (Clearing is null && !Ends && ClearsParkInPages(db))
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Seen" = 0, "Trial" = 0
+                    WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        AND "EventMatch" IS NULL AND NOT "Done" AND "Id" NOT LIKE 'operator/%'
+                    """, token);
+            if (!Ends)
+            {
+                // The next control, bound to the command's kind, operation and Park mark, clears the next page.
+                var (id, header) = PostgresRootAdmission.ClearControl(Root.Reference, Command.Id, Command.Kind, Mark, window,
+                    Command.Operator.RootThenDelete);
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
+                    VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {Root.Partition}, {Root.Actor}, {Command.Kind}, {header}, 0,
+                        floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}, false, 0, 0, 0)
+                    """, token);
+            }
+            return await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
+                        AND "Status" = {(int)status} AND "Suspended" = {(!Ends || discards) && Suspended}
+                        AND "Fault" = {prior.Fault} AND "FoundationParkAt" IS NOT DISTINCT FROM {(Ends ? null : Mark.At)}::bigint
+                        AND "FoundationParkRevision" IS NOT DISTINCT FROM {(Ends ? null : Mark.Revision)}::bigint
+                        AND "FoundationParkClearing" IS NOT DISTINCT FROM {(Ends ? null : Command.Id)}::text
+                        AND "FoundationParkCleared" IS NOT DISTINCT FROM {(Ends ? null : total)}::bigint
+                        AND "FoundationTerminalRevision" IS NOT DISTINCT FROM {(Ends ? JournalRevision : null)}::bigint
+                        AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
+                        AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
+                    AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor}
+                        AND "Partition" = {Root.Partition} AND "InboxScope" = -4 AND "Done" AND "FoundationKeptBy" IS NULL
+                        AND "Payload" IS NULL AND "Start" IS NULL AND "ReplyTo" IS NULL
+                        AND "KeepUntil" = floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}) = {cleared.Length}
+                    AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"
+                        WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
+                            AND "Status" = {(int)status}
+                            AND ("ParkAt" IS NULL) = {Ends} AND ("EndedAt" IS NOT NULL) = {Ends}))
+                AS "Value"
+                """).SingleAsync(token);
+        }
+    }
+}

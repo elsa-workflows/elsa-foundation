@@ -328,3 +328,39 @@ test("Space Light keeps Linen workflow navigation readable beneath its starfield
 
   await page.screenshot({ path: testInfo.outputPath("linen-space-light-sequence-sidebar.png"), fullPage: true, animations: "disabled" });
 });
+
+test("workspace styles draw a single focus indicator on the sidebar search wrapper", async ({ page }) => {
+  for (const style of ["quiet", "linen"] as const) {
+    await open(page, style, "classic", "dark", "appearance");
+    const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
+    const wrapper = page.locator("label.sidebar-search");
+    const unfocusedBorder = await wrapper.evaluate(element => getComputedStyle(element).borderTopColor);
+    await search.focus();
+    await wrapper.evaluate(async element => {
+      await Promise.allSettled(element.getAnimations({ subtree: true }).map(animation => animation.finished));
+    });
+    const focused = await search.evaluate(element => {
+      const input = getComputedStyle(element);
+      const container = getComputedStyle(element.closest(".sidebar-search")!);
+      return {
+        inputBorderWidth: input.borderTopWidth,
+        inputOutlineStyle: input.outlineStyle,
+        inputBoxShadow: input.boxShadow,
+        wrapperBorderWidth: container.borderTopWidth,
+        wrapperBorderColor: container.borderTopColor,
+        wrapperBoxShadow: container.boxShadow
+      };
+    });
+    expect(focused.inputBorderWidth).toBe("0px");
+    expect(focused.inputOutlineStyle).toBe("none");
+    expect(focused.inputBoxShadow).toBe("none");
+    if (style === "linen") {
+      expect(focused.wrapperBorderWidth).toBe("1px");
+      expect(focused.wrapperBorderColor).not.toBe(unfocusedBorder);
+      expect(focused.wrapperBoxShadow).toBe("none");
+    } else {
+      expect(focused.wrapperBorderWidth).toBe("0px");
+      expect(focused.wrapperBoxShadow).toContain("inset");
+    }
+  }
+});

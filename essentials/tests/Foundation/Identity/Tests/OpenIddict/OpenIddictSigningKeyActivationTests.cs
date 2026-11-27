@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using CShells.Lifecycle;
 using Elsa.Foundation.Identity.OpenIddict;
-using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Tests.OpenIddict.VendorStore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;

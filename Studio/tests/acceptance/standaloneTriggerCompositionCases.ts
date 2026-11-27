@@ -27,7 +27,7 @@ export async function verifyHostComposition(j: TriggerJourney) {
     const absentIntake = await j.page.request.post(`${j.base}/workflows/http/${String(source.configuration.path).replace(/^\/+/, "")}`, { data: { actual: "no Runtime listener" } });
     expect(absentIntake.status()).toBe(404);
     const paused = await authoringJourney.create("event", "Authoring-only paused metadata");
-    await j.page.getByRole("button", { name: "Add workflow", exact: true }).click(); await j.chooseTarget(target.authored.definition.id);
+    await j.page.getByRole("button", { name: "Add workflow", exact: true }).first().click(); await j.chooseTarget(target.authored.definition.id);
     await expect(j.page.getByRole("checkbox", { name: "Enable this subscription", exact: true })).not.toBeChecked();
     await j.page.getByRole("button", { name: "Review subscription", exact: true }).click(); await j.review();
     const disabled = (await authoringJourney.subscriptions(paused.id))[0];
@@ -52,7 +52,7 @@ export async function verifyHostComposition(j: TriggerJourney) {
     const absentDesign = await j.page.request.get(`${j.base}/design/workflows/definitions/${target.authored.definition.id}`);
     expect(absentDesign.status()).toBe(404);
     await j.open(resource.id);
-    await j.page.getByRole("button", { name: "Add workflow", exact: true }).click(); await j.chooseTarget(target.authored.definition.id, true);
+    await j.page.getByRole("button", { name: "Add workflow", exact: true }).first().click(); await j.chooseTarget(target.authored.definition.id, true);
     await expect(j.page.getByRole("heading", { name: "Declared inputs", exact: true })).toBeVisible();
     await j.capture("trigger-runtime-only-composition"); await j.page.getByRole("button", { name: "Cancel", exact: true }).click();
     const accepted = await j.sourceRequest(await j.read(resource.id), { actual: "Runtime only" }, 202);

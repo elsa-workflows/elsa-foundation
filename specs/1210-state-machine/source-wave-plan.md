@@ -55,9 +55,9 @@ A composite durably waiting for a later input must not prevent other currently r
 |---|---|
 | `src/Kernel.Durable/Store.cs`, `Events.PublishAsync` | Writes an event, reads current subscriptions, then adds deliveries separately. A retry can observe changed membership. There is no immutable installation manifest or transitive closure fact. |
 | `Store.cs`, `CatchUpAsync`; `Worker.cs`, `MeetAsync` | Kept-event catch-up can discover an event after registration. It needs a defined readiness wave rather than retroactively extending an earlier cohort. |
-| `models/Native/NativeModel.cs`, `Resume`/`DrainAsync` | Agenda items survive Durable/budget yields, but carry no shared source responsibility. A committed yield is not a genuine external wait. |
+| [NativeModel.cs](../../essentials/src/Workflows/Runtime/Native/Model/NativeModel.cs), `Resume`/`DrainAsync` | Agenda items survive Durable/budget yields, but carry no shared source responsibility. A committed yield is not a genuine external wait. |
 | `NativeModel.cs`, `ExecuteAsync`/`ChildTrigger` | Local composite work, jobs and dispatched workflows cross different boundaries. Treating every scheduled boundary as settled would close a wave too early. |
-| `models/Native/CompositeSignal.cs` | Deferral gates callbacks; it does not establish who else received the source or which continuation is still owed. |
+| [CompositeSignal.cs](../../essentials/src/Workflows/Runtime/Native/Model/CompositeSignal.cs) | Deferral gates callbacks; it does not establish who else received the source or which continuation is still owed. |
 
 The Statecharts spike and invocation-admission probe do not supply this boundary. Equal names/payloads,
 timestamps, an empty mailbox and retained provenance cannot substitute for it. This unit adds no second chart
