@@ -359,11 +359,14 @@ and on-completed-callbacks suites pass.
     `DispatchWorkflow`/`ExecuteWorkflow` keeps reading same-import targets only, so its behaviour does not change.
 
     A target in neither place is refused with `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (Q2).
-  - **Contents**: the static `Input` first, then, for a map item, each declared input the item has, in the declared
-    spelling. Members match declared names regardless of letter case, as in the #5808 rules. When two members differ
-    only in case and match one declared name, the script faults that pass with a clear message rather than pick one; for any other item, `{DefaultItemInputKey: item}` when the target declares that name, matched regardless of
-    letter case and passed in the declared spelling. The item wins on a
-    clash.
+  - **Contents**, in order:
+    - the static `Input` entries;
+    - for a map item: each declared input the item has, in the declared spelling. Members match declared names
+      regardless of letter case, as in the #5808 rules. When two members differ only in case and match one declared
+      name, the script faults that pass with a clear message rather than pick one;
+    - for any other item: `{DefaultItemInputKey: item}` when the target declares that name, matched regardless of
+      letter case and passed in the declared spelling;
+    - on a name clash between the item and the static `Input`, the item wins, for both kinds of item.
   - **`DefaultItemInputKey`** must be a literal, null or absent (null and absent mean `Item`). Anything else is refused
     with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
   - **The static `Input`**: a literal or Object map is checked with the #5808 rules and embedded as constant entries.

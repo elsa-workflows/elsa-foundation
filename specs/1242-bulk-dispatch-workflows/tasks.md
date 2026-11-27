@@ -10,7 +10,8 @@ converter) needs the activity in the catalog.
 - [ ] T001 Check whether spec 1243 has already moved the iteration-id or collection helpers to a shared runtime
   project (FR-024). Reuse them if so; otherwise keep the local helpers.
 - [ ] T002 [US1] Add `BulkDispatchWorkflows` with `Items`, the three slots, the runtime type and catalog key, the cap
-  and window constants and the `Done` outcome in `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`
+  and window constants, the slot-name constants and `ActivityStructure`/`ReplaySafe` attributes of plan §1, and the
+  `Done` outcome in `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`
   (FR-001–FR-003, FR-009).
 - [ ] T003 [US1] Add the structure handler: the three slots, `ProjectIterationVariables` for `currentItem` and
   `currentIndex`, `CompletesAfterItsChildren` true, `Unordered` for every child pair, and `AssessChildResult` per plan

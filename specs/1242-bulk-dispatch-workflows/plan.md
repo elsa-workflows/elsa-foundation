@@ -63,7 +63,14 @@ the design side), and converter rules.
   - It does not implement `IRuntimeAcceptsRescheduledFaultedChild`, because retry goes through
     `RetryFaultedActivity`, which does not need it.
 - **Input**: `Items`.
-- **Slots**: `Dispatch`, `ChildCompleted`, `ChildFaulted`, all `[ActivityChildSlot(… Single)]`.
+- **Attributes**: `[ActivityStructure("elsa.bulk-dispatch-workflows.structure", "1.0.0")]` and
+  `[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]`, as `ForEach` has. The bulk node performs no effect
+  itself; each `Dispatch` execution carries its own profile.
+- **Slots**, all `ActivityChildSlotCardinalities.Single`, with these names, keys and display names, shared as constants
+  by the activity, the structure handler, the slot validator and the converter rewrite:
+  - `[ActivityChildSlot("BulkDispatchWorkflows.Dispatch", "dispatch", "Dispatch", …)]`;
+  - `[ActivityChildSlot("BulkDispatchWorkflows.ChildCompleted", "childCompleted", "Child completed", …)]`;
+  - `[ActivityChildSlot("BulkDispatchWorkflows.ChildFaulted", "childFaulted", "Child faulted", …)]`.
 - **Structure handler**: `BulkDispatchWorkflowsStructureHandler` projects and replaces the three slots, as
   `IfStructureHandler` does, with these members spelled out (do not copy If's answers):
   - **`ProjectIterationVariables`** returns `currentItem` and `currentIndex`, typed as `LoopStructureHandler` types
