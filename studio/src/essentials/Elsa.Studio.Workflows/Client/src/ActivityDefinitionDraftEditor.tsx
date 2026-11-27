@@ -1103,6 +1103,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
             onPublicationPending={setPublicationPendingLock}
             onPublished={markDraftPublished}
             onFocusDiagnostic={(diagnostic, trigger) => focusDiagnostic(diagnostic, publicationToolbarRef.current ?? trigger)}
+            onOpenDraft={draftId => onOpenDraft(draft.definitionId, draftId)}
             onOpenVersion={versionId => onOpenVersion(draft.definitionId, versionId)}
             onOpenWorkflows={() => onOpenStudioPath("/workflows/definitions")}
             mode="toolbar"

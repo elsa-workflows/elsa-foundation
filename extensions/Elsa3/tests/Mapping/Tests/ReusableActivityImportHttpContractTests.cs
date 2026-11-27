@@ -26,13 +26,16 @@ public sealed class ReusableActivityImportHttpContractTests
             .OfType<RouteEndpoint>()
             .ToArray();
 
-        Assert.Equal(5, endpoints.Length);
+        Assert.Equal(6, endpoints.Length);
         AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections", "elsa3-import:manage");
         AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis", "elsa3-import:read");
         AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/selection", "elsa3-import:read");
-        // Applying publishes, so it also needs the publish permission (spec 246 D-4).
+        // Both Apply routes require import and publication authority (spec 246 D-4).
+        var applyPolicy = PermissionPolicyDescriptor.All("elsa3-import:manage", "workflows/publishing:manage");
         AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/apply",
-            PermissionPolicyDescriptor.All("elsa3-import:manage", "workflows/publishing:manage"));
+            applyPolicy);
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/apply-drafts",
+            applyPolicy);
         AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/imports/{idempotencyKey}", "elsa3-import:read");
     }
 

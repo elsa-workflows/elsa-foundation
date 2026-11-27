@@ -36,6 +36,7 @@ internal static partial class SqliteHostLifetimeChecks
             var sibling = await AdmitFoundationStartAsync(ingress, scope, "sibling", token);
             var definitions = new SqliteAdmissionDefinitions();
             var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+            await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
             await store.EnableRootChildrenAsync(token);
             store.BindSqliteWorkerNode();
@@ -123,6 +124,7 @@ internal static partial class SqliteHostLifetimeChecks
                 if (stopping is not null) await stopping.WaitAsync(token);
             }
 
+            await CheckRetiredReplyLeaseAsync(Path.Combine(directory.FullName, "reply-drain.db"), fenceInBatch, token);
             var deadlinePath = Path.Combine(directory.FullName, "foundation-deadline.db");
             await InstallFoundationAsync(deadlinePath, token);
             await RunPeerAsync("foundation-stuck", deadlinePath, fenceInBatch, token);
@@ -134,6 +136,49 @@ internal static partial class SqliteHostLifetimeChecks
                 ingress.SendAsync(scope, new Contract.Target.Ref(slow), kind, kind, options: options, cancellationToken: token);
         }
         finally { directory.Delete(recursive: true); }
+    }
+
+    private static async Task CheckRetiredReplyLeaseAsync(string path, bool fenceInBatch, CancellationToken token)
+    {
+        await SqliteEmbeddedHosting.InstallShippedAsync(path, token);
+        var oldRequests = SqliteEmbeddedHosting.CreateRequests(path, "reply-owner", FoundationKind);
+        using var lease = oldRequests.AcquireReplyLease();
+        await ExpectFoundationFailureAsync<ArgumentException>(() => SqliteEmbeddedHosting.InstallShippedAsync(path, token),
+            "installation refuses an unrelated reply edge");
+
+        await using (var owner = await SqliteEmbeddedHosting.StartFoundationAsync(path, "reply-owner", new FoundationLifetimeActor(),
+            reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, token, requests: oldRequests))
+        {
+            await ExpectFoundationFailureAsync<SqliteHostLockException>(() => SqliteEmbeddedHosting.InstallShippedAsync(path, token),
+                "installation still refuses an active Embedded owner");
+        }
+
+        using var cancelInstall = new CancellationTokenSource();
+        var interrupted = SqliteEmbeddedHosting.InstallShippedAsync(path, cancelInstall.Token);
+        Require(!interrupted.IsCompleted, "installation waits for a reply lease left by the stopped owner");
+        cancelInstall.Cancel();
+        await RequireCancellationAsync(interrupted, cancelInstall.Token, token);
+        await ExpectFoundationFailureAsync<OperationCanceledException>(() =>
+        {
+            using var canceledReply = oldRequests.AcquireReplyLease(cancelInstall.Token);
+            return Task.CompletedTask;
+        }, "a canceled request cannot prolong the retired reply edge");
+
+        var install = SqliteEmbeddedHosting.InstallShippedAsync(path, token);
+        var nextRequests = SqliteEmbeddedHosting.CreateRequests(path, "reply-successor", FoundationKind);
+        using var cancelOwner = new CancellationTokenSource();
+        var deferredOwner = SqliteEmbeddedHosting.StartFoundationAsync(path, "reply-successor", new FoundationLifetimeActor(),
+            reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, cancelOwner.Token, requests: nextRequests);
+        Require(!install.IsCompleted && !deferredOwner.IsCompleted,
+            "installation and a successor wait for the retired reply edge to drain");
+        cancelOwner.Cancel();
+        await RequireCancellationAsync(deferredOwner, cancelOwner.Token, token);
+
+        lease.Dispose();
+        await install.WaitAsync(token);
+        await using var replacement = await SqliteEmbeddedHosting.StartFoundationAsync(path, "reply-successor", new FoundationLifetimeActor(),
+            reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, token, requests: nextRequests);
+        Require(replacement.LastError is null, "the successor starts after the retired reply lease is released");
     }
 
     private static async Task CheckWideFoundationFenceAsync(string path, Contract.BoundScope scope, bool fenceInBatch, CancellationToken token)
@@ -150,6 +195,7 @@ internal static partial class SqliteHostLifetimeChecks
 
         var definitions = new SqliteAdmissionDefinitions();
         var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+        await store.EnableRootSelfSendsAsync(token);
         await store.EnableRootJobsAsync(token);
         await store.EnableRootChildrenAsync(token);
         store.BindSqliteWorkerNode();
@@ -194,6 +240,7 @@ internal static partial class SqliteHostLifetimeChecks
         var definitions = new SqliteAdmissionDefinitions();
         var drift = new DefinitionDrift();
         var store = new EfStore(() => OpenFoundationDb(path, definitions, drift), postgres: false, fenceInBatch);
+        await store.EnableRootSelfSendsAsync(token);
         await store.EnableRootJobsAsync(token);
         await store.EnableRootChildrenAsync(token);
         store.BindSqliteWorkerNode();

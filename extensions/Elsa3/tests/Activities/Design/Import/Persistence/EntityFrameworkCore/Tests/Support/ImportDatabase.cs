@@ -1,3 +1,4 @@
+using Elsa.Locking.Core;
 using System.Collections.Concurrent;
 using System.Data.Common;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
@@ -47,6 +48,25 @@ internal sealed partial class ImportDatabase(
             await third.GetService<IRelationalDatabaseCreator>().CreateTablesAsync();
     }
 
+    private sealed class TestIds : Elsa.Primitives.Contracts.IIdentityGenerator
+    {
+        public string Generate() => Guid.NewGuid().ToString("N");
+    }
+
+    private sealed class ProcessLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
     public EfReusableActivityImportCommand Command(
         IPersistenceAccessContextAccessor access,
         TimeProvider? clock = null,
@@ -60,7 +80,7 @@ internal sealed partial class ImportDatabase(
             Workflows(workflowsInterceptors ?? []),
             access,
             serializer ?? ImportFixtures.Serializer(),
-            clock);
+            clock, () => (new TestIds(), new ProcessLockProvider()));
 
     public EfReusableActivityImportOperationStore OperationStore(IPersistenceAccessContextAccessor access) => new(Import(), access);
 

@@ -719,28 +719,70 @@ internal static class InlineRootPromotionChecks
                         await ChangeRetryAsync(wrong, content.Payload) == 1,
                         "the changed initial body refuses Recover without entering the model or changing its Park mark");
 
+                    const string arrival = "arrival-during-initial-park";
+                    var resume = Durable.Json.Write(new ResumeStimulus("while-parked"));
+                    var window = TimeSpan.FromHours(1);
+                    var admitted = postgres
+                        ? await new PostgresRootAdmission(Open, window).AdmitDirectAsync(scope.Tenant, parked.Id,
+                            arrival, NativeKinds.Resume, resume, cancellationToken: token) == true
+                        : (await new SqliteRootAdmission(Open, window, sqliteDefinitions).SendAsync(scope.Tenant, parked,
+                            arrival, NativeKinds.Resume, resume, null, null, token)).Outcome == Contract.AdmissionOutcome.Accepted;
+                    Check(admitted, "an ordinary arrival is admitted while the initial retry is parked");
+                    await successor.WokenAsync(new InstanceRef(initial.Actor.Id), token);
+
+                    while (!await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {initial.Actor.Id} AND "Kind" = {NativeKinds.Resume}
+                            AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}) AS "Value"
+                        """).SingleAsync(token))
+                    {
+                        await successor.RunAsync(token);
+                        await Task.Delay(5, token);
+                    }
+                    var beforeRetry = (await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token))!;
+                    var retryRevision = beforeRetry.Revision + 2;
+
                     await AdmitRecoveryAsync(successor, backend, parked, "recover-initial-still-failing");
                     do
                     {
                         await successor.RunAsync(token);
                         await Task.Delay(5, token);
                         current = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
-                    } while (current is not { Status: InstanceStatus.Faulted, Revision: >= 4 });
-                    Check(current is { Revision: 4, ParkAt: > 0, State: null } && FailInitialTurn.Entries == 2,
-                        "a failed explicit retry opens a new exact Park and keeps the initial input recoverable");
+                    } while (current is not { Status: InstanceStatus.Faulted } || current.Revision < retryRevision);
+                    Check(current is { ParkAt: > 0, State: null } && current.Revision == retryRevision && FailInitialTurn.Entries == 2 &&
+                        await db.Database.SqlQuery<bool>($"""
+                            SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {initial.Actor.Id} AND "Id" = {key.Id}
+                                AND "InboxScope" = {EfStore.RootSelfScope} AND "Done"
+                                AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}) AS "Value"
+                            """).SingleAsync(token),
+                        "the retry faults alone and preserves its original signed input beside the released arrival");
 
                     FailInitialTurn.Allow = true;
                     await AdmitRecoveryAsync(successor, backend, parked, "recover-initial-ready");
-                    do
+                    for (var attempt = 0; attempt < 150 && current?.Status != InstanceStatus.Finished; attempt++)
                     {
+                        await successor.WokenAsync(new InstanceRef(initial.Actor.Id), token);
                         await successor.RunAsync(token);
                         await Task.Delay(5, token);
                         current = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
-                    } while (current?.Status != InstanceStatus.Finished);
-                    Check(current is { Revision: 6, ParkAt: null, TerminalAt: { } ended } && FailInitialTurn.Entries == 3 &&
+                    }
+                    if (current?.Status != InstanceStatus.Finished)
+                    {
+                        var entries = await db.Journal.AsNoTracking().Where(row => row.Instance == initial.Actor.Id)
+                            .OrderByDescending(row => row.Revision).Take(4).Select(row => row.Entries).ToArrayAsync(token);
+                        var inbox = await db.Database.SqlQuery<string>($"""
+                            SELECT "Kind" || ':' || "InboxScope" || ':' || "Done" || ':' ||
+                                coalesce(CAST("FoundationKeptBy" AS text), '') || ':' ||
+                                coalesce(CAST("FoundationReleasedBy" AS text), '') || ':' || "Seen" || ':' || "Attempts" AS "Value"
+                            FROM "Messages" WHERE "Target" = {initial.Actor.Id} ORDER BY "Seq"
+                            """).ToArrayAsync(token);
+                        throw new InvalidOperationException($"The combined retry has status {current?.Status}, revision {current?.Revision}, " +
+                            $"owned {successor.Owns}. Recent journal entries: {string.Join(" | ", entries)}. Inbox: {string.Join(" | ", inbox)}");
+                    }
+                    Check(current is { ParkAt: null, TerminalAt: { } ended } && current.Revision >= retryRevision + 2 && FailInitialTurn.Entries == 3 &&
                         await backend.ReadRootTerminalOutputAsync(scope.Tenant, parked.Id, ended, true, token) is { Values: not null } output &&
                         System.Text.Encoding.UTF8.GetString(output.Values).Contains("original initial input", StringComparison.Ordinal),
-                        "cold Recover re-enters the original uncommitted start with the exact input and same actor identity");
+                        $"cold Recover re-enters the original uncommitted start with the exact input and same actor identity " +
+                        $"(revision {current?.Revision}, status {current?.Status}, entries {FailInitialTurn.Entries}, fault {current?.Fault})");
 
                     Task<int> ChangeRetryAsync(string? expected, string? replacement) => db.Database.ExecuteSqlInterpolatedAsync($"""
                         UPDATE "Messages" SET "Payload" = {replacement} WHERE "Target" = {initial.Actor.Id}

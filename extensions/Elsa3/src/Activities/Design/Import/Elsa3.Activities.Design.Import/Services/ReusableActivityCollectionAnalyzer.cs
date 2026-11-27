@@ -201,7 +201,7 @@ public sealed class ReusableActivityCollectionAnalyzer(
                 rewrites.OrderBy(x => x.NodeId, StringComparer.Ordinal).ThenBy(x => x.TargetSourceVersionId, StringComparer.Ordinal).ToArray(),
                 directStarts.OrderBy(x => x.NodeId, StringComparer.Ordinal).ToArray(),
                 OrderDiagnostics(itemDiagnostics),
-                _converterRevision);
+                _converterRevision) { SourceName = source.Name };
             items.Add(item);
             diagnostics.AddRange(item.Diagnostics);
         }

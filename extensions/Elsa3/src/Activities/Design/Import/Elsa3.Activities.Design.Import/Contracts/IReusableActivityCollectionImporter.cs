@@ -8,6 +8,9 @@ namespace Elsa3.Activities.Design.Import.Contracts;
 /// </summary>
 public interface IReusableActivityCollectionImporter
 {
+    /// <summary>Whether this importer writes current drafts and their reserved publication identities.</summary>
+    bool SupportsDraftImport => false;
+
     ValueTask<ReusableActivityImportPlan> AnalyzeAsync(
         ReusableActivityImportCollection collection,
         CancellationToken cancellationToken = default);
@@ -106,6 +109,25 @@ public interface IReusableActivityExportFileUpload
     ValueTask<ReusableActivityImportUploadResult> UploadExportFilesAsync(
         Stream body, string boundary, long? contentLength, ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>Supports current workflow and activity drafts in the same transaction as the import receipt.</summary>
+public interface IReusableActivityDraftImportCommand : IReusableActivityImportCommand;
+
+/// <summary>Applies a reviewed collection as current drafts, optionally publishing its activities.</summary>
+public interface IReusableActivityDraftImport
+{
+    ValueTask<ReusableActivityImportReceipt> ApplyDraftsAsync(
+        string collectionHandle, string planId, IReadOnlyCollection<string> selectedSourceVersionIds, string idempotencyKey,
+        ReusableActivityImportAccessScope accessScope, bool publishImportedActivities, CancellationToken cancellationToken);
+}
+
+/// <summary>Looks up the exact version reserved by an imported activity draft for later publication.</summary>
+public interface IImportedActivityDraftReservations
+{
+    ValueTask<(string VersionId, string Version)?> FindReservationAsync(string draftId, CancellationToken cancellationToken);
+    ValueTask<(string DraftId, string Version)?> FindPrecedingReservationAsync(
+        string? draftTenantId, IReadOnlyCollection<string> activeSiblingIds, string version, string? publishedHeadVersion, CancellationToken cancellationToken);
 }
 
 public interface IReusableActivityImportOperationService

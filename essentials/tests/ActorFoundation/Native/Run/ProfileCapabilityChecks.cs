@@ -71,7 +71,9 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.SelfProtocol | RootCapabilities.Timers | RootCapabilities.TimerRearm | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput |
                 RootCapabilities.Children | RootCapabilities.SequencedJournal | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy |
                 RootCapabilities.Playback | RootCapabilities.PlaybackDescendants | RootCapabilities.ScheduleInventory |
-                RootCapabilities.ScheduleSettlement | RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage | RootCapabilities.PreparedStarts)
+                RootCapabilities.ScheduleSettlement | RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage | RootCapabilities.PreparedStarts |
+                RootCapabilities.AuthoredEvents | RootCapabilities.EventStarts | RootCapabilities.EventStartReceipts |
+                RootCapabilities.EventStartScan | RootCapabilities.InlinePromotion)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -98,7 +100,8 @@ internal static class ProfileCapabilityChecks
             ["root-park-inspection"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-arrivals"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
-            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootChildren", "UsesRootComposedParkRecovery", "UsesRootDueBacklog", "UsesRootJobProtocol", "UsesRootLiveEventWaits",
+            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootAuthoredEvents", "UsesRootChildren", "UsesRootComposedParkRecovery", "UsesRootDueBacklog",
+                "UsesRootEventStartReceipts", "UsesRootEventStartScan", "UsesRootEventStarts", "UsesRootInlinePromotion", "UsesRootJobProtocol", "UsesRootLiveEventWaits",
                 "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening",
                 "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootPlayback", "UsesRootPlaybackDescendants", "UsesRootPreparedStarts",
                 "UsesRootPrivateParkInputs", "UsesRootReplyProtocol", "UsesRootRetention", "UsesRootRetentionPolicy", "UsesRootRetirement",
@@ -226,11 +229,13 @@ internal static class ProfileCapabilityChecks
             sharedPostgres.Capabilities == (s6TerminalOutput.Capabilities | RootCapabilities.DueBacklog | RootCapabilities.Children |
                 RootCapabilities.SequencedJournal | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy |
                 RootCapabilities.Playback | RootCapabilities.PlaybackDescendants | RootCapabilities.ScheduleInventory |
-                RootCapabilities.ScheduleSettlement | RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage | RootCapabilities.PreparedStarts) &&
+                RootCapabilities.ScheduleSettlement | RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage | RootCapabilities.PreparedStarts |
+                RootCapabilities.AuthoredEvents | RootCapabilities.EventStarts | RootCapabilities.EventStartReceipts |
+                RootCapabilities.EventStartScan | RootCapabilities.InlinePromotion) &&
             sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
-            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 20, JournalCodec: 0 } &&
-            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 23, JournalCodec: 0 },
-            "the shared shipped format composes managed schedules and prepared starts with the previous provider capabilities");
+            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 26, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 29, JournalCodec: 0 },
+            "the shared shipped format adds inline promotion and ordered Event delivery with distinct provider definitions");
         using var sequencedPostgres = KernelDb.ForPostgresRootSequencedJournalQualification(options);
         using var sequencedSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
             StoreFormat.RootSequencedJournalQualification);
@@ -325,7 +330,6 @@ internal static class ProfileCapabilityChecks
         Check(inlinePostgres.RequiredFormat == new StoreFormat(3, 125, 1) &&
             inlineSqlite.RequiredFormat == inlinePostgres.RequiredFormat &&
             preparedPostgres.UsesRootPreparedStarts && !preparedPostgres.UsesRootInlinePromotion &&
-            !sharedPostgres.UsesRootInlinePromotion && !sharedSqlite.UsesRootInlinePromotion &&
             !inlinePostgres.UsesRootAuthoredEvents && !inlineSqlite.UsesRootAuthoredEvents &&
             !inlinePostgres.UsesRootEventStarts && !inlineSqlite.UsesRootEventStarts &&
             inlinePostgres.Capabilities == (preparedPostgres.Capabilities | RootCapabilities.InlinePromotion) &&
@@ -342,7 +346,6 @@ internal static class ProfileCapabilityChecks
             authoredSqlite.Capabilities == authoredPostgres.Capabilities &&
             authoredPostgres.UsesRootAuthoredEvents && authoredSqlite.UsesRootAuthoredEvents &&
             !authoredPostgres.UsesRootInlinePromotion && !authoredSqlite.UsesRootInlinePromotion &&
-            !sharedPostgres.UsesRootAuthoredEvents && !sharedSqlite.UsesRootAuthoredEvents &&
             RootScheduleOwnerMode.Applies(authoredPostgres) && RootScheduleOwnerMode.Applies(authoredSqlite) &&
             RootProfiles.MissingPrerequisites(authoredPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(authoredPostgres.RequiredFormat) &&
@@ -368,7 +371,6 @@ internal static class ProfileCapabilityChecks
             receiptsPostgres.Capabilities == (startEventsPostgres.Capabilities | RootCapabilities.EventStartReceipts) &&
             receiptsSqlite.Capabilities == receiptsPostgres.Capabilities &&
             !startEventsPostgres.UsesRootEventStartReceipts && !startEventsSqlite.UsesRootEventStartReceipts &&
-            !sharedPostgres.UsesRootEventStartReceipts && !sharedSqlite.UsesRootEventStartReceipts &&
             RootProfiles.MissingPrerequisites(receiptsPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(receiptsPostgres.RequiredFormat) &&
             StoreDefinitionsRevision.Seed(receiptsPostgres) is { StoreSchema: 1, MessageProtocol: 24, JournalCodec: 0 } &&
@@ -383,12 +385,24 @@ internal static class ProfileCapabilityChecks
             eventScanPostgres.UsesRootEventStartScan && eventScanSqlite.UsesRootEventStartScan &&
             !eventScanPostgres.UsesRootInlinePromotion && !eventScanSqlite.UsesRootInlinePromotion &&
             !receiptsPostgres.UsesRootEventStartScan && !receiptsSqlite.UsesRootEventStartScan &&
-            !sharedPostgres.UsesRootEventStartScan && !sharedSqlite.UsesRootEventStartScan &&
             RootProfiles.MissingPrerequisites(eventScanPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(eventScanPostgres.RequiredFormat) &&
             StoreDefinitionsRevision.Seed(eventScanPostgres) is { StoreSchema: 1, MessageProtocol: 25, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(eventScanSqlite) is { StoreSchema: 2, MessageProtocol: 28, JournalCodec: 0 },
-            "ordered Event start replay adds only a private provider profile with exact definitions");
+            "the earlier private profile isolates ordered Event replay from inline promotion");
+        using var privateActivationPostgres = KernelDb.ForPostgresRootSharedActivationQualification(options);
+        using var privateActivationSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
+            StoreFormat.RootSharedActivationQualification);
+        Check(privateActivationPostgres.RequiredFormat == StoreFormat.RootSharedActivationQualification &&
+            privateActivationSqlite.RequiredFormat == privateActivationPostgres.RequiredFormat &&
+            privateActivationPostgres.RequiredFormat != sharedPostgres.RequiredFormat &&
+            privateActivationPostgres.Capabilities == sharedPostgres.Capabilities &&
+            privateActivationSqlite.Capabilities == sharedSqlite.Capabilities &&
+            StoreDefinitionsRevision.Seed(privateActivationPostgres) is { StoreSchema: 1, MessageProtocol: 26, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(privateActivationSqlite) is { StoreSchema: 2, MessageProtocol: 29, JournalCodec: 0 },
+            "the combined qualification profile retains its distinct store marker and exact DDL revisions");
+        Check(EfStore.RenderPostgresFirstRootGuards(sharedPostgres) == EfStore.RenderPostgresFirstRootGuards(privateActivationPostgres),
+            "the PostgreSQL shipped profile installs the same physical guards as the combined qualification");
         using var testPostgres = KernelDb.ForPostgresRootDirectTestRunQualification(options);
         using var testSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootDirectTestRunQualification);
         Check(testPostgres.RequiredFormat.MessageProtocol == 131 && testSqlite.RequiredFormat == testPostgres.RequiredFormat &&
@@ -398,6 +412,9 @@ internal static class ProfileCapabilityChecks
             !testPostgres.UsesRootInlinePromotion && !testSqlite.UsesRootInlinePromotion &&
             !inlinePostgres.UsesRootDirectTestRuns && !inlineSqlite.UsesRootDirectTestRuns &&
             !sharedPostgres.UsesRootDirectTestRuns && !sharedSqlite.UsesRootDirectTestRuns &&
+            !privateActivationPostgres.UsesRootDirectTestRuns && !privateActivationSqlite.UsesRootDirectTestRuns &&
+            !testPostgres.UsesRootAuthoredEvents && !testSqlite.UsesRootAuthoredEvents &&
+            !testPostgres.UsesRootEventStarts && !testSqlite.UsesRootEventStarts &&
             RootScheduleOwnerMode.Applies(testPostgres) && RootScheduleOwnerMode.Applies(testSqlite) &&
             RootProfiles.MissingPrerequisites(testPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(testPostgres.RequiredFormat) &&
