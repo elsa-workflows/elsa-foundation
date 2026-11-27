@@ -26,7 +26,8 @@ converter) needs the activity in the catalog.
 - [ ] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
 - [ ] T006 [P] [US1] Check in Studio that the designer shows the three slots through the generic rendering, and that
   the instance view shows the per-item `Dispatch` executions. Add no Studio-specific code (FR-003).
-- [ ] T007 [P] Write the README section and update the DispatchWorkflow `EXTENSION_POINTS.md` (FR-023). Also update
+- [ ] T007 [P] Write the activity README section, covering the cap, batching, branches, FR-010a and FR-010b, and update the
+  DispatchWorkflow `EXTENSION_POINTS.md` (FR-023). Also update
   `essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, whose `ProjectIterationVariables` entry says only the
   ForEach and For handlers implement it.
 

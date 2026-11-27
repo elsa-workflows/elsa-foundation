@@ -301,11 +301,11 @@ and on-completed-callbacks suites pass.
     publish warning `ValueFlow/ConcurrentWrite`. Spec 266 warns and never refuses, and this spec follows that rule.
   - Today's analyzer also flags variables declared inside a slot, because it does not stop at the declaring container.
     This spec does not change the analyzer.
-  - The README explains the lost-update risk and the alternative: record per-child results in the child workflow, or
+  - The activity README (`essentials/src/Activities/DispatchWorkflow/Runtime/README.md`) explains the lost-update risk and the alternative: record per-child results in the child workflow, or
     read them after the bulk activity.
-- **FR-010b**: The README also states:
-  - that only `RetryFaultedActivity` ends a faulted pass. `RescheduleActivity` is refused, because the bulk activity
-    does not accept rescheduled faulted children;
+- **FR-010b**: The same activity README also states:
+  - that only `RetryFaultedActivity` ends a faulted pass. `RescheduleActivity` is refused, because the faulted pass
+    has a blocking incident (`BlockingIncident`);
   - that `DispatchFailed` reaches `ChildFaulted` only when the `Dispatch` node waits. A fire-and-forget child that
     fails to start is not seen by the bulk activity;
   - that a slot holding a `Flowchart` or another composite that handles its own child faults reports the fault as the
