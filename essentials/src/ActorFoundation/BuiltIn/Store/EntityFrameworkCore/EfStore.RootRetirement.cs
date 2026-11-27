@@ -200,7 +200,7 @@ public sealed partial class EfStore
                     """).AsNoTracking().ToListAsync(token);
                 foreach (var row in held)
                 {
-                    var message = PostgresRootAdmission.DecodeDirect(row, Root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits, scheduleControls: db.UsesRootScheduleControls);
+                    var message = PostgresRootAdmission.DecodeDirect(row, Root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits, scheduleControls: db.UsesRootScheduleControls, authoredEvents: db.UsesRootAuthoredEvents);
                     if (message.ReplyTo is { } route)
                         (db.RetiredReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
                 }

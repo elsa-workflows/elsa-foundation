@@ -8,7 +8,8 @@ internal static class RootScheduleOwnerMode
 {
     internal const string Table = "FoundationScheduleOwnerMode";
 
-    internal static bool Applies(KernelDb db) => db.RequiredFormat == StoreFormat.RootShipped && db.UsesRootScheduleControls;
+    internal static bool Applies(KernelDb db) => db.UsesRootScheduleControls &&
+        (db.RequiredFormat == StoreFormat.RootShipped || db.RequiredFormat == StoreFormat.RootAuthoredEventsQualification);
 
     // Seed only as part of creating the store. A missing row on an existing store is damage, not an unbound owner.
     internal static void ConfigureModel(ModelBuilder model, bool sqlite)

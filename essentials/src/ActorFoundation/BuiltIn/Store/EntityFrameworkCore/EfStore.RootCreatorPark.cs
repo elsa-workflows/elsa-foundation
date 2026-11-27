@@ -4,9 +4,10 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private static string KeptChildCreator(string row) => $"""
+    private static string KeptRootCreator(KernelDb db, string row) => $"""
         ({row}."InboxScope" = 0 AND {row}."Kind" = '{Kinds.Start}' AND {row}."Id" = 'root:' || {row}."Target"
-            AND {row}."Sender" IS NOT NULL AND {row}."FoundationKeptBy" = {(short)ParkKeepReason.Consumed})
+            {(db.UsesRootAuthoredEvents ? "" : $"AND {row}.\"Sender\" IS NOT NULL")}
+            AND {row}."FoundationKeptBy" = {(short)ParkKeepReason.Consumed})
         """;
 
     private async Task<PreparedRoot?> PrepareRootCreatorParkAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence,
@@ -31,7 +32,8 @@ public sealed partial class EfStore
             Fault: fault, History: start.History, Creation: 1, StartIntent: root.Fingerprint,
             ParentCreation: start.ParentCreation) { FoundationNullState = true };
         if (row != initial || header.TypeData != start.Definition || header.Labels.Count != 0 ||
-            postgres && (!creator.BindFoundationChild || start.Parent is null)) throw RootShape();
+            postgres && _ordinaryRoots?.PublishesAuthoredEvents != true && (!creator.BindFoundationChild || start.Parent is null))
+            throw RootShape();
         RootChildEffects? effects = null;
         if (creator.BindFoundationChild && start.Parent is not null)
         {
@@ -49,8 +51,12 @@ public sealed partial class EfStore
     private static async Task<bool> BindPostgresCreatorParkAsync(KernelDb db, FirstRootCheckpoint park, CancellationToken token)
     {
         var creator = park.Creator;
-        if (!db.UsesRootChildren || !creator.BindFoundationChild || creator.Start?.Parent is not { } parent ||
-            park.ChildEffects is not { } effects) return false;
+        if (creator.Start is not { } start) return false;
+        var parent = start.Parent;
+        var effects = park.ChildEffects;
+        if (parent is null
+            ? !db.UsesRootAuthoredEvents || creator.BindFoundationChild || effects is not null
+            : !db.UsesRootChildren || !creator.BindFoundationChild || effects is null) return false;
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload);
         if (fingerprint is null) return false;
         var family = RootStatePrefix(db);
@@ -61,8 +67,11 @@ public sealed partial class EfStore
                 WHERE b."Actor" = m."Target" AND b."Partition" = m."Partition" AND b."Creator" = m."Id"
                     AND b."Tenant" = {park.Tenant} AND b."Reference" = {park.Reference} AND b."Creation" = 1
                     AND b."Fingerprint" = {fingerprint} AND m."Id" = {creator.InboxKey.Id} AND m."Target" = {creator.Target.Id}
-                    AND m."InboxScope" = 0 AND m."Due" = 0 AND m."Sender" = {parent} AND NOT m."Done"
-                    AND m."KeepUntil" IS NULL AND m."ReplyTo" IS NULL AND m."EventMatch" IS NULL AND m."FoundationKeptBy" IS NULL
+                    AND m."InboxScope" = 0 AND (m."Due" = 0 OR
+                        {parent}::text IS NULL AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint)
+                    AND m."Sender" IS NOT DISTINCT FROM {parent}::text AND NOT m."Done"
+                    AND m."KeepUntil" IS NULL AND m."ReplyTo" IS NOT DISTINCT FROM {creator.ReplyTo}::text
+                    AND m."EventMatch" IS NULL AND m."FoundationKeptBy" IS NULL
                 RETURNING m.*
             ), bound AS (
                 UPDATE "Instances" i SET "FoundationReference" = {park.Reference}, "FoundationTenant" = {park.Tenant},
@@ -70,7 +79,7 @@ public sealed partial class EfStore
                     "FoundationParkAt" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint,
                     "FoundationParkRevision" = {park.JournalRevision}
                 FROM kept k
-                WHERE i."Id" = k."Target" AND i."Partition" = k."Partition" AND i."Parent" = {parent}
+                WHERE i."Id" = k."Target" AND i."Partition" = k."Partition" AND i."Parent" IS NOT DISTINCT FROM {parent}::text
                     AND i."Revision" = {park.JournalRevision} AND i."Status" = {(int)InstanceStatus.Faulted} AND i."Fault" = {park.Row.Fault}
                     AND i."FoundationReference" IS NULL AND i."FoundationTerminalAt" IS NULL AND i."FoundationTerminalRevision" IS NULL
                 RETURNING i."Id"
@@ -78,6 +87,6 @@ public sealed partial class EfStore
             SELECT kept.* FROM kept JOIN bound ON bound."Id" = kept."Target"
             """, park.Wire)).AsNoTracking().ToListAsync(token);
         return retained is [var envelope] && park.MatchesCreator(PostgresRootAdmission.DecodeCreator(envelope, children: true)) &&
-            await effects.BindAsync(db, park.Tenant, token);
+            (effects is null || await effects.BindAsync(db, park.Tenant, token));
     }
 }

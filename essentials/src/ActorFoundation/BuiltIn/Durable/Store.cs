@@ -207,6 +207,7 @@ public sealed record TurnCommit(
     internal CascadeCommit? FoundationCascade { get; init; }
     internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
     internal IReadOnlyList<Message>? FoundationRootChildSends { get; init; }
+    internal IReadOnlyList<Message>? FoundationRootPublications { get; init; }
     internal TerminalOutput? FoundationTerminalOutput { get; init; }
 }
 
