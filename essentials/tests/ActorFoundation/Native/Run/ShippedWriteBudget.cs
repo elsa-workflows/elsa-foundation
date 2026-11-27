@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
@@ -23,9 +25,16 @@ internal static class ShippedWriteBudget
     private const int Samples = 3;
     private const string Node = "shipped-write-budget";
 
-    internal static async Task<int> RunAsync(bool postgres, bool inBatch, bool requireBudget)
+    internal sealed record ForEachScenario(string Mode, int Count)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        internal const int ItemBytes = 50;
+        internal string[] Items() => Enumerable.Range(0, Count)
+            .Select(index => index.ToString("D4", CultureInfo.InvariantCulture).PadRight(ItemBytes, 'x')).ToArray();
+    }
+
+    internal static async Task<int> RunAsync(bool postgres, bool inBatch, bool requireBudget, ForEachScenario? forEach = null)
+    {
+        using var timeout = new CancellationTokenSource(forEach is null ? TimeSpan.FromSeconds(90) : TimeSpan.FromMinutes(8));
         var token = timeout.Token;
         var directory = postgres ? null : Directory.CreateTempSubdirectory(Node);
         var path = directory is null ? null : Path.Combine(directory.FullName, "kernel.db");
@@ -108,7 +117,10 @@ internal static class ShippedWriteBudget
             await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
             await store.EnableRootChildrenAsync(token);
-            var definition = Reference.WriteLines(Lines);
+            var items = forEach?.Items();
+            var definition = items is null ? Reference.WriteLines(Lines) : Wf.Workflow("for-each-budget",
+                Wf.ForEach("each", Binding.Literal(new JsonArray([.. items.Select(item => (JsonNode?)item)])),
+                    Wf.Sequence("body", Wf.Delay("wait", 2), Wf.WriteLine("write-item", Binding.Expr("currentItem")))));
             var sequenced = reads is Contract.IActorSequencedJournalReads { SupportsSequencedJournal: true } reader ? reader : null;
             var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition),
                 new() { SelfSends = true, UseStructuralJournal = sequenced is not null });
@@ -117,12 +129,13 @@ internal static class ShippedWriteBudget
             var roots = postgres ? store.BindWorkerNode(actor.Withholds) : store.BindSqliteWorkerNode(actor.Withholds);
             var adapter = new ActorAdapter(store.WorkerHeaders(roots), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
                 rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
-            var lease = TimeSpan.FromMinutes(2);
+            var lease = TimeSpan.FromMinutes(forEach is null ? 2 : 10);
             // The cadence clock stays fixed across the three warm samples. Database time, ownership and all SQL remain real.
             var sampledAt = Environment.TickCount64;
             await using var worker = new Worker(Node, 0, store, adapter, new WorkerOptions
             {
-                Partitions = 1, Lease = lease, Backlog = pressure!.Backlog, Transport = transport, Monotonic = () => sampledAt
+                Partitions = 1, Lease = lease, Backlog = pressure!.Backlog, Transport = transport,
+                Monotonic = forEach is null ? () => sampledAt : () => Environment.TickCount64
             });
             var host = new DurableHost([worker]);
             await host.HeartbeatAsync(lease, token);
@@ -131,6 +144,11 @@ internal static class ShippedWriteBudget
 
             var scope = EmbeddedTenant.Bind(Node);
             var runtime = new WorkflowRuntime(ingress, reads);
+            if (forEach is not null)
+            {
+                await MeasureForEachAsync(forEach, items!);
+                return 0;
+            }
             var spec = NativeExecutionModel.Start(definition.Id, Modes.Balanced);
             Console.WriteLine("Window starts before public admission and ends after the worker pass that lands revision 1. " +
                 "Installation, take, pressure priming, warm-up and verification reads are outside the window.");
@@ -216,6 +234,80 @@ internal static class ShippedWriteBudget
             Console.WriteLine($"{Samples} warm samples: maximum {count} {(postgres ? "wire round trips" : "SQLite provider calls")}, " +
                 $"budget {budget} ({(count <= budget ? "met" : "missed")}).");
             return requireBudget && count > budget ? 1 : 0;
+
+            async Task MeasureForEachAsync(ForEachScenario scenario, string[] expected)
+            {
+                using var stdout = new StringWriter();
+                WriteLine.Out = stdout;
+                await using var db = Observe();
+                // This connection is independent of the measured owner and sees only committed rows.
+                await db.Database.OpenConnectionAsync(token);
+                Console.WriteLine($"ForEach {scenario.Mode}, {scenario.Count} distinct {ForEachScenario.ItemBytes}-byte ASCII items, " +
+                    "one authored Delay and one WriteLine per item.");
+                var elapsed = Stopwatch.StartNew();
+                sqlite?.Begin();
+                var baseline = Read();
+                var accepted = await runtime.StartAsync(scope, "for-each", NativeExecutionModel.Start(definition.Id, scenario.Mode),
+                    cancellationToken: token);
+                Check(accepted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "The ForEach start was not admitted.");
+                var reference = accepted.Actor!.Value;
+                var admitted = Read();
+                await worker.WokenAsync(null, token);
+                var passes = 0;
+                var observed = 0L;
+                var active = new List<long>();
+                var timerIds = new HashSet<string>(StringComparer.Ordinal);
+                CheckpointBytes? checkpoint = null;
+                while (checkpoint?.Status != InstanceStatus.Finished)
+                {
+                    sqlite?.Resume();
+                    var next = await worker.RunAsync(token);
+                    passes++;
+                    sqlite?.End();
+                    token.ThrowIfCancellationRequested();
+                    Check(next is not null, "The ForEach worker lost the partition.");
+                    checkpoint = await db.Database.SqlQuery<CheckpointBytes>($"""
+                        SELECT i."Id", i."Revision", i."Status", i."FoundationTerminalRevision" AS "TerminalRevision",
+                            CAST(octet_length(i."State") AS bigint) + coalesce(octet_length(i."FoundationStateWire"), 0)
+                                + coalesce(octet_length(i."FoundationHeader"), 0) + coalesce(octet_length(i."Jobs"), 0) AS "Bytes",
+                            (SELECT max(m."Id") FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
+                                AND m."InboxScope" = {EfStore.RootSelfScope} AND m."Due" > 0 AND NOT m."Done") AS "Timer"
+                        FROM "Instances" i
+                        WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {reference.Id} AND NOT i."Retired"
+                        """).SingleOrDefaultAsync(token);
+                    if (checkpoint is null || checkpoint.Revision == observed)
+                    {
+                        if (next is { Ticks: > 0 }) await Task.Delay(next.Value, token);
+                        continue;
+                    }
+                    Check(checkpoint.Revision == ++observed, "The observer must see every committed ForEach checkpoint.");
+                    Check(checkpoint.Status is InstanceStatus.Running or InstanceStatus.Finished,
+                        $"ForEach stopped at revision {observed} with status {checkpoint.Status}.");
+                    if (checkpoint.Status == InstanceStatus.Running) active.Add(checkpoint.Bytes);
+                    if (checkpoint.Timer is { } timer) timerIds.Add(timer);
+                }
+
+                Check(checkpoint is { Timer: null } && checkpoint.TerminalRevision == observed && timerIds.Count == expected.Length,
+                    "Each item must land a distinct timer and the final checkpoint must complete without a pending timer.");
+                Check(stdout.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).SequenceEqual(expected),
+                    "The ForEach body must complete once per item in authored order.");
+                var written = Read();
+                var total = written - baseline;
+                if (postgres) Check(total.Connections == 0 && total.Groups > 0, "ForEach must use warmed PostgreSQL connections.");
+                else Check(total.Begun > 0 && total.Ended == total.Begun && total.Statements >= total.ProviderCalls,
+                    "The ForEach SQLite trace must cover the measured provider calls and all transaction boundaries.");
+                var journal = await db.Database.SqlQueryRaw<long>(
+                    """SELECT CAST(coalesce(sum(octet_length("Entries")), 0) AS bigint) AS "Value" FROM "Journal" WHERE "Instance" = {0}""",
+                    checkpoint.Id).SingleAsync(token);
+                var first = active[0];
+                active.Sort();
+                Console.WriteLine($"CHECKPOINTS revisions={observed} active={active.Count} timers={timerIds.Count} passes={passes} elapsed_ms={elapsed.ElapsedMilliseconds}");
+                Console.WriteLine($"BYTES active_first={first} active_median={active[active.Count / 2]} active_max={active[^1]} " +
+                    $"active_total={active.Sum()} terminal={checkpoint.Bytes} journal={journal}");
+                Report("ForEach admission", admitted - baseline, postgres);
+                Report("ForEach owner passes", written - admitted, postgres);
+                Report("ForEach total", total, postgres);
+            }
         }
         finally
         {
@@ -231,6 +323,8 @@ internal static class ShippedWriteBudget
         Measurement Read() => wire is null ? sqlite!.Read() : new(wire.Trips, wire.ProtocolRequests, wire.Connections,
             counter.Commands, counter.Transactions.Begun, counter.Transactions.Ended, 0, 0);
     }
+
+    private sealed record CheckpointBytes(string Id, long Revision, InstanceStatus Status, long? TerminalRevision, long Bytes, string? Timer);
 
     private static string? StructuralWriteLineCompletion(Contract.JournalEntry entry)
     {

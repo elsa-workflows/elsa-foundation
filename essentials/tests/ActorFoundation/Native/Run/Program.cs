@@ -199,6 +199,10 @@ if (args is ["shipped-write-budget", var shippedBudgetProvider and ("postgres" o
     shippedBudgetOptions is [] or ["--require-budget"])
     return await ShippedWriteBudget.RunAsync(shippedBudgetProvider == "postgres", shippedBudgetFence == "in-batch",
         requireBudget: shippedBudgetOptions.Length != 0);
+if (args is ["shipped-foreach-budget", var forEachProvider and ("postgres" or "sqlite"), var forEachMode and ("balanced" or "durable"),
+    var forEachSize] && int.TryParse(forEachSize, out var forEachCount) && forEachCount is 100 or 1_000)
+    return await ShippedWriteBudget.RunAsync(forEachProvider == "postgres", inBatch: true, requireBudget: false,
+        forEach: new(forEachMode == "balanced" ? Modes.Balanced : Modes.Durable, forEachCount));
 if (args is ["pg-root-value-check", var valueFence and ("checked" or "in-batch"), "birth"])
     return await PostgresRootValueChecks.RunAsync(valueFence == "in-batch", null);
 if (args is ["pg-root-value-check", var valueRestartFence and ("checked" or "in-batch"), "restart", var valueActor, var valueEpoch] &&
@@ -381,6 +385,7 @@ if (args is ["cost", "postgres", var connection])
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
 Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | " +
     "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | root-sequenced-journal <sqlite|postgres> <checked|in-batch> | " +
+    "shipped-foreach-budget <sqlite|postgres> <balanced|durable> <100|1000> | " +
     "workbench-shipped-history <sqlite|postgres> <executable> [playback] | " +
     "memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
