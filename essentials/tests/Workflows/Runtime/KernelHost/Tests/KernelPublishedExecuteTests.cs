@@ -18,7 +18,6 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
-using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -35,6 +34,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +50,7 @@ public sealed class KernelPublishedExecuteTests
 {
     private const string FoundationDatabase = "KERNEL_EXECUTE_FOUNDATION_POSTGRES";
     private const string RuntimeDatabase = "KERNEL_EXECUTE_RUNTIME_POSTGRES";
+    private const string RateLimitedSubject = "rate-limited-inline";
     private static readonly PersistenceScope Scope = new(PersistenceScope.DefaultValue);
 
     [Fact]
@@ -185,6 +186,26 @@ public sealed class KernelPublishedExecuteTests
         api.PostConfigureServices(builder.Services);
         var kernelApi = new WorkflowsRuntimeKernelApiFeature();
         kernelApi.PostConfigureServices(builder.Services);
+        if (inline)
+        {
+            var startDescriptor = builder.Services.Last(item => item.ServiceType == typeof(IWorkflowExecutionStartService));
+            builder.Services.Remove(startDescriptor);
+            builder.Services.AddScoped<IWorkflowExecutionStartService>(services =>
+            {
+                var context = services.GetRequiredService<IHttpContextAccessor>();
+                if (context.HttpContext?.User.FindFirstValue(IdentityClaimTypes.UserId) != RateLimitedSubject)
+                    return (IWorkflowExecutionStartService)startDescriptor.ImplementationFactory!(services);
+                var runtimeShell = services.GetRequiredService<KernelShellRuntime>();
+                var dispatch = new KernelPublishedRunDispatcher(services.GetRequiredService<IServiceScopeFactory>(),
+                    services.GetRequiredService<KernelServing>(), Scope, runtimeShell.StartPublishedAsync,
+                    (_, _, _, _) => ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Unavailable)
+                    {
+                        RefusalReason = Contract.RefusalReason.RateLimited, RetryAfter = TimeSpan.FromMilliseconds(1250)
+                    }));
+                return new WorkflowExecutionStartService(dispatch, services.GetRequiredService<IWorkflowExecutableStore>(), context,
+                    services.GetRequiredService<NormalizedPrincipalValidator>());
+            });
+        }
 
         await using var app = builder.Build();
         app.UseAuthentication();
@@ -327,14 +348,7 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(initial, await DurableRowCountAsync());
                 Assert.Equal(pinTail, await pinRead.ReadOpenTailAsync(Scope, token));
 
-                var rateLimited = new KernelPublishedRunDispatcher(scopes, app.Services.GetRequiredService<KernelServing>(), Scope,
-                    shell.StartPublishedAsync, (_, _, _, _) => ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Unavailable)
-                    {
-                        RefusalReason = Contract.RefusalReason.RateLimited, RetryAfter = TimeSpan.FromMilliseconds(1250)
-                    }));
-                var rateReceipt = await new WorkflowExecutionStartService(rateLimited, stores.GetRequiredService<IWorkflowExecutableStore>())
-                    .ExecuteAsync(new ExecuteWorkflow(pure.Identity.ArtifactId,
-                        SourceReferenceId: WorkflowActivationReferenceIdentity.Create("publish-" + pure.Identity.DefinitionId)), token);
+                var rateReceipt = await InlineAsync(pure, HttpStatusCode.TooManyRequests, "Unavailable", RateLimitedSubject);
                 Assert.True(rateReceipt.Shed);
                 Assert.Equal("RateLimited", rateReceipt.Reason);
                 Assert.Equal(2, rateReceipt.RetryAfterSeconds);
@@ -411,7 +425,8 @@ public sealed class KernelPublishedExecuteTests
                     return await http.SendAsync(request, token);
                 }
 
-                async Task<WorkflowExecutionStartDispatchView> InlineAsync(WorkflowExecutable executable, HttpStatusCode status, string disposition)
+                async Task<WorkflowExecutionStartDispatchView> InlineAsync(WorkflowExecutable executable, HttpStatusCode status,
+                    string disposition, string subject = "accepted")
                 {
                     var started = System.Diagnostics.Stopwatch.GetTimestamp();
                     while (true)
@@ -419,7 +434,7 @@ public sealed class KernelPublishedExecuteTests
                         using var response = await ExecuteAsync(executable.Identity.ArtifactId, new
                         {
                             sourceReferenceId = WorkflowActivationReferenceIdentity.Create("publish-" + executable.Identity.DefinitionId)
-                        });
+                        }, subject: subject);
                         var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await response.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
                         // A newly started owner can briefly have no partitions. Only definitive pre-queue responses can be retried.
                         if (status != HttpStatusCode.TooManyRequests && response.StatusCode == HttpStatusCode.TooManyRequests &&
