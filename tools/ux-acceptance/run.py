@@ -865,14 +865,17 @@ class OwnedBackendRestart:
 
 
 def prepare_host(project, destination, *, configuration_directory=None):
-    output = project.parent / 'bin/Debug/net10.0'
+    copy_host(project.parent / 'bin/Debug/net10.0', destination, configuration_directory or project.parent)
+
+
+def copy_host(output, destination, configuration_directory):
     shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "native-store", "packages", "appsettings*.json", "shells*.json"))
     # Older local outputs may contain stores. Never seed acceptance from them.
     for file in destination.rglob('*'):
         if file.is_file() and (file.suffix in {'.db', '.db-shm', '.db-wal'} or file.name == 'nuplane.lock.json'):
             file.unlink()
     for name in ['appsettings.json', 'shells.json']:
-        shutil.copy2((configuration_directory or project.parent) / name, destination / name)
+        shutil.copy2(configuration_directory / name, destination / name)
 
 
 def playback_profiles(stack, data, backend_project, studio_project, output, env, owned_processes, owned_pids, profiles):
