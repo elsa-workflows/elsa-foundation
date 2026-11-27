@@ -1,0 +1,278 @@
+using System.Data;
+using System.Text;
+using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Microsoft.EntityFrameworkCore;
+using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
+
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+
+internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
+    RuntimeDbContext context,
+    IPersistenceAccessContextAccessor access,
+    IWorkflowExecutableStore executables,
+    IWorkflowExecutableSourceReferenceStore sourceReferences,
+    IWorkflowTriggerBindingStore triggerBindings,
+    IWorkflowExecutableRootWriteLeaseManager leases,
+    TimeProvider clock) : IRuntimeKernelScheduleOccurrenceStore, IRuntimeKernelScheduleOccurrenceDeliveryStore, IRuntimeKernelScheduleRetentionRoots
+{
+    public async ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
+    {
+        Validate(occurrence);
+        ArgumentNullException.ThrowIfNull(readScheduleClock);
+        var scope = Bind(occurrence.Scope);
+        if (!context.Database.IsRelational() ||
+            executables.GetMaterialStore() is not EfWorkflowExecutableStore material || !ReferenceEquals(material.Context, context) ||
+            sourceReferences is not EfWorkflowExecutableSourceReferenceStore sources || !ReferenceEquals(sources.Context, context) ||
+            triggerBindings is not EfWorkflowTriggerBindingStore bindings || !ReferenceEquals(bindings.Context, context) ||
+            context.Database.CurrentTransaction is not null || context.ChangeTracker.HasChanges())
+            throw new NotSupportedException("Schedule acceptance requires one clean, scoped Runtime database and its physical publication stores.");
+
+        var id = CompositeId(scope, occurrence.Id);
+        if (await ReplayAsync(cancellationToken)) return true;
+        if (!IsDue(await readScheduleClock(cancellationToken))) return false;
+
+        var accepted = false;
+        try
+        {
+            await leases.ExecuteFencedAsync([occurrence.Executable], $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
+            {
+                await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
+                try
+                {
+                    if (await ReplayAsync(token))
+                    {
+                        accepted = true;
+                        return;
+                    }
+                    var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token);
+                    var published = await FencePublicationAsync(scope, occurrence, sources, bindings, token);
+                    if (published is null) return;
+                    var acceptedAt = await readScheduleClock(token);
+                    if (!IsDue(acceptedAt)) return;
+
+                    var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
+                    context.KernelScheduleOccurrences.Add(new()
+                    {
+                        Id = id,
+                        ScopeKey = Encode(scope),
+                        ScopeKeyHash = Hash(scope),
+                        TenantKey = Encode(tenant),
+                        TenantKeyHash = Hash(tenant),
+                        ArtifactId = Encode(occurrence.Executable.ArtifactId),
+                        ContentJson = RuntimeArtifactJson.Serialize(occurrence),
+                        SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily,
+                            RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion),
+                        Revision = 1,
+                        AcceptedAtUtcTicks = acceptedAt.UtcTicks
+                    });
+                    await context.SaveChangesAsync(token);
+                    if (!IsDue(await readScheduleClock(token)) || !published.IsLive(clock.GetUtcNow())) return;
+                    foreach (var deadline in deadlines)
+                        if (clock.GetUtcNow() >= deadline.ExpiresAt)
+                            throw new WorkflowExecutableRootWriteLeaseLostException(deadline.Grant.ArtifactId, deadline.Grant.LeaseId);
+                    await transaction.CommitAsync(token);
+                    accepted = true;
+                }
+                finally { context.ChangeTracker.Clear(); }
+            }, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch
+        {
+            // Reconcile a concurrent identical acceptance or a lost acknowledgement after its transaction was disposed.
+            if (!await ReplayAsync(cancellationToken)) throw;
+            return true;
+        }
+        return accepted;
+
+        async Task<bool> ReplayAsync(CancellationToken token)
+        {
+            var row = await FindAsync(id, token);
+            if (row is null) return false;
+            if (Read(row, scope) != occurrence)
+                throw new InvalidDataException("A schedule occurrence cannot change its accepted workflow or delivery identity.");
+            return true;
+        }
+
+        bool IsDue(DateTimeOffset now) => occurrence.Due <= now && occurrence.AcceptBefore > now;
+    }
+
+    public async ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
+        var scopeKey = Bind(scope);
+        var scopeHash = Hash(scopeKey);
+        var tenantHash = Hash(JsonSerializer.Serialize(scope.TenantId));
+        var query = context.KernelScheduleOccurrences.AsNoTracking().Where(row =>
+            row.ScopeKeyHash == scopeHash && row.TenantKeyHash == tenantHash && row.ActorReference == null);
+        if (after is not null)
+        {
+            if (after.AcceptedAtUtcTicks <= 0 || !IsReference(after.Id))
+                throw new ArgumentException("Invalid schedule delivery cursor.", nameof(after));
+            query = query.Where(row => row.AcceptedAtUtcTicks > after.AcceptedAtUtcTicks ||
+                row.AcceptedAtUtcTicks == after.AcceptedAtUtcTicks && string.Compare(row.Id, after.Id) > 0);
+        }
+        var page = await query.OrderBy(row => row.AcceptedAtUtcTicks).ThenBy(row => row.Id).Take(limit).ToArrayAsync(cancellationToken);
+        return page.Select(row =>
+        {
+            var occurrence = Read(row, scopeKey);
+            if (occurrence.Scope != scope)
+                throw new InvalidDataException("A pending occurrence differs from the requested tenant.");
+            return new RuntimeKernelScheduleOccurrenceDelivery(occurrence, new(row.AcceptedAtUtcTicks, row.Id));
+        }).ToArray();
+    }
+
+    public async ValueTask MarkMaterializedAsync(RuntimeKernelScheduleOccurrence occurrence, string actorReference, CancellationToken cancellationToken = default)
+    {
+        Validate(occurrence);
+        if (!IsReference(actorReference)) throw new ArgumentException("Invalid scheduled actor reference.", nameof(actorReference));
+        var scope = Bind(occurrence.Scope);
+        var id = CompositeId(scope, occurrence.Id);
+        var current = await RequireOccurrenceAsync();
+        if (current.ActorReference is null)
+        {
+            var updated = await context.KernelScheduleOccurrences.Where(row => row.Id == id && row.Revision == current.Revision &&
+                row.ActorReference == null && row.RetiredAtUtcTicks == null)
+                .ExecuteUpdateAsync(set => set.SetProperty(row => row.ActorReference, actorReference)
+                    .SetProperty(row => row.Revision, row => row.Revision + 1), cancellationToken);
+            if (updated == 1) return;
+            current = await RequireOccurrenceAsync();
+        }
+        if (!StringComparer.Ordinal.Equals(current.ActorReference, actorReference))
+            throw new InvalidDataException("The occurrence could not acknowledge the same scheduled workflow birth.");
+
+        async Task<RuntimeKernelScheduleOccurrenceEntity> RequireOccurrenceAsync()
+        {
+            var row = await FindAsync(id, cancellationToken);
+            if (row is null || Read(row, scope) != occurrence)
+                throw new InvalidDataException("Only the exact accepted occurrence can acknowledge a scheduled workflow birth.");
+            return row;
+        }
+    }
+
+    private Task<RuntimeKernelScheduleOccurrenceEntity?> FindAsync(string id, CancellationToken token) =>
+        context.KernelScheduleOccurrences.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, token);
+
+    private string Bind(TriggerScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var key = RequireScope(access);
+        access.Current.EnsureTenantScope(scope.TenantId);
+        if (!StringComparer.Ordinal.Equals(key, scope.Persistence.Value))
+            throw new InvalidOperationException("The occurrence scope differs from the current Runtime persistence scope.");
+        return key;
+    }
+
+    private async ValueTask<WorkflowExecutableSourceReference?> FencePublicationAsync(string scope, RuntimeKernelScheduleOccurrence occurrence,
+        EfWorkflowExecutableSourceReferenceStore sources, EfWorkflowTriggerBindingStore bindings, CancellationToken token)
+    {
+        var identity = occurrence.Executable;
+        var slot = await new EfWorkflowActivationAuthority(context, access).FindAsync(identity.DefinitionId, occurrence.SlotName, token);
+        if (slot is null || slot.ActiveActivationId != occurrence.ActivationId || slot.Revision != occurrence.PublicationRevision ||
+            !await EfAdmissionTargetFence.LockSlotAsync(context, scope, identity.DefinitionId, occurrence.SlotName, slot, token))
+            return null;
+
+        var publication = await sources.ReadPhysicalMaintenanceSourceAsync(scope, WorkflowActivationReferenceIdentity.Create(occurrence.ActivationId), token);
+        if (publication?.Value is not { Scope: WorkflowExecutableReferenceScope.Published } source ||
+            source.TenantId != occurrence.Scope.TenantId || source.ActivationId != occurrence.ActivationId || source.SlotId != slot.SlotId ||
+            (source.PublicationScope is not null && source.PublicationScope != occurrence.Scope.Persistence) ||
+            source.DefinitionId != identity.DefinitionId || source.DefinitionVersionId != identity.DefinitionVersionId ||
+            source.ArtifactId != identity.ArtifactId || source.ArtifactVersion != identity.ArtifactVersion || !source.IsLive(clock.GetUtcNow()) ||
+            !await EfAdmissionTargetFence.LockSourceAsync(sources, scope, source, token))
+            return null;
+
+        const string type = RuntimeKernelScheduleOccurrence.ReservationType;
+        var key = RuntimeKernelScheduleOccurrence.ReservationKey(occurrence.ScheduleKey);
+        var bindingId = WorkflowTriggerBinding.BuildId(occurrence.ActivationId, identity.ArtifactId, occurrence.TriggerNode, key);
+        var binding = await bindings.FenceBindingAsync(bindingId, token);
+        if (binding is not { IsActive: true, Cardinality: TriggerCardinality.ReservationOnly } ||
+            binding.ActivationId != occurrence.ActivationId || binding.SlotId != slot.SlotId ||
+            binding.DefinitionId != identity.DefinitionId || binding.ArtifactId != identity.ArtifactId ||
+            binding.ArtifactHash != identity.ArtifactHash || binding.ArtifactVersion != identity.ArtifactVersion ||
+            binding.ExecutableNodeId != occurrence.TriggerNode || binding.StimulusType != type || binding.StimulusHash != key)
+            return null;
+
+        var reservations = new EfIngressReservationStore(context, access);
+        var reservation = await reservations.FindAsync(occurrence.Scope, type, key, token);
+        if (reservation is null || reservation.OwnerKind != RuntimeIngressReservation.PublicationSlotOwner ||
+            reservation.OwnerId != slot.SlotId || reservation.OwnerRevision != slot.Revision || reservation.ConfigurationRevision != slot.Revision)
+            return null;
+        try { await reservations.FenceAsync(reservation, token); }
+        catch (TriggerOperationException error) when (error.Code == "conflict") { return null; }
+        return source;
+    }
+
+    public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    {
+        var scope = RequireScope(access);
+        var scopeKey = Encode(scope);
+        var scopeHash = Hash(scope);
+        var roots = new HashSet<string>(StringComparer.Ordinal);
+        string? after = null;
+        const int pageSize = 100;
+        while (true)
+        {
+            var query = context.KernelScheduleOccurrences.AsNoTracking().Where(row =>
+                (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) && row.RetiredAtUtcTicks == null);
+            if (after is not null) query = query.Where(row => string.Compare(row.Id, after) > 0);
+            var page = await query.OrderBy(row => row.Id).Take(pageSize).ToArrayAsync(cancellationToken);
+            foreach (var row in page) roots.Add(Read(row, scope).Executable.ArtifactId);
+            if (page.Length < pageSize) return roots;
+            after = page[^1].Id;
+        }
+    }
+
+    private static RuntimeKernelScheduleOccurrence Read(RuntimeKernelScheduleOccurrenceEntity row, string scope)
+    {
+        var validState = row switch
+        {
+            { Revision: 1, ActorReference: null, RetiredAtUtcTicks: null } => true,
+            { Revision: 2, RetiredAtUtcTicks: null } => IsReference(row.ActorReference),
+            _ => false
+        };
+        if (!validState || row.AcceptedAtUtcTicks <= 0 || EfSchemaVersion.NotReadable(RuntimeKernelScheduleOccurrenceEfModule.Chain, row.SchemaVersion))
+            throw new InvalidDataException("The accepted schedule occurrence has an invalid revision or schema.");
+        var occurrence = RuntimeArtifactJson.Deserialize<RuntimeKernelScheduleOccurrence>(row.ContentJson);
+        Validate(occurrence);
+        var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
+        if (occurrence.Scope.Persistence.Value != scope || row.Id != CompositeId(scope, occurrence.Id) ||
+            row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.TenantKey != Encode(tenant) ||
+            row.TenantKeyHash != Hash(tenant) || row.ArtifactId != Encode(occurrence.Executable.ArtifactId) ||
+            row.AcceptedAtUtcTicks < occurrence.Due.UtcTicks || row.AcceptedAtUtcTicks >= occurrence.AcceptBefore.UtcTicks)
+            throw new InvalidDataException("The accepted schedule occurrence differs from its physical identity.");
+        return occurrence;
+    }
+
+    private static void Validate(RuntimeKernelScheduleOccurrence occurrence)
+    {
+        ArgumentNullException.ThrowIfNull(occurrence);
+        ArgumentNullException.ThrowIfNull(occurrence.Scope);
+        ArgumentNullException.ThrowIfNull(occurrence.Executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.ScheduleKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.SlotName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.ActivationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.TriggerNode);
+        ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.TimerDeliveryId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.PinnedStart);
+        if (!IsReference(occurrence.ScheduleReference) ||
+            occurrence.PublicationRevision <= 0 || occurrence.ArmGeneration <= 0 ||
+            occurrence.Due <= DateTimeOffset.UnixEpoch || occurrence.AcceptBefore <= occurrence.Due ||
+            Encoding.UTF8.GetByteCount(occurrence.PinnedStart) > 128 * 1024)
+            throw new ArgumentException("Invalid scheduled occurrence identity, interval, or start payload.", nameof(occurrence));
+        using var payload = JsonDocument.Parse(occurrence.PinnedStart);
+        if (payload.RootElement.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException("The scheduled start payload must be a JSON object.", nameof(occurrence));
+    }
+
+    private static bool IsReference(string? reference) =>
+        reference is { Length: 64 } && reference.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") < 0;
+}
