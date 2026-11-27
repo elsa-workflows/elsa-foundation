@@ -38,15 +38,34 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore
         var position = state?.Through is not null ? Position(state) : await OpenScanAsync(scope, pins, cancellationToken);
         if (position is null) return null;
 
-        var eligible = pins.Where(row => row.InsertionOrdinal <= position.Through);
-        if (position.AfterId is { } afterId)
-            eligible = eligible.Where(row => row.InsertionOrdinal > position.AfterOrdinal ||
-                row.InsertionOrdinal == position.AfterOrdinal && string.Compare(row.Id, afterId) > 0);
-        var rows = await eligible.OrderBy(row => row.InsertionOrdinal).ThenBy(row => row.Id)
-            .Take(limit + 1).ToArrayAsync(cancellationToken);
+        // The release stamp is null for all open pins. Including it in the order lets PostgreSQL
+        // stop at the limit directly from the composite index.
+        var ordered = pins.Where(row => row.InsertionOrdinal <= position.Through)
+            .OrderBy(row => row.ReleasedAtUtcTicks).ThenBy(row => row.InsertionOrdinal).ThenBy(row => row.Id);
+        var allowance = limit + 1;
+        RuntimeKernelExecutablePinEntity[] rows;
+        if (position is { AfterOrdinal: 0, AfterId: { } afterId })
+        {
+            // Only the migrated prefix can share an ordinal. Seek the remaining prefix by id,
+            // then fill any unused allowance with new pins in ordinal order.
+            rows = await ordered.Where(row => row.InsertionOrdinal == 0 && string.Compare(row.Id, afterId) > 0)
+                .Take(allowance).ToArrayAsync(cancellationToken);
+            if (rows.Length < allowance && position.Through > 0)
+                rows = [.. rows, .. await ReadAfterAsync(ordered, 0, allowance - rows.Length, cancellationToken)];
+        }
+        else
+        {
+            rows = position.AfterId is null
+                ? await ordered.Take(allowance).ToArrayAsync(cancellationToken)
+                : await ReadAfterAsync(ordered, position.AfterOrdinal, allowance, cancellationToken);
+        }
         var next = rows.Length > limit ? (rows[limit - 1].InsertionOrdinal, rows[limit - 1].Id) : ((long, string)?)null;
         return new ScanPage(scope, rows.Take(limit).Select(row => ReadOpen(row, scope)).ToArray(), position, next);
     }
+
+    private static Task<RuntimeKernelExecutablePinEntity[]> ReadAfterAsync(IOrderedQueryable<RuntimeKernelExecutablePinEntity> ordered,
+        long ordinal, int allowance, CancellationToken token) =>
+        ordered.Where(row => row.InsertionOrdinal > ordinal).Take(allowance).ToArrayAsync(token);
 
     public async ValueTask<bool> TryAdvanceScanAsync(PersistenceScope scope, IRuntimeKernelExecutablePinScanPage page,
         CancellationToken cancellationToken = default)
