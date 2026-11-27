@@ -238,6 +238,13 @@ public sealed record CommitBatch(
     /// </summary>
     public int Positions => Turns.Count(s => s.Journal is not null);
 
+    internal CommitBatch WithoutRetentionJournals(IReadOnlySet<string>? refused) => refused is { Count: > 0 }
+        ? this with
+        {
+            Turns = [.. Turns.Select(turn => refused.Contains(turn.Instance) ? turn with { Journal = null } : turn)]
+        }
+        : this;
+
     /// <summary>Optional closed-open authority interval required by this transaction's guarded turns.</summary>
     public CommitWindow? Window { get; init; }
 
@@ -276,6 +283,7 @@ public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs)
     // Timers minted by the commit clock rather than supplied in TurnCommit.Sent.
     internal IReadOnlyList<Stored> ParkExpiries { get; init; } = [];
     internal IReadOnlyList<RetiredReply> RetiredReplies { get; init; } = [];
+    internal IReadOnlySet<string>? RetentionRefusals { get; init; }
     internal IReadOnlyDictionary<string, IReadOnlyList<InboxKey>>? CascadeRemovals { get; init; }
 }
 

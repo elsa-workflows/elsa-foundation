@@ -92,12 +92,17 @@ public sealed partial class EfStore
         bool WithheldInputs = false, FoundationSelfIssuer? SelfIssuer = null)
         : QualifiedRootCheckpoint(-1)
     {
+        internal bool? RetentionEligible { get; init; }
+        internal long? RetentionMarker { get; init; }
+        internal bool IsRetentionDelete => Command.Operator?.RetentionDelete == true;
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
         {
             var running = Current.Status == InstanceStatus.Running;
             var ending = running || Park is not null;
-            if (!db.UsesRootRetirement || Position <= 0 || running && !db.UsesRootTerminateThenDelete ||
-                Command.Operator?.RetentionDelete == true && !db.UsesRootRetention)
+            if (!db.UsesRootRetirement || Position <= 0 && RetentionEligible != false || running && !db.UsesRootTerminateThenDelete ||
+                IsRetentionDelete && (!db.UsesRootRetention || db.UsesRootRetentionPolicy &&
+                    (RetentionEligible is null || !db.UsesSqliteRootRuntime && RetentionMarker is null)))
                 return false;
             if (db.UsesSqliteRootRuntime)
                 return await BindSqliteRootRetirementAsync(db, this, token);
@@ -111,6 +116,9 @@ public sealed partial class EfStore
                 WHERE b."Tenant" = {Root.Tenant} AND b."Reference" = {Root.Reference} AND b."Creation" = {Current.Actor.Creation}
                     AND i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND i."Revision" = {Current.Revision}
                     AND i."Status" = {(int)Current.Status} AND NOT i."Retired"
+                    AND ({RetentionMarker}::bigint IS NULL OR EXISTS (SELECT 1 FROM pg_catalog.pg_class marker
+                        JOIN pg_catalog.pg_class source ON source.oid = i.tableoid AND source.relnamespace = marker.relnamespace
+                        WHERE marker.oid::bigint = {RetentionMarker} AND marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')))
                     AND i."Suspended" = {Current.Suspended}
                     AND i."FoundationTerminalRevision" IS NOT DISTINCT FROM {Current.TerminalRevision}
                     AND i."FoundationTerminalAt" IS NOT DISTINCT FROM {Current.TerminalAt}
@@ -127,8 +135,10 @@ public sealed partial class EfStore
             // A parked root without Park arrivals, or one being cleared, receives only its operator rows.
             if (!await SettleRootInputsAsync(db, Root.Reference, Current.Actor, [Command.InboxKey], [Command], null,
                     Park is null ? running && (Current.Suspended || WithheldInputs) : !db.UsesRootParkArrivals || Park.Clearing is not null,
-                    token, parked: Park is not null))
+                    token, parked: Park is not null, retentionMarker: RetentionMarker))
                 return false;
+
+            if (RetentionEligible == false) return true;
 
             if (clearsPrivate && (!await ClearTerminalRootSelfAsync(db, Current.Actor, Root.Partition, Current.Revision, SelfIssuer, includeImmediate: true, token) ||
                 await HasRootRetirementInboxResidueAsync(db, Root, token)))
@@ -150,6 +160,9 @@ public sealed partial class EfStore
                     "FoundationTerminalAt" = terminal."At"
                 FROM terminal
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND i."Revision" = {Current.Revision}
+                    AND ({RetentionMarker}::bigint IS NULL OR EXISTS (SELECT 1 FROM pg_catalog.pg_class marker
+                        JOIN pg_catalog.pg_class source ON source.oid = i.tableoid AND source.relnamespace = marker.relnamespace
+                        WHERE marker.oid::bigint = {RetentionMarker} AND marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')))
                 RETURNING terminal."At" AS "Value"
                 """;
             var updated = await db.Database.SqlQuery<long>(FormattableStringFactory.Create(retire.Format.Replace("/*park*/", Park is null ? "" : """
@@ -210,7 +223,8 @@ public sealed partial class EfStore
             FormattableString marker = $"""
                 INSERT INTO "Journal" ("Instance", "Partition", "Position", "Revision", "Entries")
                 SELECT {Root.Actor}, {Root.Partition}, {Position}, -1, '["delete"]'
-                WHERE EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                WHERE ({RetentionMarker}::bigint IS NULL OR pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint = {RetentionMarker})
+                    AND EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
                     AND "Revision" = {revision} AND "FoundationWriteRevision" = {revision}
                     AND "Retired" AND "Status" = {(int)status} AND "State" = 'null'

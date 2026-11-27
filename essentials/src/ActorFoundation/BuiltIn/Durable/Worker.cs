@@ -3374,6 +3374,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 await FailAsync(units, generation, cancellationToken);      // the fence matched nothing
                 return Outcome.Lost;
             }
+            batch = batch.WithoutRetentionJournals(result.RetentionRefusals);
             lock (_turnSync)
             {
                 // A stand-down on another thread may have reset since the check above: the landed result is then nobody's.
@@ -3413,6 +3414,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var fenced = batch.Fenced.Select(f => f.Partition).ToHashSet();
             foreach (var unit in units)
             {
+                if (result.RetentionRefusals?.Contains(unit.Instance) == true)
+                {
+                    // The durable decision consumed this command without changing the terminal checkpoint.
+                    var refusal = CreationProtocol.Refuse(unit.Instance, unit.Slot?.CurrentRow, unit.Consumed, "NotEligible");
+                    (unit.Row, unit.Journal, unit.Delete, unit.Unsubscribe, unit.CreationRefused, unit.Replied) =
+                        (null, null, false, false, true, refusal.Replied);
+                }
                 if (unit.Row is { } row) unit.Row = CommitClockFacts.Stamp(row, result.Now);
                 if (result.CascadeRemovals?.GetValueOrDefault(unit.Instance) is { } removed)
                 {

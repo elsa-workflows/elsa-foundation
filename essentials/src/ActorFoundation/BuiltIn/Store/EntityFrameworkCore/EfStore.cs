@@ -173,6 +173,7 @@ public class KernelDb : DbContext
     internal bool UsesRootTerminalOutput => Has(RootCapabilities.TerminalOutput);
     internal bool UsesRootSequencedJournal => Has(RootCapabilities.SequencedJournal);
     internal bool UsesRootLiveEventWaits => Has(RootCapabilities.LiveEventWaits);
+    internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
@@ -743,8 +744,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         await RequireSqliteOperationalFormatAsync(db, cancellationToken);
-        if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
-            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
+        var marker = db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
+            ? await PinRootNamespaceForCommitAsync(db, batch, cancellationToken) : null;
+        (batch, root, var retentionRefusals) = await BindRetentionPoliciesAsync(db, batch, root, marker, cancellationToken);
         var now = 0L;
         if (FenceInBatch)
         {
@@ -860,7 +862,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
-        return new Committed(true, now, sent.Select(m => m.Seq).ToList()) { RetiredReplies = db.RetiredReplies ?? [] };
+        return new Committed(true, now, sent.Select(m => m.Seq).ToList())
+        {
+            RetiredReplies = db.RetiredReplies ?? [], RetentionRefusals = retentionRefusals
+        };
     }
 
     // The careful path's statements on PostgreSQL and SQLite ({0} key, {1} instance, {2} wait, {3} partition). Only the
@@ -886,12 +891,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
     }
 
-    private async Task PinRootNamespaceForCommitAsync(KernelDb db, CommitBatch batch, CancellationToken cancellationToken)
+    private async Task<uint?> PinRootNamespaceForCommitAsync(KernelDb db, CommitBatch batch, CancellationToken cancellationToken)
     {
         try
         {
-            await PostgresRootAdmission.PinRootNamespaceAsync(db, cancellationToken,
-                writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null));
+            return await PostgresRootAdmission.PinRootCommitNamespaceAsync(db,
+                writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null), cancellationToken);
         }
         catch (Exception error) when (error is not OperationCanceledException &&
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)

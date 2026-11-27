@@ -23,7 +23,8 @@ internal static partial class SqliteHostLifetimeChecks
         try
         {
             var file = Path.Combine(directory.FullName, "reads.db");
-            await InstallFoundationAsync(file, token);
+            var foundation = new SqliteEmbeddedFoundation(file, "retention-policy-reads", ActorReadsKind);
+            await foundation.InstallShippedAsync(token);
             var tenant = EmbeddedTenant.Bind(ActorReadsKind);
             var other = ContractScopes.Bind("reads-other");
             var reads = SqliteEmbeddedHosting.CreateFoundationReads(file, pageSize: 1);
@@ -130,6 +131,25 @@ internal static partial class SqliteHostLifetimeChecks
             Require((await ListAsync(tenant, unrestricted with { EndedBefore = terminal.TerminalAt })).Count == 0 &&
                 (await ListAsync(tenant, unrestricted with { EndedBefore = terminal.TerminalAt + 1 })).Single().Header.Ref == first,
                 "the ended-before filter has a strict terminal-time boundary");
+            var retention = (Contract.IActorRetentionReads)reads;
+            var keep = new Contract.ActorRetentionWindows();
+            var expire = new Contract.ActorRetentionWindows(TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+            var quote = await retention.ReadRetentionQuoteAsync(tenant, ActorReadsKind, keep, expire, cancellationToken: token);
+            Require(quote.NewlyEligible == 1 && quote.AsOf >= terminal.TerminalAt,
+                "the retention quote counts the ended run and excludes the Running and unresolved Park projections");
+            var endedAt = terminal.TerminalAt!.Value;
+            var oneTick = expire with { Finished = TimeSpan.FromTicks(1) };
+            Require(await retention.ReadRetentionQuoteAsync(tenant, ActorReadsKind, oneTick, expire, new("definition", "a\0b"), endedAt, token) ==
+                new Contract.ActorRetentionQuote(1, endedAt) &&
+                await retention.ReadRetentionQuoteAsync(tenant, ActorReadsKind, keep, expire, asOf: endedAt - 1, cancellationToken: token) ==
+                new Contract.ActorRetentionQuote(0, endedAt - 1),
+                "the same historical clock excludes younger runs and retains the fractional prior-window boundary");
+            Require(await retention.ReadRetentionQuoteAsync(tenant, ActorReadsKind, keep, expire, new("definition", "a\\u0000b"), endedAt, token) is { NewlyEligible: 0 } &&
+                await retention.ReadRetentionQuoteAsync(other, ActorReadsKind, keep, expire, cancellationToken: token) is { NewlyEligible: 0 },
+                "retention quotes use exact definition labels and tenant scope");
+            await RetentionPolicyChecks.CheckAsync(foundation, tenant, other, () => OpenFoundationDb(file), endedAt, token);
+            await ExpectFoundationFailureAsync<ArgumentOutOfRangeException>(() => retention.ReadRetentionQuoteAsync(tenant, ActorReadsKind,
+                keep, expire, asOf: long.MaxValue, cancellationToken: token).AsTask(), "the retention quote refuses a future clock");
             var finished = (await reads.GetAsync(tenant, first, token))!;
             Require(await ingress.SendAsync(tenant, new Contract.Target.Ref(first), "delete", Contract.Kinds.Delete,
                 Json.Write(new Contract.OperatorCommand(finished.Selection!, ExpectedTarget: first)), cancellationToken: token) is

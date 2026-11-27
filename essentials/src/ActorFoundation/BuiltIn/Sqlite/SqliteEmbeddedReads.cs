@@ -15,8 +15,26 @@ public static partial class SqliteEmbeddedHosting
         return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat);
     }
 
+    internal static async ValueTask<T> RunRetentionPolicyAsync<T>(string path, StoreFormat? qualificationFormat,
+        Func<EfStore, Task<T>> operation, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        try
+        {
+            using var file = AcquireFile(path);
+            KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
+            return await operation(new EfStore(Open, postgres: false, fenceInBatch: true));
+        }
+        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+        {
+            token.ThrowIfCancellationRequested();
+            throw new TimeoutException("The SQLite retention policy could not acquire a store lock.", error);
+        }
+    }
+
     private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
-        : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads
+        : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads,
+          Contract.IActorRetentionReads
     {
         public bool SupportsSequencedJournal => qualificationFormat is null
             ? TakesSequencedJournal
@@ -34,6 +52,12 @@ public static partial class SqliteEmbeddedHosting
             ReadAsync(reads => reads.ReadSequencedJournalAsync(scope, actor, afterSequence, upperSequence, limit, cancellationToken),
                 cancellationToken, normalizeLockTimeout: true);
 
+        public ValueTask<Contract.ActorRetentionQuote> ReadRetentionQuoteAsync(Contract.BoundScope scope, string actorType,
+            Contract.ActorRetentionWindows previous, Contract.ActorRetentionWindows proposed,
+            KeyValuePair<string, string>? definitionLabel = null, long? asOf = null, CancellationToken cancellationToken = default) =>
+            ReadAsync(reads => reads.ReadRetentionQuoteAsync(scope, actorType, previous, proposed, definitionLabel, asOf, cancellationToken),
+                cancellationToken, normalizeLockTimeout: true);
+
         public ValueTask<Contract.ActorTerminalOutput?> ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             long endedAt, bool includeValues, CancellationToken cancellationToken = default) =>
             ReadAsync(reads => reads.ReadTerminalOutputAsync(scope, actor, endedAt, includeValues, cancellationToken), cancellationToken);
@@ -47,7 +71,8 @@ public static partial class SqliteEmbeddedHosting
 
         public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
-            ReadAsync(reads => reads.ListAsync(scope, query, from, cancellationToken), cancellationToken);
+            ReadAsync(reads => reads.ListAsync(scope, query, from, cancellationToken), cancellationToken,
+                normalizeLockTimeout: SupportsSequencedJournal);
 
         public ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>

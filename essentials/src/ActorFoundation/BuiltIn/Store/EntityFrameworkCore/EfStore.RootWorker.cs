@@ -34,6 +34,7 @@ public sealed partial class EfStore
         internal bool Includes(int home) => FixedPartition is null || FixedPartition == home;
         internal bool Discover { get; } = discover;
         internal bool RequiresCommittedTerminal { get; set; }
+        internal bool RequiresDurableRetentionPolicy { get; set; }
         internal bool KeepsParkInputs { get; set; }
         internal bool KeepsParkArrivals { get; set; }
         internal bool KeepsPrivateParkInputs { get; set; }
@@ -76,6 +77,7 @@ public sealed partial class EfStore
         public string? ChildReference(string tenant, CreationAddress address) => childReference?.Invoke(tenant, address);
 
         public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
+        public bool RequiresDurableRetentionPolicy => roots.RequiresDurableRetentionPolicy;
         public bool KeepsParkInputs => roots.KeepsParkInputs;
         public bool KeepsParkArrivals => roots.KeepsParkArrivals;
         public bool KeepsPrivateParkInputs => roots.KeepsPrivateParkInputs;
@@ -140,6 +142,7 @@ public sealed partial class EfStore
             if (db.UsesRootValueProtocol != RootValuesEnabled)
                 throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
             scope.RequiresCommittedTerminal = db.UsesRootRetirement;
+            scope.RequiresDurableRetentionPolicy = db.UsesRootRetentionPolicy;
             scope.KeepsParkInputs = db.UsesRootParkOpening;
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
             scope.KeepsPrivateParkInputs = db.UsesRootPrivateParkInputs;

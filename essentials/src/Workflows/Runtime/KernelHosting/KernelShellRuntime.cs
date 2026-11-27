@@ -17,12 +17,16 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs, PersistenceScope persistenceScope) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention) : IAsyncDisposable
 {
+    private static readonly TimeSpan RetentionStopBudget = TimeSpan.FromSeconds(1);
+
     private IHostedService? _owner;
     private IAsyncDisposable? _lifetime;
     private HttpClient? _client;
-    private (IIngress Ingress, IActorReads Reads)? _foundation;
+    private KernelShellFoundation? _foundation;
+    private readonly CancellationTokenSource _retentionStop = new();
+    private Task? _retention;
 
     public async Task StartAsync(CancellationToken token)
     {
@@ -46,17 +50,51 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
-        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs);
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window);
         await _owner.StartAsync(token);
+        var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
+        var worker = new KernelRetentionWorker(pass, tenant,
+            token => retention.InitializeAsync(Foundation.RetentionPolicies, token),
+            token => retention.RefreshAsync(Foundation.RetentionPolicies, token),
+            retention.Unavailable, logs.CreateLogger<KernelRetentionWorker>());
+        _retention = Task.Run(() => worker.RunAsync(_retentionStop.Token));
     }
 
-    public Task StopAsync(CancellationToken token) => _owner?.StopAsync(token) ?? Task.CompletedTask;
+    public async Task StopAsync(CancellationToken token)
+    {
+        using var retentionDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        retentionDeadline.CancelAfter(RetentionStopBudget);
+        try { await StopRetentionAsync(retentionDeadline.Token); }
+        finally
+        {
+            if (_owner is not null) await _owner.StopAsync(token);
+        }
+    }
+
+    private async Task<bool> StopRetentionAsync(CancellationToken token)
+    {
+        if (_retention is null) return true;
+        try
+        {
+            await _retentionStop.CancelAsync().WaitAsync(token);
+            await _retention.WaitAsync(token);
+            return true;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            logs.CreateLogger<KernelShellRuntime>().LogWarning("Kernel retention did not stop within the shell's shutdown deadline.");
+            return false;
+        }
+    }
 
     public ValueTask<IIngress> IngressAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Ingress);
 
     public ValueTask<IActorReads> ReadAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Reads);
 
-    private (IIngress Ingress, IActorReads Reads) Foundation => _foundation ??
+    public ValueTask<KernelRetentionStatus> ReadRetentionStatusAsync(CancellationToken token) =>
+        retention.ReadStatusAsync(Foundation.RetentionPolicies, token);
+
+    private KernelShellFoundation Foundation => _foundation ??
         throw new InvalidOperationException("The kernel shell has not opened its Actor Foundation.");
 
     private async Task ServePublicationsAsync(CancellationToken token)
@@ -82,14 +120,18 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async ValueTask DisposeAsync()
     {
+        using var stop = new CancellationTokenSource(RetentionStopBudget);
         try
         {
-            if (_lifetime is not null)
-                await _lifetime.DisposeAsync();
+            if (await StopRetentionAsync(stop.Token)) _retentionStop.Dispose();
         }
         finally
         {
-            _client?.Dispose();
+            try
+            {
+                if (_lifetime is not null) await _lifetime.DisposeAsync();
+            }
+            finally { _client?.Dispose(); }
         }
     }
 

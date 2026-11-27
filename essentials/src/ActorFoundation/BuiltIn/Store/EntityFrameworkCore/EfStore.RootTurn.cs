@@ -109,7 +109,7 @@ public sealed partial class EfStore
     // Both a model turn and a terminal no-turn disposition settle the same due FIFO prefix.
     private static async Task<bool> SettleRootInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
         Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, bool suspended, CancellationToken cancellationToken,
-        bool includePrivateInputs = true, bool parked = false)
+        bool includePrivateInputs = true, bool parked = false, long? retentionMarker = null)
     {
         if (db.UsesSqliteRootRuntime)
             return await SettleSqliteRootInputsAsync(db, reference, actor, expected,
@@ -162,6 +162,9 @@ public sealed partial class EfStore
             UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
             WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({ids}) AND "EventMatch" IS NULL
                 AND NOT "Done" AND "Target" = {actor.Id} AND "Partition" = {home} AND "KeepUntil" IS NOT NULL
+                AND ({retentionMarker}::bigint IS NULL OR EXISTS (SELECT 1 FROM pg_catalog.pg_class marker
+                    JOIN pg_catalog.pg_class source ON source.oid = "Messages".tableoid AND source.relnamespace = marker.relnamespace
+                    WHERE marker.oid::bigint = {retentionMarker} AND marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')))
             """, cancellationToken);
         return settled == ids.Length;
     }

@@ -7,10 +7,26 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 namespace Kernel.EntityFramework;
 
 internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider)
-    : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads
+    : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads,
+      IActorRetentionReads
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
+
+    internal ValueTask<ActorRetentionPolicy> ReadRetentionPolicyAsync(BoundScope scope, string actorType, CancellationToken token) =>
+        new(store.ReadRootRetentionPolicyAsync(scope, actorType, token));
+
+    internal ValueTask<ActorRetentionPolicyChange> TryApplyRetentionPolicyAsync(BoundScope scope, string actorType, long expectedRevision,
+        ActorRetentionWindows proposed, long automaticNewlyEligibleLimit, string? confirmation, CancellationToken token) =>
+        new(store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, automaticNewlyEligibleLimit, confirmation, token));
+
+    public ValueTask<ActorRetentionQuote> ReadRetentionQuoteAsync(BoundScope scope, string actorType,
+        ActorRetentionWindows previous, ActorRetentionWindows proposed, KeyValuePair<string, string>? definitionLabel = null,
+        long? asOf = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return new(store.ReadRootRetentionQuoteAsync(scope.Tenant, actorType, previous, proposed, definitionLabel, asOf, cancellationToken));
+    }
 
     public async ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(BoundScope scope, ActorRef actor, long endedAt,
         bool includeValues, CancellationToken cancellationToken = default)

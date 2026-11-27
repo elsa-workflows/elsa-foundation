@@ -1,5 +1,6 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Microsoft.Data.Sqlite;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Sqlite;
@@ -33,12 +34,20 @@ public static partial class SqliteEmbeddedHosting
         OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow, cancellationToken, authorizeOperator);
 
     internal static async ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(string databasePath, Contract.BoundScope scope,
-        Contract.ActorRef actor, string selection, TimeSpan deduplicationWindow, CancellationToken token)
+        Contract.ActorRef actor, string selection, TimeSpan deduplicationWindow, CancellationToken token, StoreFormat? format = null)
     {
-        using var file = AcquireFile(databasePath);
-        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), deduplicationWindow,
-            file.AdmissionDefinitions);
-        return await admission.RetentionDeleteAsync(scope.Tenant, actor, selection, token);
+        try
+        {
+            using var file = AcquireFile(databasePath);
+            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options, format), deduplicationWindow,
+                file.AdmissionDefinitions);
+            return await admission.RetentionDeleteAsync(scope.Tenant, actor, selection, token);
+        }
+        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+        {
+            token.ThrowIfCancellationRequested();
+            throw new TimeoutException("SQLite retention admission could not acquire its write lock.", error);
+        }
     }
 
     private static async Task<Contract.IIngress> OpenFoundationCoreAsync(string databasePath, string actorType, SqliteDirectRequests? requests,

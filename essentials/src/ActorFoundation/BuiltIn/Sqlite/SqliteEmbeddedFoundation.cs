@@ -7,7 +7,7 @@ namespace Kernel.Foundation.Sqlite;
 
 /// <summary>Composes one shipped Embedded owner and its caller interface over a dedicated SQLite file.</summary>
 /// <remarks>Install the file with <see cref="InstallShippedAsync"/> on this instance before starting the owner or using the interfaces.</remarks>
-public sealed class SqliteEmbeddedFoundation
+public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
 {
     private readonly string path;
     private readonly string node;
@@ -63,11 +63,18 @@ public sealed class SqliteEmbeddedFoundation
 
     /// <summary>Creates the host service whose reply edge also serves <see cref="OpenIngressAsync"/>.</summary>
     public SqliteEmbeddedHostedService CreateHostedService(Contract.IActorType actor, Action<string> endProcess,
-        LoopOptions? options = null, bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null)
+        LoopOptions? options = null, bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null) =>
+        CreateHostedServiceWithRetention(actor, endProcess, null, options, fenceInBatch, logger);
+
+    /// <summary>Creates a hosted owner that rechecks retention eligibility under the supplied host policy.</summary>
+    public SqliteEmbeddedHostedService CreateHostedServiceWithRetention(Contract.IActorType actor, Action<string> endProcess,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow, LoopOptions? options = null, bool fenceInBatch = true,
+        ILogger<SqliteEmbeddedHostedService>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (actor.Type != actorType) throw new ArgumentException("The actor type must match the Embedded foundation.", nameof(actor));
-        return SqliteEmbeddedHostedService.ForShipped(node, actor, endProcess, options, fenceInBatch, logger, () => (InstalledPath, requests.Value));
+        return SqliteEmbeddedHostedService.ForShipped(node, actor, endProcess, options, fenceInBatch, logger,
+            () => (InstalledPath, requests.Value), retentionWindow);
     }
 
     /// <summary>Opens durable ingress and held requests routed to this foundation's owner.</summary>
@@ -78,7 +85,25 @@ public sealed class SqliteEmbeddedFoundation
         CancellationToken cancellationToken) =>
         SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(InstalledPath, actorType, authorize, requests.Value, cancellationToken);
 
+    /// <summary>Submits a projected terminal selection from the trusted host retention worker.</summary>
+    public ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        string selection, CancellationToken cancellationToken = default) =>
+        SqliteEmbeddedHosting.AdmitRetentionDeleteAsync(InstalledPath, scope, actor, selection, requests.Value.DeduplicationWindow,
+            cancellationToken, qualificationFormat);
+
     /// <summary>Creates a paged reader of committed roots, inboxes and journals.</summary>
+    ValueTask<Contract.ActorRetentionPolicy> Contract.IActorRetentionPolicies.ReadRetentionPolicyAsync(
+        Contract.BoundScope scope, CancellationToken cancellationToken) =>
+        SqliteEmbeddedHosting.RunRetentionPolicyAsync(InstalledPath, qualificationFormat,
+            store => store.ReadRootRetentionPolicyAsync(scope, actorType, cancellationToken), cancellationToken);
+
+    ValueTask<Contract.ActorRetentionPolicyChange> Contract.IActorRetentionPolicies.TryApplyRetentionPolicyAsync(
+        Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long automaticNewlyEligibleLimit,
+        string? confirmation, CancellationToken cancellationToken) =>
+        SqliteEmbeddedHosting.RunRetentionPolicyAsync(InstalledPath, qualificationFormat,
+            store => store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, automaticNewlyEligibleLimit, confirmation, cancellationToken),
+            cancellationToken);
+
     public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize, qualificationFormat);
 
     /// <summary>Reads the store clock used to set held-request deadlines.</summary>

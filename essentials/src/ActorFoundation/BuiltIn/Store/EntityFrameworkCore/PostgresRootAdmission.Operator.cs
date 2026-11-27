@@ -98,9 +98,17 @@ internal sealed partial class PostgresRootAdmission
         {
             FoundationTerminalStamp? terminal = null;
             FoundationParkMark? park = null;
+            long? retentionMarker = null;
+            EfStore.RetentionAdmissionPolicy? retentionPolicy = null;
             if (selected)
             {
-                await PinRootNamespaceAsync(db, token);
+                if (retentionDelete && db.UsesRootRetentionPolicy)
+                {
+                    retentionMarker = await PinRootCommitNamespaceAsync(db, writesJournal: false, token);
+                    retentionPolicy = await EfStore.ReadRetentionAdmissionPolicyAsync(db, tenant, retentionMarker, now: null, token);
+                }
+                else
+                    await PinRootNamespaceAsync(db, token);
                 var cursor = await ReadSelectionCursorAsync(db, token);
                 if (deletion)
                 {
@@ -138,13 +146,14 @@ internal sealed partial class PostgresRootAdmission
             }
             if (retentionDelete)
             {
-                operation = RetentionOperationFor(tenant, reference, address.Creation, terminal!);
+                operation = RetentionOperationFor(tenant, reference, address.Creation, terminal!, retentionPolicy?.Policy.Revision);
             }
             var digest = FoundationRootCreator.OperationDigest(operation);
 
             Task<string?> LiveReceiptAsync() => db.Database.SqlQuery<string>($"""
                 SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
                 WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                    AND ({retentionMarker}::bigint IS NULL OR pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint = {retentionMarker})
                 """).SingleOrDefaultAsync(token);
 
             async Task<Receipt?> ReplayAsync(string prior)
@@ -160,7 +169,10 @@ internal sealed partial class PostgresRootAdmission
 
             // Lock the selected checkpoint before reading its receipt. If the command already
             // ended this actor, the receipt committed before the owner could consume it.
-            var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
+            var terminalTarget = terminal is null ? null :
+                await LockRootDeleteSelectionAsync(db, address, tenant, reference, terminal, retentionMarker, token);
+            var exactTerminal = terminalTarget is not null &&
+                (retentionPolicy is null || retentionPolicy.Allows(terminalTarget.Header, terminalTarget.Status, terminal!.At));
             // S5b-2: a Terminate, or a Delete, that names the Park is refused while its Park is being cleared.
             var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, recover, token) &&
                 (recover && !db.UsesRootComposedParkRecovery || !await ClearsRootParkAsync(db, address, token));
@@ -210,7 +222,8 @@ internal sealed partial class PostgresRootAdmission
             }
             var receipt = await db.Database.SqlQuery<long>($"""
                 INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
-                VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
+                SELECT {tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
+                WHERE {retentionMarker}::bigint IS NULL OR pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint = {retentionMarker}
                 ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
                     "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
                 WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint RETURNING "Until" AS "Value"
@@ -220,16 +233,18 @@ internal sealed partial class PostgresRootAdmission
                 // A competing transaction recorded this operation while we qualified the requested root.
                 prior = await db.Database.SqlQuery<string>($"""
                     SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
-                    """).SingleAsync(token);
-                return await ReplayAsync(prior);
+                        AND ({retentionMarker}::bigint IS NULL OR pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint = {retentionMarker})
+                    """).SingleOrDefaultAsync(token);
+                return prior is not null ? await ReplayAsync(prior) : null;
             }
             var replyAddress = reply?.Address;
             var (id, header) = EncodeOperator(reference, operation, digest, address.Creation, kind, due, terminal, park,
                 park is not null ? (long)deduplicationWindow.TotalMilliseconds : null, thenDelete, retentionDelete, replyAddress);
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
+            if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial", "ReplyTo")
-                VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0, {replyAddress})
-                """, token);
+                SELECT {InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0, {replyAddress}
+                WHERE {retentionMarker}::bigint IS NULL OR pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint = {retentionMarker}
+                """, token) != 1) return null;
             await tx.CommitAsync(token);
             attempt?.Committed();
             return new(reference, false);
@@ -254,24 +269,25 @@ internal sealed partial class PostgresRootAdmission
         return (occurrence, header);
     }
 
-    internal static string RetentionOperationFor(string tenant, string reference, long creation, FoundationTerminalStamp terminal) =>
-        RetentionOperationPrefix + FoundationRootCreator.OperationDigest(DurableKeyJson.Write(new
-        {
-            tenant, reference, Creation = creation, Mark = terminal
-        }));
+    internal static string RetentionOperationFor(string tenant, string reference, long creation, FoundationTerminalStamp terminal,
+        long? policyRevision = null) =>
+        RetentionOperationPrefix + FoundationRootCreator.OperationDigest(policyRevision is { } revision
+            ? DurableKeyJson.Write(new { tenant, reference, Creation = creation, Mark = terminal, PolicyRevision = revision })
+            : DurableKeyJson.Write(new { tenant, reference, Creation = creation, Mark = terminal }));
 
-    private static async Task<bool> LocksRootDeleteSelectionAsync(KernelDb db, CreationAddress address, string tenant,
-        string reference, FoundationTerminalStamp mark, CancellationToken token)
-    {
-        var rows = await db.Database.SqlQuery<long>($"""
-            SELECT "Revision" AS "Value" FROM "Instances"
-            WHERE "Id" = {address.Id} AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference}
-                AND "Status" <> {(int)InstanceStatus.Running} AND NOT "Retired"
-                AND "FoundationTerminalRevision" = {mark.Revision} AND "FoundationTerminalAt" = {mark.At}
-            FOR SHARE
-            """).ToListAsync(token);
-        return rows.Count == 1;
-    }
+    private static Task<EfStore.RetentionAdmissionTarget?> LockRootDeleteSelectionAsync(KernelDb db, CreationAddress address, string tenant,
+        string reference, FoundationTerminalStamp mark, long? marker, CancellationToken token) =>
+        db.Database.SqlQuery<EfStore.RetentionAdmissionTarget>($"""
+            SELECT CASE WHEN {marker}::bigint IS NOT NULL THEN i."FoundationHeader" END AS "Header", i."Status"
+            FROM "Instances" i
+            WHERE i."Id" = {address.Id} AND i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference}
+                AND i."Status" <> {(int)InstanceStatus.Running} AND NOT i."Retired"
+                AND i."FoundationTerminalRevision" = {mark.Revision} AND i."FoundationTerminalAt" = {mark.At}
+                AND ({marker}::bigint IS NULL OR EXISTS (SELECT 1 FROM pg_catalog.pg_class v
+                    JOIN pg_catalog.pg_class source ON source.oid = i.tableoid AND source.relnamespace = v.relnamespace
+                    WHERE v.oid::bigint = {marker} AND v.oid = pg_catalog.to_regclass('"KernelStoreVersions"')))
+            FOR SHARE OF i
+            """).SingleOrDefaultAsync(token);
 
     // The checkpoint stays shared-locked until the receipt and occurrence commit, so the Park cannot move underneath them.
     // A parked root carries no terminal mark until it ends.
@@ -329,6 +345,28 @@ internal sealed partial class PostgresRootAdmission
 
     internal static Task PinRootNamespaceAsync(KernelDb db, CancellationToken token, bool writesJournal = false) =>
         PinRootNamespaceAsync(db, false, token, writesJournal);
+
+    internal static async Task<uint?> PinRootCommitNamespaceAsync(KernelDb db, bool writesJournal, CancellationToken token) =>
+        (await PinRootNamespaceAsync(db, loadIssuer: false, token, writesJournal))?.Marker;
+
+    internal static Task<uint> PinRetentionPolicySourceAsync(KernelDb db, CancellationToken token)
+    {
+        var pin = new NpgsqlBatchCommand("""
+            SELECT v.tableoid,
+                pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident(ns.nspname) || ',pg_temp', true)
+            FROM "KernelStoreVersions" v
+            JOIN pg_catalog.pg_class marker ON marker.oid = v.tableoid
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = marker.relnamespace
+            WHERE v."Id" = $1
+            """);
+        pin.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
+        return ReadGuardedAdmissionAsync<uint>(db, [pin], async (reader, marker, ct) =>
+        {
+            if (!await reader.ReadAsync(ct) || reader.GetFieldValue<uint>(0) != marker)
+                throw new StoreFormatException("The retention policy's physical store changed.");
+            return marker;
+        }, token);
+    }
 
     internal static async Task<uint> PinPlaybackReadSourcesAsync(KernelDb db, CancellationToken token) =>
         (await PinRootNamespaceAsync(db, false, token, writesJournal: true))?.Marker

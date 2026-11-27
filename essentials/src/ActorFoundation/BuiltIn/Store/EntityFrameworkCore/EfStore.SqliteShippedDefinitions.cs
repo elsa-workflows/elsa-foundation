@@ -295,6 +295,8 @@ public sealed partial class EfStore
             "Key" BLOB NOT NULL,
             "Partitions" INTEGER NOT NULL CHECK ("Partitions" > 0)
             """);
+        if (db.UsesRootRetentionPolicy)
+            yield return Table(RetentionPolicyTable, RetentionPolicyColumns(sqlite: true));
         yield return Table("FoundationRootBirths", """
             "Reference" TEXT NOT NULL PRIMARY KEY,
             "Tenant" TEXT NOT NULL CHECK (length("Tenant") BETWEEN 1 AND 64 AND instr("Tenant", char(0)) = 0

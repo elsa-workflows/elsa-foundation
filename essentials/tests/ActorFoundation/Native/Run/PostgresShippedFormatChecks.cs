@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
@@ -159,6 +160,7 @@ internal static class PostgresShippedFormatChecks
         await using var service = new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message),
             new() { PollInterval = TimeSpan.FromMilliseconds(20) }, requests: foundation.Requests);
         await service.StartAsync(stop);
+        Contract.ActorRef retainedAcrossExtension;
         try
         {
             // A held start answered from its own turn; the job it runs afterwards settles and the root finishes.
@@ -170,6 +172,25 @@ internal static class PostgresShippedFormatChecks
             var fetched = await SettledAsync(answered);
             Require(fetched is { Status: InstanceStatus.Finished } && Variable(fetched, "outcome") == "200" && partner.Calls("/ok") == 1,
                 "its SendHttpRequest job runs after the answer, settles, and the root commits Finished");
+            var retention = (Contract.IActorRetentionReads)foundation;
+            var keep = new Contract.ActorRetentionWindows();
+            var expire = new Contract.ActorRetentionWindows(Finished: TimeSpan.Zero);
+            var terminalAt = fetched!.TerminalAt!.Value;
+            var definition = (await foundation.GetAsync(scope, answered, stop))!.Header.Labels["definition"];
+            var quote = await retention.ReadRetentionQuoteAsync(scope, WorkflowActor.WorkflowActor.ActorType, keep, expire,
+                new("definition", definition), cancellationToken: stop);
+            Require(quote.NewlyEligible == 1 && quote.AsOf >= terminalAt,
+                "the PostgreSQL retention quote counts the exact projected terminal definition");
+            Require(await retention.ReadRetentionQuoteAsync(scope, WorkflowActor.WorkflowActor.ActorType,
+                expire with { Finished = TimeSpan.FromTicks(1) }, expire, asOf: terminalAt, cancellationToken: stop) ==
+                new Contract.ActorRetentionQuote(1, terminalAt) &&
+                await retention.ReadRetentionQuoteAsync(scope, WorkflowActor.WorkflowActor.ActorType, expire, keep, cancellationToken: stop) is { NewlyEligible: 0 },
+                "the PostgreSQL retention quote compares both windows at one clock and excludes extensions");
+            Require(await retention.ReadRetentionQuoteAsync(ContractScopes.Bind("other-retention-tenant"), WorkflowActor.WorkflowActor.ActorType,
+                keep, expire, cancellationToken: stop) is { NewlyEligible: 0 } &&
+                await retention.ReadRetentionQuoteAsync(scope, "WORKFLOW", keep, expire, cancellationToken: stop) is { NewlyEligible: 0 },
+                "the PostgreSQL quote returns zero for an unmatched tenant or ordinal actor type");
+            await RetentionPolicyChecks.CheckAsync(foundation, scope, ContractScopes.Bind("other-retention-tenant"), Open, terminalAt, stop);
             var fetchedActor = fetched!.Actor.Id;
             await using (var guard = Open())
                 await PostgresRootRetirementChecks.CheckRetirementFootprintAsync(guard, fetchedActor, stop);
@@ -178,6 +199,7 @@ internal static class PostgresShippedFormatChecks
             var stuck = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("stuck")), "stuck-1", Contract.Kinds.Start,
                 cancellationToken: stop)).Actor!.Value;
             var timedOut = await SettledAsync(stuck);
+            retainedAcrossExtension = stuck;
             Require(timedOut is { Status: InstanceStatus.Finished } && Variable(timedOut, "outcome") == SendHttpRequest.TimeoutOutcome,
                 "a timed job that passes its deadline settles on Timeout and the root finishes");
 
@@ -224,6 +246,20 @@ internal static class PostgresShippedFormatChecks
         {
             await service.StopAsync(CancellationToken.None);
         }
+        var retainedImage = (await store.ReadFirstRootAsync(scope.Tenant, retainedAcrossExtension.Id, stop))!;
+        var selection = (await foundation.GetAsync(scope, retainedAcrossExtension, stop))!.Selection!;
+        await RetentionPolicyChecks.CheckPendingAcrossExtensionAsync(foundation, scope, retainedImage, Open,
+            () => foundation.AdmitRetentionDeleteAsync(scope, retainedAcrossExtension, selection, stop),
+            freshOwner: async check =>
+            {
+                const string successor = "shipped-retention-successor";
+                var replies = PostgresPreviewHosting.CreateRequests(Open, successor, WorkflowActor.WorkflowActor.ActorType);
+                await using var restart = await PostgresPreviewHosting.StartAsync(Open, successor, actor,
+                    error => throw new InvalidOperationException(error), new() { PollInterval = TimeSpan.FromMilliseconds(20) }, stop,
+                    onFault: null, replies, fenceInBatch: inBatch, retentionWindow: static _ => TimeSpan.Zero);
+                await check();
+                await restart.StopAsync(stop);
+            }, extended: new(), stop);
         return 0;
 
         async Task<Contract.ActorRef> StartAsync(string workflow, string id) =>
@@ -343,6 +379,9 @@ internal static class PostgresShippedFormatChecks
             await RefusesRevisionAsync(() => store.PartitionCountAsync(token).AsTask());
             await RefusesRevisionAsync(() => store.ReadRootActorAsync("tenant", "missing", token));
             await RefusesRevisionAsync(() => store.ReadRootActorListAsync("tenant", "", null, null, [], null, null, 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootRetentionQuoteAsync("tenant", "workflow", new(), new(), null, null, token));
+            await RefusesRevisionAsync(() => store.ReadRootRetentionPolicyAsync(ContractScopes.Bind("tenant"), "workflow", token));
+            await RefusesRevisionAsync(() => store.TryApplyRootRetentionPolicyAsync(ContractScopes.Bind("tenant"), "workflow", 0, new(), 0, confirmation: null, token));
             await RefusesRevisionAsync(() => store.ReadRootJournalAsync("tenant", "missing", 1, 1, token));
             await RefusesRevisionAsync(() => store.ReadRootInboxAsync("tenant", "missing", 0, "", 1, token));
             await RefusesRevisionAsync(() => store.ReadRootWorkflowHistoryAsync("tenant", "type", null, null, null, null, null, null, 1, token));
@@ -736,7 +775,9 @@ internal static class PostgresShippedFormatChecks
             ("shipped 26", "refuse_26", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 26 },
                 RootProfiles.ParkRecoveryComposition)),
             ("shipped 27", "refuse_27", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 27 },
-                RootProfiles.TimerRearmQualification))
+                RootProfiles.TimerRearmQualification)),
+            ("shipped 32", "refuse_32", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 32 },
+                RootProfiles.LiveEventQualification))
         })
         {
             await using (var older = open(shipped))
