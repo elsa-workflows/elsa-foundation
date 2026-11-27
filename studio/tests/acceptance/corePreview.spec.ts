@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { kernelHttpJourney } from "./kernelHttpJourney";
 import { corePreviewSmokeJourney, type CorePreviewStack } from "./corePreviewSmokeJourney";
 import { corePreviewActivityTimelineJourney } from "./corePreviewActivityTimelineJourney";
 
@@ -46,3 +47,4 @@ test.afterEach(async ({ page }) => {
 
 test("core preview stack is ready", async ({ page, request }, info) => corePreviewSmokeJourney(page, request, info, stack, capture, receipt));
 test("Studio opens the committed kernel activity timeline", async ({ page }, info) => corePreviewActivityTimelineJourney(page, info, stack, capture, receipt));
+test("kernel HTTP response opens the committed run", async ({ page, request }, info) => kernelHttpJourney(page, request, info, stack, capture, receipt));

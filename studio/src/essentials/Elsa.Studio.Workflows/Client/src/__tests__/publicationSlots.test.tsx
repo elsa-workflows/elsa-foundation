@@ -518,6 +518,16 @@ describe("publication channel UX", () => {
     expect(document.activeElement).toBe(container.querySelector("#publication-recovery-title"));
   });
 
+  it("shows the unsupported reason without a retry action", () => {
+    const container = render(review({
+      phase: "partialFailure", promotedVersionId: "version-2", publicationUnsupported: true,
+      failureMessage: "Delay is unavailable on this host."
+    }));
+    expect(text(container)).toContain("Delay is unavailable on this host.");
+    expect(text(container)).not.toContain("Retry publication");
+    expect(button(container, "Close")).toBeDefined();
+  });
+
   it("uses a fixed three-region shell so body alerts cannot displace the footer", () => {
     const container = render(review({
       phase: "savedFailure",

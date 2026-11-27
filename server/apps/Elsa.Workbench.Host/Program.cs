@@ -188,7 +188,7 @@ builder.Services.AddCors(options =>
         // download name the executable-artifact export sets on the wire -- it silently falls back to
         // rebuilding the name, leaving the server not actually the authority on a name it owns (#1794).
         // Retry-After is not safelisted either: the Agent API's retryable refusals carry it (#3441).
-        .WithExposedHeaders("Content-Disposition", "Retry-After"));
+        .WithExposedHeaders("Content-Disposition", "Retry-After", "x-elsa-workflow-instance-id"));
 });
 
 builder.Services.AddNuplaneAdmin();

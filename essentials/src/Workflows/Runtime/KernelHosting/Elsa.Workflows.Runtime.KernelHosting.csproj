@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Opt-in packaged shell hosting for published Elsa workflows on the built-in Actor Foundation.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="../../../ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
+    <ProjectReference Include="../../../ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj" />
+    <ProjectReference Include="../../../ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <ProjectReference Include="../../../Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj" />
+    <ProjectReference Include="../../../Modularity/Core/Elsa.Modularity.Core.csproj" />
+    <ProjectReference Include="../KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
+    <ProjectReference Include="../KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+    <ProjectReference Include="../../../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

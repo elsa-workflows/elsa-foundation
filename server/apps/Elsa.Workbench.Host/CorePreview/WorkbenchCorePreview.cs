@@ -3,6 +3,7 @@ using Elsa.ActorFoundation.Hosting;
 using Elsa.Workbench.Readiness;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;

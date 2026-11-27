@@ -19,6 +19,8 @@ public sealed class HttpResponseInstructionDelivery(
     IActivityExecutionStateStore activityExecutionStateStore,
     IEnumerable<IHttpContentFactory> contentFactories)
 {
+    private const string WorkflowInstanceIdHeader = "x-elsa-workflow-instance-id";
+    private static readonly object CommittedExecution = new();
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly JsonWriterOptions BodyWriterOptions = new()
     {
@@ -53,12 +55,26 @@ public sealed class HttpResponseInstructionDelivery(
                 var instruction = payload.Deserialize<HttpResponseInstruction>(SerializerOptions)
                     ?? throw new InvalidOperationException(
                         $"Committed HTTP response instruction '{state.InvocationId}' resolved to null.");
-                await WriteAsync(response, instruction, cancellationToken);
+                await WriteAsync(response, instruction, workflowExecutionId, cancellationToken);
                 return true;
             }
         }
 
         return false;
+    }
+
+    internal static void ReserveWorkflowInstanceHeader(HttpResponse response)
+    {
+        if (!response.HasStarted)
+            response.OnStarting(static state =>
+            {
+                var target = (HttpResponse)state;
+                if (target.HttpContext.Items.TryGetValue(CommittedExecution, out var committed) && committed is string id)
+                    target.Headers[WorkflowInstanceIdHeader] = id;
+                else
+                    target.Headers.Remove(WorkflowInstanceIdHeader);
+                return Task.CompletedTask;
+            }, response);
     }
 
     private static bool IsResponseInstructionCompletion(ActivityExecutionState state) =>
@@ -69,6 +85,7 @@ public sealed class HttpResponseInstructionDelivery(
     private async ValueTask WriteAsync(
         HttpResponse response,
         HttpResponseInstruction instruction,
+        string workflowExecutionId,
         CancellationToken cancellationToken)
     {
         response.StatusCode = instruction.StatusCode;
@@ -76,6 +93,8 @@ public sealed class HttpResponseInstructionDelivery(
         foreach (var (name, values) in instruction.Headers)
             response.Headers[name] = values;
 
+        response.HttpContext.Items[CommittedExecution] = workflowExecutionId;
+        response.Headers[WorkflowInstanceIdHeader] = workflowExecutionId;
         var body = BodyText(instruction.Body);
         var contentType = string.IsNullOrWhiteSpace(instruction.ContentType)
             ? InferContentType(instruction.Body)

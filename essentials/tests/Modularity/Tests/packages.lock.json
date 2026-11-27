@@ -1929,6 +1929,7 @@
           "CShells.Nuplane": "[0.0.31, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Nuplane": "[0.0.15, )",
           "Nuplane.Admin": "[0.0.15, )",
@@ -2671,6 +2672,7 @@
           "Elsa.Workflows.Runtime.JavaScript": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelApi": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.KernelHosting": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Reconciliation": "[4.0.0-dev, )",
@@ -3059,6 +3061,23 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.kernelhosting": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Http": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.Sqlite": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.KernelApi": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.native.activities": {

@@ -55,6 +55,7 @@ export interface PublicationReviewState {
   promotedVersionId?: string;
   savedDraft?: WorkflowDraft;
   failureMessage?: string;
+  publicationUnsupported?: boolean;
   published?: Publication;
 }
 

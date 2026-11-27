@@ -32,6 +32,8 @@ internal static partial class SqliteHostLifetimeChecks
             var protectedActor = await AdmitAsync("protected", "protected");
             var large = await AdmitAsync("large", "plain");
             var largeDelete = await AdmitAsync("large-delete", "large-delete");
+            var compoundRetire = await AdmitAsync("compound-retire", "compound-retire");
+            var compoundKeep = await AdmitAsync("compound-keep", "compound-keep");
             var exhausted = await AdmitAsync("exhausted", "exhausted");
             var withJob = await AdmitAsync("outstanding", "running");
             var protectionReads = 0;
@@ -39,7 +41,7 @@ internal static partial class SqliteHostLifetimeChecks
             {
                 if (header.TypeData == "large-delete" && Interlocked.Increment(ref protectionReads) > 1)
                     throw new InvalidOperationException("The fixture temporarily cannot read deletion protection.");
-                return header.TypeData == "protected";
+                return header.TypeData is "protected" or "compound-keep";
             });
             executor.ReleaseFault.TrySetResult();
 
@@ -47,7 +49,7 @@ internal static partial class SqliteHostLifetimeChecks
             {
                 await first.StartAsync(token);
                 await WaitAsync(first, plain, 1);
-                foreach (var root in new[] { delete, pair, protectedActor, large, largeDelete, exhausted, withJob })
+                foreach (var root in new[] { delete, pair, protectedActor, large, largeDelete, compoundRetire, compoundKeep, exhausted, withJob })
                 {
                     await WaitAsync(first, root, 1);
                     Require(await ingress.SendAsync(scope, new Contract.Target.Ref(root), "poison", "fail", cancellationToken: token) is
@@ -62,6 +64,10 @@ internal static partial class SqliteHostLifetimeChecks
             var largeDeleteActor = (await store.ReadFirstRootAsync(scope.Tenant, largeDelete.Id, token))!.Actor.Id;
             await SeedKeptPageAsync(largeActor, InMemoryStore.ParkPageLimit, 8);
             await SeedKeptPageAsync(largeDeleteActor, 2, ParkRecoveryCredit.LimitBytes / 2 + 1_024);
+            var compoundRetireActor = (await store.ReadFirstRootAsync(scope.Tenant, compoundRetire.Id, token))!.Actor.Id;
+            var compoundKeepActor = (await store.ReadFirstRootAsync(scope.Tenant, compoundKeep.Id, token))!.Actor.Id;
+            await SeedKeptPageAsync(compoundRetireActor, InMemoryStore.ParkPageLimit, 8);
+            await SeedKeptPageAsync(compoundKeepActor, InMemoryStore.ParkPageLimit, 8);
             var exhaustedActor = (await store.ReadFirstRootAsync(scope.Tenant, exhausted.Id, token))!.Actor.Id;
             await SeedKeptPageAsync(exhaustedActor, InMemoryStore.ParkPageLimit, 8);
             var park = await ReadAsync(plain);
@@ -75,6 +81,10 @@ internal static partial class SqliteHostLifetimeChecks
             var protectedReply = CallAsync(protectedActor, "protected", Contract.Kinds.Delete, (await ReadAsync(protectedActor)).Selection!);
             var largeReply = CallAsync(large, "large", Contract.Kinds.Terminate, (await ReadAsync(large)).Selection!);
             var largeDeleteReply = CallAsync(largeDelete, "large-delete", Contract.Kinds.Delete, (await ReadAsync(largeDelete)).Selection!);
+            var compoundRetireReply = CallAsync(compoundRetire, "compound-retire", Contract.Kinds.Terminate,
+                (await ReadAsync(compoundRetire)).Selection!, thenDelete: true);
+            var compoundKeepReply = CallAsync(compoundKeep, "compound-keep", Contract.Kinds.Terminate,
+                (await ReadAsync(compoundKeep)).Selection!, thenDelete: true);
             var outstanding = CallAsync(withJob, "outstanding", Contract.Kinds.Terminate, (await ReadAsync(withJob)).Selection!);
             while (!await db.Messages.AnyAsync(row => row.Target == largeDeleteActor && row.Kind == Kinds.Delete && !row.Done, token))
                 await Task.Delay(25, token);
@@ -129,6 +139,25 @@ internal static partial class SqliteHostLifetimeChecks
                     AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {largeDeleteActor} AND "Revision" = 4 AND "Entries" =
                         {Json.Write(new { Outcome = "refused", Operation = "large-delete", Reason = "unavailable" })}) AS "Value"
                 """).SingleAsync(token), "the byte cut keeps the second large row and persists a retry when final-page protection is unavailable");
+            Require(await compoundRetireReply is { Channel: Request.Response, Item: "started" } &&
+                await compoundKeepReply is { Channel: Request.Response, Item: "started" },
+                "both held compound operations acknowledge paged clearing with started");
+            while (await reads.GetAsync(scope, compoundRetire, token) is not null) await Task.Delay(25, token);
+            var kept = await WaitAsync(owner, compoundKeep, 4);
+            Require(kept is { Status: InstanceStatus.Cancelled, TerminalAt: > 0, ParkAt: null } &&
+                kept.TerminalRevision == kept.Revision &&
+                await reads.GetAsync(scope, compoundKeep, token) is { Header.Status: Contract.ActorStatus.Cancelled, Park: null, Selection: not null } &&
+                await db.Database.SqlQuery<bool>($"""
+                    SELECT NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" IN ({compoundRetireActor}, {compoundKeepActor})
+                            AND "FoundationKeptBy" IS NOT NULL)
+                        AND (SELECT count(*) FROM "Journal" WHERE "Instance" = {compoundRetireActor}) = 1
+                        AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {compoundRetireActor} AND "Revision" = -1 AND "Entries" = '["delete"]')
+                        AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {compoundKeepActor} AND "Revision" = 3
+                            AND "Entries" = {Json.Write(new { Outcome = "clearing", Operation = "compound-keep", Cleared = InMemoryStore.ParkPageLimit })})
+                        AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {compoundKeepActor} AND "Revision" = {kept.Revision}
+                            AND "Entries" = {Json.Write(new { Outcome = "protected", Disposition = "terminated", Operation = "compound-keep", Cleared = InMemoryStore.ParkPageLimit + 1 })})
+                        AS "Value"
+                    """).SingleAsync(token), "the last page retires one compound root and leaves the protected root Cancelled with its two outcomes");
             var originalEpoch = (await FenceAsync(file, token)).Epoch;
             await owner.StopAsync(token);
             Require(owner.LastError is null, "the first page owner stops with the clearing and its continuation committed");

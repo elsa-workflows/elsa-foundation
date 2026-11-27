@@ -18,6 +18,9 @@ public sealed record KernelHttpAnswer(int StatusCode, string ContentType, string
 /// </summary>
 public static class KernelHttpEdge
 {
+    /// <summary>The existing Elsa HTTP header for the exact workflow instance created by a request.</summary>
+    public const string WorkflowInstanceIdHeader = "x-elsa-workflow-instance-id";
+
     // Before NotFound: static fields initialize in order.
     private static readonly IReadOnlyDictionary<string, string> NoHeaders = new Dictionary<string, string>();
 
@@ -61,7 +64,7 @@ public static class KernelHttpEdge
     public static KernelHttpAnswer Answer(Contract.Reply reply)
     {
         ArgumentNullException.ThrowIfNull(reply);
-        return reply switch
+        KernelHttpAnswer answer = reply switch
         {
             { Error: "no waiter" or "missing" } => Text(404, "no workflow serves this route"),
             { Error: "timeout" } => Text(504, "the workflow did not answer in time"),
@@ -73,6 +76,15 @@ public static class KernelHttpEdge
             { Error: null, Item: null } => new(204, "text/plain", null, NoHeaders),
             _ => Text(500, "the workflow answered with something this edge cannot send")
         };
+
+        // The edge owns the run link. A workflow can have authored this field in an earlier version.
+        if (reply.Actor is null && !answer.Headers.Keys.Contains(WorkflowInstanceIdHeader, StringComparer.OrdinalIgnoreCase))
+            return answer;
+        var headers = new Dictionary<string, string>(answer.Headers, StringComparer.OrdinalIgnoreCase);
+        headers.Remove(WorkflowInstanceIdHeader);
+        if (reply.Actor is { } actor)
+            headers.Add(WorkflowInstanceIdHeader, actor.Id);
+        return answer with { Headers = headers };
     }
 
     /// <summary>The answer for a request no start route serves.</summary>
