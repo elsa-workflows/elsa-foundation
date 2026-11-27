@@ -66,20 +66,14 @@ public sealed partial class EfStore
         var rows = await db.Database.SqlQuery<JournalProjection>($"""
             /* sqlite-root-journal */
             WITH root AS MATERIALIZED (
-                SELECT b."Partition", b."Actor", i."Revision",
+                SELECT b."Partition", b."Actor", i."Revision", p."Position" AS "HeadPosition",
                     CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalRevision" END AS "CancellationRevision",
                     CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalAt" END AS "CancellationAt"
                 FROM "FoundationRootBirths" b JOIN "Instances" i
                     ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                     AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"
+                JOIN "Partitions" p ON p."Id" = b."Partition"
                 WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
-            ), head AS MATERIALIZED (
-                SELECT r."Revision", r."CancellationRevision", r."CancellationAt",
-                    (SELECT j."Position" FROM "Journal" j
-                     WHERE j."Partition" = r."Partition" AND j."Instance" = r."Actor"
-                        AND j."Revision" BETWEEN 1 AND r."Revision"
-                     ORDER BY j."Position" DESC LIMIT 1) AS "Position"
-                FROM root r
             ), page AS (
                 SELECT j."Position", j."Revision", j."Entries"
                 FROM "Journal" j
@@ -87,10 +81,10 @@ public sealed partial class EfStore
                     AND j."Position" >= {fromPosition} AND j."Revision" BETWEEN 1 AND (SELECT "Revision" FROM root)
                 ORDER BY j."Position" LIMIT {limit}
             )
-            SELECT {at} AS "AsOf", page."Position", page."Revision", page."Entries", head."Revision" AS "HeadRevision",
-                head."Position" AS "HeadPosition", head."CancellationRevision", head."CancellationAt",
+            SELECT {at} AS "AsOf", page."Position", page."Revision", page."Entries", root."Revision" AS "HeadRevision",
+                root."HeadPosition", root."CancellationRevision", root."CancellationAt",
                 NULL AS "StoreSchema", NULL AS "MessageProtocol", NULL AS "JournalCodec", NULL AS "DefinitionStamp"
-            FROM (SELECT 1) stamp LEFT JOIN head ON true LEFT JOIN page ON true
+            FROM (SELECT 1) stamp LEFT JOIN root ON true LEFT JOIN page ON true
             ORDER BY page."Position"
             """).ToListAsync(token);
         return BuildRootJournalPage(rows);

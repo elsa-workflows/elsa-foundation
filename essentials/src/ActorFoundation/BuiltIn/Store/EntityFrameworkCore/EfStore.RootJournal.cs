@@ -14,6 +14,7 @@ public sealed partial class EfStore
 
     // The public reader will keep physical positions inside its continuation token.
     // The lower bound is inclusive so a reader can resume within one commit's entries.
+    // The fenced partition position bounds all visible journal rows within the same snapshot.
     internal async Task<RootJournalPage> ReadRootJournalAsync(string tenant, string reference, long fromPosition, int limit,
         CancellationToken cancellationToken = default)
     {
@@ -33,22 +34,16 @@ public sealed partial class EfStore
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
                     FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
                 ), root AS (
-                    SELECT b."Actor", b."Partition", i."Revision",
+                    SELECT b."Actor", b."Partition", i."Revision", p."Position" AS "HeadPosition",
                         CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalRevision" END AS "CancellationRevision",
                         CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalAt" END AS "CancellationAt"
                     FROM "FoundationRootBirths" b JOIN "Instances" i
                         ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                         AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
+                    JOIN "Partitions" p ON p."Id" = b."Partition"
                     WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
                         AND EXISTS (SELECT 1 FROM marker WHERE "StoreSchema" = {expected.StoreSchema}
                             AND "MessageProtocol" = {expected.MessageProtocol} AND "JournalCodec" = {expected.JournalCodec})
-                ), head AS MATERIALIZED (
-                    SELECT r."Revision", r."CancellationRevision", r."CancellationAt",
-                        (SELECT j."Position" FROM "Journal" j
-                         WHERE j."Partition" = r."Partition" AND j."Instance" = r."Actor"
-                            AND j."Revision" BETWEEN 1 AND r."Revision"
-                         ORDER BY j."Position" DESC LIMIT 1) AS "Position"
-                    FROM root r
                 ), page AS (
                     SELECT j."Position", j."Revision", j."Entries"
                     FROM root r JOIN "Journal" j ON j."Partition" = r."Partition" AND j."Instance" = r."Actor"
@@ -56,10 +51,10 @@ public sealed partial class EfStore
                     ORDER BY j."Position" LIMIT {limit}
                 )
                 SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
-                    page."Position", page."Revision", page."Entries", head."Revision" AS "HeadRevision",
-                    head."Position" AS "HeadPosition", head."CancellationRevision", head."CancellationAt",
+                    page."Position", page."Revision", page."Entries", root."Revision" AS "HeadRevision",
+                    root."HeadPosition", root."CancellationRevision", root."CancellationAt",
                     marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp"
-                FROM (VALUES (1)) stamp(id) LEFT JOIN head ON true LEFT JOIN page ON true LEFT JOIN marker ON true
+                FROM (VALUES (1)) stamp(id) LEFT JOIN root ON true LEFT JOIN page ON true LEFT JOIN marker ON true
                 ORDER BY page."Position"
                 """)).ToListAsync(cancellationToken);
         }

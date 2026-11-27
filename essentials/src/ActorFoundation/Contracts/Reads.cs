@@ -11,7 +11,7 @@ public sealed record Page<T>(IReadOnlyList<T> Items, PageToken? Next, long AsOf)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? JournalHeadRevision { get; init; }
 
-    /// <summary>An opaque bookmark after the last journal row in this snapshot. Use it to read later commits.</summary>
+    /// <summary>An opaque bookmark beyond the journal commits visible in this snapshot. Use it to read later commits.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PageToken? JournalCatchUpToken { get; init; }
 
