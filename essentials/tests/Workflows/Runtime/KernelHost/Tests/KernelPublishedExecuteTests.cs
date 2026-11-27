@@ -15,6 +15,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -85,6 +86,9 @@ public sealed class KernelPublishedExecuteTests
             structure: Structure("elsa.flowchart.structure", new { startNodeId = "output", connections = Array.Empty<object>(), variables = Array.Empty<object>() }),
             slots: [Slot("Flowchart.Activities", SetOutput("output", "message", Request("input", "message")))]));
 
+        var waiting = ExecutableOf("execute-waiting", "waiting", Sequence("sequence",
+            Node("delay", Types.Delay, [Literal("Duration", "00:00:45", "TimeSpan")])));
+
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -117,6 +121,7 @@ public sealed class KernelPublishedExecuteTests
         }.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
+        new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(builder.Services);
 
         await using var app = builder.Build();
         app.UseAuthentication();
@@ -129,9 +134,11 @@ public sealed class KernelPublishedExecuteTests
         var materials = stores.GetRequiredService<IWorkflowExecutableStore>();
         await materials.SaveAsync(canonical, token);
         await materials.SaveAsync(flowchart, token);
+        await materials.SaveAsync(waiting, token);
         await PublishAsync(alias, "blue");
         await PublishAsync(sibling, "default");
         await PublishAsync(flowchart, "default");
+        await PublishAsync(waiting, "default");
         var shell = app.Services.GetRequiredService<KernelShellRuntime>();
         await shell.StartAsync(token);
         try
@@ -169,11 +176,47 @@ public sealed class KernelPublishedExecuteTests
             Assert.Empty(await pins.ListPinnedExecutableArtifactIdsAsync(token));
 
             using var native = await ExecuteAsync(alias.Identity.ArtifactId, new { sourceReferenceId = target });
-            await VerifyAsync(native, alias, canonical.Identity, "blue", "authored-input", "authored-variable");
+            var completed = await VerifyAsync(native, alias, canonical.Identity, "blue", "authored-input", "authored-variable");
             using var flow = await ExecuteAsync(flowchart.Identity.ArtifactId, new { inputs = new { message = "flowchart-input" } }, tenant: "default");
             await VerifyAsync(flow, flowchart, flowchart.Identity, "default", "flowchart-input");
             Assert.Equal(new[] { canonical.Identity.ArtifactId, flowchart.Identity.ArtifactId }.Order(StringComparer.Ordinal),
                 (await pins.ListPinnedExecutableArtifactIdsAsync(token)).Order(StringComparer.Ordinal));
+
+            using var forbiddenDelete = await DeleteAsync(completed, manage: false);
+            Assert.Equal(HttpStatusCode.Forbidden, forbiddenDelete.StatusCode);
+            using var foreignDelete = await DeleteAsync(completed, manage: true, tenant: "another-tenant");
+            Assert.Equal(HttpStatusCode.NotFound, foreignDelete.StatusCode);
+            Assert.NotNull(await reads.GetAsync(bound, new(completed), token));
+            await VerifyDeletedAsync(completed);
+
+            using var delayed = await ExecuteAsync(waiting.Identity.ArtifactId, new { });
+            Assert.Equal(HttpStatusCode.OK, delayed.StatusCode);
+            var delayedRun = (await delayed.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token))!.WorkflowExecutionId;
+            Contract.ActorView? delayedActor;
+            do
+            {
+                await Task.Delay(50, token);
+                delayedActor = await reads.GetAsync(bound, new(delayedRun), token);
+            } while (delayedActor is null);
+            Assert.Equal(Contract.ActorStatus.Running, delayedActor.Header.Status);
+            await VerifyDeletedAsync(delayedRun);
+
+            async Task VerifyDeletedAsync(string run)
+            {
+                using var response = await DeleteAsync(run, manage: true);
+                Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync(token));
+                Assert.Equal(new WorkflowInstanceDeletionView(run), await response.Content.ReadFromJsonAsync<WorkflowInstanceDeletionView>(token));
+                Assert.Null(await reads.GetAsync(bound, new(run), token));
+            }
+
+            async Task<HttpResponseMessage> DeleteAsync(string run, bool manage, string? tenant = null)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Delete, $"/runtime/workflows/instances/{run}");
+                request.Headers.Add("X-Fixture-Subject", "accepted");
+                if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
+                if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
+                return await http.SendAsync(request, token);
+            }
 
             async Task<HttpResponseMessage> ExecuteAsync(string artifact, object body, string? tenant = null, string subject = "accepted")
             {
@@ -184,7 +227,7 @@ public sealed class KernelPublishedExecuteTests
                 return await http.SendAsync(request, token);
             }
 
-            async Task VerifyAsync(HttpResponseMessage response, WorkflowExecutable source, WorkflowExecutableIdentity material, string slot,
+            async Task<string> VerifyAsync(HttpResponseMessage response, WorkflowExecutable source, WorkflowExecutableIdentity material, string slot,
                 string message, string? seed = null)
             {
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -214,6 +257,7 @@ public sealed class KernelPublishedExecuteTests
                 using var document = JsonDocument.Parse(output!.Values!);
                 Assert.Equal(message, document.RootElement.GetProperty("message").GetString());
                 if (seed is not null) Assert.Equal(seed, document.RootElement.GetProperty("seed").GetString());
+                return actor.Id;
             }
         }
         finally { await shell.StopAsync(CancellationToken.None); }
@@ -248,6 +292,7 @@ public sealed class KernelPublishedExecuteTests
                 new(IdentityClaimTypes.Permission, "workflows/runtime:execute"),
                 new(IdentityClaimTypes.Normalized, "v1")
             };
+            if (Request.Headers.ContainsKey("X-Fixture-Manage")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:manage"));
             if (Request.Headers.TryGetValue("X-Fixture-Tenant", out var tenant)) claims.Add(new(IdentityClaimTypes.TenantId, tenant.ToString()));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
         }
