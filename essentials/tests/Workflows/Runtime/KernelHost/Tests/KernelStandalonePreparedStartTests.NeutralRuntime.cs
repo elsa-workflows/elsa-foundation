@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Events;
 using Elsa.Serialization.Core;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -11,6 +12,7 @@ using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Scheduling;
 using Kernel.Foundation.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -115,10 +117,10 @@ public sealed partial class KernelStandalonePreparedStartTests
                     var replay = await Source(services).AdmitAsync(signal, token);
                     Assert.True(replay.Replayed);
                     Assert.Equal(sourceId, replay.AdmissionId);
-                    var processor = services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
-                    var processed = await processor.ProcessAsync(new(1), token);
-                    Assert.Equal(1, processed.DeliveredCount);
-                    Assert.Equal(sourceId, Assert.Single(processed.Items).OutboxItemId);
+                    var pump = Assert.Single(host.GetServices<IRecurringTask>());
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pump.ExecuteAsync(new(canceled: true)));
+                    Assert.Equal(RuntimeRecipientPhase.Pending, Progress(await ReadAsync(services, sourceId, token)).Phase);
+                    await RunScheduledSweepAsync(pump, token);
                     var accepted = Assert.IsType<RuntimePostCommitOutboxItem>(await services.GetRequiredService<IRuntimeIngressDeliveryStore>()
                         .FindDeliveryAsync(DeliveryScope, sourceId, token));
                     var receipt = Assert.IsType<RuntimeTargetAcceptanceReceipt>(Progress(accepted).Receipt);
@@ -132,7 +134,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                         .ReadTerminalOutputAsync(owner, finished.Header.Ref, Assert.IsType<long>(finished.Header.EndedAt), includeValues: true, cancellationToken: token);
                     using var output = JsonDocument.Parse(Assert.IsType<byte[]>(result?.Values));
                     Assert.Equal("runner-free", output.RootElement.GetProperty("result").GetString());
-                    Assert.Equal(0, (await processor.ProcessAsync(new(1), token)).AttemptedCount);
+                    Assert.Equal(0, (await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(1), token)).AttemptedCount);
                     Assert.Equal(finished.Header.Ref, Assert.Single((await reads.ListAsync(owner, new(), cancellationToken: token)).Items).Header.Ref);
                 }
                 finally { await StopAsync(shell); }
@@ -186,6 +188,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                     }.ConfigureServices(services);
                     new RuntimePublicationEntityFrameworkCoreFeature().ConfigureServices(services);
                     new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
+                    new WorkflowsRuntimePreparedStandaloneSourcePumpFeature().ConfigureServices(services);
                 }
                 else
                 {
@@ -231,6 +234,24 @@ public sealed partial class KernelStandalonePreparedStartTests
             }
         }
         finally { directory?.Delete(recursive: true); }
+
+        static async Task RunScheduledSweepAsync(IRecurringTask pump, CancellationToken token)
+        {
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            await using var scheduled = pump.GetSchedule().ScheduleExecution(async () =>
+            {
+                try
+                {
+                    await pump.ExecuteAsync(token);
+                    completed.TrySetResult();
+                }
+                catch (Exception exception)
+                {
+                    completed.TrySetException(exception);
+                }
+            });
+            await completed.Task.WaitAsync(token);
+        }
 
         static IStandaloneTriggerIngress<FixtureEvent> Source(IServiceProvider provider) =>
             provider.GetRequiredService<IStandaloneTriggerIngress<FixtureEvent>>();
