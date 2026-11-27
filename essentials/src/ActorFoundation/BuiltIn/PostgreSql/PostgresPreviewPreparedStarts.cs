@@ -85,6 +85,31 @@ public static partial class PostgresPreviewHosting
         }
     }
 
+    // Separately proves admission without changing the lifetime proof used for releasing executable pins.
+    internal static async Task<bool> HasAcceptedPreparedStartAsync(Func<KernelDb> open, Contract.BoundScope scope,
+        Contract.ActorRef actor, string issuance, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(scope);
+        try
+        {
+            await using var db = open();
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
+            await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", cancellationToken);
+            var (key, bind) = await PostgresRootAdmission.PinRootPreparedStartProofAsync(db, cancellationToken);
+            var stage = RootPreparedStarts.Verify(key, scope, actor, issuance);
+            if (stage is null) return false;
+            var accepted = await RootPreparedStarts.HasAcceptedBirthAsync(db, stage, cancellationToken, bind);
+            await transaction.CommitAsync(cancellationToken);
+            return accepted;
+        }
+        catch (Exception error) when (!cancellationToken.IsCancellationRequested &&
+            error is TimeoutException or NpgsqlException { IsTransient: true })
+        {
+            return false;
+        }
+    }
+
     /// <summary>Removes one bounded page of expired held-root preparations for this scope.</summary>
     public static async Task<int> PrunePreparedStartsAsync(Func<KernelDb> open, Contract.BoundScope scope,
         CancellationToken cancellationToken = default)

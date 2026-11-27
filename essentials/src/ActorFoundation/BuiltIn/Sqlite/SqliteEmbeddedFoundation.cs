@@ -243,6 +243,11 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         CancellationToken cancellationToken = default) =>
         requests.Value.ConfirmHeldStartAsync(scope, actor, issuance, cancellationToken);
 
+    // Separately proves admission without changing the lifetime proof used for releasing executable pins.
+    internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
+        CancellationToken cancellationToken = default) =>
+        requests.Value.HasAcceptedPreparedStartAsync(scope, actor, issuance, cancellationToken);
+
     /// <summary>Removes one bounded page of expired held-root preparations for this scope.</summary>
     public Task<int> PrunePreparedStartsAsync(Contract.BoundScope scope, CancellationToken cancellationToken = default) =>
         requests.Value.PruneHeldStartsAsync(scope, cancellationToken);

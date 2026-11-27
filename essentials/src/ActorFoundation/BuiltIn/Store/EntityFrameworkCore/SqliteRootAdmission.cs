@@ -206,6 +206,14 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     internal Task<int> PruneHeldStartsAsync(Contract.BoundScope scope, CancellationToken token) =>
         WriteAsync((db, now, ct) => RootPreparedStarts.PruneAsync(db, scope.Tenant, now, ct), token);
 
+    internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
+        CancellationToken token) =>
+        InAdmissionTransactionAsync(async (db, ct) =>
+        {
+            var stage = RootPreparedStarts.Verify(await ReadRootIssuerKeyAsync(db, ct), scope, actor, issuance);
+            return stage is not null && await RootPreparedStarts.HasAcceptedBirthAsync(db, stage, ct);
+        }, token, readOnly: true);
+
     internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
         CancellationToken token) =>
         WriteAsync(async (db, now, ct) =>

@@ -102,6 +102,9 @@ public static partial class SqliteEmbeddedHosting
         internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
             CancellationToken token) => admission.ConfirmHeldStartAsync(scope, actor, issuance, token);
 
+        internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
+            CancellationToken token) => admission.HasAcceptedPreparedStartAsync(scope, actor, issuance, token);
+
         internal Task<int> PruneHeldStartsAsync(Contract.BoundScope scope, CancellationToken token) => admission.PruneHeldStartsAsync(scope, token);
 
         void IReplyTransport.Send(string destination, Reply reply) => edge.Send(destination, reply);
@@ -267,6 +270,11 @@ public static partial class SqliteEmbeddedHosting
                 CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
                     (admission, ct) => admission.ConfirmHeldStartAsync(scope, actor, issuance, ct), token), token);
+
+            internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
+                CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.HasAcceptedPreparedStartAsync(scope, actor, issuance, ct), token), token);
 
             internal Task<int> PruneHeldStartsAsync(Contract.BoundScope scope, CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,

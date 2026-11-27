@@ -197,6 +197,8 @@ if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or 
     return await SqliteHostLifetimeChecks.RunHeldRepliesAsync(sqliteReplyFence == "in-batch");
 if (args is ["sqlite-prepared-starts", var preparedFence and ("checked" or "in-batch")])
     return await SqlitePreparedStartChecks.RunAsync(preparedFence == "in-batch");
+if (args is ["sqlite-prepared-starts", var shippedPreparedFence and ("checked" or "in-batch"), "shipped"])
+    return await SqlitePreparedStartChecks.RunAsync(shippedPreparedFence == "in-batch", shipped: true);
 if (args is ["sqlite-held-reply-peer", var sqliteReplyPath, var sqlitePeerFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunHeldReplyPeerAsync(sqliteReplyPath, sqlitePeerFence == "in-batch");
 if (args is ["sqlite-root-terminate", var sqliteTerminateFence and ("checked" or "in-batch")])
@@ -233,6 +235,7 @@ if (args is ["pg-http-event-owner-process", var eventWorkerFence and ("checked" 
     return await PostgresHttpOwnerLoss.RunOwnerAsync(eventWorkerFence, eventPause, new(eventOwnerRef), heldEvent: true);
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
 if (args is ["pg-protected-held-start"]) return await PostgresHeldStartChecks.RunAsync(protectedStarts: true);
+if (args is ["pg-protected-held-start", "shipped"]) return await PostgresHeldStartChecks.RunAsync(protectedStarts: true, shipped: true);
 if (args is ["pg-child-workflows"]) return await PostgresChildWorkflowChecks.RunAsync();
 if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch")])
     return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");
