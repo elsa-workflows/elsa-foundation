@@ -63,8 +63,8 @@ internal sealed partial class PostgresRootAdmission
         {
             var address = await GuardedRootAddressAsync(db, tenant, life.Reference, ct);
             if (address is not { Creation: 1 } || address.Id != life.Address.Id) return false;
-            return await AdmissionStatusAsync(db, address, tenant, life.Reference, ct,
-                requireCheckpoint: caller is not null) == InstanceStatus.Running;
+            var status = await AdmissionStatusAsync(db, address, tenant, life.Reference, ct, requireCheckpoint: caller is not null);
+            return await AcceptsDirectInputAsync(db, address, tenant, life.Reference, status, caller is not null, ct);
         }
     }
 }

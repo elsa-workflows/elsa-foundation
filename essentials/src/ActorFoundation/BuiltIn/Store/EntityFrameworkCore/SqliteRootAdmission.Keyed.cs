@@ -34,7 +34,7 @@ internal sealed partial class SqliteRootAdmission
                 {
                     var selected = await ReadTargetAsync(db, tenant, life.Reference, readToken);
                     return selected is not null && selected.Actor == life.Address.Id && selected.Partition == life.Address.Partition &&
-                        (selected.Status == (int)InstanceStatus.Running || caller is null && selected is { HasCheckpoint: false, Pending: true });
+                        AcceptsDirectInput(db, selected, caller is not null);
                 }, attempt, ct);
         }, token, attempt);
 

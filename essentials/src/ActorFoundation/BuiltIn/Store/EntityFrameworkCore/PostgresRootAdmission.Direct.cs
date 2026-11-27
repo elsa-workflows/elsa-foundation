@@ -154,13 +154,7 @@ internal sealed partial class PostgresRootAdmission
             if (db.UsesRootRetirement && await HasReceiptAsync()) return await DuplicateAsync();
             return await RefuseAsync(DirectResult.MissingTarget);
         }
-        var acceptsParkArrival = db.UsesRootParkArrivals && status == InstanceStatus.Faulted && reply is null &&
-            await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
-                    AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
-                    AND "FoundationParkAt" IS NOT NULL) AS "Value"
-                """).SingleAsync(cancellationToken);
-        if (status != InstanceStatus.Running && !acceptsParkArrival)
+        if (!await AcceptsDirectInputAsync(db, address, tenant, reference, status, reply is not null, cancellationToken))
         {
             // A Faulted or Cancelled checkpoint ends only in a family that ends that status, under the family's prefix.
             var terminal = status == InstanceStatus.Finished ||
@@ -231,6 +225,16 @@ internal sealed partial class PostgresRootAdmission
             return reason;
         }
     }
+
+    private static async Task<bool> AcceptsDirectInputAsync(KernelDb db, CreationAddress address, string tenant, string reference,
+        InstanceStatus? status, bool held, CancellationToken token) =>
+        status == InstanceStatus.Running ||
+        db.UsesRootParkArrivals && status == InstanceStatus.Faulted && !held &&
+        await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
+                AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
+                AND "FoundationParkAt" IS NOT NULL) AS "Value"
+            """).SingleAsync(token);
 
     private static Task<CreationAddress?> RootAddressAsync(KernelDb db, string tenant, string reference, CancellationToken cancellationToken) =>
         db.Database.SqlQuery<CreationAddress>($"""

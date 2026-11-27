@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
 using Microsoft.Data.Sqlite;
@@ -84,6 +85,7 @@ internal static class KeyedRootChecks
             await UntilAsync(async () => await fixture.Reads.GetAsync(scope, reference, token), actor => actor is null);
             await VerifyReuseAsync();
             await VerifyHeldAsync();
+            await VerifyParkArrivalAsync();
             return 0;
 
             Task<Contract.Admission> SendAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind, string? payload = null) =>
@@ -195,6 +197,35 @@ internal static class KeyedRootChecks
                     "an expired keyed wait leaves no creator or receipt");
             }
 
+            async Task VerifyParkArrivalAsync()
+            {
+                var target = new Contract.Target.Key("Parking");
+                var started = await SendAsync(scope, new Contract.Target.Key(target.CallerKey, start), "park-start", Contract.Kinds.Start);
+                var actor = started.Actor!.Value;
+                await UntilAsync(async () => await fixture.Reads.GetAsync(scope, actor, token),
+                    view => view is { Header.Status: Contract.ActorStatus.Running });
+                await SendAsync(scope, target, "fault", "fault");
+                var parked = await UntilAsync(async () => await fixture.Reads.GetAsync(scope, actor, token),
+                    view => view is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null });
+                var held = await RequestAsync(scope, target, "held-while-parked", "answer", "held Park input");
+                var arrivals = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(1));
+                var accepted = await fixture.Ingress.SendAsync(scope, target, "park-input", "append", "keyed Park input", arrivals, token);
+                var retry = await fixture.Ingress.SendAsync(scope, target, "park-input", "append", "keyed Park input", arrivals, token);
+                Require(held.Error == "missing" && accepted.Outcome == Contract.AdmissionOutcome.Accepted && accepted.Actor == actor &&
+                    retry.Outcome == Contract.AdmissionOutcome.Duplicate && retry.Actor == actor,
+                    "a one-way keyed input joins the current Park once and a held input is refused");
+
+                var recover = JsonSerializer.Serialize(new Contract.OperatorCommand(parked!.Selection, ExpectedTarget: actor));
+                var resumed = await SendAsync(scope, new Contract.Target.Ref(actor), "recover", Contract.Kinds.Recover, recover);
+                Require(resumed.Outcome == Contract.AdmissionOutcome.Accepted, "the actor accepts the selected Recover");
+                var tail = await UntilAsync(async () => await fixture.Reads.TailAsync(scope, actor, cancellationToken: token),
+                    page => page.Items.Any(item => item.Entry.Contains("keyed Park input", StringComparison.Ordinal)));
+                Require((await fixture.Reads.GetAsync(scope, actor, token))?.Header.Status == Contract.ActorStatus.Running &&
+                    tail.Items.Count(item => item.Entry.Contains("keyed Park input", StringComparison.Ordinal)) == 1 &&
+                    tail.Items.All(item => !item.Entry.Contains("held Park input", StringComparison.Ordinal)),
+                    "Recover releases the keyed arrival to the same life once");
+            }
+
             async Task<Contract.Reply> RequestAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind,
                 string? payload = null, int timeoutMs = 4_000) =>
                 await fixture.Ingress.RequestAsync(tenant, target, id, kind, payload, keep,
@@ -223,7 +254,7 @@ internal static class KeyedRootChecks
     private static async Task<Fixture> OpenAsync(bool postgres, bool inBatch, string file, CancellationToken token)
     {
         static bool Authorize(Contract.BoundScope scope, Contract.ActorRef target, string kind) =>
-            scope.Tenant == "keyed" && kind == Contract.Kinds.Delete;
+            scope.Tenant == "keyed" && kind is Contract.Kinds.Delete or Contract.Kinds.Recover;
         static void EndProcess(string reason) => throw new InvalidOperationException(reason);
         if (postgres)
         {
@@ -235,6 +266,28 @@ internal static class KeyedRootChecks
                 Require(await PostgresFixtureDatabase.IsEmptyAsync(empty, token), "the keyed fixture requires a fresh PostgreSQL store");
             await PostgresPreviewHosting.InstallKeyedStartsQualificationAsync(options, token);
             var requests = PostgresPreviewHosting.CreateRequests(Open, Node, ActorType);
+            KernelDb OpenSeparately() => PostgresPreviewHosting.CreateKeyedStartsQualificationContext(options);
+            KernelDb OpenShipped() => PostgresPreviewHosting.CreateShippedContext(options);
+            await ExpectAsync<ArgumentException>(() => PostgresPreviewHosting.OpenFoundationAsync(OpenSeparately, ActorType, requests,
+                cancellationToken: token), "same PostgreSQL store factory");
+            await ExpectAsync<ArgumentException>(() => PostgresPreviewHosting.OpenFoundationAsync(OpenShipped, ActorType, requests,
+                cancellationToken: token), "same PostgreSQL store factory");
+            var protectedRequests = PostgresPreviewHosting.CreateRequestsWithRootStartProtection(Open, Node, ActorType, ProtectAsync);
+            var protectedFoundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, ActorType, protectedRequests, cancellationToken: token);
+            await VerifyProtectedStartRefusalAsync(protectedFoundation, protectedRequests.ReadClockAsync, token);
+            await using (var drift = Open())
+            {
+                await drift.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationKeyBindings" ALTER COLUMN "ReuseAfter" DROP NOT NULL""", token);
+                await ExpectAsync<StoreFormatException>(() => PostgresPreviewHosting.InstallKeyedStartsQualificationAsync(options, token),
+                    "caller-key tables or indexes");
+                await drift.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationKeyBindings" ALTER COLUMN "ReuseAfter" SET NOT NULL""", token);
+                await drift.Database.ExecuteSqlRawAsync("""CREATE INDEX "keyed_fixture_extra" ON "FoundationKeyReceipts" ("Fingerprint")""", token);
+                await ExpectAsync<StoreFormatException>(() => PostgresPreviewHosting.InstallKeyedStartsQualificationAsync(options, token),
+                    "caller-key tables or indexes");
+                await drift.Database.ExecuteSqlRawAsync("""DROP INDEX "keyed_fixture_extra" """, token);
+                Require(true, "the PostgreSQL installer refuses binding column and receipt index drift");
+            }
+            Require(true, "the PostgreSQL facade rejects a crossed keyed request edge or profile");
             var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, ActorType, Authorize, requests,
                 cancellationToken: token);
             return new(Open, foundation, foundation, requests.ReadClockAsync, async ct => await PostgresPreviewHosting.StartAsync(Open, Node, new Probe(),
@@ -243,6 +296,10 @@ internal static class KeyedRootChecks
 
         var sqlite = SqliteEmbeddedFoundation.ForKeyedStartsQualification(file, Node, ActorType);
         await sqlite.InstallShippedAsync(token);
+        var protectedSqlite = SqliteEmbeddedFoundation.ForKeyedStartsQualification(file, Node, ActorType, ProtectAsync);
+        await protectedSqlite.InstallShippedAsync(token);
+        await VerifyProtectedStartRefusalAsync(await protectedSqlite.OpenIngressWithOperatorsAsync(Authorize, token),
+            protectedSqlite.ReadClockAsync, token);
         var ingress = await sqlite.OpenIngressWithOperatorsAsync(Authorize, token);
         var sqliteOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
             { DataSource = file, ForeignKeys = true, Pooling = false }.ToString()).Options;
@@ -254,6 +311,27 @@ internal static class KeyedRootChecks
                 await owner.StartAsync(ct);
                 return owner;
             });
+    }
+
+    private static ValueTask<bool> ProtectAsync(PendingRootStart start, CancellationToken token) =>
+        throw new InvalidOperationException("This fixture requires callers to stop before any uncomposed protection.");
+
+    private static async Task VerifyProtectedStartRefusalAsync(Contract.IIngress ingress, Func<CancellationToken, ValueTask<long>> clock,
+        CancellationToken token)
+    {
+        var scope = ContractScopes.Bind("keyed");
+        var start = new Contract.Target.Key("Protected", new(ActorType, "held"));
+        var deadline = await clock(token) + 4_000;
+        await ExpectAsync<NotSupportedException>(() => ingress.RequestAsync(scope, start, "protected-start", Contract.Kinds.Start,
+            null, null, new(null, deadline), token).AsTask(), "configured root-start protection");
+        Require(true, "a protected reply edge refuses an uncomposed held keyed creator");
+    }
+
+    private static async Task ExpectAsync<TException>(Func<Task> run, string message) where TException : Exception
+    {
+        try { await run(); }
+        catch (TException error) when (error.Message.Contains(message, StringComparison.Ordinal)) { return; }
+        throw new InvalidOperationException("Expected a refusal for " + message);
     }
 
     private static void Require(bool ok, string message)
@@ -269,7 +347,7 @@ internal static class KeyedRootChecks
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => throw new NotSupportedException();
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => throw new NotSupportedException();
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
         {
@@ -281,6 +359,7 @@ internal static class KeyedRootChecks
             var items = JsonSerializer.Deserialize<List<string>>(turn.State)!;
             foreach (var item in turn.Inbox)
             {
+                if (item.Kind == "fault") throw new InvalidOperationException("Park the keyed test actor.");
                 if (item.Kind == "append")
                 {
                     items.Add(item.Payload!);

@@ -33,8 +33,8 @@ internal static class RootKeyedAdmission
         PRIMARY KEY ("Tenant", "KeyDigest")
         """;
 
-    internal static string ReceiptColumns(bool sqlite) => $$"""
-        "Actor" text {{Collation(sqlite)}} NOT NULL REFERENCES "FoundationKeyBindings" ("Actor"),
+    internal static string ReceiptColumns(bool sqlite, string bindingTable = BindingTable) => $$"""
+        "Actor" text {{Collation(sqlite)}} NOT NULL REFERENCES "{{bindingTable}}" ("Actor"),
         "Operation" text {{Collation(sqlite)}} NOT NULL,
         "Fingerprint" text NOT NULL,
         "Generation" {{(sqlite ? "integer" : "bigint")}} NOT NULL CHECK ("Generation" > 0),
@@ -44,11 +44,55 @@ internal static class RootKeyedAdmission
 
     private static string Collation(bool sqlite) => sqlite ? "COLLATE BINARY" : """ COLLATE "C" """;
 
-    internal static Task InstallPostgresAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync($$"""
-            CREATE TABLE IF NOT EXISTS "{{BindingTable}}" ({{BindingColumns(sqlite: false)}});
-            CREATE TABLE IF NOT EXISTS "{{ReceiptTable}}" ({{ReceiptColumns(sqlite: false)}});
-            """, token);
+    internal static async Task InstallPostgresAsync(KernelDb db, CancellationToken token)
+    {
+        var transaction = db.Database.CurrentTransaction ?? throw new InvalidOperationException("Caller-key definitions require the install transaction.");
+        await db.Database.ExecuteSqlRawAsync(RenderPostgresTables(BindingTable, ReceiptTable, "IF NOT EXISTS "), token);
+        // PostgreSQL renders both schemas from the same DDL, including the indexes that implement primary and unique keys.
+        var suffix = Guid.NewGuid().ToString("N");
+        var twinBinding = BindingTable + "_" + suffix;
+        var twinReceipt = ReceiptTable + "_" + suffix;
+        const string savepoint = "kernel_keyed_definition_twin";
+        await transaction.CreateSavepointAsync(savepoint, token);
+        await db.Database.ExecuteSqlRawAsync(RenderPostgresTables(twinBinding, twinReceipt, ""), token);
+        var valid = await db.Database.SqlQuery<bool>($"""
+            WITH relation(layout, installed, oid) AS (
+                VALUES ('binding', true, pg_catalog.to_regclass('"FoundationKeyBindings"')),
+                       ('receipt', true, pg_catalog.to_regclass('"FoundationKeyReceipts"')),
+                       ('binding', false, pg_catalog.to_regclass(pg_catalog.quote_ident({twinBinding}))),
+                       ('receipt', false, pg_catalog.to_regclass(pg_catalog.quote_ident({twinReceipt})))
+            ), shape AS (
+                SELECT r.layout, r.installed, t.relnamespace, t.relpersistence, t.relkind, t.relrowsecurity, t.relforcerowsecurity,
+                    EXISTS (SELECT 1 FROM pg_catalog.pg_inherits h WHERE h.inhrelid = r.oid OR h.inhparent = r.oid) AS inherited,
+                    (SELECT jsonb_agg(jsonb_build_array(a.attname, a.atttypid, a.atttypmod, a.attcollation, a.attnotnull,
+                        a.attidentity, a.attgenerated, pg_catalog.pg_get_expr(d.adbin, d.adrelid)) ORDER BY a.attnum)
+                        FROM pg_catalog.pg_attribute a LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid = r.oid AND d.adnum = a.attnum
+                        WHERE a.attrelid = r.oid AND a.attnum > 0 AND NOT a.attisdropped) AS column_definitions,
+                    (SELECT array_agg(c.definition ORDER BY c.definition) FROM (
+                        SELECT pg_catalog.format('%s %s', c.convalidated, pg_catalog.replace(pg_catalog.pg_get_constraintdef(c.oid),
+                            {twinBinding}, {BindingTable})) AS definition
+                        FROM pg_catalog.pg_constraint c WHERE c.conrelid = r.oid) c) AS constraint_definitions,
+                    (SELECT array_agg(i.definition ORDER BY i.definition) FROM (
+                        SELECT pg_catalog.format('%s %s %s %s %s %s', i.indisvalid, i.indisready, i.indisprimary, i.indisunique, i.indimmediate,
+                            substring(pg_catalog.pg_get_indexdef(i.indexrelid) FROM ' USING .*$')) AS definition
+                        FROM pg_catalog.pg_index i WHERE i.indrelid = r.oid) i) AS index_definitions
+                FROM relation r JOIN pg_catalog.pg_class t ON t.oid = r.oid
+            )
+            SELECT count(*) = 2 AND bool_and(i.relnamespace = e.relnamespace AND i.relpersistence = e.relpersistence
+                AND i.relkind = e.relkind AND i.relrowsecurity = e.relrowsecurity AND i.relforcerowsecurity = e.relforcerowsecurity
+                AND i.inherited = e.inherited AND i.column_definitions IS NOT DISTINCT FROM e.column_definitions
+                AND i.constraint_definitions IS NOT DISTINCT FROM e.constraint_definitions
+                AND i.index_definitions IS NOT DISTINCT FROM e.index_definitions) AS "Value"
+            FROM shape i JOIN shape e ON e.layout = i.layout AND i.installed AND NOT e.installed
+            """).SingleAsync(token);
+        await transaction.RollbackToSavepointAsync(savepoint, token);
+        if (!valid) throw new StoreFormatException("The installed PostgreSQL caller-key tables or indexes differ from the profile definitions.");
+    }
+
+    private static string RenderPostgresTables(string bindings, string receipts, string createGuard) => $$"""
+        CREATE TABLE {{createGuard}}"{{bindings}}" ({{BindingColumns(sqlite: false)}});
+        CREATE TABLE {{createGuard}}"{{receipts}}" ({{ReceiptColumns(sqlite: false, bindings)}});
+        """;
 
     internal static Request? Prepare(string tenant, Contract.Target.Key target, string id, string kind, string? payload, long? due,
         long window, string? actorType)

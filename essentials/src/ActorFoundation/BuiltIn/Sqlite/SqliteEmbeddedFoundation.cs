@@ -55,8 +55,9 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal static SqliteEmbeddedFoundation ForAuthoredEventsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootAuthoredEventsQualification);
 
-    internal static SqliteEmbeddedFoundation ForKeyedStartsQualification(string databasePath, string node, string actorType) =>
-        new(databasePath, node, actorType, StoreFormat.RootKeyedStartsQualification);
+    internal static SqliteEmbeddedFoundation ForKeyedStartsQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync? protectRootStart = null) =>
+        new(databasePath, node, actorType, StoreFormat.RootKeyedStartsQualification, protectRootStart);
 
     /// <summary>Composes the dedicated preview format for qualifying indexed playback.</summary>
     public static SqliteEmbeddedFoundation ForPlaybackQualification(string databasePath, string node, string actorType) =>

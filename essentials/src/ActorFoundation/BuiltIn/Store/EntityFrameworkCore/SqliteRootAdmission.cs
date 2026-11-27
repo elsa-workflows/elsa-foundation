@@ -276,8 +276,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             if (target is null)
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
 
-            var canReceive = target.Status == (int)InstanceStatus.Running || reply is null &&
-                (!target.HasCheckpoint && target.Pending || db.UsesRootParkArrivals && target.Status == (int)InstanceStatus.Faulted && target.Parked);
+            var canReceive = AcceptsDirectInput(db, target, reply is not null);
             if (canReceive && reply is not null && reply.Caller.Deadline <= now) return null;
             var liveReceipt = (canReceive || target.Terminal || target.Status is null && db.UsesRootRetirement)
                 && await db.Database.SqlQuery<bool>($"""
@@ -306,6 +305,10 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             return new(Contract.AdmissionOutcome.Accepted, reference);
         }, token, attempt);
     }
+
+    private static bool AcceptsDirectInput(KernelDb db, Target target, bool held) =>
+        target.Status == (int)InstanceStatus.Running || !held &&
+        (!target.HasCheckpoint && target.Pending || db.UsesRootParkArrivals && target.Status == (int)InstanceStatus.Faulted && target.Parked);
 
     internal async ValueTask<long> ReadReplyTimeAsync(CancellationToken token)
     {
