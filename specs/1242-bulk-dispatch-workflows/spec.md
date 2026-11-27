@@ -214,7 +214,7 @@ and on-completed-callbacks suites pass.
 - **A child of a waiting activity is still running when the parent instance is cancelled**: the child is cancelled
   when `CancelChildOnParentCancellation` is true. That is the `DispatchWorkflow` rule, applied per child.
 - **`Items` evaluates to a value that is not a collection**: the activity faults, as `ForEach` does. Elsa 3 silently
-  dispatched nothing; the converter documents the difference.
+  dispatched nothing. The converter README documents the difference (FR-023).
 - **Two waiting activities in one parent instance**: each keeps its own children. Elsa 3's shared per-instance
   bookmark and counter is not reproduced.
 - **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: it becomes a blocking incident on that
@@ -289,9 +289,10 @@ and on-completed-callbacks suites pass.
     raises those as plain exceptions, so they cannot be told apart, and absorbing them would hide recoverable errors.
 - **FR-009**: The activity has one outcome, `Done`.
 - **FR-010**: A slot reads its item as `variables.currentItem` and `variables.currentIndex`. Reading the dispatched
-  child's result in a slot is not part of this spec (Out of Scope). Publish MUST refuse a slot binding to the
-  `Dispatch` node's result: passes run concurrently, so such a binding cannot tell which item's `Dispatch` run it
-  reads.
+  child's result in a slot is not part of this spec (Out of Scope). Publish MUST refuse a direct, unscoped slot
+  binding to the `Dispatch` node's result (`ValueFlow/EarlierProducerRun`): passes run concurrently, so such a binding
+  cannot tell which item's `Dispatch` run it reads. Bindings that declare a scope, and script expression parameters,
+  keep their existing rules (#4056).
 - **FR-010a**: Passes run concurrently, so `Dispatch` and both slots are unordered with themselves across passes.
   - A variable write under the bulk node, from `Dispatch` (an output capture) or from either slot, raises spec 266's
     publish warning `ValueFlow/ConcurrentWrite`. Spec 266 warns and never refuses, and this spec follows that rule.
@@ -347,7 +348,8 @@ and on-completed-callbacks suites pass.
   - **The target must be in the same import**, so its declared inputs are known. Otherwise the node is refused with
     `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (Q2).
   - **Contents**: the static `Input` first, then, for a map item, each declared input the item has, in the declared
-    spelling; for any other item, `{DefaultItemInputKey: item}` when the target declares that name. The item wins on a
+    spelling. Members match declared names regardless of letter case, as in the #5808 rules. When two members differ
+    only in case and match one declared name, the script faults that pass with a clear message rather than pick one; for any other item, `{DefaultItemInputKey: item}` when the target declares that name. The item wins on a
     clash.
   - **`DefaultItemInputKey`** must be a literal, null or absent (null and absent mean `Item`). Anything else is refused
     with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.

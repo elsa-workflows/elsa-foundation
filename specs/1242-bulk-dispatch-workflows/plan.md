@@ -56,9 +56,9 @@ the design side), and converter rules.
   - Runtime type `Elsa.BulkDispatchWorkflows`.
   - Catalog key `Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows` (spec FR-001).
   - The descendant handler gives a fault deep inside a slot the same intervention-and-defer path as a direct slot
-    child (spec FR-008). It does
-  not implement `IRuntimeAcceptsRescheduledFaultedChild`, because retry goes through `RetryFaultedActivity`, which
-  does not need it.
+    child (spec FR-008).
+  - It does not implement `IRuntimeAcceptsRescheduledFaultedChild`, because retry goes through
+    `RetryFaultedActivity`, which does not need it.
 - **Input**: `Items`.
 - **Slots**: `Dispatch`, `ChildCompleted`, `ChildFaulted`, all `[ActivityChildSlot(… Single)]`.
 - **Structure handler**: `BulkDispatchWorkflowsStructureHandler` projects and replaces the three slots, as
@@ -207,7 +207,7 @@ the design side), and converter rules.
 ## Test scope
 
 - **Runtime** (`BulkDispatchWorkflows` tests next to the DispatchWorkflow runtime tests):
-  - N children start in one turn, each with distinct dispatch identities;
+  - with N ≤ 16, N children start in one turn, each with a distinct dispatch identity;
   - the wait and no-wait completion;
   - each branch routing (Completed, Faulted, Cancelled, DispatchFailed, a dispatch input fault);
   - an empty or null `Items`;

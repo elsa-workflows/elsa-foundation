@@ -21,7 +21,7 @@
 - [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
-- [x] Dependencies and assumptions identified. The waiting path depends on spec 1243.
+- [x] Dependencies and assumptions identified. No dependency on spec 1243; the cap follows #5875.
 
 ## Feature Readiness
 
@@ -34,3 +34,4 @@
 
 - The Speckit `before_specify` git hook was skipped: the session's task fixed the branch name
   (`agent/claude/3052-spec1242-bulk-dispatch`) and the spec number (1242).
+- Redesigned 2026-11-26 on the coordinator's call: a dedicated `BulkDispatchWorkflows` activity replaces the converter lowering (now rejected option C). Local review converged at round 9 of the redesign (clean).

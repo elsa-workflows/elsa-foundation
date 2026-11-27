@@ -49,7 +49,7 @@ converter) needs the activity in the catalog.
   here.
 - [ ] T011 [US4] Child-result reads in the slots (FR-019). Add `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ` here.
   Also add the outer-write refusal (FR-010a, FR-019) and `ELS3-ACTIVITY-BULK-DISPATCH-OUTER-WRITE` here.
-- [ ] T012 [P] [US3] [US4] Converter tests (plan, Test scope: Converter). Remove `no-counterpart:BulkDispatchWorkflows`
+- [ ] T012 [P] [US3] [US4] Converter tests (plan, Test scope: Converter), including item members matched to declared names regardless of case, and two members that differ only in case. Remove `no-counterpart:BulkDispatchWorkflows`
   from `Elsa3ConversionDiagnosticsTests` and keep ParallelForEach.
 - [ ] T013 [P] Update the converter README and the spec 236 member map and diagnostic-code contract (FR-021, FR-023). The README states the outer-write rule (FR-010a).
 - [ ] T014 Convert `performance-concurrency.json` (with its child) and the composition root locally, and hand FR-022
