@@ -182,7 +182,7 @@ internal static partial class KernelAuthoredEventChecks
     private static async Task<(Func<KernelDb> Open, Contract.IIngress Ingress, Contract.IActorReads Reads,
         IAsyncDisposable Owner, EventStartPort? Events, Func<CancellationToken, Task<IAsyncDisposable>> Restart)>
         OpenAsync(Contract.IActorType model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
-            bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false)
+            bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false, RootPublicEventHost? publicEventHost = null)
     {
         const string node = "authored-event-owner";
         var loop = new LoopOptions
@@ -194,7 +194,10 @@ internal static partial class KernelAuthoredEventChecks
 
         if (provider == "sqlite")
         {
-            var sqlite = publicStarts ? SqliteEmbeddedFoundation.ForPublicEventStartsQualification(path, node, model.Type) :
+            var sqlite = publicEventHost is not null
+                ? SqliteEmbeddedFoundation.ForPublicEventHostQualification(path, node, model.Type,
+                    publicEventHost.ProtectsStarts ? Protect : null)
+                : publicStarts ? SqliteEmbeddedFoundation.ForPublicEventStartsQualification(path, node, model.Type) :
                 orderedScan ? SqliteEmbeddedFoundation.ForEventStartScanQualification(path, node, model.Type, (_, _) => ValueTask.FromResult(true)) :
                 retainReceipts ? SqliteEmbeddedFoundation.ForEventStartReceiptsQualification(path, node, model.Type, (_, _) => ValueTask.FromResult(true)) :
                 eventStarts ? SqliteEmbeddedFoundation.ForEventStartsQualification(path, node, model.Type) :
@@ -203,6 +206,7 @@ internal static partial class KernelAuthoredEventChecks
             var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
                 { DataSource = path, Pooling = false }.ConnectionString).Options;
             KernelDb Open() => KernelDb.ForSqliteRootShipped(options,
+                publicEventHost is not null ? StoreFormat.RootPublicEventHostQualification :
                 publicStarts ? StoreFormat.RootPublicEventStartsQualification : orderedScan ? StoreFormat.RootEventStartScanQualification :
                 retainReceipts ? StoreFormat.RootEventStartReceiptsQualification :
                 eventStarts ? StoreFormat.RootEventStartsQualification : StoreFormat.RootAuthoredEventsQualification);
@@ -224,7 +228,8 @@ internal static partial class KernelAuthoredEventChecks
 
         var pg = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
             throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).Options;
-        KernelDb OpenPostgres() => publicStarts ? KernelDb.ForPostgresRootPublicEventStartsQualification(pg) :
+        KernelDb OpenPostgres() => publicEventHost is not null ? KernelDb.ForPostgresRootPublicEventHostQualification(pg, publicEventHost) :
+            publicStarts ? KernelDb.ForPostgresRootPublicEventStartsQualification(pg) :
             orderedScan ? KernelDb.ForPostgresRootEventStartScanQualification(pg) :
             retainReceipts ? KernelDb.ForPostgresRootEventStartReceiptsQualification(pg) :
             eventStarts ? KernelDb.ForPostgresRootEventStartsQualification(pg) :
@@ -234,7 +239,9 @@ internal static partial class KernelAuthoredEventChecks
         var cold = new EfStore(OpenPostgres, postgres: true);
         await cold.CreateAsync(1);
         await cold.InstallPreviewRootSchemaAsync(token);
-        var requests = PostgresPreviewHosting.CreateRequests(OpenPostgres, node, model.Type);
+        var requests = publicEventHost?.ProtectsStarts == true
+            ? PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenPostgres, node, model.Type, Protect)
+            : PostgresPreviewHosting.CreateRequests(OpenPostgres, node, model.Type);
         var foundation = eventStarts
             ? await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenPostgres, model.Type, Authorize, requests, cancellationToken: token)
             : await PostgresPreviewHosting.OpenFoundationAsync(OpenPostgres, model.Type, requests, cancellationToken: token);
@@ -254,6 +261,8 @@ internal static partial class KernelAuthoredEventChecks
         async Task<IAsyncDisposable> StartPostgresAsync(CancellationToken cancellationToken) =>
             await PostgresPreviewHosting.StartAsync(OpenPostgres, node, model, EndProcess, loop, cancellationToken,
                 Console.Error.WriteLine, (IReplyTransport)requests, fenceInBatch: inBatch);
+
+        static ValueTask<bool> Protect(PendingRootStart _, CancellationToken __) => ValueTask.FromResult(true);
 
         static bool Authorize(Contract.BoundScope scope, Contract.ActorRef _, string kind) =>
             scope.Tenant == "authored-events" && kind == Contract.Kinds.Delete;

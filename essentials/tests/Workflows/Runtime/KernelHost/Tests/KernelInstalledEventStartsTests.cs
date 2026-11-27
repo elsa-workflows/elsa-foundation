@@ -75,6 +75,17 @@ public sealed class KernelInstalledEventStartsTests
     }
 
     [Fact]
+    public Task Sqlite_preserves_protected_Event_start_authority_through_reopen() => RunAsync(false, shipped: true, publicEventHost: true);
+
+    [SkippableFact]
+    public Task Postgres_preserves_protected_Event_start_authority_through_reopen()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return RunAsync(true, shipped: true, publicEventHost: true);
+    }
+
+    [Fact]
     public Task Sqlite_adopts_the_active_stock_Event_without_republishing() => RunAsync(false, shipped: true, adoptStock: true);
 
     [SkippableFact]
@@ -93,7 +104,7 @@ public sealed class KernelInstalledEventStartsTests
         RunAsync(false, shipped: true, adoption: (startup, afterAdoption));
 
     private static async Task RunAsync(bool postgres, bool shipped = false, bool adoptStock = false,
-        (bool Startup, bool AfterAdoption)? adoption = null)
+        (bool Startup, bool AfterAdoption)? adoption = null, bool publicEventHost = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(55));
         var token = deadline.Token;
@@ -136,6 +147,7 @@ public sealed class KernelInstalledEventStartsTests
                 try
                 {
                     await firstApp.StartAsync(token);
+                    if (publicEventHost) await CheckGenericStartRefusedAsync(firstApp);
                     original = await PublishAsync(services, first, 0, null);
                     Assert.True(original.Succeeded, original.Failure?.Message);
                     var unsupported = await PublishAsync(services, ephemeral, 0, null);
@@ -185,6 +197,7 @@ public sealed class KernelInstalledEventStartsTests
                 try
                 {
                     await restarted.StartAsync(token);
+                    if (publicEventHost) await CheckGenericStartRefusedAsync(restarted);
                     var services = restarted.Services.GetRequiredService<IServiceScopeFactory>();
                     await using (var owner = await services.CreateAsyncScopeAsync(Persistence))
                     {
@@ -619,6 +632,15 @@ public sealed class KernelInstalledEventStartsTests
                     .FindAsync(Scope, slot.SlotId, slot.Revision, token);
             }
 
+            async Task CheckGenericStartRefusedAsync(WebApplication app)
+            {
+                var storage = app.Services.GetRequiredService<KernelShellStorage>();
+                var foundation = await storage.OpenAsync(token);
+                var generic = new Contract.StartSpec(Kernel.WorkflowActor.WorkflowActor.ActorType, "fixture", "{}");
+                await Assert.ThrowsAsync<NotSupportedException>(() =>
+                    foundation.Ingress.SetStartAsync(Tenant, "event:Changed", "unprotected", generic, token).AsTask());
+            }
+
             WebApplication OpenShell(bool priorCapabilities = false, AdoptionRace? adoptionRace = null)
             {
                 var builder = WebApplication.CreateBuilder();
@@ -648,7 +670,10 @@ public sealed class KernelInstalledEventStartsTests
                 var api = new WorkflowsRuntimeApiFeature();
                 api.ConfigureServices(services);
                 var hosting = new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation };
-                if (shipped && !priorCapabilities)
+                if (publicEventHost)
+                    hosting.ConfigureServices(services, KernelShellStorage.CreatePublicEventHostQualification(provider, path, foundation),
+                        protectChildExecutables: true);
+                else if (shipped && !priorCapabilities)
                     hosting.ConfigureServices(services);
                 else
                 {

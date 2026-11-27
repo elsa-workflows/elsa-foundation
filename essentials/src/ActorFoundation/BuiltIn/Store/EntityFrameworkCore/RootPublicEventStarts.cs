@@ -71,6 +71,9 @@ internal static partial class RootPublicEventStarts
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         RequireTransaction(db, bind);
+        var host = await RootPublicEventHost.ReadAsync(db, bind, token);
+        if (host is { ProtectsStarts: true } || host is not null && spec is not null && host.ActorType != spec.Type)
+            throw new NotSupportedException("The installed host does not authorize this public Event start.");
         var retainedFrom = spec is null ? now : await RootPublicEventPublications.RetentionThresholdAsync(db, tenant, now, bind, token);
         var command = spec is null
             ? (FormattableString)$"""
@@ -108,6 +111,7 @@ internal static partial class RootPublicEventStarts
         CancellationToken token, int replyAddressBytes = 0)
     {
         RequireTransaction(db, bind);
+        if (await RootPublicEventHost.ReadAsync(db, bind, token) is { ProtectsStarts: true }) return default;
         FormattableString query = $"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/), candidates AS MATERIALIZED (
                 SELECT /*start-bytes*/ AS "Bytes" FROM "FoundationPublicEventStarts"
@@ -146,6 +150,8 @@ internal static partial class RootPublicEventStarts
         Func<FormattableString, FormattableString>? bind, CancellationToken token, Func<int, string>? replyTo = null, bool rememberDelivery = false)
     {
         RequireTransaction(db, bind);
+        var host = await RootPublicEventHost.ReadAsync(db, bind, token);
+        if (host is { ProtectsStarts: true }) return [];
         var targets = await db.Database.SqlQuery<CapturedStart>(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
             SELECT source."SourceReady", t."Registration", t."Key", t."Wait", t."EventId", t."Start", t."Payload", t."PayloadEscaped"
@@ -168,6 +174,8 @@ internal static partial class RootPublicEventStarts
             var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
             var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
             var template = DurableKeyJson.Read<Contract.StartSpec>(target.Start!);
+            if (host is not null && host.ActorType != template.Type)
+                throw new StoreFormatException("A captured Event start differs from the installed actor type.");
             var spec = new StartSpec(template.Type, template.TypeData, template.Input, History: (History)template.History);
             var replyAddress = replyTo?.Invoke(prepared.Count);
             var creator = FoundationRootCreator.Create(actor, operation, FoundationRootCreator.OperationDigest(operation), spec, null, replyAddress);

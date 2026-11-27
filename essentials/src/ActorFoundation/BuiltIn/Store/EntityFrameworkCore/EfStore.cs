@@ -122,13 +122,15 @@ public class KernelDb : DbContext
     public KernelDb(DbContextOptions<KernelDb> options) : this(options, StoreFormat.Current, RootCapabilities.None) { }
 
     private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities,
-        bool sqliteShippedInstall = false, SqliteAdmissionDefinitions? sqliteRuntimeDefinitions = null) : base(options)
+        bool sqliteShippedInstall = false, SqliteAdmissionDefinitions? sqliteRuntimeDefinitions = null,
+        RootPublicEventHost? publicEventHost = null) : base(options)
     {
         RequiredFormat = format;
         Capabilities = capabilities;
         SqliteShippedInstall = sqliteShippedInstall;
         SqliteRuntimeDefinitions = sqliteRuntimeDefinitions;
         RootStateFamily = RootStateFamily.Of(capabilities);
+        PublicEventHost = publicEventHost;
     }
 
     private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
@@ -178,6 +180,8 @@ public class KernelDb : DbContext
     internal bool UsesRootEventStartReceipts => Has(RootCapabilities.EventStartReceipts);
     internal bool UsesRootEventStartScan => Has(RootCapabilities.EventStartScan);
     internal bool UsesRootPublicEventStarts => Has(RootCapabilities.PublicEventStarts);
+    internal bool UsesRootPublicEventHost => Has(RootCapabilities.PublicEventHost);
+    internal RootPublicEventHost? PublicEventHost { get; }
     internal bool UsesRootKeyedStarts => Has(RootCapabilities.KeyedStarts);
     internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
@@ -222,6 +226,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootSharedActivationQualification, RootProfiles.SharedActivationQualification);
     internal static KernelDb ForPostgresRootPublicEventStartsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootPublicEventStartsQualification, RootProfiles.PublicEventStartsQualification);
+    internal static KernelDb ForPostgresRootPublicEventHostQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootPublicEventHostQualification, RootProfiles.PublicEventHostQualification, publicEventHost: host);
     internal static KernelDb ForPostgresRootKeyedStartsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootKeyedStartsQualification, RootProfiles.KeyedStartsQualification);
     internal static KernelDb ForPostgresRootAuthoredEventsQualification(DbContextOptions<KernelDb> options) =>
@@ -260,12 +266,13 @@ public class KernelDb : DbContext
     internal static KernelDb ForSqliteRootTimerRearmQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
         new(options, StoreFormat.RootTimerRearmQualification, RootProfiles.TimerRearmQualification, sqliteShippedInstall: true,
             sqliteRuntimeDefinitions: definitions);
-    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options, StoreFormat? qualificationFormat = null) =>
-        ForSqliteRootFormat(options, qualificationFormat, definitions: null);
+    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options, StoreFormat? qualificationFormat = null,
+        RootPublicEventHost? publicEventHost = null) => ForSqliteRootFormat(options, qualificationFormat, definitions: null, publicEventHost);
     internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions,
-        StoreFormat? qualificationFormat = null) => ForSqliteRootFormat(options, qualificationFormat, definitions);
+        StoreFormat? qualificationFormat = null, RootPublicEventHost? publicEventHost = null) =>
+        ForSqliteRootFormat(options, qualificationFormat, definitions, publicEventHost);
     private static KernelDb ForSqliteRootFormat(DbContextOptions<KernelDb> options, StoreFormat? qualificationFormat,
-        SqliteAdmissionDefinitions? definitions)
+        SqliteAdmissionDefinitions? definitions, RootPublicEventHost? publicEventHost)
     {
         if (qualificationFormat == StoreFormat.SqliteRootChildrenQualification)
             return new(options, qualificationFormat.Value, RootProfiles.ChildQualification, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
@@ -293,6 +300,9 @@ public class KernelDb : DbContext
         if (qualificationFormat == StoreFormat.RootPublicEventStartsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PublicEventStartsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPublicEventHostQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PublicEventHostQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
         if (qualificationFormat == StoreFormat.RootKeyedStartsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.KeyedStartsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);

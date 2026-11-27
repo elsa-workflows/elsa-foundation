@@ -93,6 +93,9 @@ if (args is ["kernel-event-scan", var scanProvider and ("postgres" or "sqlite"),
     return await KernelAuthoredEventChecks.RunStartsAsync(scanProvider, scanFence == "in-batch", retainReceipts: true, orderedScan: true);
 if (args is ["kernel-public-event-starts", var publicEventProvider and ("postgres" or "sqlite"), var publicEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPublicStartsAsync(publicEventProvider, publicEventFence == "in-batch");
+if (args is ["kernel-public-event-host", var eventHostProvider and ("postgres" or "sqlite"),
+    var eventHostFence and ("checked" or "in-batch"), var eventHostMode and ("generic" or "protected")])
+    return await KernelAuthoredEventChecks.RunPublicEventHostAsync(eventHostProvider, eventHostFence == "in-batch", eventHostMode == "protected");
 if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunAsync(authoredEventProvider, authoredEventFence == "in-batch");
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();

@@ -68,12 +68,15 @@ public sealed class PostgresDirectRequests : IReplyTransport
             throw new ArgumentException("Event starts and held requests must use the same PostgreSQL store factory.");
     }
 
+    internal bool ProtectsRootStarts => _protectRootStart is not null;
+
     internal void RequirePublicEventBinding(Func<KernelDb> create, string actorType)
     {
         using var selected = create();
         var supportsPublicEvents = admission.SupportsPublicEvents();
         if (selected.UsesRootPublicEventStarts != supportsPublicEvents ||
-            supportsPublicEvents && (!admission.UsesDatabaseFactory(create) || _startType != actorType || _protectRootStart is not null))
+            supportsPublicEvents && (!admission.UsesDatabaseFactory(create) || _startType != actorType ||
+                ProtectsRootStarts && !selected.UsesRootPublicEventHost))
             throw new ArgumentException("Public Event requests must share the PostgreSQL store factory and actor type.");
     }
 

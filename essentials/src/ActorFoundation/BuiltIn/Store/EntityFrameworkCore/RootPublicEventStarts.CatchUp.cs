@@ -31,6 +31,7 @@ internal static partial class RootPublicEventStarts
     internal static async Task<CatchUpKey?> FindCatchUpAsync(KernelDb db, Func<FormattableString, FormattableString>? bind,
         CancellationToken token)
     {
+        if (await RootPublicEventHost.ReadAsync(db, bind, token) is { ProtectsStarts: true }) return null;
         var next = await db.Database.SqlQuery<CatchUpKey>(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/), pending AS (
                 SELECT "Tenant", "Key", "Wait", "Incarnation" AS "Registration"
@@ -48,6 +49,7 @@ internal static partial class RootPublicEventStarts
     internal static async Task<bool> CatchUpAsync(KernelDb db, CatchUpKey target, Func<FormattableString, FormattableString>? bind,
         CancellationToken token)
     {
+        if (await RootPublicEventHost.ReadAsync(db, bind, token) is { ProtectsStarts: true }) return false;
         RequireTransaction(db, bind);
         // Limit the ordinal page before testing eligibility. A receipt-only span still advances the cursor.
         var step = await db.Database.SqlQuery<CatchUpStep>(Bind($"""

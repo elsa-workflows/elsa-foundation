@@ -74,7 +74,7 @@ internal sealed partial class PostgresRootAdmission
         return result;
 
         FormattableString Bind(FormattableString query) => query.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)
-            ? BindPublicEventStarts(query, pin)
+            ? BindPublicEventStarts(db, query, pin)
             : WithAdmissionSource(query, pin, "/*event-source*/", 5,
                 """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')""");
     }
@@ -92,7 +92,7 @@ internal sealed partial class PostgresRootAdmission
         return sql =>
         {
             if (sql.Format.Contains(RootEventStarts.Source, StringComparison.Ordinal)) return BindEventStarts(sql, pin);
-            if (sql.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)) return BindPublicEventStarts(sql, pin);
+            if (sql.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)) return BindPublicEventStarts(db, sql, pin);
             return WithAdmissionSource(sql, pin, "/*event-source*/", 5,
                 """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')""");
         };

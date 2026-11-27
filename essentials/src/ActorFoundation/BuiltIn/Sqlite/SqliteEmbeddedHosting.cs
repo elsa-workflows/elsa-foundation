@@ -52,15 +52,16 @@ public static partial class SqliteEmbeddedHosting
         InstallShippedFileAsync(databasePath, cancellationToken);
 
     internal static async Task<string> InstallShippedFileAsync(string databasePath, CancellationToken cancellationToken,
-        StoreFormat? qualificationFormat = null)
+        StoreFormat? qualificationFormat = null, RootPublicEventHost? publicEventHost = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         cancellationToken.ThrowIfCancellationRequested();
+        if (publicEventHost is not null) RequireFoundationActorType(publicEventHost.ActorType);
         var path = Path.GetFullPath(databasePath);
         // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
         using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }
         using var file = await AcquireRuntimeFileAsync(path, requests: null, cancellationToken);
-        await using var db = KernelDb.ForSqliteRootShipped(file.Options, qualificationFormat);
+        await using var db = KernelDb.ForSqliteRootShipped(file.Options, qualificationFormat, publicEventHost);
         await EfStore.InstallSqliteShippedAsync(db, partitions: 1, cancellationToken);
         await UseWalAsync(db, cancellationToken);
         return file.Path;
@@ -121,7 +122,7 @@ public static partial class SqliteEmbeddedHosting
             if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
             var shipped = rootType is not null;
             KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
-                qualificationFormat: requests?.QualificationFormat) : new(file.Options);
+                qualificationFormat: requests?.QualificationFormat, publicEventHost: requests?.PublicEventHost) : new(file.Options);
 
             int partitions;
             bool selfSends, publicEventMaintenance;

@@ -299,6 +299,7 @@ public static partial class PostgresPreviewHosting
             requests?.RequireKeyBinding(create, actorType, takesKeyedRequests);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
+            await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actorType, requests?.ProtectsRootStarts == true), cancellationToken);
             usesPressure = db.UsesRootDueBacklog;
         }
         if (usesPressure && pressure is null)
@@ -335,6 +336,8 @@ public static partial class PostgresPreviewHosting
         using var db = create();
         if (protectRootStart is not null && (!db.UsesRootReplyProtocol || !db.UsesRootPreparedStarts))
             throw new NotSupportedException("Held root protection requires an installed PostgreSQL prepared-start profile.");
+        if (db.UsesRootPublicEventHost && db.PublicEventHost != new RootPublicEventHost(actorType, protectRootStart is not null))
+            throw new ArgumentException("Held requests must match the public Event host actor type and root start protection.");
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
         return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),
             node, actorType, protectRootStart) { DeduplicationWindow = window };
@@ -404,6 +407,8 @@ public static partial class PostgresPreviewHosting
                     : "Only a store with held replies answers held callers.");
             (replies as PostgresDirectRequests)?.RequireKeyBinding(create, actor.Type, db.UsesRootKeyedStarts);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+            await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actor.Type, (replies as PostgresDirectRequests)?.ProtectsRootStarts == true),
+                cancellationToken);
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
             if (db.UsesRootScheduleControls) await RootScheduleControls.RequirePostgresDefinitionsAsync(db, cancellationToken);

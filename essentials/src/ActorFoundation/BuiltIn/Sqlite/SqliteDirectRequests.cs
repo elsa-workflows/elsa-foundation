@@ -50,6 +50,8 @@ public static partial class SqliteEmbeddedHosting
         internal TimeSpan DeduplicationWindow { get; }
         internal RootAdmissionPressure? Pressure { get; }
         internal StoreFormat? QualificationFormat { get; }
+        internal RootPublicEventHost? PublicEventHost => QualificationFormat == StoreFormat.RootPublicEventHostQualification
+            ? new(actorType, protectRootStart is not null) : null;
 
         internal void RequireBinding(string databasePath, string configuredType, string? owner = null)
         {
@@ -161,7 +163,7 @@ public static partial class SqliteEmbeddedHosting
                   format == StoreFormat.RootAuthoredEventsQualification || format == StoreFormat.RootEventStartsQualification ||
                   format == StoreFormat.RootEventStartReceiptsQualification || format == StoreFormat.RootEventStartScanQualification ||
                   format == StoreFormat.RootDirectTestRunQualification || format == StoreFormat.RootSharedActivationQualification ||
-                  format == StoreFormat.RootPublicEventStartsQualification ||
+                  format == StoreFormat.RootPublicEventStartsQualification || format == StoreFormat.RootPublicEventHostQualification ||
                   format == StoreFormat.RootKeyedStartsQualification
                 : TakesHttpWaits;
 
@@ -289,7 +291,7 @@ public static partial class SqliteEmbeddedHosting
             }
 
             private SqliteRootAdmission ForFile(FileLease file) =>
-                CreateAdmission(file, window, owner.Pressure, owner.QualificationFormat);
+                CreateAdmission(file, window, owner.Pressure, owner.QualificationFormat, owner.PublicEventHost);
 
             private Task<T> WriteAsync<T>(string tenant, RootAdmissionKind kind,
                 Func<SqliteRootAdmission, RootAdmissionPressure.Attempt?, CancellationToken, Task<T>> admit, CancellationToken token) =>

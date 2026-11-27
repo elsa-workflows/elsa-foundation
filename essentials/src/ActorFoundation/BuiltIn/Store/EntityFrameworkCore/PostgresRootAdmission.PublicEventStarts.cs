@@ -48,7 +48,7 @@ internal sealed partial class PostgresRootAdmission
         await transaction.CommitAsync(token);
         return changed;
 
-        FormattableString Bind(FormattableString query) => BindPublicEventStarts(query, pin);
+        FormattableString Bind(FormattableString query) => BindPublicEventStarts(db, query, pin);
     }
 
     internal async Task<Contract.Admission> PublishPublicEventAsync(string tenant, string key, string id, string? payload,
@@ -86,7 +86,7 @@ internal sealed partial class PostgresRootAdmission
         return result;
 
         FormattableString Bind(FormattableString query) => query.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)
-            ? BindPublicEventStarts(query, pin)
+            ? BindPublicEventStarts(db, query, pin)
             : WithAdmissionSource(query, pin, "/*event-source*/", 5,
                 """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')""");
     }
@@ -102,22 +102,40 @@ internal sealed partial class PostgresRootAdmission
         var qualified = tenant + "_" + key;
         await RootEventAdmission.LockPostgresKeysAsync(db, [qualified], token);
         var now = await RootEventAdmission.ReadPostgresClockAsync(db, token);
-        await RootPublicEventStarts.SetAsync(db, tenant, qualified, wait, spec, now, sql => BindPublicEventStarts(sql, pin), token);
+        await RootPublicEventStarts.SetAsync(db, tenant, qualified, wait, spec, now, sql => BindPublicEventStarts(db, sql, pin), token);
         await transaction.CommitAsync(token);
     }
 
-    private static Task LockPublicEventStartTablesAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync("""
+    internal static async Task RequirePublicEventHostAsync(KernelDb db, RootPublicEventHost host, CancellationToken token)
+    {
+        if (!db.UsesRootPublicEventHost) return;
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
+        var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
+            throw new StoreFormatException("The public Event host requires the pinned PostgreSQL store.");
+        await LockPublicEventStartTablesAsync(db, token);
+        await RootPublicEventHost.RequireAsync(db, host, sql => BindPublicEventStarts(db, sql, pin), token);
+        await transaction.CommitAsync(token);
+    }
+
+    private static Task LockPublicEventStartTablesAsync(KernelDb db, CancellationToken token)
+    {
+        const string tables = """
             LOCK TABLE ONLY "FoundationPublicEventStarts", ONLY "FoundationPublicEventTargets", ONLY "FoundationPublicEventPublications",
                 ONLY "FoundationPublicEventHorizons", ONLY "FoundationPublicEventLiveWaits", ONLY "FoundationPublicEventLiveReceipts",
-                ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Instances", ONLY "Subscriptions", ONLY "Messages" IN ACCESS SHARE MODE
-            """, token);
+                ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Instances", ONLY "Subscriptions", ONLY "Messages"
+            """;
+        var host = db.UsesRootPublicEventHost ? """, ONLY "FoundationPublicEventHost" """ : "";
+        return db.Database.ExecuteSqlRawAsync(tables + host + " IN ACCESS SHARE MODE", token);
+    }
 
-    private static FormattableString BindPublicEventStarts(FormattableString sql, PinnedRootSource pin) =>
-        WithAdmissionSource(sql, pin, RootPublicEventStarts.Source, 11,
-            """
+    private static FormattableString BindPublicEventStarts(KernelDb db, FormattableString sql, PinnedRootSource pin)
+    {
+        const string tables = """
             ('"FoundationPublicEventStarts"'), ('"FoundationPublicEventTargets"'), ('"FoundationPublicEventPublications"'), ('"FoundationPublicEventHorizons"'),
             ('"FoundationPublicEventLiveWaits"'), ('"FoundationPublicEventLiveReceipts"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
             ('"Instances"'), ('"Subscriptions"'), ('"Messages"')
-            """, requirePermanentDirectRelations: true);
+            """;
+        return WithAdmissionSource(sql, pin, RootPublicEventStarts.Source, db.UsesRootPublicEventHost ? 12 : 11,
+            db.UsesRootPublicEventHost ? tables + """ , ('"FoundationPublicEventHost"') """ : tables, requirePermanentDirectRelations: true);
+    }
 }
