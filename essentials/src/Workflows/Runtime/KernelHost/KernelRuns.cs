@@ -36,6 +36,16 @@ public sealed class KernelRuns
         return (false, (view, run));
     }
 
+    /// <summary>Reads committed output from this exact end in the host's tenant.</summary>
+    public async ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(ActorRef actor, long endedAt, bool includeValues,
+        CancellationToken cancellationToken = default)
+    {
+        var reads = await _reads(cancellationToken);
+        return reads is IActorTerminalOutputReads output
+            ? await output.ReadTerminalOutputAsync(Tenant, actor, endedAt, includeValues, cancellationToken)
+            : null;
+    }
+
     /// <summary>Reads a committed journal page for this run in the host's tenant.</summary>
     public async ValueTask<Page<JournalEntry>> TailAsync(ActorRef actor, PageToken? from = null, CancellationToken cancellationToken = default)
     {

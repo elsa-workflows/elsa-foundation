@@ -360,6 +360,7 @@ public sealed partial class EfStore
         foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
         foreach (var projector in SqliteRootProjectors()) yield return projector;
         foreach (var history in SqliteRootWorkflowHistoryDefinitions()) yield return history;
+        if (db.UsesRootTerminalOutput) yield return SqliteRootTerminalOutputDefinition();
         foreach (var outcome in SqliteRootOutcomes(db)) yield return outcome;
     }
 

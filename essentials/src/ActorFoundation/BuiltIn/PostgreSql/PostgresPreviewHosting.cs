@@ -24,6 +24,19 @@ public static class PostgresPreviewHosting
     /// </summary>
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
 
+    /// <summary>Uses the dedicated preview store format for qualifying retained terminal output.</summary>
+    public static KernelDb CreateTerminalOutputQualificationContext(DbContextOptions<KernelDb> options, bool withTimers = false) =>
+        KernelDb.ForRootTerminalOutputQualification(options, format: withTimers
+            ? StoreFormat.RootS6TerminalOutputQualification : StoreFormat.RootTerminalOutputQualification);
+
+    /// <summary>Installs or verifies a database dedicated to terminal output qualification.</summary>
+    public static Task InstallTerminalOutputQualificationAsync(DbContextOptions<KernelDb> options, bool withTimers = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreateTerminalOutputQualificationContext(options, withTimers), cancellationToken);
+    }
+
     /// <summary>
     /// Readies a dedicated database for the shipped format (<see cref="CreateShippedContext"/>), for a single-process host
     /// such as the Workbench to call before its node starts. An empty database is installed. One whose store marker is the
@@ -33,11 +46,15 @@ public static class PostgresPreviewHosting
     /// multi-node production host keeps installation an explicit setup step, run while no node is.
     /// </summary>
     /// <exception cref="InvalidOperationException">The database holds something other than the shipped format.</exception>
-    public static async Task InstallShippedAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
+    public static Task InstallShippedAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
-        KernelDb Open() => CreateShippedContext(options);
-        await using var guard = Open();
+        return InstallPreviewFormatAsync(() => CreateShippedContext(options), cancellationToken);
+    }
+
+    private static async Task InstallPreviewFormatAsync(Func<KernelDb> open, CancellationToken cancellationToken)
+    {
+        await using var guard = open();
         if (!guard.Database.IsNpgsql())
             throw new NotSupportedException("The shipped Core Preview format installs on PostgreSQL.");
         // One install at a time: a session lock held on its own connection around the whole check and install. Its key is
@@ -46,7 +63,7 @@ public static class PostgresPreviewHosting
         await guard.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(48602345, 2)", cancellationToken);
         try
         {
-            await using (var db = Open())
+            await using (var db = open())
             {
                 if (await db.Database.SqlQueryRaw<bool>("""SELECT pg_catalog.current_schema() IS NULL AS "Value" """).SingleAsync(cancellationToken))
                     throw new InvalidOperationException(
@@ -71,7 +88,7 @@ public static class PostgresPreviewHosting
             }
             // Both steps are idempotent: on a store already whole they change nothing, and on one a cut-short first install
             // left (its marker seeded, the rest not yet) they complete it.
-            var store = new EfStore(Open, postgres: true);
+            var store = new EfStore(open, postgres: true);
             await store.CreateAsync();
             await store.InstallPreviewRootSchemaAsync(cancellationToken);
         }
@@ -237,10 +254,12 @@ public static class PostgresPreviewHosting
 
         int partitions;
         bool nativeJobs, selfSends;
+        int terminalOutputLimit;
         await using (var db = create())
         {
             nativeJobs = db.UsesRootJobProtocol;
             selfSends = db.UsesRootSelfProtocol;
+            terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("Hosting requires a PostgreSQL Core Preview format.");
             if (db.UsesRootReplyProtocol != (replies is not null))
@@ -261,7 +280,7 @@ public static class PostgresPreviewHosting
         var watched = watchdog.Watch(store);
         var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
             rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null,
-            rootHeldReplies: replies is not null);
+            rootHeldReplies: replies is not null, rootTerminalOutputLimit: terminalOutputLimit);
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;

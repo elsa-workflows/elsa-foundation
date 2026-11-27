@@ -9,7 +9,7 @@ namespace Kernel.Foundation.Postgres;
 /// ordinary sends to exact root references, and the reads of those roots. With <see cref="PostgresDirectRequests"/>, on a
 /// store with held replies, a request starts a root or sends to one and holds its caller until the owner answers.
 /// </summary>
-public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads
+public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads, Contract.IActorTerminalOutputReads
 {
     private readonly PostgresRootAdmission admission;
     private readonly PostgresRootReads reads;
@@ -58,6 +58,10 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         }
         return await ingress.SendAsync(scope, target, id, kind, payload, options, cancellationToken);
     }
+
+    ValueTask<Contract.ActorTerminalOutput?> Contract.IActorTerminalOutputReads.ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        long endedAt, bool includeValues, CancellationToken cancellationToken) =>
+        reads.ReadTerminalOutputAsync(scope, actor, endedAt, includeValues, cancellationToken);
 
     public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         CancellationToken cancellationToken = default) => reads.GetAsync(scope, actor, cancellationToken);

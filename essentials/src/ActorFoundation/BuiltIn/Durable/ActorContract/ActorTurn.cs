@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Text;
+using System.Text.Json.Nodes;
 using Kernel.Runtime;
 using Contract = Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
@@ -15,6 +16,7 @@ internal sealed partial class ActorAdapter
         private readonly Func<string, string>? _rootJobHandle;
         private readonly bool _rootTimedJobIssuance;
         private readonly RootValueReader? _readRootValue;
+        private readonly int _terminalOutputLimit;
         private List<Durable.FoundationValue>? _values;
         private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
@@ -32,13 +34,15 @@ internal sealed partial class ActorAdapter
         private bool _migrated;
 
         public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
-            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance, RootValueReader? readRootValue)
+            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance, RootValueReader? readRootValue,
+            int terminalOutputLimit)
         {
             _inMemory = store;
             _issueSelf = issueSelf;
             _rootJobHandle = rootJobHandle;
             _rootTimedJobIssuance = rootTimedJobIssuance;
             _readRootValue = readRootValue;
+            _terminalOutputLimit = terminalOutputLimit;
             _input = input;
             Now = input.Services.Now;
             _turn = new(input, foundation: true);
@@ -254,6 +258,8 @@ internal sealed partial class ActorAdapter
             {
                 if (row.Parent is not null) _turn.AddTerminalNotice(Notice(row, _output is null ? null : Durable.Json.Write(_output), final: true));
                 outcome.Unsubscribe = true;
+                if (_terminalOutputLimit > 0 && _status == Contract.ActorStatus.Finished && _output is JsonObject outputs)
+                    outcome.FoundationTerminalOutput = TerminalOutputEncoding.Capture(outputs, _terminalOutputLimit);
             }
             if (_input.Row is null) _entries.Insert(0, "start");
             if (ended) _entries.Add("end");
