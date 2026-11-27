@@ -163,7 +163,7 @@ public static partial class SqliteEmbeddedHosting
                   format == StoreFormat.RootEventStartReceiptsQualification || format == StoreFormat.RootEventStartScanQualification ||
                   format == StoreFormat.RootDirectTestRunQualification || format == StoreFormat.RootSharedActivationQualification ||
                   format == StoreFormat.RootPublicEventStartsQualification ||
-                  format == StoreFormat.RootKeyedStartsQualification
+                  format == StoreFormat.RootKeyedStartsQualification || format == StoreFormat.RootEphemeralTestRunQualification
                 : TakesHttpWaits;
 
             public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>

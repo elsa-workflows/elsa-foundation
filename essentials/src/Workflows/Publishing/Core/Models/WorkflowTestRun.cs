@@ -36,5 +36,6 @@ public enum WorkflowTestRunStatus
     DispatchDeferred,
     Prepared,
     Stopped,
-    StopRequested
+    StopRequested,
+    CompletedWithoutRecord
 }

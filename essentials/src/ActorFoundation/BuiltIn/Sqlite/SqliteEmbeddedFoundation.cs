@@ -48,7 +48,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||
-        qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
+        qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat == StoreFormat.RootEphemeralTestRunQualification ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
             throw new InvalidOperationException("The selected SQLite profile does not support Event starts.");
@@ -96,6 +96,14 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootDirectTestRunQualification, protectRootStart);
     }
 
+    /// <summary>Binds the private SQLite Ephemeral Test Run format with its executable protection.</summary>
+    public static SqliteEmbeddedFoundation ForEphemeralTestRunQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootEphemeralTestRunQualification, protectRootStart);
+    }
+
     /// <summary>Binds the private SQLite inline start qualification profile with its executable protection.</summary>
     public static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
         ProtectRootStartAsync protectRootStart)
@@ -119,6 +127,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
         qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
         qualificationFormat == StoreFormat.RootDirectTestRunQualification ||
+        qualificationFormat == StoreFormat.RootEphemeralTestRunQualification ||
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||

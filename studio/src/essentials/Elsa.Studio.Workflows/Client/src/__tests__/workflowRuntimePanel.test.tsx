@@ -42,6 +42,13 @@ describe("Runtime panel information hierarchy", () => {
     expect(container.querySelector(".wf-runtime-outcome")?.textContent).not.toContain("Waiting");
   });
 
+  it("reports an Ephemeral completion without exposing an execution link", () => {
+    flushSync(() => root.render(<WorkflowRuntimePanel testRun={{ ...receipt, status: "CompletedWithoutRecord", workflowExecutionId: null }} onOpenRun={() => {}} />));
+    expect(container.querySelector(".studio-status-chip")?.textContent).toBe("Completed");
+    expect(container.querySelector(".wf-runtime-outcome")?.textContent).toContain("completed without an execution record");
+    expect([...container.querySelectorAll("button")].map(button => button.textContent)).not.toContain("Open run");
+  });
+
   it.each([["DispatchDeferred", "Deferred"], ["DispatchRejected", "Rejected"], ["FutureState", "FutureState"]])("does not label %s as accepted", (status, expected) => {
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={{ ...receipt, status, commandDispatchStatus: null }} onOpenRun={() => {}} />));
     expect(container.querySelector(".studio-status-chip")?.textContent).toBe(expected);

@@ -504,6 +504,38 @@ public sealed class EfWorkflowAlterationAndScopeTests
         await using var other = db.Open("tenant-b"); Assert.Null(await other.ScopeStore.FindAsync(scope.ScopeId));
     }
 
+    [Theory]
+    [InlineData(WorkflowTestRunInlineState.CompletedWithoutRecord)]
+    [InlineData(WorkflowTestRunInlineState.Refused)]
+    [InlineData(WorkflowTestRunInlineState.RateLimited)]
+    public async Task Inline_test_scope_keeps_an_exact_no_actor_receipt_after_close(WorkflowTestRunInlineState outcome)
+    {
+        await using var database = await Database.CreateAsync();
+        var now = new DateTimeOffset(2026, 11, 27, 10, 0, 0, TimeSpan.Zero);
+        var scope = new WorkflowTestScope("inline-test-scope", now.AddMinutes(1), "tenant-a", new("partition"));
+        await using (var writer = database.Open("tenant-a"))
+        {
+            await writer.ScopeStore.CreateAsync(scope, now);
+            Assert.False(await writer.ScopeStore.BeginInlineStartAsync(scope, () => scope.ExpiresAt));
+            Assert.True(await writer.ScopeStore.BeginInlineStartAsync(scope, () => now));
+            Assert.False(await writer.ScopeStore.BeginInlineStartAsync(scope, () => now));
+            await writer.ScopeStore.CloseAsync(new(scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, now.AddSeconds(1)));
+            Assert.True(await writer.ScopeStore.SettleInlineStartAsync(scope, outcome));
+            var conflicting = outcome == WorkflowTestRunInlineState.CompletedWithoutRecord
+                ? WorkflowTestRunInlineState.Refused : WorkflowTestRunInlineState.CompletedWithoutRecord;
+            Assert.False(await writer.ScopeStore.SettleInlineStartAsync(scope, conflicting));
+            await writer.ScopeStore.CompleteAsync(scope.ScopeId, now.AddSeconds(2));
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        var restored = Assert.IsType<WorkflowTestScopeRecord>(await restarted.ScopeStore.FindAsync(scope.ScopeId));
+        Assert.Equal(WorkflowTestScopeState.Closed, restored.State);
+        Assert.Equal(outcome, restored.InlineStart);
+        Assert.Null(restored.IsolatedActor);
+        await using var other = database.Open("tenant-b");
+        Assert.Null(await other.ScopeStore.FindAsync(scope.ScopeId));
+    }
+
     [Fact]
     public async Task Scope_replay_conflict_and_stale_admission_are_durable()
     {

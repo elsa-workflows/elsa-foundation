@@ -284,7 +284,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
               <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
             </Suspense>
           ) : null}
-          {!rejected && context && onRunViewUpdated && "view" in testRun ? (
+          {!rejected && view.status !== "CompletedWithoutRecord" && context && onRunViewUpdated && "view" in testRun ? (
             <LazyWorkflowTestRunControls
               context={context}
               testRun={runState}
@@ -333,6 +333,7 @@ function runtimeSummary(view: WorkflowTestRunView, observation: TestRunObservati
   if (!terminal && (view.status === "StopRequested" || view.status === "Stopped" && execution))
     return { status: "Stopping", description: "Stop requested. Waiting for runtime confirmation." };
   if (view.status === "Stopped" && !execution) return { status: "Stopped", description: "The test run was stopped." };
+  if (view.status === "CompletedWithoutRecord") return { status: "Completed", description: "Test run completed without an execution record." };
   if (execution) {
     const status = ["Completed", "Faulted", "Cancelled"].includes(execution.status) ? execution.status
       : observation?.waits.length || execution.status === "Suspended" ? "Waiting" : execution.status;

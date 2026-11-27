@@ -10,18 +10,30 @@ public sealed partial class EfStore
     private sealed record InlineRootSource(byte[] Key, (uint Marker, uint Namespace, long Table)? Postgres,
         Func<FormattableString, FormattableString>? Bind);
     private sealed record InlineStarts(Contract.BoundScope Scope, byte[] Key, (uint Marker, uint Namespace, long Table)? Postgres,
-        Func<StartSpec, object, bool> Validate, ProtectRootStartAsync Protect, TimeSpan ReceiptWindow);
+        Func<StartSpec, object, bool> Validate, ProtectRootStartAsync Protect, TimeSpan ReceiptWindow,
+        Contract.BoundScope? AdditionalScope, Func<Contract.ActorStatus, bool>? AllowsAdditionalWriteFreeCompletion)
+    {
+        internal Contract.BoundScope? ScopeFor(string tenant) => tenant == Scope.Tenant ? Scope :
+            tenant == AdditionalScope?.Tenant ? AdditionalScope : null;
+
+        internal bool AllowsWriteFreeCompletion(string tenant, Contract.ActorStatus status) =>
+            tenant != AdditionalScope?.Tenant || AllowsAdditionalWriteFreeCompletion!(status);
+    }
     private InlineStarts? _inlineStarts;
 
     internal async Task EnableInlinePromotionAsync(Contract.BoundScope scope, Func<StartSpec, object, bool> validate,
-        ProtectRootStartAsync protect, TimeSpan receiptWindow, CancellationToken token)
+        ProtectRootStartAsync protect, TimeSpan receiptWindow, CancellationToken token,
+        Contract.BoundScope? additionalScope = null, Func<Contract.ActorStatus, bool>? allowsAdditionalWriteFreeCompletion = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(validate);
         ArgumentNullException.ThrowIfNull(protect);
         ArgumentOutOfRangeException.ThrowIfLessThan(receiptWindow, TimeSpan.FromMilliseconds(1));
+        if ((additionalScope is null) != (allowsAdditionalWriteFreeCompletion is null) || additionalScope?.Tenant == scope.Tenant)
+            throw new ArgumentException("An additional inline tenant requires its own completion policy.", nameof(additionalScope));
         await using var db = create();
-        if (!db.UsesRootInlinePromotion || !OwnedCommit)
+        if (!db.UsesRootInlinePromotion || !OwnedCommit ||
+            additionalScope is not null && db.RequiredFormat != StoreFormat.RootEphemeralTestRunQualification)
             throw new NotSupportedException("Inline starts require the private owned promotion profile.");
         await using var transaction = await (Engine?.BeginAsync(db, token) ?? db.Database.BeginTransactionAsync(token));
         var origin = await PinInlineRootSourceAsync(db, token);
@@ -30,7 +42,8 @@ public sealed partial class EfStore
         {
             if (_ordinaryRoots is not null || _inlineStarts is not null)
                 throw new InvalidOperationException("Configure inline starts once before binding the worker.");
-            _inlineStarts = new(scope, origin.Key, origin.Postgres, validate, protect, receiptWindow);
+            _inlineStarts = new(scope, origin.Key, origin.Postgres, validate, protect, receiptWindow,
+                additionalScope, allowsAdditionalWriteFreeCompletion);
         }
     }
 
@@ -52,10 +65,11 @@ public sealed partial class EfStore
     }
 
     internal (Contract.ActorRef Reference, Task<InlineRootResult> Outcome)? QueueInlineRoot(Worker worker, string operationId,
-        StartSpec start, object material, Action<InstanceRef>? wake)
+        StartSpec start, object material, Action<InstanceRef>? wake, Contract.BoundScope? selectedScope = null)
     {
         if (_inlineStarts is not { } inline || !ReferenceEquals(_ordinaryRoots?.InlineIssuer, inline)) return null;
-        var scope = inline.Scope;
+        var scope = selectedScope ?? inline.Scope;
+        if (!ReferenceEquals(inline.ScopeFor(scope.Tenant), scope)) return null;
         var name = scope.Tenant + "_" + Guid.NewGuid().ToString("N");
         var operation = RootPreparedStarts.InlineOperation(operationId);
         var digest = FoundationRootCreator.OperationDigest(operation);
