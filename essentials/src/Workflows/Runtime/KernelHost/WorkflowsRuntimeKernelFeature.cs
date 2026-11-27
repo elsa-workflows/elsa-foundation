@@ -76,8 +76,11 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
         // A singleton, as the default it replaces is: it is stateless, so a consumer of any lifetime resolves it.
         services.AddSingleton<IWorkflowTriggerBindingExtractor, KernelTriggerBindingExtractor>();
 
-        DropRouteTableObserver(services);
-        UnmountHttpEndpointMiddleware(services);
+        if (!services.Any(descriptor => !descriptor.IsKeyedService && descriptor.ServiceType == typeof(KernelWorkflowHttpActivities)))
+        {
+            DropRouteTableObserver(services);
+            UnmountHttpEndpointMiddleware(services);
+        }
 
         ReplaceDefault<IWorkflowActivationCoordinator>(services, DefaultCoordinatorTypeName);
         services.AddScoped<IWorkflowActivationCoordinator>(provider => new KernelActivationCoordinator(

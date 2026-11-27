@@ -47,14 +47,26 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.TryAddSingleton<LegacyWorkflowHttpRouting>();
+        ConfigureSharedServices(services, FaultHandlerType, AuthorizationHandlerType,
+            RouteTableConvergenceIntervalSeconds, RouteTableConvergenceMaxBackoffSeconds);
+        services.AddScoped(typeof(IHttpEndpointRoutesResolver), RouteResolverType.GetLoadedType());
+
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, RouteTableTriggerIndexObserver>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IBookmarkLifecycleObserver, RouteTableBookmarkObserver>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowTriggerIndexValidator, HttpEndpointRoutingUniquenessValidator>());
+    }
+
+    internal static void ConfigureSharedServices(IServiceCollection services, string faultHandlerType, string authorizationHandlerType,
+        double intervalSeconds, double maxBackoffSeconds)
+    {
         // AuthenticationBasedHttpEndpointAuthorizationHandler needs IAuthorizationService. Hosts that enable
         // this feature without FoundationIdentityAbstractions still have to resolve that handler when the
         // standalone HTTP trigger middleware is constructed.
         services.AddAuthorization();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IIngressReservationPolicy, HttpIngressReservationPolicy>());
-        RegisterFaultHandler(services);
-        RegisterAuthorizationHandler(services);
-        RegisterRouteResolver(services);
+        services.AddScoped(typeof(IHttpEndpointFaultHandler), faultHandlerType.GetLoadedType());
+        services.AddScoped(typeof(IHttpEndpointAuthorizationHandler), authorizationHandlerType.GetLoadedType());
 
         // The single serialization point for every route-table refresh (startup + publish observer + bookmark
         // observer): a singleton owning a SemaphoreSlim(1,1) that opens a fresh scope per refresh, so a stale read
@@ -69,29 +81,14 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         // Converge with changes made on other nodes (#2190): the observers below fire only where the change was made,
         // so every node checks the durable index's stimulus identities on an interval and rebuilds when they moved.
         // The settings are validated here so a bad value fails the shell, not the first tick.
-        var interval = PositiveSeconds(RouteTableConvergenceIntervalSeconds, nameof(RouteTableConvergenceIntervalSeconds));
-        var maxBackoffInterval = PositiveSeconds(RouteTableConvergenceMaxBackoffSeconds, nameof(RouteTableConvergenceMaxBackoffSeconds));
+        var interval = PositiveSeconds(intervalSeconds, nameof(RouteTableConvergenceIntervalSeconds));
+        var maxBackoffInterval = PositiveSeconds(maxBackoffSeconds, nameof(RouteTableConvergenceMaxBackoffSeconds));
         services.Configure<HttpEndpointRouteTableConvergenceOptions>(options =>
         {
             options.Interval = interval;
             options.MaxBackoffInterval = maxBackoffInterval;
         });
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, HttpEndpointRouteTableConvergencePumpTask>());
-
-        // Keep the route table fresh on every publish: the trigger indexer notifies this observer after it
-        // rewrites an artifact's bindings. Contribution seam (fan-in), so TryAddEnumerable.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, RouteTableTriggerIndexObserver>());
-
-        // Keep the route table fresh as instances suspend on / resume from mid-flow endpoints: the
-        // bookmark lifecycle notifier calls this observer after a bookmark create/consume commits, and it re-projects
-        // the whole table (trigger bindings ∪ waiting bookmarks). Contribution seam (fan-in), so TryAddEnumerable.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IBookmarkLifecycleObserver, RouteTableBookmarkObserver>());
-
-        // Publish-time (template, method) uniqueness (issue #592 item 2): validates the extracted binding set on
-        // the indexer's PRE-write seam so a cross-definition conflict fails the second publish with the durable
-        // index untouched. HTTP-specific by design — shared stimulus identity is legitimate fan-out for other
-        // stimulus types. Contribution seam (fan-in), so TryAddEnumerable.
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowTriggerIndexValidator, HttpEndpointRoutingUniquenessValidator>());
     }
 
     // The one validation of the convergence settings: positive, finite and representable as a TimeSpan. NaN and the
@@ -101,21 +98,6 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
             ? TimeSpan.FromSeconds(seconds)
             : throw new ArgumentOutOfRangeException(setting, seconds, $"{setting} must be a positive, finite number of seconds.");
 
-    private void RegisterFaultHandler(IServiceCollection services)
-    {
-        var type = FaultHandlerType.GetLoadedType();
-        services.AddScoped(typeof(IHttpEndpointFaultHandler), type);
-    }
-
-    private void RegisterAuthorizationHandler(IServiceCollection services)
-    {
-        var type = AuthorizationHandlerType.GetLoadedType();
-        services.AddScoped(typeof(IHttpEndpointAuthorizationHandler), type);
-    }
-
-    private void RegisterRouteResolver(IServiceCollection services)
-    {
-        var type = RouteResolverType.GetLoadedType();
-        services.AddScoped(typeof(IHttpEndpointRoutesResolver), type);
-    }
 }
+
+internal sealed class LegacyWorkflowHttpRouting;

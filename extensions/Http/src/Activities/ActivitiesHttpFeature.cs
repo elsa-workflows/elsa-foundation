@@ -69,15 +69,21 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
 
     public void ConfigureServices(IServiceCollection services)
     {
+        ConfigureSharedServices(services, BasePath, SyncRequestTimeout);
+        services.AddScoped<HttpEndpointMiddleware>();
+    }
+
+    internal static void ConfigureSharedServices(IServiceCollection services, string basePath, TimeSpan syncRequestTimeout)
+    {
         services.AddHttpContextAccessor();
         services.TryAddScoped<HttpTriggerSourceContext>();
         services.TryAddScoped<IStandaloneTriggerSourceContext<StandaloneHttpTriggerSource>>(provider => provider.GetRequiredService<HttpTriggerSourceContext>());
         services.AddStandaloneTriggerIngress<StandaloneHttpTriggerSource>(StandaloneHttpTriggerSource.Descriptor);
         services.TryAddScoped<StandaloneHttpTriggerMiddleware>();
         services.AddApiCapabilitySource<HttpWorkflowEndpointsCapabilitySource>();
-        services.Configure<HttpEndpointOptions>(options => options.BasePath = BasePath);
-        services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = SyncRequestTimeout);
-        services.Configure<HttpRoutePublicationOptions>(options => options.BasePath = BasePath);
+        services.Configure<HttpEndpointOptions>(options => options.BasePath = basePath);
+        services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = syncRequestTimeout);
+        services.Configure<HttpRoutePublicationOptions>(options => options.BasePath = basePath);
         services.TryAddSingleton(provider =>
         {
             var options = provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
@@ -119,10 +125,6 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, HttpEndpointTriggerStimulusProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunTriggerDriver, HttpTestRunDriver>());
 
-        // The inbound request middleware is resolved from DI per request (IMiddleware) so it can take the scoped
-        // stimulus router; mounted into the shell pipeline by UseMiddleware below. CShells guarantees an
-        // IMiddlewareFactory in the shell container, so only the middleware itself needs registering.
-        services.AddScoped<HttpEndpointMiddleware>();
         services.AddScoped<HttpTestRunIngressMiddleware>();
 
         // Request-owned synchronous response services. The activity returns a typed instruction inside its
@@ -147,8 +149,13 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     /// </summary>
     public void UseMiddleware(IApplicationBuilder app, Microsoft.Extensions.Hosting.IHostEnvironment? environment)
     {
+        UseSharedMiddleware(app);
+        app.UseMiddleware<HttpEndpointMiddleware>();
+    }
+
+    internal static void UseSharedMiddleware(IApplicationBuilder app)
+    {
         app.UseMiddleware<HttpTestRunIngressMiddleware>();
         app.UseMiddleware<StandaloneHttpTriggerMiddleware>();
-        app.UseMiddleware<HttpEndpointMiddleware>();
     }
 }
