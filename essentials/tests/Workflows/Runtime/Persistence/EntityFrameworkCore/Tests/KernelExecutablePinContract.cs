@@ -26,6 +26,8 @@ internal static class KernelExecutablePinContract
         var clock = new FakeTimeProvider(now);
         var services = new ServiceCollection();
         services.AddLogging();
+        var supplementalRoots = new SupplementalScheduleRoots();
+        services.AddSingleton<IRuntimeKernelScheduleRetentionRoots>(supplementalRoots);
         services.AddSingleton<TimeProvider>(clock);
         services.AddSingleton<IPersistenceAccessContextAccessor>(new Access(tenant));
         services.AddWorkflowRuntime();
@@ -93,7 +95,7 @@ internal static class KernelExecutablePinContract
         await material.SaveAsync(manualOrphan);
         var servicesForCollection = reopened.ServiceProvider;
         var manualCollector = new WorkflowExecutableReferenceGarbageCollector(
-            servicesForCollection.GetRequiredService<IWorkflowExecutableStore>(),
+            new OpaqueExecutableDecorator(servicesForCollection.GetRequiredService<IWorkflowExecutableStore>()),
             servicesForCollection.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
             servicesForCollection.GetRequiredService<IWorkflowExecutionStateStore>(),
             Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
@@ -102,6 +104,20 @@ internal static class KernelExecutablePinContract
         Assert.Null(await material.FindAsync(manualOrphan.Identity.ArtifactId));
         Assert.NotNull(await material.FindAsync(selected.Identity.ArtifactId));
         Assert.NotNull(await material.FindAsync(dependency.Identity.ArtifactId));
+
+        var scheduled = Artifact("supplemental-schedule-root");
+        await material.SaveAsync(scheduled);
+        supplementalRoots.ArtifactId = scheduled.Identity.ArtifactId;
+        Assert.Equal(0, (await collector.SweepAsync()).DeletedArtifactCount);
+        Assert.NotNull(await material.FindAsync(scheduled.Identity.ArtifactId));
+        supplementalRoots.ArtifactId = null;
+        Assert.Equal(1, (await collector.SweepAsync()).DeletedArtifactCount);
+        Assert.Null(await material.FindAsync(scheduled.Identity.ArtifactId));
+
+        await db.KernelExecutablePins.ExecuteUpdateAsync(rows => rows.SetProperty(row => row.ScopeKeyHash, new string('A', 64)));
+        await Assert.ThrowsAsync<InvalidDataException>(() => roots.ListPinnedExecutableArtifactIdsAsync().AsTask());
+        var exactScopeHash = EfRuntimeOperationalStoreSupport.Hash(tenant.Value);
+        await db.KernelExecutablePins.ExecuteUpdateAsync(rows => rows.SetProperty(row => row.ScopeKeyHash, exactScopeHash));
 
         Assert.False(await roots.TryReleaseAsync(first, (_, _) => ValueTask.FromResult(RuntimeKernelExecutablePinProof.Unresolved)));
         Assert.False(await roots.TryReleaseAsync(first, (_, _) => throw new TimeoutException()));
@@ -194,6 +210,16 @@ internal static class KernelExecutablePinContract
                 await beforeLease(cancellationToken);
             return await base.TryAcquireRootWriteLeaseAsync(artifactId, leaseId, expiresAt, now, cancellationToken);
         }
+    }
+
+    private sealed class OpaqueExecutableDecorator(IWorkflowExecutableStore inner) : WorkflowExecutableStoreDecorator(inner);
+
+    private sealed class SupplementalScheduleRoots : IRuntimeKernelScheduleRetentionRoots
+    {
+        internal string? ArtifactId { get; set; }
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<string>>(ArtifactId is { } id ? [id] : []);
     }
 
     private sealed class Access(PersistenceScope scope) : IPersistenceAccessContextAccessor

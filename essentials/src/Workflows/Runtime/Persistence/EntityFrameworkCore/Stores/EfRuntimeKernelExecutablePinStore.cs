@@ -7,13 +7,14 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access,
-    IWorkflowExecutableStore executables, IWorkflowExecutableRootWriteLeaseManager leases, TimeProvider clock) : IRuntimeKernelExecutablePinStore
+    IWorkflowExecutableStore executables, IWorkflowExecutableRootWriteLeaseManager leases, TimeProvider clock) : IRuntimeKernelExecutablePinStore, IRuntimeMaterialRetentionRootSource
 {
     private static readonly UTF8Encoding PinEncoding = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
     private static readonly EfWriteRetry Writes = new(EfWriteRetry.DefaultMaxAttempts, error =>
@@ -104,6 +105,9 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
         return new(rows.Take(limit).Select(row => ReadOpen(row, scope)).ToArray(), rows.Length > limit ? rows[limit - 1].Id : null);
     }
 
+    bool IRuntimeMaterialRetentionRootSource.IsCoveredBy(IWorkflowExecutableStore material) =>
+        material is EfWorkflowExecutableStore physical && ReferenceEquals(physical.Context, context);
+
     public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
         ReadPinnedExecutableIdsAsync(context, Bind(), cancellationToken);
 
@@ -111,8 +115,12 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
         PersistenceScope scope, CancellationToken cancellationToken)
     {
         var roots = new HashSet<string>(StringComparer.Ordinal);
-        // Read a single rowset so concurrent inserts cannot keep extending the GC pass.
-        await foreach (var row in OpenPins(context, scope).AsAsyncEnumerable().WithCancellation(cancellationToken))
+        var scopeKey = Encode(scope.Value);
+        var scopeHash = Hash(scope.Value);
+        // Read a single rowset and check both scope-key fields when validating each result.
+        var query = context.KernelExecutablePins.AsNoTracking().Where(row =>
+            (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) && row.ReleasedAtUtcTicks == null);
+        await foreach (var row in query.AsAsyncEnumerable().WithCancellation(cancellationToken))
             roots.Add(ReadOpen(row, scope).Executable.ArtifactId);
         return roots;
     }

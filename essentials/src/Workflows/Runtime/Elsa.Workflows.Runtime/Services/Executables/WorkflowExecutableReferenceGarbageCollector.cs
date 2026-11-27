@@ -565,17 +565,16 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         roots.AddRange(await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         if (_workflowDispatchRootStore is not null)
             roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
-        if (_executableStore.GetMaterialStore() is IRuntimeKernelExecutableRetentionMaterial physical)
-            roots.AddRange(await physical.ListPinnedKernelExecutableIdsAsync(cancellationToken));
-        else
-        {
-            if (KernelScheduleRoots is not null)
-                roots.AddRange(await KernelScheduleRoots.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
-            if (KernelExecutablePins is not null)
-                roots.AddRange(await KernelExecutablePins.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
-        }
+        roots.AddRange(await _executableStore.ListMaterialRetentionRootIdsAsync(cancellationToken));
+        if (KernelScheduleRoots is { } schedules && !IsMaterialRootSource(schedules))
+            roots.AddRange(await schedules.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        if (KernelExecutablePins is { } pins && !IsMaterialRootSource(pins))
+            roots.AddRange(await pins.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         return roots;
     }
+
+    private bool IsMaterialRootSource(object reader) =>
+        reader is IRuntimeMaterialRetentionRootSource source && source.IsCoveredBy(_executableStore.GetMaterialStore());
 
     private async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
         IEnumerable<string> artifactIds,

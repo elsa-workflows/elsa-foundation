@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
 
@@ -20,7 +21,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
     IWorkflowTriggerBindingStore triggerBindings,
     IWorkflowExecutableRootWriteLeaseManager leases,
     TimeProvider clock) : IRuntimeKernelScheduleOccurrenceStore, IRuntimeKernelScheduleOccurrenceDeliveryStore,
-        IRuntimeKernelScheduleOccurrenceRetirementStore, IRuntimeKernelScheduleRetentionRoots
+        IRuntimeKernelScheduleOccurrenceRetirementStore, IRuntimeKernelScheduleRetentionRoots, IRuntimeMaterialRetentionRootSource
 {
     public async ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence,
         Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
@@ -258,6 +259,9 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         catch (TriggerOperationException error) when (error.Code == "conflict") { return null; }
         return source;
     }
+
+    bool IRuntimeMaterialRetentionRootSource.IsCoveredBy(IWorkflowExecutableStore material) =>
+        material is EfWorkflowExecutableStore physical && ReferenceEquals(physical.Context, context);
 
     public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
         ReadPinnedExecutableIdsAsync(context, RequireScope(access), cancellationToken);
