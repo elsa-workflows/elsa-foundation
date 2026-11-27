@@ -21,6 +21,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
     KernelShellRuntime runtime, KernelTestRuns testRuns, KernelOperatorIngress operators, TimeProvider time) : IWorkflowDirectTestRunDispatcher
 {
     private static readonly TimeSpan StopBudget = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan InlineReservationBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
 
     public bool SupportsTrigger(string driverId) => driverId is "Elsa.Event" or "Elsa.HttpEndpoint" or "Elsa.Timer" or "Elsa.Cron";
@@ -66,9 +67,22 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         var inline = mode == PersistenceMode.Ephemeral;
         if (inline && (!runtime.TakesEphemeralTestRuns || triggered))
             return Refused("EphemeralTestRunUnavailable");
-        if (inline && !await services.GetRequiredService<IWorkflowTestScopeAdmissionStore>()
-                .BeginInlineStartAsync(test, clock.GetUtcNow, cancellationToken))
-            return UnknownInlineResult();
+        if (inline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // A disconnect must not hide whether the exact reservation committed. The offer owns the next decision.
+            using var reservation = new CancellationTokenSource(InlineReservationBudget, time);
+            try
+            {
+                if (!await services.GetRequiredService<IWorkflowTestScopeAdmissionStore>()
+                        .BeginInlineStartAsync(test, clock.GetUtcNow, reservation.Token))
+                    return UnknownInlineResult();
+            }
+            catch (OperationCanceledException) when (reservation.IsCancellationRequested)
+            {
+                return UnknownInlineResult();
+            }
+        }
 
         Workflow workflow;
         try
@@ -81,6 +95,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         {
             if (inline && !await runtime.SettleInlineTestAsync(test, WorkflowTestRunInlineState.Refused))
                 return UnknownInlineResult();
+            if (inline) cancellationToken.ThrowIfCancellationRequested();
             return Refused(error.Message);
         }
 

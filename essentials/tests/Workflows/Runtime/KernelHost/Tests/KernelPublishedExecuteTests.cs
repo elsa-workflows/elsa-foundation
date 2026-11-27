@@ -251,6 +251,14 @@ public sealed partial class KernelPublishedExecuteTests
             });
         }
 
+        var scopeAdmission = new FixtureTestScopeAdmission();
+        if (recordEphemeralTestCompletion is false)
+        {
+            var admissionDescriptor = builder.Services.Single(item => item.ServiceType == typeof(IWorkflowTestScopeAdmissionStore));
+            builder.Services.Remove(admissionDescriptor);
+            builder.Services.AddScoped<IWorkflowTestScopeAdmissionStore>(services => new ObservedTestScopeAdmission(
+                (IWorkflowTestScopeAdmissionStore)admissionDescriptor.ImplementationFactory!(services), scopeAdmission));
+        }
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
@@ -303,6 +311,7 @@ public sealed partial class KernelPublishedExecuteTests
                 await VerifyEphemeralTestAsync(pure, recordCompletion);
                 if (!recordCompletion)
                 {
+                    await VerifyEphemeralCancellationBeforeOfferAsync(uncertain);
                     await VerifyEphemeralCancellationAsync(uncertain);
                     await VerifyEphemeralTestAsync(slow, expectActor: true);
                 }
@@ -850,6 +859,47 @@ public sealed partial class KernelPublishedExecuteTests
                 Assert.True(read.Value.Run.Ephemeral);
             }
 
+            async Task VerifyEphemeralCancellationBeforeOfferAsync(WorkflowExecutable executable)
+            {
+                var before = await DurableRowCountAsync();
+                WorkflowTestScope test;
+                await using (var authoring = await scopes.CreateAsyncScopeAsync(Scope))
+                {
+                    var services = authoring.ServiceProvider;
+                    (test, _, var request) = await PrepareEphemeralTestAsync(services, executable);
+                    using var caller = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    scopeAdmission.Began = scope =>
+                    {
+                        Assert.Equal(test.ScopeId, scope.ScopeId);
+                        caller.Cancel();
+                    };
+                    try
+                    {
+                        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => services.GetRequiredService<IWorkflowDirectTestRunDispatcher>()
+                            .DispatchAsync(request, WorkflowExecutableReferenceScope.TestRun, cancellationToken: caller.Token).AsTask());
+                        Assert.True(caller.IsCancellationRequested);
+                    }
+                    finally { scopeAdmission.Began = null; }
+                }
+
+                await using var recovered = await scopes.CreateAsyncScopeAsync(Scope);
+                var recovery = recovered.ServiceProvider;
+                var store = recovery.GetRequiredService<IWorkflowTestScopeStore>();
+                var now = DateTimeOffset.UtcNow;
+                await store.CloseAsync(new(test.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, now), token);
+                await store.CompleteAsync(test.ScopeId, now, token);
+                var durable = Assert.IsType<WorkflowTestScopeRecord>(await store.FindAsync(test.ScopeId, token));
+                var source = Assert.IsType<WorkflowExecutableSourceReference>(await recovery
+                    .GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(test.ScopeId, token));
+                Assert.Equal(WorkflowTestScopeState.Closed, durable.State);
+                Assert.Equal(WorkflowTestRunInlineState.Unavailable, durable.InlineStart);
+                Assert.Null(durable.IsolatedActor);
+                Assert.Equal(WorkflowDirectTestRunObservation.Unavailable, await recovery.GetRequiredService<IWorkflowDirectTestRunDispatcher>()
+                    .ObserveAsync(durable, source, token));
+                Assert.Equal(0, scripts.Calls);
+                Assert.Equal(before, await DurableRowCountAsync());
+            }
+
             async Task VerifyEphemeralCancellationAsync(WorkflowExecutable executable)
             {
                 var before = await DurableRowCountAsync();
@@ -1196,6 +1246,32 @@ public sealed partial class KernelPublishedExecuteTests
             return ValueTask.FromResult(subject == "deny" ? WorkflowExecutableStartDecision.Deny("denied", "Denied by fixture") :
                 WorkflowExecutableStartDecision.Allow());
         }
+    }
+
+    private sealed class FixtureTestScopeAdmission
+    {
+        public Action<WorkflowTestScope>? Began { get; set; }
+    }
+
+    private sealed class ObservedTestScopeAdmission(IWorkflowTestScopeAdmissionStore physical, FixtureTestScopeAdmission fixture)
+        : IWorkflowTestScopeAdmissionStore
+    {
+        public ValueTask AssertOpenAsync(WorkflowTestScope scope, DateTimeOffset observedAt, CancellationToken cancellationToken) =>
+            physical.AssertOpenAsync(scope, observedAt, cancellationToken);
+
+        public ValueTask AdmitIsolatedActorAsync(WorkflowTestScope scope, string actorReference, Func<DateTimeOffset> readClock,
+            CancellationToken cancellationToken) => physical.AdmitIsolatedActorAsync(scope, actorReference, readClock, cancellationToken);
+
+        public async ValueTask<bool> BeginInlineStartAsync(WorkflowTestScope scope, Func<DateTimeOffset> readClock,
+            CancellationToken cancellationToken)
+        {
+            var began = await physical.BeginInlineStartAsync(scope, readClock, cancellationToken);
+            if (began) fixture.Began?.Invoke(scope);
+            return began;
+        }
+
+        public ValueTask<bool> SettleInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
+            CancellationToken cancellationToken) => physical.SettleInlineStartAsync(scope, outcome, cancellationToken);
     }
 
     private sealed class PinBoundary

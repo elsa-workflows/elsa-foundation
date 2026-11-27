@@ -175,14 +175,15 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     internal bool TakesEphemeralTestRuns => storage.TakesEphemeralTestRuns;
 
-    internal ValueTask<InlineStartOutcome> StartInlineTestAsync(WorkflowTestScope test, StartSpec start, Workflow executable,
+    internal async ValueTask<InlineStartOutcome> StartInlineTestAsync(WorkflowTestScope test, StartSpec start, Workflow executable,
         CancellationToken token)
     {
+        if (Volatile.Read(ref _publishedInlineStarts) is { } inline)
+            return await inline.Requests.StartAdditionalAsync(test.ScopeId, start, inline.Model.CaptureInlineMaterial(executable),
+                outcome => SettleInlineTestOutcomeAsync(test, outcome), token);
+        var unavailable = await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable));
         token.ThrowIfCancellationRequested();
-        return Volatile.Read(ref _publishedInlineStarts) is { } inline
-            ? inline.Requests.StartAdditionalAsync(test.ScopeId, start, inline.Model.CaptureInlineMaterial(executable),
-                outcome => SettleInlineTestOutcomeAsync(test, outcome), token)
-            : SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable));
+        return unavailable;
     }
 
     private async ValueTask<InlineStartOutcome> SettleInlineTestOutcomeAsync(WorkflowTestScope test, InlineStartOutcome outcome)

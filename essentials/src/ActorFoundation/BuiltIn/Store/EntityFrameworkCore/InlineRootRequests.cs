@@ -89,20 +89,27 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
 
     /// <summary>Offers an exact start and its trusted local material to the additional scope bound at composition.</summary>
     /// <remarks>Settlement of an accepted owner receipt continues when the caller stops waiting.</remarks>
-    public ValueTask<InlineStartOutcome> StartAdditionalAsync(string operationId, Contract.StartSpec start, object material,
+    public async ValueTask<InlineStartOutcome> StartAdditionalAsync(string operationId, Contract.StartSpec start, object material,
         Func<InlineStartOutcome, ValueTask<InlineStartOutcome>> settle, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(settle);
+        if (_additionalScope is { } additional) return await StartCoreAsync(additional, operationId, start, material, settle, token);
+        var outcome = await settle(new(InlineStartDisposition.Refused));
         token.ThrowIfCancellationRequested();
-        return _additionalScope is { } additional ? StartCoreAsync(additional, operationId, start, material, settle, token)
-            : settle(new(InlineStartDisposition.Refused));
+        return outcome;
     }
 
     private async ValueTask<InlineStartOutcome> StartCoreAsync(Contract.BoundScope selectedScope, string operationId,
         Contract.StartSpec start, object material, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>>? settle, CancellationToken token)
     {
         var (receipt, unqueued) = Offer(selectedScope, operationId, start, material, settle, token);
-        if (receipt is null) return settle is null ? unqueued : await settle(unqueued);
+        if (receipt is null)
+        {
+            // Before the queue accepts work, a cancelled caller still has a definite no-actor outcome.
+            var outcome = settle is null ? unqueued : await settle(unqueued);
+            token.ThrowIfCancellationRequested();
+            return outcome;
+        }
 
         try { return await receipt.WaitAsync(RootPreparedStarts.OneWayBudget, token); }
         catch (TimeoutException)
@@ -117,13 +124,12 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
         string operationId, Contract.StartSpec start, object material, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>>? settle,
         CancellationToken token)
     {
-        token.ThrowIfCancellationRequested();
+        if (token.IsCancellationRequested) return (null, new(InlineStartDisposition.Unavailable));
         if (start.Type != actorType || EfStore.CreateInlineRootSpec(operationId, start) is not { } trusted || !validate(start, material))
             return (null, new(InlineStartDisposition.Refused));
         lock (_gate)
         {
-            token.ThrowIfCancellationRequested();
-            if (_owner is not { } owner) return (null, new(InlineStartDisposition.Unavailable));
+            if (token.IsCancellationRequested || _owner is not { } owner) return (null, new(InlineStartDisposition.Unavailable));
             using var attempt = owner.Store.AdmissionPressure!.BeginInlineStart(selectedScope.Tenant);
             try { attempt.RequireInlineTenantRate(); }
             catch (RootAdmissionRefused refusal)
