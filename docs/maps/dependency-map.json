@@ -3462,6 +3462,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Modularity.Core",
+          "path": "essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Persistence.Schema",
           "path": "essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj"
         },
@@ -8174,6 +8179,150 @@
       ]
     },
     {
+      "path": "essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj",
+      "name": "Elsa.Workflows.Runtime.KernelHosting",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.KernelHosting",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Runtime.KernelHosting",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Core",
+          "path": "essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
+          "path": "essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Hosting",
+          "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.JavaScript.Core",
+          "path": "essentials/src/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Modularity.Core",
+          "path": "essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.KernelApi",
+          "path": "essentials/src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.KernelHost",
+          "path": "essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "extensions/Http/src/Activities/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Cronos",
+          "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Data.SqlClient",
+          "version": "7.0.2"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "MySql.Data",
+          "version": "26.7.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "MySql.EntityFrameworkCore",
+          "version": "10.0.9"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Npgsql",
+          "version": "10.0.3"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
+          "version": "10.0.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "SQLitePCLRaw.bundle_e_sqlite3",
+          "version": "3.0.3"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
       "path": "essentials/src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj",
       "name": "Elsa.Workflows.Runtime.Native.Activities",
       "kind": "source",
@@ -11595,6 +11744,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.KernelHost",
           "path": "essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.KernelHosting",
+          "path": "essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj"
         },
         {
           "type": "internal",
@@ -34133,6 +34287,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.KernelHost",
           "path": "essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.KernelHosting",
+          "path": "essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj"
         },
         {
           "type": "internal",

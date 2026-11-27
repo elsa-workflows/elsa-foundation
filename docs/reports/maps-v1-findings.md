@@ -6,9 +6,9 @@ This is a point-in-time report from direct repo facts. It is not a constitution 
 
 ## Summary
 
-- Source projects: 250
+- Source projects: 251
 - Test projects: 213
-- Discovered CShells feature classes: 179
+- Discovered CShells feature classes: 180
 - Specs: 358
 - Direct package IDs with multiple versions: 0
 
@@ -27,7 +27,7 @@ No direct package ID has multiple direct versions.
 
 ## Runtime/Design Reference Signal
 
-No direct runtime-path project reference to an `Elsa.*Design*` project was found by the Maps v1 heuristic.
+- Elsa.Workflows.Runtime.KernelHosting -> Elsa.Activities.Design.Core
 
 ## Next Map Work
 
