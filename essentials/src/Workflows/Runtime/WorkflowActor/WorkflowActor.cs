@@ -180,7 +180,10 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         {
             var start = inbox.FirstOrDefault(message => message.Kind == Kinds.Start) ??
                 throw new InvalidOperationException("A workflow without state needs its start message.");
-            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Workflow, start.Payload, workflow.Ephemeral, workflow.History, workflow.Definition));
+            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Workflow, start.Payload, workflow.Ephemeral, workflow.History, workflow.Definition)
+            {
+                ExecutableSelection = workflow.ExecutableSelection
+            });
         }
         if (workflow.Version is not { } version || version > model.StateVersion)
             throw new InvalidOperationException("This model cannot read the stored state version.");
