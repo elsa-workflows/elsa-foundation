@@ -49,8 +49,8 @@ internal sealed partial class SqliteRootAdmission
                 """, ct));
             if (db.UsesRootScheduleLineage)
                 RequireOne(await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference")
-                    VALUES ({tenant}, {birth.Reference}, {birth.Reference})
+                    INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference", "Retired")
+                    VALUES ({tenant}, {birth.Reference}, {birth.Reference}, false)
                     """, ct));
             await EnqueueAsync(db, creator.Target.Id, creator.Target.Partition, creator.InboxKey.Id, 0, creator.Kind, header,
                 payload, due: null, keepUntil: null, replyTo: null, token: ct);

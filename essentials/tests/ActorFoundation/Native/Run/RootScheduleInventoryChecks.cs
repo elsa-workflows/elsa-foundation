@@ -353,11 +353,19 @@ internal static class RootScheduleInventoryChecks
             "root retirement leaves a queued detached child holding the occurrence");
         Require(await ChangeChildDueAsync(child, 0) == 1, "the exact queued child is released to its owner");
         await WaitForAsync(child, Contract.ActorStatus.Running);
+        if (postgres)
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "FoundationScheduleLineage" ALTER COLUMN "Retired" SET DEFAULT true
+                """, token);
         Require((await ingress.SendAsync(scope, new Contract.Target.Ref(child), "dispatch-nested", LifecycleActor.DispatchNested,
             cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "a detached child accepts a new turn after root retirement");
         var completedChild = await WaitForAsync(child, Contract.ActorStatus.Finished);
         var grandchild = actor.Descendants[child];
         Require(await IsActiveMemberAsync(grandchild), "a nested detached child inherits the original retired root's cohort");
+        if (postgres)
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "FoundationScheduleLineage" ALTER COLUMN "Retired" DROP DEFAULT
+                """, token);
         await RetireAsync(child, completedChild);
         Require(!await isRetired() && await IsActiveMemberAsync(grandchild),
             "retiring the detached child leaves its nested descendant holding the occurrence");

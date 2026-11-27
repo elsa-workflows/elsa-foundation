@@ -22,7 +22,7 @@ internal static class RootScheduleLineage
             "Tenant" {{text}} NOT NULL,
             "Reference" {{text}} NOT NULL PRIMARY KEY REFERENCES "FoundationRootBirths" ("Reference"),
             "RootReference" {{text}} NOT NULL REFERENCES "FoundationRootBirths" ("Reference"),
-            "Retired" {{boolean}} NOT NULL DEFAULT false {{provesBoolean}}
+            "Retired" {{boolean}} NOT NULL {{provesBoolean}}
             """;
     }
 
@@ -87,14 +87,14 @@ internal static class RootScheduleLineage
         FormattableString insert = db.UsesSqliteRootRuntime
             ? (FormattableString)$"""
                 WITH source AS MATERIALIZED (/*lineage-source*/)
-                INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference")
-                SELECT {tenant}, value, {parent.RootReference} FROM json_each({DurableKeyJson.Write(childReferences)}), source
+                INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference", "Retired")
+                SELECT {tenant}, value, {parent.RootReference}, false FROM json_each({DurableKeyJson.Write(childReferences)}), source
                 WHERE source."Ready"
                 """
             : $"""
                 WITH source AS MATERIALIZED (/*lineage-source*/)
-                INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference")
-                SELECT {tenant}, reference, {parent.RootReference} FROM unnest({childReferences}::text[]) AS children(reference), source
+                INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference", "Retired")
+                SELECT {tenant}, reference, {parent.RootReference}, false FROM unnest({childReferences}::text[]) AS children(reference), source
                 WHERE source."Ready"
                 """;
         return await db.Database.ExecuteSqlInterpolatedAsync(BindCommitSource(db, insert), token) == childReferences.Length;

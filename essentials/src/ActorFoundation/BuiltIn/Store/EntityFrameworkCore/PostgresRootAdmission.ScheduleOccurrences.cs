@@ -69,8 +69,8 @@ internal sealed partial class PostgresRootAdmission
         write = System.Runtime.CompilerServices.FormattableStringFactory.Create(write.Format
             .Replace("/*lineage-insert*/", db.UsesRootScheduleLineage ? """
                 , lineage AS (
-                    INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference")
-                    SELECT "Tenant", "Reference", "Reference" FROM birth RETURNING "Reference")
+                    INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference", "Retired")
+                    SELECT "Tenant", "Reference", "Reference", false FROM birth RETURNING "Reference")
                 """ : "", StringComparison.Ordinal)
             .Replace("/*lineage-check*/", db.UsesRootScheduleLineage ? "AND EXISTS (SELECT 1 FROM lineage)" : "", StringComparison.Ordinal),
             write.GetArguments());
