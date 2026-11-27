@@ -83,7 +83,7 @@ Remove-Item import-adjusted.tmp.json
 ## Elsa 4 Workbench
 
 The Workbench has the `Elsa3JsonReconciliation` feature in its catalog but leaves it off in `shells.json`. A run turns it
-on with environment variables (they override `shells.json`, see `apps/Elsa.Workbench/Program.cs`), so the committed
+on with environment variables (they override `shells.json`, see `apps/Elsa.Workbench.Host/Program.cs`), so the committed
 shell stays unchanged. See *Elsa 4 run configuration* below (task T007).
 
 ### Elsa 4 run configuration (T007)
@@ -96,7 +96,7 @@ shared `Elsa` connection (the import commits in one transaction with the Activit
 database), and `WorkflowsRuntimeCheckpointPersistence` in `Durable` mode.
 
 ```powershell
-$wb = (Resolve-Path ../../../../apps/Elsa.Workbench).Path
+$wb = (Resolve-Path ../../../../apps/Elsa.Workbench.Host).Path
 Remove-Item "$wb/*.db", "$wb/*.db-shm", "$wb/*.db-wal" -ErrorAction SilentlyContinue
 $feature = 'CShells__Shells__default__Features__'
 function Set-RunVariable([string] $name, [string] $value) { [Environment]::SetEnvironmentVariable($name, $value, 'Process') }
@@ -119,12 +119,12 @@ dotnet run --project $wb --no-launch-profile
 
 Ready when the log shows the summary line `Elsa 3 import 'jtest' in persistence scope 'default': …`. After every
 start, set capture (it lives in memory): snapshot level for activity inputs and outputs, and the `variableWrites`
-override. The Workbench's seeded development admin comes from `apps/Elsa.Workbench/shells.json`. The identity cookie
+override. The Workbench's seeded development admin comes from `apps/Elsa.Workbench.Host/shells.json`. The identity cookie
 is larger than curl's 8 KB cookie limit, so this uses a PowerShell web session:
 
 ```powershell
 $base = 'http://localhost:5095'
-$seed = (Get-Content ../../../../apps/Elsa.Workbench/shells.json -Raw | ConvertFrom-Json).CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore
+$seed = (Get-Content ../../../../apps/Elsa.Workbench.Host/shells.json -Raw | ConvertFrom-Json).CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore
 $login = @{ username = $seed.SeedAdminUserName; password = $seed.SeedAdminPassword } | ConvertTo-Json
 Invoke-RestMethod -Method Post "$base/_elsa/identity/login" -ContentType 'application/json' -Body $login -SessionVariable session | Out-Null
 $token = (Invoke-RestMethod "$base/_elsa/identity/token" -WebSession $session).accessToken
