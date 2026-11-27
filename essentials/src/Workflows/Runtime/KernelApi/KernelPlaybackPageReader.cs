@@ -39,12 +39,13 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
             return await StillOwnsAsync(header) ? Unavailable("current-authorization-unsupported") : null;
         var binding = KernelPlaybackCursor.Bind(host.Tenant.Tenant, header.Workflow, query, access);
         var window = cursor.Open(query.SequenceToken, binding);
-        if (query.IncludeDescendants)
+        if (query.IncludeDescendants &&
+            !await ProviderAsync(() => host.SupportsDescendantPlaybackAsync(cancellationToken), "playback-scope-capability"))
             return await ReauthorizeAsync() ? Unavailable("scope-descendants-unsupported") : null;
 
         var snapshot = await ProviderAsync(() => host.ReadPlaybackAsync(new ActorRef(query.WorkflowExecutionId),
             new(query.Limit, query.Position, query.AnchorActivityExecutionId, query.ActivityExecutionId,
-                window?.Upper, window?.RetainedAfter), cancellationToken), "read-playback");
+                window?.Upper, window?.RetainedAfter) { IncludeDescendants = query.IncludeDescendants }, cancellationToken), "read-playback");
         if (snapshot is null || !await ReauthorizeAsync()) return null;
         try
         {

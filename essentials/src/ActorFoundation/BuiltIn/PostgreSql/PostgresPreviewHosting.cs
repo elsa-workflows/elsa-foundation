@@ -28,6 +28,17 @@ public static class PostgresPreviewHosting
     public static KernelDb CreatePlaybackQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootPlaybackQualification(options);
 
+    /// <summary>Selects the dedicated preview format for qualifying descendant playback.</summary>
+    public static KernelDb CreatePlaybackDescendantsQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootPlaybackDescendantsQualification(options);
+
+    /// <summary>Installs or verifies a dedicated descendant playback qualification database.</summary>
+    public static Task InstallPlaybackDescendantsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreatePlaybackDescendantsQualificationContext(options), cancellationToken);
+    }
+
     /// <summary>Installs or verifies a dedicated playback qualification database.</summary>
     public static Task InstallPlaybackQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
     {
@@ -289,12 +300,12 @@ public static class PostgresPreviewHosting
             throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
         int partitions;
-        bool nativeJobs, selfSends, shipped;
+        bool nativeJobs, selfSends, liveReplyRelay;
         int terminalOutputLimit;
         await using (var db = create())
         {
             nativeJobs = db.UsesRootJobProtocol;
-            shipped = db.RequiredFormat == StoreFormat.RootShipped;
+            liveReplyRelay = db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootPlaybackDescendants;
             selfSends = db.UsesRootSelfProtocol;
             terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
@@ -305,6 +316,7 @@ public static class PostgresPreviewHosting
                     : "Only a store with held replies answers held callers.");
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
+            if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 
@@ -323,7 +335,7 @@ public static class PostgresPreviewHosting
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;
-        var edge = shipped ? replies as PostgresDirectRequests : null;
+        var edge = liveReplyRelay ? replies as PostgresDirectRequests : null;
         var relay = edge is null ? null : await edge.OpenLiveRepliesAsync(create,
             error => Volatile.Read(ref reporter)?.RecordLoopError(error), cancellationToken);
         var workers = new WorkerOptions

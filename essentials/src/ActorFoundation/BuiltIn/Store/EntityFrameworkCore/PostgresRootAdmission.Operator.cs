@@ -511,7 +511,7 @@ internal sealed partial class PostgresRootAdmission
             """);
         pin.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
         var journalReady = pinSequencedJournal ? ", " + EfStore.PostgresSequencedJournalReady("marker.oid") +
-            (db.UsesRootPlayback ? " AND " + EfStore.PostgresPlaybackReady("marker.oid") : "") : "";
+            (db.UsesRootPlayback ? " AND " + EfStore.PostgresPlaybackReady("marker.oid", db.UsesRootPlaybackDescendants) : "") : "";
         var validate = new NpgsqlBatchCommand($$"""
             SELECT marker.oid, marker.relnamespace, (
                 SELECT count(*) = $1
@@ -535,9 +535,14 @@ internal sealed partial class PostgresRootAdmission
         // Keep trigger state stable until the fenced write commits. ROW EXCLUSIVE permits other
         // writers but conflicts with ALTER TABLE ... ENABLE/DISABLE TRIGGER.
         if (pinSequencedJournal)
-            commands.Add(new(db.UsesRootPlayback
-                ? """LOCK TABLE "Journal", "FoundationSequencedJournal", "FoundationJournalPlayback", "FoundationJournalPlaybackInvalid" IN ROW EXCLUSIVE MODE"""
-                : """LOCK TABLE "Journal", "FoundationSequencedJournal" IN ROW EXCLUSIVE MODE"""));
+        {
+            var tables = """LOCK TABLE "Journal", "FoundationSequencedJournal" """;
+            if (db.UsesRootPlayback)
+                tables += """, "FoundationJournalPlayback", "FoundationJournalPlaybackInvalid" """;
+            if (db.UsesRootPlaybackDescendants)
+                tables += """, "FoundationJournalPlaybackScopes" """;
+            commands.Add(new(tables + " IN ROW EXCLUSIVE MODE"));
+        }
         commands.Add(validate);
         if (loadIssuer) commands.Add(new("""SELECT issuer."Key", issuer."Partitions", marker.oid """ + RootIssuerSource));
         if (markRead is not null)

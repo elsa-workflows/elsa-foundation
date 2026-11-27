@@ -135,7 +135,8 @@ internal static class WorkbenchCorePreview
         var publications = configuration.GetValue<bool>(PublicationsKey);
         var terminalOutputsWithTimers = string.Equals(configuration[TerminalOutputQualificationKey]?.Trim(), "s6", StringComparison.OrdinalIgnoreCase);
         var terminalOutputQualification = terminalOutputsWithTimers || configuration.GetValue<bool>(TerminalOutputQualificationKey);
-        var playbackQualification = configuration.GetValue<bool>(PlaybackQualificationKey);
+        var playbackDescendants = string.Equals(configuration[PlaybackQualificationKey]?.Trim(), "descendants", StringComparison.OrdinalIgnoreCase);
+        var playbackQualification = playbackDescendants || configuration.GetValue<bool>(PlaybackQualificationKey);
         if (terminalOutputQualification && !publications)
             throw new InvalidOperationException($"{TerminalOutputQualificationKey} requires {PublicationsKey} and a dedicated qualification database.");
         if (playbackQualification && (!publications || terminalOutputQualification))
@@ -154,7 +155,7 @@ internal static class WorkbenchCorePreview
             Children: useSqlite ? !terminalOutputQualification && SqliteEmbeddedHosting.TakesChildren : PostgresPreviewHosting.TakesChildren(OpenPostgres),
             SelfSends: useSqlite ? sqliteHasS6 && SqliteEmbeddedHosting.TakesSelfSends : PostgresPreviewHosting.TakesSelfSends(OpenPostgres),
             HttpWaits: useSqlite
-                ? !terminalOutputQualification && !playbackQualification && SqliteEmbeddedHosting.TakesHttpWaits
+                ? !terminalOutputQualification && (!playbackQualification || playbackDescendants) && SqliteEmbeddedHosting.TakesHttpWaits
                 : PostgresPreviewHosting.TakesHttpWaits(OpenPostgres));
         var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
         if (serving is not null)
@@ -197,6 +198,7 @@ internal static class WorkbenchCorePreview
         // On the shipped format the node answers held callers: the held requests of this host's edge.
         var sqlite = sqlitePath is null ? null : terminalOutputQualification
             ? SqliteEmbeddedFoundation.ForTerminalOutputQualification(sqlitePath, node, WorkflowActor.ActorType, terminalOutputsWithTimers)
+            : playbackDescendants ? SqliteEmbeddedFoundation.ForPlaybackDescendantsQualification(sqlitePath, node, WorkflowActor.ActorType)
             : playbackQualification ? SqliteEmbeddedFoundation.ForPlaybackQualification(sqlitePath, node, WorkflowActor.ActorType)
             : new SqliteEmbeddedFoundation(sqlitePath, node, WorkflowActor.ActorType);
         var postgresRequests = publications && !useSqlite ? PostgresPreviewHosting.CreateRequests(OpenPostgres, node, WorkflowActor.ActorType) : null;
@@ -263,6 +265,7 @@ internal static class WorkbenchCorePreview
                     // other database is refused with what to do, and the process ends before its node starts.
                     if (sqlite is not null) await sqlite.InstallShippedAsync(token);
                     else if (terminalOutputQualification) await PostgresPreviewHosting.InstallTerminalOutputQualificationAsync(postgresOptions!, terminalOutputsWithTimers, token);
+                    else if (playbackDescendants) await PostgresPreviewHosting.InstallPlaybackDescendantsQualificationAsync(postgresOptions!, token);
                     else if (playbackQualification) await PostgresPreviewHosting.InstallPlaybackQualificationAsync(postgresOptions!, token);
                     else if (publications) await PostgresPreviewHosting.InstallShippedAsync(postgresOptions!, token);
                     edge?.StoreInstalled();
@@ -277,6 +280,7 @@ internal static class WorkbenchCorePreview
             services.AddSingleton(new WorkbenchCorePreviewReads(OpenPreviewReadsAsync, EmbeddedTenant.Bind(readsTenant)));
 
         KernelDb OpenPostgres() => terminalOutputQualification ? PostgresPreviewHosting.CreateTerminalOutputQualificationContext(postgresOptions!, terminalOutputsWithTimers) :
+            playbackDescendants ? PostgresPreviewHosting.CreatePlaybackDescendantsQualificationContext(postgresOptions!) :
             playbackQualification ? PostgresPreviewHosting.CreatePlaybackQualificationContext(postgresOptions!) :
             publications ? PostgresPreviewHosting.CreateShippedContext(postgresOptions!) :
             timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(postgresOptions!) :

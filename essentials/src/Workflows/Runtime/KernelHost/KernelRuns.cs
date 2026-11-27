@@ -61,6 +61,10 @@ public sealed class KernelRuns
     public async ValueTask<bool> SupportsPlaybackAsync(CancellationToken cancellationToken = default) =>
         await _reads(cancellationToken) is IActorPlaybackReads { SupportsPlayback: true };
 
+    /// <summary>Whether the selected foundation indexes descendant membership.</summary>
+    public async ValueTask<bool> SupportsDescendantPlaybackAsync(CancellationToken cancellationToken = default) =>
+        await _reads(cancellationToken) is IActorPlaybackReads { SupportsDescendantPlayback: true };
+
     /// <summary>Reads a ranked occurrence window in the host's tenant.</summary>
     public async ValueTask<ActorPlaybackPage?> ReadPlaybackAsync(ActorRef actor, ActorPlaybackQuery query,
         CancellationToken cancellationToken = default)

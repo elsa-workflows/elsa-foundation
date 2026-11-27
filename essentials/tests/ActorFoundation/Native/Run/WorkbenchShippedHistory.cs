@@ -6,7 +6,7 @@ namespace Elsa.Workbench.Qualification;
 
 internal static partial class WorkbenchPostgresPreview
 {
-    internal static async Task RunShippedHistoryAsync(string executable, bool postgres, bool playback = false)
+    internal static async Task RunShippedHistoryAsync(string executable, bool postgres, bool playback, bool descendants)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var token = deadline.Token;
@@ -18,7 +18,7 @@ internal static partial class WorkbenchPostgresPreview
         try
         {
             using var host = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace,
-                diagnosticHistoryDisabled: true, playbackQualification: playback);
+                diagnosticHistoryDisabled: true, playbackQualification: descendants ? "descendants" : playback ? "true" : null);
             await host.WaitReadyAsync(token);
             await host.WaitForKernelServingAsync(token);
             var address = new Uri(await host.ListeningAsync(token));
@@ -31,15 +31,17 @@ internal static partial class WorkbenchPostgresPreview
                 .SelectMany(capability => capability.GetProperty("links").EnumerateArray())
                 .Any(link => link.GetProperty("rel").GetString() == "workflow-history-occurrences");
             Require(occurrencesAdvertised == playback, "only the selected playback store advertises the occurrence relation");
+            var httpWaits = !playback || descendants;
             using (var wait = await client.PostAsync("/workflows/http/core-preview/wait", null, token))
-                Require(wait.StatusCode == (playback ? HttpStatusCode.NotFound : HttpStatusCode.Accepted),
-                    playback ? "private Playback retains the protocol-31 HTTP capability set" :
-                        "the shipped profile opens the live HTTP wait");
-            if (!playback)
+                Require(wait.StatusCode == (httpWaits ? HttpStatusCode.Accepted : HttpStatusCode.NotFound),
+                    httpWaits ? $"the selected profile opens the live HTTP wait ({(int)wait.StatusCode}: {await wait.Content.ReadAsStringAsync(token)})" :
+                        "private Playback retains the protocol-31 HTTP capability set");
+            if (httpWaits)
             {
                 using var resumed = await client.PostAsync("/workflows/http/core-preview/decision", null, token);
-                Require(resumed.StatusCode == HttpStatusCode.OK && await resumed.Content.ReadAsStringAsync(token) == "decided",
-                    "the shipped host delivers the HTTP event and returns the workflow response");
+                var body = await resumed.Content.ReadAsStringAsync(token);
+                Require(resumed.StatusCode == HttpStatusCode.OK && body == "decided",
+                    $"the selected host delivers the HTTP event and returns the workflow response ({(int)resumed.StatusCode}: {body})");
             }
 
             await PublishAsync("native-history", flowchart: false);
@@ -58,11 +60,20 @@ internal static partial class WorkbenchPostgresPreview
                 using var deniedPlayback = await anonymous.GetAsync(OccurrencesPath(runs[0].Run), token);
                 Require(deniedPlayback.StatusCode == HttpStatusCode.Unauthorized, "the standard Playback route requires read authorization");
             }
+            if (descendants)
+            {
+                var flowRun = runs[1];
+                await RetirePlaybackAsync(connection, sqlite, flowRun.Run, token);
+                using var retired = await client.GetAsync(flowRun.FrozenScopePath!, token);
+                Require(retired.StatusCode == HttpStatusCode.NotFound, "the public route cannot reopen a retired run's frozen descendant token");
+                var surviving = await ReadAsync(runs[0].FrozenScopePath!);
+                Require(Text(surviving, "totalCount") == "3", "retiring a run leaves another run's frozen membership untouched");
+            }
             await host.StopAsync();
             if (playback)
-                await VerifyPlaybackProviderAsync(connection, sqlite, runs[0].Run, token);
+                await VerifyPlaybackProviderAsync(connection, sqlite, runs[0].Run, descendants, token);
 
-            async Task<(string Run, string CatchUp)> CheckHistoryAsync(string name)
+            async Task<(string Run, string CatchUp, string? FrozenScopePath)> CheckHistoryAsync(string name)
             {
                 var run = await StartAsync(name);
                 var first = await ReadAsync(HistoryPath(run));
@@ -76,6 +87,10 @@ internal static partial class WorkbenchPostgresPreview
                     Require(Text(admitted, "state") == "unavailable" && Text(admitted, "reason") == "occurrence-facet-unsupported",
                         $"the shipped {name} reports unavailable Playback on a history-only provider");
 
+                var prefix = descendants ? await CollectAsync(run, first) : null;
+                var scopedId = prefix?.Single(item => Activity(item, "ActivityStarted", "scope")).GetProperty("activityExecutionId").GetString();
+                var scopedPath = scopedId is null ? null : OccurrencesPath(run) + "&includeDescendants=true&activityExecutionId=" + Uri.EscapeDataString(scopedId);
+                var frozenScope = scopedPath is null ? (JsonElement?)null : await ReadAsync(scopedPath);
                 while (true)
                 {
                     var detail = await ReadAsync(RunPath(run));
@@ -86,7 +101,7 @@ internal static partial class WorkbenchPostgresPreview
                     await Task.Delay(50, token);
                 }
 
-                var prefix = await CollectAsync(run, first);
+                prefix ??= await CollectAsync(run, first);
                 Require(prefix.Any(item => Activity(item, "ActivityStarted", "delay")) &&
                     prefix.All(item => !Activity(item, "ActivityCompleted", "delay") && !Activity(item, "ActivityStarted", "result")),
                     $"the published {name} keeps its original window pinned after the Delay turn commits");
@@ -102,7 +117,10 @@ internal static partial class WorkbenchPostgresPreview
                     !item.GetRawText().Contains("private-history-fixture-value", StringComparison.Ordinal)),
                     $"the published {name} exposes committed structural facts with timestamps and ancestry");
                 if (playback) await CheckPlaybackAsync(name, run, admitted, prefix.Concat(later));
-                return (run, catchUp);
+                var frozenScopePath = scopedPath is not null && frozenScope is { } scope
+                    ? await CheckDescendantsAsync(name, scopedPath, scope, prefix.Concat(later))
+                    : null;
+                return (run, catchUp, frozenScopePath);
             }
 
             async Task CheckPlaybackAsync(string name, string run, JsonElement admitted, IEnumerable<JsonElement> events)
@@ -143,11 +161,44 @@ internal static partial class WorkbenchPostgresPreview
                 Require(Text(scoped, "totalCount") == "1" && Text(scoped, "selectedPosition") == "0" &&
                     Text(scoped.GetProperty("items").EnumerateArray().Single(), "activityExecutionId") == activity,
                     $"the published {name} limits Playback to the exact activity scope");
-                var descendants = await ReadAsync(exact + "&includeDescendants=true");
-                Require(Text(descendants, "state") == "unavailable" && Text(descendants, "reason") == "scope-descendants-unsupported",
-                    $"the published {name} reports unqualified descendant membership as unavailable");
+                if (!descendants)
+                {
+                    var unavailable = await ReadAsync(exact + "&includeDescendants=true");
+                    Require(Text(unavailable, "state") == "unavailable" && Text(unavailable, "reason") == "scope-descendants-unsupported",
+                        $"the published {name} reports unqualified descendant membership as unavailable");
+                }
                 using var mismatched = await client.GetAsync(frozenPath + "&activityExecutionId=" + encoded, token);
                 Require(mismatched.StatusCode == HttpStatusCode.BadRequest, "a Playback sequence token cannot change its scope");
+            }
+
+            async Task<string> CheckDescendantsAsync(string name, string scope, JsonElement first, IEnumerable<JsonElement> events)
+            {
+                var tokenValue = Text(first, "sequenceToken");
+                var frozen = scope + "&sequenceToken=" + Uri.EscapeDataString(tokenValue);
+                var delay = events.Single(item => Activity(item, "ActivityStarted", "delay"));
+                var result = events.Single(item => Activity(item, "ActivityStarted", "result"));
+                var sibling = events.Single(item => Activity(item, "ActivityStarted", "answer"));
+                string Anchor(JsonElement item) => "&anchorActivityExecutionId=" + Uri.EscapeDataString(Text(item, "activityExecutionId"));
+                Require(Text(first, "state") == "partial" && Text(first, "totalCount") == "3" &&
+                    first.GetProperty("items").EnumerateArray().Select(row => Text(row, "executableNodeId")).SequenceEqual(["scope", "nested"]),
+                    $"the published {name} opens dense scoped membership starting with the exact scope and its child");
+                var last = await ReadAsync(frozen + Anchor(delay));
+                var row = last.GetProperty("items").EnumerateArray().Last();
+                Require(Text(last, "totalCount") == "3" && Text(last, "selectedPosition") == "2" && Text(last, "sequenceToken") == tokenValue &&
+                    Text(row, "historyEventId") == Text(delay, "historyEventId") && last.GetProperty("hasNewerHistory").GetBoolean() &&
+                    row.GetProperty("nextActivityExecutionId").ValueKind == JsonValueKind.Null,
+                    $"the published {name} resolves a grandchild at its frozen rank with no later neighbor");
+                var tooNew = await ReadAsync(frozen + Anchor(result));
+                Require(Text(tooNew, "reason") == "anchor-outside-range", $"the published {name} frozen scope excludes a later descendant");
+                var outside = await ReadAsync(frozen + Anchor(sibling));
+                Require(Text(outside, "reason") == "anchor-outside-scope", $"the published {name} scope excludes a committed sibling");
+                var fresh = await ReadAsync(scope + Anchor(result));
+                Require(Text(fresh, "totalCount") == "4" && Text(fresh, "selectedPosition") == "3" &&
+                    fresh.GetProperty("items").EnumerateArray().Select(item => Text(item, "executableNodeId")).SequenceEqual(["delay", "result"]),
+                    $"the published {name} refresh admits the new descendant at the next rank");
+                using var mismatched = await client.GetAsync(frozen.Replace("includeDescendants=true", "includeDescendants=false", StringComparison.Ordinal), token);
+                Require(mismatched.StatusCode == HttpStatusCode.BadRequest, "a frozen descendant cursor cannot be used with exact scope");
+                return frozen;
             }
 
             async Task<IReadOnlyList<JsonElement>> CollectAsync(string run, JsonElement page)
@@ -195,9 +246,13 @@ internal static partial class WorkbenchPostgresPreview
                     intrinsic = new { kind = "setOutput", valueType = new { alias = "String", collectionKind = "single" } },
                     inputs = new[] { new { referenceKey = "name", value = Literal("Result") }, new { referenceKey = "value", value = Literal("private-history-fixture-value") } }
                 };
-                object[] activities = [start, answer, delay, result];
+                var inner = descendants ? await SequenceAsync("scope", [await SequenceAsync("nested", [delay, result])]) : null;
+                object[] activities = inner is null ? [start, answer, delay, result] : [start, answer, inner];
+                var connections = inner is null
+                    ? new[] { Edge("start", "answer"), Edge("answer", "delay"), Edge("delay", "result") }
+                    : new[] { Edge("start", "answer"), Edge("answer", "scope") };
                 object payload = flowchart
-                    ? new { activities, startNodeId = "start", connections = new[] { Edge("start", "answer"), Edge("answer", "delay"), Edge("delay", "result") } }
+                    ? new { activities, startNodeId = "start", connections }
                     : new { activities };
                 var root = await NodeAsync("root", flowchart ? "Elsa.Activities.Flowchart.Activities.Flowchart" : "Elsa.Activities.Sequence.Activities.Sequence",
                     [], new { kind = flowchart ? "elsa.flowchart.structure" : "elsa.sequence.structure", schemaVersion = "1.0.0", payload });
@@ -208,6 +263,10 @@ internal static partial class WorkbenchPostgresPreview
                 var version = submitted.GetProperty("version").GetProperty("id").GetString()!;
                 await ReadAsync($"/publishing/workflows/{Uri.EscapeDataString(version)}/publish", new { });
             }
+
+            Task<object> SequenceAsync(string id, object[] activities) =>
+                NodeAsync(id, "Elsa.Activities.Sequence.Activities.Sequence", [],
+                    new { kind = "elsa.sequence.structure", schemaVersion = "1.0.0", payload = new { activities } });
 
             async Task<object> NodeAsync(string id, string kind, Dictionary<string, object> values, object? structure = null)
             {

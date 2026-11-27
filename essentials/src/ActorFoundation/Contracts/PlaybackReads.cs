@@ -4,6 +4,7 @@ namespace Kernel.Foundation.Contracts;
 public interface IActorPlaybackReads
 {
     bool SupportsPlayback { get; }
+    bool SupportsDescendantPlayback => false;
 
     /// <summary>Reads one coherent retained window for the exact actor. Null denotes a missing actor.</summary>
     ValueTask<ActorPlaybackPage?> ReadPlaybackAsync(BoundScope scope, ActorRef actor, ActorPlaybackQuery query,
@@ -11,7 +12,10 @@ public interface IActorPlaybackReads
 }
 
 public sealed record ActorPlaybackQuery(int Limit, long? Position, string? Anchor, string? Activity,
-    long? UpperSequence = null, long? RetainedAfterSequence = null);
+    long? UpperSequence = null, long? RetainedAfterSequence = null)
+{
+    public bool IncludeDescendants { get; init; }
+}
 
 public enum ActorPlaybackAvailability { Available, Unavailable, Invalidated, TargetUnavailable }
 
