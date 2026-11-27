@@ -194,7 +194,7 @@ public class KernelDb : DbContext
     internal bool UsesRootPreparedStarts => Has(RootCapabilities.PreparedStarts);
     internal bool UsesRootDirectTestRuns => Has(RootCapabilities.DirectTestRuns);
     internal bool UsesRootInlinePromotion => Has(RootCapabilities.InlinePromotion);
-    internal uint? ScheduleLineageCommitMarker { get; set; }
+    internal uint? RootCommitMarker { get; set; }
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
     internal bool UsesRootComposedParkRecovery =>
@@ -1023,7 +1023,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         {
             var marker = await PostgresRootAdmission.PinRootCommitNamespaceAsync(db,
                 writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null), cancellationToken);
-            if (db.UsesRootScheduleLineage) db.ScheduleLineageCommitMarker = marker;
+            db.RootCommitMarker = marker;
             return marker;
         }
         catch (Exception error) when (error is not OperationCanceledException &&
