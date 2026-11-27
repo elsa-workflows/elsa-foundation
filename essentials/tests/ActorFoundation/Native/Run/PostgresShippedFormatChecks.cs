@@ -49,9 +49,10 @@ internal static class PostgresShippedFormatChecks
                     db.UsesRootTimedJobPreview && db.UsesRootTerminalSelection && db.UsesRootRetirement && db.UsesRootOperatorReplies &&
                     db.UsesRootParkInspection && db.UsesRootParkArrivals && db.UsesRootComposedParkRecovery && db.SupportsRootWorkflowHistory,
                 "the shipped format carries held replies, timed jobs, selected operators with retirement, Park inspection, arrivals, Recover and workflow history");
-            Require(!db.UsesRootSelfProtocol && !db.UsesRootTimers && !db.UsesRootValueProtocol && !db.UsesRootJobPreview &&
-                    !db.UsesRootTimedJobIssuance,
-                "the shipped format excludes self-sends, timers, values, untimed-only jobs and timed-job issuance");
+            Require(db.UsesRootSelfProtocol && db.UsesRootTimers && db.UsesRootTimerRearm,
+                "the shipped format carries actor-owned self-sends, durable timers and Park timer re-arm");
+            Require(!db.UsesRootValueProtocol && !db.UsesRootJobPreview && !db.UsesRootTimedJobIssuance,
+                "the shipped format excludes values, untimed-only jobs and timed-job issuance");
         }
         var store = new EfStore(Open, postgres: true);
         await store.CreateAsync(1);
@@ -60,6 +61,24 @@ internal static class PostgresShippedFormatChecks
         Require(true, "the shipped schema and its workflow history install, and install again over themselves");
         await CheckGuardBodyParityAsync(Open, stop);
         await CheckDefinitionRevisionAsync(Open, store, stop);
+        await using (var db = Open())
+        {
+            await db.Database.ExecuteSqlRawAsync("""DROP TRIGGER kernel_root_self_insert ON "Messages" """, stop);
+            try
+            {
+                await store.EnableRootSelfSendsAsync(stop);
+                throw new InvalidOperationException("The shipped owner initialized the self issuer without its installed trigger.");
+            }
+            catch (StoreFormatException)
+            {
+                Require(!await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM pg_trigger
+                        WHERE tgrelid = '"Messages"'::regclass AND tgname = 'kernel_root_self_insert') AS "Value"
+                    """).SingleAsync(stop), "the shipped owner refuses a missing timer trigger without changing the installed definitions");
+            }
+        }
+        await store.InstallPreviewRootSchemaAsync(stop);
+
         await RefusalsAsync(connection, options, stop);
 
         var registry = new WorkflowRegistry()
@@ -328,7 +347,9 @@ internal static class PostgresShippedFormatChecks
             ("shipped 24", "refuse_24", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 24 },
                 RootProfiles.ParkCompositionBase)),
             ("shipped 25", "refuse_25", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 25 },
-                RootProfiles.ParkCompositionBase))
+                RootProfiles.ParkCompositionBase)),
+            ("shipped 26", "refuse_26", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 26 },
+                RootProfiles.ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery))
         })
         {
             await using (var older = open(shipped))

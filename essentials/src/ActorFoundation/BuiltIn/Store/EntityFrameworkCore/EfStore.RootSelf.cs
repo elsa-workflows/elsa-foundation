@@ -34,13 +34,18 @@ public sealed partial class EfStore
         }
         await RequireStoreVersionsAsync(db, token);
         var install = await db.Database.SqlQueryRaw<SelfInstallation>("""
-            SELECT "Key", EXISTS (
+            SELECT "Key", to_regclass('"FoundationRootMessages"') IS NOT NULL AND EXISTS (
                 SELECT 1 FROM pg_trigger
                 WHERE tgrelid = '"Messages"'::regclass AND tgname = 'kernel_root_self_insert'
                     AND tgfoid = to_regprocedure('kernel_root_self_insert_v3()') AND tgenabled IN ('O', 'A')) AS "Installed"
             FROM "FoundationRootIssuer"
             """).SingleAsync(token);
-        if (!install.Installed) await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
+        if (!install.Installed)
+        {
+            if (db.RequiredFormat == StoreFormat.RootShipped)
+                throw new StoreFormatException("The shipped store requires its installed private inbox view and insert trigger.");
+            await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
+        }
         RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.UsesRootTimers, db.UsesRootPrivateParkInputs,
             db.UsesRootTimerRearm ? CheckRootTimerRearmsAsync : null);
     }
