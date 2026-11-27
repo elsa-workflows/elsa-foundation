@@ -189,6 +189,26 @@ public sealed class Elsa3LoopPassVariableReadTests
     }
 
     [Fact]
+    public async Task A_parallel_loop_that_reaches_an_earlier_loops_leftover_is_refused()
+    {
+        // 'earlier' leaves its CurrentValue in 'root'; both parallel loops then overwrite that block in place instead of
+        // their bodies, so 'first''s read could see 'second''s item.
+        var parallel = Activity("parallel", "Elsa.Parallel");
+        parallel.Activities =
+        [
+            ForEach("first", Sequence("first-body", Read("getVariable('CurrentValue')"))),
+            ForEach("second", Sequence("second-body", Activity("second-node", "Elsa.WriteLine", ("text", Literal("acme"))))),
+        ];
+        var earlier = ForEach("earlier", Activity("earlier-node", "Elsa.WriteLine", ("text", Literal("acme"))));
+
+        var result = await ConvertAsync(Sequence("root", earlier, parallel));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'second'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_read_while_a_fork_branch_loop_shares_its_variable_is_refused()
     {
         // Fork runs its branches concurrently; both bodies are no container, so both passes share one block in 'root'.

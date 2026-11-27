@@ -46,7 +46,9 @@ internal sealed record Elsa3PassRead(Elsa3PassReadKind Kind, string Name, string
 /// <item>A declared variable whose id is <c>{camelName}Variable</c> shares the block.</item>
 /// </list>
 /// The read binds to the loop only where the pass value wins on every run; where a variable of that name wins on every
-/// run, the read keeps today's handling; anything else is refused rather than guessed. A reusable activity anywhere in the
+/// run, the read keeps today's handling; anything else is refused rather than guessed. The refusals for an inner loop, a
+/// reusable activity and an id clash come first, even where a nested variable of that name would win (refusal over
+/// guessing). A reusable activity anywhere in the
 /// owning loop's body is refused, as its contents are not visible here.
 /// </summary>
 internal static class Elsa3LoopPassVariables
@@ -114,14 +116,14 @@ internal static class Elsa3LoopPassVariables
         {
             if (IsDescendant(plan, reusable, owner))
                 return Ambiguous(name, $"reusable activity '{NodeId(reusable)}' in loop '{NodeId(owner)}''s body runs inline, and a loop inside it that declares '{name}' overwrites the same Elsa 3 variable");
-            if (SharesBlock(plan, reusable, top, topContainer, fresh: true, container: null) && MayRunAlongside(plan, reusable, read))
+            if (SharesBlock(plan, reusable, top, locations, fresh: true, container: null) && MayRunAlongside(plan, reusable, read))
                 return Ambiguous(name, $"reusable activity '{NodeId(reusable)}' may run alongside the read, and a loop inside it that declares '{name}' overwrites the same Elsa 3 variable");
         }
 
         foreach (var loop in others)
         {
             var (container, fresh) = Location(plan, loop);
-            if (SharesBlock(plan, loop, top, topContainer, fresh, container) && MayRunAlongside(plan, loop, read))
+            if (SharesBlock(plan, loop, top, locations, fresh, container) && MayRunAlongside(plan, loop, read))
                 return Ambiguous(name, $"loop '{NodeId(loop)}' may run alongside the read and overwrite the same Elsa 3 variable");
         }
 
@@ -198,14 +200,22 @@ internal static class Elsa3LoopPassVariables
     }
 
     /// <summary>
-    /// Whether <paramref name="writer"/> writes the block the read finds: it sits under the outermost declaring loop or the
-    /// container holding that loop's block, or (with a block of its own in an enclosing container) above that block.
+    /// Whether <paramref name="writer"/> may write the block the read finds, wherever that block lives (the outermost
+    /// declaring loop's location, or an earlier loop's leftover further up): it sits under that loop or that container, or
+    /// (with a block of its own in an enclosing container) above it.
     /// </summary>
-    private static bool SharesBlock(Elsa3ConversionPlan plan, Elsa3Activity writer, Elsa3Activity top, Elsa3Activity? topContainer, bool fresh, Elsa3Activity? container) =>
+    private static bool SharesBlock(
+        Elsa3ConversionPlan plan,
+        Elsa3Activity writer,
+        Elsa3Activity top,
+        IEnumerable<(Elsa3Activity? Container, bool Fresh, Elsa3Activity? Writer)> locations,
+        bool fresh,
+        Elsa3Activity? container) =>
         IsDescendant(plan, writer, top) ||
-        topContainer is null ||
-        IsDescendant(plan, writer, topContainer) ||
-        !fresh && (container is null || ReferenceEquals(container, topContainer) || IsDescendant(plan, topContainer, container));
+        locations.Any(location =>
+            location.Container is null ||
+            IsDescendant(plan, writer, location.Container) ||
+            !fresh && (container is null || ReferenceEquals(container, location.Container) || IsDescendant(plan, location.Container, container)));
 
     /// <summary>
     /// Whether two activities may run interleaved: their nearest common ancestor runs its children concurrently (a
