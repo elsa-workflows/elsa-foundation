@@ -392,6 +392,7 @@ public class KernelDb : DbContext
             });
             if (StoreDefinitionsRevision.Seed(this) is { } definitions) entity.HasData(definitions);
         });
+        if (RootScheduleOwnerMode.Applies(this)) RootScheduleOwnerMode.ConfigureModel(model, sqliteShippedInstall);
         model.Entity<PartitionEntity>(e =>
         {
             e.ToTable("Partitions");
