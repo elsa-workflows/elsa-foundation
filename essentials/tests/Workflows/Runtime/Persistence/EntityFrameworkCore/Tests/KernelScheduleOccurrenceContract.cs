@@ -33,6 +33,8 @@ internal static class KernelScheduleOccurrenceContract
         var authority = new EfWorkflowActivationAuthority(context, access);
         var activationSwitch = new EfWorkflowActivationSwitch(authority, bindings, references, access, clock);
         var store = Store(context, access, clock);
+        ValueTask<bool> AcceptAsync(RuntimeKernelScheduleOccurrence offer, DateTimeOffset? scheduleNow = null) =>
+            store.TryAcceptAsync(offer, _ => ValueTask.FromResult(scheduleNow ?? clock.GetUtcNow()));
         var first = new WorkflowExecutableIdentity("first-material", "material-producer", "material-v1", "1", "first-hash");
         var second = first with { ArtifactId = "replacement-material", DefinitionVersionId = "material-v2", ArtifactHash = "replacement-hash" };
         foreach (var identity in new[] { first, second })
@@ -63,20 +65,16 @@ internal static class KernelScheduleOccurrenceContract
         var original = new RuntimeKernelScheduleOccurrence(scope, scheduleKey, new string('A', 64), slotName,
             "schedule-a", 1, 1, "timer-a", Now, Now.AddMinutes(1), first, node, "{\"version\":1}");
         await PublishAsync(first, original.ActivationId, 0);
-        Assert.False(await store.TryAcceptAsync(original with { Due = Now.AddSeconds(1) }));
-        Assert.True(await store.TryAcceptAsync(original));
+        Assert.False(await AcceptAsync(original with { Due = Now.AddSeconds(1) }));
+        Assert.True(await AcceptAsync(original));
         await PublishAsync(second, "schedule-b", 1);
-        Assert.False(await store.TryAcceptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" }));
-        await Assert.ThrowsAsync<InvalidDataException>(() => store.TryAcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
+        Assert.False(await AcceptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" }));
+        await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
 
         var replacement = original with { ActivationId = "schedule-b", PublicationRevision = 2, ArmGeneration = 2,
             TimerDeliveryId = "timer-b", Executable = second, PinnedStart = "{\"version\":2}" };
-        Assert.True(await store.TryAcceptAsync(replacement));
-        Assert.True((await activationSwitch.TryDeactivateAsync(new(first.DefinitionId, slotName,
-            WorkflowActivationSource.Publishing, 2, Now), [])).Succeeded);
-        clock.Advance(TimeSpan.FromMinutes(2));
-        Assert.True(await store.TryAcceptAsync(original));
-        Assert.False(await store.TryAcceptAsync(replacement with { ArmGeneration = 3, TimerDeliveryId = "expired-timer" }));
+        Assert.True(await AcceptAsync(replacement));
+        Assert.False(await AcceptAsync(replacement with { ArmGeneration = 3, TimerDeliveryId = "expired-timer" }, Now.AddMinutes(2)));
         await using var restarted = open();
         var relay = Store(restarted, access, clock);
         var pageOne = Assert.Single(await relay.ListPendingAsync(scope, null, 1));
@@ -84,14 +82,25 @@ internal static class KernelScheduleOccurrenceContract
         Assert.Empty(await relay.ListPendingAsync(scope, pageTwo.Cursor, 1));
         Assert.Contains(original, new[] { pageOne.Occurrence, pageTwo.Occurrence });
         Assert.Contains(replacement, new[] { pageOne.Occurrence, pageTwo.Occurrence });
+
+        var delayed = replacement with { ArmGeneration = 4, TimerDeliveryId = "delayed-commit",
+            Due = Now.AddMinutes(-2), AcceptBefore = Now.AddSeconds(-1) };
+        Assert.True(await AcceptAsync(delayed, Now.AddMinutes(-1)));
+        Assert.Empty(await relay.ListPendingAsync(scope, pageTwo.Cursor, 1));
+        Assert.Equal(delayed, Assert.Single(await relay.ListPendingAsync(scope, null, 1)).Occurrence);
+        await relay.MarkMaterializedAsync(delayed, new string('D', 64));
+
+        Assert.True((await activationSwitch.TryDeactivateAsync(new(first.DefinitionId, slotName,
+            WorkflowActivationSource.Publishing, 2, Now), [])).Succeeded);
+        clock.Advance(TimeSpan.FromMinutes(2));
         var actorReference = new string('B', 64);
         await relay.MarkMaterializedAsync(original, actorReference);
         await relay.MarkMaterializedAsync(original, actorReference);
         await Assert.ThrowsAsync<InvalidDataException>(() => relay.MarkMaterializedAsync(original, new string('C', 64)).AsTask());
         Assert.Equal(replacement, Assert.Single(await relay.ListPendingAsync(scope, null, 2)).Occurrence);
-        Assert.True(await store.TryAcceptAsync(original));
+        Assert.True(await store.TryAcceptAsync(original, _ => throw new InvalidOperationException("Replays need no schedule clock.")));
         Assert.Equal(new[] { first.ArtifactId, second.ArtifactId }, (await relay.ListPinnedExecutableArtifactIdsAsync()).Order(StringComparer.Ordinal));
-        Assert.Equal(2, await context.KernelScheduleOccurrences.CountAsync());
+        Assert.Equal(3, await context.KernelScheduleOccurrences.CountAsync());
     }
 
     private static EfRuntimeKernelScheduleOccurrenceStore Store(RuntimeDbContext context, Accessor access, TimeProvider clock)

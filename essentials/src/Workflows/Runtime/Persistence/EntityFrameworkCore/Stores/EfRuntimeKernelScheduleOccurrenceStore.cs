@@ -21,9 +21,11 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
     IWorkflowExecutableRootWriteLeaseManager leases,
     TimeProvider clock) : IRuntimeKernelScheduleOccurrenceStore, IRuntimeKernelScheduleOccurrenceDeliveryStore, IRuntimeKernelScheduleRetentionRoots
 {
-    public async ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
     {
         Validate(occurrence);
+        ArgumentNullException.ThrowIfNull(readScheduleClock);
         var scope = Bind(occurrence.Scope);
         if (!context.Database.IsRelational() ||
             executables.GetMaterialStore() is not EfWorkflowExecutableStore material || !ReferenceEquals(material.Context, context) ||
@@ -34,7 +36,7 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
 
         var id = CompositeId(scope, occurrence.Id);
         if (await ReplayAsync(cancellationToken)) return true;
-        if (!IsDue()) return false;
+        if (!IsDue(await readScheduleClock(cancellationToken))) return false;
 
         var accepted = false;
         await leases.ExecuteFencedAsync([occurrence.Executable], $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
@@ -47,11 +49,11 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
                     accepted = true;
                     return;
                 }
-                if (!IsDue()) return;
-
                 var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token);
                 var published = await FencePublicationAsync(scope, occurrence, sources, bindings, token);
-                if (published is null || !IsDue()) return;
+                if (published is null) return;
+                var acceptedAt = await readScheduleClock(token);
+                if (!IsDue(acceptedAt)) return;
 
                 var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
                 context.KernelScheduleOccurrences.Add(new()
@@ -66,10 +68,10 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
                     SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily,
                         RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion),
                     Revision = 1,
-                    AcceptedAtUtcTicks = clock.GetUtcNow().UtcTicks
+                    AcceptedAtUtcTicks = acceptedAt.UtcTicks
                 });
                 await context.SaveChangesAsync(token);
-                if (!IsDue() || !published.IsLive(clock.GetUtcNow())) return;
+                if (!IsDue(await readScheduleClock(token)) || !published.IsLive(clock.GetUtcNow())) return;
                 foreach (var deadline in deadlines)
                     if (clock.GetUtcNow() >= deadline.ExpiresAt)
                         throw new WorkflowExecutableRootWriteLeaseLostException(deadline.Grant.ArtifactId, deadline.Grant.LeaseId);
@@ -89,11 +91,7 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
             return true;
         }
 
-        bool IsDue()
-        {
-            var now = clock.GetUtcNow();
-            return occurrence.Due <= now && occurrence.AcceptBefore > now;
-        }
+        bool IsDue(DateTimeOffset now) => occurrence.Due <= now && occurrence.AcceptBefore > now;
     }
 
     public async ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,

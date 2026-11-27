@@ -12805,7 +12805,7 @@ Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.I
 const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ReservationType = "kernel-schedule-publication-v1" -> string!
 static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ReservationKey(string! scheduleKey) -> string!
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore
-Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryAcceptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryAcceptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.DateTimeOffset>>! readScheduleClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.RuntimeKernelScheduleOccurrenceCursor(long AcceptedAtUtcTicks, string! Id) -> void
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.AcceptedAtUtcTicks.get -> long

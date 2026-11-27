@@ -29,11 +29,15 @@ public sealed record RuntimeKernelScheduleOccurrence(
 /// <summary>Commits a schedule occurrence and its retained executable under the same publication transaction boundary.</summary>
 public interface IRuntimeKernelScheduleOccurrenceStore
 {
+    /// <param name="occurrence">The authenticated offer.</param>
+    /// <param name="readScheduleClock">The bound Actor Foundation clock that issued the due time and deadline.</param>
+    /// <param name="cancellationToken">Cancellation for the current attempt.</param>
     /// <returns>True when the exact occurrence was accepted or is an immutable replay. False when authority has moved or expired.</returns>
-    ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence, CancellationToken cancellationToken = default);
+    ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default);
 }
 
-/// <summary>The stable seek position of an accepted occurrence within its tenant.</summary>
+/// <summary>A seek position within one pass over the pending occurrences of a bound tenant.</summary>
 public sealed record RuntimeKernelScheduleOccurrenceCursor(long AcceptedAtUtcTicks, string Id);
 
 /// <summary>A persisted admission and its position in delivery order.</summary>
@@ -42,6 +46,8 @@ public sealed record RuntimeKernelScheduleOccurrenceDelivery(RuntimeKernelSchedu
 /// <summary>Relays immutable accepted occurrences to the Actor Foundation.</summary>
 public interface IRuntimeKernelScheduleOccurrenceDeliveryStore
 {
+    /// <summary>Reads a page of pending admissions. Begin every new scan with a null cursor.</summary>
+    /// <remarks>Commit order can differ from admission time, so rows published behind an in-flight cursor appear on the next scan.</remarks>
     ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,
         RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default);
 
