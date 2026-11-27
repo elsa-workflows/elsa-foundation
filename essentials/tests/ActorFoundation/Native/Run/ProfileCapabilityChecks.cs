@@ -484,6 +484,21 @@ internal static class ProfileCapabilityChecks
             inlinePostgres.Capabilities | authoredPostgres.Capabilities | startEventsPostgres.Capabilities |
             receiptsPostgres.Capabilities | eventScanPostgres.Capabilities | testPostgres.Capabilities | publicEventsPostgres.Capabilities |
             keyedPostgres.Capabilities | publicHostPostgres.Capabilities;
+        using var pagedPostgres = KernelDb.ForPostgresRootPagedPublicEventsQualification(options);
+        using var pagedSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
+            StoreFormat.RootPagedPublicEventsQualification);
+        Check(pagedPostgres.RequiredFormat == StoreFormat.RootPagedPublicEventsQualification &&
+            pagedSqlite.RequiredFormat == pagedPostgres.RequiredFormat &&
+            pagedPostgres.Capabilities == (publicEventsPostgres.Capabilities | RootCapabilities.PagedPublicEvents) &&
+            pagedSqlite.Capabilities == pagedPostgres.Capabilities &&
+            !sharedPostgres.UsesRootPagedPublicEvents && !sharedSqlite.UsesRootPagedPublicEvents &&
+            !publicEventsPostgres.UsesRootPagedPublicEvents && !publicEventsSqlite.UsesRootPagedPublicEvents &&
+            RootProfiles.MissingPrerequisites(pagedPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(pagedPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(pagedPostgres) is { StoreSchema: 1, MessageProtocol: 30, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(pagedSqlite) is { StoreSchema: 2, MessageProtocol: 33, JournalCodec: 0 },
+            "private paged Events carry an independent protocol and exact physical dispatch definitions");
+        mapped |= pagedPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -523,6 +538,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
             [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
             [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
+            [RootCapabilities.PagedPublicEvents] = RootCapabilities.PublicEventStarts,
             [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts | RootCapabilities.Retirement | RootCapabilities.Children,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,

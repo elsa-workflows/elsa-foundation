@@ -142,7 +142,8 @@ public sealed partial class EfStore
         var page = await BindSqliteParkPageAsync(db, root, turn.Expected, turn.Suspended, turn.Mark, turn.Clearing, turn.Cleared,
             turn.KeptDigest, turn.Count - pinned, turn.Ends, turn.Command, token, turn.Children, turn.Jobs, omitPinnedJob);
         var window = turn.Command.Operator!.RootParkWindow!.Value;
-        if (page is null || !await ClearSqliteParkPageAsync(db, root, page, window, token)) return false;
+        if (page is null || !await ClearSqliteParkPageAsync(db, root, page, window, token) ||
+            turn.Ends && !await AbandonParkPublicationsAsync(db, root, token)) return false;
         if (turn.Ends && (!await ClearConsumedRootJobAsync(db, root.Actor, root.Partition, job.Value.ConsumedId, token) ||
             db.UsesRootChildren && !await ClearTerminalRootSelfAsync(db, actor, root.Partition, turn.Expected, turn.SelfIssuer,
                 includeImmediate: false, token))) return false;

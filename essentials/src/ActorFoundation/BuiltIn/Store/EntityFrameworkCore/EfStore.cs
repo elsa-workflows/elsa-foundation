@@ -182,6 +182,7 @@ public class KernelDb : DbContext
     internal bool UsesRootPublicEventStarts => Has(RootCapabilities.PublicEventStarts);
     internal bool UsesRootPublicEventHost => Has(RootCapabilities.PublicEventHost);
     internal RootPublicEventHost? PublicEventHost { get; }
+    internal bool UsesRootPagedPublicEvents => Has(RootCapabilities.PagedPublicEvents);
     internal bool UsesRootKeyedStarts => Has(RootCapabilities.KeyedStarts);
     internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
@@ -193,7 +194,7 @@ public class KernelDb : DbContext
     internal bool UsesRootPreparedStarts => Has(RootCapabilities.PreparedStarts);
     internal bool UsesRootDirectTestRuns => Has(RootCapabilities.DirectTestRuns);
     internal bool UsesRootInlinePromotion => Has(RootCapabilities.InlinePromotion);
-    internal uint? ScheduleLineageCommitMarker { get; set; }
+    internal uint? RootCommitMarker { get; set; }
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
     internal bool UsesRootComposedParkRecovery =>
@@ -228,6 +229,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootPublicEventStartsQualification, RootProfiles.PublicEventStartsQualification);
     internal static KernelDb ForPostgresRootPublicEventHostQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
         new(options, StoreFormat.RootPublicEventHostQualification, RootProfiles.PublicEventHostQualification, publicEventHost: host);
+    internal static KernelDb ForPostgresRootPagedPublicEventsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPagedPublicEventsQualification, RootProfiles.PagedPublicEventsQualification);
     internal static KernelDb ForPostgresRootKeyedStartsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootKeyedStartsQualification, RootProfiles.KeyedStartsQualification);
     internal static KernelDb ForPostgresRootAuthoredEventsQualification(DbContextOptions<KernelDb> options) =>
@@ -302,6 +305,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootSharedActivationQualification)
             return new(options, qualificationFormat.Value, RootProfiles.SharedActivationQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPagedPublicEventsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PagedPublicEventsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootPublicEventStartsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PublicEventStartsQualification,
@@ -732,6 +738,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (batch.PublicationReservation is not null || batch.Turns.Any(turn => turn.FoundationPublicationSequence is not null && !turn.OpensPark))
+            return CommitRootPublicationAsync(batch, sentAt, cancellationToken);
         return _ordinaryRoots is { } roots ? CommitWorkerRootAsync(roots, batch, sentAt, cancellationToken)
             : CommitAsync(batch, null, sentAt, cancellationToken);
     }
@@ -1015,7 +1023,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         {
             var marker = await PostgresRootAdmission.PinRootCommitNamespaceAsync(db,
                 writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null), cancellationToken);
-            if (db.UsesRootScheduleLineage) db.ScheduleLineageCommitMarker = marker;
+            db.RootCommitMarker = marker;
             return marker;
         }
         catch (Exception error) when (error is not OperationCanceledException &&
@@ -1197,13 +1205,24 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """
             + (postgres ? """, b.tableoid::bigint AS "BirthTableOid" """ : """, NULL AS "BirthTableOid" """)
         : "";
-    private string PollMessages => _ordinaryRoots is { Discover: true }
+    private string PollMessages(KernelDb db) => _ordinaryRoots is { Discover: true }
         ? $"""
-           ({RootInboxSource} m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
+           ({RootInboxSource} m {(db.UsesRootPagedPublicEvents ? "LEFT " : "")}JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
               AND b."Creation" = 1 AND m."EventMatch" IS NULL
               AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" IN ({RootInputScopes})))
            """
         : RootInboxSource + " m";
+
+    private string PollQualifiedInputs(KernelDb db)
+    {
+        var rootInputs = RootPollFilter(db);
+        return db.UsesRootPagedPublicEvents && _ordinaryRoots is { Discover: true }
+            ? $"""
+                AND ((m."InboxScope" = {RootPublicEventTicket.Scope} AND m."Kind" = '{Kinds.Publish}' AND m."EventMatch" IS NULL)
+                     OR (b."Actor" IS NOT NULL {rootInputs}))
+                """
+            : rootInputs;
+    }
     private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
     // Only PostgreSQL profiles with the private body column can have split historical event payloads.
     // CASE avoids inspecting row content except for the single shared numeric event slot.
@@ -1214,22 +1233,36 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
          FROM (SELECT {(postgres && (db.UsesRootOperatorProtocol || RootTimedJobSettlementEnabled || RootSelfIssuer is { SupportsTimers: true }) ? RootClockMilliseconds : Now)} AS now) t
-         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter(db)}
+         LEFT JOIN {PollMessages(db)} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {PollQualifiedInputs(db)}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
     private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, KernelDb db)
     {
-        var found = page.Where(r => r.Target is not null).Select(r =>
+        var found = page.Where(r => r.Target is not null && !IsRootPublicationPollRow(db, r)).Select(r =>
             new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, r.BirthPartition!.Value, r.BirthFingerprint!)).Distinct().ToArray();
         return ToPolled(page, new(scope.FixedPartition, found), db);
     }
+
+    private static bool IsRootPublicationPollRow(KernelDb? db, PollRow row) => db?.UsesRootPagedPublicEvents == true &&
+        row.InboxScope is { } scope && RootPublicEventTicket.IsStored(scope, row.Kind);
 
     private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, KernelDb? db = null)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
             if (r.SplitEventPayload) throw SplitEventPayload();
+            if (bindings is not null && IsRootPublicationPollRow(db, r))
+            {
+                var address = new InstanceRef(r.Target!);
+                var ticket = RootPublicEventTicket.Decode(new MessageEntity
+                {
+                    Id = r.Id!, InboxScope = r.InboxScope!.Value, Target = address.Id, Partition = address.Partition,
+                    Kind = r.Kind!, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value,
+                    ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil, JobGeneration = r.JobGeneration!.Value
+                });
+                return new Stored(ticket.ToMessage(), r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
+            }
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };

@@ -150,6 +150,7 @@ public static partial class SqliteEmbeddedHosting
             var format = requests?.QualificationFormat;
             if (target is Contract.Target.Event publish && (format == StoreFormat.RootPublicEventStartsQualification ||
                 format == StoreFormat.RootPublicEventHostQualification ||
+                format == StoreFormat.RootPagedPublicEventsQualification ||
                 format is null && RootProfiles.Shipped.HasFlag(RootCapabilities.PublicEventStarts)))
             {
                 using var writer = AcquireFile(path);

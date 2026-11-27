@@ -85,13 +85,13 @@ internal sealed partial class PostgresRootAdmission
         if (!db.UsesRootAuthoredEvents || marker is null)
             throw new StoreFormatException("Authored event publication requires a pinned PostgreSQL store.");
         var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token);
-        if (pin?.Marker != marker)
+        if (pin is null || pin.Marker != marker)
             throw new StoreFormatException("The authored event source changed during the owned commit.");
         if (db.UsesRootEventStarts) await LockEventStartTablesAsync(db, token);
         if (db.UsesRootPublicEventStarts) await LockPublicEventStartTablesAsync(db, token);
         return sql =>
         {
-            if (sql.Format.Contains(RootEventStarts.Source, StringComparison.Ordinal)) return BindEventStarts(sql, pin);
+            if (sql.Format.Contains(RootEventStarts.Source, StringComparison.Ordinal)) return BindEventStarts(db, sql, pin);
             if (sql.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)) return BindPublicEventStarts(db, sql, pin);
             return WithAdmissionSource(sql, pin, "/*event-source*/", 5,
                 """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')""");

@@ -125,7 +125,8 @@ internal sealed partial class PostgresRootAdmission
                 ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Instances", ONLY "Subscriptions", ONLY "Messages"
             """;
         var host = db.UsesRootPublicEventHost ? """, ONLY "FoundationPublicEventHost" """ : "";
-        return db.Database.ExecuteSqlRawAsync(tables + host + " IN ACCESS SHARE MODE", token);
+        var dispatch = db.UsesRootPagedPublicEvents ? """, ONLY "FoundationPublicEventDispatch", ONLY "FoundationPagedEventStarts" """ : "";
+        return db.Database.ExecuteSqlRawAsync(tables + host + dispatch + " IN ACCESS SHARE MODE", token);
     }
 
     private static FormattableString BindPublicEventStarts(KernelDb db, FormattableString sql, PinnedRootSource pin)
@@ -135,7 +136,10 @@ internal sealed partial class PostgresRootAdmission
             ('"FoundationPublicEventLiveWaits"'), ('"FoundationPublicEventLiveReceipts"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
             ('"Instances"'), ('"Subscriptions"'), ('"Messages"')
             """;
-        return WithAdmissionSource(sql, pin, RootPublicEventStarts.Source, db.UsesRootPublicEventHost ? 12 : 11,
-            db.UsesRootPublicEventHost ? tables + """ , ('"FoundationPublicEventHost"') """ : tables, requirePermanentDirectRelations: true);
+        var host = db.UsesRootPublicEventHost ? """ , ('"FoundationPublicEventHost"') """ : "";
+        var dispatch = db.UsesRootPagedPublicEvents ? """ , ('"FoundationPublicEventDispatch"'), ('"FoundationPagedEventStarts"') """ : "";
+        return WithAdmissionSource(sql, pin, RootPublicEventStarts.Source,
+            11 + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 2 : 0),
+            tables + host + dispatch, requirePermanentDirectRelations: true);
     }
 }
