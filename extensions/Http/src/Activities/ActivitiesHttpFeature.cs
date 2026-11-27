@@ -153,9 +153,10 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         app.UseMiddleware<HttpEndpointMiddleware>();
     }
 
-    internal static void UseSharedMiddleware(IApplicationBuilder app)
+    internal static void UseSharedMiddleware(IApplicationBuilder app, bool mountStandalone = true)
     {
         app.UseMiddleware<HttpTestRunIngressMiddleware>();
-        app.UseMiddleware<StandaloneHttpTriggerMiddleware>();
+        if (mountStandalone)
+            app.UseMiddleware<StandaloneHttpTriggerMiddleware>();
     }
 }
