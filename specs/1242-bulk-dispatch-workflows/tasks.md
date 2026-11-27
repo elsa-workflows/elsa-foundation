@@ -7,29 +7,30 @@ converter) needs the activity in the catalog.
 
 ## Phase 1: The Elsa 4 activity (US1, US2)
 
-- [ ] T001 Check whether spec 1243 has already moved the iteration-id or collection helpers to a shared runtime
+- [X] T001 Check whether spec 1243 has already moved the iteration-id or collection helpers to a shared runtime
   project (FR-024). Reuse them if so; otherwise keep the local helpers.
-- [ ] T002 [US1] Add `BulkDispatchWorkflows` with `Items`, the three slots, the runtime type and catalog key, the cap
+  *Done: 1243 is parked, so `BulkDispatchIteration` and `BulkDispatchItems` stay local in DispatchWorkflow.Runtime.*
+- [X] T002 [US1] Add `BulkDispatchWorkflows` with `Items`, the three slots, the runtime type and catalog key, the cap
   and window constants, the slot-name constants and `ActivityStructure`/`ReplaySafe` attributes of plan §1, and the
   `Done` outcome in `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`
   (FR-001–FR-003, FR-009).
-- [ ] T003 [US1] Add the structure handler: the three slots, `ProjectIterationVariables` for `currentItem` and
+- [X] T003 [US1] Add the structure handler: the three slots, `ProjectIterationVariables` for `currentItem` and
   `currentIndex`, `CompletesAfterItsChildren` true, `Unordered` for every child pair, and `AssessChildResult` per plan
   §1: different children → `Unknown`, `MayRunConcurrently = true`, `EarlierProducerRunCanReachConsumer = true`; a child
   with itself → `EarlierProducerRunCanReachConsumer = false`. Add the `BulkDispatch/DispatchSlot` draft validator, with a
   Validations.Core reference (FR-003, plan §1). Register both in the DispatchWorkflow features. `DispatchPinSource` is
   not changed.
-- [ ] T004 [US1] [US2] Scheduling and completion:
+- [X] T004 [US1] [US2] Scheduling and completion:
   - `Dispatch` once per item with iteration id and scope, at most 16 passes open (FR-004, FR-005);
   - routing by outcome and completion, with the ended-index state of plan §2 (FR-006);
   - the cap (FR-007);
   - faults: no fault handler, so the incident strategy decides; never absorb (FR-008);
   - the `Items` durable-binding treatment, and slots scheduled with the pass's iteration id and their own
     `LoopIterationScopeRequest` (plan §2).
-- [ ] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
+- [X] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
 - [ ] T006 [P] [US1] Check in Studio that the designer shows the three slots through the generic rendering, and that
   the instance view shows the per-item `Dispatch` executions. Add no Studio-specific code (FR-003).
-- [ ] T007 [P] Write the activity README section, covering the cap, batching, branches, FR-010a and FR-010b, and update the
+- [X] T007 [P] Write the activity README section, covering the cap, batching, branches, FR-010a and FR-010b, and update the
   DispatchWorkflow `EXTENSION_POINTS.md` (FR-023). Also update
   `essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, whose `ProjectIterationVariables` entry says only the
   ForEach and For handlers implement it.
