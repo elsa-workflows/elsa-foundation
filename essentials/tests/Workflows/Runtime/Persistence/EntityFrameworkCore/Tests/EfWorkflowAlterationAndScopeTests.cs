@@ -528,6 +528,8 @@ public sealed class EfWorkflowAlterationAndScopeTests
     [InlineData("wrong-actor")]
     [InlineData("expired-under-fence")]
     [InlineData("close-wins")]
+    [InlineData("concurrent-delivery")]
+    [InlineData("binding-changes")]
     public async Task Isolated_actor_admission_commits_only_while_the_exact_scope_is_open(string scenario)
     {
         await using var db = await Database.CreateAsync();
@@ -543,45 +545,66 @@ public sealed class EfWorkflowAlterationAndScopeTests
             await seed.Context.SaveChangesAsync();
         }
 
-        using var closed = new ManualResetEventSlim();
+        using var competingWriteSettled = new ManualResetEventSlim();
         var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hasCompetingWrite = scenario is "close-wins" or "concurrent-delivery" or "binding-changes";
         var clockReads = 0;
         var budget = TimeSpan.FromSeconds(10);
         await using var writer = db.Open(tenant);
         var admission = Task.Run(async () => await writer.ScopeStore.AdmitIsolatedActorAsync(
             scope, scenario == "wrong-actor" ? "another-actor" : actor, ReadClock));
-        if (scenario == "close-wins")
+        if (hasCompetingWrite)
         {
             try
             {
                 await observed.Task.WaitAsync(budget);
-                await using var closer = db.Open(tenant);
-                var close = await closer.ScopeStore.CloseAsync(new(scope.ScopeId,
-                    WorkflowTestScopeCloseReason.ExplicitTeardown, createdAt.AddMinutes(1)));
-                Assert.Equal(WorkflowTestScopeCloseDisposition.Accepted, close.Disposition);
+                await using var competitor = db.Open(tenant);
+                switch (scenario)
+                {
+                    case "close-wins":
+                        var close = await competitor.ScopeStore.CloseAsync(new(scope.ScopeId,
+                            WorkflowTestScopeCloseReason.ExplicitTeardown, createdAt.AddMinutes(1)));
+                        Assert.Equal(WorkflowTestScopeCloseDisposition.Accepted, close.Disposition);
+                        break;
+                    case "concurrent-delivery":
+                        await competitor.ScopeStore.AdmitIsolatedActorAsync(scope, actor, () => createdAt.AddSeconds(1));
+                        break;
+                    case "binding-changes":
+                        var row = await competitor.Context.WorkflowTestScopes.SingleAsync();
+                        var record = WorkflowTestScopeEfSupport.Read(row, tenant);
+                        WorkflowTestScopeEfSupport.Copy(row, record with { IsolatedActor = new("replacement-actor", "next-issuance") }, 2);
+                        await competitor.Context.SaveChangesAsync();
+                        break;
+                }
             }
-            finally { closed.Set(); }
+            finally { competingWriteSettled.Set(); }
         }
 
-        if (scenario == "open")
+        if (scenario is "open" or "concurrent-delivery")
             await admission;
         else
             await Assert.ThrowsAsync<TestScopeAdmissionException>(() => admission);
-        Assert.Equal(scenario is "open" or "expired-under-fence" ? 2 : 1, clockReads);
+        Assert.Equal(scenario is "open" or "expired-under-fence" or "concurrent-delivery" ? 2 : 1, clockReads);
 
         await using var verifier = db.Open(tenant);
         var persisted = await verifier.Context.WorkflowTestScopes.SingleAsync();
-        Assert.Equal(scenario is "open" or "close-wins" ? 2 : 1, persisted.Revision);
+        var expectedRevision = scenario switch
+        {
+            "concurrent-delivery" => 3,
+            "open" or "close-wins" or "binding-changes" => 2,
+            _ => 1
+        };
+        Assert.Equal(expectedRevision, persisted.Revision);
         Assert.Equal(scenario == "close-wins" ? WorkflowTestScopeState.Closing : WorkflowTestScopeState.Open,
             (WorkflowTestScopeState)persisted.State);
 
         DateTimeOffset ReadClock()
         {
             clockReads++;
-            if (scenario == "close-wins")
+            if (hasCompetingWrite && clockReads == 1)
             {
                 observed.TrySetResult();
-                Assert.True(closed.Wait(budget), "Close did not settle before the scope revision check.");
+                Assert.True(competingWriteSettled.Wait(budget), "The competing write did not settle before the scope admission fence.");
             }
             return scenario == "expired-under-fence" && clockReads == 2 ? scope.ExpiresAt : createdAt.AddSeconds(1);
         }

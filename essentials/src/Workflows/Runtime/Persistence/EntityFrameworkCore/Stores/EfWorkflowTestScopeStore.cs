@@ -155,11 +155,13 @@ public sealed class EfWorkflowTestScopeStore(
         if (record!.IsolatedActor?.ActorReference != actorReference)
             throw new TestScopeAdmissionException("The workflow test scope does not admit the selected actor.");
 
-        var revision = row!.Revision;
-        var nextRevision = checked(revision + 1);
+        var content = row!.ContentJson;
+        var schema = row.SchemaVersion;
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        if (await exact.Where(x => x.Revision == revision && x.State == (int)WorkflowTestScopeState.Open)
-                .ExecuteUpdateAsync(update => update.SetProperty(x => x.Revision, nextRevision), cancellationToken) != 1)
+        // Other deliveries only increment the revision. Fence against changes to the validated scope or its actor binding.
+        if (await exact.Where(x => x.State == (int)WorkflowTestScopeState.Open && x.ContentJson == content &&
+                                   x.SchemaVersion == schema && x.Revision < long.MaxValue)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.Revision, x => x.Revision + 1), cancellationToken) != 1)
             throw new TestScopeAdmissionException("The workflow test scope changed during admission.");
 
         // Sample expiry again with the row locked. Waiting for a competing write must not admit expired work.
