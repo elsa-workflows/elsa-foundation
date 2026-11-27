@@ -211,7 +211,8 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     internal static async Task<byte[]> ReadRootIssuerKeyAsync(KernelDb db, CancellationToken token) =>
         (await ReadIssuerAsync(db, token)).Key;
 
-    private static Task<Target?> ReadTargetAsync(KernelDb db, string tenant, string reference, CancellationToken token)
+    private static Task<Target?> ReadTargetAsync(KernelDb db, string tenant, string reference, CancellationToken token,
+        bool includeRetentionHeader = false)
     {
         var family = db.RootStateFamily;
         return db.Database.SqlQuery<Target>($"""
@@ -227,7 +228,8 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
                 EXISTS (SELECT 1 FROM "Messages" m
                     WHERE m."Id" = b."Creator" AND m."Target" = b."Actor" AND m."Partition" = b."Partition"
                         AND m."InboxScope" = 0 AND NOT m."Done") AS "Pending",
-                i."FoundationParkAt" IS NOT NULL AS "Parked", i."FoundationHeader" AS "Header"
+                i."FoundationParkAt" IS NOT NULL AS "Parked",
+                CASE WHEN {includeRetentionHeader} THEN i."FoundationHeader" END AS "Header"
             FROM "FoundationRootBirths" b
             LEFT JOIN "Instances" i ON i."Id" = b."Actor"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1

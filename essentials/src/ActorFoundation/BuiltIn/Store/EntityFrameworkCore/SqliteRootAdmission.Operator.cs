@@ -40,12 +40,13 @@ internal sealed partial class SqliteRootAdmission
             if (park is not { Revision: > 0, At: > 0 } && (recover || (deletion ? terminal is not { Revision: > 0 }
                 : !PostgresRootSelection.MatchesRunning(cursor, selection, tenant, reference.Id))))
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
-            var target = await ReadTargetAsync(db, tenant, reference.Id, ct);
+            var usesPolicy = retentionDelete && db.UsesRootRetentionPolicy;
+            var target = await ReadTargetAsync(db, tenant, reference.Id, ct, includeRetentionHeader: usesPolicy);
             if (target is null)
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
             if (reply is not null && reply.Caller.Deadline <= now)
                 throw new PostgresRootAdmission.OperatorReplyExpired();
-            var policy = retentionDelete && db.UsesRootRetentionPolicy
+            var policy = usesPolicy
                 ? await EfStore.ReadRetentionAdmissionPolicyAsync(db, tenant, marker: null, now, ct) : null;
             var idKey = retentionDelete
                 ? PostgresRootAdmission.RetentionOperationFor(tenant, reference.Id, 1, terminal!, policy?.Policy.Revision) : operation;

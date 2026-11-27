@@ -278,7 +278,8 @@ internal sealed partial class PostgresRootAdmission
     private static Task<EfStore.RetentionAdmissionTarget?> LockRootDeleteSelectionAsync(KernelDb db, CreationAddress address, string tenant,
         string reference, FoundationTerminalStamp mark, long? marker, CancellationToken token) =>
         db.Database.SqlQuery<EfStore.RetentionAdmissionTarget>($"""
-            SELECT i."FoundationHeader" AS "Header", i."Status" FROM "Instances" i
+            SELECT CASE WHEN {marker}::bigint IS NOT NULL THEN i."FoundationHeader" END AS "Header", i."Status"
+            FROM "Instances" i
             WHERE i."Id" = {address.Id} AND i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference}
                 AND i."Status" <> {(int)InstanceStatus.Running} AND NOT i."Retired"
                 AND i."FoundationTerminalRevision" = {mark.Revision} AND i."FoundationTerminalAt" = {mark.At}

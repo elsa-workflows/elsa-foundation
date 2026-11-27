@@ -8,8 +8,9 @@ public sealed partial class EfStore
     internal sealed record RetentionAdmissionPolicy(ActorRetentionPolicy Policy, string? EncodedType, long AsOf)
     {
         internal bool Allows(string? header, InstanceStatus status, long endedAt) =>
-            header is not null && EncodedType == EncodeRetentionActorType(DurableKeyJson.Read<RootHeader>(header).Model) &&
-            Elapsed(RetentionMillis.From(Policy.Windows), status, endedAt, AsOf);
+            EncodedType is not null && header is not null &&
+            Elapsed(RetentionMillis.From(Policy.Windows), status, endedAt, AsOf) &&
+            EncodedType == EncodeRetentionActorType(DurableKeyJson.Read<RootHeader>(header).Model);
     }
 
     internal sealed record RetentionAdmissionTarget(string? Header, InstanceStatus Status);
