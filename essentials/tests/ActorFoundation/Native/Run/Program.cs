@@ -29,6 +29,8 @@ if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
 if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, .. var readsProfile] && readsProfile is ([] or ["timed"]))
     return await PostgresCorePreviewReadSeed.RunAsync(originalRoot, seedFile, timed: readsProfile.Length != 0);
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
+if (args is ["sqlite-shipped-compatibility", .. var compatibility])
+    return await SqliteShippedCompatibilityProcess.RunAsync(compatibility);
 if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"), var backlogFence and ("checked" or "in-batch")])
     return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
 if (args is ["shipped-delay-recovery", var delayProvider and ("postgres" or "sqlite"), var delayFence and ("checked" or "in-batch")])
