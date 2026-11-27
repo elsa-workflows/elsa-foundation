@@ -46,7 +46,7 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 
-public sealed class KernelPublishedExecuteTests
+public sealed partial class KernelPublishedExecuteTests
 {
     private const string FoundationDatabase = "KERNEL_EXECUTE_FOUNDATION_POSTGRES";
     private const string RuntimeDatabase = "KERNEL_EXECUTE_RUNTIME_POSTGRES";
@@ -148,6 +148,7 @@ public sealed class KernelPublishedExecuteTests
         builder.Services.AddAuthentication("KernelExecuteFixture").AddScheme<AuthenticationSchemeOptions, FixtureAuthentication>("KernelExecuteFixture", _ => { });
         builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
             { "KernelExecuteFixture" });
+        builder.Services.ReplaceCurrentSubjectPermissionAuthorizer<FixtureReadAuthorizer>();
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
         builder.Services.AddSingleton<IPermissionResourceHandler, FixtureRunPolicy>();
@@ -326,6 +327,37 @@ public sealed class KernelPublishedExecuteTests
             await VerifyDeletedAsync(reauthorized);
             var nativeParkSelection = await VerifyRecoveryAsync(recoverable, nativeRoute);
             await VerifyRecoveryAsync(recoverableFlowchart, flowchartRoute, nativeParkSelection);
+            await VerifyReducedHistoryProjectionsAsync();
+
+            async Task VerifyReducedHistoryProjectionsAsync()
+            {
+                var serving = app.Services.GetRequiredService<KernelServing>();
+                var slot = WorkflowActivationSlotIdentity.Create(recoverable.Identity.DefinitionId, "default");
+                var workflow = (serving.Find(slot) ?? throw new InvalidOperationException("The recovery workflow is not served.")).Workflow;
+                var ingress = await shell.IngressAsync(token);
+                foreach (var history in new[] { Contract.History.State, Contract.History.Minimal })
+                {
+                    expressions.IsAvailable = false;
+                    var start = Kernel.WorkflowActor.WorkflowActor.Start(Kernel.Native.NativeExecutionModel.Start(workflow) with { History = history });
+                    var admission = await ingress.SendAsync(bound, new Contract.Target.Start(start), Guid.NewGuid().ToString("N"),
+                        Contract.Kinds.Start, cancellationToken: token);
+                    Assert.Equal(Contract.AdmissionOutcome.Accepted, admission.Outcome);
+                    var actor = Assert.IsType<Contract.ActorRef>(admission.Actor);
+                    var projected = new ProjectedRun(reads, bound, actor, recoverable.Identity.DefinitionId, history);
+                    await projected.ReadAsync(Contract.ActorStatus.Running, parked: false, token);
+
+                    using var fault = await http.PostAsync("/fixture/workflows/" + nativeRoute, null, token);
+                    var park = await projected.ReadAsync(Contract.ActorStatus.Faulted, parked: true, token);
+                    expressions.IsAvailable = true;
+                    using var recovery = await RequestRecoveryAsync(actor, HttpMethod.Post, selection: park.Selection);
+                    Assert.Equal(HttpStatusCode.Accepted, recovery.StatusCode);
+                    await projected.ReadAsync(Contract.ActorStatus.Running, parked: false, token);
+
+                    using var completed = await http.PostAsync("/fixture/workflows/" + nativeRoute, null, token);
+                    Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+                    await projected.ReadAsync(Contract.ActorStatus.Finished, parked: false, token);
+                }
+            }
 
             async Task VerifyPrivateInlineAsync()
             {
@@ -476,12 +508,11 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(HttpStatusCode.OK, start.StatusCode);
                 var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await start.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
                 var actor = new Contract.ActorRef(Assert.IsType<string>(receipt.WorkflowExecutionId));
-                while ((await reads.TailAsync(bound, actor, cancellationToken: token)).JournalHeadRevision is not > 0)
-                    await Task.Delay(40, token);
+                var projected = new ProjectedRun(reads, bound, actor, executable.Identity.DefinitionId, Contract.History.Full);
+                await projected.ReadAsync(Contract.ActorStatus.Running, parked: false, token);
                 var waitRoute = "/fixture/workflows/" + path;
                 using var first = await http.PostAsync(waitRoute, null, token);
-                var route = $"/runtime/workflows/instances/{actor.Id}/recovery";
-
+                var park = await projected.ReadAsync(Contract.ActorStatus.Faulted, parked: true, token);
                 using var forbidden = await RecoveryAsync(HttpMethod.Get, manage: false);
                 Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
                 using var hidden = await RecoveryAsync(HttpMethod.Get, tenant: "another-tenant");
@@ -491,8 +522,10 @@ public sealed class KernelPublishedExecuteTests
                 var status = await parked.Content.ReadFromJsonAsync<JsonElement>(token);
                 Assert.True(status.GetProperty("status").GetString() == "Available",
                     $"Recovery status {status}; workflow HTTP {(int)first.StatusCode}: {await first.Content.ReadAsStringAsync(token)}");
-                var selected = Assert.IsType<string>(status.GetProperty("token").GetString());
-                Assert.NotEmpty(selected);
+                Assert.NotEmpty(status.GetProperty("token").GetString()!);
+                var selected = Assert.IsType<string>(park.Selection);
+                if (otherSelection is null)
+                    await VerifyTenantReadIsolationAsync(http, reads, bound, actor, executable.Identity.DefinitionId, token);
                 using var missingGrant = await InspectParkAsync(inspect: false);
                 Assert.Equal(HttpStatusCode.NotFound, missingGrant.StatusCode);
                 using var foreignEvidence = await InspectParkAsync(tenant: "another-tenant");
@@ -538,7 +571,7 @@ public sealed class KernelPublishedExecuteTests
 
                 using var accepted = await RecoveryAsync(HttpMethod.Post, selection: selected);
                 Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
-                while (await reads.GetAsync(bound, actor, token) is not { Park: null }) await Task.Delay(40, token);
+                await projected.ReadAsync(Contract.ActorStatus.Running, parked: false, token);
                 using var noPark = await RecoveryAsync(HttpMethod.Get);
                 Assert.Equal("NotParked", (await noPark.Content.ReadFromJsonAsync<JsonElement>(token)).GetProperty("status").GetString());
                 using var noEvidence = await InspectParkAsync();
@@ -563,8 +596,7 @@ public sealed class KernelPublishedExecuteTests
                 using var second = await http.PostAsync(waitRoute, null, token);
                 Assert.Equal(HttpStatusCode.OK, second.StatusCode);
                 Assert.Equal("recovered", await second.Content.ReadAsStringAsync(token));
-                var ended = Assert.IsType<Contract.ActorView>(await reads.GetAsync(bound, actor, token));
-                Assert.Equal(Contract.ActorStatus.Finished, ended.Header.Status);
+                var ended = await projected.ReadAsync(Contract.ActorStatus.Finished, parked: false, token);
                 var output = await Assert.IsAssignableFrom<Contract.IActorTerminalOutputReads>(reads)
                     .ReadTerminalOutputAsync(bound, actor, Assert.IsType<long>(ended.Header.EndedAt), includeValues: true, cancellationToken: token);
                 using var values = JsonDocument.Parse(Assert.IsType<byte[]>(output?.Values));
@@ -585,16 +617,19 @@ public sealed class KernelPublishedExecuteTests
                     return await http.SendAsync(request, token);
                 }
 
-                async Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null,
-                    string subject = "accepted")
-                {
-                    using var request = new HttpRequestMessage(method, route);
-                    if (method == HttpMethod.Post) request.Content = JsonContent.Create(new { token = selection });
-                    request.Headers.Add("X-Fixture-Subject", subject);
-                    if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
-                    if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
-                    return await http.SendAsync(request, token);
-                }
+                Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null,
+                    string subject = "accepted") => RequestRecoveryAsync(actor, method, manage, tenant, selection, subject);
+            }
+
+            async Task<HttpResponseMessage> RequestRecoveryAsync(Contract.ActorRef actor, HttpMethod method, bool manage = true,
+                string? tenant = null, string? selection = null, string subject = "accepted")
+            {
+                using var request = new HttpRequestMessage(method, $"/runtime/workflows/instances/{actor.Id}/recovery");
+                if (method == HttpMethod.Post) request.Content = JsonContent.Create(new { token = selection });
+                request.Headers.Add("X-Fixture-Subject", subject);
+                if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
+                if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
+                return await http.SendAsync(request, token);
             }
 
             async Task<string> StartWaitingAsync()
