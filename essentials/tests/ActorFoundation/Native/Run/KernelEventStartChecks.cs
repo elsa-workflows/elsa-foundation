@@ -47,7 +47,7 @@ internal static partial class KernelAuthoredEventChecks
         registry.Add(chart).Add(native);
         var old = Register(chart, "old-activation");
         var next = Register(native, "new-activation");
-        var model = new PublicWorkflow([new NativeExecutionModel(registry)]);
+        var model = new PublicWorkflow([new NativeExecutionModel(registry, new() { AuthoredEventStarts = true })]);
         var directory = Directory.CreateTempSubdirectory("event-starts");
         try
         {

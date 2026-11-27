@@ -18,6 +18,13 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
         return row is null ? null : ReadScoped(row, scope, slotId);
     }
 
+    public async ValueTask<RuntimeKernelEventPublication?> FindCurrentAsync(TriggerScope scope, string slotId,
+        CancellationToken cancellationToken = default)
+    {
+        var row = await Scoped(scope).SingleOrDefaultAsync(item => item.SlotHash == Hash(slotId) && item.Current, cancellationToken);
+        return row is null ? null : ReadScoped(row, scope, slotId);
+    }
+
     public ValueTask<IReadOnlyList<RuntimeKernelEventPublication>> ListAsync(TriggerScope scope, bool superseded,
         string? afterSlot, long afterRevision, int limit, CancellationToken cancellationToken = default) =>
         ListBySlotAsync(scope, Eligible(scope, superseded), afterSlot, afterRevision, limit, cancellationToken);

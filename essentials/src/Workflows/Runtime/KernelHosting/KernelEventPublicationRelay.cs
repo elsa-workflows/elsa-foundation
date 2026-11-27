@@ -70,16 +70,46 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
             .FindAsync(scope, slot.SlotId, slot.Revision, cancellationToken);
     }
 
-    public async ValueTask ApplyAsync(RuntimeKernelEventPublication publication, CancellationToken cancellationToken)
+    public ValueTask ApplyAsync(RuntimeKernelEventPublication publication, CancellationToken cancellationToken) =>
+        ApplyAsync(publication, restore: false, cancellationToken);
+
+    private async ValueTask ApplyAsync(RuntimeKernelEventPublication publication, bool restore, CancellationToken cancellationToken)
     {
         using var budget = Limit(cancellationToken);
         await using var runtime = await scopes.CreateAsyncScopeAsync(scope.Persistence);
         var services = runtime.ServiceProvider;
-        var registrations = await BindAsync(publication, services, budget.Token);
-        var applied = await bind().ApplyAsync(publication.SlotId, publication.Revision, registrations, budget.Token);
-        if (applied is not (EventRegistrationResult.Applied or EventRegistrationResult.Duplicate) ||
-            !await services.GetRequiredService<IRuntimeKernelEventPublicationStore>().AcknowledgeAsync(publication, budget.Token))
+        var store = services.GetRequiredService<IRuntimeKernelEventPublicationStore>();
+        while (true)
+        {
+            EventStartRegistration[] registrations;
+            try { registrations = await BindAsync(publication, services, budget.Token); }
+            catch (InvalidDataException) when (restore)
+            {
+                // A successor can drain the old publication and release its material after the scan read it.
+                if (await ReadSuccessorAsync() is not { } successor) throw;
+                publication = successor;
+                continue;
+            }
+            var applied = await bind().ApplyAsync(publication.SlotId, publication.Revision, registrations, budget.Token);
+            if (applied is (EventRegistrationResult.Applied or EventRegistrationResult.Duplicate) &&
+                await store.AcknowledgeAsync(publication, budget.Token))
+                return;
+
+            // A stale provider response alone is insufficient. A durable Runtime successor also explains
+            // why an otherwise successful provider write could not acknowledge this exact generation.
+            if (restore && await ReadSuccessorAsync() is { } next)
+            {
+                publication = next;
+                continue;
+            }
             throw new InvalidOperationException($"The exact Event registration revision was not acknowledged ({applied}).");
+        }
+
+        async ValueTask<RuntimeKernelEventPublication?> ReadSuccessorAsync()
+        {
+            var current = await store.FindCurrentAsync(publication.Scope, publication.SlotId, budget.Token);
+            return current?.Revision > publication.Revision ? current : null;
+        }
     }
 
     internal async Task RestoreAsync(CancellationToken token)
@@ -90,7 +120,7 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
             IReadOnlyList<RuntimeKernelEventPublication> legacy;
             using (var read = Limit(token)) legacy = await ReadLegacyPageAsync(false, legacyAfter, read.Token);
             if (legacy.Count == 0) break;
-            foreach (var publication in legacy) await ApplyAsync(publication, token);
+            foreach (var publication in legacy) await ApplyAsync(publication, restore: true, token);
             legacyAfter = (legacy[^1].SlotId, legacy[^1].Revision);
         }
 
@@ -102,7 +132,7 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
             IReadOnlyList<RuntimeKernelEventPublicationScanItem> page;
             using (var read = Limit(token)) page = await ReadRuntimePageAsync(false, after, through, read.Token);
             if (page.Count == 0) return;
-            foreach (var item in page) await ApplyAsync(item.Publication, token);
+            foreach (var item in page) await ApplyAsync(item.Publication, restore: true, token);
             after = page[^1].Ordinal;
         }
     }

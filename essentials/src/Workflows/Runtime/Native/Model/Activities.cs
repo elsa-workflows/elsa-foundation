@@ -692,12 +692,15 @@ public sealed class Flowchart : CompositeActivity
             nodeMetadata: n.Gateways.ToDictionary(g => g.Key, g => new FlowchartNodeMetadata(KindOf(g.Value)), StringComparer.Ordinal))));
 
     /// <summary>
-    /// A child a run can be started at by its trigger when no connection leads to it. The graph engine uses these entries
-    /// when classifying loops, so a loop reached from an entry is classified from where the run enters it.
+    /// The existing HTTP and schedule roots used to classify loops. Event discovery is separate so a workflow
+    /// starting elsewhere, including one resumed from an older checkpoint, keeps its original loop boundaries.
     /// </summary>
     internal static bool IsEntry(Node flowchart, Node child) =>
-        (child.Type == typeof(HttpEndpoint) || child.Type == typeof(Timer) || child.Type == typeof(Cron) ||
-         child.Type == typeof(Event) && NativeStartTriggers.CanStart(child)) &&
+        (child.Type == typeof(HttpEndpoint) || child.Type == typeof(Timer) || child.Type == typeof(Cron)) &&
+        !flowchart.Connections.Any(connection => connection.Target == child.Id);
+
+    internal static bool IsEventEntry(Node flowchart, Node child) =>
+        child.Type == typeof(Event) && NativeStartTriggers.CanStart(child) &&
         !flowchart.Connections.Any(connection => connection.Target == child.Id);
 
     private static string KindOf(Gateway gateway) => gateway switch

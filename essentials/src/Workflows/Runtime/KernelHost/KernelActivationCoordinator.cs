@@ -591,8 +591,23 @@ public sealed class KernelActivationCoordinator(
         var results = new List<WorkflowActivationResult>();
         foreach (var slot in await authority.ListByDefinitionIdsAsync([.. definitions], cancellationToken))
             if (slot.ActiveActivationId is not null)
-                results.Add(await EnsureServingAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken));
+                results.Add(await RestoreServingAsync(slot));
         return results;
+
+        async ValueTask<WorkflowActivationResult> RestoreServingAsync(WorkflowActivationSlot slot)
+        {
+            while (true)
+            {
+                var result = await EnsureServingAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken);
+                if (result.Outcome != WorkflowActivationOutcome.CommittedPending)
+                    return result;
+                // Only startup follows a concurrently changed slot here. Callers waiting for a particular
+                // publication must receive its exact acknowledgment or a pending result.
+                var current = await authority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken);
+                if (current is null || current.Revision <= result.Slot.Revision)
+                    return result;
+            }
+        }
     }
 
     /// <summary>

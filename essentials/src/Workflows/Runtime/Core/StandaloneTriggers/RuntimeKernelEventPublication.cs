@@ -36,6 +36,10 @@ public interface IRuntimeKernelEventPublicationStore
     ValueTask<RuntimeKernelEventPublication?> FindAsync(TriggerScope scope, string slotId, long revision,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Reads the exact scoped slot's current Event generation, including an acknowledged withdrawal.</summary>
+    ValueTask<RuntimeKernelEventPublication?> FindCurrentAsync(TriggerScope scope, string slotId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Read a bounded page of current unapplied registrations or retained superseded generations.</summary>
     /// <remarks>Restart a sweep with a null cursor so changes behind an earlier cursor are visited.</remarks>
     ValueTask<IReadOnlyList<RuntimeKernelEventPublication>> ListAsync(TriggerScope scope, bool superseded, string? afterSlot,
