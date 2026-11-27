@@ -23,7 +23,7 @@ namespace Kernel.Native.Run;
 // requires for a Terminate, held or not, on a parked root. The owner ends the root in one commit when its kept rows fit
 // one page: Cancelled and unsuspended with its terminal mark, every kept row cleared and its Park mark gone, journalled
 // "terminated". A stale Park is refused as "selection" and a larger one as "page". Of the shipped formats only RootShipped
-// (format 25) takes these paths, the S5b-3b Delete of a parked root among them; the qualification profiles carry none.
+// takes these paths, the S5b-3b Delete of a parked root among them; the qualification profiles carry none.
 internal static class PostgresRootParkedOperatorChecks
 {
     private static readonly StoreFormat Composed = StoreFormat.Current with { MessageProtocol = 95 };
@@ -56,7 +56,8 @@ internal static class PostgresRootParkedOperatorChecks
     [
         "Qualified actor checkpoint requires a qualified update",
         "Qualified actor journal requires the next running checkpoint revision",
-        "An operator outcome entry requires the checkpoint write at its revision"
+        "An operator outcome entry requires the checkpoint write at its revision",
+        "A recover outcome entry requires the checkpoint write at its revision"
     ];
 
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy, bool Content);
@@ -87,7 +88,7 @@ internal static class PostgresRootParkedOperatorChecks
                 PostgresRootIngress.RefusalError("TargetMismatch") == "target" && PostgresRootIngress.RefusalError("Ended") == "missing",
             "the ingress reports a held command refused on a parked root as \"parked\", \"park outstanding\" or \"resolution open\"");
         Check(RootProfiles.MissingPrerequisites(capabilities) == RootCapabilities.None && db.UsesRootParkedOperators &&
-                !db.UsesRootParkArrivals && db.UsesRootTerminalSelection && db.UsesRootOperatorReplies && db.UsesRootTerminateThenDelete,
+                db.UsesRootParkArrivals == shippedSet && db.UsesRootTerminalSelection && db.UsesRootOperatorReplies && db.UsesRootTerminateThenDelete,
             "the closed composed set carries Park opening and inspection with the format 17 operator chain");
         ShippedFormatsUnchanged();
 
@@ -141,12 +142,18 @@ internal static class PostgresRootParkedOperatorChecks
                 !await main.OperateAsync(early, "delete-other", Contract.Kinds.Delete, parkLate) &&
                 !await main.OperateAsync(late, "delete-stale", Contract.Kinds.Delete, main.SealPark(late, before.Revision + 1, (await main.ParkAtAsync(before))!.Value)),
             "admission refuses a parked root's running selection, another root's Park and a stale Park, for a Terminate and a Delete");
+        if (shippedSet)
+        {
+            await main.DriveAsync(late, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
+            Check(!probe.Saw(late, "ordinary"), "the shipped profile keeps the now-due input as an arrival");
+        }
         Check(await main.TerminateAsync(late, "terminate-late", parkLate), "a Terminate with the root's Park selection is admitted");
         var inbox = (await main.Cold.ReadRootInboxAsync(tenant.Tenant, late.Id, 0, "", 10, stop)).Rows;
-        Check(inbox is [{ Id: "withheld", KeptBy: null }, { Id: "fail-late", KeptBy: ParkKeepReason.Consumed }, { Id: "terminate-late", KeptBy: null }],
-            "inspection lists the withheld input, the kept fault input and the pending Terminate in FIFO order");
-        await main.DriveAsync(late, image => image is { Revision: 3, Status: InstanceStatus.Cancelled });
-        await main.TerminatedAsync(late, "terminate-late", cleared: 1);
+        Check(inbox is [{ Id: "withheld" } first, { Id: "fail-late", KeptBy: ParkKeepReason.Consumed }, { Id: "terminate-late", KeptBy: null }] &&
+            first.KeptBy == (shippedSet ? ParkKeepReason.Arrived : null),
+            "inspection lists the ordinary input, the kept fault input and the pending Terminate in FIFO order");
+        await main.DriveAsync(late, image => image is { Status: InstanceStatus.Cancelled } && image.Revision == (shippedSet ? 4 : 3));
+        await main.TerminatedAsync(late, "terminate-late", cleared: shippedSet ? 2 : 1);
         await main.SettledInputsAsync(late);
         Check(await main.InputsAsync(late) is [{ Id: var withheld, Done: true }, { Kind: "fail", Done: true, KeptBy: null, Content: false },
                 { Kind: Contract.Kinds.Terminate, Done: true }] && withheld.StartsWith(late.Id, StringComparison.Ordinal) &&
@@ -334,10 +341,14 @@ internal static class PostgresRootParkedOperatorChecks
         Check(await main.OperateAsync(suspendedResume, "resume-fails", Contract.Kinds.Resume), "a Resume is admitted for the suspended root");
         await main.DriveAsync(suspendedResume, image => image is { Revision: 4, Status: InstanceStatus.Faulted });
         await main.SettledAsync(suspendedResume, "resume-fails", suspended.State, suspended: true);
+        var suspendedParkSelection = await main.ParkSelectionAsync(suspendedResume, 3);
+        if (shippedSet)
+            Check(!await main.OperateAsync(suspendedResume, "recover-suspended-park", Contract.Kinds.Recover, suspendedParkSelection),
+                "one-page Recover refuses a suspended Park before admitting an occurrence");
         Check(!await main.OperateAsync(suspendedResume, "resume-parked", Contract.Kinds.Resume) &&
                 !await main.TerminateAsync(suspendedResume, "running-suspended-park") &&
                 await main.OperateAsync(suspendedResume, "terminate-suspended-park", Contract.Kinds.Terminate,
-                    await main.ParkSelectionAsync(suspendedResume, 3), reply: true),
+                    suspendedParkSelection, reply: true),
             "admission refuses a Resume and the running selection, and admits a held Terminate with the Park selection, for the suspended Park");
         await main.DriveAsync(suspendedResume, image => image is { Revision: 5, Status: InstanceStatus.Cancelled });
         await main.TerminatedAsync(suspendedResume, "terminate-suspended-park", cleared: 0, suspended.State);
@@ -393,6 +404,7 @@ internal static class PostgresRootParkedOperatorChecks
             await RecordedResultParkSet(recovery: true);
             await RecordedResultParkSet(recovery: true, currentPin: true);
             await LiveJobParkSet(publishFirst: false);
+            await LiveJobParkSet(publishFirst: false, terminate: true);
             await LiveJobParkSet(publishFirst: true);
             await LiveJobParkSet(publishFirst: true, invalidResult: true);
             await LiveJobParkSet(publishFirst: false, reversedPair: true);
@@ -699,7 +711,7 @@ internal static class PostgresRootParkedOperatorChecks
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
             var resultOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
             var protocol = StoreFormat.Current with { MessageProtocol = 86 };
-            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            var capabilities = RootProfiles.ParkCompositionBase | RootProfiles.Formats[StoreFormat.RootParkRecovery];
             KernelDb OpenResult() => recovery ? KernelDb.ForUnshippedComposition(resultOptions, protocol, capabilities)
                 : KernelDb.ForPostgresRootShipped(resultOptions);
             await using var set = new Set(schema, OpenResult, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
@@ -809,11 +821,12 @@ internal static class PostgresRootParkedOperatorChecks
             }
         }
 
-        async Task LiveJobParkSet(bool publishFirst, bool invalidResult = false, bool reversedPair = false)
+        async Task LiveJobParkSet(bool publishFirst, bool invalidResult = false, bool reversedPair = false, bool terminate = false)
         {
-            var schema = invalidResult ? "live_job_invalid_result" : reversedPair ? "live_job_reversed_pair" :
+            var schema = terminate ? "shipped_live_job_terminate" : invalidResult ? "live_job_invalid_result" : reversedPair ? "live_job_reversed_pair" :
                 publishFirst ? "live_job_published_before_park" : "live_job_pending_during_park";
-            await db.Database.ExecuteSqlRawAsync(invalidResult ? "CREATE SCHEMA live_job_invalid_result" :
+            await db.Database.ExecuteSqlRawAsync(terminate ? "CREATE SCHEMA shipped_live_job_terminate" :
+                invalidResult ? "CREATE SCHEMA live_job_invalid_result" :
                 reversedPair ? "CREATE SCHEMA live_job_reversed_pair" : publishFirst ? "CREATE SCHEMA live_job_published_before_park"
                     : "CREATE SCHEMA live_job_pending_during_park", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
@@ -821,8 +834,9 @@ internal static class PostgresRootParkedOperatorChecks
             var metadata = new LiveJobMetadataObservation();
             var jobOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).AddInterceptors(gate, metadata).Options;
             var protocol = StoreFormat.Current with { MessageProtocol = 86 };
-            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
-            KernelDb OpenJob() => KernelDb.ForUnshippedComposition(jobOptions, protocol, capabilities);
+            var capabilities = RootProfiles.ParkCompositionBase | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            KernelDb OpenJob() => terminate ? KernelDb.ForPostgresRootShipped(jobOptions)
+                : KernelDb.ForUnshippedComposition(jobOptions, protocol, capabilities);
             await using var set = new Set(schema, OpenJob, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true, PollLimit = 1 };
             await set.InstallAsync(createTables: true);
             var actor = "";
@@ -873,7 +887,7 @@ internal static class PostgresRootParkedOperatorChecks
             Check(await set.SendAsync(root, "fault-while-live", "fail", dueAt: publishFirst ? issued.AsOf + 120_000 : null),
                 "an earlier ordinary fault is admitted while the live job is entered");
             if (publishFirst) set.Probe.ReleaseLiveJob.TrySetResult();
-            var park = publishFirst || reversedPair ? await set.DriveAsync(root, row => row is { Status: InstanceStatus.Faulted })
+            var park = publishFirst || reversedPair || terminate ? await set.DriveAsync(root, row => row is { Status: InstanceStatus.Faulted })
                 : await ParkWithConcurrentDeadlineWriterAsync();
             var before = await ReadTimedRowsAsync();
             Check(park.Jobs == issued.Jobs && park.NextJobGeneration == issued.NextJobGeneration &&
@@ -913,6 +927,24 @@ internal static class PostgresRootParkedOperatorChecks
                 Check(before is [{ Payload.Length: > ParkRecoveryCredit.LimitBytes }] && metadata.Columns.Count >= 2 &&
                     metadata.Columns.All(columns => columns.SequenceEqual(new[] { "Id", "Kind", "Seq", "Due", "Valid" }, StringComparer.Ordinal)),
                     "Recover polls and binds a result over the arrival-page budget using only scalar metadata");
+            if (terminate)
+            {
+                Check(!set.Probe.LiveJobCancelled.Task.IsCompleted && set.Probe.LiveInvocations == 1 &&
+                    await set.OperateAsync(root, "terminate-recovered", Kinds.Terminate, await set.SelectionAsync(root)),
+                    "the shipped profile admits Terminate while the recovered callback remains entered");
+                var cancelled = await set.DriveAsync(root, row => row is { Status: InstanceStatus.Cancelled });
+                await set.Probe.LiveJobCancelled.Task.WaitAsync(stop);
+                await using var read = OpenJob();
+                Check(cancelled is { Jobs: null, NextJobGeneration: 1, ParkAt: null } && cancelled.TerminalRevision == cancelled.Revision &&
+                    set.Probe.LiveInvocations == 1 && set.Probe.Count(root, Contract.Kinds.JobFinished) == 0 &&
+                    (await ReadTimedRowsAsync()).Count == 0 &&
+                    !await read.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "FoundationProtectedTimedJobs" WHERE "Actor" = {actor}) AS "Value"
+                        """).SingleAsync(stop),
+                    "Terminate cancels the entered callback and removes its exact timed rows and protected references");
+                return;
+            }
+
             if (!publishFirst) set.Probe.ReleaseLiveJob.TrySetResult();
             var ended = await set.DriveAsync(root, row => row is { Status: InstanceStatus.Finished });
             Check(ended is { Jobs: null, NextJobGeneration: 1 } && set.Probe.Count(root, Contract.Kinds.JobFinished) == 1 &&
@@ -967,14 +999,15 @@ internal static class PostgresRootParkedOperatorChecks
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA joint_park_recovery", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "joint_park_recovery" }.ConnectionString;
             var jointOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
-            var protocol = StoreFormat.Current with { MessageProtocol = 86 };
-            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
-            KernelDb OpenJoint() => KernelDb.ForUnshippedComposition(jointOptions, protocol, capabilities);
+            KernelDb OpenJoint() => KernelDb.ForPostgresRootShipped(jointOptions);
             await using var set = new Set("joint-park-recovery", OpenJoint, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
             await set.InstallAsync(createTables: true);
-            var ingress = new PostgresRootIngress(set.Admission, Probe.Type, (_, _) => true, (_, _) => true, authorizeRecover: (_, _) => true);
+            var ingress = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenJoint, Probe.Type,
+                (caller, _, kind) => ReferenceEquals(caller, tenant) && kind is Contract.Kinds.Terminate or Contract.Kinds.Delete or Contract.Kinds.Recover,
+                cancellationToken: stop);
             Contract.ActorRef recovering = default;
             Contract.ActorRef clearing = default;
+            string? staleRecoverActor = null;
             EfStore.RootImage? withheldPark = null;
             EfStore.RootImage? parked = null;
             string? clearingSelection = null;
@@ -1005,6 +1038,15 @@ internal static class PostgresRootParkedOperatorChecks
                         UPDATE "Messages" SET "Due" = 0
                         WHERE "Target" = {withheld.Actor.Id} AND ("Kind" = {Kinds.Terminate} OR "Kind" = 'withheld-ordinary') AND NOT "Done"
                         """, token) == 2, "the earlier ordinary input and stale selected Terminate mature on the recovered withholding root");
+                }
+                if (result.Landed && staleRecoverActor is { } suspendedActor &&
+                    batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "recover-before-suspend"))
+                {
+                    await using var write = OpenJoint();
+                    Check(await write.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "Due" = 0
+                        WHERE "Target" = {suspendedActor} AND "Kind" = {Kinds.Suspend} AND NOT "Done"
+                        """, token) == 1, "the earlier Suspend matures between the two Recover commands");
                 }
                 if (result.Landed && batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "old-park-terminate"))
                     releasedBeforeControl = set.Probe.Saw(recovering, "arrival-1") && set.Probe.Saw(recovering, "arrival-2");
@@ -1038,6 +1080,10 @@ internal static class PostgresRootParkedOperatorChecks
             }
             Check(!set.Probe.Saw(recovering, "arrival-1") && !set.Probe.Saw(recovering, "arrival-2"),
                 "the owner keeps arrivals without invoking the parked actor");
+            var noOperators = await PostgresPreviewHosting.OpenFoundationAsync(OpenJoint, Probe.Type, cancellationToken: stop);
+            Check(await noOperators.SendAsync(tenant, new Contract.Target.Ref(recovering), "recover", Contract.Kinds.Recover,
+                    Json.Write(new Contract.OperatorCommand(selection, ExpectedTarget: recovering)), cancellationToken: stop)
+                is { Outcome: Contract.AdmissionOutcome.Refused }, "the ordinary hosted ingress refuses Recover without host authorization");
             Check(await SendOperatorAsync(recovering, "recover", Contract.Kinds.Recover, selection, stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
                 "public ingress admits an immediate Recover with the original Park selection");
             await set.PassUntilAsync(() => set.AnsweredAny("old-park-terminate"));
@@ -1074,6 +1120,80 @@ internal static class PostgresRootParkedOperatorChecks
                 (await set.InputsAsync(withheld)).Any(input => input is { Kind: "withheld-ordinary", Done: false }) &&
                 !set.Probe.Saw(withheld, "withheld-ordinary") && ReferenceEquals(set.Owner, owner) && !set.StoodDown,
                 "both stale Park commands settle on the same owner while the earlier authored-withheld input remains pending");
+
+            var suspending = await set.StartAsync("suspend-between-recover");
+            var running = await set.ImageAsync(suspending);
+            Check(await set.OperateAsync(suspending, "delayed-suspend", Kinds.Suspend, dueAt: running.AsOf + 120_000) &&
+                await set.SendAsync(suspending, "fault-before-suspend", "fail"),
+                "the shipped profile admits a future Suspend and the faulting input while the root runs");
+            var beforeSuspend = await set.DriveAsync(suspending, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            staleRecoverActor = beforeSuspend.Actor.Id;
+            var beforeSuspendSelection = await set.ParkSelectionAsync(suspending, beforeSuspend.Revision);
+            Check(await set.OperateAsync(suspending, "recover-before-suspend", Kinds.Recover, beforeSuspendSelection) &&
+                await set.OperateAsync(suspending, "stale-recover-after-suspend", Kinds.Recover, beforeSuspendSelection),
+                "the Park admits two distinct Recover operations using the same selection");
+            await set.DriveAsync(suspending, image => image is { Revision: 5, Status: InstanceStatus.Running, Suspended: true });
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, beforeSuspend.Actor.Id, 0, stop)) is
+                [.., """{"Outcome":"refused","Operation":"stale-recover-after-suspend","Reason":"selection"}"""] &&
+                set.Probe.Saw(suspending, Kinds.Suspend) && ReferenceEquals(set.Owner, owner) && !set.StoodDown,
+                "the stale Recover advances the journal while preserving suspension on the same owner");
+            Check(await set.OperateAsync(suspending, "resume-after-stale-recover", Kinds.Resume),
+                "the shipped profile still admits Resume after the stale Recover settles");
+            await set.DriveAsync(suspending, image => image is { Revision: 6, Status: InstanceStatus.Running, Suspended: false });
+
+            var firstGrant = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenJoint, Probe.Type,
+                (caller, target, kind) => ReferenceEquals(caller, tenant) && target == suspending && kind == Contract.Kinds.Suspend,
+                cancellationToken: stop);
+            var secondGrant = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenJoint, Probe.Type,
+                (caller, target, kind) => ReferenceEquals(caller, tenant) && target == recovering && kind == Contract.Kinds.Suspend,
+                cancellationToken: stop);
+            const string sharedId = "same-exact-operator-id";
+            var firstRef = new Contract.Target.Ref(suspending);
+            var secondRef = new Contract.Target.Ref(recovering);
+            Check(await firstGrant.SendAsync(tenant, firstRef, sharedId, Contract.Kinds.Suspend, cancellationToken: stop)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                await firstGrant.SendAsync(tenant, firstRef, sharedId, Contract.Kinds.Suspend, cancellationToken: stop)
+                    is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var prior } && prior == suspending &&
+                await secondGrant.SendAsync(tenant, secondRef, sharedId, Contract.Kinds.Suspend, cancellationToken: stop)
+                    is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null },
+                "the public operator grant returns the same actor's receipt and refuses a receipt for a different actor");
+            const string raceId = "competing-exact-operator-id";
+            var receiptBarrier = new OperatorReceiptInsertBarrier();
+            var raceOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).AddInterceptors(receiptBarrier).Options;
+            KernelDb OpenRace() => KernelDb.ForPostgresRootShipped(raceOptions);
+            var raceFirst = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenRace, Probe.Type,
+                (caller, target, kind) => ReferenceEquals(caller, tenant) && target == suspending && kind == Contract.Kinds.Suspend,
+                cancellationToken: stop);
+            var raceSecond = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenRace, Probe.Type,
+                (caller, target, kind) => ReferenceEquals(caller, tenant) && target == recovering && kind == Contract.Kinds.Suspend,
+                cancellationToken: stop);
+            var competing = await Task.WhenAll(
+                raceFirst.SendAsync(tenant, firstRef, raceId, Contract.Kinds.Suspend, cancellationToken: stop).AsTask(),
+                raceSecond.SendAsync(tenant, secondRef, raceId, Contract.Kinds.Suspend, cancellationToken: stop).AsTask());
+            Check(receiptBarrier.ConflictReads == 1 &&
+                competing.Count(result => result.Outcome == Contract.AdmissionOutcome.Accepted) == 1 &&
+                competing[0].Actor == (competing[0].Outcome == Contract.AdmissionOutcome.Accepted ? suspending : null) &&
+                competing[1].Actor == (competing[1].Outcome == Contract.AdmissionOutcome.Accepted ? recovering : null) &&
+                competing.Any(result => result is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null }),
+                "competing grants for separate actors leave one accepted operation and one refusal");
+
+            var finishing = await set.StartAsync("faulted-after-recover");
+            Check(await set.SendAsync(finishing, "park-before-terminal", "fail"), "a failing input opens the terminal-race Park");
+            await set.DriveAsync(finishing, image => image is { Revision: 2, Status: InstanceStatus.Faulted, TerminalRevision: null });
+            Check(await set.SendAsync(finishing, "terminal-arrival", "end-faulted"), "the Park admits the input that will end the root");
+            await set.DriveAsync(finishing, image => image is { Revision: 3, Status: InstanceStatus.Faulted, TerminalRevision: null });
+            var endSelection = await set.ParkSelectionAsync(finishing, 2);
+            Check(await SendOperatorAsync(finishing, "recover-before-terminal", Contract.Kinds.Recover, endSelection, stop)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                await SendOperatorAsync(finishing, "recover-after-terminal", Contract.Kinds.Recover, endSelection, stop)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the terminal-race Park admits two distinct Recover commands before the owner runs");
+            await set.SettledInputsAsync(finishing);
+            var terminal = await set.ImageAsync(finishing);
+            Check(terminal is { Revision: 5, TerminalRevision: 5, Status: InstanceStatus.Faulted, ParkAt: null } &&
+                set.Probe.Count(finishing, "end-faulted") == 1 && ReferenceEquals(set.Owner, owner) && !set.StoodDown &&
+                !(await set.Cold.ReadJournalOfAsync(0, terminal.Actor.Id, 0, stop)).Any(entry => entry.Revision > 5),
+                "a released arrival ends the root Faulted and the second Recover settles without another checkpoint");
 
             clearing = await set.StartAsync("clearing-and-recover");
             var payload = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
@@ -1117,7 +1237,7 @@ internal static class PostgresRootParkedOperatorChecks
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "withheld_cohort" }.ConnectionString;
             var cohortOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
             var protocol = StoreFormat.Current with { MessageProtocol = 86 };
-            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            var capabilities = RootProfiles.ParkCompositionBase | RootProfiles.Formats[StoreFormat.RootParkRecovery];
             KernelDb OpenCohort() => KernelDb.ForUnshippedComposition(cohortOptions, protocol, capabilities);
             await using var set = new Set("withheld-cohort", OpenCohort, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
             await set.InstallAsync(createTables: true);
@@ -1158,7 +1278,7 @@ internal static class PostgresRootParkedOperatorChecks
             var observation = new RaceHook(settings);
             var sampleOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).AddInterceptors(observation).Options;
             var protocol = StoreFormat.Current with { MessageProtocol = 86 };
-            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            var capabilities = RootProfiles.ParkCompositionBase | RootProfiles.Formats[StoreFormat.RootParkRecovery];
             KernelDb OpenSample() => KernelDb.ForUnshippedComposition(sampleOptions, protocol, capabilities);
             await using var set = new Set("bounded-cohort-sample", OpenSample, owned, inBatch, tenant, stop)
             {
@@ -1471,8 +1591,7 @@ internal static class PostgresRootParkedOperatorChecks
             await set.RetiredAsync(root);
         }
 
-        // A Park can be suspended only where Suspend is admitted. Every set with Park recovery, shipped or composed with
-        // termination, admits Recover and no other operator command, so Recover never reaches a suspended Park.
+        // The early recovery qualification profiles have no shared operator chain.
         async Task RecoverNeverMeetsSuspendedPark()
         {
             var recoveryTerminations = RootProfiles.Formats[StoreFormat.RootParkRecovery] | RootProfiles.Formats[StoreFormat.RootTerminalSelection];
@@ -1496,11 +1615,11 @@ internal static class PostgresRootParkedOperatorChecks
 
         void ShippedFormatsUnchanged()
         {
-            // S7: of the shipped formats only format 25 carries Park with termination, and it takes the parked-operator paths.
+            // The shipped root format takes the parked-operator paths.
             Check(RootProfiles.Formats.Where(entry => entry.Key != StoreFormat.RootShipped)
                     .All(entry => (entry.Value & RootCapabilities.ParkOpening) == 0 || (entry.Value & RootCapabilities.Termination) == 0) &&
                 KernelDb.ForPostgresRootShipped(options).UsesRootParkedOperators,
-                "only format 25 carries Park with termination, on the parked-operator paths, so formats 19-22 and 5, 11-17 keep theirs");
+                "the shipped root format carries Park with termination, and the qualification formats retain their operator paths");
             foreach (var shipped in new Func<DbContextOptions<KernelDb>, KernelDb>[] { KernelDb.ForPostgresRootParkOpening,
                 KernelDb.ForPostgresRootParkInspection, KernelDb.ForPostgresRootParkArrivals, KernelDb.ForPostgresRootParkRecovery,
                 KernelDb.ForPostgresRootOperators, KernelDb.ForPostgresRootTerminations, KernelDb.ForPostgresRootOperatorReplies })
@@ -1540,8 +1659,9 @@ internal static class PostgresRootParkedOperatorChecks
             var parked = await main.ImageAsync(early);
             var live = await main.ImageAsync(running);
             var suspendedPark = await main.ImageAsync(suspendedTerminate);
-            Check(!await main.TriggerProbeAsync(parked, null, Continue(parked)),
-                "the checkpoint trigger refuses a parked revision move with no refused entry");
+            Check(await main.TriggerProbeAsync(parked, null, Continue(parked)) == shippedSet,
+                shippedSet ? "the shipped arrivals guard allows an unchanged Park checkpoint without a journal entry" :
+                    "the earlier checkpoint guard requires a refusal entry for a parked revision move");
             Check(await main.TriggerProbeAsync(parked, ProbeRefusal, Continue(parked)) &&
                     await main.TriggerProbeAsync(suspendedPark, ProbeRefusal, Continue(suspendedPark)),
                 "a refused entry with only the revision moved passes the triggers on a parked root, suspended or not (rolled back)");
@@ -3388,6 +3508,30 @@ internal static class PostgresRootParkedOperatorChecks
             TriggerMessages.Contains(refused.MessageText);
     }
 
+    private sealed class OperatorReceiptInsertBarrier : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource _insertsReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _inserts;
+        private int _conflictReads;
+        internal int ConflictReads => Volatile.Read(ref _conflictReads);
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            var sql = command.CommandText;
+            if (sql.Contains("""INSERT INTO "FoundationOperatorReceipts" AS r""", StringComparison.Ordinal))
+            {
+                // Each request has missed the receipt lookup before executing its competing insert.
+                if (Interlocked.Increment(ref _inserts) == 2) _insertsReady.TrySetResult();
+                await _insertsReady.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
+            }
+            else if (sql.Contains("""FROM "FoundationOperatorReceipts" WHERE "Tenant" =""", StringComparison.Ordinal) &&
+                !sql.Contains("\"Until\"", StringComparison.Ordinal))
+                Interlocked.Increment(ref _conflictReads);
+            return result;
+        }
+    }
+
     private sealed class LiveJobCommitGate : DbTransactionInterceptor
     {
         internal string? Actor { get; set; }
@@ -3525,6 +3669,7 @@ internal static class PostgresRootParkedOperatorChecks
         internal HashSet<string> RecordedJobPlans { get; } = [];
         internal HashSet<string> LiveJobPlans { get; } = [];
         internal TaskCompletionSource ReleaseLiveJob { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource LiveJobCancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal string LiveJobResult { get; set; } = "live-result";
         private int _liveInvocations;
         internal int LiveInvocations => Volatile.Read(ref _liveInvocations);
@@ -3541,8 +3686,16 @@ internal static class PostgresRootParkedOperatorChecks
             if (job.Key == LiveJob)
             {
                 Interlocked.Increment(ref _liveInvocations);
-                await ReleaseLiveJob.Task.WaitAsync(cancellationToken);
-                return LiveJobResult;
+                try
+                {
+                    await ReleaseLiveJob.Task.WaitAsync(cancellationToken);
+                    return LiveJobResult;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    LiveJobCancelled.TrySetResult();
+                    throw;
+                }
             }
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return null;
@@ -3563,6 +3716,7 @@ internal static class PostgresRootParkedOperatorChecks
                 return new(ReleaseCohort.Task.WaitAsync(cancellationToken));
             }
             if (turn.Inbox.Any(input => input.Kind == Contract.Kinds.Terminate)) turn.End(Contract.ActorStatus.Cancelled);
+            if (turn.Inbox is [{ Kind: "end-faulted" }]) turn.End(Contract.ActorStatus.Faulted, "ordinary input ended the actor");
             if (turn.Inbox is [{ Kind: "issue-job" }])
             {
                 turn.StartJob("work", timeout: TimeSpan.FromSeconds(30));

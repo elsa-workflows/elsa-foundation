@@ -67,7 +67,7 @@ internal sealed partial class PostgresRootAdmission
 
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
         TimeSpan? keepFor, CancellationToken token, string? selection = null, bool thenDelete = false, bool retentionDelete = false,
-        OperatorReply? reply = null)
+        OperatorReply? reply = null, bool requireExactTarget = false)
     {
         if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete or Kinds.Recover) || !retentionDelete && !FoundationMetadataLimits.IsOutsideMessageId(operation))
             throw new ArgumentException("Expected a one-way exact-root operator command.");
@@ -76,11 +76,11 @@ internal sealed partial class PostgresRootAdmission
         var windowMs = (long)window.TotalMilliseconds;
         await using var db = create();
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
-        // The standalone recovery profile admits only Recover. The composition also admits Terminate and Delete.
+        // The standalone recovery profile admits only Recover. The composition also admits the root operator chain.
         var recover = kind == Kinds.Recover;
         // Recover is immediate: a delayed one could mature behind the cohort it releases.
         if (recover ? !db.UsesRootParkRecovery || due is not null || reply is not null
-            : db.UsesRootParkRecovery && (!db.UsesRootComposedParkRecovery || kind is Kinds.Suspend or Kinds.Resume)) return null;
+            : db.UsesRootParkRecovery && !db.UsesRootComposedParkRecovery) return null;
         var deletion = kind == Kinds.Delete;
         if (deletion && !db.UsesRootRetirement || thenDelete && (kind != Kinds.Terminate || !db.UsesRootTerminateThenDelete) ||
             retentionDelete && (!deletion || !db.UsesRootRetention)) return null;
@@ -142,7 +142,7 @@ internal sealed partial class PostgresRootAdmission
             // ended this actor, the receipt committed before the owner could consume it.
             var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
             // S5b-2: a Terminate, or a Delete, that names the Park is refused while its Park is being cleared.
-            var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, token) &&
+            var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, recover, token) &&
                 (recover && !db.UsesRootComposedParkRecovery || !await ClearsRootParkAsync(db, address, token));
             var selectedStatus = selected && !deletion && park is null
                 ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
@@ -154,7 +154,7 @@ internal sealed partial class PostgresRootAdmission
             if (prior is not null)
             {
                 await tx.CommitAsync(token);
-                return selected && prior != reference ? null : new(prior, true);
+                return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
             }
             if (!deletion && park is null)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
@@ -202,7 +202,7 @@ internal sealed partial class PostgresRootAdmission
                     SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
                     """).SingleAsync(token);
                 await tx.CommitAsync(token);
-                return selected && prior != reference ? null : new(prior, true);
+                return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
             }
             var actor = new InstanceRef(address.Id);
             var replyAddress = reply?.Address;
@@ -257,13 +257,13 @@ internal sealed partial class PostgresRootAdmission
     // The checkpoint stays shared-locked until the receipt and occurrence commit, so the Park cannot move underneath them.
     // A parked root carries no terminal mark until it ends.
     private static async Task<bool> LocksRootParkSelectionAsync(KernelDb db, CreationAddress address, string tenant,
-        string reference, FoundationParkMark mark, CancellationToken token) =>
+        string reference, FoundationParkMark mark, bool requireUnsuspended, CancellationToken token) =>
         address.Creation == 1 && (await db.Database.SqlQuery<long>($"""
             SELECT "Revision" AS "Value" FROM "Instances"
             WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
                 AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
                 AND "Status" = {(int)InstanceStatus.Faulted} AND "FoundationParkAt" = {mark.At} AND "FoundationParkRevision" = {mark.Revision}
-                AND "FoundationTerminalRevision" IS NULL
+                AND "FoundationTerminalRevision" IS NULL AND (NOT {requireUnsuspended} OR NOT "Suspended")
             FOR SHARE
             """).ToListAsync(token)).Count == 1;
 
@@ -437,7 +437,7 @@ internal sealed partial class PostgresRootAdmission
     private static bool CanReadOperatorKind(string kind, bool terminations, bool retirements, bool parkRecovery, bool parkedTerminate, bool composedRecovery) =>
         kind switch
         {
-            Kinds.Suspend or Kinds.Resume => !parkRecovery,
+            Kinds.Suspend or Kinds.Resume => !parkRecovery || composedRecovery,
             Kinds.Terminate => terminations && (!parkRecovery || parkedTerminate),
             Kinds.Delete => retirements && (!parkRecovery || composedRecovery),
             Kinds.Recover => parkRecovery,

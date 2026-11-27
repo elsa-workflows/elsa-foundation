@@ -15,10 +15,10 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
 
-// S7 (#4229): the shipped PostgreSQL format 25, installed and hosted as a host does: PostgresPreviewHosting's shipped
+// S7 (#4229): the shipped PostgreSQL format, installed and hosted as a host does: PostgresPreviewHosting's shipped
 // context, InstallPreviewRootSchemaAsync, a Foundation with held requests and a PostgresPreviewHostedService answering
 // through them. A held start is answered from its own turn and then runs a job; a timed job passes its deadline; a selected
-// Terminate and Delete reach the roots, with workflow history beside them. The format 25 marker refuses the preview formats
+// Terminate and Delete reach the roots, with workflow history beside them. The shipped marker refuses the preview formats
 // it replaces, which are recreated, and they refuse it.
 // A Terminate of a root whose timed job runs settles the job in its terminal commit, and a Delete retires it after.
 // Deferred to the next slice, since the PostgreSQL root dispatch refuses both on every format today: output written after a
@@ -42,16 +42,16 @@ internal static class PostgresShippedFormatChecks
         await using (var db = Open())
         {
             Require(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the shipped-format check uses an empty PostgreSQL database");
-            Require(db.RequiredFormat == StoreFormat.RootShipped && db.RequiredFormat.MessageProtocol == 25 &&
+            Require(db.RequiredFormat == StoreFormat.RootShipped &&
                     db.Capabilities == RootProfiles.Shipped && RootProfiles.MissingPrerequisites(db.Capabilities) == RootCapabilities.None,
-                "the shipped context selects format 25 with its closed capability set");
+                "the shipped context selects RootShipped with its closed capability set");
             Require(db.SupportsCorePreview && db.UsesRootReplyProtocol && db.UsesRootJobProtocol && db.UsesRootTimedJobSettlement &&
                     db.UsesRootTimedJobPreview && db.UsesRootTerminalSelection && db.UsesRootRetirement && db.UsesRootOperatorReplies &&
-                    db.UsesRootParkInspection && db.SupportsRootWorkflowHistory,
-                "format 25 carries held replies, timed jobs, selected operators with retirement, Park inspection and workflow history");
+                    db.UsesRootParkInspection && db.UsesRootParkArrivals && db.UsesRootComposedParkRecovery && db.SupportsRootWorkflowHistory,
+                "the shipped format carries held replies, timed jobs, selected operators with retirement, Park inspection, arrivals, Recover and workflow history");
             Require(!db.UsesRootSelfProtocol && !db.UsesRootTimers && !db.UsesRootValueProtocol && !db.UsesRootJobPreview &&
-                    !db.UsesRootTimedJobIssuance && !db.UsesRootParkArrivals && !db.UsesRootParkRecovery,
-                "format 25 leaves out self-sends, timers, values, untimed-only jobs, timed-job issuance and Park arrivals and recovery");
+                    !db.UsesRootTimedJobIssuance,
+                "the shipped format excludes self-sends, timers, values, untimed-only jobs and timed-job issuance");
         }
         var store = new EfStore(Open, postgres: true);
         await store.CreateAsync(1);
@@ -141,7 +141,7 @@ internal static class PostgresShippedFormatChecks
             Require(await HistoryRowsAsync(answered) == 0 && await foundation.GetAsync(scope, answered, stop) is null,
                 "the node retires the deleted root, and its history row goes with it");
 
-            Require(!escalated.Task.IsCompleted && service.LastError is null, "the node ran on format 25 without a fault");
+            Require(!escalated.Task.IsCompleted && service.LastError is null, "the node ran on the shipped format without a fault");
         }
         finally
         {
@@ -233,19 +233,19 @@ internal static class PostgresShippedFormatChecks
         await using var db = open();
         var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
-        Require(fingerprint == "57e58fe50b39be05c975d86edfedd1b67285e97afb976665e3d036eab6275e2f",
+        Require(fingerprint == "6437ebccede5e7ea7b5517ba26a3c445efc88b3d035aab7e350fb422d89caedd",
             $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
             FROM pg_catalog.pg_proc p
             WHERE p.pronamespace = pg_catalog.current_schema()::regnamespace
-                AND p.proname IN ('kernel_project_root_park_metadata', 'kernel_require_root_checkpoint_writer',
+                AND p.proname IN ('kernel_preserve_parked_live_job', 'kernel_project_root_park_metadata', 'kernel_require_root_checkpoint_writer',
                     'kernel_require_root_journal_revision', 'kernel_require_root_outcome_checkpoint')
             ORDER BY p.proname
             """).ToListAsync(token);
-        Require(bodies is ["e7baf78be308c2709f13bfda3a6c4a1e", "ea812679b5936defa1fa29dee81c42d7",
-                "dc59bbf4e6ab2ed76822721cdb89069a", "4422f56b0cd80c905e3d21e30a7cd610"],
-            "the installed PostgreSQL Park projector, checkpoint, journal and deferred outcome functions match their revision");
+        Require(bodies is ["631edb89241ac99b9413e1101d7eea78", "e7baf78be308c2709f13bfda3a6c4a1e",
+                "0a3dfca99fafab70faca7da405f3aa7c", "32455ab166ed6b45a9ecf861da7d4d74", "d09aff9335d80374110e4786ef74b5a7"],
+            $"the installed PostgreSQL Park job protection, projector, checkpoint, journal and deferred outcome functions match their revision ({string.Join(", ", bodies)})");
     }
 
     private static async Task CheckDefinitionRevisionAsync(Func<KernelDb> open, EfStore store, CancellationToken token)
@@ -313,8 +313,8 @@ internal static class PostgresShippedFormatChecks
         }
     }
 
-    // Format 25 refuses the markers of the preview formats it replaces, and each of them refuses format 25's: their
-    // databases are recreated, not migrated (card 3).
+    // Each preview format and the current shipped format refuse each other's marker. The preview
+    // databases are recreated (card 3).
     private static async Task RefusalsAsync(string connection, DbContextOptions<KernelDb> shipped, CancellationToken stop)
     {
         foreach (var (name, schema, open) in new (string, string, Func<DbContextOptions<KernelDb>, KernelDb>)[]
@@ -326,12 +326,14 @@ internal static class PostgresShippedFormatChecks
             // S5b-3b: format 25 changed format 24's triggers and stored framing under the same capability set, so a database
             // installed as format 24 is recreated too.
             ("shipped 24", "refuse_24", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 24 },
-                RootProfiles.Shipped))
+                RootProfiles.ParkCompositionBase)),
+            ("shipped 25", "refuse_25", options => KernelDb.ForUnshippedComposition(options, StoreFormat.Current with { MessageProtocol = 25 },
+                RootProfiles.ParkCompositionBase))
         })
         {
             await using (var older = open(shipped))
-                await RequireMarkerRefusedAsync(older, $"the {name} profile refuses the format 25 marker", stop);
-            // The older format's own database, in a schema of its own: format 25 refuses its marker.
+                await RequireMarkerRefusedAsync(older, $"the {name} profile refuses the current shipped marker", stop);
+            // The older format's own database, in a schema of its own: the current shipped format refuses its marker.
             await using (var db = PostgresPreviewHosting.CreateShippedContext(shipped))
                 await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + schema, stop);
             var olderOptions = new DbContextOptionsBuilder<KernelDb>()
@@ -339,7 +341,7 @@ internal static class PostgresShippedFormatChecks
             await using (var created = open(olderOptions))
                 await created.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
             await using (var newer = PostgresPreviewHosting.CreateShippedContext(olderOptions))
-                await RequireMarkerRefusedAsync(newer, $"format 25 refuses the {name} marker, so its database is recreated", stop);
+                await RequireMarkerRefusedAsync(newer, $"the current shipped format refuses the {name} marker, so its database is recreated", stop);
         }
     }
 

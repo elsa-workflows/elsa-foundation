@@ -133,8 +133,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var message = delivery.Message;
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
-        // A recover that reaches an ended or suspended root settles with the other operator kinds through the root refusal.
-        if (roots is not null && input.Row is { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Faulted, Suspended: false } recoverTarget &&
+        // Recover of a running or suspended root is a stale selection. Ended roots settle it through the root refusal.
+        if (roots is not null && input.Row is { } recoverTarget &&
+            (recoverTarget.Status == Durable.InstanceStatus.Running || IsRootParked(recoverTarget)) &&
             input.Taken is [{ Durable: true } recover] && IsRootRecover(recover.Message))
             return RecoverRootPark(input, recoverTarget, recover);
         if ((RefuseOnParkedRoot(input) ?? RefuseStaleParkCommand(input)) is { } parkedRefusal) return parkedRefusal;

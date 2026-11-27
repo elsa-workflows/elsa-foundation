@@ -47,7 +47,7 @@ internal static class PostgresRootStateFamilyChecks
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(240));
         var ct = timeout.Token;
-        var withoutPark = shippedSet ? RootProfiles.Shipped & ~RootProfiles.Formats[StoreFormat.RootParkInspection]
+        var withoutPark = shippedSet ? RootProfiles.ParkCompositionBase & ~RootProfiles.Formats[StoreFormat.RootParkInspection]
             : RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootTimedJobPreview] |
                 RootCapabilities.ReplyProtocol | RootCapabilities.OperatorReplies;
         var withPark = withoutPark | RootProfiles.Formats[StoreFormat.RootParkInspection];
@@ -100,8 +100,8 @@ internal static class PostgresRootStateFamilyChecks
         var family = db.RootStateFamily;
         Check(family == new RootStateFamily(FamilyPrefix, true, true),
             $"the {set} writes one family that names timed jobs, stable body and replies: {family.Prefix}");
-        // S7: the shipped format 25 writes this family; no qualification profile's prefix matches it in either direction.
-        Check(RootStateFamily.Of(RootProfiles.Shipped) == family, $"the shipped format 25 writes the {set} family");
+        // S7: the shipped format writes this family; no qualification profile's prefix matches it in either direction.
+        Check(RootStateFamily.Of(RootProfiles.Shipped) == family, $"the shipped format writes the {set} family");
         var qualification = RootProfiles.Formats.Where(entry => entry.Key != StoreFormat.RootShipped)
             .Select(entry => RootStateFamily.Of(entry.Value).Prefix).Distinct().ToArray();
         Check(qualification.Length == 6 && qualification.All(prefix => !family.Prefix.StartsWith(prefix, StringComparison.Ordinal) &&
