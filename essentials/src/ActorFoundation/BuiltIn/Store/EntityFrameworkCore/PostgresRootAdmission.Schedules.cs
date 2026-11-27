@@ -15,18 +15,44 @@ internal sealed partial class PostgresRootAdmission
         var actorType = RootScheduleInventory.RequireActorType(scheduleActorType);
         var specification = RootScheduleInventory.CreatorSpecification(key, actorType, typeData);
         await using var db = create();
-        if (!db.UsesRootScheduleInventory) throw new NotSupportedException("The profile does not admit schedule roots.");
+        if (!db.UsesRootScheduleInventory || db.UsesRootScheduleControls)
+            throw new NotSupportedException("The profile does not admit unversioned schedule roots.");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
         var pin = await PinScheduleStoreAsync(db, writing: true, cancellationToken);
         if (await RootScheduleInventory.FindAsync(db, tenant, key, actorType, cancellationToken, Bind) is { } existing)
             return await CompleteAsync(existing, duplicate: true);
 
+        var (result, reference) = await InsertScheduleCreatorAsync(db, tenant, key, actorType, specification, pin, Bind, cancellationToken);
+        if (!result.SourceReady) throw new StoreFormatException("The pinned schedule store changed during admission.");
+        if (!result.Claimed)
+        {
+            // Read Committed observes the contender that resolved the unique key after the statement snapshot.
+            var winner = await RootScheduleInventory.FindAsync(db, tenant, key, actorType, cancellationToken, Bind)
+                ?? throw new StoreFormatException("A concurrent schedule claim has no admitted creator.");
+            return await CompleteAsync(winner, duplicate: true);
+        }
+        if (!result.Enqueued) throw new StoreFormatException("The schedule claim has no creator.");
+        return await CompleteAsync(reference, duplicate: false);
+
+        FormattableString Bind(FormattableString sql) => BindScheduleSource(sql, pin);
+
+        async Task<Contract.Admission> CompleteAsync(string exactRef, bool duplicate)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return new(duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(exactRef));
+        }
+    }
+
+    private static async Task<(ScheduleWrite Write, string Reference)> InsertScheduleCreatorAsync(KernelDb db, string tenant,
+        ScheduleRootKey key, string actorType, StartSpec specification, PinnedRootSource pin,
+        Func<FormattableString, FormattableString> bind, CancellationToken cancellationToken)
+    {
         var issuer = pin.Issuer ?? throw new StoreFormatException("The pinned root store has no issuer.");
         var creator = RootScheduleInventory.BuildCreator(key, tenant, specification, issuer.Key, issuer.Partitions, out var reference);
         var (header, payload) = EncodeCreator(creator);
         if (!FitsEnvelope(header, payload)) throw new MetadataLimitExceeded(nameof(specification), EfStore.RootContentBytes);
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
-        var result = (await db.Database.SqlQuery<ScheduleWrite>(Bind($"""
+        var result = (await db.Database.SqlQuery<ScheduleWrite>(bind($"""
             WITH source AS MATERIALIZED (/*schedule-source*/), claimed AS (
                 INSERT INTO "FoundationScheduleRoots" ("Tenant", "Key", "Definition", "Reference", "ActorType")
                 SELECT {tenant}, {key.Key}, {key.Definition}, {reference}, {actorType} FROM source WHERE "SourceReady"
@@ -46,24 +72,7 @@ internal sealed partial class PostgresRootAdmission
             SELECT source."SourceReady", EXISTS (SELECT 1 FROM claimed) AS "Claimed",
                 EXISTS (SELECT 1 FROM creator) AS "Enqueued" FROM source
             """)).ToListAsync(cancellationToken)).Single();
-        if (!result.SourceReady) throw new StoreFormatException("The pinned schedule store changed during admission.");
-        if (!result.Claimed)
-        {
-            // Read Committed observes the contender that resolved the unique key after the statement snapshot.
-            var winner = await RootScheduleInventory.FindAsync(db, tenant, key, actorType, cancellationToken, Bind)
-                ?? throw new StoreFormatException("A concurrent schedule claim has no admitted creator.");
-            return await CompleteAsync(winner, duplicate: true);
-        }
-        if (!result.Enqueued) throw new StoreFormatException("The schedule claim has no creator.");
-        return await CompleteAsync(reference, duplicate: false);
-
-        FormattableString Bind(FormattableString sql) => BindScheduleSource(sql, pin);
-
-        async Task<Contract.Admission> CompleteAsync(string exactRef, bool duplicate)
-        {
-            await transaction.CommitAsync(cancellationToken);
-            return new(duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(exactRef));
-        }
+        return (result, reference);
     }
 
     internal async Task<RootScheduleInventory.Page> ReadScheduleRootsAsync(string tenant, string definition, string? after, int limit,
