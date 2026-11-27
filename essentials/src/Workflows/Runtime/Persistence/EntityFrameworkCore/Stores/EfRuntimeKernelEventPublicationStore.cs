@@ -59,15 +59,24 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
     }
 
     internal async ValueTask StageAsync(TriggerScope scope, WorkflowActivationSlot slot, WorkflowExecutableSourceReference? source,
-        IReadOnlyList<WorkflowTriggerBinding> bindings, CancellationToken token)
+        IReadOnlyList<WorkflowTriggerBinding> bindings, bool inheritTenant, CancellationToken token)
     {
         var scopeHash = Hash(scope.Persistence.Value);
         var slotHash = Hash(slot.SlotId);
-        var tenantHash = TenantHash(scope);
         var existing = await context.KernelEventPublications.SingleOrDefaultAsync(row => row.ScopeHash == scopeHash &&
             row.SlotHash == slotHash && row.Current, token);
         var entries = ReadEntries(slot, source, bindings);
         if (existing is null && entries.Length == 0) return;
+
+        // Once reservations disappear, an unapplied withdrawal still belongs to the slot. Carry it into the
+        // next transition so that acknowledging that transition also fences out the older physical registration.
+        var prior = existing is null ? null : Read(existing, scope.Persistence);
+        if (inheritTenant && prior is not null) scope = prior.Scope;
+        if (existing is not null)
+        {
+            ReadScoped(existing, scope, slot.SlotId);
+            if (entries.Length == 0 && existing.ArtifactId is null && existing.Applied) return;
+        }
 
         RuntimeKernelEventSource? owner = null;
         if (entries.Length != 0 && source is not null)
@@ -83,7 +92,6 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
         var content = RuntimeArtifactJson.Serialize(publication);
         if (existing is not null)
         {
-            var prior = ReadScoped(existing, scope, slot.SlotId);
             if (existing.Revision == slot.Revision && RuntimeArtifactJson.Serialize(prior) == content) return;
             if (existing.Revision >= slot.Revision)
                 throw new InvalidDataException("The Event publication generation does not advance its slot's exact revision.");
@@ -92,7 +100,7 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
         }
         context.KernelEventPublications.Add(new()
         {
-            ScopeHash = scopeHash, SlotHash = slotHash, TenantHash = tenantHash, Revision = slot.Revision,
+            ScopeHash = scopeHash, SlotHash = slotHash, TenantHash = TenantHash(scope), Revision = slot.Revision,
             ArtifactId = owner?.Executable.ArtifactId, ContentJson = content, Current = true,
             SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelEventPublicationEfModule.SchemaFamily,
                 RuntimeKernelEventPublicationEfModule.SchemaVersion)

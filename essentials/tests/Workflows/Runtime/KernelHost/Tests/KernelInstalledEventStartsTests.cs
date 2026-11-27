@@ -228,6 +228,38 @@ public sealed class KernelInstalledEventStartsTests
                 finally { await shell.StopAsync(token); }
             }
 
+            await using (var withdrawal = OpenShell())
+            {
+                var storage = withdrawal.Services.GetRequiredService<KernelShellStorage>();
+                await storage.InstallAsync(token, (_, _) => ValueTask.FromResult(false));
+                var services = withdrawal.Services.GetRequiredService<IServiceScopeFactory>();
+                var subscriber = ExecutableOf("subscriber-withdrawal", Definition,
+                    Node("start", Types.Event, [Literal("EventName", "Changed", "String")]));
+                var registered = await PublishAsync(services, subscriber, interrupted.Slot.Revision + 1, Tenant.Tenant);
+                Assert.True(registered.Succeeded, registered.Failure?.Message);
+                var port = storage.BindEventStarts(Tenant);
+                Assert.False(await port.ConfirmDrainedAsync(registered.Slot.SlotId, registered.Slot.Revision, token));
+
+                gate.InterruptRevision = registered.Slot.Revision + 1;
+                var plain = ExecutableOf("subscriber-without-event", Definition, SetOutput("seen", "seen", Literal("value", "plain")));
+                var pending = await PublishAsync(services, plain, registered.Slot.Revision, Tenant.Tenant);
+                Assert.False(pending.Succeeded);
+                Assert.Equal(PublicationStatus.Candidate, pending.Publication.Status);
+                Assert.Equal(registered.Slot.Revision + 1, pending.Slot.Revision);
+                Assert.False(await port.ConfirmDrainedAsync(registered.Slot.SlotId, registered.Slot.Revision, token));
+
+                await using var scope = await services.CreateAsyncScopeAsync(Persistence);
+                var deactivated = await scope.ServiceProvider.GetRequiredService<UnpublishPublicationSlotRequestHandler>()
+                    .UnpublishAsync(Definition, KernelServing.DefaultSlotName, token);
+                Assert.Null(deactivated.ActiveActivationId);
+                Assert.Equal(pending.Slot.Revision + 1, deactivated.Revision);
+                var publications = scope.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>();
+                var tombstone = await publications.FindAsync(Scope, deactivated.SlotId, deactivated.Revision, token);
+                Assert.NotNull(tombstone);
+                Assert.Null(tombstone.Source);
+                Assert.True(await port.ConfirmDrainedAsync(registered.Slot.SlotId, registered.Slot.Revision, token));
+            }
+
             WebApplication OpenShell()
             {
                 var builder = WebApplication.CreateBuilder();

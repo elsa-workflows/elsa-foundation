@@ -25,11 +25,14 @@ public static partial class PostgresPreviewHosting
         InstallPreviewFormatAsync(() => CreateEventStartReceiptsQualificationContext(options), cancellationToken);
 
     /// <summary>Binds trusted Event registration and relay to the selected qualification database and tenant.</summary>
-    public static IEventStartAdmissions BindEventStarts(Func<KernelDb> create, Contract.BoundScope scope)
+    public static IEventStartAdmissions BindEventStarts(Func<KernelDb> create, Contract.BoundScope scope, PostgresDirectRequests? requests = null)
     {
+        ArgumentNullException.ThrowIfNull(create);
+        ArgumentNullException.ThrowIfNull(scope);
+        requests?.RequireEventBinding(create);
         using var db = create();
         if (!db.UsesRootEventStarts) throw new StoreFormatException("Event starts require their private qualification profile.");
-        return new EventStarts(new PostgresRootAdmission(create, TimeSpan.Zero), scope.Tenant);
+        return new EventStarts(new PostgresRootAdmission(create, TimeSpan.Zero, pressure: requests?.Pressure), scope.Tenant);
     }
 
     private sealed class EventStarts(PostgresRootAdmission admission, string tenant) : IEventStartAdmissions

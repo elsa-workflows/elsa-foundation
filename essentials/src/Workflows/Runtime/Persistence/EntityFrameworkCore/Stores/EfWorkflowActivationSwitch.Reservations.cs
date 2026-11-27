@@ -23,6 +23,7 @@ public sealed partial class EfWorkflowActivationSwitch
         RuntimeKernelScheduleControl[] desired = [];
         WorkflowExecutableSourceReference? source = null;
         WorkflowTriggerBinding[] eventEntries = [];
+        var inheritEventTenant = false;
         if (slot.ActiveActivationId is { } activation)
         {
             source = await _references.FindAsync(WorkflowActivationReferenceIdentity.Create(activation), ct)
@@ -53,11 +54,13 @@ public sealed partial class EfWorkflowActivationSwitch
             var tenants = existing.Select(row => EfIngressReservationStore.Read(row, persistence).Scope.TenantId).Distinct(StringComparer.Ordinal).ToArray();
             if (tenants.Length > 1) throw new InvalidDataException("A logical slot has conflicting reservation tenants.");
             scope = new(persistence, tenants.SingleOrDefault()); claims = [];
+            inheritEventTenant = tenants.Length == 0;
         }
         var previous = await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId,
             claims, ct, _reservationPolicies, adoptSchedules: onlySchedules);
-        if (!onlySchedules && (eventEntries.Length != 0 || previous.Any(claim => claim.StimulusType == RuntimeKernelEventPublication.ReservationType)))
-            await new EfRuntimeKernelEventPublicationStore(_context, _accessContextAccessor).StageAsync(scope, slot, source, eventEntries, ct);
+        if (!onlySchedules)
+            await new EfRuntimeKernelEventPublicationStore(_context, _accessContextAccessor)
+                .StageAsync(scope, slot, source, eventEntries, inheritEventTenant, ct);
         if (desired.Length == 0 && !previous.Any(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType))
             return null;
 
