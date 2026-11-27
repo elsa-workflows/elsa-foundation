@@ -1,10 +1,13 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.KernelHost;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
 
@@ -19,11 +22,13 @@ namespace Elsa.Workflows.Runtime.KernelApi;
     DisplayName = "Workflows Runtime Kernel API",
     Description = "Serves workflow lists, run summaries and activity timelines from the clean-slate kernel on a kernel shell.",
     DependsOn = new object[] { WorkflowsRuntimeKernelFeature.FeatureName, "WorkflowsRuntimeApi" })]
-public class WorkflowsRuntimeKernelApiFeature : IShellFeature, IPostConfigureShellServices
+public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigureShellServices
 {
     public const string FeatureName = "WorkflowsRuntimeKernelApi";
 
     public virtual void ConfigureServices(IServiceCollection services) => services.AddDataProtection();
+
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => KernelHistoryStream.Map(endpoints);
 
     public virtual void PostConfigureServices(IServiceCollection services)
     {

@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import { getWorkflowHistoryPage, getWorkflowHistoryEvent, getWorkflowHistoryBookmark, listWorkflowHistoryBookmarks, RuntimeHistoryIdentityError } from "../api/runtimeHistory";
+import { getWorkflowHistoryPage, getWorkflowHistoryStream, getWorkflowHistoryEvent, getWorkflowHistoryBookmark, listWorkflowHistoryBookmarks, RuntimeHistoryIdentityError } from "../api/runtimeHistory";
 import { historyBookmark, historyCoverage, historyEvent, historyPage } from "./runtimeHistoryFixtures";
 const links = [
   { rel: "workflow-history-page", href: "runtime/workflows/instances/{workflowExecutionId}/history" },
@@ -75,4 +75,86 @@ it.each(["page", "event", "bookmarks", "bookmark"] as const)("refuses explicit i
     bookmark: () => getWorkflowHistoryBookmark(context, "run", "bookmark-1")
   };
   await expect(reads[kind]()).rejects.toBeInstanceOf(RuntimeHistoryIdentityError);
+});
+
+it("times out a stalled history body and can reconnect with the last confirmed bookmark", async () => {
+  vi.useFakeTimers();
+  try {
+    const { context } = setup(null, [...links,
+      { rel: "workflow-history-live", href: "runtime/workflows/instances/{workflowExecutionId}/history/live" }]);
+    const page = historyPage([historyEvent(4)], { upperSequence: 4, scannedThroughSequence: 4, catchUpToken: "after-4" });
+    const request = vi.fn(async (_url: string, options: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(JSON.stringify({ page }) + "\n"));
+          options.signal!.addEventListener("abort", () => controller.error(options.signal!.reason), { once: true });
+        }
+      });
+      return new Response(body, { headers: { "content-type": "application/x-ndjson" } });
+    });
+    context.http.requestResponse = request;
+    const signal = new AbortController().signal;
+    const stream = getWorkflowHistoryStream(context, "run", { continuationToken: "after-3" }, signal);
+    const first = await stream.next();
+    expect(first.value).toEqual(page);
+    const stalled = expect(stream.next()).rejects.toMatchObject({ name: "TimeoutError" });
+    await vi.advanceTimersByTimeAsync(35_000);
+    await stalled;
+    expect(signal.aborted).toBe(false);
+    const resumed = getWorkflowHistoryStream(context, "run", { continuationToken: first.value!.catchUpToken }, signal);
+    await resumed.next();
+    expect(new URL(request.mock.calls[1][0], context.baseUrl).searchParams.get("cursor")).toBe("after-4");
+    await resumed.return(undefined);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("retries an authenticated history link acquisition that ignored cancellation", async () => {
+  vi.useFakeTimers();
+  try {
+    const live = { rel: "workflow-history-live", href: "runtime/workflows/instances/{workflowExecutionId}/history/live" };
+    const { context, getJson } = setup(null, [live]);
+    getJson.mockReset().mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValue({ capabilities: [{ id: "elsa.api.runtime", contractVersion: "1", links: [live] }] });
+    context.http.requestResponse = vi.fn(async () => new Response("", { headers: { "content-type": "application/x-ndjson" } }));
+    const request = { continuationToken: "same-bookmark" };
+    const signal = new AbortController().signal;
+    const waiting = expect(getWorkflowHistoryStream(context, "run", request, signal).next()).rejects.toMatchObject({ name: "TimeoutError" });
+    await vi.advanceTimersByTimeAsync(35_000);
+    await waiting;
+    expect(context.http.requestResponse).not.toHaveBeenCalled();
+    const retry = getWorkflowHistoryStream(context, "run", request, signal);
+    await expect(retry.next()).resolves.toMatchObject({ done: true });
+    expect(getJson).toHaveBeenCalledTimes(2);
+    expect(context.http.requestResponse).toHaveBeenCalledWith(expect.stringContaining("cursor=same-bookmark"), expect.anything());
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("bounds a stalled authentication transport before headers and disposes its late response", async () => {
+  vi.useFakeTimers();
+  try {
+    const { context } = setup(null, [{ rel: "workflow-history-live", href: "runtime/workflows/instances/{workflowExecutionId}/history/live" }]);
+    let complete!: (response: Response) => void;
+    let authSignal!: AbortSignal;
+    const cancelled = vi.fn();
+    context.http.requestResponse = vi.fn().mockImplementationOnce((_url, options: RequestInit) => {
+      authSignal = options.signal!;
+      return new Promise<Response>(resolve => { complete = resolve; });
+    }).mockImplementation(async () => new Response("", { headers: { "content-type": "application/x-ndjson" } }));
+    const request = { continuationToken: "confirmed-bookmark" };
+    const signal = new AbortController().signal;
+    const waiting = expect(getWorkflowHistoryStream(context, "run", request, signal).next()).rejects.toMatchObject({ name: "TimeoutError" });
+    await vi.advanceTimersByTimeAsync(35_000);
+    await waiting;
+    expect(authSignal.aborted).toBe(true);
+    complete(new Response(new ReadableStream({ cancel: cancelled }), { headers: { "content-type": "application/x-ndjson" } }));
+    await expect(getWorkflowHistoryStream(context, "run", request, signal).next()).resolves.toMatchObject({ done: true });
+    expect(cancelled).toHaveBeenCalledOnce();
+    expect(context.http.requestResponse).toHaveBeenNthCalledWith(2, expect.stringContaining("cursor=confirmed-bookmark"), expect.anything());
+  } finally {
+    vi.useRealTimers();
+  }
 });

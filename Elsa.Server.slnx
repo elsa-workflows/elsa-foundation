@@ -227,6 +227,7 @@
   <Folder Name="/extensions/Rules/tests/Persistence/EntityFrameworkCore/">
     <Project Path="extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
+  <Folder Name="/server/" />
   <Folder Name="/server/apps/">
     <Project Path="server/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
     <Project Path="server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" />
@@ -261,6 +262,8 @@
   <Folder Name="/essentials/tests/ActorFoundation/Native/">
     <Project Path="essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj" />
   </Folder>
+  <Folder Name="/prototypes/" />
+  <Folder Name="/prototypes/kernel-model/" />
   <Folder Name="/prototypes/kernel-model/models/">
     <Project Path="prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
   </Folder>
@@ -284,6 +287,7 @@
     <Project Path="essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <Project Path="essentials/src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj" />
   </Folder>
+  <Folder Name="/extensions/Bpmn/" />
   <Folder Name="/extensions/Bpmn/src/">
     <Project Path="extensions/Bpmn/src/Api/Elsa.Activities.Bpmn.Api.csproj" />
     <Project Path="extensions/Bpmn/src/Core/Elsa.Activities.Bpmn.Core.csproj" />
@@ -342,6 +346,7 @@
     <Project Path="essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj" />
     <Project Path="essentials/src/Cli/Worker/Elsa.Cli.Worker.csproj" />
   </Folder>
+  <Folder Name="/extensions/Connections/" />
   <Folder Name="/extensions/Connections/src/">
     <Project Path="extensions/Connections/src/Api/Elsa.Connections.Api.csproj" />
     <Project Path="extensions/Connections/src/Core/Elsa.Connections.Core.csproj" />
@@ -352,12 +357,15 @@
   <Folder Name="/extensions/Connections/src/Persistence/">
     <Project Path="extensions/Connections/src/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/extensions/Diagnostics/" />
   <Folder Name="/extensions/Diagnostics/src/">
     <Project Path="extensions/Diagnostics/src/Persistence/Elsa.Diagnostics.Persistence.csproj" />
   </Folder>
+  <Folder Name="/extensions/ConsoleStream/" />
   <Folder Name="/extensions/ConsoleStream/src/">
     <Project Path="extensions/ConsoleStream/src/Elsa.Diagnostics.ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
   </Folder>
+  <Folder Name="/extensions/Diagnostics.OpenTelemetry/" />
   <Folder Name="/extensions/Diagnostics.OpenTelemetry/src/">
     <Project Path="extensions/Diagnostics.OpenTelemetry/src/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <Project Path="extensions/Diagnostics.OpenTelemetry/src/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
@@ -366,6 +374,7 @@
   <Folder Name="/extensions/Diagnostics.OpenTelemetry/src/Persistence/">
     <Project Path="extensions/Diagnostics.OpenTelemetry/src/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/extensions/Diagnostics.StructuredLogs/" />
   <Folder Name="/extensions/Diagnostics.StructuredLogs/src/">
     <Project Path="extensions/Diagnostics.StructuredLogs/src/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj" />
     <Project Path="extensions/Diagnostics.StructuredLogs/src/Elsa.Diagnostics.StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj" />
@@ -395,18 +404,23 @@
     <Project Path="essentials/src/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <Project Path="essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
   </Folder>
+  <Folder Name="/extensions/Git/" />
   <Folder Name="/extensions/Git/src/">
     <Project Path="extensions/Git/src/Elsa.Git/Elsa.Git.csproj" />
   </Folder>
+  <Folder Name="/extensions/Git/src/Workflows/" />
+  <Folder Name="/extensions/Git/src/Workflows/Design/" />
   <Folder Name="/extensions/Git/src/Workflows/Design/Reconciliation/">
     <Project Path="extensions/Git/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.Git.csproj" />
   </Folder>
   <Folder Name="/extensions/Http/src/Activities/">
     <Project Path="extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
   </Folder>
+  <Folder Name="/extensions/Http/src/Workflows/" />
   <Folder Name="/extensions/Http/src/Workflows/Runtime/">
     <Project Path="extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
   </Folder>
+  <Folder Name="/extensions/Http/" />
   <Folder Name="/extensions/Http/src/">
     <Project Path="extensions/Http/src/Core/Elsa.Http.Core.csproj" />
     <Project Path="extensions/Http/src/Elsa.Http/Elsa.Http.csproj" />
@@ -424,6 +438,7 @@
     <Project Path="essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
     <Project Path="essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
   </Folder>
+  <Folder Name="/extensions/Identity/" />
   <Folder Name="/extensions/Identity/src/">
     <Project Path="extensions/Identity/src/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
     <Project Path="extensions/Identity/src/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj" />
@@ -481,12 +496,15 @@
     <Project Path="essentials/src/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj" />
     <Project Path="essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
   </Folder>
+  <Folder Name="/extensions/Attention/" />
   <Folder Name="/extensions/Attention/src/">
     <Project Path="extensions/Attention/src/Api/Elsa.Attention.Api.csproj" />
   </Folder>
+  <Folder Name="/extensions/Tasks/" />
   <Folder Name="/extensions/Tasks/src/">
     <Project Path="extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj" />
   </Folder>
+  <Folder Name="/extensions/Secrets/" />
   <Folder Name="/extensions/Secrets/src/">
     <Project Path="extensions/Secrets/src/Api/Elsa.Secrets.Api.csproj" />
     <Project Path="extensions/Secrets/src/Core/Elsa.Secrets.Core.csproj" />
@@ -494,6 +512,7 @@
     <Project Path="extensions/Secrets/src/Nuplane/Elsa.Secrets.Nuplane.csproj" />
     <Project Path="extensions/Secrets/src/Workflows/Elsa.Secrets.Workflows.csproj" />
   </Folder>
+  <Folder Name="/extensions/Dashboard/" />
   <Folder Name="/extensions/Dashboard/src/">
     <Project Path="extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj" />
     <Project Path="extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj" />
@@ -605,8 +624,6 @@
   <Folder Name="/essentials/src/Workflows/Runtime/Persistence/">
     <Project Path="essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
-  <Folder Name="/studio/" />
-  <Folder Name="/tests/" />
   <Folder Name="/essentials/tests/">
     <Project Path="essentials/tests/Testing/Elsa.Testing.csproj" />
   </Folder>
@@ -755,6 +772,7 @@
     <Project Path="extensions/Diagnostics.OpenTelemetry/tests/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj" />
   </Folder>
   <Folder Name="/extensions/Diagnostics.OpenTelemetry/tests/Persistence/" />
+  <Folder Name="/extensions/Diagnostics/tests/" />
   <Folder Name="/extensions/Diagnostics/tests/Persistence/">
     <Project Path="extensions/Diagnostics/tests/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj" />
   </Folder>
@@ -839,9 +857,11 @@
   <Folder Name="/essentials/tests/Persistence/EntityFrameworkCore/MySql/">
     <Project Path="essentials/tests/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj" />
   </Folder>
+  <Folder Name="/extensions/Attention/tests/" />
   <Folder Name="/extensions/Attention/tests/Api/">
     <Project Path="extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj" />
   </Folder>
+  <Folder Name="/extensions/Tasks/tests/" />
   <Folder Name="/extensions/Tasks/tests/Execution/">
     <Project Path="extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj" />
   </Folder>
@@ -990,6 +1010,7 @@
   <Folder Name="/essentials/tests/Workflows/Runtime/Api/">
     <Project Path="essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj" />
   </Folder>
+  <Folder Name="/extensions/Http/tests/Workflows/" />
   <Folder Name="/extensions/Http/tests/Workflows/Runtime/">
     <Project Path="extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
   </Folder>
