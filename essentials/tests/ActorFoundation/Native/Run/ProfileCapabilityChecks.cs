@@ -354,9 +354,23 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(receiptsPostgres) is { StoreSchema: 1, MessageProtocol: 24, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(receiptsSqlite) is { StoreSchema: 2, MessageProtocol: 27, JournalCodec: 0 },
             "bounded Event receipt retention has a distinct private profile and exact provider definitions");
+        using var eventScanPostgres = KernelDb.ForPostgresRootEventStartScanQualification(options);
+        using var eventScanSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootEventStartScanQualification);
+        Check(eventScanPostgres.RequiredFormat == StoreFormat.RootEventStartScanQualification &&
+            eventScanSqlite.RequiredFormat == eventScanPostgres.RequiredFormat &&
+            eventScanPostgres.Capabilities == (receiptsPostgres.Capabilities | RootCapabilities.EventStartScan) &&
+            eventScanSqlite.Capabilities == eventScanPostgres.Capabilities &&
+            eventScanPostgres.UsesRootEventStartScan && eventScanSqlite.UsesRootEventStartScan &&
+            !receiptsPostgres.UsesRootEventStartScan && !receiptsSqlite.UsesRootEventStartScan &&
+            !sharedPostgres.UsesRootEventStartScan && !sharedSqlite.UsesRootEventStartScan &&
+            RootProfiles.MissingPrerequisites(eventScanPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(eventScanPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(eventScanPostgres) is { StoreSchema: 1, MessageProtocol: 25, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(eventScanSqlite) is { StoreSchema: 2, MessageProtocol: 28, JournalCodec: 0 },
+            "ordered Event start replay adds only a private provider profile with exact definitions");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
             playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
-            authoredPostgres.Capabilities | startEventsPostgres.Capabilities | receiptsPostgres.Capabilities;
+            authoredPostgres.Capabilities | startEventsPostgres.Capabilities | receiptsPostgres.Capabilities | eventScanPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -393,6 +407,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.AuthoredEvents] = RootCapabilities.LiveEventWaits | RootCapabilities.SelfProtocol,
             [RootCapabilities.EventStarts] = RootCapabilities.AuthoredEvents | RootCapabilities.PreparedStarts,
             [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
+            [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
             [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,

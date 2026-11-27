@@ -76,6 +76,12 @@ public static partial class SqliteEmbeddedHosting
         internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(Contract.BoundScope scope, string? after, CancellationToken token) =>
             admission.ListEventStartsAsync(scope.Tenant, after, token);
 
+        internal Task<long> ReadEventStartTailAsync(Contract.BoundScope scope, CancellationToken token) =>
+            admission.ReadEventStartTailAsync(scope.Tenant, token);
+
+        internal Task<IReadOnlyList<EventStartScanItem>> ReadEventStartPageAsync(Contract.BoundScope scope, long after, long through, int limit,
+            CancellationToken token) => admission.ReadEventStartPageAsync(scope.Tenant, after, through, limit, token);
+
         internal Task<Contract.Admission> AdmitEventStartAsync(Contract.BoundScope scope, string target,
             Func<EventStartTarget, Contract.StartSpec> start, ProtectRootStartAsync protect, CancellationToken token) =>
             RootEventStarts.RelayAsync(target, start, ct => admission.ReadEventStartAsync(scope.Tenant, target, ct),
@@ -149,7 +155,7 @@ public static partial class SqliteEmbeddedHosting
                 ? format == StoreFormat.RootLiveEventQualification || format == StoreFormat.RootPlaybackDescendantsQualification ||
                   format == StoreFormat.RootManagedSchedulesQualification || format == StoreFormat.RootPreparedStartsQualification ||
                   format == StoreFormat.RootAuthoredEventsQualification || format == StoreFormat.RootEventStartsQualification ||
-                  format == StoreFormat.RootEventStartReceiptsQualification
+                  format == StoreFormat.RootEventStartReceiptsQualification || format == StoreFormat.RootEventStartScanQualification
                 : TakesHttpWaits;
 
             public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
@@ -210,6 +216,14 @@ public static partial class SqliteEmbeddedHosting
             internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(string tenant, string? after, CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
                     (admission, ct) => admission.ListEventStartsAsync(tenant, after, ct), token), token);
+
+            internal Task<long> ReadEventStartTailAsync(string tenant, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ReadEventStartTailAsync(tenant, ct), token), token);
+
+            internal Task<IReadOnlyList<EventStartScanItem>> ReadEventStartPageAsync(string tenant, long after, long through, int limit,
+                CancellationToken token) => OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ReadEventStartPageAsync(tenant, after, through, limit, ct), token), token);
 
             internal Task<(EventStartTarget? Pending, string? Settled)> ReadEventStartAsync(string tenant, string target, CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,

@@ -17,15 +17,32 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 /// <summary>Reconciles committed Runtime publication generations and their provider-selected starts.</summary>
 internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, TriggerScope scope, BoundScope actors,
-    KernelHostCapabilities capabilities, Func<IEventStartAdmissions> bind, TimeProvider clock, ILogger<KernelEventPublicationRelay> logger, bool retainsReceipts = false)
+    KernelHostCapabilities capabilities, Func<IEventStartAdmissions> bind, TimeProvider clock, ILogger<KernelEventPublicationRelay> logger,
+    bool retainsReceipts = false, bool orderedScan = false)
     : IKernelEventPublicationRegistration
 {
     private const int RuntimePageSize = 16;
     private static readonly TimeSpan Cadence = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ReadBudget = TimeSpan.FromSeconds(5);
-    private (string Slot, long Revision)? _applyAfter;
-    private (string Slot, long Revision)? _drainAfter;
+    private readonly Scan _apply = new();
+    private readonly Scan _drain = new();
+    private readonly Scan _targets = new();
+    private readonly LegacyScan _legacyApply = new();
+    private readonly LegacyScan _legacyDrain = new();
     private string? _targetAfter;
+
+    private sealed class Scan
+    {
+        internal long? Through { get; set; }
+        internal long After { get; set; }
+
+        internal void Reset() => (Through, After) = (null, 0);
+    }
+
+    private sealed class LegacyScan
+    {
+        internal (string Slot, long Revision)? After { get; set; }
+    }
 
     public bool SupportsDurableMode => retainsReceipts;
 
@@ -67,14 +84,27 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
 
     internal async Task RestoreAsync(CancellationToken token)
     {
-        (string Slot, long Revision)? after = null;
-        do
+        (string Slot, long Revision)? legacyAfter = null;
+        while (true)
         {
-            using var budget = Limit(token);
-            var page = await PageAsync(false, after, budget.Token);
-            after = Cursor(page);
-            foreach (var publication in page) await ApplyAsync(publication, token);
-        } while (after is not null);
+            IReadOnlyList<RuntimeKernelEventPublication> legacy;
+            using (var read = Limit(token)) legacy = await ReadLegacyPageAsync(false, legacyAfter, read.Token);
+            if (legacy.Count == 0) break;
+            foreach (var publication in legacy) await ApplyAsync(publication, token);
+            legacyAfter = (legacy[^1].SlotId, legacy[^1].Revision);
+        }
+
+        long through;
+        using (var read = Limit(token)) through = await ReadRuntimeTailAsync(read.Token);
+        long after = 0;
+        while (after < through)
+        {
+            IReadOnlyList<RuntimeKernelEventPublicationScanItem> page;
+            using (var read = Limit(token)) page = await ReadRuntimePageAsync(false, after, through, read.Token);
+            if (page.Count == 0) return;
+            foreach (var item in page) await ApplyAsync(item.Publication, token);
+            after = page[^1].Ordinal;
+        }
     }
 
     internal async Task RunAsync(KernelExecutableProtection protection, CancellationToken token)
@@ -84,60 +114,122 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
             using var timer = new PeriodicTimer(Cadence, clock);
             do
             {
-                await MaintainAsync(ApplyPageAsync, token);
-                await MaintainAsync(RelayPageAsync, token);
-                await MaintainAsync(DrainPageAsync, token);
-                if (retainsReceipts) await MaintainAsync(PruneReceiptsAsync, token);
+                await VisitLegacyPageAsync(_legacyApply, false, (item, ct) => ApplyAsync(item, ct).AsTask(), token);
+                await VisitOrderedPageAsync(_apply, ReadRuntimeTailAsync,
+                    (after, through, ct) => ReadRuntimePageAsync(false, after, through, ct),
+                    item => item.Ordinal, (item, ct) => ApplyAsync(item.Publication, ct).AsTask(), token);
+                await RelayPageAsync(token);
+                await VisitLegacyPageAsync(_legacyDrain, true, ReleaseDrainedAsync, token);
+                await VisitOrderedPageAsync(_drain, ReadRuntimeTailAsync,
+                    (after, through, ct) => ReadRuntimePageAsync(true, after, through, ct),
+                    item => item.Ordinal, (item, ct) => ReleaseDrainedAsync(item.Publication, ct), token);
+                if (retainsReceipts) await MaintainAsync(async ct => { await bind().PruneSettledAsync(ct); }, token);
             } while (await timer.WaitForNextTickAsync(token));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
 
-        async Task PruneReceiptsAsync(CancellationToken operation)
+        async Task RelayPageAsync(CancellationToken stopping)
         {
-            var provider = bind();
-            while (await provider.PruneSettledAsync(operation) != 0) operation.ThrowIfCancellationRequested();
-        }
+            IEventStartAdmissions? provider = null;
+            await MaintainAsync(_ =>
+            {
+                provider = bind();
+                return Task.CompletedTask;
+            }, stopping);
+            if (provider is null) return;
+            if (orderedScan)
+            {
+                var scan = (IOrderedEventStartAdmissions)provider;
+                await VisitOrderedPageAsync(_targets, scan.ReadPendingTailAsync,
+                    (after, through, ct) => scan.ReadPendingPageAsync(after, through, RuntimePageSize, ct),
+                    item => item.Ordinal, (item, ct) => AdmitAsync(provider, item.Target, protection, ct), stopping);
+                return;
+            }
 
-        async Task ApplyPageAsync(CancellationToken operation)
-        {
-            var page = await PageAsync(false, _applyAfter, operation);
-            _applyAfter = Cursor(page);
-            foreach (var item in page)
-                await MaintainAsync(ct => ApplyAsync(item, ct).AsTask(), operation);
-        }
-        async Task RelayPageAsync(CancellationToken operation)
-        {
-            var provider = bind();
-            var targets = await provider.ListAsync(_targetAfter, operation);
-            _targetAfter = targets.Count == 0 ? null : targets[^1].Id;
-            foreach (var target in targets)
-                await MaintainAsync(ct => AdmitAsync(provider, target, protection, ct), operation);
-        }
-        async Task DrainPageAsync(CancellationToken operation)
-        {
-            var page = await PageAsync(true, _drainAfter, operation);
-            _drainAfter = Cursor(page);
-            var provider = bind();
-            foreach (var item in page)
-                await MaintainAsync(async ct =>
-                {
-                    if (!await provider.ConfirmDrainedAsync(item.SlotId, item.Revision, ct)) return;
-                    await using var runtime = await scopes.CreateAsyncScopeAsync(scope.Persistence);
-                    await runtime.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>().ReleaseDrainedAsync(item, ct);
-                }, operation);
+            IReadOnlyList<EventStartTarget>? targets = null;
+            await MaintainAsync(async ct => targets = await provider.ListAsync(_targetAfter, ct), stopping);
+            if (targets is null) return;
+            if (targets.Count == 0) _targetAfter = null;
+            await VisitPageAsync(targets, (target, ct) => AdmitAsync(provider, target, protection, ct),
+                target => _targetAfter = target.Id, stopping);
         }
     }
 
-    private async Task<IReadOnlyList<RuntimeKernelEventPublication>> PageAsync(bool obsolete, (string Slot, long Revision)? after,
-        CancellationToken token)
+    private async Task<long> ReadRuntimeTailAsync(CancellationToken token)
     {
         await using var runtime = await scopes.CreateAsyncScopeAsync(scope.Persistence);
         return await runtime.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>()
-            .ListAsync(scope, obsolete, after?.Slot, after?.Revision ?? 0, RuntimePageSize, token);
+            .ReadScanTailAsync(scope, token);
     }
 
-    private static (string Slot, long Revision)? Cursor(IReadOnlyList<RuntimeKernelEventPublication> page) =>
-        page.Count < RuntimePageSize ? null : (page[^1].SlotId, page[^1].Revision);
+    private async Task<IReadOnlyList<RuntimeKernelEventPublicationScanItem>> ReadRuntimePageAsync(bool obsolete,
+        long after, long through, CancellationToken token)
+    {
+        await using var runtime = await scopes.CreateAsyncScopeAsync(scope.Persistence);
+        return await runtime.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>()
+            .ListScanAsync(scope, obsolete, after, through, RuntimePageSize, token);
+    }
+
+    private async Task<IReadOnlyList<RuntimeKernelEventPublication>> ReadLegacyPageAsync(bool obsolete,
+        (string Slot, long Revision)? after, CancellationToken token)
+    {
+        await using var runtime = await scopes.CreateAsyncScopeAsync(scope.Persistence);
+        return await runtime.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>()
+            .ListLegacyScanAsync(scope, obsolete, after?.Slot, after?.Revision ?? 0, RuntimePageSize, token);
+    }
+
+    private async Task ReleaseDrainedAsync(RuntimeKernelEventPublication publication, CancellationToken token)
+    {
+        if (!await bind().ConfirmDrainedAsync(publication.SlotId, publication.Revision, token)) return;
+        await using var runtime = await scopes.CreateAsyncScopeAsync(scope.Persistence);
+        await runtime.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>().ReleaseDrainedAsync(publication, token);
+    }
+
+    private async Task VisitOrderedPageAsync<T>(Scan scan, Func<CancellationToken, Task<long>> readTail,
+        Func<long, long, CancellationToken, Task<IReadOnlyList<T>>> readPage, Func<T, long> ordinal,
+        Func<T, CancellationToken, Task> visit, CancellationToken token)
+    {
+        IReadOnlyList<T>? page = null;
+        await MaintainAsync(async ct =>
+        {
+            scan.Through ??= await readTail(ct);
+            page = scan.Through == 0 ? [] : await readPage(scan.After, scan.Through.Value, ct);
+        }, token);
+        if (page is null) return;
+        await VisitPageAsync(page, visit, item =>
+        {
+            var next = ordinal(item);
+            if (next <= scan.After || next > scan.Through)
+                throw new InvalidDataException("An Event scan did not advance within its committed boundary.");
+            scan.After = next;
+        }, token);
+
+        if (page.Count == 0 || scan.After == scan.Through) scan.Reset();
+    }
+
+    private async Task VisitLegacyPageAsync(LegacyScan scan, bool obsolete,
+        Func<RuntimeKernelEventPublication, CancellationToken, Task> visit, CancellationToken token)
+    {
+        IReadOnlyList<RuntimeKernelEventPublication>? page = null;
+        await MaintainAsync(async ct => page = await ReadLegacyPageAsync(obsolete, scan.After, ct), token);
+        if (page is null) return;
+        if (page.Count == 0) scan.After = null;
+        await VisitPageAsync(page, visit, item => scan.After = (item.SlotId, item.Revision), token);
+    }
+
+    private async Task VisitPageAsync<T>(IReadOnlyList<T> page, Func<T, CancellationToken, Task> visit,
+        Action<T> advance, CancellationToken token)
+    {
+        // Yield between attempts. Each item has its own deadline, so a timeout leaves the unvisited suffix in the scan.
+        var started = clock.GetTimestamp();
+        foreach (var item in page)
+        {
+            token.ThrowIfCancellationRequested();
+            await MaintainAsync(ct => visit(item, ct), token);
+            advance(item);
+            if (clock.GetElapsedTime(started) >= ReadBudget) break;
+        }
+    }
 
     private async Task AdmitAsync(IEventStartAdmissions provider, EventStartTarget target,
         KernelExecutableProtection protection, CancellationToken token)

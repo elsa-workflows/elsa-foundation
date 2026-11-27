@@ -21,6 +21,13 @@ internal sealed partial class PostgresRootAdmission
     internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(string tenant, string? after, CancellationToken token) =>
         ReadEventStartsAsync((db, bind) => RootEventStarts.ListAsync(db, tenant, after, bind, token), token);
 
+    internal Task<long> ReadEventStartTailAsync(string tenant, CancellationToken token) =>
+        ReadEventStartsAsync((db, bind) => RootEventStarts.ReadPendingTailAsync(db, tenant, bind, token), token);
+
+    internal Task<IReadOnlyList<EventStartScanItem>> ReadEventStartPageAsync(string tenant, long after, long through, int limit,
+        CancellationToken token) =>
+        ReadEventStartsAsync((db, bind) => RootEventStarts.ReadPendingPageAsync(db, tenant, after, through, limit, bind, token), token);
+
     internal Task<Contract.Admission> AdmitEventStartAsync(string tenant, string target,
         Func<EventStartTarget, Contract.StartSpec> start, ProtectRootStartAsync protect, CancellationToken caller) =>
         RootEventStarts.RelayAsync(target, start,

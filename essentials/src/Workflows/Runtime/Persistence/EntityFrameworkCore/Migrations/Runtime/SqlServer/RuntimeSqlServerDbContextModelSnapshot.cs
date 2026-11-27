@@ -2131,6 +2131,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .IsConcurrencyToken()
                         .HasColumnType("bit");
 
+                    b.Property<long?>("InsertionOrdinal")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -2147,11 +2150,28 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeHash", "SlotHash", "Current");
 
+                    b.HasIndex("ScopeHash", "TenantHash", "InsertionOrdinal")
+                        .IsUnique()
+                        .HasDatabaseName("UX_KernelEventPublication_InsertionOrdinal")
+                        .HasFilter("[InsertionOrdinal] IS NOT NULL");
+
+                    b.HasIndex("ScopeHash", "TenantHash", "Current", "InsertionOrdinal")
+                        .HasDatabaseName("IX_KernelEventPublication_RetainScan");
+
+                    b.HasIndex("ScopeHash", "TenantHash", "Current", "Applied", "InsertionOrdinal")
+                        .HasDatabaseName("IX_KernelEventPublication_ApplyScan");
+
                     b.HasIndex("ScopeHash", "TenantHash", "Current", "SlotHash", "Revision")
                         .HasDatabaseName("IX_KernelEventPublication_Retain");
 
                     b.HasIndex("ScopeHash", "TenantHash", "Current", "Applied", "SlotHash", "Revision")
                         .HasDatabaseName("IX_KernelEventPublication_Apply");
+
+                    b.HasIndex("ScopeHash", "TenantHash", "InsertionOrdinal", "Current", "SlotHash", "Revision")
+                        .HasDatabaseName("IX_KernelEventPublication_RetainLegacy");
+
+                    b.HasIndex("ScopeHash", "TenantHash", "InsertionOrdinal", "Current", "Applied", "SlotHash", "Revision")
+                        .HasDatabaseName("IX_KernelEventPublication_ApplyLegacy");
 
                     b.ToTable("elsa_runtime_kernel_event_publication", (string)null);
                 });

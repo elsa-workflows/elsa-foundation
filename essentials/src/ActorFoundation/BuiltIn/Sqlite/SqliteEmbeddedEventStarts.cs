@@ -19,16 +19,30 @@ public sealed partial class SqliteEmbeddedFoundation
         return new(databasePath, node, actorType, StoreFormat.RootEventStartReceiptsQualification, protectRootStart);
     }
 
+    /// <summary>Composes the dedicated ordered Event start qualification profile.</summary>
+    public static SqliteEmbeddedFoundation ForEventStartScanQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootEventStartScanQualification, protectRootStart);
+    }
+
     /// <summary>Binds trusted Event registration and relay to the selected file and tenant.</summary>
     public IEventStartAdmissions BindEventStarts(Contract.BoundScope scope) => new BoundEventStarts(EventStarts, scope);
 
-    private sealed class BoundEventStarts(SqliteEmbeddedHosting.SqliteDirectRequests requests, Contract.BoundScope scope) : IEventStartAdmissions
+    private sealed class BoundEventStarts(SqliteEmbeddedHosting.SqliteDirectRequests requests, Contract.BoundScope scope) : IOrderedEventStartAdmissions
     {
         public Task<EventRegistrationResult> ApplyAsync(string slot, long revision, IReadOnlyList<EventStartRegistration> registrations, CancellationToken cancellationToken) =>
             requests.ApplyEventStartsAsync(scope, slot, revision, registrations, cancellationToken);
 
         public Task<IReadOnlyList<EventStartTarget>> ListAsync(string? after, CancellationToken cancellationToken) =>
             requests.ListEventStartsAsync(scope, after, cancellationToken);
+
+        public Task<long> ReadPendingTailAsync(CancellationToken cancellationToken) =>
+            requests.ReadEventStartTailAsync(scope, cancellationToken);
+
+        public Task<IReadOnlyList<EventStartScanItem>> ReadPendingPageAsync(long after, long through, int limit, CancellationToken cancellationToken) =>
+            requests.ReadEventStartPageAsync(scope, after, through, limit, cancellationToken);
 
         public Task<Contract.Admission> AdmitAsync(string target, Func<EventStartTarget, Contract.StartSpec> start,
             ProtectRootStartAsync protect, CancellationToken cancellationToken) =>

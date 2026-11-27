@@ -22,5 +22,15 @@ internal sealed class RuntimeKernelEventPublicationEntityConfiguration : IEntity
             .HasDatabaseName("IX_KernelEventPublication_Apply");
         builder.HasIndex(row => new { row.ScopeHash, row.TenantHash, row.Current, row.SlotHash, row.Revision })
             .HasDatabaseName("IX_KernelEventPublication_Retain");
+        builder.HasIndex(row => new { row.ScopeHash, row.TenantHash, row.InsertionOrdinal }).IsUnique()
+            .HasDatabaseName("UX_KernelEventPublication_InsertionOrdinal");
+        builder.HasIndex(row => new { row.ScopeHash, row.TenantHash, row.Current, row.Applied, row.InsertionOrdinal })
+            .HasDatabaseName("IX_KernelEventPublication_ApplyScan");
+        builder.HasIndex(row => new { row.ScopeHash, row.TenantHash, row.Current, row.InsertionOrdinal })
+            .HasDatabaseName("IX_KernelEventPublication_RetainScan");
+        builder.HasIndex(row => new { row.ScopeHash, row.TenantHash, row.InsertionOrdinal, row.Current, row.Applied, row.SlotHash, row.Revision })
+            .HasDatabaseName("IX_KernelEventPublication_ApplyLegacy");
+        builder.HasIndex(row => new { row.ScopeHash, row.TenantHash, row.InsertionOrdinal, row.Current, row.SlotHash, row.Revision })
+            .HasDatabaseName("IX_KernelEventPublication_RetainLegacy");
     }
 }

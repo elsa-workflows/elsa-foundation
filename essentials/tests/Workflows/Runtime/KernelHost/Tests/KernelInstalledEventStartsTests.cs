@@ -139,7 +139,6 @@ public sealed class KernelInstalledEventStartsTests
                 Assert.Contains(replacement.Identity.ArtifactId, roots);
             }
 
-            gate.Hold = false;
             gate.DefaultMode = PersistenceMode.Durable;
             await using (var restarted = OpenShell())
             {
@@ -161,9 +160,34 @@ public sealed class KernelInstalledEventStartsTests
                             .FindAsync(original.Publication.PublicationId, token);
                         Assert.Equal(PublicationStatus.Retired, old!.Status);
                     }
+                    var pendingStarts = Assert.IsAssignableFrom<IOrderedEventStartAdmissions>(
+                        restarted.Services.GetRequiredService<KernelShellStorage>().BindEventStarts(Tenant));
+                    var firstTail = await pendingStarts.ReadPendingTailAsync(token);
+                    var olderTarget = Assert.Single(await pendingStarts.ReadPendingPageAsync(0, firstTail, 1, token));
+                    Assert.Equal(first.Identity.ArtifactId, olderTarget.Target.Registration.ArtifactId);
                     await ExecuteAsync(restarted, wrongName);
                     await ExecuteAsync(restarted, nextProducer);
+                    await UntilAsync(async () => await pendingStarts.ReadPendingTailAsync(token) > firstTail);
+                    var nextTail = await pendingStarts.ReadPendingTailAsync(token);
+                    var frozen = Assert.Single(await pendingStarts.ReadPendingPageAsync(0, firstTail, 16, token));
+                    Assert.Equal(olderTarget, frozen);
+                    var newerTarget = Assert.Single(await pendingStarts.ReadPendingPageAsync(firstTail, nextTail, 16, token));
+                    Assert.Equal(replacement.Identity.ArtifactId, newerTarget.Target.Registration.ArtifactId);
+
+                    // The older target uses its complete item deadline. The relay must still visit and settle its healthy suffix.
+                    gate.BlockedTarget = olderTarget.Target.Id;
+                    gate.Hold = false;
                     var runs = restarted.Services.GetRequiredService<KernelRuns>();
+                    await gate.TimedOut.Task.WaitAsync(token);
+                    await UntilAsync(async () =>
+                    {
+                        await foreach (var (actor, run) in runs.ListAsync(Definition, token))
+                            if (run.Workflow == replacement.Identity.ArtifactId && actor.Header.Status == Contract.ActorStatus.Finished)
+                                return true;
+                        return false;
+                    });
+                    Assert.Equal(olderTarget, Assert.Single(await pendingStarts.ReadPendingPageAsync(0, firstTail, 16, token)));
+                    gate.BlockedTarget = null;
                     await UntilAsync(async () =>
                     {
                         var seen = new Dictionary<string, string?>(StringComparer.Ordinal);
@@ -288,11 +312,11 @@ public sealed class KernelInstalledEventStartsTests
                 services.AddScoped<UnpublishPublicationSlotRequestHandler>();
                 var api = new WorkflowsRuntimeApiFeature();
                 api.ConfigureServices(services);
-                var storage = KernelShellStorage.CreateEventStartReceiptsQualification(provider, path, foundation);
+                var storage = KernelShellStorage.CreateEventStartScanQualification(provider, path, foundation);
                 new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, storage, protectChildExecutables: true);
                 services.Replace(ServiceDescriptor.Singleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(), Scope,
                     Tenant, sp.GetRequiredService<KernelServing>().Capabilities, () => new PausableAdmissions(storage.BindEventStarts(Tenant), gate),
-                    TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), retainsReceipts: true)));
+                    TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), retainsReceipts: true, orderedScan: true)));
                 new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
                 api.PostConfigureServices(services);
                 var app = builder.Build();
@@ -375,9 +399,11 @@ public sealed class KernelInstalledEventStartsTests
         internal PersistenceMode DefaultMode = PersistenceMode.Balanced;
         internal long? InterruptRevision;
         internal bool FailBeforeCommit;
+        internal volatile string? BlockedTarget;
+        internal readonly TaskCompletionSource TimedOut = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private sealed class PausableAdmissions(IEventStartAdmissions inner, RelayGate gate) : IEventStartAdmissions
+    private sealed class PausableAdmissions(IEventStartAdmissions inner, RelayGate gate) : IOrderedEventStartAdmissions
     {
         public async Task<EventRegistrationResult> ApplyAsync(string slot, long revision, IReadOnlyList<EventStartRegistration> items, CancellationToken token)
         {
@@ -397,10 +423,27 @@ public sealed class KernelInstalledEventStartsTests
 
         public Task<IReadOnlyList<EventStartTarget>> ListAsync(string? after, CancellationToken token) => inner.ListAsync(after, token);
 
-        public Task<Contract.Admission> AdmitAsync(string target, Func<EventStartTarget, Contract.StartSpec> start, ProtectRootStartAsync protect,
-            CancellationToken token) => gate.Hold
-            ? Task.FromResult(new Contract.Admission(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy))
-            : inner.AdmitAsync(target, start, protect, token);
+        public Task<long> ReadPendingTailAsync(CancellationToken token) => ((IOrderedEventStartAdmissions)inner).ReadPendingTailAsync(token);
+
+        public Task<IReadOnlyList<EventStartScanItem>> ReadPendingPageAsync(long after, long through, int limit, CancellationToken token) =>
+            ((IOrderedEventStartAdmissions)inner).ReadPendingPageAsync(after, through, limit, token);
+
+        public async Task<Contract.Admission> AdmitAsync(string target, Func<EventStartTarget, Contract.StartSpec> start, ProtectRootStartAsync protect,
+            CancellationToken token)
+        {
+            if (gate.Hold)
+                return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy);
+            if (gate.BlockedTarget == target)
+            {
+                try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    gate.TimedOut.TrySetResult();
+                    throw;
+                }
+            }
+            return await inner.AdmitAsync(target, start, protect, token);
+        }
 
         public Task<int> PruneSettledAsync(CancellationToken cancellationToken) => inner.PruneSettledAsync(cancellationToken);
 

@@ -4,6 +4,7 @@ using Elsa.ActorFoundation.TestSupport;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Hosting;
+using Kernel.Foundation.Postgres;
 using Kernel.Native;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -20,9 +21,11 @@ internal static partial class KernelAuthoredEventChecks
         Func<Contract.BoundScope, string, Func<EventStartTarget, Contract.StartSpec>, ProtectRootStartAsync, CancellationToken, Task<Contract.Admission>> Start,
         Func<Contract.BoundScope, string, long, CancellationToken, Task<bool>> Drained,
         Func<Contract.BoundScope, Contract.ActorRef, string, CancellationToken, Task<RootStartProof>> Proof,
-        Func<Contract.BoundScope, CancellationToken, Task<int>> Prune);
+        Func<Contract.BoundScope, CancellationToken, Task<int>> Prune,
+        Func<Contract.BoundScope, CancellationToken, Task<long>> ReadTail,
+        Func<Contract.BoundScope, long, long, int, CancellationToken, Task<IReadOnlyList<EventStartScanItem>>> ReadPage);
 
-    internal static async Task<int> RunStartsAsync(string provider, bool inBatch, bool retainReceipts = false)
+    internal static async Task<int> RunStartsAsync(string provider, bool inBatch, bool retainReceipts = false, bool orderedScan = false)
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var token = stop.Token;
@@ -49,7 +52,7 @@ internal static partial class KernelAuthoredEventChecks
         try
         {
             var (open, ingress, reads, owner, eventPort) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"),
-                inBatch, token, eventStarts: true, retainReceipts);
+                inBatch, token, eventStarts: true, retainReceipts, orderedScan);
             await using var owned = owner;
             var events = eventPort ?? throw new InvalidOperationException("The event start port is missing.");
             Check(await events.Apply(scope, slot, 5, [old], token) == EventRegistrationResult.Applied &&
@@ -57,6 +60,7 @@ internal static partial class KernelAuthoredEventChecks
                 "the same event and slot register independently for two bound tenants");
             await PublishAsync("first-publisher");
             var selectedOld = (await events.List(scope, null, token)).Single();
+            var firstTail = orderedScan ? await events.ReadTail(scope, token) : 0;
             Check(selectedOld is { Revision: 5, Key: eventKey, Registration.ActivationId: "old-activation" } &&
                 selectedOld.Payload == JsonSerializer.Serialize("old payload") && (await events.List(other, null, token)).Count == 0,
                 "an authored publication captures its exact active Flowchart source, trigger and payload in the producer checkpoint");
@@ -93,10 +97,35 @@ internal static partial class KernelAuthoredEventChecks
             var selectedNew = pending.Single(item => item.Revision == 6);
             Check(selectedNew.Registration == next && selectedNew.Payload == JsonSerializer.Serialize("new payload"),
                 "a subsequent publish sees only the replacement registration");
+            if (orderedScan)
+            {
+                var nextTail = await events.ReadTail(scope, token);
+                Check(firstTail > 0 && nextTail > firstTail &&
+                    (await events.ReadPage(scope, 0, firstTail, 16, token)) is [{ Target: var earlier }] && earlier == selectedOld &&
+                    (await events.ReadPage(scope, firstTail, nextTail, 16, token)) is [{ Target: var later }] && later == selectedNew &&
+                    await events.ReadTail(other, token) == 0,
+                    "the fixed tenant scan visits earlier work and leaves later captured targets for the next pass");
+            }
 
             static Contract.StartSpec Unexpected(EventStartTarget _) => throw new InvalidOperationException("No start may be composed.");
             static ValueTask<bool> UnexpectedProtect(PendingRootStart _, CancellationToken __) =>
                 throw new InvalidOperationException("No executable pin may be requested.");
+            IEventStartAdmissions? pressureRelay = null;
+            if (provider == "postgres")
+            {
+                var pressure = RootAdmissionPressure.CreateDefault();
+                var requests = PostgresPreviewHosting.CreateRequests(open, "event-pressure", PublicWorkflow.ActorType,
+                    deduplicationWindow: null, pressure);
+                pressureRelay = PostgresPreviewHosting.BindEventStarts(open, scope, requests);
+                await using var db = open();
+                var keys = await db.Partitions.Select(partition => partition.Id).ToArrayAsync(token);
+                pressure.Refresh(keys.ToDictionary(partition => partition, _ => pressure.Backlog.HighWater + 1), 1);
+                var full = await pressureRelay.AdmitAsync(selectedNew.Id, Compose, UnexpectedProtect, token);
+                Check(full is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.InboxFull, RetryAfter: not null } &&
+                    (await pressureRelay.ListAsync(null, token)).Contains(selectedNew),
+                    "the PostgreSQL Event relay observes owner pressure and retains the exact pending target");
+                pressure.Refresh(keys.ToDictionary(partition => partition, _ => 0), 1);
+            }
             Check((await events.Start(other, selectedOld.Id, Unexpected, UnexpectedProtect, token)).Reason == Contract.RefusalReason.TargetMismatch,
                 "another tenant cannot read or admit a captured target by its opaque ID");
 
@@ -139,7 +168,9 @@ internal static partial class KernelAuthoredEventChecks
                 "the replaced registration can release its source pin after the final target transfers to its root pin");
             var ended = await OutputAsync(actor, "old payload");
 
-            var newer = await events.Start(scope, selectedNew.Id, Compose, (_, _) => ValueTask.FromResult(true), token);
+            var newer = pressureRelay is null
+                ? await events.Start(scope, selectedNew.Id, Compose, (_, _) => ValueTask.FromResult(true), token)
+                : await pressureRelay.AdmitAsync(selectedNew.Id, Compose, (_, _) => ValueTask.FromResult(true), token);
             Check(newer is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the replacement's independent target is admitted");
             await OutputAsync(newer.Actor!.Value, "new payload");
 

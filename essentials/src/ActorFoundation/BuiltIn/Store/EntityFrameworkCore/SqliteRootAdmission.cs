@@ -177,6 +177,14 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(string tenant, string? after, CancellationToken token) =>
         InAdmissionTransactionAsync((db, ct) => RootEventStarts.ListAsync(db, tenant, after, bind: null, ct), token, readOnly: true);
 
+    internal Task<long> ReadEventStartTailAsync(string tenant, CancellationToken token) =>
+        InAdmissionTransactionAsync((db, ct) => RootEventStarts.ReadPendingTailAsync(db, tenant, bind: null, ct), token, readOnly: true);
+
+    internal Task<IReadOnlyList<EventStartScanItem>> ReadEventStartPageAsync(string tenant, long after, long through, int limit,
+        CancellationToken token) =>
+        InAdmissionTransactionAsync((db, ct) => RootEventStarts.ReadPendingPageAsync(db, tenant, after, through, limit, bind: null, ct),
+            token, readOnly: true);
+
     internal Task<(EventStartTarget? Pending, string? Settled)> ReadEventStartAsync(string tenant, string target, CancellationToken token) =>
         InAdmissionTransactionAsync((db, ct) => RootEventStarts.ReadWorkAsync(db, tenant, target, bind: null, ct), token, readOnly: true);
 

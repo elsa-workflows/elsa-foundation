@@ -18,15 +18,19 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
         return row is null ? null : ReadScoped(row, scope, slotId);
     }
 
-    public async ValueTask<IReadOnlyList<RuntimeKernelEventPublication>> ListAsync(TriggerScope scope, bool superseded,
-        string? afterSlot, long afterRevision, int limit, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<RuntimeKernelEventPublication>> ListAsync(TriggerScope scope, bool superseded,
+        string? afterSlot, long afterRevision, int limit, CancellationToken cancellationToken = default) =>
+        ListBySlotAsync(scope, Eligible(scope, superseded), afterSlot, afterRevision, limit, cancellationToken);
+
+    public ValueTask<IReadOnlyList<RuntimeKernelEventPublication>> ListLegacyScanAsync(TriggerScope scope, bool superseded,
+        string? afterSlot, long afterRevision, int limit, CancellationToken cancellationToken = default) =>
+        ListBySlotAsync(scope, Eligible(scope, superseded).Where(row => row.InsertionOrdinal == null),
+            afterSlot, afterRevision, limit, cancellationToken);
+
+    private static async ValueTask<IReadOnlyList<RuntimeKernelEventPublication>> ListBySlotAsync(TriggerScope scope,
+        IQueryable<RuntimeKernelEventPublicationEntity> query, string? afterSlot, long afterRevision, int limit, CancellationToken cancellationToken)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, RuntimeStorePageRequest.MaximumLimit);
-        var query = Scoped(scope);
-        query = superseded
-            ? query.Where(item => !item.Current && item.ArtifactId != null)
-            : query.Where(item => item.Current && !item.Applied);
+        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         if (afterSlot is not null)
         {
             var afterHash = Hash(afterSlot);
@@ -36,6 +40,29 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
 
         var rows = await query.OrderBy(item => item.SlotHash).ThenBy(item => item.Revision).Take(limit).ToArrayAsync(cancellationToken);
         return rows.Select(row => ReadScoped(row, scope)).ToArray();
+    }
+
+    public async ValueTask<long> ReadScanTailAsync(TriggerScope scope, CancellationToken cancellationToken = default)
+    {
+        var tail = await Scoped(scope).Where(row => row.InsertionOrdinal != null).OrderByDescending(row => row.InsertionOrdinal)
+            .Select(row => new { row.InsertionOrdinal, row.SchemaVersion, row.Current }).FirstOrDefaultAsync(cancellationToken);
+        if (tail is null) return 0;
+        EfSchemaVersion.EnsureReadable(RuntimeKernelEventPublicationEfModule.Chain, tail.SchemaVersion);
+        var ordinal = tail.InsertionOrdinal.GetValueOrDefault();
+        if (ordinal <= 0 || !tail.Current)
+            throw new InvalidDataException("The Event publication order does not have a current tail.");
+        return ordinal;
+    }
+
+    public async ValueTask<IReadOnlyList<RuntimeKernelEventPublicationScanItem>> ListScanAsync(TriggerScope scope, bool superseded,
+        long after, long through, int limit, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(after);
+        ArgumentOutOfRangeException.ThrowIfLessThan(through, after);
+        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
+        var rows = await Eligible(scope, superseded).Where(row => row.InsertionOrdinal > after && row.InsertionOrdinal <= through)
+            .OrderBy(row => row.InsertionOrdinal).Take(limit).ToArrayAsync(cancellationToken);
+        return rows.Select(row => new RuntimeKernelEventPublicationScanItem(row.InsertionOrdinal.GetValueOrDefault(), ReadScoped(row, scope))).ToArray();
     }
 
     public async ValueTask<bool> AcknowledgeAsync(RuntimeKernelEventPublication publication, CancellationToken cancellationToken = default)
@@ -98,9 +125,16 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
             if (existing.ArtifactId is null) context.KernelEventPublications.Remove(existing);
             else existing.Current = false;
         }
+        // A transition supersedes a current row only when it writes a newer current one. Drain can
+        // delete only superseded rows, so the newest ordinal remains a durable tail without a counter row.
+        // The activation transaction retries an allocation race on the scoped unique index.
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Assigning an Event publication ordinal requires the activation transaction.");
+        var ordinal = checked(await ReadScanTailAsync(scope, token) + 1);
         context.KernelEventPublications.Add(new()
         {
             ScopeHash = scopeHash, SlotHash = slotHash, TenantHash = TenantHash(scope), Revision = slot.Revision,
+            InsertionOrdinal = ordinal,
             ArtifactId = owner?.Executable.ArtifactId, ContentJson = content, Current = true,
             SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelEventPublicationEfModule.SchemaFamily,
                 RuntimeKernelEventPublicationEfModule.SchemaVersion)
@@ -131,6 +165,13 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
         Scoped(publication.Scope).Where(row => row.SlotHash == Hash(publication.SlotId) &&
             row.Revision == publication.Revision && row.ContentJson == RuntimeArtifactJson.Serialize(publication));
 
+    private IQueryable<RuntimeKernelEventPublicationEntity> Eligible(TriggerScope scope, bool superseded)
+    {
+        var query = Scoped(scope);
+        return superseded ? query.Where(item => !item.Current && item.ArtifactId != null) :
+            query.Where(item => item.Current && !item.Applied);
+    }
+
     private static RuntimeKernelEventPublication ReadScoped(RuntimeKernelEventPublicationEntity row, TriggerScope scope, string? slotId = null)
     {
         var value = Read(row, scope.Persistence);
@@ -145,7 +186,7 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
         EfSchemaVersion.EnsureReadable(RuntimeKernelEventPublicationEfModule.Chain, row.SchemaVersion);
         var value = RuntimeArtifactJson.Deserialize<RuntimeKernelEventPublication>(row.ContentJson);
         if (value.Scope.Persistence != scope || Hash(scope.Value) != row.ScopeHash || TenantHash(value.Scope) != row.TenantHash ||
-            Hash(value.SlotId) != row.SlotHash || value.Revision <= 0 || value.Revision != row.Revision ||
+            Hash(value.SlotId) != row.SlotHash || value.Revision <= 0 || value.Revision != row.Revision || row.InsertionOrdinal is <= 0 ||
             value.Source?.Executable.ArtifactId != row.ArtifactId || (value.Source is null) != (value.Entries.Count == 0))
             throw new InvalidDataException("The stored Event publication does not match its indexed authority.");
         return value;

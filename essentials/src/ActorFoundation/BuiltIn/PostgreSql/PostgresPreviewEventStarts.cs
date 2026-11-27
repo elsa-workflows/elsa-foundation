@@ -24,6 +24,14 @@ public static partial class PostgresPreviewHosting
     public static Task InstallEventStartReceiptsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
         InstallPreviewFormatAsync(() => CreateEventStartReceiptsQualificationContext(options), cancellationToken);
 
+    /// <summary>Selects the dedicated ordered Event start qualification format.</summary>
+    public static KernelDb CreateEventStartScanQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootEventStartScanQualification(options);
+
+    /// <summary>Installs or verifies the ordered Event start qualification database.</summary>
+    public static Task InstallEventStartScanQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreateEventStartScanQualificationContext(options), cancellationToken);
+
     /// <summary>Binds trusted Event registration and relay to the selected qualification database and tenant.</summary>
     public static IEventStartAdmissions BindEventStarts(Func<KernelDb> create, Contract.BoundScope scope, PostgresDirectRequests? requests = null)
     {
@@ -35,13 +43,19 @@ public static partial class PostgresPreviewHosting
         return new EventStarts(new PostgresRootAdmission(create, TimeSpan.Zero, pressure: requests?.Pressure), scope.Tenant);
     }
 
-    private sealed class EventStarts(PostgresRootAdmission admission, string tenant) : IEventStartAdmissions
+    private sealed class EventStarts(PostgresRootAdmission admission, string tenant) : IOrderedEventStartAdmissions
     {
         public Task<EventRegistrationResult> ApplyAsync(string slot, long revision, IReadOnlyList<EventStartRegistration> registrations, CancellationToken cancellationToken) =>
             admission.ApplyEventStartsAsync(tenant, slot, revision, registrations, cancellationToken);
 
         public Task<IReadOnlyList<EventStartTarget>> ListAsync(string? after, CancellationToken cancellationToken) =>
             admission.ListEventStartsAsync(tenant, after, cancellationToken);
+
+        public Task<long> ReadPendingTailAsync(CancellationToken cancellationToken) =>
+            admission.ReadEventStartTailAsync(tenant, cancellationToken);
+
+        public Task<IReadOnlyList<EventStartScanItem>> ReadPendingPageAsync(long after, long through, int limit, CancellationToken cancellationToken) =>
+            admission.ReadEventStartPageAsync(tenant, after, through, limit, cancellationToken);
 
         public Task<Contract.Admission> AdmitAsync(string target, Func<EventStartTarget, Contract.StartSpec> start,
             ProtectRootStartAsync protect, CancellationToken cancellationToken) =>

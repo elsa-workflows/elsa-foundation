@@ -51,6 +51,7 @@
     <Compile Include="..\Tests\KernelScheduleOccurrenceContract.cs" Link="KernelScheduleOccurrenceContract.cs" />
     <Compile Include="..\Tests\KernelScheduleOccurrenceContract.Adoption.cs" Link="KernelScheduleOccurrenceContract.Adoption.cs" />
     <Compile Include="..\Tests\KernelScheduleOccurrenceContract.ControlScan.cs" Link="KernelScheduleOccurrenceContract.ControlScan.cs" />
+    <Compile Include="..\Tests\KernelEventPublicationScanContract.cs" Link="KernelEventPublicationScanContract.cs" />
     <Compile Include="..\Tests\RuntimeEventExecutableTestFixture.cs" Link="RuntimeEventExecutableTestFixture.cs" />
     <Compile Include="..\Tests\LiveDrainSweepContentionContract.cs" Link="LiveDrainSweepContentionContract.cs" />
     <Compile Include="..\Tests\OutboxStoreRegistration.cs" Link="OutboxStoreRegistration.cs" />

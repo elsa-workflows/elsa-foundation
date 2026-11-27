@@ -27,6 +27,9 @@ public sealed record RuntimeKernelEventPublication(TriggerScope Scope, string Sl
     public static string ReservationKey(string slotId, string node) => WorkflowTriggerBinding.BuildId(ReservationType, slotId, node);
 }
 
+/// <summary>A publication generation and its immutable position in the scoped Event scan.</summary>
+public sealed record RuntimeKernelEventPublicationScanItem(long Ordinal, RuntimeKernelEventPublication Publication);
+
 /// <summary>Reads Event registrations staged with publication authority and records exact provider acknowledgments.</summary>
 public interface IRuntimeKernelEventPublicationStore
 {
@@ -37,6 +40,19 @@ public interface IRuntimeKernelEventPublicationStore
     /// <remarks>Restart a sweep with a null cursor so changes behind an earlier cursor are visited.</remarks>
     ValueTask<IReadOnlyList<RuntimeKernelEventPublication>> ListAsync(TriggerScope scope, bool superseded, string? afterSlot,
         long afterRevision, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads the committed positive upper ordinal shared by both scan lanes, or zero when none has been assigned.</summary>
+    ValueTask<long> ReadScanTailAsync(TriggerScope scope, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads ordered generations after <paramref name="after"/> through the fixed pass bound.</summary>
+    /// <remarks>Start a new pass at zero to revisit failures and older generations that have since become superseded.</remarks>
+    ValueTask<IReadOnlyList<RuntimeKernelEventPublicationScanItem>> ListScanAsync(TriggerScope scope, bool superseded,
+        long after, long through, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads immutable predecessor membership in slot-hash and revision order, excluding all new generations.</summary>
+    /// <remarks>The private predecessor writer must stop before upgrade. A new pass begins at a null slot.</remarks>
+    ValueTask<IReadOnlyList<RuntimeKernelEventPublication>> ListLegacyScanAsync(TriggerScope scope, bool superseded,
+        string? afterSlot, long afterRevision, int limit, CancellationToken cancellationToken = default);
 
     ValueTask<bool> AcknowledgeAsync(RuntimeKernelEventPublication publication, CancellationToken cancellationToken = default);
 

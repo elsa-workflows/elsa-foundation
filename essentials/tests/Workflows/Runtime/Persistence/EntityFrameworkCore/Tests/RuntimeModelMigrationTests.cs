@@ -54,7 +54,8 @@ public sealed partial class RuntimeModelMigrationTests
             Assert.Equal(history, upgradedHistory.Take(history.Length));
             Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership",
                 "KernelScheduleOccurrences", "KernelScheduleControls", "KernelScheduleOccurrenceRetirement", "KernelExecutablePins",
-                "KernelScheduleControlOrder", "KernelScheduleControlScanStamp", "KernelScheduleCutover", "KernelExecutablePinScan", "KernelEventPublications"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+                "KernelScheduleControlOrder", "KernelScheduleControlScanStamp", "KernelScheduleCutover", "KernelExecutablePinScan", "KernelEventPublications",
+                "KernelEventPublicationOrder"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
             await using (var absentTimerHistory = connection.CreateCommand())
             {
                 absentTimerHistory.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeOperationalStateEfModule.DurableTimerTableName}\" WHERE HistoryRevision != 0 OR HistoryPending != 0 OR HistoryRetired != 0";

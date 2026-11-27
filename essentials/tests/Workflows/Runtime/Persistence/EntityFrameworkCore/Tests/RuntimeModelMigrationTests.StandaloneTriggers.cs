@@ -51,7 +51,7 @@ public sealed partial class RuntimeModelMigrationTests
         var history = await History(connection);
         Assert.Equal(previousHistory, history.Take(previousHistory.Length));
         Assert.Equal(["StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership", "KernelScheduleOccurrences", "KernelScheduleControls",
-            "KernelScheduleOccurrenceRetirement", "KernelExecutablePins", "KernelScheduleControlOrder", "KernelScheduleControlScanStamp", "KernelScheduleCutover", "KernelExecutablePinScan", "KernelEventPublications"],
+            "KernelScheduleOccurrenceRetirement", "KernelExecutablePins", "KernelScheduleControlOrder", "KernelScheduleControlScanStamp", "KernelScheduleCutover", "KernelExecutablePinScan", "KernelEventPublications", "KernelEventPublicationOrder"],
             history.Skip(previousHistory.Length).Select(id => id[(id.LastIndexOf('_') + 1)..]));
         var after = await LegacyRows(connection);
         foreach (var (table, bytes) in before) Assert.Equal(bytes, after[table]);

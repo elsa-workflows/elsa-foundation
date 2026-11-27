@@ -26,6 +26,9 @@ public enum EventRegistrationResult { Applied, Duplicate, Stale, Conflict }
 public sealed record EventStartTarget(string Tenant, string Id, string Slot, long Revision, string EventId, string Key,
     string? Payload, EventStartRegistration Registration);
 
+/// <summary>A pending target and its position in the physical insertion order.</summary>
+public sealed record EventStartScanItem(long Ordinal, EventStartTarget Target);
+
 /// <summary>Trusted Event registration and selected-target relay bound to one physical store and tenant.</summary>
 public interface IEventStartAdmissions
 {
@@ -37,6 +40,13 @@ public interface IEventStartAdmissions
 
     /// <summary>Prunes one bounded page of settled receipts past the supported replay window.</summary>
     Task<int> PruneSettledAsync(CancellationToken cancellationToken) => Task.FromResult(0);
+}
+
+/// <summary>Bounded sweeps of accepted targets under a fixed provider insertion ceiling.</summary>
+public interface IOrderedEventStartAdmissions : IEventStartAdmissions
+{
+    Task<long> ReadPendingTailAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<EventStartScanItem>> ReadPendingPageAsync(long after, long through, int limit, CancellationToken cancellationToken);
 }
 
 /// <summary>Provider-owned registrations and accepted event starts. Removing a registration leaves its selected targets intact.</summary>
@@ -53,6 +63,8 @@ internal static partial class RootEventStarts
     internal const string SlotPendingColumns = """("Tenant", "Slot", "Revision") WHERE "Reference" IS NULL""";
     internal const string ReceiptIndex = "IX_FoundationEventStartTargets_Receipt";
     internal const string ReceiptColumns = """("Tenant", "ReceiptUntil", "Id") WHERE "Reference" IS NOT NULL""";
+    internal const string ScanIndex = "IX_FoundationEventStartTargets_Scan";
+    internal const string ScanColumns = """("Tenant", "Ordinal") WHERE "Reference" IS NULL""";
     internal const string Source = "/*event-start-source*/";
     private const long ReplayWindowMilliseconds = 60 * 60 * 1000;
     private const int PageSize = 64;
@@ -78,16 +90,20 @@ internal static partial class RootEventStarts
             """;
     }
 
-    internal static string TargetColumns(bool sqlite, bool retainsReceipts)
+    internal static string TargetColumns(bool sqlite, bool retainsReceipts, bool orderedScan)
     {
         var (text, number) = Types(sqlite);
         var receiptColumn = retainsReceipts ? $""" "ReceiptUntil" {number} NOT NULL CHECK ("ReceiptUntil" >= 0), """ : "";
+        var ordinalColumn = !orderedScan ? "" : sqlite
+            ? """ "Ordinal" INTEGER PRIMARY KEY AUTOINCREMENT, """
+            : """ "Ordinal" bigint GENERATED ALWAYS AS IDENTITY UNIQUE CHECK ("Ordinal" > 0), """;
+        var targetKey = sqlite && orderedScan ? """UNIQUE ("Tenant", "Id")""" : """PRIMARY KEY ("Tenant", "Id")""";
         return $"""
             "Tenant" {text} NOT NULL, "Id" {text} NOT NULL, "Slot" {text} NOT NULL, "Node" {text} NOT NULL,
             "Revision" {number} NOT NULL CHECK ("Revision" > 0),
             "Key" {text} NOT NULL, "EventId" {text} NOT NULL, "Authority" {text}, "Payload" {text},
             "Reference" {text} UNIQUE REFERENCES "FoundationRootBirths" ("Reference"),
-            "Intent" {text}, "BirthFingerprint" {text}, {receiptColumn}PRIMARY KEY ("Tenant", "Id"),
+            "Intent" {text}, "BirthFingerprint" {text}, {receiptColumn}{ordinalColumn}{targetKey},
             CHECK (("Reference" IS NULL AND "Authority" IS NOT NULL AND "Intent" IS NULL AND "BirthFingerprint" IS NULL)
                 OR ("Reference" IS NOT NULL AND "Authority" IS NULL AND "Payload" IS NULL AND "Intent" IS NOT NULL AND "BirthFingerprint" IS NOT NULL))
             """;
