@@ -27,8 +27,15 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     public static StartSpec Start(WorkflowStart start) =>
         new(ActorType, JsonSerializer.Serialize(new WorkflowHeader(start.Model, start.Workflow, null,
-            Ephemeral: start.Ephemeral, History: start.History, Definition: start.Definition == start.Workflow ? null : start.Definition)),
+            Ephemeral: start.Ephemeral, History: start.History, Definition: start.Definition == start.Workflow ? null : start.Definition,
+            ExecutableSelection: start.ExecutableSelection)),
             start.Input, start.Ephemeral, start.History);
+
+    internal static (string Model, string Workflow, string Definition, string? ExecutableSelection)? DescribeStart(string type, string typeData)
+    {
+        if (type != ActorType || JsonSerializer.Deserialize<WorkflowHeader>(typeData) is not { } header) return null;
+        return (header.Model, header.Workflow, header.Definition ?? header.Workflow, header.ExecutableSelection);
+    }
 
     public bool Withholds(ActorHeader header)
     {
@@ -217,7 +224,9 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     private sealed record WorkflowHeader(string Model, string Workflow, int? Version, bool Suspended = false,
         string? SubStatus = null, bool Ephemeral = false, History History = History.Full,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Definition = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? StartedAt = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? StartedAt = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        string? ExecutableSelection = null);
 
     /// <summary>
     /// What a workflow actor's header says about its run, for reads that list runs: the workflow it runs (an artifact on a
