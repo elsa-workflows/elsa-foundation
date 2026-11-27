@@ -47,6 +47,12 @@ public interface IRuntimeKernelExecutablePinStore
         WorkflowExecutableSourceReference source, WorkflowTestRunActorBinding? observedBinding, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<bool>(new NotSupportedException("The Runtime provider does not fence Test Run executable pins."));
 
+    /// <summary>Protects an attached Test Run child while fencing its root source and exact open scope.</summary>
+    /// <remarks>The caller verifies the provider-issued parent and the child's immutable dependency. The root binding stays intact.</remarks>
+    ValueTask<bool> TryPinAttachedTestRunAsync(RuntimeKernelExecutablePin pin, WorkflowTestScope scope,
+        WorkflowExecutableSourceReference source, WorkflowTestRunActorBinding root, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<bool>(new NotSupportedException("The Runtime provider does not fence attached Test Run executable pins."));
+
     /// <summary>Returns the inclusive upper cursor for this cleanup pass, or null when there are no open pins.</summary>
     ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken cancellationToken = default);
 

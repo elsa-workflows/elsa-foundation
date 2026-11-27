@@ -36,7 +36,12 @@ public sealed record WorkflowPublishedStart(string SourceReferenceId, string Sou
 /// <summary>Test scope and authoring source retained independently of the executable material selected to run.</summary>
 public sealed record WorkflowTestStart(string ScopeId, DateTimeOffset ExpiresAt, string? Tenant, string Partition,
     string SourceReferenceId, string SourceKind, string SourceId, string? SourceVersion, string DefinitionVersionId,
-    string ArtifactVersion, string SourceDigest, string? SubjectId);
+    string ArtifactVersion, string SourceDigest, string? SubjectId)
+{
+    /// <summary>The isolated root proved by the child's provider-owned attached birth.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? RootActor { get; init; }
+}
 
 /// <summary>Runs workflow models through the public actor contract.</summary>
 public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
@@ -316,7 +321,12 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         public void Reply(Message message, string channel, object? item) => turn.Reply(message, channel, item);
         public string Send(ActorRef target, string kind, object? payload, long? dueAt) => turn.Send(target, kind, SerializeValue(payload), dueAt);
         public void Recall(string id) => turn.Recall(id);
-        public ActorRef Start(WorkflowStart spec, Placement placement, bool detached) => turn.Start(WorkflowActor.Start(spec), placement, detached);
+        public ActorRef Start(WorkflowStart spec, Placement placement, bool detached)
+        {
+            if (Workflow.TestStart is not { } test) return turn.Start(WorkflowActor.Start(spec), placement, detached);
+            if (detached) throw new InvalidOperationException("A Test Run may start only attached child workflows.");
+            return turn.Start(WorkflowActor.Start(spec, null, test with { RootActor = test.RootActor ?? Instance.Ref.Id }), placement);
+        }
         public void StartJob(string key, object? arguments, TimeSpan? timeout) => turn.StartJob(key, JobArguments(Instance.Model, SerializeValue(arguments)), timeout);
         public void CancelJob(string key) => turn.CancelJob(key);
         public void Hold(Message message) => turn.Hold(message);

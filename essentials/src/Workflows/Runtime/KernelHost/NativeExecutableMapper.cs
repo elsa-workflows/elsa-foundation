@@ -56,13 +56,13 @@ public static class NativeExecutableMapper
 
     /// <summary>Maps canonical material under the logical definition of its selected publication.</summary>
     internal static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities, string? definition,
-        bool scopedHttpTransport = false)
+        bool scopedHttpTransport = false, bool requireTestRunChildren = false)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(capabilities);
         try
         {
-            var mapping = new Mapping(executable, scopedHttpTransport);
+            var mapping = new Mapping(executable, scopedHttpTransport, requireTestRunChildren);
             var root = mapping.MapNode(executable.RootActivity, Scope.Workflow);
             var variables = mapping.WorkflowVariables();
             Native.Workflow workflow;
@@ -110,7 +110,7 @@ public static class NativeExecutableMapper
     /// </summary>
     private sealed record GraphScope(string Node, IReadOnlySet<string> Inputs, IReadOnlyDictionary<string, string> Variables);
 
-    private sealed class Mapping(WorkflowExecutable executable, bool scopedHttpTransport)
+    private sealed class Mapping(WorkflowExecutable executable, bool scopedHttpTransport, bool requireTestRunChildren)
     {
         private const string WorkflowScopeId = VariableReference.WorkflowScopeId;
         private const string LegacyGraphScopeId = "activity-graph";
@@ -119,6 +119,7 @@ public static class NativeExecutableMapper
         private const string WholeResult = "$result";
         private const string InputVariable = "input";
         private const string OutputVariable = "output";
+        private const string PinnedChildMetadata = "Elsa.DispatchWorkflow.PinnedTarget";
 
         // The loops' iteration variables, as both cores name them: a body reads them as variables its loop declares.
         private static readonly Dictionary<Type, string[]> IterationVariables = new()
@@ -139,6 +140,9 @@ public static class NativeExecutableMapper
         // Every node's Native type, resolved up front so a result read can find its producer's shape wherever it sits, and
         // so the first node in document order that the kernel does not run is the one refused.
         private readonly Dictionary<string, Type> _types = executable.Nodes.ToDictionary(node => node.ExecutableNodeId, TypeOf, StringComparer.Ordinal);
+        private readonly ILookup<string, WorkflowExecutableDependency> _testRunChildren = executable.Dependencies
+            .SelectMany(dependency => dependency.DispatchNodeIds.Select(id => (Id: id, Dependency: dependency)))
+            .ToLookup(edge => edge.Id, edge => edge.Dependency, StringComparer.Ordinal);
 
         // The names of container-declared variables, by their container and key, for refusals that name them.
         private readonly Dictionary<(string Scope, string Key), string> _containerVariables = ContainerVariables(executable);
@@ -211,7 +215,13 @@ public static class NativeExecutableMapper
         {
             var id = source.ExecutableNodeId;
             var type = _types[id];
-            var node = new Native.Node(id, type);
+            var child = type == typeof(Native.DispatchWorkflow) ? ReadTestRunChild(source) : null;
+            if (type == typeof(Native.DispatchWorkflow) && requireTestRunChildren &&
+                (child is null || source.InputBindings.GetValueOrDefault("WaitForCompletion") is not
+                    { Source: RuntimeInputBindingSource.Literal, LiteralValue.ValueKind: JsonValueKind.True }))
+                throw NativeMappingRefusedException.Activity(id,
+                    "A Test Run can dispatch only an exactly pinned child with Wait for completion enabled.");
+            var node = new Native.Node(id, type) { TestRunChild = child };
             if (source.IntrinsicKind is not null)
             {
                 if (source.ChildSlots.Any(slot => slot.Activities.Count != 0))
@@ -227,6 +237,30 @@ public static class NativeExecutableMapper
             }
             MapCaptures(source, node, scope);
             return node;
+        }
+
+        private Native.TestRunChildSelection? ReadTestRunChild(ExecutableNode source)
+        {
+            if (_testRunChildren[source.ExecutableNodeId].Take(2).ToArray() is not [var dependency] ||
+                !source.Metadata.TryGetValue(PinnedChildMetadata, out var metadata) ||
+                source.InputBindings.GetValueOrDefault("WorkflowDefinitionId") is not
+                    { Source: RuntimeInputBindingSource.Literal, LiteralValue: { ValueKind: JsonValueKind.String } definition })
+                return null;
+            try
+            {
+                using var document = JsonDocument.Parse(metadata);
+                if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("executable", out var pin) ||
+                    pin.Deserialize<WorkflowExecutableIdentity>(PayloadOptions) is not { } identity ||
+                    !document.RootElement.TryGetProperty("source", out var sourcePin) ||
+                    sourcePin.Deserialize<WorkflowExecutableSourceProvenance>(PayloadOptions) is not { } provenance ||
+                    provenance.DefinitionId != definition.GetString()?.Trim() ||
+                    identity.ArtifactId != dependency.ArtifactId || identity.ArtifactHash != dependency.ArtifactHash)
+                    return null;
+                var selection = JsonSerializer.Serialize(identity);
+                return ReadMaterialSelection(selection, dependency.ArtifactId) is null ? null :
+                    new(dependency.ArtifactId, provenance.DefinitionId, selection);
+            }
+            catch (JsonException) { return null; }
         }
 
         /// <summary>The structure of a composite onto the Native shape; returns the inputs it consumed (a Switch's case conditions).</summary>

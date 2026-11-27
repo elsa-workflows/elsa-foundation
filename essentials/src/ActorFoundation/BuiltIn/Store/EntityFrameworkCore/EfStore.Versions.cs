@@ -81,6 +81,9 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootKeyedStartsQualification => new(3, 133, 1);
     internal static StoreFormat RootEphemeralTestRunQualification => new(3, 134, 1);
     internal static StoreFormat RootPublicEventHostQualification => new(3, 135, 1);
+    internal static StoreFormat RootAttachedTestRunQualification => new(3, 136, 1);
+    internal bool SupportsIsolatedInlineQualification =>
+        this == RootEphemeralTestRunQualification || this == RootAttachedTestRunQualification;
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -549,7 +552,7 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootEventStartReceiptsQualification => sqlite ? 27 : 24,
                 _ when db.RequiredFormat == StoreFormat.RootEventStartScanQualification => sqlite ? 28 : 25,
                 _ when db.RequiredFormat == StoreFormat.RootSharedActivationQualification ||
-                    db.RequiredFormat == StoreFormat.RootEphemeralTestRunQualification ||
+                    db.RequiredFormat.SupportsIsolatedInlineQualification ||
                     db.RequiredFormat == StoreFormat.RootShipped =>
                     sqlite ? SqliteSharedActivationRevision : PostgreSqlSharedActivationRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPublicEventStartsQualification => sqlite ? 30 : 27,

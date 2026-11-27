@@ -4,9 +4,11 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
 
-internal readonly record struct ChildWorkflowTarget(string Id, Workflow? Selected = null)
+internal readonly record struct ChildWorkflowTarget(string Id, Workflow? Selected = null, TestRunChildSelection? TestRunChild = null)
 {
-    internal Models.WorkflowStart Start(string mode, JsonObject? input) => Selected is { } workflow
+    internal Models.WorkflowStart Start(string mode, JsonObject? input) => TestRunChild is { } exact
+        ? NativeExecutionModel.Start(exact.ArtifactId, mode, input, definition: exact.Definition) with { ExecutableSelection = exact.ExecutableSelection }
+        : Selected is { } workflow
         ? NativeExecutionModel.Start(workflow, mode, input)
         : NativeExecutionModel.Start(Id, mode, input);
 }

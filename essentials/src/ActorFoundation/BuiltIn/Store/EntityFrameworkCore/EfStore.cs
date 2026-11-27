@@ -249,6 +249,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootDirectTestRunQualification, RootProfiles.DirectTestRunQualification);
     internal static KernelDb ForPostgresRootEphemeralTestRunQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootEphemeralTestRunQualification, RootProfiles.EphemeralTestRunQualification);
+    internal static KernelDb ForPostgresRootAttachedTestRunQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootAttachedTestRunQualification, RootProfiles.EphemeralTestRunQualification);
     internal static KernelDb ForPostgresRootInlinePromotionQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootInlinePromotionQualification, RootProfiles.InlinePromotionQualification);
     internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>
@@ -332,7 +334,7 @@ public class KernelDb : DbContext
         if (qualificationFormat == StoreFormat.RootDirectTestRunQualification)
             return new(options, qualificationFormat.Value, RootProfiles.DirectTestRunQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
-        if (qualificationFormat == StoreFormat.RootEphemeralTestRunQualification)
+        if (qualificationFormat is { SupportsIsolatedInlineQualification: true })
             return new(options, qualificationFormat.Value, RootProfiles.EphemeralTestRunQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootInlinePromotionQualification)

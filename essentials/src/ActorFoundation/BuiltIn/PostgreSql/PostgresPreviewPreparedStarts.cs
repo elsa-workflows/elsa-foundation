@@ -33,6 +33,14 @@ public static partial class PostgresPreviewHosting
     public static Task InstallEphemeralTestRunQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken) =>
         InstallPreviewFormatAsync(() => CreateEphemeralTestRunQualificationContext(options), cancellationToken);
 
+    /// <summary>Creates the PostgreSQL context for qualifying attached children in isolated Test Runs.</summary>
+    public static KernelDb CreateAttachedTestRunQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootAttachedTestRunQualification(options);
+
+    /// <summary>Installs the attached Test Run qualification format in an empty PostgreSQL fixture.</summary>
+    public static Task InstallAttachedTestRunQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken) =>
+        InstallPreviewFormatAsync(() => CreateAttachedTestRunQualificationContext(options), cancellationToken);
+
     /// <summary>Creates the PostgreSQL context for private inline start qualification.</summary>
     public static KernelDb CreateInlineStartsQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootInlinePromotionQualification(options);

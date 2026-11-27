@@ -9,6 +9,7 @@ public sealed partial class EfStore
 {
     internal ProtectChildBirthsAsync? ProtectChildBirths { get; init; }
     private byte[]? _rootChildIssuanceKey;
+    private bool _qualifiesAttachedTestRuns;
     private Func<string, CreationAddress, string>? _rootChildReference;
     private Func<string, string>? _rootChildMessageHandle;
     private const string RootChildNoticePrefix = "!kernel-child-notice/1:";
@@ -38,6 +39,7 @@ public sealed partial class EfStore
             key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
         }
         if (ProtectChildBirths is not null) _rootChildIssuanceKey = key;
+        _qualifiesAttachedTestRuns = db.RequiredFormat == StoreFormat.RootAttachedTestRunQualification;
         _rootChildReference = (tenant, address) => FoundationRootCreator.ReferenceFor(key, tenant, address);
         _rootChildMessageHandle = seed => FoundationSelfSend.Handle(key, "child-" + seed);
     }
@@ -211,12 +213,12 @@ public sealed partial class EfStore
             else throw RootShape();
         }
         var pending = ProtectChildBirths is not null && starts.Count > 0
-            ? PrepareChildBirthProtection(root, row.Revision, fence ?? throw RootShape(), starts)
+            ? PrepareChildBirthProtection(root, row, fence ?? throw RootShape(), starts)
             : null;
         return new(root.Reference, row.Children, starts.ToArray(), inputs.ToArray(), notice, pending);
     }
 
-    private PendingChildBirth[] PrepareChildBirthProtection(WorkerRoot parent, long revision, PartitionFence fence, List<RootChildStart> starts)
+    private PendingChildBirth[] PrepareChildBirthProtection(WorkerRoot parent, InstanceRow row, PartitionFence fence, List<RootChildStart> starts)
     {
         var key = _rootChildIssuanceKey ?? throw RootShape();
         return starts.Select(child =>
@@ -224,9 +226,14 @@ public sealed partial class EfStore
             var creator = child.Creator;
             var spec = creator.Start!;
             var fingerprint = CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload) ?? throw RootShape();
-            var birth = new FoundationChildIssuance(parent.Tenant, parent.Actor, parent.Fingerprint, revision, creator.Target.Id, fingerprint);
+            var birth = new FoundationChildIssuance(parent.Tenant, parent.Actor, parent.Fingerprint, row.Revision, creator.Target.Id, fingerprint);
             return new PendingChildBirth(parent.Tenant, new Contract.ActorRef(child.Reference), spec.Model, spec.Definition,
-                FoundationChildIssuance.Issue(key, birth, fence));
+                FoundationChildIssuance.Issue(key, birth, fence))
+            {
+                Parent = _qualifiesAttachedTestRuns && spec.Parent is not null && row.FoundationDispatchHeader is { } header
+                    ? new(new(parent.Reference), row.Model, header.Header.TypeData, IsRoot: row.Parent is null)
+                    : null
+            };
         }).ToArray();
     }
 

@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Services.Executables;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using Kernel.Foundation.Hosting;
+using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -32,11 +33,25 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
     internal async ValueTask<ChildBirthProtectionOutcome> ProtectAsync(IReadOnlyList<PendingChildBirth> births, CancellationToken token)
     {
         var pins = new List<RuntimeKernelExecutablePin>();
+        var attached = new List<(RuntimeKernelExecutablePin Pin, WorkflowTestStart Test, PendingChildParent Parent, KernelExecutableSelection Selection)>();
         foreach (var birth in births)
         {
-            if (birth.Tenant != actors.Tenant || scope.Value != actors.Tenant ||
-                KernelExecutableSelection.Read(birth.Type, birth.TypeData) is not { TestStart: null } selected)
+            if (scope.Value != actors.Tenant || KernelExecutableSelection.Read(birth.Type, birth.TypeData) is not { } selected)
                 return ChildBirthProtectionOutcome.Refused;
+            if (selected.TestStart is { } test)
+            {
+                if (!foundation.TakesAttachedTestRuns || testActors is not { IsHostIsolated: true } isolated || birth.Tenant != isolated.Tenant ||
+                    birth.Parent is not { } parent || selected.Executable is not { } child ||
+                    KernelExecutableSelection.Read(parent.Type, parent.TypeData) is not
+                        { Executable: not null, TestStart: { } parentTest } parentSelection ||
+                    parent.IsRoot != (parentTest.RootActor is null) ||
+                    test != (parentTest with { RootActor = parentTest.RootActor ?? parent.Actor.Id }))
+                    return ChildBirthProtectionOutcome.Refused;
+                attached.Add((new(scope, actors.Tenant, birth.Actor.Id, child, birth.Issuance) { IsolatedTenant = isolated.Tenant },
+                    test, parent, parentSelection));
+                continue;
+            }
+            if (birth.Tenant != actors.Tenant) return ChildBirthProtectionOutcome.Refused;
             if (selected.Executable is { } exact)
                 pins.Add(new(scope, actors.Tenant, birth.Actor.Id, exact, birth.Issuance));
             else if (!serving.IsHostWorkflow(selected.Workflow, selected.Definition))
@@ -47,6 +62,9 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         {
             foreach (var batch in pins.Chunk(RuntimeStorePageRequest.MaximumLimit))
                 if (!await TryPinAsync(batch, token)) return ChildBirthProtectionOutcome.Stale;
+            foreach (var child in attached)
+                if (!await TryPinTestRunChildAsync(child.Pin, child.Test, child.Parent, child.Selection, token))
+                    return ChildBirthProtectionOutcome.Stale;
             return ChildBirthProtectionOutcome.Protected;
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
@@ -64,6 +82,26 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
             logger.LogWarning(error, "Child executable protection refused a selected identity for tenant {Tenant}.", actors.Tenant);
             return ChildBirthProtectionOutcome.Refused;
         }
+    }
+
+    private async ValueTask<bool> TryPinTestRunChildAsync(RuntimeKernelExecutablePin pin, WorkflowTestStart test,
+        PendingChildParent parent, KernelExecutableSelection selected, CancellationToken token)
+    {
+        using var bounded = Limit(token);
+        await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
+        var services = runtime.ServiceProvider;
+        if (await ReadTestRunAuthorityAsync(services, test, bounded.Token) is not { } authority ||
+            authority.Current.IsolatedActor is not { } root || root.ActorReference != test.RootActor)
+            return false;
+        if (parent.IsRoot && (authority.Source.ArtifactId != selected.Workflow || authority.Source.DefinitionId != selected.Definition))
+            throw new InvalidDataException("The attached Test Run child's parent does not match the root executable source.");
+        var material = await services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(selected.Workflow, bounded.Token);
+        if (material is null || material.Identity != selected.Executable ||
+            !material.Dependencies.Any(dependency => dependency.ArtifactId == pin.Executable.ArtifactId &&
+                dependency.ArtifactHash == pin.Executable.ArtifactHash))
+            throw new InvalidDataException("The attached Test Run child is not an exact dependency of its parent executable.");
+        return await services.GetRequiredService<IRuntimeKernelExecutablePinStore>()
+            .TryPinAttachedTestRunAsync(pin, authority.Current.Scope, authority.Source, root, bounded.Token);
     }
 
     internal async ValueTask<bool> ProtectHeldStartAsync(PendingRootStart start, CancellationToken token)
@@ -124,23 +162,10 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         var store = services.GetRequiredService<IRuntimeKernelExecutablePinStore>();
         if (selected?.TestStart is { } test)
         {
-            if (test is not { ScopeId.Length: > 0, Partition.Length: > 0, SourceDigest.Length: > 0 } ||
-                (test.Tenant ?? PersistenceScope.DefaultValue) != scope.Value || test.ExpiresAt <= clock.GetUtcNow() ||
-                test.ScopeId != test.SourceReferenceId || test.SubjectId is not null && string.IsNullOrWhiteSpace(test.SubjectId))
+            if (test.RootActor is not null || await ReadTestRunAuthorityAsync(services, test, bounded.Token) is not { } authority ||
+                authority.Source.ArtifactId != selected.Workflow || authority.Source.DefinitionId != selected.Definition)
                 return false;
-            var reference = await services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
-                .FindAsync(test.SourceReferenceId, bounded.Token);
-            if (reference is null || reference.Scope != WorkflowExecutableReferenceScope.TestRun ||
-                reference.ArtifactId != selected.Workflow || reference.DefinitionId != selected.Definition ||
-                reference.TenantId != test.Tenant || reference.ExpiresAt != test.ExpiresAt ||
-                reference.SourceKind != test.SourceKind || reference.SourceId != test.SourceId || reference.SourceVersion != test.SourceVersion ||
-                reference.DefinitionVersionId != test.DefinitionVersionId || reference.ArtifactVersion != test.ArtifactVersion ||
-                !reference.IsLive(clock.GetUtcNow()) || KernelPublishedRunDispatcher.SourceDigest(reference) != test.SourceDigest)
-                return false;
-            var expected = new WorkflowTestScope(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition));
-            var current = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, bounded.Token);
-            if (current is not { State: WorkflowTestScopeState.Open } || !WorkflowTestScope.ContextEquals(current.Scope, expected))
-                return false;
+            var current = authority.Current;
 
             var pin = pins.Single();
             var selectedBinding = new WorkflowTestRunActorBinding(pin.ActorReference, pin.Issuance);
@@ -152,7 +177,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
                     return false;
             }
 
-            return await store.TryPinTestRunAsync(pin, expected, reference, current.IsolatedActor, bounded.Token);
+            return await store.TryPinTestRunAsync(pin, current.Scope, authority.Source, current.IsolatedActor, bounded.Token);
         }
         if (selected?.PublishedStart is not { } publication) return await store.TryPinAsync(pins, bounded.Token);
 
@@ -174,6 +199,26 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         if (slot is null || slot.SlotId != publication.SlotId || slot.ActiveActivationId != publication.ActivationId ||
             slot.Revision != publication.SlotRevision) return false;
         return await store.TryPinPublishedAsync(pins.Single(), slot, source, bounded.Token);
+    }
+
+    private async ValueTask<(WorkflowTestScopeRecord Current, WorkflowExecutableSourceReference Source)?> ReadTestRunAuthorityAsync(
+        IServiceProvider services, WorkflowTestStart test, CancellationToken token)
+    {
+        if (test is not { ScopeId.Length: > 0, Partition.Length: > 0, SourceDigest.Length: > 0 } ||
+            (test.Tenant ?? PersistenceScope.DefaultValue) != scope.Value || test.ExpiresAt <= clock.GetUtcNow() ||
+            test.ScopeId != test.SourceReferenceId || test.SubjectId is not null && string.IsNullOrWhiteSpace(test.SubjectId))
+            return null;
+        var source = await services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(test.SourceReferenceId, token);
+        if (source is null || source.Scope != WorkflowExecutableReferenceScope.TestRun || source.TenantId != test.Tenant ||
+            source.ExpiresAt != test.ExpiresAt || source.SourceKind != test.SourceKind || source.SourceId != test.SourceId ||
+            source.SourceVersion != test.SourceVersion || source.DefinitionVersionId != test.DefinitionVersionId ||
+            source.ArtifactVersion != test.ArtifactVersion || !source.IsLive(clock.GetUtcNow()) ||
+            KernelPublishedRunDispatcher.SourceDigest(source) != test.SourceDigest)
+            return null;
+        var expected = new WorkflowTestScope(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition));
+        var current = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, token);
+        return current is { State: WorkflowTestScopeState.Open } && WorkflowTestScope.ContextEquals(current.Scope, expected)
+            ? (current, source) : null;
     }
 
     internal async Task RunAsync(CancellationToken token)
@@ -259,8 +304,11 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
                 };
             }
 
-            if (exact.IsolatedTenant is not null) return RuntimeKernelExecutablePinProof.Unresolved;
-            var proof = await foundation.ConfirmChildBirthAsync(actors, new(exact.ActorReference), exact.Issuance, cancellationToken);
+            var childTenant = exact.IsolatedTenant is null ? actors : testActors;
+            if (childTenant is null || exact.IsolatedTenant is { } childIsolated &&
+                (!foundation.TakesAttachedTestRuns || childTenant.Tenant != childIsolated))
+                return RuntimeKernelExecutablePinProof.Unresolved;
+            var proof = await foundation.ConfirmChildBirthAsync(childTenant, new(exact.ActorReference), exact.Issuance, cancellationToken);
             return proof switch
             {
                 FoundationChildBirthProof.BirthRetired => RuntimeKernelExecutablePinProof.BirthRetired,
