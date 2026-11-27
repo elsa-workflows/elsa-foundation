@@ -87,21 +87,23 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
         var (entries, last) = FoundationJournalPaging.Read(
             snapshot.Rows.Select(row => (row.Position, row.Revision, row.Entries)), after, _pageSize);
 
-        PageToken? next = null;
-        if (entries.Count > 0)
-        {
-            Span<byte> landing = stackalloc byte[Bookmark.Size];
-            last.Write(landing);
-            next = new(cursor.Seal(context, landing));
-        }
-        var head = snapshot.Rows.FirstOrDefault();
+        PageToken? next = entries.Count > 0 ? Seal(last) : null;
+        var head = snapshot.Head;
         return new(entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray(), next, snapshot.AsOf)
         {
-            JournalHeadRevision = head?.HeadRevision,
+            JournalHeadRevision = head?.Revision,
+            JournalCatchUpToken = head is null ? null : Seal(Bookmark.AfterPosition(head.Position)),
             JournalCancellation = head is { CancellationRevision: > 0 and var revision, CancellationAt: { } at }
                 ? new JournalCancellation(revision, at)
                 : null
         };
+
+        PageToken Seal(Bookmark mark)
+        {
+            Span<byte> landing = stackalloc byte[Bookmark.Size];
+            mark.Write(landing);
+            return new(cursor.Seal(context, landing));
+        }
     }
 
     public async ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,

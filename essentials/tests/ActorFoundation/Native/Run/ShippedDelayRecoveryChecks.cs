@@ -107,6 +107,7 @@ internal static class ShippedDelayRecoveryChecks
             var marker = await db.StoreVersions.AsNoTracking().SingleAsync(row => row.Id == StoreVersionEntity.MarkerId, token);
             Check(marker.Format == StoreFormat.RootShipped, "the journey runs on the widened shipped marker");
             Contract.ActorRef nativeRoot, flowRoot;
+            Contract.Page<Contract.JournalEntry> nativePrefix, flowPrefix;
             DelayWait nativeWait, flowWait;
             Contract.ActorView nativePark, flowPark;
             long originalEpoch;
@@ -116,6 +117,15 @@ internal static class ShippedDelayRecoveryChecks
                 flowRoot = await AdmitAsync(FlowDefinition);
                 nativeWait = await WaitingAsync(nativeRoot, NativeDelay);
                 flowWait = await WaitingAsync(flowRoot, FlowDelay);
+                nativePrefix = await reads.TailAsync(scope, nativeRoot, cancellationToken: token);
+                flowPrefix = await reads.TailAsync(scope, flowRoot, cancellationToken: token);
+                Check(nativePrefix is { JournalHeadRevision: > 0, JournalCatchUpToken: not null } &&
+                    flowPrefix is { JournalHeadRevision: > 0, JournalCatchUpToken: not null },
+                    "both waiting workflows expose the committed journal head and a catch-up bookmark");
+                var idle = await reads.TailAsync(scope, nativeRoot, nativePrefix.JournalCatchUpToken, token);
+                Check(idle is { Items.Count: 0, Next: null, JournalCatchUpToken: not null } &&
+                    idle.JournalHeadRevision == nativePrefix.JournalHeadRevision,
+                    "an idle journal read retains the actor's committed head without replaying entries");
                 originalEpoch = await EpochAsync();
                 nativePark = await ParkAsync(nativeRoot);
                 flowPark = await ParkAsync(flowRoot);
@@ -149,7 +159,8 @@ internal static class ShippedDelayRecoveryChecks
 
             var nativeFinished = await UntilAsync(() => FinishedAsync(nativeRoot));
             var flowFinished = await UntilAsync(() => FinishedAsync(flowRoot));
-            foreach (var (actor, wait, result) in new[] { (nativeRoot, nativeWait, nativeFinished), (flowRoot, flowWait, flowFinished) })
+            foreach (var (actor, wait, result, prefix) in new[]
+                { (nativeRoot, nativeWait, nativeFinished, nativePrefix), (flowRoot, flowWait, flowFinished, flowPrefix) })
             {
                 Check(Json.Read<NativeState>(result.State!).Variables["finished"]!.GetValue<bool>() &&
                     timers.Where(timer => timer.Actor == actor).ToArray() is [var timer] &&
@@ -159,6 +170,11 @@ internal static class ShippedDelayRecoveryChecks
                 var visible = await reads.GetAsync(scope, actor, token);
                 Check(visible is { Park: null, Header.Status: Contract.ActorStatus.Finished },
                     "the public actor read shows a finished run with its Park cleared");
+                var caughtUp = await reads.TailAsync(scope, actor, prefix.JournalCatchUpToken, token);
+                Check(caughtUp.JournalHeadRevision == result.Revision && caughtUp.Items.Count > 0 &&
+                    caughtUp.Items.All(entry => entry.Revision > prefix.JournalHeadRevision) &&
+                    caughtUp.Items.Any(entry => entry.Revision == result.Revision),
+                    "the earlier bookmark reads only newer committed entries across owner replacement");
             }
             await CheckTerminationAsync();
             var retaining = await AdmitAsync(TerminalDefinition, "retain-immediate-at-end");
@@ -205,10 +221,19 @@ internal static class ShippedDelayRecoveryChecks
                     "Terminate clears the authentic far-future private timer in the terminal checkpoint");
 
                 var terminal = (await reads.GetAsync(scope, plain, token))!.Selection;
+                var endedHistory = await reads.TailAsync(scope, plain, cancellationToken: token);
+                var endBookmark = endedHistory.JournalCatchUpToken;
+                var emptyEnd = await reads.TailAsync(scope, plain, endBookmark, token);
+                Check(endBookmark is not null && emptyEnd is { Items.Count: 0, JournalCancellation: { } cancellation } &&
+                    cancellation.Revision == ended.TerminalRevision && emptyEnd.JournalHeadRevision == ended.Revision,
+                    "an empty terminal tail retains its cancellation and committed revision");
                 Check(terminal is not null && await ingress.SendAsync(scope, new Contract.Target.Ref(plain), "delete-delay",
                     Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(terminal)), cancellationToken: token)
                     is { Outcome: Contract.AdmissionOutcome.Accepted }, "the shipped provider admits Delete of the exact terminal selection");
                 await RetiredAsync(plain, plainTimer);
+                var retiredTail = await reads.TailAsync(scope, plain, endBookmark, token);
+                Check(retiredTail is { Items.Count: 0, JournalHeadRevision: null, JournalCatchUpToken: null },
+                    "a bookmark cannot make a retired run's journal appear live");
 
                 var runningCompound = (await reads.GetAsync(scope, compound, token))!;
                 Check(await runtime.TerminateThenDeleteAsync(scope, "terminate-and-delete-delay", runningCompound, token)

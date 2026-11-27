@@ -7,9 +7,13 @@ public readonly record struct PageToken(string Value);
 
 public sealed record Page<T>(IReadOnlyList<T> Items, PageToken? Next, long AsOf)
 {
-    /// <summary>The actor's committed revision in the snapshot that produced a nonempty journal page.</summary>
+    /// <summary>The actor's committed revision in this journal snapshot, including an empty page for a live actor.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? JournalHeadRevision { get; init; }
+
+    /// <summary>An opaque bookmark after the last journal row in this snapshot. Use it to read later commits.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PageToken? JournalCatchUpToken { get; init; }
 
     /// <summary>The actor's committed cancellation in the same journal snapshot, when retained.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
