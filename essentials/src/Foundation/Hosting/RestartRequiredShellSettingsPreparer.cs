@@ -7,8 +7,30 @@ namespace Elsa.Foundation.Hosting;
 
 /// <summary>Checks the outgoing generation before CShells configures any of its replacement's features.</summary>
 internal sealed class RestartRequiredShellSettingsPreparer(IServiceProvider host,
-    ILogger<RestartRequiredShellSettingsPreparer> logger) : IShellSettingsPreparer
+    ILogger<RestartRequiredShellSettingsPreparer> logger, IShellSettingsPreparer? inner) : IShellSettingsPreparer
 {
+    internal static void Register(IServiceCollection services)
+    {
+        var existing = services.SingleOrDefault(descriptor =>
+            descriptor.ServiceType == typeof(IShellSettingsPreparer) && !descriptor.IsKeyedService);
+        var key = new object();
+        if (existing is not null)
+        {
+            services.Remove(existing);
+            // Keep the application's preparer at its original lifetime while CShells sees one unkeyed registration.
+            var keyed = existing.ImplementationInstance is { } instance
+                ? ServiceDescriptor.KeyedSingleton(typeof(IShellSettingsPreparer), key, instance)
+                : existing.ImplementationFactory is { } factory
+                    ? ServiceDescriptor.DescribeKeyed(typeof(IShellSettingsPreparer), key, (provider, _) => factory(provider), existing.Lifetime)
+                    : ServiceDescriptor.DescribeKeyed(typeof(IShellSettingsPreparer), key, existing.ImplementationType!, existing.Lifetime);
+            services.Add(keyed);
+        }
+        services.Add(ServiceDescriptor.Describe(typeof(IShellSettingsPreparer), provider => new RestartRequiredShellSettingsPreparer(
+            provider, provider.GetRequiredService<ILogger<RestartRequiredShellSettingsPreparer>>(),
+            existing is null ? null : provider.GetRequiredKeyedService<IShellSettingsPreparer>(key)),
+            existing?.Lifetime ?? ServiceLifetime.Singleton));
+    }
+
     public Task<ShellSettingsPreparationResult> PrepareAsync(ShellSettingsPreparationContext context,
         CancellationToken cancellationToken)
     {
@@ -22,6 +44,7 @@ internal sealed class RestartRequiredShellSettingsPreparer(IServiceProvider host
             throw new InvalidOperationException("The active shell requires a host restart before replacement.");
         }
 
-        return Task.FromResult(ShellSettingsPreparationResult.Unchanged(context));
+        return inner?.PrepareAsync(context, cancellationToken) ??
+            Task.FromResult(ShellSettingsPreparationResult.Unchanged(context));
     }
 }
