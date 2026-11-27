@@ -347,9 +347,8 @@ internal static class PostgresShippedFormatChecks
         var scope = EmbeddedTenant.Bind("queued-creator");
         const string node = "queued-creator-owner";
         var requests = PostgresPreviewHosting.CreateRequests(open, node, actor.Type);
-        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(open, actor.Type, requests, cancellationToken: token);
-        var operators = await store.OpenSelectedRootIngressAsync(actor.Type, TimeSpan.FromHours(1),
-            (bound, _) => ReferenceEquals(bound, scope), token, (bound, _) => ReferenceEquals(bound, scope));
+        var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(open, actor.Type,
+            (bound, _, kind) => ReferenceEquals(bound, scope) && kind == Contract.Kinds.Recover, requests, cancellationToken: token);
         await using var owner = await PostgresPreviewHosting.StartAsync(open, node, actor,
             reason => throw new InvalidOperationException(reason), new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(20) },
             token, onFault: null, replies: requests, fenceInBatch: inBatch);
@@ -364,7 +363,7 @@ internal static class PostgresShippedFormatChecks
         Require(parked is { Status: InstanceStatus.Faulted, ParkAt: not null, State: null },
             "the ordinary creator faults before its first state");
         var selection = (await foundation.GetAsync(scope, actorRef, token))!.Selection;
-        Require(await operators.SendAsync(scope, new Contract.Target.Ref(actorRef), "recover-queued-creator", Contract.Kinds.Recover,
+        Require(await foundation.SendAsync(scope, new Contract.Target.Ref(actorRef), "recover-queued-creator", Contract.Kinds.Recover,
             JsonSerializer.Serialize(new Contract.OperatorCommand(selection)), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
             "the exact queued creator Park admits Recover");
         Require(await WaitForRevisionAsync(actorRef, 2) is { Status: InstanceStatus.Running, ParkAt: null },
@@ -383,7 +382,7 @@ internal static class PostgresShippedFormatChecks
         Require(await WaitForRevisionAsync(nullable, 2) is { Status: InstanceStatus.Faulted, ParkAt: not null, State: null },
             "a later failure can park the same null checkpoint");
         var later = (await foundation.GetAsync(scope, nullable, token))!.Selection;
-        Require(await operators.SendAsync(scope, new Contract.Target.Ref(nullable), "recover-later", Contract.Kinds.Recover,
+        Require(await foundation.SendAsync(scope, new Contract.Target.Ref(nullable), "recover-later", Contract.Kinds.Recover,
             JsonSerializer.Serialize(new Contract.OperatorCommand(later)), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
             "the later null-state Park admits Recover");
         Require(await WaitForRevisionAsync(nullable, 3) is { Status: InstanceStatus.Running, ParkAt: null },
