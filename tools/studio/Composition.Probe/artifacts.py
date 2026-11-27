@@ -80,9 +80,8 @@ class Artifacts:
         mapping = ET.SubElement(root, "packageSourceMapping")
         entries = [
             ("candidate", str(self.feed), list(self.packages) + [CUSTOM_ID]),
-            ("nuget.org", "https://api.nuget.org/v3/index.json", ["*"]),
+            ("nuget.org", "https://api.nuget.org/v3/index.json", ["*", "Nuplane", "Nuplane.*"]),
             ("CShells", "https://f.feedz.io/valence-works/cshells/nuget/index.json", ["CShells", "CShells.*"]),
-            ("Nuplane", "https://f.feedz.io/valence-works/nuplane/nuget/index.json", ["Nuplane", "Nuplane.*"]),
             ("Specifications", "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json", ["Elsa.Specifications.*"]),
         ]
         for key, url, patterns in entries:
@@ -179,7 +178,7 @@ class Artifacts:
         (source / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": features}}}}))
         settings = {"Logging": {"LogLevel": {"Default": "Warning", "Microsoft.Hosting.Lifetime": "Information"}},
                     "Studio": {"HostId": "composition-" + name, "Auth": {"Enabled": False, "SessionCacheSeconds": 0}},
-                    "Nuplane": {"Setup": {"AutomaticReconciliation": False}, "Loading": {"Enabled": True}},
+                    "Nuplane": {"Reconciliation": {"EnableAutomaticReconciliation": False}, "Loading": {"Enabled": True}},
                     "Qualification": {"EnrollOwnedStore": True}}
         (source / "appsettings.json").write_text(json.dumps(settings))
         cache = self.root / (name + "-cache")

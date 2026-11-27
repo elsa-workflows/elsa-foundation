@@ -28,7 +28,7 @@ public sealed class PackageProtectionTests
     public async Task Feed_module_discovery_retries_without_caching_an_incomplete_manifest_when_archive_admission_is_full()
     {
         await using var host = await AdministrationHost.StartAsync(
-            nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }),
+            nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); }),
             loadPackages: true,
             beforeStudio: builder => builder.Configuration.AddInMemoryCollection(
                 new Dictionary<string, string?> { ["CShells:Shells:Authoring:Features:EtlStudio"] = "true" }));
@@ -167,7 +167,7 @@ public sealed class PackageProtectionTests
     [Fact]
     public async Task A_static_provider_cannot_bypass_archive_verification()
     {
-        await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
+        await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); }));
         PackageAssetTests.Pack(host, "1.0.0", "unprotected-package-sentinel");
         await PackageAssetTests.Reconcile(host);
         var package = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);
@@ -182,7 +182,7 @@ public sealed class PackageProtectionTests
     [Fact]
     public async Task A_deployed_file_alias_cannot_bypass_archive_verification()
     {
-        await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
+        await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); }));
         PackageAssetTests.Pack(host, "1.0.0", "aliased-unprotected-package-sentinel");
         await PackageAssetTests.Reconcile(host);
         var package = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);

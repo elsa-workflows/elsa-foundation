@@ -30,6 +30,8 @@ interface FeedDraft {
   directoryPath: string;
   includePatterns: string;
   includeAllPackages: boolean;
+  trusted: boolean;
+  directory: ModuleManagementFeed["directory"];
 }
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
@@ -349,8 +351,13 @@ function FeedDialog({
     >
       <div className="modules-form">
           <StudioField label="Feed name"><input ref={nameInput} name="feedName" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} /></StudioField>
-          <StudioField label="Service index"><input name="serviceIndex" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} /></StudioField>
-          <StudioField label="Directory path"><input name="directoryPath" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} /></StudioField>
+          <StudioField label="Service index"><input name="serviceIndex" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value, trusted: false })} /></StudioField>
+          <StudioField label="Directory path"><input name="directoryPath" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value, trusted: false })} /></StudioField>
+          <label className="modules-checkbox">
+            <input type="checkbox" name="trust" checked={feedDraft.trusted}
+              onChange={event => setFeedDraft({ ...feedDraft, trusted: event.target.checked })} />
+            Trust this package source
+          </label>
           <StudioField label="Include patterns"><textarea name="includePatterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} /></StudioField>
           <label className="modules-checkbox">
             <input
@@ -371,8 +378,10 @@ function createFeedDraft(feed?: ModuleManagementFeed): FeedDraft {
     name: feed?.name ?? "",
     serviceIndex: feed?.serviceIndex ?? "",
     directoryPath: feed?.directoryPath ?? "",
-    includePatterns: feed ? feed.includePatterns.join("\n") || "*" : "*",
-    includeAllPackages: feed?.includeAll ?? false
+    includePatterns: feed ? feed.includePatterns.join("\n") : "*",
+    includeAllPackages: feed?.includeAll ?? false,
+    trusted: feed?.trust === "Trusted",
+    directory: feed?.directory ?? { watch: true, debounceWindow: "00:00:01" }
   };
 }
 
@@ -385,9 +394,10 @@ function createFeedFromDraft(feedDraft: FeedDraft): ModuleManagementFeed {
     name: feedDraft.name.trim(),
     serviceIndex: feedDraft.serviceIndex.trim() || null,
     directoryPath: feedDraft.directoryPath.trim() || null,
+    trust: feedDraft.trusted ? "Trusted" : "Untrusted",
     includeAll: feedDraft.includeAllPackages || feedDraft.includePatterns.trim() === "*",
     includePatterns,
-    directory: { watch: true, debounceWindow: "00:00:01" }
+    directory: feedDraft.directory
   };
 }
 

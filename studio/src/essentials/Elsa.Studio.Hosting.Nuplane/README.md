@@ -57,6 +57,13 @@ upload feed if a cache already uses `packages`. Uploads trigger reconciliation. 
 configured periodic reconciliation.
 Root-owned Nuplane services and the shared CShells adapter handle discovery and active-generation replacement.
 
+Nuplane 1.x requires explicit trust for package acquisition. In Package feeds, select **Trust this package
+source** for a feed you approve. Editing its service index or directory path clears that selection so you
+can decide whether to trust the new address. For configured feeds, set `Trust: Trusted` on approved entries
+under `Nuplane:Setup:Feeds`. If you supply a Nuplane builder callback, set the trust level when registering
+each approved feed. For renamed configuration keys, see the
+[Nuplane migration notes](https://github.com/valence-works/nuplane/releases/tag/0.0.16).
+
 Only an exclusively owned standard JSON source is writable. Custom/overlaid shell or management sources stay
 readable but refuse local changes. Writes hold the same process-wide mutation lease through read/revision/write/
 reload; an error after a completed atomic save explicitly reports that the configuration was saved but reload failed.

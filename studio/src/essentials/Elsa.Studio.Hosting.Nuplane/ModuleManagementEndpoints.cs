@@ -3,8 +3,11 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Studio.Api.Authorization;
 using Elsa.Studio.Api.Contracts;
+using Microsoft.Extensions.Options;
 using global::Nuplane.Admin;
+using global::Nuplane.Abstractions;
 using global::Nuplane.Abstractions.PackageStoreProtection;
+using global::Nuplane.Feeds.Configuration;
 using global::Nuplane.Feeds.Setup;
 
 namespace Elsa.Studio.Hosting.Nuplane;
@@ -41,13 +44,13 @@ internal static class ModuleManagementEndpoints
             foreach (var package in snapshot.Packages)
                 packages.Add(await PackageRegistryReader.ReadAsync(package, reader, diagnostics, context.RequestAborted));
             var policy = management.ReadRetention();
-            var feedDeclarations = NuplaneFeedSetupDeclarationReader.Read(configuration.GetSection(FeedPrefix)).Declarations;
+            var feedDeclarations = StudioNuplaneSettings.ReadFeeds(configuration.GetSection(FeedPrefix));
             var canManageFeeds = management.CanWrite(FeedPrefix) &&
-                feedDeclarations.All(feed => feed.SourceShape == NuplaneFeedSetupSourceShape.Array);
+                feedDeclarations.All(feed => feed.IsArray);
             return Results.Ok(new ModuleManagementRegistryResponse(
                 new("studio", "Studio", environment.ApplicationName, environment.ContentRootPath), DateTimeOffset.UtcNow,
                 modules.Modules.Select(module => ModuleManagementModule.FromStudioModule(module, environment.ApplicationName)).ToArray(),
-                packages, DropFolderPackages(settings.DropFolder), ReadFeeds(configuration, feedDeclarations),
+                packages, DropFolderPackages(settings.DropFolder), ReadFeeds(feedDeclarations),
                 new(policy.KeepNewestInactiveVersionsPerPackage, policy.Status),
                 new(true, canManageFeeds, true, true, true,
                     management.CanWrite(ManagementConfigurationStore.RetentionPrefix)), diagnostics));
@@ -146,7 +149,8 @@ internal static class ModuleManagementEndpoints
         });
     }
 
-    private static Task<IResult> UpdateFeedAsync(string name, ModuleManagementFeed feed, ManagementConfigurationStore store, CancellationToken token)
+    private static Task<IResult> UpdateFeedAsync(string name, ModuleManagementFeed feed, ManagementConfigurationStore store,
+        IOptionsSnapshot<FeedResolutionOptions> options, CancellationToken token)
     {
         if (FeedError(feed with { Name = name }) is { } invalid) return Task.FromResult(Error(invalid));
         return MutateFeedsAsync(store, token, feeds =>
@@ -155,17 +159,20 @@ internal static class ModuleManagementEndpoints
             if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
             var existing = feeds[index] as JsonObject;
             if (IsCacheOnlyFeed(existing)) return ReadOnlyFeed(name);
+            if (!SameAddress(feed, existing) && HasTrustOverrides(name, options.Value)) return FeedHasTrustOverrides(name);
             feeds[index] = FeedJson(feed, name, existing);
             return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate registration changes."));
         });
     }
 
-    private static Task<IResult> DeleteFeedAsync(string name, ManagementConfigurationStore store, CancellationToken token) =>
+    private static Task<IResult> DeleteFeedAsync(string name, ManagementConfigurationStore store,
+        IOptionsSnapshot<FeedResolutionOptions> options, CancellationToken token) =>
         MutateFeedsAsync(store, token, feeds =>
         {
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
             if (IsCacheOnlyFeed(feeds[index] as JsonObject)) return ReadOnlyFeed(name);
+            if (HasTrustOverrides(name, options.Value)) return FeedHasTrustOverrides(name);
             feeds.RemoveAt(index);
             return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate registration changes."));
         });
@@ -210,23 +217,32 @@ internal static class ModuleManagementEndpoints
     }
 
     // The response projects public feed fields only; credentials stay in host configuration (#3735).
-    private static IReadOnlyList<ModuleManagementRegistryFeed> ReadFeeds(IConfiguration configuration,
-        IReadOnlyList<NuplaneFeedSetupDeclaration> declarations) =>
+    private static IReadOnlyList<ModuleManagementRegistryFeed> ReadFeeds(
+        IReadOnlyList<StudioNuplaneSettings.FeedSection> declarations) =>
         declarations.Where(declaration => !string.IsNullOrWhiteSpace(declaration.Name))
             .OrderBy(declaration => declaration.Name, StringComparer.OrdinalIgnoreCase)
             .Select(declaration =>
             {
-                var feed = configuration.GetSection(declaration.ConfigurationPath);
+                var feed = declaration.Section;
                 return new ModuleManagementRegistryFeed(
                     declaration.Name, feed["ServiceIndex"], feed["DirectoryPath"], feed.GetValue<bool>("IncludeAll"),
                     feed.GetSection("IncludePatterns").GetChildren().Select(item => item.Value).OfType<string>().ToArray(),
-                    new(feed.GetValue<bool?>("Directory:Watch") ?? true, feed["Directory:DebounceWindow"] ?? "00:00:01"));
+                    new(feed.GetValue<bool?>("Directory:Watch") ?? true, feed["Directory:DebounceWindow"] ?? "00:00:01"))
+                {
+                    Trust = feed.GetValue<FeedTrustLevel>("Trust") == FeedTrustLevel.Trusted
+                        ? nameof(FeedTrustLevel.Trusted)
+                        : nameof(FeedTrustLevel.Untrusted)
+                };
             }).ToArray();
 
     private static JsonObject FeedJson(ModuleManagementFeed feed, string name, JsonObject? previous = null)
     {
         var result = previous?.DeepClone().AsObject() ?? new JsonObject();
         result["Name"] = name;
+        if (feed.Trust is { } trust)
+            result["Trust"] = IsTrustDecision(trust, FeedTrustLevel.Trusted) ? nameof(FeedTrustLevel.Trusted) : nameof(FeedTrustLevel.Untrusted);
+        else if (!SameAddress(feed, previous))
+            result.Remove("Trust");
         result["ServiceIndex"] = feed.ServiceIndex;
         result["DirectoryPath"] = feed.DirectoryPath;
         // A write without a credential keeps the stored one for the same service index: the browser never receives it, so it
@@ -240,6 +256,16 @@ internal static class ModuleManagementEndpoints
         directory["DebounceWindow"] = feed.Directory?.DebounceWindow ?? "00:00:01";
         return result;
     }
+
+    private static bool SameAddress(ModuleManagementFeed feed, JsonObject? previous) =>
+        string.Equals((string?)previous?["ServiceIndex"], feed.ServiceIndex, StringComparison.Ordinal) &&
+        string.Equals((string?)previous?["DirectoryPath"], feed.DirectoryPath, StringComparison.Ordinal);
+
+    private static bool HasTrustOverrides(string name, FeedResolutionOptions options) =>
+        options.TrustOverrides.Any(item => string.Equals(item.FeedName, name, StringComparison.OrdinalIgnoreCase));
+
+    private static IResult FeedHasTrustOverrides(string name) =>
+        ReadOnlyConfiguration($"Remove the package trust overrides for '{name}' before changing its address or deleting it.");
 
     private static int IndexOf(JsonArray feeds, string name)
     {
@@ -258,10 +284,16 @@ internal static class ModuleManagementEndpoints
     private static IResult ReadOnlyConfiguration(string error) =>
         Results.Conflict(new { Error = error, Code = "configuration-read-only" });
 
+    private static bool IsTrustDecision(string? trust, FeedTrustLevel level) =>
+        string.Equals(trust, level.ToString(), StringComparison.OrdinalIgnoreCase);
+
     private static string? FeedError(ModuleManagementFeed feed)
     {
         if (string.IsNullOrWhiteSpace(feed.Name)) return "Feed name is required.";
         if (feed.Name != feed.Name.Trim()) return "Feed names cannot start or end with whitespace.";
+        if (string.Equals(feed.Name, StudioNuplaneSettings.FallbackFeedName, StringComparison.OrdinalIgnoreCase)) return "That feed name is reserved for Studio.";
+        if (feed.Trust is { } trust && !IsTrustDecision(trust, FeedTrustLevel.Trusted) && !IsTrustDecision(trust, FeedTrustLevel.Untrusted))
+            return "Feed trust must be Trusted or Untrusted.";
         if (!string.IsNullOrWhiteSpace(feed.ServiceIndex) && !string.IsNullOrWhiteSpace(feed.DirectoryPath)) return "Choose a service index or a directory path, not both.";
         if (string.IsNullOrWhiteSpace(feed.ServiceIndex) && string.IsNullOrWhiteSpace(feed.DirectoryPath)) return "A service index or directory path is required.";
         if (!string.IsNullOrWhiteSpace(feed.ServiceIndex) && (!Uri.TryCreate(feed.ServiceIndex, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http"))) return "The service index must be an absolute HTTP or HTTPS URL.";

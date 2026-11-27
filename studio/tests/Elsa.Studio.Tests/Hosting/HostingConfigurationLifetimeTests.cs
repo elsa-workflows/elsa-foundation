@@ -209,7 +209,7 @@ public sealed class HostingConfigurationLifetimeTests
                 builder.Configuration.Sources.Clear();
                 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Nuplane:Setup:AutomaticReconciliation"] = "false",
+                    ["Nuplane:Reconciliation:EnableAutomaticReconciliation"] = "false",
                     ["Nuplane:Loading:Enabled"] = "false"
                 });
                 host.Configuration = builder.Configuration;
