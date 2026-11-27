@@ -231,9 +231,11 @@ public sealed partial class EfStore
         History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
         string? Jobs, long? NextJobGeneration, string? Fault, long? ParkAt, string? Parent, string? Children);
 
-    internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
+    internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference,
+        CancellationToken cancellationToken = default, bool requireIsolatedTestRunProfile = false)
     {
         await using var db = create();
+        if (requireIsolatedTestRunProfile && !db.UsesRootDirectTestRuns) return null;
         // The model's protection decision must see the same physical checkpoint as retirement.
         await using var transaction = await BeginPinnedRootOperationAsync(db, cancellationToken);
         // The SQLite runtime verified the marker and catalog in BeginPinnedRootOperationAsync.
