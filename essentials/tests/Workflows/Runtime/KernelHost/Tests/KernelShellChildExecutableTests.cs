@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.ActorFoundation.Hosting;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
