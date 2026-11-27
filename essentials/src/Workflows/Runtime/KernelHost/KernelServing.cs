@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Models;
 using Kernel.Native;
 
 namespace Elsa.Workflows.Runtime.KernelHost;
@@ -36,12 +37,17 @@ public sealed class KernelServing
     /// What the host's foundation runs (<see cref="KernelHostCapabilities"/>); a workflow that needs what it lacks is refused
     /// where it is mapped. All of it by default.
     /// </param>
-    public KernelServing(Func<string, string?>? cronError = null, KernelHostCapabilities? capabilities = null)
+    /// <param name="publicationScope">The ordinary persistence scope this registry serves when bound to a single tenant.</param>
+    public KernelServing(Func<string, string?>? cronError = null, KernelHostCapabilities? capabilities = null,
+        PersistenceScope? publicationScope = null)
     {
         _cronError = cronError;
+        PublicationScope = publicationScope;
         Capabilities = capabilities ?? KernelHostCapabilities.All;
         _state = Build(new Dictionary<string, KernelServedSlot>(StringComparer.Ordinal));
     }
+
+    internal PersistenceScope? PublicationScope { get; }
 
     public WorkflowRegistry Registry { get; } = new();
 

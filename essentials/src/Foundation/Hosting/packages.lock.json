@@ -193,6 +193,9 @@
       "elsa.attention.core": {
         "type": "Project"
       },
+      "elsa.modularity.core": {
+        "type": "Project"
+      },
       "elsa.persistence.schema": {
         "type": "Project"
       },

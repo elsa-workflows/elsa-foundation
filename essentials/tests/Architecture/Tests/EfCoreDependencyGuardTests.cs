@@ -74,7 +74,8 @@ public sealed class EfCoreDependencyGuardTests
         "Npgsql.EntityFrameworkCore.PostgreSQL"
     ];
 
-    // ADR 0099 and #4229 admit these provider packages. The Built-in runtime and contracts retain no EF edge.
+    // ADR 0099 and #4229 admit these provider packages and the opt-in host composition that selects them.
+    // The Built-in runtime and layer 3 contracts and engine retain no EF edge.
     private static readonly IReadOnlyDictionary<string, string[]> BuiltInActorFoundationEfClosures =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
@@ -83,6 +84,8 @@ public sealed class EfCoreDependencyGuardTests
             ["essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj"] =
                 BuiltInActorFoundationEfPackages,
             ["essentials/src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj"] =
+                BuiltInActorFoundationEfPackages,
+            ["essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj"] =
                 BuiltInActorFoundationEfPackages
         };
 

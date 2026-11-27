@@ -91,7 +91,8 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
             provider.GetService<IRecurringTriggerScheduleStore>(),
             provider.GetService<IOptions<ActivationChannelOptions>>()?.Value,
             provider.GetServices<IWorkflowTriggerIndexObserver>(),
-            provider.GetService<ILogger<KernelActivationCoordinator>>()));
+            provider.GetService<ILogger<KernelActivationCoordinator>>(),
+            provider.GetService<IPersistenceAccessContextAccessor>()));
     }
 
     /// <summary>Whether the shell whose services these are composes this feature: its trigger extractor is the kernel's.</summary>

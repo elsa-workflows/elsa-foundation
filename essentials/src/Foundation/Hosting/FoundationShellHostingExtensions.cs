@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using CShells.Nuplane;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,6 +61,7 @@ public static class FoundationShellHostingExtensions
             shells.WithConfigurationProvider(builder.Configuration);
         });
 
+        services.AddSingleton<IShellSettingsPreparer, RestartRequiredShellSettingsPreparer>();
         services.AddShellActivationRunner();
         var tracker = new ShellActivationTracker();
         services.AddSingleton(tracker);
