@@ -140,6 +140,38 @@ public sealed class EfWorkflowTestScopeStore(
         ArgumentNullException.ThrowIfNull(scope); cancellationToken.ThrowIfCancellationRequested(); return AssertOpenCore(scope, observedAt, cancellationToken);
     }
 
+    public async ValueTask AdmitIsolatedActorAsync(WorkflowTestScope scope, string actorReference,
+        Func<DateTimeOffset> readClock, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorReference);
+        ArgumentNullException.ThrowIfNull(readClock);
+        var accessScope = RequireScope();
+        EnsureAccess(scope);
+        var exact = AdmissionScope(accessScope, scope.ScopeId);
+        var row = await exact.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+        var record = row is null ? null : WorkflowTestScopeEfSupport.Read(row, accessScope, scope.ScopeId);
+        WorkflowTestScopeAdmission.EnsureOpen(record, scope, readClock());
+        if (record!.IsolatedActor?.ActorReference != actorReference)
+            throw new TestScopeAdmissionException("The workflow test scope does not admit the selected actor.");
+
+        var revision = row!.Revision;
+        var nextRevision = checked(revision + 1);
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        if (await exact.Where(x => x.Revision == revision && x.State == (int)WorkflowTestScopeState.Open)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.Revision, nextRevision), cancellationToken) != 1)
+            throw new TestScopeAdmissionException("The workflow test scope changed during admission.");
+
+        // Sample expiry again with the row locked. Waiting for a competing write must not admit expired work.
+        WorkflowTestScopeAdmission.EnsureOpen(record, scope, readClock());
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private IQueryable<WorkflowTestScopeEntity> AdmissionScope(string accessScope, string scopeId) =>
+        _context.WorkflowTestScopes.Where(x => x.Id == WorkflowTestScopeEfSupport.Id(accessScope, scopeId) &&
+            x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) &&
+            x.ScopeId == EfRelationalIdentity.Encode(scopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scopeId));
+
     private async ValueTask AssertOpenCore(WorkflowTestScope scope, DateTimeOffset observedAt, CancellationToken ct)
     {
         if (observedAt == default)
@@ -147,8 +179,7 @@ public sealed class EfWorkflowTestScopeStore(
 
         var accessScope = RequireScope();
         _access.Current.EnsureTenantScope(scope.TenantId);
-        var row = await _context.WorkflowTestScopes
-            .SingleOrDefaultAsync(x => x.Id == WorkflowTestScopeEfSupport.Id(accessScope, scope.ScopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(scope.ScopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scope.ScopeId), ct);
+        var row = await AdmissionScope(accessScope, scope.ScopeId).SingleOrDefaultAsync(ct);
         WorkflowTestScopeAdmission.EnsureOpen(
             row is null ? null : WorkflowTestScopeEfSupport.Read(row, accessScope, scope.ScopeId),
             scope,

@@ -42,14 +42,17 @@ internal sealed class KernelTestRunWaitControl(KernelTestRuns tests, KernelShell
             var previous = Lookup(snapshot, receipt, deliveryId, delivered: false);
             if (previous != "Unseen" || receipt.StimulusDigest is null) return previous;
 
-            await using var runtimeScope = await scopes.CreateAsyncScopeAsync(persistence);
-            await runtimeScope.ServiceProvider.GetRequiredService<IWorkflowTestScopeAdmissionStore>()
-                .AssertOpenAsync(scope, time.GetUtcNow(), token);
             var request = new NativeTestRunEvent(scope.ScopeId, receipt.WaitId, deliveryId, receipt.ConfigurationDigest,
                 receipt.StimulusDigest, stimulus);
+            var payload = JsonSerializer.Serialize(request);
             var ingress = await runtime.IngressAsync(token);
+            await using (var runtimeScope = await scopes.CreateAsyncScopeAsync(persistence))
+                await runtimeScope.ServiceProvider.GetRequiredService<IWorkflowTestScopeAdmissionStore>()
+                    .AdmitIsolatedActorAsync(scope, actor.Id, time.GetUtcNow, token);
+            // The scope CAS authorized this attempt. If Stop has since committed a terminal actor checkpoint,
+            // the Foundation will settle this as ended input without invoking the workflow.
             var admission = await ingress.SendAsync(tests.Reads.Tenant, new Target.Ref(actor), Guid.NewGuid().ToString("N"),
-                NativeTestRunWaitControl.Deliver, JsonSerializer.Serialize(request), cancellationToken: token);
+                NativeTestRunWaitControl.Deliver, payload, cancellationToken: token);
             if (admission.Outcome == AdmissionOutcome.Refused)
                 return admission.Reason is RefusalReason.NodeBusy or RefusalReason.InboxFull or RefusalReason.RateLimited
                     ? "Pending" : "NoLongerWaiting";

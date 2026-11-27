@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Contracts;
@@ -41,6 +42,18 @@ public interface IWorkflowTestScopeAdmissionStore
         WorkflowTestScope scope,
         DateTimeOffset observedAt,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Commits one admission for an exact isolated actor while its immutable scope is open and unexpired.
+    /// A committed admission may reach the actor while teardown is in progress. It grants no later admission.
+    /// </summary>
+    /// <exception cref="TestScopeAdmissionException">The store cannot prove admission for the selected actor.</exception>
+    ValueTask AdmitIsolatedActorAsync(
+        WorkflowTestScope scope,
+        string actorReference,
+        Func<DateTimeOffset> readClock,
+        CancellationToken cancellationToken = default) =>
+        throw new TestScopeAdmissionException("The store does not support isolated Test Run actor admission.");
 }
 
 /// <summary>
