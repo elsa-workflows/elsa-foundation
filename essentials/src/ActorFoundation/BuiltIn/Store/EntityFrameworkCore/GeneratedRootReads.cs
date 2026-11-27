@@ -6,12 +6,6 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 
 namespace Kernel.EntityFramework;
 
-internal interface ICommittedRootStateReads
-{
-    ValueTask<(string TypeData, string? State, ActorStatus Status)?> ReadCommittedStateAsync(BoundScope scope,
-        ActorRef actor, CancellationToken cancellationToken);
-}
-
 internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider)
     : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads,
       IActorRetentionReads, IActorParkInboxReads
@@ -79,8 +73,9 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
     internal async ValueTask<(string TypeData, string? State, ActorStatus Status)?> ReadCommittedStateAsync(BoundScope scope,
         ActorRef actor, CancellationToken cancellationToken)
     {
-        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
-        var read = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken);
+        ArgumentNullException.ThrowIfNull(scope);
+        if (!scope.IsHostIsolated || !PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
+        var read = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken, requireIsolatedTestRunProfile: true);
         return read is { } found ? (found.TypeData, found.State, (ActorStatus)found.Status) : null;
     }
 
