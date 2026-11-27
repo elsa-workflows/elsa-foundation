@@ -93,7 +93,16 @@ dotnet run --project Studio/src/apps/Elsa.Studio.Essentials.Host --launch-profil
 ```
 
 Open `http://localhost:5087` and sign in with the development administrator. CORS and the identity return URLs of
-this host allow that Studio host's two local addresses (`http://localhost:5087`, `https://localhost:7028`).
+this host allow that Studio host's two local addresses (`http://localhost:5087`, `https://localhost:7028`). Build the Studio
+frontend first (`pnpm build` in `Studio`), as for any Studio app from source.
+
+This host doesn't advertise `elsa.api.standalone-triggers`, `elsa.api.workflow-dashboard`, `elsa.api.attention` or
+`elsa.api.secrets`, so Studio hides the standalone triggers screens, the portfolio, run-health and needs-attention widgets,
+the Attention widget and Secrets.
+
+The definitions list shows the imported definitions, but Studio opens a definition through its current draft, and an
+imported definition has none: the designer says "This workflow definition has no current draft". Change the workflow in
+your `migrated/` folder instead, give it a new `version` (a stored version never changes) and restart the host.
 
 ## What your own host needs
 

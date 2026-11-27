@@ -93,7 +93,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   - scenario 5: an unknown feature means the host refuses to start, naming it;
   - scenario 6: a missing workflows folder means the host refuses to start, naming it; so does a missing activities
     file.
-- [ ] T008 [US1] Check by hand with the quickstart, and record the steps and results in the PR:
+- [X] T008 [US1] Check by hand with the quickstart, and record the steps and results in the PR:
   - scenario 3: a feature from a project reference the engineer adds to the host project, listed in
     `shells.Local.json`;
   - SC-002: from a fresh clone, run a workflow from another `migrated/` folder by setting only the two folder settings
@@ -111,7 +111,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 
 ## Phase 5: User Story 4 - Studio (P3)
 
-- [ ] T010 [US4] Start the repository's Studio host against the migration host. Sign in, open a definition, edit an
+- [X] T010 [US4] Start the repository's Studio host against the migration host. Sign in, open a definition, edit an
   expression, publish, and see the host run the new version. Record it in the PR, with the Studio host used and any
   Studio module that expects a capability the host doesn't advertise (R-8). Name that Studio host in the README.
 
