@@ -22,7 +22,7 @@ public static class EmbeddedTenant
     }
 
     /// <summary>Derives a stable, separate actor tenant for host-owned work that ordinary ingress must never address.</summary>
-    internal static BoundScope Isolate(BoundScope configured, string purpose)
+    public static BoundScope Isolate(BoundScope configured, string purpose)
     {
         ArgumentNullException.ThrowIfNull(configured);
         ArgumentException.ThrowIfNullOrWhiteSpace(purpose);
