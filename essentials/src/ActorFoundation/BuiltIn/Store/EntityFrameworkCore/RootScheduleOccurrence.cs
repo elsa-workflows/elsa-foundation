@@ -85,10 +85,11 @@ internal sealed record ScheduledWorkflowBirth(string Reference, Message Creator,
             """;
         query = FormattableStringFactory.Create(query.Format
             .Replace("/*lineage-receipt*/", db.UsesRootScheduleLineage ? """
-                EXISTS (SELECT 1 FROM "FoundationScheduleLineage" lineage WHERE lineage."Reference" = birth."Reference"
+                EXISTS (SELECT 1 FROM /*lineage-table*/ lineage WHERE lineage."Reference" = birth."Reference"
                     AND lineage."Tenant" = birth."Tenant" AND lineage."RootReference" = birth."Reference")
                 """ : "true", StringComparison.Ordinal)
-            .Replace("/*retirement-proof*/", retirement, StringComparison.Ordinal), query.GetArguments());
+            .Replace("/*retirement-proof*/", retirement, StringComparison.Ordinal)
+            .Replace("/*lineage-table*/", RootScheduleLineage.PhysicalTable(db), StringComparison.Ordinal), query.GetArguments());
         var row = await db.Database.SqlQuery<Receipt>(RootScheduleInventory.Bind(query, bindSource)).SingleAsync(token);
         if (!row.SourceReady) throw new StoreFormatException("The pinned schedule store changed during occurrence lookup.");
         if (row.Reference is null) return null;

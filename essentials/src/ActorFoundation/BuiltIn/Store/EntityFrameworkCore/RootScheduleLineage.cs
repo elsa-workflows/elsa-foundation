@@ -15,6 +15,10 @@ internal static class RootScheduleLineage
 
     internal const string PostgresLock = """LOCK TABLE ONLY "FoundationScheduleLineage" IN ROW EXCLUSIVE MODE""";
 
+    // PostgreSQL can attach an inheritance child after the catalog check without taking a conflicting lock on the parent.
+    internal static string PhysicalTable(KernelDb db) => db.Database.IsNpgsql()
+        ? "ONLY \"" + Table + "\"" : "\"" + Table + "\"";
+
     internal static string Columns(bool sqlite)
     {
         var text = sqlite ? "TEXT" : """text COLLATE "C" """;
@@ -118,7 +122,7 @@ internal static class RootScheduleLineage
 
         FormattableString update = $"""
             WITH source AS MATERIALIZED (/*lineage-source*/)
-            UPDATE "FoundationScheduleLineage" SET "Retired" = true
+            UPDATE /*lineage-table*/ SET "Retired" = true
             WHERE "Tenant" = {tenant} AND "Reference" = {reference} AND NOT "Retired"
                 AND (SELECT "Ready" FROM source)
                 AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {actor} AND "Partition" = {partition}
@@ -134,7 +138,7 @@ internal static class RootScheduleLineage
         FormattableString query = $"""
             WITH source AS MATERIALIZED (/*lineage-source*/)
             SELECT source."Ready" AS "SourceReady", member."Tenant", member."RootReference", member."Retired"
-            FROM source LEFT JOIN "FoundationScheduleLineage" member ON source."Ready" AND member."Reference" = {reference}
+            FROM source LEFT JOIN /*lineage-table*/ member ON source."Ready" AND member."Reference" = {reference}
             """;
         var member = await db.Database.SqlQuery<Member>(BindCommitSource(db, query)).SingleAsync(token);
         if (!member.SourceReady || member.RootReference is not null && member.Tenant != tenant)
@@ -144,8 +148,9 @@ internal static class RootScheduleLineage
 
     private static FormattableString BindCommitSource(KernelDb db, FormattableString query)
     {
+        var sql = query.Format.Replace("/*lineage-table*/", PhysicalTable(db), StringComparison.Ordinal);
         if (db.UsesSqliteRootRuntime)
-            return FormattableStringFactory.Create(query.Format.Replace("/*lineage-source*/", """SELECT true AS "Ready" """,
+            return FormattableStringFactory.Create(sql.Replace("/*lineage-source*/", """SELECT true AS "Ready" """,
                 StringComparison.Ordinal), query.GetArguments());
         var marker = db.ScheduleLineageCommitMarker ?? throw new StoreFormatException("The PostgreSQL lineage owner has no pinned store.");
         var source = $$"""
@@ -158,15 +163,15 @@ internal static class RootScheduleLineage
                 WHERE marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"') AND marker.oid::bigint = {{{query.ArgumentCount}}})
             AS "Ready"
             """;
-        return FormattableStringFactory.Create(query.Format.Replace("/*lineage-source*/", source, StringComparison.Ordinal),
+        return FormattableStringFactory.Create(sql.Replace("/*lineage-source*/", source, StringComparison.Ordinal),
             [.. query.GetArguments(), (long)marker]);
     }
 
     internal const string RootMembershipProof = """
-            AND EXISTS (SELECT 1 FROM "FoundationScheduleLineage"
+            AND EXISTS (SELECT 1 FROM /*lineage-table*/
                 WHERE "Tenant" = birth."Tenant" AND "Reference" = birth."Reference"
                     AND "RootReference" = birth."Reference" AND "Retired")
-            AND NOT EXISTS (SELECT 1 FROM "FoundationScheduleLineage"
+            AND NOT EXISTS (SELECT 1 FROM /*lineage-table*/
                 WHERE "Tenant" = birth."Tenant" AND "RootReference" = birth."Reference" AND NOT "Retired")
             """;
 }

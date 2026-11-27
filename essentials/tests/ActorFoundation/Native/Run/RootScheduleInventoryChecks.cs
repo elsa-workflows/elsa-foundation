@@ -368,6 +368,13 @@ internal static class RootScheduleInventoryChecks
                     DROP FUNCTION rewrite_live_lineage();
                     """, token);
             }
+
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TABLE schedule_lineage_child () INHERITS ("FoundationScheduleLineage");
+                """, token);
+            try { await RequireUnsafeDefinitionRefusalAsync("an attached inheritance child"); }
+            finally { await db.Database.ExecuteSqlRawAsync("DROP TABLE schedule_lineage_child", token); }
+
             Require(await db.Messages.CountAsync(token) == beforeDrift && await RetiredAsync(nextOccurrence, nextActor.Id),
                 "lineage schema refusals preserve the inbox and exact retirement receipt");
         }
