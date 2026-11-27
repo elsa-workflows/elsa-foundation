@@ -48,9 +48,15 @@ public sealed class NativeSchedules
     /// workflow instances still run, or a republished definition's two versions would both claim its schedule.
     /// </param>
     /// <param name="cronError">The host's check of a cron expression: null when it reads, else why not. Without one, every expression is refused.</param>
-    public NativeSchedules(WorkflowRegistry registry, Func<string, string?>? cronError = null)
+    public NativeSchedules(WorkflowRegistry registry, Func<string, string?>? cronError = null) : this(registry.All, cronError) { }
+
+    /// <summary>Builds the schedule table from logical publications, which may share one stored workflow artifact.</summary>
+    public static NativeSchedules ForPublications(IEnumerable<Workflow> workflows, Func<string, string?>? cronError = null) =>
+        new(workflows, cronError);
+
+    private NativeSchedules(IEnumerable<Workflow> workflows, Func<string, string?>? cronError)
     {
-        foreach (var workflow in registry.All.OrderBy(w => w.Id, StringComparer.Ordinal))
+        foreach (var workflow in workflows.OrderBy(w => w.Id, StringComparer.Ordinal))
         {
             var starts = StartPath(workflow.Root).ToHashSet();
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(Timer) || n.Type == typeof(Cron)).OrderBy(n => n.Id, StringComparer.Ordinal))

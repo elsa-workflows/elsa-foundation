@@ -121,9 +121,11 @@ public sealed class KernelServing
     /// </summary>
     internal NativeSchedule[] SchedulesOf(Workflow workflow)
     {
-        var served = _state.Schedules.All.Where(schedule => schedule.Workflow == workflow.Id).ToArray();
-        if (served.Length > 0 || _state.Slots.Values.Any(slot => slot.Workflow.Id == workflow.Id)) return served;
-        try { return [.. new NativeSchedules(new WorkflowRegistry().Add(workflow), _cronError).All]; }
+        var snapshot = _state;
+        var served = snapshot.Schedules.All.Where(schedule => schedule.Workflow == workflow.Id && schedule.Definition == workflow.Definition).ToArray();
+        if (served.Length > 0 || snapshot.Slots.Values.Any(slot => slot.Workflow.Id == workflow.Id && slot.DefinitionId == workflow.Definition))
+            return served;
+        try { return [.. NativeSchedules.ForPublications([workflow], _cronError).All]; }
         catch (ArgumentException) { return []; }
     }
 
@@ -153,12 +155,14 @@ public sealed class KernelServing
 
     private ServingState Build(Dictionary<string, KernelServedSlot> slots)
     {
+        var workflows = slots.Values.OrderBy(slot => slot.SlotId, StringComparer.Ordinal).Select(slot => slot.Workflow).ToArray();
         var registry = new WorkflowRegistry();
-        foreach (var slot in slots.Values.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)) registry.Add(slot.Workflow);
+        foreach (var workflow in workflows) registry.Add(workflow);
         var routes = new HttpRoutes(registry);
         var starts = routes.Routes.Where(route => route.Start).ToDictionary(route => (route.Method, route.Template.Text),
             route => (route, registry.Get(route.Workflow)));
-        return new(slots, routes, new NativeSchedules(registry, _cronError), starts);
+        var schedules = NativeSchedules.ForPublications(workflows.DistinctBy(workflow => (workflow.Id, workflow.Definition)), _cronError);
+        return new(slots, routes, schedules, starts);
     }
 }
 

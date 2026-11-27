@@ -35,11 +35,27 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
 
     public ValueTask<AttemptOutcome> TryAcceptAttemptAsync(RuntimeKernelScheduleOccurrence occurrence, DateTimeOffset attemptDeadline,
         Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default) =>
-        AcceptAsync(occurrence, null, null, attemptDeadline, readScheduleClock, cancellationToken);
+        AcceptAsync(occurrence, null, null, null, attemptDeadline, readScheduleClock, cancellationToken);
+
+    public ValueTask<AttemptOutcome> TryAcceptSelectedAttemptAsync(RuntimeKernelScheduleOccurrence occurrence,
+        WorkflowExecutableIdentity material, DateTimeOffset attemptDeadline, Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock,
+        CancellationToken cancellationToken = default) =>
+        AcceptAsync(occurrence, material ?? throw new ArgumentNullException(nameof(material)), null, null, attemptDeadline, readScheduleClock, cancellationToken);
 
     public ValueTask<AttemptOutcome> TryHandoffAttemptAsync(RuntimeKernelScheduleOccurrence origin, RuntimeKernelScheduleOccurrence successor,
         string continuity, DateTimeOffset attemptDeadline, Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        HandoffAsync(origin, successor, null, continuity, attemptDeadline, readScheduleClock, cancellationToken);
+
+    public ValueTask<AttemptOutcome> TryHandoffSelectedAttemptAsync(RuntimeKernelScheduleOccurrence origin, RuntimeKernelScheduleOccurrence successor,
+        WorkflowExecutableIdentity material, string continuity, DateTimeOffset attemptDeadline,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default) =>
+        HandoffAsync(origin, successor, material ?? throw new ArgumentNullException(nameof(material)), continuity, attemptDeadline,
+            readScheduleClock, cancellationToken);
+
+    private ValueTask<AttemptOutcome> HandoffAsync(RuntimeKernelScheduleOccurrence origin, RuntimeKernelScheduleOccurrence successor,
+        WorkflowExecutableIdentity? material, string continuity, DateTimeOffset attemptDeadline,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken)
     {
         Validate(origin);
         Validate(successor);
@@ -51,14 +67,17 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
             origin.TimerDeliveryId != successor.TimerDeliveryId || origin.Due != successor.Due ||
             origin.AcceptBefore != successor.AcceptBefore || origin.PublicationRevision >= successor.PublicationRevision)
             throw new ArgumentException("The successor must carry the same timer and logical publication slot.", nameof(successor));
-        return AcceptAsync(successor, origin, continuity, attemptDeadline, readScheduleClock, cancellationToken);
+        return AcceptAsync(successor, material, origin, continuity, attemptDeadline, readScheduleClock, cancellationToken);
     }
 
-    private async ValueTask<AttemptOutcome> AcceptAsync(RuntimeKernelScheduleOccurrence occurrence, RuntimeKernelScheduleOccurrence? origin,
-        string? continuity, DateTimeOffset attemptDeadline, Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock,
+    private async ValueTask<AttemptOutcome> AcceptAsync(RuntimeKernelScheduleOccurrence occurrence, WorkflowExecutableIdentity? selectedMaterial,
+        RuntimeKernelScheduleOccurrence? origin, string? continuity, DateTimeOffset attemptDeadline, Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock,
         CancellationToken cancellationToken)
     {
         Validate(occurrence);
+        var exactMaterial = selectedMaterial ?? occurrence.Executable;
+        if (exactMaterial.ArtifactId != occurrence.Executable.ArtifactId || exactMaterial.ArtifactHash != occurrence.Executable.ArtifactHash)
+            throw new ArgumentException("The selected material differs from the published schedule artifact.", nameof(selectedMaterial));
         if (occurrence.Origin is not null) throw new ArgumentException("The store stamps the original offer on acceptance.", nameof(occurrence));
         var original = origin ?? occurrence;
         if (origin is not null) occurrence = occurrence with { Origin = new(origin.Scope.TenantId, IntentFingerprint(origin)) };
@@ -82,7 +101,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         var outcome = AttemptOutcome.Retry;
         try
         {
-            await leases.ExecuteFencedAsync([occurrence.Executable], $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
+            await leases.ExecuteFencedAsync([exactMaterial], $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
             {
                 await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
                 try
