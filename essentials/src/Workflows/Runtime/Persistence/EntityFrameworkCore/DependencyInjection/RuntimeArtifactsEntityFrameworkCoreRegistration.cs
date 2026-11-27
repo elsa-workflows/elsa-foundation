@@ -48,8 +48,10 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                     !string.Equals(EfRelationalProviderBinding.Normalize(existing.Provider), EfRelationalProviderBinding.Normalize(options.Provider), StringComparison.Ordinal) ||
                     !string.Equals(existing.ConnectionString, options.ConnectionString, StringComparison.Ordinal) ||
                     !string.Equals(existing.ConnectionName, options.ConnectionName, StringComparison.Ordinal) ||
-                    !CacheOptionsEqual(existing.WorkflowExecutableCache, cacheOptions))
+                    (existing.WorkflowExecutableCache is { } priorCache && cacheOptions is not null &&
+                        (priorCache.Enabled != cacheOptions.Enabled || priorCache.Capacity != cacheOptions.Capacity)))
                     throw new InvalidOperationException("Runtime artifacts EF persistence is already registered with different provider options.");
+                RuntimeEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
                 RuntimeEfContextRegistration.EnsureContextIsAvailable(
                     services,
                     provider,
@@ -73,6 +75,8 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                     RuntimeOperationalStateStoreBackend.Find(services) is { Name: RuntimeOperationalStateStoreBackend.EntityFramework } siblingOperationalBackend
                         ? siblingOperationalBackend.Owns
                         : null);
+                if (existing.WorkflowExecutableCache is null && cacheOptions is not null)
+                    SelectCachePolicy(services, registeredBackend, existing, cacheOptions);
                 return services;
             }
 
@@ -103,7 +107,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 .Configure(options => options.AllowEphemeralDevelopmentKey = false);
             services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
             services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
-            var configured = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName, Schema = options.Schema, Pooling = options.Pooling, WorkflowExecutableCache = cacheOptions };
+            var configured = CopyWithCache(options, cacheOptions);
             var optionsStart = services.Count;
             services.AddSingleton(configured);
             var ownedInfrastructure = new List<ServiceDescriptor> { services[optionsStart] };
@@ -198,6 +202,36 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
         }
     }
 
+    private static void SelectCachePolicy(IServiceCollection services, RuntimeArtifactStoreBackend backend,
+        RuntimeArtifactsEntityFrameworkCoreOptions existing, WorkflowExecutableCacheOptions cacheOptions)
+    {
+        // A neutral artifact selection can precede the aggregate's explicit policy. Keep the physical store,
+        // source references, pins, and context descriptors so every sibling still owns the same context.
+        var options = services.Single(descriptor => ReferenceEquals(descriptor.ImplementationInstance, existing));
+        var store = services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
+        var marker = services.Single(descriptor => ReferenceEquals(descriptor.ImplementationInstance, backend));
+        services.Remove(options);
+        services.Remove(store);
+        services.Remove(marker);
+        var owned = services.Where(backend.Owns).ToArray();
+        var configured = ServiceDescriptor.Singleton(CopyWithCache(existing, cacheOptions));
+        services.Add(configured);
+        var cache = AddExecutableStore(services, cacheOptions);
+        RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
+            RuntimeArtifactStoreBackend.EntityFramework, owned.Append(configured).Concat(cache)));
+    }
+
+    private static RuntimeArtifactsEntityFrameworkCoreOptions CopyWithCache(RuntimeArtifactsEntityFrameworkCoreOptions options,
+        WorkflowExecutableCacheOptions? cacheOptions) => new()
+    {
+        Provider = options.Provider,
+        ConnectionString = options.ConnectionString,
+        ConnectionName = options.ConnectionName,
+        Schema = options.Schema,
+        Pooling = options.Pooling,
+        WorkflowExecutableCache = cacheOptions
+    };
+
     /// <summary>
     /// Selects the executable-store surface. Enabled caching keeps the provider-neutral composition: ordinary scoped
     /// reads go through one bounded cache partitioned by persistence scope, and every other access policy reads the
@@ -250,9 +284,6 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
         return copy;
     }
 
-    private static bool CacheOptionsEqual(WorkflowExecutableCacheOptions? left, WorkflowExecutableCacheOptions? right) =>
-        left is null ? right is null : right is not null && left.Enabled == right.Enabled && left.Capacity == right.Capacity;
-
     /// <summary>Key of the uncached EF store behind the optional executable cache.</summary>
     public const string UncachedWorkflowExecutableStoreKey = "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.UncachedWorkflowExecutableStore";
 }
@@ -289,9 +320,8 @@ public sealed class RuntimeArtifactsEntityFrameworkCoreOptions
     public bool Pooling { get; set; }
 
     /// <summary>
-    /// Bounded shell-local cache of immutable workflow executables, isolated by persistence scope. Null (this
-    /// participant's default) registers no cache infrastructure and reads executables straight from the database;
-    /// the Runtime EF aggregate always supplies it.
+    /// Bounded shell-local cache of immutable workflow executables, isolated by persistence scope. Null leaves the
+    /// policy to another participant, if present. With no explicit policy, reads go straight to the database.
     /// </summary>
     public WorkflowExecutableCacheOptions? WorkflowExecutableCache { get; set; }
 }
