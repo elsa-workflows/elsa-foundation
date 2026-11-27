@@ -35,16 +35,26 @@ public sealed partial class EfStore
     }
 
     internal (Contract.ActorRef Reference, Task<InlineRootResult> Outcome)? QueueInlineRoot(Worker worker, string operationId,
-        Contract.StartSpec spec, object material)
+        Contract.StartSpec spec, object material) => CreateInlineRootSpec(operationId, spec) is { } start
+        ? QueueInlineRoot(worker, operationId, start, material, wake: null)
+        : null;
+
+    internal static StartSpec? CreateInlineRootSpec(string operationId, Contract.StartSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
-        if (_inlineStarts is not { } inline || _ordinaryRoots?.InlineIssuer != inline ||
-            !FoundationMetadataLimits.IsOutsideMessageId(operationId) || !FoundationMetadataLimits.FitsName(spec.Type) ||
+        if (!FoundationMetadataLimits.IsOutsideMessageId(operationId) || !FoundationMetadataLimits.FitsName(spec.Type) ||
             !spec.Ephemeral || !Enum.IsDefined(spec.History))
             return null;
         var start = new StartSpec(spec.Type, spec.TypeData, spec.Input, Ephemeral: true, History: (History)spec.History);
         try { RootAdmissionWire.RequireCreator(operationId, start); }
         catch (MetadataLimitExceeded) { return null; }
+        return start;
+    }
+
+    internal (Contract.ActorRef Reference, Task<InlineRootResult> Outcome)? QueueInlineRoot(Worker worker, string operationId,
+        StartSpec start, object material, Action<InstanceRef>? wake)
+    {
+        if (_inlineStarts is not { } inline || _ordinaryRoots?.InlineIssuer != inline) return null;
         var owner = worker.Fences.FirstOrDefault();
         if (owner is null) return null;
         var scope = inline.Scope;
@@ -53,7 +63,9 @@ public sealed partial class EfStore
         var operation = RootPreparedStarts.InlineOperation(operationId);
         var creator = FoundationRootCreator.Create(actor, operation, FoundationRootCreator.OperationDigest(operation), start, null, null)
             with { FoundationRootBinding = (actor.Id, scope.Tenant, reference) };
-        return worker.TryQueueQualifiedInlineStart(creator, material, inline) is { } receipt ? (new(reference), receipt) : null;
+        if (worker.TryQueueQualifiedInlineStart(creator, material, inline) is not { } receipt) return null;
+        wake?.Invoke(actor);
+        return (new(reference), receipt);
     }
 
     // The direct qualification path exercises the same preparation and binding as the owned worker.

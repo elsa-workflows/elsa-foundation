@@ -32,13 +32,13 @@ public sealed class SqliteEmbeddedHostedService : IHostedService, IAsyncDisposab
     internal static SqliteEmbeddedHostedService ForShipped(string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options, bool fenceInBatch, ILogger<SqliteEmbeddedHostedService>? logger,
         Func<(string Path, SqliteEmbeddedHosting.SqliteDirectRequests? Requests)> bind, Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null,
-        Contract.IActorType? auxiliaryActor = null, ProtectChildBirthsAsync? protectChildBirths = null) =>
+        Contract.IActorType? auxiliaryActor = null, ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null) =>
         new(new NodeHostedService("SQLite embedded", node, endProcess, (options ?? new LoopOptions()).DisposeDeadline,
             (fault, escalate, token) =>
             {
                 var (path, requests) = bind();
                 return SqliteEmbeddedHosting.StartFoundationAsync(path, node, actor, escalate, options,
-                    fenceInBatch, token, fault, requests, retentionWindow, auxiliaryActor, protectChildBirths);
+                    fenceInBatch, token, fault, requests, retentionWindow, auxiliaryActor, protectChildBirths, inlineStarts);
             }, logger));
 
     /// <summary>The shutdown fault, if any, or the last fault recorded by the node.</summary>

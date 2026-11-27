@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -10,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Kernel.Foundation.Contracts;
+using Kernel.Foundation.Hosting;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,10 +20,12 @@ using Admission = Kernel.Foundation.Contracts.Admission;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal delegate ValueTask<Admission> StartPublishedKernelRun(string operationId, StartSpec start, CancellationToken token);
+internal delegate ValueTask<InlineStartOutcome> StartPublishedInlineRun(string operationId, StartSpec start, Workflow executable,
+    CancellationToken token);
 
 /// <summary>Admits ordinary published Execute requests through the installed actor foundation.</summary>
 internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, KernelServing serving, PersistenceScope persistence,
-    StartPublishedKernelRun start) : IWorkflowStartDispatcher
+    StartPublishedKernelRun start, StartPublishedInlineRun? inline = null) : IWorkflowStartDispatcher
 {
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
@@ -68,8 +72,12 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         var operationId = Guid.NewGuid().ToString("N");
         var provenance = WorkflowExecutableSourceProvenance.From(source);
         if (mode == PersistenceMode.Ephemeral)
-            return Result(operationId, executable.Identity, provenance, new(AdmissionOutcome.Refused), clock.GetUtcNow(),
+        {
+            if (inline is null) return Result(operationId, executable.Identity, provenance, new(AdmissionOutcome.Refused), clock.GetUtcNow(),
                 "EphemeralPublishedStartUnavailable");
+            var outcome = await inline(operationId, spec, published.Workflow, cancellationToken);
+            return InlineResult(operationId, executable.Identity, provenance, outcome, clock.GetUtcNow());
+        }
         var receipt = await start(operationId, spec, cancellationToken);
         return Result(operationId, executable.Identity, provenance, receipt, clock.GetUtcNow());
 
@@ -117,7 +125,41 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
             [RuntimeMetadataKeys.DispatchRetryAfterSeconds] = Math.Ceiling(Math.Clamp(admission.RetryAfter?.TotalSeconds ?? 1, 1, int.MaxValue))
                 .ToString(CultureInfo.InvariantCulture)
         } : null;
-        return new(id, material, new(operationId, id, status, recordedAt, reason, metadata),
-            new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt), source);
+        return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata);
     }
+
+    private static WorkflowExecutionStartDispatchResult InlineResult(string operationId, WorkflowExecutableIdentity material,
+        WorkflowExecutableSourceProvenance source, InlineStartOutcome outcome, DateTimeOffset recordedAt)
+    {
+        var (status, reason) = outcome.Disposition switch
+        {
+            InlineStartDisposition.Volatile or InlineStartDisposition.Committed when outcome.Status == ActorStatus.Faulted =>
+                (WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted, "WorkflowFaulted"),
+            InlineStartDisposition.Volatile or InlineStartDisposition.Committed => (WorkflowExecutionCommandDispatchStatus.Accepted, null),
+            InlineStartDisposition.Refused => (WorkflowExecutionCommandDispatchStatus.Rejected, "InlineStartRefused"),
+            InlineStartDisposition.Unavailable => (WorkflowExecutionCommandDispatchStatus.Deferred, nameof(RefusalReason.NodeBusy)),
+            InlineStartDisposition.Unknown => (WorkflowExecutionCommandDispatchStatus.Deferred, "InlineStartOutcomeUnknown"),
+            _ => throw new InvalidOperationException("The Actor Foundation returned an invalid inline outcome.")
+        };
+        var hasRun = outcome.Disposition == InlineStartDisposition.Committed;
+        if (hasRun != outcome.Actor.HasValue) throw new InvalidOperationException("Only a committed inline outcome has an actor.");
+        var id = outcome.Actor?.Id ?? operationId;
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [WorkflowExecutionStartDispatchView.PersistenceOutcomeKey] = outcome.Disposition.ToString()
+        };
+        if (outcome.Status is { } actorStatus) metadata[WorkflowExecutionStartDispatchView.StartActorStatusKey] = actorStatus.ToString();
+        if (outcome.Disposition == InlineStartDisposition.Unavailable)
+        {
+            metadata[RuntimeMetadataKeys.DispatchShed] = "true";
+            metadata[RuntimeMetadataKeys.DispatchRetryAfterSeconds] = "1";
+        }
+        return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata);
+    }
+
+    private static WorkflowExecutionStartDispatchResult CreateResult(string operationId, string id, WorkflowExecutableIdentity material,
+        WorkflowExecutableSourceProvenance source, WorkflowExecutionCommandDispatchStatus status, DateTimeOffset recordedAt,
+        string? reason, IReadOnlyDictionary<string, string>? metadata) =>
+        new(id, material, new(operationId, id, status, recordedAt, reason, metadata),
+            new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt), source);
 }

@@ -130,6 +130,7 @@ public static partial class SqliteEmbeddedHosting
             public bool SupportsEvents => owner.QualificationFormat is { } format
                 ? format == StoreFormat.RootLiveEventQualification || format == StoreFormat.RootPlaybackDescendantsQualification ||
                   format == StoreFormat.RootManagedSchedulesQualification || format == StoreFormat.RootPreparedStartsQualification ||
+                  format == StoreFormat.RootInlinePromotionQualification ||
                   format == StoreFormat.RootAuthoredEventsQualification
                 : TakesHttpWaits;
 

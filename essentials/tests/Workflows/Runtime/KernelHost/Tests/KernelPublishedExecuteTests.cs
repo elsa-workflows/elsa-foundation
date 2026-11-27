@@ -8,13 +8,16 @@ using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -56,7 +59,18 @@ public sealed class KernelPublishedExecuteTests
         return RunAsync(true);
     }
 
-    private static async Task RunAsync(bool postgres)
+    [Fact]
+    public Task Sqlite_private_ephemeral_execute_reports_volatile_completion_and_committed_promotion() => RunAsync(false, inline: true);
+
+    [SkippableFact]
+    public Task PostgreSql_private_ephemeral_execute_reports_volatile_completion_and_committed_promotion()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return RunAsync(true, inline: true);
+    }
+
+    private static async Task RunAsync(bool postgres, bool inline = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var directory = postgres ? null : Directory.CreateTempSubdirectory("kernel-published-execute-");
@@ -69,12 +83,12 @@ public sealed class KernelPublishedExecuteTests
             }.ToString();
             if (postgres) Assert.NotEqual(new Npgsql.NpgsqlConnectionStringBuilder(foundation).Database,
                 new Npgsql.NpgsqlConnectionStringBuilder(runtime).Database);
-            await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, deadline.Token);
+            await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, inline, deadline.Token);
         }
         finally { directory?.Delete(recursive: true); }
     }
 
-    private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, CancellationToken token)
+    private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, bool inline, CancellationToken token)
     {
         var canonical = ExecutableOf("execute-native", "canonical-publication", Sequence("sequence",
             SetOutput("input", "message", Request("input", "message")), SetOutput("variable", "seed", VariableRead("input", "seed-key"))),
@@ -105,6 +119,19 @@ public sealed class KernelPublishedExecuteTests
                     new { source = new { nodeId = "output", port = "Done" }, target = new { nodeId = "reply" } }
                 }
             }), slots: [Slot("Flowchart.Activities", RecoveryNodes(flowchartRoute))]));
+        var pure = Ephemeral(ExecutableOf("inline-native", "inline-native", Sequence("sequence", SetOutput("inline-output", "message", Literal("value", "no durable run")))));
+        var slow = Ephemeral(ExecutableOf("inline-flowchart", "inline-flowchart", Node("flow", Types.Flowchart,
+            structure: Structure("elsa.flowchart.structure", new
+            {
+                startNodeId = "delay",
+                connections = new[] { new { source = new { nodeId = "delay", port = "Done" }, target = new { nodeId = "output" } } },
+                variables = Array.Empty<object>()
+            }), slots: [Slot("Flowchart.Activities", Node("delay", Types.Delay, [Literal("Duration", "00:00:06", "TimeSpan")]),
+                SetOutput("output", "message", Literal("value", "flowchart finished")))])));
+        var retractedInline = Ephemeral(ExecutableOf("inline-retracted", "inline-retracted", Sequence("sequence",
+            Node("delay", Types.Delay, [Literal("Duration", "00:00:06", "TimeSpan")]))));
+        var uncertain = Ephemeral(ExecutableOf("inline-uncertain", "inline-uncertain", Sequence("sequence",
+            Node("blocked-script", Types.RunJavaScript, [Literal("Script", "return 1;", "String")]))));
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
@@ -121,6 +148,8 @@ public sealed class KernelPublishedExecuteTests
         builder.Services.AddSingleton(new ShellSettings(new ShellId("default")));
         var expressions = new FixtureExpressions();
         builder.Services.AddSingleton<IPortableExpressionEvaluator>(expressions);
+        var scripts = new BlockingScript();
+        if (inline) builder.Services.AddSingleton<IJavaScriptScriptEvaluator>(scripts);
         builder.Services.AddSingleton(new WorkflowHttpEndpointSettings("/fixture/workflows", TimeSpan.FromSeconds(3), 4096,
             (context, _, _) => { context.Response.StatusCode = 504; return ValueTask.CompletedTask; }));
         builder.Services.AddWorkflowRuntime();
@@ -142,7 +171,10 @@ public sealed class KernelPublishedExecuteTests
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
         };
-        kernelHosting.ConfigureServices(builder.Services);
+        if (inline)
+            kernelHosting.ConfigureServices(builder.Services, KernelShellStorage.CreateInlineStartsQualification(provider,
+                kernelHosting.SqlitePath, foundation));
+        else kernelHosting.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
         var kernelApi = new WorkflowsRuntimeKernelApiFeature();
@@ -170,6 +202,16 @@ public sealed class KernelPublishedExecuteTests
         await PublishAsync(waiting, "default");
         await PublishAsync(recoverable, "default");
         await PublishAsync(recoverableFlowchart, "default");
+        await materials.SaveAsync(pure, token);
+        await PublishAsync(pure, "default");
+        if (inline)
+        {
+            foreach (var candidate in new[] { slow, retractedInline, uncertain })
+            {
+                await materials.SaveAsync(candidate, token);
+                await PublishAsync(candidate, "default");
+            }
+        }
         var shell = app.Services.GetRequiredService<KernelShellRuntime>();
         await shell.StartAsync(token);
         try
@@ -177,6 +219,18 @@ public sealed class KernelPublishedExecuteTests
             await app.StartAsync(token);
             var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
             using var http = new HttpClient { BaseAddress = new(address) };
+            if (inline)
+            {
+                await VerifyPrivateInlineAsync();
+                return;
+            }
+            using (var excluded = await ExecuteAsync(pure.Identity.ArtifactId, new { }))
+            {
+                Assert.Equal(HttpStatusCode.Conflict, excluded.StatusCode);
+                var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await excluded.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
+                Assert.Equal("EphemeralPublishedStartUnavailable", receipt.Reason);
+                Assert.Null(receipt.PersistenceOutcome);
+            }
             var target = WorkflowActivationReferenceIdentity.Create("publish-native-blue");
             using var ambiguous = await ExecuteAsync(canonical.Identity.ArtifactId, new { });
             Assert.Equal(HttpStatusCode.Conflict, ambiguous.StatusCode);
@@ -246,13 +300,133 @@ public sealed class KernelPublishedExecuteTests
             var nativeParkSelection = await VerifyRecoveryAsync(recoverable, nativeRoute);
             await VerifyRecoveryAsync(recoverableFlowchart, flowchartRoute, nativeParkSelection);
 
+            async Task VerifyPrivateInlineAsync()
+            {
+                var scope = EmbeddedTenant.Bind(Scope.Value);
+                var read = await shell.ReadAsync(token);
+                var pinRead = stores.GetRequiredService<IRuntimeKernelExecutablePinStore>();
+                var initial = await DurableRowCountAsync();
+                var pinTail = await pinRead.ReadOpenTailAsync(Scope, token);
+
+                using var wrongTenant = await ExecuteAsync(pure.Identity.ArtifactId, new { }, tenant: "different-tenant");
+                Assert.Equal(HttpStatusCode.NotFound, wrongTenant.StatusCode);
+                var volatileResult = await InlineAsync(pure, HttpStatusCode.OK, "Volatile");
+                Assert.Equal("Finished", volatileResult.ActorStatus);
+                Assert.Equal(nameof(WorkflowExecutionCommandDispatchStatus.Accepted), volatileResult.CommandDispatchStatus);
+                Assert.Null(volatileResult.WorkflowExecutionId);
+                Assert.Null(volatileResult.AgentId);
+                Assert.Null(await read.GetAsync(scope, new(volatileResult.EnvelopeId), token));
+                using (var response = await ReadRunAsync(volatileResult.EnvelopeId))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                Assert.Equal(initial, await DurableRowCountAsync());
+                Assert.Equal(pinTail, await pinRead.ReadOpenTailAsync(Scope, token));
+
+                pinBoundary.BeforeAdmission = async (source, ct) =>
+                {
+                    if (source.DefinitionId != retractedInline.Identity.DefinitionId) return;
+                    await using var retract = await scopes.CreateAsyncScopeAsync(Scope);
+                    var coordinator = retract.ServiceProvider.GetRequiredService<IWorkflowActivationCoordinator>();
+                    Assert.True((await coordinator.DeactivateAsync(new(retractedInline, "default", WorkflowActivationSource.Publishing, 1), ct)).Succeeded);
+                    pinBoundary.Retracted = true;
+                };
+                var refused = await InlineAsync(retractedInline, HttpStatusCode.Conflict, "Refused");
+                Assert.True(pinBoundary.Retracted);
+                Assert.Null(refused.WorkflowExecutionId);
+                Assert.Equal(initial, await DurableRowCountAsync());
+                Assert.Empty(await pinRead.ListPinnedExecutableArtifactIdsAsync(token));
+
+                var promoted = await InlineAsync(slow, HttpStatusCode.OK, "Committed");
+                Assert.Equal("Running", promoted.ActorStatus);
+                var actor = new Contract.ActorRef(Assert.IsType<string>(promoted.WorkflowExecutionId));
+                var row = Assert.IsType<Contract.ActorView>(await read.GetAsync(scope, actor, token));
+                Assert.Equal(promoted.SourceReferenceId, Kernel.WorkflowActor.WorkflowActor.DescribeRun(row.Header)?.PublishedStart?.SourceReferenceId);
+                using (var response = await ReadRunAsync(actor.Id))
+                    Assert.True(response.StatusCode == HttpStatusCode.OK, $"Committed run read returned {response.StatusCode}: {await response.Content.ReadAsStringAsync(token)}");
+                Assert.Contains(slow.Identity.ArtifactId, await pinRead.ListPinnedExecutableArtifactIdsAsync(token));
+                while ((row = (await read.GetAsync(scope, actor, token))!).Header.Status == Contract.ActorStatus.Running)
+                    await Task.Delay(25, token);
+                Assert.Equal(Contract.ActorStatus.Finished, row.Header.Status);
+                var data = await Assert.IsAssignableFrom<Contract.IActorTerminalOutputReads>(read).ReadTerminalOutputAsync(scope, actor,
+                    row.Header.EndedAt!.Value, includeValues: true, cancellationToken: token);
+                using var output = JsonDocument.Parse(Assert.IsType<byte[]>(data?.Values));
+                Assert.Equal("flowchart finished", output.RootElement.GetProperty("message").GetString());
+
+                try
+                {
+                    var pending = InlineAsync(uncertain, HttpStatusCode.GatewayTimeout, "Unknown");
+                    await scripts.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+                    var waitingSince = System.Diagnostics.Stopwatch.GetTimestamp();
+                    Assert.False(pending.IsCompleted);
+                    var unknown = await pending;
+                    Assert.True(System.Diagnostics.Stopwatch.GetElapsedTime(waitingSince) >= TimeSpan.FromSeconds(8));
+                    Assert.False(unknown.Shed);
+                    Assert.Null(unknown.WorkflowExecutionId);
+                    Assert.Null(unknown.RetryAfterSeconds);
+                }
+                finally { scripts.Released.TrySetResult(); }
+
+                await shell.StopAsync(token);
+                var unavailable = await InlineAsync(pure, HttpStatusCode.TooManyRequests, "Unavailable");
+                Assert.True(unavailable.Shed);
+                Assert.Null(unavailable.WorkflowExecutionId);
+
+                async Task<HttpResponseMessage> ReadRunAsync(string run)
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, $"/runtime/workflows/instances/{run}");
+                    request.Headers.Add("X-Fixture-Subject", "accepted");
+                    request.Headers.Add("X-Fixture-Tenant", Scope.Value);
+                    request.Headers.Add("X-Fixture-Read", "yes");
+                    return await http.SendAsync(request, token);
+                }
+
+                async Task<WorkflowExecutionStartDispatchView> InlineAsync(WorkflowExecutable executable, HttpStatusCode status, string disposition)
+                {
+                    var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                    while (true)
+                    {
+                        using var response = await ExecuteAsync(executable.Identity.ArtifactId, new
+                        {
+                            sourceReferenceId = WorkflowActivationReferenceIdentity.Create("publish-" + executable.Identity.DefinitionId)
+                        });
+                        var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await response.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
+                        // A newly started owner can briefly have no partitions. Only definitive pre-queue responses can be retried.
+                        if (status != HttpStatusCode.TooManyRequests && response.StatusCode == HttpStatusCode.TooManyRequests &&
+                            receipt.PersistenceOutcome == "Unavailable" && System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(8))
+                        {
+                            await Task.Delay(100, token);
+                            continue;
+                        }
+                        Assert.True(response.StatusCode == status, $"Inline Execute returned {response.StatusCode}: {await response.Content.ReadAsStringAsync(token)}");
+                        Assert.Equal(disposition, receipt.PersistenceOutcome);
+                        Assert.Equal(executable.Identity.ArtifactId, receipt.ArtifactId);
+                        if (status == HttpStatusCode.GatewayTimeout) Assert.Null(response.Headers.RetryAfter);
+                        return receipt;
+                    }
+                }
+            }
+
+            async Task<long> DurableRowCountAsync()
+            {
+                await using System.Data.Common.DbConnection db = directory is null
+                    ? new Npgsql.NpgsqlConnection(foundation)
+                    : new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory, "foundation.db"), Pooling = false }.ToString());
+                await db.OpenAsync(token);
+                await using var command = db.CreateCommand();
+                command.CommandText = """
+                    SELECT (SELECT count(*) FROM "Instances") + (SELECT count(*) FROM "FoundationRootBirths")
+                       + (SELECT count(*) FROM "FoundationRootReceipts") + (SELECT count(*) FROM "FoundationPreparedRootStarts")
+                       + (SELECT count(*) FROM "Journal")
+                    """;
+                return Convert.ToInt64(await command.ExecuteScalarAsync(token));
+            }
+
             async Task<string> VerifyRecoveryAsync(WorkflowExecutable executable, string path, string? otherSelection = null)
             {
                 expressions.IsAvailable = false;
                 using var start = await ExecuteAsync(executable.Identity.ArtifactId, new { });
                 Assert.Equal(HttpStatusCode.OK, start.StatusCode);
                 var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await start.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
-                var actor = new Contract.ActorRef(receipt.WorkflowExecutionId);
+                var actor = new Contract.ActorRef(Assert.IsType<string>(receipt.WorkflowExecutionId));
                 while ((await reads.TailAsync(bound, actor, cancellationToken: token)).JournalHeadRevision is not > 0)
                     await Task.Delay(40, token);
                 var waitRoute = "/fixture/workflows/" + path;
@@ -348,10 +522,10 @@ public sealed class KernelPublishedExecuteTests
                 do
                 {
                     await Task.Delay(50, token);
-                    actor = await reads.GetAsync(bound, new(receipt.WorkflowExecutionId), token);
+                    actor = await reads.GetAsync(bound, new(Assert.IsType<string>(receipt.WorkflowExecutionId)), token);
                 } while (actor is null);
                 Assert.Equal(Contract.ActorStatus.Running, actor.Header.Status);
-                return receipt.WorkflowExecutionId;
+                return receipt.WorkflowExecutionId!;
             }
 
             async Task VerifyDeletedAsync(string run)
@@ -393,7 +567,7 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(source.Identity.ArtifactVersion, receipt.ArtifactVersion);
                 Assert.Equal("publish-" + source.Identity.DefinitionId, receipt.PublicationId);
                 Assert.Equal(WorkflowActivationSlotIdentity.Create(source.Identity.DefinitionId, slot), receipt.SlotId);
-                var actor = new Contract.ActorRef(receipt.WorkflowExecutionId);
+                var actor = new Contract.ActorRef(Assert.IsType<string>(receipt.WorkflowExecutionId));
                 Contract.ActorView? view;
                 do
                 {
@@ -447,6 +621,24 @@ public sealed class KernelPublishedExecuteTests
             : throw new Kernel.Native.NativeExpressionsUnavailableException("The fixture evaluator is unavailable.");
     }
 
+    private sealed class BlockingScript : IJavaScriptScriptEvaluator
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async ValueTask<JsonElement?> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
+        {
+            Entered.TrySetResult();
+            await Released.Task.WaitAsync(request.CancellationToken);
+            return JsonSerializer.SerializeToElement(1);
+        }
+    }
+
+    private static WorkflowExecutable Ephemeral(WorkflowExecutable executable) => new(executable.Identity, executable.RootActivity,
+        executable.ResumeTargets, executable.CreatedAt, executable.CompatibilityMetadata, executable.InputContract, executable.Dependencies,
+        executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy,
+        persistenceMode: PersistenceMode.Ephemeral, workflowVariables: executable.WorkflowVariables);
+
     private static WorkflowExecutable PublishedAs(WorkflowExecutable canonical, string definition, string version) =>
         new(canonical.Identity with { DefinitionId = definition, DefinitionVersionId = definition + "-v" + version, ArtifactVersion = version },
             canonical.RootActivity, canonical.ResumeTargets, canonical.CreatedAt, canonical.CompatibilityMetadata,
@@ -465,6 +657,11 @@ public sealed class KernelPublishedExecuteTests
                 new(IdentityClaimTypes.Normalized, "v1")
             };
             if (Request.Headers.ContainsKey("X-Fixture-Manage")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:manage"));
+            if (Request.Headers.ContainsKey("X-Fixture-Read"))
+            {
+                claims.Add(new(IdentityClaimTypes.Permission, WorkflowRuntimePermissions.WorkflowRuntimeRead));
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission));
+            }
             if (Request.Headers.TryGetValue("X-Fixture-Tenant", out var tenant)) claims.Add(new(IdentityClaimTypes.TenantId, tenant.ToString()));
             if (Request.Headers.TryGetValue("X-Fixture-Tenant-Alias", out var alias)) claims.Add(new("tenant_id", alias.ToString()));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));

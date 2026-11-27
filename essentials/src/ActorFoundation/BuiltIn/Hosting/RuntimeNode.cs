@@ -116,17 +116,19 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     public int ScopeOf(InstanceRef actor) => _runtime.ScopeOf(actor);
     public ValueTask WakeAsync(InstanceRef actor, CancellationToken cancellationToken = default) => _runtime.WakeAsync(actor, cancellationToken);
 
+    internal void WakeLocal(InstanceRef actor)
+    {
+        var scope = ScopeOf(actor);
+        if (_gone || (uint)scope >= (uint)_due.Length) return;
+        Volatile.Write(ref _due[scope], 0);
+        Signal();
+    }
+
     public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
         var heartbeatEvery = host is INodeLeaseHost { NodeLease: { } lease } ? Cadence(lease, _options) : (TimeSpan?)null;
         await _runtime.StartAsync(host, cancellationToken);
-        _runtime.Wake.Listen(actor =>
-        {
-            var scope = ScopeOf(actor);
-            if (_gone || (uint)scope >= (uint)_due.Length) return;
-            Volatile.Write(ref _due[scope], 0);
-            Signal();
-        });
+        _runtime.Wake.Listen(WakeLocal);
         lock (_halting)
             if (_halted is null)     // a stop or kill that came first leaves the node unstarted
             {
