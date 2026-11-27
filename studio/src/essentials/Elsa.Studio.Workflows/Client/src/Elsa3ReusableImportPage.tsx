@@ -68,7 +68,9 @@ export function Elsa3ReusableImportPage({
   context: StudioEndpointContext;
   navigate(path: string): void;
 }) {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const totalBytes = files.reduce((total, file) => total + file.size, 0);
   const [collectionHandleInput, setCollectionHandleInput] = useState("");
   const [uploadStatus, setUploadStatus] = useState<OperationStatus>("idle");
   const [uploadResult, setUploadResult] = useState<Elsa3ReusableImportUploadResult | null>(null);
@@ -134,28 +136,29 @@ export function Elsa3ReusableImportPage({
     setMessage(nextMessage);
   };
 
-  const chooseFile = (nextFile: File | null) => {
+  const chooseFiles = (nextFiles: File[]) => {
     uploadController.current?.abort();
-    setFile(nextFile);
+    setFiles(nextFiles);
     setUploadStatus("idle");
     setUploadResult(null);
     setCollectionHandleInput("");
-    resetReviewedInput(nextFile ? "A new source file is staged. Upload it to create a new immutable collection handle." : "");
+    resetReviewedInput(nextFiles.length ? "Upload the selected exports to create a collection." : "");
   };
 
   const changeCollectionHandle = (value: string) => {
     uploadController.current?.abort();
     setCollectionHandleInput(value);
-    setFile(null);
+    setFiles([]);
+    if (fileInput.current) fileInput.current.value = "";
     setUploadStatus("idle");
     setUploadResult(null);
     resetReviewedInput(value.trim() ? "The collection handle changed. Fresh analysis is required." : "");
   };
 
   const upload = async () => {
-    if (!file) return;
-    if (file.size > maximumClientUploadBytes) {
-      setMessage(`The selected file is ${formatBytes(file.size)}. Studio limits a browser upload to ${formatBytes(maximumClientUploadBytes)} before the server applies its authoritative bound.`);
+    if (!files.length) return;
+    if (totalBytes > maximumClientUploadBytes) {
+      setMessage(`The selected files total ${formatBytes(totalBytes)}. Select up to ${formatBytes(maximumClientUploadBytes)} per upload.`);
       setUploadStatus("failed");
       return;
     }
@@ -163,17 +166,16 @@ export function Elsa3ReusableImportPage({
     uploadController.current?.abort();
     uploadController.current = controller;
     setUploadStatus("loading");
-    setMessage(`Uploading ${formatBytes(file.size)} once. Apply will use only the immutable handle.`);
+    setMessage(`Uploading ${formatBytes(totalBytes)} once. Apply will use only the immutable handle.`);
     try {
-      const content = await file.text();
-      if (controller.signal.aborted) return;
-      const result = await uploadElsa3ReusableCollection(context, content, controller.signal);
+      const result = await uploadElsa3ReusableCollection(context, files, controller.signal);
       if (controller.signal.aborted) return;
       setUploadResult(result);
       setCollectionHandleInput("");
       setUploadStatus("ready");
       resetReviewedInput(`Immutable collection accepted: ${result.sourceVersionCount} exact source versions, expires ${formatDateTime(result.expiresAt)}.`);
     } catch (error) {
+      if (controller.signal.aborted) return;
       if (isAbortError(error)) {
         setUploadStatus("idle");
         setMessage("Upload cancelled. No collection handle was accepted by Studio.");
@@ -453,7 +455,8 @@ export function Elsa3ReusableImportPage({
 
   const redactAuthorizedState = () => {
     resetReviewedInput("The authorized Elsa 3 import resource could not be confirmed. Retained analysis and receipt details were cleared without disclosing a hidden collection or plan identity.");
-    setFile(null);
+    setFiles([]);
+    if (fileInput.current) fileInput.current.value = "";
     setCollectionHandleInput("");
     setUploadResult(null);
     setUploadStatus("idle");
@@ -492,20 +495,22 @@ export function Elsa3ReusableImportPage({
         <header className="elsa3-import-split">
           <div>
             <h2 id="elsa3-source-title">1. Select an export</h2>
-            <p>Upload an Elsa 3 JSON export or enter the ID of a collection you already uploaded.</p>
+            <p>Select JSON or ZIP exports from Elsa 3 Studio, or enter an existing collection ID.</p>
           </div>
           {uploadResult ? <span className="elsa3-import-success-badge"><CheckCircle2 size={14} /> Upload complete</span> : null}
         </header>
         <div className="elsa3-import-responsive-grid">
           <label className="elsa3-import-field">
-            <span>Elsa 3 collection file</span>
+            <span>Elsa 3 export files</span>
             <input
               type="file"
-              accept=".json,application/json"
+              ref={fileInput}
+              multiple
+              accept=".json,.zip,application/json,application/zip"
               disabled={uploadStatus === "loading" || applyStatus === "loading"}
-              onChange={event => chooseFile(event.target.files?.[0] ?? null)}
+              onChange={event => chooseFiles(Array.from(event.target.files ?? []))}
             />
-            <small>{file ? `${file.name} · ${formatBytes(file.size)}` : `Maximum file size: ${formatBytes(maximumClientUploadBytes)}`}</small>
+            <small>{files.length ? `${files.map(file => file.name).join(", ")} · ${formatBytes(totalBytes)}` : `Up to ${formatBytes(maximumClientUploadBytes)} per upload`}</small>
           </label>
           <span className="elsa3-import-or">or</span>
           <StudioField className="elsa3-import-field" label={<><span>Existing collection ID</span></>}><input
@@ -516,7 +521,7 @@ export function Elsa3ReusableImportPage({
             /><small>Use an unexpired collection ID from this backend and account.</small></StudioField>
         </div>
         <div className="elsa3-import-actions">
-          <StudioButton type="button" onClick={() => void upload()} disabled={!file || uploadStatus === "loading" || applyStatus === "loading"}>
+          <StudioButton type="button" onClick={() => void upload()} disabled={!files.length || uploadStatus === "loading" || applyStatus === "loading"}>
             {uploadStatus === "loading" ? <LoaderCircle size={14} className="wf-spin" /> : <Upload size={14} />}
             {uploadStatus === "loading" ? "Uploading bounded collection" : "Upload once"}
           </StudioButton>

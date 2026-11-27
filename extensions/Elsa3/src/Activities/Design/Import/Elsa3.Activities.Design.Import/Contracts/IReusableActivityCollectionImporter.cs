@@ -99,6 +99,15 @@ public interface IReusableActivityImportOperationStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Optional native-export upload capability for a collection operation service.</summary>
+public interface IReusableActivityExportFileUpload
+{
+    /// <summary>Reads multipart JSON and ZIP exports as one bounded, immutable collection.</summary>
+    ValueTask<ReusableActivityImportUploadResult> UploadExportFilesAsync(
+        Stream body, string boundary, long? contentLength, ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IReusableActivityImportOperationService
 {
     /// <summary>
