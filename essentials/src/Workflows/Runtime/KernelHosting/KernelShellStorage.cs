@@ -35,6 +35,7 @@ internal abstract class KernelShellStorage
         throw new InvalidOperationException("The store does not take Event starts.");
     public abstract bool TakesInlineStarts { get; }
     public abstract IProtectedRootStarts BindPublishedStarts(BoundScope scope);
+    internal abstract IPreparedRootStartHandoff BindPreparedStartQualification(BoundScope scope);
     public abstract Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null);
     public abstract Task<RootStartProof> ConfirmPreparedStartAsync(BoundScope scope, ActorRef actor, string issuance,
         CancellationToken token);
@@ -175,6 +176,8 @@ internal abstract class KernelShellStorage
             ? SqliteEmbeddedHosting.TakesInlineStarts
             : profile is Profile.InlineStarts or Profile.SharedActivation or Profile.PublicEventHost || TakesEphemeralTestRuns;
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Foundation.BindProtectedRootStarts(scope);
+        internal override IPreparedRootStartHandoff BindPreparedStartQualification(BoundScope scope) =>
+            Foundation.BindPreparedRootStartQualification(scope);
 
         public override ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token) =>
             ValueTask.FromResult(BindSchedules(scope, Foundation.BindScheduleControls(ScheduleActor.ActorType),
@@ -274,6 +277,8 @@ internal abstract class KernelShellStorage
         internal override IEventStartAdmissions BindEventStarts(BoundScope scope) => PostgresPreviewHosting.BindEventStarts(OpenDatabase, scope, Requests);
         public override bool TakesInlineStarts => PostgresPreviewHosting.TakesInlineStarts(OpenDatabase);
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Requests.BindProtectedRootStarts(scope);
+        internal override IPreparedRootStartHandoff BindPreparedStartQualification(BoundScope scope) =>
+            PostgresPreviewHosting.BindPreparedRootStartQualification(OpenDatabase, Requests, scope);
         private PostgresDirectRequests Requests => _requests ??
             throw new InvalidOperationException("Install the PostgreSQL prepared-start store before opening it.");
 

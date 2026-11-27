@@ -28,3 +28,36 @@ public enum RootStartProof
     BirthRetired,
     PreparationDisarmed
 }
+
+/// <summary>The physically observed disposition of one exact provider-issued preparation.</summary>
+public enum PreparedRootStartDisposition { Unresolved, Accepted, Disarmed }
+
+/// <summary>Trusted host composition for privately qualifying a source-owned protected start.</summary>
+public interface IPreparedRootStartHandoff
+{
+    ValueTask<Admission> StartAsync(string operationId, Kernel.Foundation.Contracts.StartSpec spec, ProtectRootStartAsync protect, CancellationToken cancellationToken = default);
+    ValueTask<PreparedRootStartDisposition> ObserveAsync(ActorRef actor, string issuance, CancellationToken cancellationToken = default);
+}
+
+internal sealed class BoundPreparedRootStartHandoff(
+    Func<ProtectRootStartAsync, IProtectedRootStarts> bind,
+    Func<ActorRef, string, CancellationToken, Task<bool>> accepted,
+    Func<ActorRef, string, CancellationToken, Task<RootStartProof>> lifetime) : IPreparedRootStartHandoff
+{
+    public ValueTask<Admission> StartAsync(string operationId, Kernel.Foundation.Contracts.StartSpec spec, ProtectRootStartAsync protect, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(protect);
+        return bind(protect).StartAsync(operationId, spec, cancellationToken);
+    }
+
+    public async ValueTask<PreparedRootStartDisposition> ObserveAsync(ActorRef actor, string issuance, CancellationToken cancellationToken = default)
+    {
+        if (await accepted(actor, issuance, cancellationToken)) return PreparedRootStartDisposition.Accepted;
+        return await lifetime(actor, issuance, cancellationToken) switch
+        {
+            RootStartProof.BirthRetired => PreparedRootStartDisposition.Accepted,
+            RootStartProof.PreparationDisarmed => PreparedRootStartDisposition.Disarmed,
+            _ => PreparedRootStartDisposition.Unresolved
+        };
+    }
+}

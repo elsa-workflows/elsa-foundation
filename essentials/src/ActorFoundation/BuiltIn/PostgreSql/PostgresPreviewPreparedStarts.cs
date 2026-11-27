@@ -9,6 +9,19 @@ namespace Kernel.Foundation.Postgres;
 
 public static partial class PostgresPreviewHosting
 {
+    /// <summary>Binds the private source-owned handoff to the same installed source and tenant as protected admission.</summary>
+    public static IPreparedRootStartHandoff BindPreparedRootStartQualification(Func<KernelDb> open, PostgresDirectRequests requests,
+        Contract.BoundScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(requests);
+        requests.RequireEventBinding(open);
+        _ = requests.BindProtectedRootStarts(scope);
+        return new BoundPreparedRootStartHandoff(protect => requests.BindProtectedRootStarts(scope, protect),
+            (actor, issuance, token) => HasAcceptedPreparedStartAsync(open, scope, actor, issuance, token),
+            (actor, issuance, token) => ConfirmPreparedStartAsync(open, scope, actor, issuance, token));
+    }
+
     /// <summary>Creates a private PostgreSQL context that qualifies prepared held starts and managed schedules.</summary>
     public static KernelDb CreatePreparedStartsQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootPreparedStartsQualification(options);

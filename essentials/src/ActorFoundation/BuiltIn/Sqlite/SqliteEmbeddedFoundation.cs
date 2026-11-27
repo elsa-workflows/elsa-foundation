@@ -238,6 +238,15 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     /// <summary>Binds one-way protected starts to this installed SQLite file and the host's selected tenant.</summary>
     public IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope) => requests.Value.BindProtectedRootStarts(scope);
 
+    /// <summary>Binds the private source-owned handoff to the installed file and selected tenant.</summary>
+    public IPreparedRootStartHandoff BindPreparedRootStartQualification(Contract.BoundScope scope)
+    {
+        _ = BindProtectedRootStarts(scope);
+        return new BoundPreparedRootStartHandoff(protect => requests.Value.BindProtectedRootStarts(scope, protect),
+            (actor, issuance, token) => HasAcceptedPreparedStartAsync(scope, actor, issuance, token),
+            (actor, issuance, token) => ConfirmPreparedStartAsync(scope, actor, issuance, token));
+    }
+
     /// <summary>Confirms an exact protected held start under the installed root source.</summary>
     public Task<RootStartProof> ConfirmPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
         CancellationToken cancellationToken = default) =>

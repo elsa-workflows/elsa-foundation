@@ -38,7 +38,8 @@ internal static class RuntimeStandaloneTriggerRegistration
             provider.GetRequiredService<NativeIngressTargetEvidence>(), provider.GetService<IRuntimeModelExecutionReader>(), provider.GetService<IRecurringTriggerScheduleStore>(),
             provider.GetServices<IStimulusDeliveryIntentAdapter>(), provider.GetRequiredService<NativeIngressWaitTargetEvidence>(),
             provider.GetRequiredService<IBookmarkResumeResolver>(),
-            StandaloneTriggerRuntimeRegistration.Physical<IRuntimeCheckpointCommitStore>(provider, typeof(CoalescingRuntimeCheckpointCommitStore))));
+            StandaloneTriggerRuntimeRegistration.Physical<IRuntimeCheckpointCommitStore>(provider, typeof(CoalescingRuntimeCheckpointCommitStore)),
+            provider.GetService<IRuntimePreparedStartAttemptProof>()));
         services.Add(resource); services.Add(ingress);
         var reader = ServiceDescriptor.Scoped<IRuntimeIngressReservationReader, EfIngressReservationStore>();
         var sourceCommit = ServiceDescriptor.Scoped<ITriggerSourceResourceCommitStore, EfTriggerSourceResourceCommitStore>();

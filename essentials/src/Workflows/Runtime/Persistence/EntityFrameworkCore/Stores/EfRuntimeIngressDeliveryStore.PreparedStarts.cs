@@ -1,20 +1,26 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-internal enum RuntimePreparedStartProof { Unresolved, Accepted, Disarmed }
-
-/// <summary>Private qualification boundary for evidence read from the installed Foundation owner.</summary>
-internal interface IRuntimePreparedStartAttemptProof
+internal sealed partial class EfRuntimeIngressDeliveryStore : IRuntimePreparedStartHandoff
 {
-    ValueTask<RuntimePreparedStartProof> ObserveAsync(TriggerScope scope, string actorReference, string issuance, CancellationToken cancellationToken);
-}
+    public async ValueTask<RuntimeCommittedRecipient> CommitPreparedStartAsync(RuntimeDeliverySourceContext source, string recipientId,
+        CancellationToken cancellationToken = default)
+    {
+        RequirePreparedStarts();
+        var item = await ReadSourceAsync(source, cancellationToken);
+        var recipient = item.SubscriptionDelivery!.Recipients.SingleOrDefault(candidate => candidate.RecipientId == recipientId) ??
+            throw new InvalidDataException("The prepared dispatch recipient was not accepted.");
+        var existing = item.SubscriptionDelivery.Progress.Single(progress => progress.RecipientId == recipientId).Seal;
+        var seal = existing ?? CreatePreparedStartQualificationSeal(item, recipient);
+        var committed = existing is null ? await CommitDispatchAsync(source, seal, cancellationToken) : item;
+        return ReadPreparedStart(committed, new(seal.SourceOutboxItemId, seal.SourceFingerprint,
+            seal.SelectionFingerprint, source.Scope, recipientId, seal.Fingerprint)).Committed;
+    }
 
-internal sealed partial class EfRuntimeIngressDeliveryStore
-{
     internal static RuntimeDispatchSeal CreatePreparedStartQualificationSeal(RuntimePostCommitOutboxItem item,
         RuntimeSubscriptionRecipient recipient) =>
         new(RuntimeDispatchSeal.PreparedStartQualificationVersion, item.OutboxItemId, item.SourceFingerprint,
@@ -38,7 +44,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
             throw new InvalidDataException("The prepared start seal differs from its exact accepted material and recipient.");
     }
 
-    internal async ValueTask<(long Generation, bool Disarmed)?> ReadPreparedStartAttemptAsync(RuntimeCommittedRecipientAuthority authority,
+    public async ValueTask<(long Generation, bool Disarmed)?> ReadPreparedStartAttemptAsync(RuntimeCommittedRecipientAuthority authority,
         CancellationToken cancellationToken = default)
     {
         RequirePreparedStarts();
@@ -49,7 +55,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
 
     /// <summary>Binds the exact offer received from the configured owner before the protection callback returns.</summary>
     /// <remarks>The caller captures the prior generation before requesting preparation. Binding never substitutes a newer offer.</remarks>
-    internal async ValueTask<long?> TryBindPreparedStartAsync(RuntimeDeliverySourceContext source,
+    public async ValueTask<long?> TryBindPreparedStartAsync(RuntimeDeliverySourceContext source,
         RuntimeCommittedRecipientAuthority authority, long previousGeneration, string tenant, string actorReference, string issuance,
         CancellationToken cancellationToken = default)
     {
@@ -72,7 +78,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
     }
 
     /// <summary>Reconciles only the recorded attempt and retains its exact positive actor receipt.</summary>
-    internal async ValueTask<RuntimePostCommitOutboxItem> ReconcilePreparedStartAsync(RuntimeDeliverySourceContext source,
+    public async ValueTask<RuntimePostCommitOutboxItem> ReconcilePreparedStartAsync(RuntimeDeliverySourceContext source,
         RuntimeCommittedRecipientAuthority authority, long generation,
         CancellationToken cancellationToken = default)
     {

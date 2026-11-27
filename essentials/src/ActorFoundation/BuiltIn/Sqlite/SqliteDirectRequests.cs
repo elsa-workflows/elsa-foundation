@@ -71,9 +71,12 @@ public static partial class SqliteEmbeddedHosting
             ArgumentNullException.ThrowIfNull(scope);
             if (protectRootStart is not { } protect)
                 throw new InvalidOperationException("Configure SQLite root start protection before binding one-way starts.");
-            return new BoundProtectedRootStarts(actorType,
-                (operation, spec, token, _) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token));
+            return BindProtectedRootStarts(scope, protect);
         }
+
+        internal IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope, ProtectRootStartAsync protect) =>
+            new BoundProtectedRootStarts(actorType,
+                (operation, spec, token, _) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token));
 
         internal Task<EventRegistrationResult> ApplyEventStartsAsync(Contract.BoundScope scope, string slot, long revision,
             IReadOnlyList<EventStartRegistration> registrations, CancellationToken token) =>
