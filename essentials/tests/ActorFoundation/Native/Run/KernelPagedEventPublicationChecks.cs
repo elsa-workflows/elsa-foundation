@@ -88,38 +88,60 @@ internal static partial class KernelAuthoredEventChecks
     {
         var qualified = tenant + "_" + PagedEventActor.Key;
         var occurrence = FoundationRootCreator.OperationDigest(eventId);
-        var payload = RootAdmissionWire.EncodePayload(PagedEventActor.Payload);
+        var ticket = "pub:" + occurrence;
+        var target = Kernel.Runtime.InstanceRef.In(0, "fixture-publisher");
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var keepUntil = now + (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
         await using (var db = open())
         {
             await using var tx = await db.Database.BeginTransactionAsync(token);
+            // Use the forthcoming profile's state shape for this isolated storage witness. The normal product provisioner
+            // and the owned ticket use this same definition once wired to the new protocol.
+            await db.Database.ExecuteSqlRawAsync($"""
+                CREATE TABLE "{RootPublicEventDispatch.Table}" ({RootPublicEventDispatch.Columns(db.Database.IsSqlite())})
+                """, token);
             var bind = await BindPageSourceAsync(db);
             await RootPublicEventPublications.InsertAsync(db, tenant, qualified, eventId, occurrence, Guid.NewGuid(), occurrence,
                 PagedEventActor.Payload, now, keepUntil, keepUntil, sql => RootPublicEventStarts.Bind(sql, bind), token);
+            await RootPublicEventDispatch.AddAsync(db, occurrence, ticket, target.Id, target.Partition, bind, token);
             await tx.CommitAsync(token);
         }
-        var rolledBack = await PageAsync(null, commit: false);
+        var rolledBack = await PageAsync(commit: false);
         Check(await CountDeliveriesAsync() == 0, "rolling back a physical page leaves no split delivery");
-        var first = await PageAsync(null);
+        var first = await PageAsync();
         Check(first == rolledBack && first is { Complete: false, Through: not null } && await CountDeliveriesAsync() == 1,
-            "the first physical page commits one oversized delivery and its exact cursor");
-        Check(await PageAsync(null) == first && await CountDeliveriesAsync() == 1,
-            "retrying the same position cannot enqueue an occurrence twice");
-        var second = await PageAsync(first.Through);
+            "rollback preserved the initial cursor and the first commit wrote one oversized delivery");
+        Check(await PageAsync(replay: true) == first && await CountDeliveriesAsync() == 1,
+            "an obsolete cursor cannot advance committed state or enqueue an occurrence twice");
+        var second = await PageAsync();
         Check(second is { Complete: false, Through: not null } && second.Through != first.Through && await CountDeliveriesAsync() == 2,
             "the physical keyset seek resumes at the next waiter and stops at the byte allowance");
-        var third = await PageAsync(second.Through);
+        var third = await PageAsync();
         Check(third is { Complete: true, Through: not null } && third.Through != second.Through && await CountDeliveriesAsync() == 3,
             "the short final physical page lands one oversized delivery and proves exhaustion");
+        await using (var db = open())
+        {
+            var status = await db.Database.SqlQuery<int>($"""
+                SELECT "Status" AS "Value" FROM "FoundationPublicEventDispatch" WHERE "Occurrence" = {occurrence}
+                """).SingleAsync(token);
+            Check(status == (int)Contract.PublicationStatus.Matched, "the publication records Matched with its final delivery");
+            // Restore this private fixture's installed schema before opening its existing host again.
+            await db.Database.ExecuteSqlRawAsync("DROP TABLE \"FoundationPublicEventDispatch\"", token);
+        }
 
-        async Task<RootEventAdmission.LiveMatchPage> PageAsync(SubscriptionPosition? after, bool commit = true)
+        async Task<RootEventAdmission.LiveMatchPage> PageAsync(bool commit = true, bool replay = false)
         {
             await using var db = open();
             await using var tx = await db.Database.BeginTransactionAsync(token);
             var bind = await BindPageSourceAsync(db);
-            var page = await RootEventAdmission.MatchLivePageAsync(db, tenant, qualified, eventId, occurrence, payload,
-                keepUntil, after, bind, token);
+            var publication = await RootPublicEventDispatch.ReadPendingAsync(db, occurrence, ticket, target.Id, target.Partition, bind, token)
+                ?? throw new InvalidOperationException("The exact publication stopped before its last page.");
+            if (replay) publication = publication with { Position = RootPublicEventDispatch.Cursor.Initial };
+            var page = await RootEventAdmission.MatchLivePageAsync(db, publication.Tenant, publication.Key, publication.EventId,
+                publication.Occurrence, publication.Payload, publication.KeepUntil, publication.Position.LiveThrough, bind, token);
+            var changed = await RootPublicEventDispatch.ChangeAsync(db, publication, new(page.Through, page.Complete, null),
+                page.Complete ? Contract.PublicationStatus.Matched : Contract.PublicationStatus.Pending, bind, token);
+            if (changed == replay) throw new InvalidOperationException("The durable cursor update disagreed with the exact source position.");
             if (commit) await tx.CommitAsync(token);
             return page;
         }
