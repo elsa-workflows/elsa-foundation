@@ -9,6 +9,9 @@ internal interface IRootDispatchHeaders
 {
     (string Tenant, string Reference) Creator(Durable.Message creator);
     Durable.FoundationDispatchHeader Checkpoint(Durable.InstanceRow row);
+    bool SupportsChildren => false;
+    Func<string, string>? ChildMessageHandle => null;
+    string? ChildReference(string tenant, Durable.CreationAddress address) => null;
     bool RequiresCommittedTerminal { get; }
     bool KeepsParkInputs { get; }
     bool KeepsParkArrivals { get; }
@@ -24,16 +27,19 @@ internal sealed partial class ActorAdapter
     {
         var spec = input.Spec!;
         var (tenant, reference) = roots!.Creator(input.Taken[input.From].Message);
-        return new(new(reference), spec.Model, tenant, Contract.ActorStatus.Running, null, null, null,
-            spec.Definition, InitialHeader(spec.Definition).Labels);
+        return new(new(reference), spec.Model, tenant, Contract.ActorStatus.Running, null,
+            RootParent(tenant, spec.Parent, spec.ParentCreation), null, spec.Definition, InitialHeader(spec.Definition).Labels);
     }
 
     private Contract.ActorHeader RootHeader(Durable.InstanceRow row)
     {
         var metadata = row.FoundationDispatchHeader ?? roots!.Checkpoint(row);
         return new(new(metadata.Reference), row.Model, metadata.Tenant, (Contract.ActorStatus)row.Status, row.Fault,
-            null, metadata.Terminal?.At, metadata.Header.TypeData, metadata.Header.Labels);
+            RootParent(metadata.Tenant, row.Parent, row.ParentCreation), metadata.Terminal?.At, metadata.Header.TypeData, metadata.Header.Labels);
     }
+
+    private Contract.ActorRef? RootParent(string tenant, string? parent, long creation) =>
+        parent is not null && roots!.ChildReference(tenant, new(parent, creation)) is { } reference ? new(reference) : null;
 
     private static bool IsRootControl(Durable.Message message) => message is
     {
@@ -113,14 +119,16 @@ internal sealed partial class ActorAdapter
         if (roots is not { RefusesParkedOperators: true } || input.Row is not
             { Status: Durable.InstanceStatus.Faulted, Retired: false, Creation: 1, FoundationDispatchHeader: { Terminal: null } header } row ||
             input.Taken is not [{ Durable: true, Message: var control } refused] ||
-            !IsRootControl(control) || control.Target.Id != row.Id) return null;
+            !(IsRootControl(control) || roots.SupportsChildren && control is
+                { Kind: Durable.Kinds.Terminate, Operator.RootParkMark: not null } && MatchesRootChildInput(row, control)) ||
+            control.Target.Id != row.Id) return null;
         var revision = checked(row.Revision + 1);
         var (mark, facts, clear) = (control.Operator!.RootParkMark, control.Operator.RootParkFacts, control.Operator.RootParkClear);
         var deletes = control.Kind == Durable.Kinds.Delete || control.Operator.RootThenDelete;
         var reason = control.Kind is not (Durable.Kinds.Terminate or Durable.Kinds.Delete) || mark is null || facts is null ? "parked"
             : clear ? facts.Clearing != control.Id || facts.Mark != mark ? "selection" : null
             : facts.Clearing is not null ? "clearing" : facts.Mark != mark ? "selection"
-            : facts.Outstanding || deletes && facts.Residue ? "outstanding" : null;
+            : facts.Outstanding || deletes && (facts.Residue || roots.SupportsChildren && row.Parent is not null) ? "outstanding" : null;
         // S5b-3b: a Delete runs ProtectsDeletion at its Open, as the in-memory OpenParkDelete does. A protected root, or one
         // whose protection cannot be read, is refused with its Park and kept rows as they are. A single page is its own Open.
         if (reason is null && !clear && control.Kind == Durable.Kinds.Delete)
@@ -167,6 +175,14 @@ internal sealed partial class ActorAdapter
                 Journal = kept ? Durable.Json.Write(new { Outcome = "protected", Disposition = "terminated", Operation = control.Id, Cleared = cleared })
                     : Durable.Json.Write(new { Outcome = "terminated", Operation = control.Id, Cleared = cleared })
             };
+            if (roots.SupportsChildren && ended.Parent is not null)
+            {
+                if (row.Children is not null || row.Jobs is not null)
+                    Durable.CascadeProtocol.Open(terminated, Durable.CascadeRegistry.From(row));
+                terminated.Sent.Add(Durable.FoundationChildNotice.Create(ended, null, final: true));
+                RequireRootOutcome(terminated, row, control);
+                terminated.ClearsPrivateTimersOnEnd = issueSelf is { DistinguishesTimers: true };
+            }
             terminated.ReplyTo(refused, kept ? "terminated and kept" : "terminated");
             return terminated;
         }
@@ -303,7 +319,8 @@ internal sealed partial class ActorAdapter
         if (input.Taken is not [{ Durable: true, Message: { Operator: { } command } message }] ||
             message.Kind != Durable.Kinds.Delete && !command.RootThenDelete) return null;
         var row = input.Row;
-        if (row is not { Creation: 1, Retired: false, Parent: null, Children: null, Jobs: null, FoundationDispatchHeader: { } header } ||
+        if (row is not { Creation: 1, Retired: false, Children: null, Jobs: null, FoundationDispatchHeader: { } header } ||
+            row.Parent is not null && (roots?.SupportsChildren != true || row.Status == Durable.InstanceStatus.Running) ||
             row.Model != actor.Type || row.Id != message.Target.Id || message.TargetCreation != row.Creation ||
             (command.RootThenDelete ? command.DeleteTarget != header.Reference : header.Terminal is null || header.Terminal != command.QualifiedTerminal))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
@@ -329,13 +346,18 @@ internal sealed partial class ActorAdapter
         return outcome;
     }
 
+    private static bool MatchesRootChildInput(Durable.InstanceRow? row, Durable.Message message) =>
+        message.FoundationRootChildInput && row is { Parent: not null } child &&
+        message.Target.Id == child.Id && message.TargetCreation == child.Creation &&
+        message.Sender == child.Parent && message.SenderCreation == child.ParentCreation;
+
     private string? RootRefusal(Durable.TurnInput input)
     {
         if ((input.Row?.Model ?? input.Spec?.Model) != actor.Type) return "UnknownActorType";
         if (input.Row is { Status: not Durable.InstanceStatus.Running }) return "Ended";
-        if (input.Row is { } row && (row.Creation != 1 || row.Retired || row.Parent is not null ||
+        if (input.Row is { } row && (row.Creation != 1 || row.Retired ||
             row.ParkRecovery is not null || row.ParkCohort is not null || row.ParkDiscard is not null || row.Cascade is not null ||
-            rootJobHandle is null && row.Jobs is not null || row.Children is not null))
+            rootJobHandle is null && row.Jobs is not null || roots?.SupportsChildren != true && (row.Children is not null || row.Parent is not null)))
             return "RootDispatchUnavailable";
 
         if (input.Row is not null && input.Taken is [var command] && command.Durable && IsRootControl(command.Message) &&
@@ -350,8 +372,19 @@ internal sealed partial class ActorAdapter
             var message = delivery.Message;
             if (issueSelf is not null && issueSelf.Allows(message.Due) && delivery.Durable && input.Row is { } issuer &&
                 Durable.FoundationSelfSend.IsSelfInput(message, issuer.Id, issuer.Creation)) continue;
+            if (roots?.SupportsChildren == true && message.FoundationRootChildNotice && delivery.Durable)
+            {
+                if (ChildNoticeError(input.Row, message) is { } error) return error;
+                continue;
+            }
+            if (roots?.SupportsChildren == true && message.FoundationRootChildInput && delivery.Durable)
+            {
+                if (!MatchesRootChildInput(input.Row, message)) return "WrongParent";
+                continue;
+            }
+            var childStart = roots?.SupportsChildren == true && message.BindFoundationChild && message.Start is not null;
             if (!delivery.Durable || message.Target.Id != input.Actor || message.TargetCreation != 1 ||
-                message.Sender is not null || message.EventMatch is not null ||
+                message.Sender is not null && !childStart || message.EventMatch is not null ||
                 message.ActorAuthored || message.Operator is not null)
                 return "RootDispatchUnavailable";
             // A held caller is answered on a start as on a direct input. On a start this check is structural: the poll takes
@@ -364,8 +397,8 @@ internal sealed partial class ActorAdapter
                 return "RootDispatchUnavailable";
             if (message.Start is not null)
             {
-                if (input.Row is not null || message.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 }, Ephemeral: false } ||
-                    message.InboxScope != 0 || message.Kind != Durable.Kinds.Start || message.StorageId != "root:" + input.Actor)
+                if (input.Row is not null || message.Start is not { Creation: { Generation: 1, Previous: 0 }, Ephemeral: false } ||
+                    message.Start.Parent is not null && !childStart || message.InboxScope != 0 || message.Kind != Durable.Kinds.Start || message.StorageId != "root:" + input.Actor)
                     return "RootDispatchUnavailable";
             }
             else if (message.InboxScope != Durable.InboxKey.FoundationOccurrenceScope || message.StorageId is null ||
@@ -377,13 +410,31 @@ internal sealed partial class ActorAdapter
 
     private void RequireRootOutcome(Durable.TurnOutcome outcome, Durable.InstanceRow? previous, Durable.Message input)
     {
+        if (roots?.SupportsChildren == true && outcome.Sent.Any(IsChildEffect))
+        {
+            // The qualified writer commits these rows. Their recipients obtain the stored envelope through polling.
+            outcome.FoundationRootChildSends = outcome.Sent.Where(IsChildEffect).ToArray();
+            outcome.Sent.RemoveAll(IsChildEffect);
+            if (outcome.Row is { } childRow) outcome.Row = childRow with { CustomHandles = null };
+        }
+
+        var childCascade = roots?.SupportsChildren == true &&
+            outcome.Row is { Status: Durable.InstanceStatus.Cancelled, Jobs: null, Children: null } &&
+            outcome.FoundationCascade is { Entries.Children.IsEmpty: false, Input: null };
+        if (childCascade && outcome.Row is { Cascade: not null } opening)
+        {
+            // This store persists the remaining registry and paging cursor beside the ended checkpoint.
+            outcome.Sent.RemoveAll(message => message.Kind == Durable.Kinds.Cascade);
+            outcome.Row = opening with { Cascade = null };
+        }
         var timedFault = outcome.Row is { Status: Durable.InstanceStatus.Faulted } && rootTimedJobSettlement &&
             previous is not null && !outcome.OpensPark &&
             outcome.Consumed is [{ Durable: true, Message: var result }] &&
             Durable.RootJobTicket.IsRecordedResult(result, previous) &&
             result.Read<Durable.JobFinished>() is { Error: "timeout", Result: null };
-        var terminated = input.Kind == Durable.Kinds.Terminate && IsRootControl(input) && previous is not null &&
-            outcome.Row is { Status: Durable.InstanceStatus.Cancelled };
+        var terminated = previous is not null && outcome.Row is { Status: Durable.InstanceStatus.Cancelled } &&
+            (input.Kind == Durable.Kinds.Terminate && IsRootControl(input) ||
+                roots?.SupportsChildren == true && input.FoundationRootChildInput);
         // A profile whose state family ends Faulted roots (timed-job settlement) commits a model's Faulted end, as the
         // in-memory reference does: its held callers are answered with that end (Worker.Release).
         var faulted = rootTimedJobSettlement && !outcome.OpensPark && outcome.Row is { Status: Durable.InstanceStatus.Faulted };
@@ -407,9 +458,12 @@ internal sealed partial class ActorAdapter
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
             // their delivery, and drops it when it holds none (Worker.Release), as the in-memory reference does.
-            outcome.FoundationCascade is not null && !settlesJobs || outcome.InMemory)
+            outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
+
+        static bool IsChildEffect(Durable.Message message) =>
+            message.BindFoundationChild || message.FoundationRootChildInput || message.CascadeOrigin || message.Kind == Durable.Kinds.ChildFinished;
 
         bool SupportsSends(Durable.InstanceRow row)
         {

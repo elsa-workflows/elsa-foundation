@@ -275,11 +275,12 @@ public static class PostgresPreviewHosting
         var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch) { AdmissionPressure = pressure };
         if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
+        await store.EnableRootChildrenAsync(cancellationToken);
         var scope = store.BindWorkerNode(actor.Withholds);
         await store.PrimeAdmissionPressureAsync(cancellationToken);
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
-        var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
+        var adapter = new ActorAdapter(store.WorkerHeaders(scope), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
             rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null,
             rootHeldReplies: replies is not null, rootTerminalOutputLimit: terminalOutputLimit);
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per

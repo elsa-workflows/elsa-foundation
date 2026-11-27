@@ -69,6 +69,7 @@ public sealed partial class EfStore
                     CROSS JOIN LATERAL (SELECT ltrim(reply.deadline, '+0') AS digits) normalized
                     WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
                         AND m."InboxScope" = -4 AND m."EventMatch" IS NULL
+                        /*root-child-notices*/
                         AND (NOT m."Done" OR /*kept*/)
                         AND (NOT m."Done" OR /*root-parked*/)
                         AND (m."Seq", m."Id" COLLATE "C") > ({afterSeq}, {afterOccurrence})
@@ -89,7 +90,8 @@ public sealed partial class EfStore
             var rootParked = db.UsesRootParkInspection ? """i."FoundationParkAt" IS NOT NULL""" : "false";
             var sql = StoreDefinitionsRevision.AddPostgresStampSql(query.Format).Replace("/*kept*/", kept, StringComparison.Ordinal)
                 .Replace("/*kept-by*/", keptBy, StringComparison.Ordinal)
-                .Replace("/*root-parked*/", rootParked, StringComparison.Ordinal);
+                .Replace("/*root-parked*/", rootParked, StringComparison.Ordinal)
+                .Replace("/*root-child-notices*/", db.UsesRootChildren ? "AND NOT " + RootChildNoticePredicate("m") : "", StringComparison.Ordinal);
             sampled = await db.Database.SqlQuery<InboxProjection>(FormattableStringFactory.Create(sql, query.GetArguments()))
                 .ToListAsync(cancellationToken);
         }

@@ -175,6 +175,14 @@ internal static class ProfileCapabilityChecks
             backlog.Capabilities == (RootProfiles.ParkRecoveryComposition | RootCapabilities.DueBacklog) &&
             !RootProfiles.Formats.ContainsKey(backlog.RequiredFormat),
             "the earlier private pressure format retains its original capabilities");
+        using var children = KernelDb.ForPostgresRootChildrenQualification(options);
+        Check(children.RequiredFormat == StoreFormat.PostgresRootChildrenQualification &&
+            children.RequiredFormat is { StoreSchema: 3, MessageProtocol: 111, JournalCodec: 1 } &&
+            StoreDefinitionsRevision.Seed(children) is { StoreSchema: 1, MessageProtocol: 9, JournalCodec: 0 } &&
+            children.UsesRootChildren && !children.UsesRootDueBacklog &&
+            children.Capabilities == (RootProfiles.TimerRearmQualification | RootCapabilities.Children) &&
+            !RootProfiles.Formats.ContainsKey(children.RequiredFormat) && !mapped.HasFlag(RootCapabilities.Children),
+            "the private PostgreSQL child profile keeps its full format, definition and capability sets");
         var sqliteOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite("Data Source=:memory:").Options;
         using var sqliteBacklog = KernelDb.ForRootDueBacklogQualification(sqliteOptions, new SqliteAdmissionDefinitions());
         Check(StoreDefinitionsRevision.Seed(backlog) is { StoreSchema: 1, MessageProtocol: 5, JournalCodec: 0 } &&
@@ -212,7 +220,7 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, JournalCodec: 0 },
             "the shipped format composes admission pressure and terminal output under distinct provider definitions");
-        mapped |= backlog.Capabilities | terminalOutput.Capabilities;
+        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped

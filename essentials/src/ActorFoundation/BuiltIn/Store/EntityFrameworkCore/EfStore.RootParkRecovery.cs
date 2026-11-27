@@ -72,7 +72,8 @@ public sealed partial class EfStore
                     WHERE {CohortWaitingWork};
                 """ : "", StringComparison.Ordinal)
             .Replace("/*parked-operator-outcomes*/",
-                db.UsesRootComposedParkRecovery ? "AND " + RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint : "",
+                db.UsesRootComposedParkRecovery ? "AND " + RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint +
+                    (db.UsesRootChildren ? SettledParkedChildJob : "") : "",
                 StringComparison.Ordinal), token);
 
     // Operator outcome entries, the only journal entries that are JSON objects. The checkpoint trigger reads them
@@ -312,11 +313,15 @@ public sealed partial class EfStore
     {
         // S5b: a Terminate that names a parked root's Park reads the same facts in a parked-operator set.
         if (!db.UsesRootParkRecovery && !db.UsesRootParkedOperators ||
-            !polled.Messages.Any(item => item.Message.Operator?.RootParkMark is not null)) return polled;
+            !polled.Messages.Any(item => item.Message.Operator?.RootParkMark is not null || db.UsesRootChildren && IsRootChildTerminate(item.Message)))
+            return polled;
         var messages = new List<Stored>(polled.Messages.Count);
         foreach (var item in polled.Messages)
         {
-            if (item.Message is not { Operator: { RootParkMark: not null } command } message)
+            var message = item.Message;
+            var childTerminate = db.UsesRootChildren && IsRootChildTerminate(message);
+            var endsAttachedChild = db.UsesRootChildren && message.Kind == Kinds.Terminate && message.Operator?.RootThenDelete != true;
+            if (message.Operator is not { RootParkMark: not null } && !childTerminate)
             {
                 messages.Add(item);
                 continue;
@@ -329,13 +334,26 @@ public sealed partial class EfStore
                 ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token)
                 : await db.Database.SqlQueryRaw<ParkMarkRow>($"""
                 SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
-                    "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL
+                    ("Jobs" IS NOT NULL OR "Children" IS NOT NULL) AND NOT ({"{2}"} AND "Parent" IS NOT NULL
+                        AND ("Jobs" IS NULL OR {jobPin} IS NOT NULL OR {livePin} IS NOT NULL))
+                        OR "CustomHandles" IS NOT NULL
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
                     EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = "Instances"."Id" AND m."Partition" = "Instances"."Partition"
                         AND {PendingResidue}) AS "Residue",
                     {clearing}, "Jobs", {jobPin} AS "ParkJobResult", {livePin} AS "ParkLiveJob" FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
-                """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
+                """, message.Target.Id, message.Target.Partition, endsAttachedChild).SingleOrDefaultAsync(token);
+            var command = message.Operator;
+            if (childTerminate)
+            {
+                if (park is not { At: { } parkAt, Revision: { } parkRevision })
+                {
+                    messages.Add(item);
+                    continue;
+                }
+                command = new(null) { RootParkMark = new(parkRevision, parkAt), RootParkWindow = (long)TimeSpan.FromHours(1).TotalMilliseconds };
+            }
+            if (command is null) throw RootShape();
             var recover = message.Kind == Kinds.Recover;
             var quoteFits = true;
             List<KeptRow> kept;

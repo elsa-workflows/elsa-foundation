@@ -190,6 +190,7 @@ public sealed record TurnCommit(
     internal long? FoundationPublicationSequence { get; init; }
     internal CascadeCommit? FoundationCascade { get; init; }
     internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
+    internal IReadOnlyList<Message>? FoundationRootChildSends { get; init; }
     internal TerminalOutput? FoundationTerminalOutput { get; init; }
 }
 

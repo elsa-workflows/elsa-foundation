@@ -166,12 +166,13 @@ public class KernelDb : DbContext
     internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
+    internal bool UsesRootChildren => Has(RootCapabilities.Children);
     internal bool UsesRootDueBacklog => Has(RootCapabilities.DueBacklog);
     internal bool UsesRootPrivateParkInputs => UsesRootSelfProtocol && UsesRootParkArrivals && UsesRootComposedParkRecovery;
     internal bool UsesRootTimerRearm => UsesRootPrivateParkInputs && Has(RootCapabilities.TimerRearm);
     internal bool UsesRootTerminalOutput => Has(RootCapabilities.TerminalOutput);
     internal bool SeparateRootFormatLock =>
-        RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput;
+        RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
     internal bool UsesRootComposedParkRecovery =>
         UsesRootParkRecovery && (Capabilities & RootProfiles.ParkCompositionBase) == RootProfiles.ParkCompositionBase;
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
@@ -183,6 +184,9 @@ public class KernelDb : DbContext
     internal bool RecordsRootParkRevision => UsesRootParkArrivals || UsesRootParkedOperators;
     internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
+    internal static KernelDb ForPostgresRootChildrenQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification,
+            RootProfiles.TimerRearmQualification | RootCapabilities.Children);
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
@@ -906,6 +910,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? PostgresOperatorPollFilter(db) : "")}
+             {(db.UsesRootChildren && _ordinaryRoots.Discover ? RootChildCascadePollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
@@ -917,6 +922,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                    {(db.UsesRootComposedParkRecovery ? $"""
                      AND (i."FoundationParkAt" IS NULL OR m."InboxScope" IN ({ParkInputScopes(db)}) AND (m."ReplyTo" IS NULL OR m."Id" LIKE 'operator/%'))
                      """ : "")}
+                   {(db.UsesRootChildren ? "AND " + RootChildParkInputs("m", "i") : "")}
                    {RootPollCohortFilter(db)})))
             """;
     private string PostgresOperatorPollFilter(KernelDb db)
@@ -924,10 +930,18 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         var filter = db.UsesRootComposedParkRecovery ? WithReleasedCohort(RootClearingOperatorPollFilter)
             .Replace("/*held-park-predecessor*/", """
                 AND (target."FoundationParkAt" IS NULL OR prior."ReplyTo" IS NULL OR prior."Id" LIKE 'operator/%')
+                /*root-child-prior*/
                 """, StringComparison.Ordinal)
+            .Replace("/*root-child-prior*/", db.UsesRootChildren
+                ? "AND " + RootChildParkInputs("prior", "target") : "", StringComparison.Ordinal)
             : db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
             : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
             : RootOperatorPollFilter;
+        filter = filter.Replace("/*root-child-cascade*/", db.UsesRootChildren ? $"""
+            {RootChildCascadeRow} OR EXISTS (SELECT 1 FROM "Instances" child
+                WHERE child."Id" = m."Target" AND child."Partition" = m."Partition" AND child."Suspended"
+                AND {RootChildTerminatePredicate("m", "child")}) OR
+            """ : "", StringComparison.Ordinal);
         // A running actor can withhold even when the physical suspension flag is clear. Offer the first due operator
         // beside earlier ordinary inputs so the owner can choose from its committed header.
         filter = filter.Replace("/*root-self-predecessor*/",
@@ -939,7 +953,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
     private static readonly string RootOperatorPollTemplate = $"""
-         AND (m."InboxScope" = 0 OR EXISTS (
+         AND (m."InboxScope" = 0 OR /*root-child-cascade*/ EXISTS (
              SELECT 1 FROM "Instances" target
              WHERE target."Id" = m."Target" AND target."Partition" = m."Partition"
                AND (CASE WHEN m."Id" LIKE 'operator/%' THEN
@@ -1054,7 +1068,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
-                var message = key.Scope == 0 ? (db?.UsesSqliteRootRuntime == true ? DecodeSqliteCreator(entity) : PostgresRootAdmission.DecodeCreator(entity))
+                var message = key.Scope == 0 ? (db?.UsesSqliteRootRuntime == true ? DecodeSqliteCreator(entity) : PostgresRootAdmission.DecodeCreator(entity, db?.UsesRootChildren == true))
                     with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
                     : DecodeRootInput(db!, entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
@@ -1066,7 +1080,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             }
             if (key.Match is null &&
                 (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) ||
-                    PostgresRootAdmission.IsStoredOperator(r.Start) || key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))
+                    PostgresRootAdmission.IsStoredOperator(r.Start) || IsStoredRootChildNotice(r.Start) || IsStoredRootChildInput(r.Start) || r.Start == RootChildCascadeWire || key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
