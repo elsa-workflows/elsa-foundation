@@ -2110,6 +2110,59 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.ToTable("elsa_runtime_ingress_reservations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelEventPublicationEntity", b =>
+                {
+                    b.Property<string>("ScopeHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SlotHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("Applied")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ArtifactId")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Current")
+                        .IsConcurrencyToken()
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TenantHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("ScopeHash", "SlotHash", "Revision");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeHash", "SlotHash", "Current");
+
+                    b.HasIndex("ScopeHash", "TenantHash", "Current", "SlotHash", "Revision")
+                        .HasDatabaseName("IX_KernelEventPublication_Retain");
+
+                    b.HasIndex("ScopeHash", "TenantHash", "Current", "Applied", "SlotHash", "Revision")
+                        .HasDatabaseName("IX_KernelEventPublication_Apply");
+
+                    b.ToTable("elsa_runtime_kernel_event_publication", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelExecutablePinEntity", b =>
                 {
                     b.Property<string>("Id")

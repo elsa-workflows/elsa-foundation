@@ -53,6 +53,10 @@ public sealed class KernelActivationCoordinator(
     private const int MaximumDiagnosticLength = 512;
     private readonly ActivationChannelOptions _channels = channels ?? new();
     private readonly IReadOnlyCollection<IWorkflowTriggerIndexObserver> _observers = triggerObservers?.ToArray() ?? [];
+    internal IKernelEventPublicationRegistration? EventPublications { get; init; }
+    internal IRuntimePersistenceModeResolver? EventPersistenceModes { get; init; }
+
+    public bool RequiresInactiveAcknowledgment => EventPublications is not null;
 
     public async ValueTask<WorkflowActivationResult> ActivateAsync(WorkflowActivationCommand command, CancellationToken cancellationToken = default)
     {
@@ -180,8 +184,19 @@ public sealed class KernelActivationCoordinator(
 
         try
         {
+            var mode = EventPublications is { SupportsDurableMode: true } &&
+                plan.Served?.Workflow is { } native && NativeStartTriggers.StartEvents(native).Any()
+                ? EventPersistenceModes!.Resolve(command.Executable)
+                : (PersistenceMode?)null;
+            if (mode is not (null or PersistenceMode.Balanced or PersistenceMode.Durable))
+                throw new InvalidOperationException("An authored Event start requires Balanced or Durable persistence.");
+            var events = EventPublications is null
+                ? []
+                : KernelEventClaims.Create(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt, mode);
+            EventPublications?.Validate(plan, command, reference, events);
             await PrepareProjectionsAsync(command.ActivationId,
-                PublicationClaims(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt), cancellationToken);
+                [.. ScheduleClaims(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt), .. events],
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (Exception exception)
@@ -219,6 +234,15 @@ public sealed class KernelActivationCoordinator(
             return refused;
         }
 
+        // An Event generation committed with the slot can already be selected by another owner. Serving recovery
+        // and observer refresh on this path must preserve that committed generation.
+        RuntimeKernelEventPublication? eventPublication;
+        try { eventPublication = await ReadEventPublicationAsync(transition.Slot, CancellationToken.None); }
+        catch (Exception error) when (EventPublications is not null)
+        {
+            return EventPublicationPending(transition.Slot, error);
+        }
+
         // 4. Serve, then tell the trigger observers (Studio's workflow library among them). The activation stands from here
         // on, so a cancellation does not stop the serving it needs; a failure of either reverts it.
         try
@@ -227,7 +251,9 @@ public sealed class KernelActivationCoordinator(
         }
         catch (Exception exception)
         {
-            return await RevertAsync(command, reference, plan, transition, exception, WorkflowActivationStep.ProjectionActivation);
+            return eventPublication is null
+                ? await RevertAsync(command, reference, plan, transition, exception, WorkflowActivationStep.ProjectionActivation)
+                : EventPublicationPending(transition.Slot, exception);
         }
         try
         {
@@ -235,10 +261,13 @@ public sealed class KernelActivationCoordinator(
         }
         catch (Exception exception)
         {
-            return await RevertAsync(command, reference, plan, transition, exception, WorkflowActivationStep.TriggerObserverNotification);
+            if (eventPublication is null)
+                return await RevertAsync(command, reference, plan, transition, exception, WorkflowActivationStep.TriggerObserverNotification);
+            LogEventObserverFailure(transition.Slot, exception);
         }
 
-        return new(true, WorkflowActivationOutcome.Activated, transition.Slot, reference, transition.ReplacedActivationId);
+        return await ApplyEventPublicationAsync(transition.Slot, eventPublication, CancellationToken.None) ??
+            new(true, WorkflowActivationOutcome.Activated, transition.Slot, reference, transition.ReplacedActivationId);
     }
 
     // ---- serving -------------------------------------------------------------------------------------------------
@@ -347,7 +376,11 @@ public sealed class KernelActivationCoordinator(
         var definitionId = command.Executable.Identity.DefinitionId;
         var slot = await authority.FindAsync(definitionId, command.SlotName, cancellationToken);
         if (slot?.ActiveActivationId is not { } activationId)
-            return new(true, WorkflowActivationOutcome.AlreadyInactive, slot ?? EmptySlot(definitionId, command.SlotName));
+        {
+            var empty = slot ?? EmptySlot(definitionId, command.SlotName);
+            return await EnsureEventPublicationAsync(empty, cancellationToken) ??
+                new(true, WorkflowActivationOutcome.AlreadyInactive, empty);
+        }
 
         // What the slot serves, whether or not this host serves it (after a restart it may not), so its schedules are stopped.
         var served = await ServedOrMappedAsync(slot, activationId, command.Executable, cancellationToken);
@@ -391,6 +424,12 @@ public sealed class KernelActivationCoordinator(
         // 5. The slot stops serving: it leaves the serving set and the routes, and each schedule is stopped, then its run
         // removed. The registry keeps the workflow for the instances that run it. The deactivation stands either way: a
         // schedule that could not be stopped is reported in the result and the log.
+        RuntimeKernelEventPublication? eventPublication;
+        try { eventPublication = await ReadEventPublicationAsync(transition.Slot, CancellationToken.None); }
+        catch (Exception error) when (EventPublications is not null)
+        {
+            return EventPublicationPending(transition.Slot, error);
+        }
         string? servingFailure = null;
         try
         {
@@ -408,11 +447,14 @@ public sealed class KernelActivationCoordinator(
         }
         catch (Exception exception)
         {
-            return await FailDeactivationAsync(command, slot, served, claims, transition, exception);
+            if (eventPublication is null)
+                return await FailDeactivationAsync(command, slot, served, claims, transition, exception);
+            LogEventObserverFailure(transition.Slot, exception);
         }
 
         await RetireReferencesAsync(slot, others);
-        return new(true, WorkflowActivationOutcome.Deactivated, transition.Slot, ReplacedActivationId: activationId,
+        return await ApplyEventPublicationAsync(transition.Slot, eventPublication, CancellationToken.None) ??
+            new(true, WorkflowActivationOutcome.Deactivated, transition.Slot, ReplacedActivationId: activationId,
             Diagnostic: servingFailure, CompensationDiagnostic: servingFailure);
     }
 
@@ -517,7 +559,8 @@ public sealed class KernelActivationCoordinator(
                 // lost), stops serving here: its routes go, and its schedules are stopped and their runs removed.
                 if (serving.Find(empty.SlotId) is not null)
                     await ServeAsync(serving.Plan(empty.SlotId, null), empty.Revision, cancellationToken);
-                return new(true, WorkflowActivationOutcome.AlreadyInactive, empty);
+                return await EnsureEventPublicationAsync(empty, cancellationToken) ??
+                    new(true, WorkflowActivationOutcome.AlreadyInactive, empty);
             }
             var (current, unserved) = await CheckServingAsync(slot, cancellationToken);
             return unserved ?? new(true, current.ActiveActivationId is null ? WorkflowActivationOutcome.AlreadyInactive : WorkflowActivationOutcome.AlreadyActive, current);
@@ -582,7 +625,7 @@ public sealed class KernelActivationCoordinator(
                 {
                     (restore, var refusal) = await PlanRestoreAsync(slot, cancellationToken);
                     if (refusal is not null) return (slot, refusal);
-                    var claims = PublicationClaims(restore!.Serving, restore.Identity, activationId, restore.Source.CreatedAt);
+                    var claims = ScheduleClaims(restore!.Serving, restore.Identity, activationId, restore.Source.CreatedAt);
                     if (claims.Length > 0)
                     {
                         if (!await adoption.TryAdoptSchedulesAsync(slot, restore.Source, claims, others, cancellationToken))
@@ -601,10 +644,11 @@ public sealed class KernelActivationCoordinator(
             }
 
             // 6. Ensure this host serves it.
+            var publication = await ReadEventPublicationAsync(slot, cancellationToken);
             if (serving.Find(slot.SlotId) is { } served && served.ActivationId == activationId && serving.Registry.Contains(served.Workflow.Id))
             {
-                if (repaired) await NotifyServingAsync(slot, served.Workflow.Id);
-                return (slot, null);
+                if (repaired || publication is not null) await NotifyServingAsync(slot, served.Workflow.Id);
+                return (slot, await ApplyEventPublicationAsync(slot, publication, cancellationToken));
             }
             if (restore is null)
             {
@@ -613,15 +657,15 @@ public sealed class KernelActivationCoordinator(
             }
             if (adoption is not null && !adopted)
             {
-                var claims = PublicationClaims(restore!.Serving, restore.Identity, activationId, restore.Source.CreatedAt);
+                var claims = ScheduleClaims(restore!.Serving, restore.Identity, activationId, restore.Source.CreatedAt);
                 if (claims.Length > 0 && !await adoption.TryAdoptSchedulesAsync(slot, restore.Source, claims, [], cancellationToken))
                     return await ScheduleAdoptionMovedAsync(slot, cancellationToken);
             }
             await ServeAsync(restore!.Serving, slot.Revision, cancellationToken);
             logger?.LogInformation("Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves on this host again",
                 activationId, slot.WorkflowDefinitionId, slot.SlotName);
-            if (repaired) await NotifyServingAsync(slot, restore.Identity.ArtifactId);
-            return (slot, null);
+            if (repaired || publication is not null) await NotifyServingAsync(slot, restore.Identity.ArtifactId);
+            return (slot, await ApplyEventPublicationAsync(slot, publication, cancellationToken));
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -714,9 +758,51 @@ public sealed class KernelActivationCoordinator(
         Diagnostic: Truncate($"Activation '{slot.ActiveActivationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}' is named by the slot and does not serve: {reason}"),
         FailedStep: step);
 
+    private ValueTask<RuntimeKernelEventPublication?> ReadEventPublicationAsync(WorkflowActivationSlot slot, CancellationToken token) =>
+        EventPublications is not { } publications || slot.Revision == 0
+            ? ValueTask.FromResult<RuntimeKernelEventPublication?>(null)
+            : publications.ReadAsync(slot, token);
+
+    private async ValueTask<WorkflowActivationResult?> EnsureEventPublicationAsync(WorkflowActivationSlot slot, CancellationToken token)
+    {
+        try { return await ApplyEventPublicationAsync(slot, await ReadEventPublicationAsync(slot, token), token); }
+        catch (Exception error) when (EventPublications is not null && NotRequestedCancellation(error, token))
+        {
+            return EventPublicationPending(slot, error);
+        }
+    }
+
+    private async ValueTask<WorkflowActivationResult?> ApplyEventPublicationAsync(WorkflowActivationSlot slot,
+        RuntimeKernelEventPublication? publication, CancellationToken token)
+    {
+        if (publication is null) return null;
+        try
+        {
+            await EventPublications!.ApplyAsync(publication, token);
+            return null;
+        }
+        catch (Exception error) when (NotRequestedCancellation(error, token))
+        {
+            return EventPublicationPending(slot, error);
+        }
+    }
+
+    private WorkflowActivationResult EventPublicationPending(WorkflowActivationSlot slot, Exception error)
+    {
+        logger?.LogWarning(error, "Event publication for definition {DefinitionId} slot {SlotName} revision {Revision} awaits reconciliation",
+            slot.WorkflowDefinitionId, slot.SlotName, slot.Revision);
+        return new(false, WorkflowActivationOutcome.CommittedPending, slot,
+            Diagnostic: "The publication committed but its Event serving could not be confirmed. Retry the publication or check its serving status.",
+            FailedStep: WorkflowActivationStep.ProjectionActivation);
+    }
+
+    private void LogEventObserverFailure(WorkflowActivationSlot slot, Exception error) =>
+        logger?.LogWarning(error, "Event publication for definition {DefinitionId} slot {SlotName} committed; the publication observer did not refresh",
+            slot.WorkflowDefinitionId, slot.SlotName);
+
     // ---- the old core's activation duties --------------------------------------------------------------------------
 
-    private WorkflowTriggerBinding[] PublicationClaims(KernelServingPlan plan, WorkflowExecutableIdentity identity,
+    private WorkflowTriggerBinding[] ScheduleClaims(KernelServingPlan plan, WorkflowExecutableIdentity identity,
         string activationId, DateTimeOffset createdAt) =>
         schedules.RequiresPublicationClaims
             ? plan.State.Schedules.All.Where(schedule => schedule.Workflow == identity.ArtifactId && schedule.Definition == identity.DefinitionId)
@@ -732,7 +818,7 @@ public sealed class KernelActivationCoordinator(
             return (await triggerBindingStore.ListAllByActivationAsync(activationId, cancellationToken))
                 .Where(binding => binding.Cardinality == TriggerCardinality.ReservationOnly).ToArray();
         }
-        catch (NotSupportedException) when (!schedules.RequiresPublicationClaims)
+        catch (NotSupportedException) when (!schedules.RequiresPublicationClaims && EventPublications is null)
         {
             // Legacy stores could support switching without exposing an activation-scoped binding query.
             return [];
@@ -840,14 +926,22 @@ public sealed class KernelActivationCoordinator(
 
         if (StringComparer.Ordinal.Equals(slot.ActiveActivationId, command.ActivationId))
         {
+            RuntimeKernelEventPublication? eventPublication;
+            try { eventPublication = await ReadEventPublicationAsync(slot, CancellationToken.None); }
+            catch (Exception error) when (EventPublications is not null)
+            {
+                return EventPublicationPending(slot, error);
+            }
             try
             {
                 await ServeAsync(plan, slot.Revision, CancellationToken.None);
                 await NotifyServingAsync(slot, plan.Served!.Workflow.Id);
-                return new(true, WorkflowActivationOutcome.Activated, slot, await FindLiveReferenceAsync(slot, CancellationToken.None) ?? reference);
+                return await ApplyEventPublicationAsync(slot, eventPublication, CancellationToken.None) ??
+                    new(true, WorkflowActivationOutcome.Activated, slot, await FindLiveReferenceAsync(slot, CancellationToken.None) ?? reference);
             }
             catch (Exception exception)
             {
+                if (eventPublication is not null) return EventPublicationPending(slot, exception);
                 logger?.LogError(exception, "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves the slot but could not be served on this host",
                     command.ActivationId, definitionId, command.SlotName);
             }

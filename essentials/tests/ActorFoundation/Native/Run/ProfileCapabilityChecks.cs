@@ -329,9 +329,34 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(authoredPostgres) is { StoreSchema: 1, MessageProtocol: 20, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(authoredSqlite) is { StoreSchema: 2, MessageProtocol: 23, JournalCodec: 0 },
             "private authored events only widen the protocol-35 wire and write path on both physical providers");
+        using var startEventsPostgres = KernelDb.ForPostgresRootEventStartsQualification(options);
+        using var startEventsSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootEventStartsQualification);
+        Check(startEventsPostgres.RequiredFormat == new StoreFormat(3, 127, 1) &&
+            startEventsSqlite.RequiredFormat == startEventsPostgres.RequiredFormat &&
+            startEventsPostgres.Capabilities == (authoredPostgres.Capabilities | RootCapabilities.EventStarts) &&
+            startEventsSqlite.Capabilities == startEventsPostgres.Capabilities &&
+            startEventsPostgres.UsesRootEventStarts && startEventsSqlite.UsesRootEventStarts &&
+            !authoredPostgres.UsesRootEventStarts && !authoredSqlite.UsesRootEventStarts &&
+            RootProfiles.MissingPrerequisites(startEventsPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(startEventsPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(startEventsPostgres) is { StoreSchema: 1, MessageProtocol: 23, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(startEventsSqlite) is { StoreSchema: 2, MessageProtocol: 26, JournalCodec: 0 },
+            "private event starts add exact registration and settlement definitions without changing earlier formats");
+        using var receiptsPostgres = KernelDb.ForPostgresRootEventStartReceiptsQualification(options);
+        using var receiptsSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootEventStartReceiptsQualification);
+        Check(receiptsPostgres.RequiredFormat == new StoreFormat(3, 128, 1) && receiptsSqlite.RequiredFormat == receiptsPostgres.RequiredFormat &&
+            receiptsPostgres.Capabilities == (startEventsPostgres.Capabilities | RootCapabilities.EventStartReceipts) &&
+            receiptsSqlite.Capabilities == receiptsPostgres.Capabilities &&
+            !startEventsPostgres.UsesRootEventStartReceipts && !startEventsSqlite.UsesRootEventStartReceipts &&
+            !sharedPostgres.UsesRootEventStartReceipts && !sharedSqlite.UsesRootEventStartReceipts &&
+            RootProfiles.MissingPrerequisites(receiptsPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(receiptsPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(receiptsPostgres) is { StoreSchema: 1, MessageProtocol: 24, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(receiptsSqlite) is { StoreSchema: 2, MessageProtocol: 27, JournalCodec: 0 },
+            "bounded Event receipt retention has a distinct private profile and exact provider definitions");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
             playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
-            authoredPostgres.Capabilities;
+            authoredPostgres.Capabilities | startEventsPostgres.Capabilities | receiptsPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -366,6 +391,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
             [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
             [RootCapabilities.AuthoredEvents] = RootCapabilities.LiveEventWaits | RootCapabilities.SelfProtocol,
+            [RootCapabilities.EventStarts] = RootCapabilities.AuthoredEvents | RootCapabilities.PreparedStarts,
+            [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
             [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
