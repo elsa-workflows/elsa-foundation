@@ -26,6 +26,7 @@ namespace Kernel.Native.Run;
 // takes these paths, the S5b-3b Delete of a parked root among them; the qualification profiles carry none.
 internal static class PostgresRootParkedOperatorChecks
 {
+    private const string PlantChild = """ "Children" = '[{"Id":"fixture","Creation":1}]' """;
     private static readonly StoreFormat Composed = StoreFormat.Current with { MessageProtocol = 95 };
     private static readonly StoreFormat ComposedJobs = StoreFormat.Current with { MessageProtocol = 94 };
     private static readonly StoreFormat ComposedArrivals = StoreFormat.Current with { MessageProtocol = 93 };
@@ -170,9 +171,11 @@ internal static class PostgresRootParkedOperatorChecks
         Check(await main.SendAsync(planned, "fail-planned", "fail"), "a failing input is admitted for the planned root");
         var plannedPark = await main.DriveAsync(planned, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
         var parkPlanned = await main.ParkSelectionAsync(planned, 2);
-        await main.BypassAsync(plannedPark, """ "Children" = 'fixture' """);
+        await main.BypassAsync(plannedPark, PlantChild);
         try
         {
+            // The shipped owner loads child registries. Re-read the fixture row after its out-of-band change.
+            if (shippedSet) await main.RetakeAsync();
             Check(await main.OperateAsync(planned, "terminate-planned", Contract.Kinds.Terminate, parkPlanned, reply: true),
                 "a held Terminate with the Park selection is admitted for the root with children");
             await main.DriveAsync(planned, image => image is { Revision: 3 });
@@ -180,6 +183,7 @@ internal static class PostgresRootParkedOperatorChecks
         finally { await main.BypassAsync(plannedPark, """ "Children" = NULL """); }
         await main.SettledAsync(planned, "terminate-planned", reason: "outstanding");
         main.Answered("terminate-planned", "ParkOutstanding");
+        if (shippedSet) await main.RetakeAsync();
         // A subscription counts as outstanding too, so the Terminate is refused instead of failing its commit.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ('planned', {plannedPark.Actor.Id}, 'planned', 0)
@@ -1698,7 +1702,7 @@ internal static class PostgresRootParkedOperatorChecks
             foreach (var (column, planted, cleared) in new[]
             {
                 ("jobs", """ "Jobs" = 'fixture' """, """ "Jobs" = NULL """),
-                ("children", """ "Children" = 'fixture' """, """ "Children" = NULL """),
+                ("children", PlantChild, """ "Children" = NULL """),
                 ("custom handles", """ "CustomHandles" = 'fixture' """, """ "CustomHandles" = NULL """),
                 ("no fault", """ "Fault" = NULL """, $""" "Fault" = '{DurableKeyJson.Write(Fault)}' """)
             })
@@ -2273,7 +2277,7 @@ internal static class PostgresRootParkedOperatorChecks
             foreach (var (label, planted, cleared) in new[]
             {
                 ("jobs", """ "Jobs" = 'fixture' """, """ "Jobs" = NULL """),
-                ("children", """ "Children" = 'fixture' """, """ "Children" = NULL """),
+                ("children", PlantChild, """ "Children" = NULL """),
                 ("a parent", """ "Parent" = 'fixture' """, """ "Parent" = NULL """),
                 ("custom handles", """ "CustomHandles" = 'fixture' """, """ "CustomHandles" = NULL """)
             })
@@ -2896,7 +2900,7 @@ internal static class PostgresRootParkedOperatorChecks
             var planted = await set.DriveAsync(raceChildren, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
             Check(await set.TerminateAsync(raceChildren, "race-children-terminate", await set.ParkSelectionAsync(raceChildren, 2)),
                 "the arrivals set admits a Terminate with the Park selection for the third raced root");
-            race.Arm(planted.Actor.Id, $"""UPDATE "Instances" SET "Children" = 'fixture' WHERE "Id" = '{planted.Actor.Id}'""");
+            race.Arm(planted.Actor.Id, $"""UPDATE "Instances" SET {PlantChild} WHERE "Id" = '{planted.Actor.Id}'""");
             await set.PassUntilAsync(() => race.Fired == 3);
             Check(await set.ImageAsync(raceChildren) is { Revision: 2, Status: InstanceStatus.Faulted },
                 "the commit that met planted children rolled back, and its owner stood down");
@@ -3455,8 +3459,11 @@ internal static class PostgresRootParkedOperatorChecks
             await using var db = open();
             await using var transaction = await db.Database.BeginTransactionAsync(stop);
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_require_root_checkpoint_writer""", stop);
-            if (await db.Database.ExecuteSqlInterpolatedAsync(FormattableStringFactory.Create("UPDATE \"Instances\" SET " + change + " WHERE \"Id\" = {0}", root.Actor.Id), stop) != 1)
+            var format = change.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal);
+            if (await db.Database.ExecuteSqlInterpolatedAsync(FormattableStringFactory.Create("UPDATE \"Instances\" SET " + format + " WHERE \"Id\" = {0}", root.Actor.Id), stop) != 1)
                 throw new InvalidOperationException("The bypass did not change exactly the root row.");
+            // The child settlement trigger may have queued a deferred check for this same-revision update.
+            await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", stop);
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_require_root_checkpoint_writer""", stop);
             await transaction.CommitAsync(stop);
         }
