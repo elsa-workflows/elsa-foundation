@@ -12918,3 +12918,48 @@ Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceR
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceRetirementStore.TryRetireAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, string! actorReference, System.Func<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence!, string!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<bool>>! confirmRetired, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowScheduleAdoption
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowScheduleAdoption.TryAdoptSchedulesAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot! slot, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! source, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding!>! claims, System.Collections.Generic.IReadOnlyCollection<string!>! alsoServing, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.RuntimeKernelExecutablePin(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! Scope, string! Tenant, string! ActorReference, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, string! Issuance) -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Scope.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Tenant.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Tenant.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.ActorReference.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.ActorReference.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Executable.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Issuance.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Issuance.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.PersistenceScope! Scope, out string! Tenant, out string! ActorReference, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, out string! Issuance) -> void
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Equals(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? other) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.<Clone>$() -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!
+static Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.operator ==(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? left, Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.operator !=(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? left, Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? right) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.RuntimeKernelExecutablePinPage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>! Items, string? Next) -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Items.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Next.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Next.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>! Items, out string? Next) -> void
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Equals(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? other) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.<Clone>$() -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage!
+static Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.operator ==(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? left, Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.operator !=(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? left, Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? right) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof.Unresolved = 0 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof.BirthRetired = 1 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof.IssuanceFencedAbsent = 2 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.TryPinAsync(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>! pins, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.ReadOpenTailAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.ListOpenAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string? after, string! through, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.TryReleaseAsync(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin! pin, System.Func<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof>>! confirmAsync, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.ListPinnedExecutableArtifactIdsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>

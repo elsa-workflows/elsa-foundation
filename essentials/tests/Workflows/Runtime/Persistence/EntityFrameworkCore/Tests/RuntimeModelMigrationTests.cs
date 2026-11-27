@@ -53,7 +53,7 @@ public sealed partial class RuntimeModelMigrationTests
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
             Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership",
-                "KernelScheduleOccurrences", "KernelScheduleControls", "KernelScheduleOccurrenceRetirement"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+                "KernelScheduleOccurrences", "KernelScheduleControls", "KernelScheduleOccurrenceRetirement", "KernelExecutablePins"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
             await using (var absentTimerHistory = connection.CreateCommand())
             {
                 absentTimerHistory.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeOperationalStateEfModule.DurableTimerTableName}\" WHERE HistoryRevision != 0 OR HistoryPending != 0 OR HistoryRetired != 0";
@@ -66,7 +66,7 @@ public sealed partial class RuntimeModelMigrationTests
                 RuntimeHistoryProjectionSchema.BookmarkTable, RuntimeHistoryProjectionSchema.BookmarkCountTable, RuntimeHistoryProjectionSchema.ActivityTable,
                 RuntimeHistoryOccurrenceEntityConfiguration.OccurrenceTable, RuntimeHistoryOccurrenceEntityConfiguration.MembershipTable,
                 RuntimeHistoryOccurrenceEntityConfiguration.CounterTable, RuntimeKernelScheduleOccurrenceEfModule.TableName,
-                RuntimeKernelScheduleControlEfModule.TableName })
+                RuntimeKernelScheduleControlEfModule.TableName, RuntimeKernelExecutablePinEfModule.TableName })
             {
                 Assert.Contains(table, after.Keys);
                 await using var historyRows = connection.CreateCommand(); historyRows.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
