@@ -438,6 +438,23 @@ public sealed class ModuleAdministrationTests
     }
 
     [Fact]
+    public async Task Feed_address_changes_check_pending_overrides_in_the_management_file()
+    {
+        const string original = """{"Nuplane":{"Setup":{"Feeds":[{"Name":"candidate","DirectoryPath":"one","Trust":"Untrusted","Directory":{"Watch":false}}]}}}""";
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"), original));
+        var file = Path.Combine(host.Root, "nuplane-management.json");
+        var document = JsonNode.Parse(original)!;
+        document["Nuplane"]!["FeedResolution"] = JsonNode.Parse(
+            """{"TrustOverrides":[{"FeedName":"candidate","PackageId":"Elsa.Example","Reason":"Fixture approval"}]}""");
+        await File.WriteAllTextAsync(file, document.ToJsonString());
+
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "two"));
+        Assert.Equal(HttpStatusCode.Conflict, edit.StatusCode);
+        Assert.Equal("one", JsonNode.Parse(await File.ReadAllTextAsync(file))!["Nuplane"]!["Setup"]!["Feeds"]![0]!["DirectoryPath"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task A_feed_edit_that_changes_the_service_index_drops_the_stored_credential()
     {
         const string credential = "secrets://vault/issued-for-private-host-3735";

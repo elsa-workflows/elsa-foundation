@@ -147,7 +147,7 @@ function PackageFeedsWorkbench({
   }
 
   function updateDraftFeed(feedName: string, feedDraft: FeedDraft) {
-    onUpdateFeed(feedName, createFeedFromDraft(feedDraft));
+    onUpdateFeed(feedName, createFeedFromDraft(feedDraft, editingFeed ?? undefined));
     setEditingFeed(null);
   }
 
@@ -358,7 +358,7 @@ function FeedDialog({
               onChange={event => setFeedDraft({ ...feedDraft, trusted: event.target.checked })} />
             Trust this package source
           </label>
-          <StudioField label="Include patterns"><textarea name="includePatterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} /></StudioField>
+          <StudioField label="Include patterns" description="Enter one package pattern per line."><textarea name="includePatterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} /></StudioField>
           <label className="modules-checkbox">
             <input
               type="checkbox"
@@ -385,17 +385,19 @@ function createFeedDraft(feed?: ModuleManagementFeed): FeedDraft {
   };
 }
 
-function createFeedFromDraft(feedDraft: FeedDraft): ModuleManagementFeed {
-  const includePatterns = feedDraft.includeAllPackages
+function createFeedFromDraft(feedDraft: FeedDraft, original?: ModuleManagementFeed): ModuleManagementFeed {
+  const unchangedSelection = original !== undefined && feedDraft.includeAllPackages === original.includeAll &&
+    feedDraft.includePatterns === original.includePatterns.join("\n");
+  const includePatterns = unchangedSelection ? original.includePatterns : feedDraft.includeAllPackages
     ? ["*"]
-    : feedDraft.includePatterns.split(/\r?\n|,/).map(x => x.trim()).filter(Boolean);
+    : feedDraft.includePatterns.split(/\r?\n/).map(pattern => pattern.trim()).filter(Boolean);
 
   return {
     name: feedDraft.name.trim(),
     serviceIndex: feedDraft.serviceIndex.trim() || null,
     directoryPath: feedDraft.directoryPath.trim() || null,
     trust: feedDraft.trusted ? "Trusted" : "Untrusted",
-    includeAll: feedDraft.includeAllPackages || feedDraft.includePatterns.trim() === "*",
+    includeAll: unchangedSelection ? original.includeAll : feedDraft.includeAllPackages || feedDraft.includePatterns.trim() === "*",
     includePatterns,
     directory: feedDraft.directory
   };

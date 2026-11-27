@@ -141,7 +141,7 @@ internal static class ModuleManagementEndpoints
     private static Task<IResult> AddFeedAsync(ModuleManagementFeed feed, ManagementConfigurationStore store, CancellationToken token)
     {
         if (FeedError(feed) is { } invalid) return Task.FromResult(Error(invalid));
-        return MutateFeedsAsync(store, token, feeds =>
+        return MutateFeedsAsync(store, token, (feeds, _) =>
         {
             if (IndexOf(feeds, feed.Name) >= 0) return Results.Conflict(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."));
             feeds.Add(FeedJson(feed, feed.Name));
@@ -153,13 +153,13 @@ internal static class ModuleManagementEndpoints
         IOptionsSnapshot<FeedResolutionOptions> options, CancellationToken token)
     {
         if (FeedError(feed with { Name = name }) is { } invalid) return Task.FromResult(Error(invalid));
-        return MutateFeedsAsync(store, token, feeds =>
+        return MutateFeedsAsync(store, token, (feeds, document) =>
         {
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
             var existing = feeds[index] as JsonObject;
             if (IsCacheOnlyFeed(existing)) return ReadOnlyFeed(name);
-            if (!SameAddress(feed, existing) && HasTrustOverrides(name, options.Value)) return FeedHasTrustOverrides(name);
+            if (!SameAddress(feed, existing) && HasTrustOverrides(name, document, options)) return FeedHasTrustOverrides(name);
             feeds[index] = FeedJson(feed, name, existing);
             return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate registration changes."));
         });
@@ -167,17 +167,17 @@ internal static class ModuleManagementEndpoints
 
     private static Task<IResult> DeleteFeedAsync(string name, ManagementConfigurationStore store,
         IOptionsSnapshot<FeedResolutionOptions> options, CancellationToken token) =>
-        MutateFeedsAsync(store, token, feeds =>
+        MutateFeedsAsync(store, token, (feeds, document) =>
         {
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
             if (IsCacheOnlyFeed(feeds[index] as JsonObject)) return ReadOnlyFeed(name);
-            if (HasTrustOverrides(name, options.Value)) return FeedHasTrustOverrides(name);
+            if (HasTrustOverrides(name, document, options)) return FeedHasTrustOverrides(name);
             feeds.RemoveAt(index);
             return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate registration changes."));
         });
 
-    private static async Task<IResult> MutateFeedsAsync(ManagementConfigurationStore store, CancellationToken token, Func<JsonArray, IResult> mutate)
+    private static async Task<IResult> MutateFeedsAsync(ManagementConfigurationStore store, CancellationToken token, Func<JsonArray, JsonObject, IResult> mutate)
     {
         IResult result = Results.BadRequest();
         try
@@ -202,7 +202,7 @@ internal static class ModuleManagementEndpoints
                     return false;
                 }
 
-                result = mutate(feeds);
+                result = mutate(feeds, document);
                 if (result is not IStatusCodeHttpResult { StatusCode: >= 200 and < 300 })
                     return false;
 
@@ -213,6 +213,10 @@ internal static class ModuleManagementEndpoints
             return result;
         }
         catch (ConfigurationReadOnlyException error) { return ReadOnlyConfiguration(error.Message); }
+        catch (OptionsValidationException)
+        {
+            return ReadOnlyConfiguration("Correct the Nuplane feed resolution settings before changing feed addresses or deleting feeds.");
+        }
         catch (StudioHostingException error) { return Results.Json(new { Error = error.Message }, statusCode: StatusCodes.Status503ServiceUnavailable); }
     }
 
@@ -261,8 +265,20 @@ internal static class ModuleManagementEndpoints
         string.Equals((string?)previous?["ServiceIndex"], feed.ServiceIndex, StringComparison.Ordinal) &&
         string.Equals((string?)previous?["DirectoryPath"], feed.DirectoryPath, StringComparison.Ordinal);
 
-    private static bool HasTrustOverrides(string name, FeedResolutionOptions options) =>
-        options.TrustOverrides.Any(item => string.Equals(item.FeedName, name, StringComparison.OrdinalIgnoreCase));
+    private static bool HasTrustOverrides(string name, JsonObject document, IOptionsSnapshot<FeedResolutionOptions> options)
+    {
+        // The owned file can contain a pending override before its configuration provider reloads.
+        var overrides = (document["Nuplane"] as JsonObject)?["FeedResolution"] as JsonObject;
+        IEnumerable<JsonNode?> stored = overrides?["TrustOverrides"] switch
+        {
+            JsonArray array => array,
+            JsonObject keyed => keyed.Select(entry => entry.Value),
+            _ => []
+        };
+        return stored.OfType<JsonObject>().Any(entry =>
+                   string.Equals(entry["FeedName"]?.ToString(), name, StringComparison.OrdinalIgnoreCase)) ||
+               options.Value.TrustOverrides.Any(item => string.Equals(item.FeedName, name, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static IResult FeedHasTrustOverrides(string name) =>
         ReadOnlyConfiguration($"Remove the package trust overrides for '{name}' before changing its address or deleting it.");
