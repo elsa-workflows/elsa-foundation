@@ -618,6 +618,10 @@ internal static class PostgresShippedFormatChecks
         Require(marked[actor].Trial == lease.Epoch && marked[actor].Seen == lease.Epoch && marked[actor].Attempts == 0 &&
             marked[neighbor].Seen == lease.Epoch && marked[neighbor].Trial == 0 && marked[neighbor].Attempts == 0,
             "the landed mark charges neither actor before an owner dies");
+        var stalePosition = await store.CommitAsync(batch with { Position = lease.Position + 1, Trial = [seen], Seen = [] }, token);
+        var afterStalePosition = await ReadMarksAsync();
+        Require(!stalePosition.Landed && afterStalePosition[actor].Trial == lease.Epoch && afterStalePosition[neighbor].Trial == 0,
+            "the mark-only fence rejects a stale position without marking a new Trial");
         await db.Nodes.Where(node => node.Id == departing).ExecuteUpdateAsync(update => update.SetProperty(node => node.LeaseUntil, 0), token);
         var successor = await store.TakeAsync(partition, "trial-mark-successor", span, token)
             ?? throw new InvalidOperationException("The trial fixture could not replace the expired owner.");

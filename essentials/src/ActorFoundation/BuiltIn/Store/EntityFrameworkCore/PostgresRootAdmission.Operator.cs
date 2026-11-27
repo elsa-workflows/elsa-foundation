@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Kernel.Durable;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NpgsqlTypes;
@@ -383,8 +384,16 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
     }
 
-    internal static async Task<IReadOnlyList<EfStore.WorkerRoot>> PinRootMarkBindingsAsync(KernelDb db, int? partition,
-        string[] actors, string[] references, CancellationToken token)
+    internal sealed record CheckedMarkFence(long At, uint Marker, uint Namespace, uint Messages);
+
+    private sealed record MarkSourceRead(NpgsqlBatchCommand Bindings, NpgsqlBatchCommand? Fence)
+    {
+        internal List<EfStore.WorkerRoot> Roots { get; } = [];
+        internal CheckedMarkFence? Checked { get; set; }
+    }
+
+    internal static async Task<(IReadOnlyList<EfStore.WorkerRoot> Roots, CheckedMarkFence? Checked)> PinRootMarkBindingsAsync(KernelDb db,
+        int? partition, string[] actors, string[] references, IReadOnlyList<PartitionFence>? checkedFences, CancellationToken token)
     {
         var bindings = new NpgsqlBatchCommand("""
             SELECT marker.oid, marker.relnamespace, b."Tenant", b."Reference", b."Actor", b."Partition", b."Fingerprint"
@@ -399,20 +408,48 @@ internal sealed partial class PostgresRootAdmission
         bindings.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = (object?)partition ?? DBNull.Value });
         bindings.Parameters.Add(new NpgsqlParameter<string[]> { TypedValue = actors });
         bindings.Parameters.Add(new NpgsqlParameter<string[]> { TypedValue = references });
-        var result = new List<EfStore.WorkerRoot>();
+        var read = new MarkSourceRead(bindings, checkedFences is null ? null : LockMarkFences(checkedFences));
         try
         {
-            await PinRootParkSourcesAsync(db, loadIssuer: false, pinSequencedJournal: false, token, bindings, result);
+            await PinRootParkSourcesAsync(db, loadIssuer: false, pinSequencedJournal: false, token, read);
         }
         catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
         {
             throw new StoreFormatException("The qualified root store schema is unreadable.", error);
         }
-        return result;
+        return (read.Roots, read.Checked);
+    }
+
+    // In checked mode an otherwise unchanged fence needs only the ordered row locks. All mark DML
+    // is sent after the checked result and runs while these exact epoch/position rows remain locked.
+    private static NpgsqlBatchCommand LockMarkFences(IReadOnlyList<PartitionFence> fences)
+    {
+        var command = new NpgsqlBatchCommand("""
+            WITH marker AS MATERIALIZED (
+                SELECT oid, relnamespace FROM pg_catalog.pg_class
+                WHERE oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+            ), locked AS MATERIALIZED (
+                SELECT p."Id"
+                FROM unnest($1::integer[], $2::bigint[], $3::bigint[]) AS wanted(id, epoch, position)
+                JOIN "Partitions" p ON p."Id" = wanted.id AND p."Epoch" = wanted.epoch AND p."Position" = wanted.position
+                JOIN pg_catalog.pg_class source ON source.oid = p.tableoid AND source.relkind = 'r'
+                JOIN marker ON marker.relnamespace = source.relnamespace
+                ORDER BY p."Id" FOR UPDATE OF p
+            )
+            SELECT marker.oid, marker.relnamespace, messages.oid,
+                CASE WHEN (SELECT count(*) FROM locked) = cardinality($1)
+                    THEN (extract(epoch from clock_timestamp()) * 1000)::bigint END
+            FROM marker JOIN pg_catalog.pg_class messages ON messages.oid = pg_catalog.to_regclass('"Messages"')
+                AND messages.relnamespace = marker.relnamespace AND messages.relkind = 'r'
+            """);
+        command.Parameters.Add(new NpgsqlParameter<int[]> { TypedValue = fences.Select(fence => fence.Partition).ToArray() });
+        command.Parameters.Add(new NpgsqlParameter<long[]> { TypedValue = fences.Select(fence => fence.Epoch).ToArray() });
+        command.Parameters.Add(new NpgsqlParameter<long[]> { TypedValue = fences.Select(fence => fence.Position).ToArray() });
+        return command;
     }
 
     private static Task<PinnedRootSource> PinRootParkSourcesAsync(KernelDb db, bool loadIssuer, bool pinSequencedJournal,
-        CancellationToken token, NpgsqlBatchCommand? markBindings = null, List<EfStore.WorkerRoot>? marks = null)
+        CancellationToken token, MarkSourceRead? markRead = null)
     {
         // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
         var receipts = db.UsesRootOperatorProtocol;
@@ -457,7 +494,11 @@ internal sealed partial class PostgresRootAdmission
             commands.Add(new("""LOCK TABLE "Journal", "FoundationSequencedJournal" IN ROW EXCLUSIVE MODE"""));
         commands.Add(validate);
         if (loadIssuer) commands.Add(new("""SELECT issuer."Key", issuer."Partitions", marker.oid """ + RootIssuerSource));
-        if (markBindings is not null) commands.Add(markBindings);
+        if (markRead is not null)
+        {
+            commands.Add(markRead.Bindings);
+            if (markRead.Fence is { } fence) commands.Add(fence);
+        }
         return ReadGuardedAdmissionAsync<PinnedRootSource>(db, commands, async (reader, marker, ct) =>
         {
             if (!await reader.ReadAsync(ct) || reader.GetFieldValue<uint>(1) != marker)
@@ -470,7 +511,7 @@ internal sealed partial class PostgresRootAdmission
                     : "Park requires the source tables in the marker schema.");
             if (pinSequencedJournal && !reader.GetBoolean(3))
                 throw new StoreFormatException("The installed sequenced journal projection is incomplete.");
-            if (markBindings is not null)
+            if (markRead is not null)
             {
                 if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct))
                     throw new StoreFormatException("The qualified root mark source is unreadable.");
@@ -479,9 +520,16 @@ internal sealed partial class PostgresRootAdmission
                     if (reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema)
                         throw new StoreFormatException("The qualified root mark source changed its physical schema.");
                     if (!reader.IsDBNull(2))
-                        marks!.Add(new(reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.GetString(6)));
+                        markRead.Roots.Add(new(reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.GetString(6)));
                 }
                 while (await reader.ReadAsync(ct));
+                if (markRead.Fence is not null)
+                {
+                    if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct) ||
+                        reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema)
+                        throw new StoreFormatException("The qualified root mark fence changed its physical schema.");
+                    if (!reader.IsDBNull(3)) markRead.Checked = new(reader.GetInt64(3), marker, schema, reader.GetFieldValue<uint>(2));
+                }
             }
             if (!loadIssuer) return new(marker, schema, null);
             if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct))

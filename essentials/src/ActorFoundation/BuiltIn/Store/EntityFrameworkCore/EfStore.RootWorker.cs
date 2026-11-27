@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -262,7 +263,8 @@ public sealed partial class EfStore
             };
     }
 
-    private sealed record ScopedMarks(WorkerRoot Root, long Epoch, IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial) : QualifiedRootCheckpoint(0)
+    private sealed record ScopedMarks(WorkerRoot Root, long Epoch, IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial,
+        PostgresRootAdmission.CheckedMarkFence? CheckedFence) : QualifiedRootCheckpoint(0)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -282,15 +284,34 @@ public sealed partial class EfStore
                     var ids = group.Select(key => scope is RootJobScope or RootTimedJobScope ? StoredJobId(key) : key.Id).ToArray();
                     var count = db.UsesSqliteRootRuntime
                         ? await MarkSqliteRootAsync(db, Root, Epoch, trial, scope, ids, cancellationToken)
-                        : await db.Database.ExecuteSqlInterpolatedAsync($"""
-                            UPDATE "Messages" SET "Seen" = {Epoch}, "Trial" = CASE WHEN {trial} THEN {Epoch} ELSE "Trial" END
-                            WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {scope}
-                                AND "Id" = ANY({ids}) AND "EventMatch" IS NULL AND NOT "Done"
-                            """, cancellationToken);
+                        : await MarkPostgresRootAsync(db, trial, scope, ids, cancellationToken);
                     if (count != ids.Length) return false;
                 }
                 return true;
             }
+        }
+
+        private Task<int> MarkPostgresRootAsync(KernelDb db, bool trial, long scope, string[] ids, CancellationToken token)
+        {
+            FormattableString mark = $"""
+                UPDATE "Messages" SET "Seen" = {Epoch}, "Trial" = CASE WHEN {trial} THEN {Epoch} ELSE "Trial" END
+                WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {scope}
+                    AND "Id" = ANY({ids}) AND "EventMatch" IS NULL AND NOT "Done"
+                """;
+            if (CheckedFence is { } source)
+            {
+                // A name can resolve to a replacement schema even with the original relations locked.
+                // The actual writes must use the inbox anchored to the physical checked fence.
+                var guarded = mark.Format + "\n" + """
+                    AND tableoid::bigint = {7} AND EXISTS (
+                        SELECT 1 FROM "KernelStoreVersions" v JOIN pg_catalog.pg_class c ON c.oid = v.tableoid
+                        WHERE v."Id" = {8} AND c.oid::bigint = {9} AND c.relnamespace::bigint = {10}
+                    )
+                    """;
+                mark = FormattableStringFactory.Create(guarded,
+                    [.. mark.GetArguments(), (long)source.Messages, StoreVersionEntity.MarkerId, (long)source.Marker, (long)source.Namespace]);
+            }
+            return db.Database.ExecuteSqlInterpolatedAsync(mark, token);
         }
     }
 
@@ -385,16 +406,21 @@ public sealed partial class EfStore
 
     private sealed record PostgresMarkPreparation(EfStore Store, WorkerRoots Scope, CommitBatch Batch) : QualifiedRootCheckpoint(0)
     {
-        internal async Task<RootCheckpoints> PrepareAsync(KernelDb db, CancellationToken token)
+        internal async Task<(RootCheckpoints Checkpoints, bool FenceChecked, long? FenceTime)> PrepareAsync(KernelDb db, CancellationToken token)
         {
             if (!db.UsesRootParkOpening || db.Database.CurrentTransaction is null)
                 throw new StoreFormatException("The PostgreSQL mark plan requires the pinned owned transaction.");
             var inputs = Batch.Seen.Concat(Batch.Trial).Select(InputBinding).ToLookup(input => input.Creator, input => input.Name);
-            var matches = await PostgresRootAdmission.PinRootMarkBindingsAsync(db, Scope.FixedPartition,
-                inputs[true].Distinct(StringComparer.Ordinal).ToArray(), inputs[false].Distinct(StringComparer.Ordinal).ToArray(), token);
+            var fences = Batch.Fenced;
+            var checkFence = !Store.FenceInBatch && !Store.Unfenced && !Store.FenceIgnoresCount && !Store.UnorderedFenceLocks &&
+                Batch.DueBacklog is null;
+            var (matches, checkedFence) = await PostgresRootAdmission.PinRootMarkBindingsAsync(db, Scope.FixedPartition,
+                inputs[true].Distinct(StringComparer.Ordinal).ToArray(), inputs[false].Distinct(StringComparer.Ordinal).ToArray(),
+                checkFence ? fences : null, token);
             if (matches.Any(root => !Scope.Includes(root.Partition) || new InstanceRef(root.Actor).Partition != root.Partition)) throw RootShape();
             var roots = new WorkerRoots(Scope.FixedPartition, matches);
-            return Store.WorkerCheckpoints(PrepareWorkerMarks(roots, Batch, Batch.Fenced.ToDictionary(fence => fence.Partition)), [], []);
+            var checkpoints = Store.WorkerCheckpoints(PrepareWorkerMarks(roots, Batch, fences.ToDictionary(fence => fence.Partition), checkedFence), [], []);
+            return (checkpoints, checkFence, checkedFence?.At);
         }
 
         internal override Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken) =>
@@ -497,7 +523,7 @@ public sealed partial class EfStore
     }
 
     private static List<QualifiedRootCheckpoint> PrepareWorkerMarks(WorkerRoots roots, CommitBatch batch,
-        IReadOnlyDictionary<int, PartitionFence> byPartition)
+        IReadOnlyDictionary<int, PartitionFence> byPartition, PostgresRootAdmission.CheckedMarkFence? checkedFence = null)
     {
         var seen = batch.Seen.ToLookup(roots.ForInput);
         var trials = batch.Trial.ToLookup(roots.ForInput);
@@ -505,7 +531,7 @@ public sealed partial class EfStore
         foreach (var root in seen.Select(g => g.Key).Union(trials.Select(g => g.Key)))
         {
             if (!byPartition.TryGetValue(root.Partition, out var fence)) throw RootShape();
-            commands.Add(new ScopedMarks(root, fence.Epoch, seen[root].ToArray(), trials[root].ToArray()));
+            commands.Add(new ScopedMarks(root, fence.Epoch, seen[root].ToArray(), trials[root].ToArray(), checkedFence));
         }
         return commands;
     }
