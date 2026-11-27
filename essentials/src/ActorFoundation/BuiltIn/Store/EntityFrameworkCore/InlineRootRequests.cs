@@ -36,8 +36,8 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     {
         ArgumentNullException.ThrowIfNull(additionalScope);
         ArgumentNullException.ThrowIfNull(allowAdditionalWriteFreeCompletion);
-        if (additionalScope.Tenant == scope.Tenant)
-            throw new ArgumentException("The additional inline scope must name a distinct tenant.", nameof(additionalScope));
+        if (!additionalScope.IsHostIsolated || additionalScope.Tenant == scope.Tenant)
+            throw new ArgumentException("The additional inline scope must name a distinct host-isolated tenant.", nameof(additionalScope));
         _additionalScope = additionalScope;
         _allowAdditionalWriteFreeCompletion = allowAdditionalWriteFreeCompletion;
     }
