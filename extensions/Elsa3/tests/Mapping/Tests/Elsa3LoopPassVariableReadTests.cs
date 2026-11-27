@@ -82,7 +82,7 @@ public sealed class Elsa3LoopPassVariableReadTests
     }
 
     [Fact]
-    public async Task A_variable_declared_inside_the_body_takes_precedence()
+    public async Task A_variable_of_a_container_inside_the_body_comes_first_and_keeps_todays_handling()
     {
         var inner = Sequence("inner", Read("getVariable('CurrentValue')"));
         inner.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-inner-value", name = "CurrentValue", typeName = "String" } });
@@ -122,6 +122,63 @@ public sealed class Elsa3LoopPassVariableReadTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         AssertReads(result, VariableReference.WorkflowScopeId, "acme-lower");
+    }
+
+    [Fact]
+    public async Task A_read_after_an_inner_loop_that_declares_the_name_is_refused()
+    {
+        // Elsa 3's inner For overwrites the outer pass's CurrentValue, so the read after it saw the inner index.
+        var body = Sequence("body", For("inner", Activity("inner-node", "Elsa.WriteLine", ("text", Literal("acme")))), Read("getVariable('CurrentValue')"));
+
+        var result = await ConvertAsync(Sequence("root", ForEach("loop", body)));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'inner'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_enclosing_containers_variable_hides_the_pass_of_a_body_that_is_no_container()
+    {
+        // The pass's variable lands in the enclosing Sequence after that Sequence's own CurrentValue, which Elsa 3 finds
+        // first: today's handling applies, and the read never binds to the loop.
+        var root = Sequence("root", ForEach("loop", Read("getVariable('CurrentValue')")));
+        root.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-root-value", name = "CurrentValue", typeName = "String" } });
+
+        var result = await ConvertAsync(root);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.DanglingReference && diagnostic.Message.Contains("'CurrentValue'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_read_that_depends_on_an_earlier_sibling_loop_is_refused()
+    {
+        // When 'first' ran before, 'second' overwrites first's CurrentValue in 'root', and the body's own CurrentValue hides
+        // it; otherwise the pass's variable is the body's and wins. Elsa 3's result depended on the run.
+        var first = ForEach("first", Activity("first-node", "Elsa.WriteLine", ("text", Literal("acme"))));
+        var body = Sequence("body", Read("getVariable('CurrentValue')"));
+        body.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-body-value", name = "CurrentValue", typeName = "String" } });
+
+        var result = await ConvertAsync(Sequence("root", first, ForEach("second", body)));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'first'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_generated_accessor_registered_after_a_body_variable_of_another_case_reads_the_pass()
+    {
+        // Elsa 3 registered the body's currentValue, then the per-pass CurrentValue on the same scope, which replaced it.
+        var body = Sequence("body", Read("getCurrentValue()"));
+        body.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-lower", name = "currentValue", typeName = "String" } });
+
+        var result = await ConvertAsync(Sequence("root", ForEach("loop", body)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        AssertReadsLoop(result, "loop", "currentItem");
     }
 
     [Fact]
