@@ -313,6 +313,11 @@ public sealed partial class EfStore
             yield return Table(RootScheduleInventory.Table, RootScheduleInventory.Columns(sqlite: true));
             yield return Index(RootScheduleInventory.DefinitionIndex, RootScheduleInventory.Table, RootScheduleInventory.IndexedColumns);
         }
+        if (db.UsesRootScheduleLineage)
+        {
+            yield return Table(RootScheduleLineage.Table, RootScheduleLineage.Columns(sqlite: true));
+            yield return Index(RootScheduleLineage.CohortIndex, RootScheduleLineage.Table, RootScheduleLineage.IndexedColumns);
+        }
         yield return Table("FoundationRootReceipts", """
             "Tenant" TEXT NOT NULL,
             "Operation" TEXT NOT NULL,

@@ -47,6 +47,11 @@ internal sealed partial class SqliteRootAdmission
                 INSERT INTO "FoundationRootBirths" ("Tenant", "Reference", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
                 VALUES ({tenant}, {birth.Reference}, {creator.Target.Id}, {creator.Target.Partition}, 1, {creator.InboxKey.Id}, {birth.Fingerprint})
                 """, ct));
+            if (db.UsesRootScheduleLineage)
+                RequireOne(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference")
+                    VALUES ({tenant}, {birth.Reference}, {birth.Reference})
+                    """, ct));
             await EnqueueAsync(db, creator.Target.Id, creator.Target.Partition, creator.InboxKey.Id, 0, creator.Kind, header,
                 payload, due: null, keepUntil: null, replyTo: null, token: ct);
             return new(Contract.AdmissionOutcome.Accepted, reference);

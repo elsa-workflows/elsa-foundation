@@ -501,6 +501,9 @@ internal sealed partial class PostgresRootAdmission
         if (childLedger)
             lockTables = lockTables.Replace("IN ACCESS SHARE MODE", ", \"FoundationRootChildCascades\" IN ACCESS SHARE MODE", StringComparison.Ordinal);
 
+        if (db.UsesRootScheduleLineage)
+            lockTables = lockTables.Replace("IN ACCESS SHARE MODE", ", \"FoundationScheduleLineage\" IN ACCESS SHARE MODE", StringComparison.Ordinal);
+
         var pin = new NpgsqlBatchCommand("""
             SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident(ns.nspname) || ',pg_temp', true),
                 c.oid, c.relnamespace
@@ -512,6 +515,7 @@ internal sealed partial class PostgresRootAdmission
         pin.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
         var journalReady = pinSequencedJournal ? ", " + EfStore.PostgresSequencedJournalReady("marker.oid") +
             (db.UsesRootPlayback ? " AND " + EfStore.PostgresPlaybackReady("marker.oid", db.UsesRootPlaybackDescendants) : "") : "";
+        var lineageReady = db.UsesRootScheduleLineage ? " AND " + RootScheduleLineage.PostgresReady("marker.oid") : "";
         var validate = new NpgsqlBatchCommand($$"""
             SELECT marker.oid, marker.relnamespace, (
                 SELECT count(*) = $1
@@ -522,7 +526,7 @@ internal sealed partial class PostgresRootAdmission
                 JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name) AND c.relkind = 'r'
                     AND c.relnamespace = marker.relnamespace
                 WHERE ($2 OR required.name <> '"FoundationOperatorReceipts"')
-                    AND ($3 OR required.name <> '"FoundationRootChildCascades"')){{journalReady}}
+                    AND ($3 OR required.name <> '"FoundationRootChildCascades"')){{lineageReady}}{{journalReady}}
             FROM pg_catalog.pg_class marker WHERE marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
             """);
         validate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = (receipts ? 14 : 13) + (childLedger ? 1 : 0) });

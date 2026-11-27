@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data.Common;
 using Elsa.ActorFoundation.Hosting;
 using Kernel.Durable;
@@ -14,7 +15,8 @@ namespace Kernel.Native.Run;
 
 internal static class RootScheduleInventoryChecks
 {
-    internal static async Task<int> RunAsync(bool postgres, bool settleOccurrences = false, bool fenceInBatch = true)
+    internal static async Task<int> RunAsync(bool postgres, bool settleOccurrences = false, bool fenceInBatch = true,
+        bool trackLineage = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var token = timeout.Token;
@@ -33,9 +35,11 @@ internal static class RootScheduleInventoryChecks
                     DataSource = Path.Combine(directory!.FullName, "schedules.db"), ForeignKeys = true, Pooling = false, DefaultTimeout = 1
                 }.ConnectionString);
 
-            var format = settleOccurrences ? StoreFormat.RootScheduleSettlementQualification : StoreFormat.RootScheduleInventoryQualification;
+            var format = trackLineage ? StoreFormat.RootScheduleLineageQualification
+                : settleOccurrences ? StoreFormat.RootScheduleSettlementQualification : StoreFormat.RootScheduleInventoryQualification;
             var definitions = new SqliteAdmissionDefinitions();
             KernelDb Open() => !postgres ? KernelDb.ForSqliteRootRuntime(options.Options, definitions, qualificationFormat: format)
+                : trackLineage ? KernelDb.ForPostgresRootScheduleLineageQualification(options.Options)
                 : settleOccurrences ? KernelDb.ForPostgresRootScheduleSettlementQualification(options.Options)
                 : KernelDb.ForPostgresRootScheduleInventoryQualification(options.Options);
             await using var db = Open();
@@ -249,6 +253,28 @@ internal static class RootScheduleInventoryChecks
         var retiredReplay = await AdmitAsync(tenant, nextOccurrence, pinned);
         Require(retiredReplay is { Outcome: Contract.AdmissionOutcome.Duplicate } && retiredReplay.Actor == nextActor &&
             await db.Messages.CountAsync(token) == messageCount, "the retired birth replays without recreating its inbox");
+        if (db.UsesRootScheduleLineage)
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                DROP INDEX "IX_FoundationScheduleLineage_Cohort";
+                CREATE INDEX "IX_FoundationScheduleLineage_Cohort"
+                    ON "FoundationScheduleLineage" ("Reference", "Retired");
+                """, token);
+            try
+            {
+                await RetiredAsync(nextOccurrence, nextActor.Id);
+                throw new InvalidOperationException("Cohort retirement accepted an incompatible live-member index.");
+            }
+            catch (StoreFormatException) { Console.WriteLine("ok cohort retirement refuses an incompatible live-member index"); }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    DROP INDEX "IX_FoundationScheduleLineage_Cohort";
+                    CREATE INDEX "IX_FoundationScheduleLineage_Cohort"
+                        ON "FoundationScheduleLineage" ("Tenant", "RootReference", "Retired");
+                    """, token);
+            }
+        }
 
         Task<Contract.Admission> AdmitAsync(string tenantId, RootScheduleOccurrence item, StartSpec spec) => postgres
             ? pg.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token)
@@ -273,7 +299,7 @@ internal static class RootScheduleInventoryChecks
         Contract.ActorRef reference, Func<Task<bool>> isRetired, CancellationToken token)
     {
         const string node = "schedule-retirement";
-        var actor = new FinishingActor(type);
+        var actor = new LifecycleActor(type, db.UsesRootScheduleLineage ? reference : null);
         var store = new EfStore(open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
         await store.EnableRootSelfSendsAsync(token);
         await store.EnableRootJobsAsync(token);
@@ -292,7 +318,7 @@ internal static class RootScheduleInventoryChecks
         else
         {
             var path = db.Database.GetDbConnection().DataSource;
-            var format = StoreFormat.RootScheduleSettlementQualification;
+            var format = db.RequiredFormat;
             var requests = SqliteEmbeddedHosting.CreateRequests(path, node, type, qualificationFormat: format);
             ingress = await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(path, type, Authorize, requests, token);
             reads = SqliteEmbeddedHosting.CreateFoundationReads(path, qualificationFormat: format);
@@ -306,21 +332,71 @@ internal static class RootScheduleInventoryChecks
         Require(await host.ActivateAsync(0, token) == worker && worker.Fences.Count == partitions,
             $"the fixture holds its partition fences ({(fenceInBatch ? "in-batch" : "checked")})");
         var scope = EmbeddedTenant.Bind(tenant);
-        Contract.ActorView? completed;
-        do
-        {
-            await DriveAsync();
-            completed = await reads.GetAsync(scope, reference, token);
-        } while (completed?.Header.Status != Contract.ActorStatus.Finished);
+        var completed = await WaitForAsync(reference, Contract.ActorStatus.Finished);
         Require(!await isRetired(), "a finished scheduled workflow still owns its executable pin");
-        var command = Json.Write(new Contract.OperatorCommand(completed.Selection!, ExpectedTarget: reference));
-        Require((await ingress.SendAsync(scope, new Contract.Target.Ref(reference), "retire-occurrence", Contract.Kinds.Delete,
-            command, cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the owner admits selected scheduled workflow retirement");
-        while (!await isRetired())
+        if (!db.UsesRootScheduleLineage)
         {
-            await DriveAsync();
+            await RetireAsync(reference, completed);
+            Require(await isRetired(), "the fenced owner committed a durable exact retirement proof");
+            return;
         }
-        Require(await isRetired(), "the fenced owner committed a durable exact retirement proof");
+
+        var child = actor.Descendants[reference];
+        // Hold back just this exact creator to distinguish a queued child from a persisted child checkpoint.
+        Require(await ChangeChildDueAsync(child, long.MaxValue - 1) == 1 &&
+            await reads.GetAsync(scope, child, token) is null && await IsActiveMemberAsync(child),
+            "a committed detached creator belongs to the cohort before it has a checkpoint");
+        await RetireAsync(reference, completed);
+        Require(!await isRetired() && await IsActiveMemberAsync(child),
+            "root retirement leaves a queued detached child holding the occurrence");
+        Require(await ChangeChildDueAsync(child, 0) == 1, "the exact queued child is released to its owner");
+        await WaitForAsync(child, Contract.ActorStatus.Running);
+        Require((await ingress.SendAsync(scope, new Contract.Target.Ref(child), "dispatch-nested", LifecycleActor.DispatchNested,
+            cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "a detached child accepts a new turn after root retirement");
+        var completedChild = await WaitForAsync(child, Contract.ActorStatus.Finished);
+        var grandchild = actor.Descendants[child];
+        Require(await IsActiveMemberAsync(grandchild), "a nested detached child inherits the original retired root's cohort");
+        await RetireAsync(child, completedChild);
+        Require(!await isRetired() && await IsActiveMemberAsync(grandchild),
+            "retiring the detached child leaves its nested descendant holding the occurrence");
+        await WaitForAsync(grandchild, Contract.ActorStatus.Running);
+        Require((await ingress.SendAsync(scope, new Contract.Target.Ref(grandchild), "complete-nested", LifecycleActor.Complete,
+            cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the nested descendant accepts completion");
+        var completedGrandchild = await WaitForAsync(grandchild, Contract.ActorStatus.Finished);
+        Require(!await isRetired(), "a finished descendant still belongs to the active cohort before its tombstone");
+        await RetireAsync(grandchild, completedGrandchild);
+        Require(await isRetired(), "retiring the last exact descendant releases the occurrence while unrelated cohorts remain");
+
+        async Task<Contract.ActorView> WaitForAsync(Contract.ActorRef target, Contract.ActorStatus status)
+        {
+            while (true)
+            {
+                await DriveAsync();
+                if (await reads.GetAsync(scope, target, token) is { } view && view.Header.Status == status) return view;
+            }
+        }
+
+        async Task RetireAsync(Contract.ActorRef target, Contract.ActorView view)
+        {
+            var command = Json.Write(new Contract.OperatorCommand(view.Selection!, ExpectedTarget: target));
+            var retired = await ingress.SendAsync(scope, new Contract.Target.Ref(target), "retire-occurrence/" + target.Id,
+                Contract.Kinds.Delete, command, cancellationToken: token);
+            Require(retired.Outcome == Contract.AdmissionOutcome.Accepted, $"the owner admits selected scheduled workflow retirement ({retired.Outcome})");
+            do { await DriveAsync(); } while (await reads.GetAsync(scope, target, token) is not null);
+        }
+
+        Task<int> ChangeChildDueAsync(Contract.ActorRef target, long due) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Messages" AS pending SET "Due" = {due}
+            WHERE pending."InboxScope" = 0 AND EXISTS (
+                SELECT 1 FROM "FoundationRootBirths" birth
+                WHERE birth."Reference" = {target.Id} AND birth."Tenant" = {tenant}
+                    AND birth."Creator" = pending."Id" AND birth."Actor" = pending."Target" AND birth."Partition" = pending."Partition")
+            """, token);
+
+        Task<bool> IsActiveMemberAsync(Contract.ActorRef target) => db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "FoundationScheduleLineage" WHERE "Tenant" = {tenant}
+                AND "Reference" = {target.Id} AND "RootReference" = {reference.Id} AND NOT "Retired") AS "Value"
+            """).SingleAsync(token);
 
         async Task DriveAsync()
         {
@@ -331,20 +407,32 @@ internal static class RootScheduleInventoryChecks
         }
 
         bool Authorize(Contract.BoundScope bound, Contract.ActorRef target, string kind) =>
-            bound.Tenant == tenant && target == reference && kind == Contract.Kinds.Delete;
+            bound.Tenant == tenant && (target == reference || actor.Descendants.Values.Contains(target)) && kind == Contract.Kinds.Delete;
     }
 
-    private sealed class FinishingActor(string type) : Contract.IActorType
+    private sealed class LifecycleActor(string type, Contract.ActorRef? lineageRoot) : Contract.IActorType
     {
+        private const string Child = "detached child";
+        private const string Grandchild = "detached grandchild";
+        internal const string DispatchNested = "fixture.dispatch-nested";
+        internal const string Complete = "fixture.complete";
+        internal ConcurrentDictionary<Contract.ActorRef, Contract.ActorRef> Descendants { get; } = new();
         public string Type => type;
         public bool Withholds(Contract.ActorHeader header) => false;
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
-            if (turn.Header.Type == type)
+            var kind = turn.Inbox[0].Kind;
+            turn.State = "{}";
+            if (turn.Header.Ref == lineageRoot)
+                Descendants[turn.Header.Ref] = turn.Start(new(type, Child), detached: true);
+            else if (turn.Header.TypeData == Child)
             {
-                turn.State = "{}";
-                turn.End(Contract.ActorStatus.Finished);
+                if (kind != DispatchNested) return ValueTask.CompletedTask;
+                Descendants[turn.Header.Ref] = turn.Start(new(type, Grandchild), detached: true);
             }
+            else if (turn.Header.TypeData == Grandchild && kind != Complete)
+                return ValueTask.CompletedTask;
+            turn.End(Contract.ActorStatus.Finished);
             return ValueTask.CompletedTask;
         }
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
