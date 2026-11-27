@@ -43,19 +43,21 @@ public interface IRuntimeKernelScheduleOccurrenceStore
     {
         if (attemptDeadline != occurrence.AcceptBefore)
             throw new NotSupportedException("The Runtime provider does not support renewed schedule attempts.");
-        if (await TryAcceptAsync(occurrence, readScheduleClock, cancellationToken)) return RuntimeKernelScheduleAttemptOutcome.Accepted;
-        var now = await readScheduleClock(cancellationToken);
-        return now < occurrence.Due || now >= attemptDeadline
-            ? RuntimeKernelScheduleAttemptOutcome.Retry
-            : RuntimeKernelScheduleAttemptOutcome.Refused;
+        // The predecessor contract cannot distinguish an expired attempt from displaced authority.
+        return await TryAcceptAsync(occurrence, readScheduleClock, cancellationToken)
+            ? RuntimeKernelScheduleAttemptOutcome.Accepted
+            : RuntimeKernelScheduleAttemptOutcome.Retry;
     }
 }
 
 /// <summary>Whether a managed schedule attempt resolved its immutable occurrence.</summary>
 public enum RuntimeKernelScheduleAttemptOutcome
 {
+    /// <summary>The window expired or the provider could not settle the original occurrence.</summary>
     Retry,
+    /// <summary>The original occurrence committed or replayed its exact receipt.</summary>
     Accepted,
+    /// <summary>The original occurrence no longer owns its selected publication.</summary>
     Refused
 }
 
