@@ -62,6 +62,8 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
             services.TryAddScoped<KernelParkRecovery>();
             services.AddApiCapabilitySource<KernelParkRecoveryCapabilitySource>();
         }
+        ReplaceService(typeof(IWorkflowExecutableRetentionReader), typeof(LegacyWorkflowExecutableRetentionReader),
+            typeof(KernelWorkflowExecutableRetentionReader));
 
         void ReplaceService(Type service, Type runtimeImplementation, Type kernelImplementation)
         {
