@@ -80,5 +80,29 @@ public interface IActorTerminalOutputReads
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Optional bounded access to the retained, actor-local sequence of committed journal entries.</summary>
+public interface IActorSequencedJournalReads
+{
+    /// <summary>Whether this configured reader has the sequenced journal installed.</summary>
+    bool SupportsSequencedJournal { get; }
+
+    /// <summary>
+    /// Reads after a sequence through an optional frozen upper sequence. Null denotes a missing actor.
+    /// The reader samples the retained page and sequence bounds in one snapshot.
+    /// </summary>
+    ValueTask<ActorSequencedJournalPage?> ReadSequencedJournalAsync(BoundScope scope, ActorRef actor, long afterSequence,
+        long? upperSequence, int limit, CancellationToken cancellationToken = default);
+}
+
+/// <summary>An actor-local position. A null entry marks a retained position whose content is unavailable.</summary>
+public sealed record SequencedJournalEntry(long Sequence, long Revision, int CommitOrdinal, string? Entry, long RecordedAt);
+
+/// <summary>
+/// One bounded page. Sequences, including the frozen upper bound, belong only to this actor.
+/// Times are Unix milliseconds. An empty sequence has a zero retained lower bound.
+/// </summary>
+public sealed record ActorSequencedJournalPage(IReadOnlyList<SequencedJournalEntry> Items, long RetainedFromSequence,
+    long UpperSequence, long ScannedThroughSequence, long? LastRecordedAt, bool CapturedFromStart, long AsOf);
+
 /// <summary>The authored names as JSON, the complete UTF-8 JSON output object when requested and retained, and its commit time.</summary>
 public sealed record ActorTerminalOutput(long CapturedAt, string Names, bool Omitted, byte[]? Values);
