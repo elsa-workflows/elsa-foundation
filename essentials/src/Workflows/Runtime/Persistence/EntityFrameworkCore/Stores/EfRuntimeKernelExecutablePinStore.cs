@@ -106,16 +106,10 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
     {
         var scope = Bind();
-        var through = await ReadOpenTailAsync(scope, cancellationToken);
         var roots = new HashSet<string>(StringComparer.Ordinal);
-        if (through is null) return roots;
-        string? after = null;
-        do
-        {
-            var page = await ListOpenAsync(scope, after, through, RuntimeStorePageRequest.MaximumLimit, cancellationToken);
-            foreach (var pin in page.Items) roots.Add(pin.Executable.ArtifactId);
-            after = page.Next;
-        } while (after is not null);
+        // Read a single rowset so concurrent inserts cannot keep extending the GC pass.
+        await foreach (var row in OpenPins(scope).AsAsyncEnumerable().WithCancellation(cancellationToken))
+            roots.Add(ReadOpen(row, scope).Executable.ArtifactId);
         return roots;
     }
 
