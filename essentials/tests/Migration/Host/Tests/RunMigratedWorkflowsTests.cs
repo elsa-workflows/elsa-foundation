@@ -194,7 +194,7 @@ public sealed class RunMigratedWorkflowsTests
                 ["activities"] = new JsonArray(
                     Node("acme-endpoint", CatalogIds.VersionIdOf(typeof(HttpEndpoint)),
                         Literal("Path", "acme-greeting"), Literal("SupportedMethods", new JsonArray("GET")),
-                        Literal("CanStartWorkflow", true), Literal("ResponseMode", 1)),
+                        Literal("CanStartWorkflow", true), Literal("ResponseMode", "Sync")),
                     Node("acme-greeting", compositeVersionId),
                     Node("acme-response", CatalogIds.VersionIdOf(typeof(WriteHttpResponse)),
                         Literal("StatusCode", 200), Literal("ContentType", "text/plain"), Literal("Body", "composite ran")))

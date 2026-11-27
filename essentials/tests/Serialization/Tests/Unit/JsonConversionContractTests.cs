@@ -26,6 +26,25 @@ public sealed class JsonConversionContractTests
     }
 
     [Fact]
+    public void An_enum_reads_from_its_number_or_the_exact_name_a_member_declares_and_still_writes_a_number()
+    {
+        // The activity catalog records enum defaults and options by name, so a published literal carries "Sync".
+        Assert.Equal(DeliveryMode.Sync, JsonConversionContract.For(typeof(DeliveryMode)).Read(Element("\"Sync\""), typeof(DeliveryMode)));
+        Assert.Equal(DeliveryMode.Sync, JsonConversionContract.For(typeof(DeliveryMode?)).Read(Element("\"Sync\""), typeof(DeliveryMode?)));
+        Assert.Equal(DeliveryMode.Sync, JsonConversionContract.For(typeof(DeliveryMode)).Read(Element("1"), typeof(DeliveryMode)));
+        Assert.Null(JsonConversionContract.For(typeof(DeliveryMode?)).Read(Element("null"), typeof(DeliveryMode?)));
+        Assert.Equal("1", JsonConversionContract.For(typeof(DeliveryMode)).Write(DeliveryMode.Sync, typeof(DeliveryMode)).GetRawText());
+
+        var unknown = Assert.Throws<JsonException>(() => JsonConversionContract.For(typeof(DeliveryMode)).Read(Element("\"Later\""), typeof(DeliveryMode)));
+        Assert.Contains("Async, Sync", unknown.Message, StringComparison.Ordinal);
+        Assert.Throws<JsonException>(() => JsonConversionContract.For(typeof(DeliveryMode)).Read(Element("\"sync\""), typeof(DeliveryMode)));
+        Assert.Throws<JsonException>(() => JsonConversionContract.For(typeof(DeliveryMode)).Read(Element("\"1\""), typeof(DeliveryMode)));
+        Assert.Throws<JsonException>(() => JsonConversionContract.For(typeof(DeliveryMode)).Read(Element("\"Async, Sync\""), typeof(DeliveryMode)));
+    }
+
+    private enum DeliveryMode { Async = 0, Sync = 1 }
+
+    [Fact]
     public void Default_round_trips_camel_case_and_warns_without_rewriting_carried_data()
     {
         var contract = JsonConversionContract.For(typeof(Order));

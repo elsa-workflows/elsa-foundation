@@ -21,8 +21,7 @@
                 "inputs": [
                   { "referenceKey": "Path", "value": { "value": "hello", "expressionType": "Literal" } },
                   { "referenceKey": "SupportedMethods", "value": { "value": [ "GET" ], "expressionType": "Literal" } },
-                  { "referenceKey": "CanStartWorkflow", "value": { "value": true, "expressionType": "Literal" } },
-                  { "referenceKey": "ResponseMode", "value": { "value": 1, "expressionType": "Literal" } }
+                  { "referenceKey": "CanStartWorkflow", "value": { "value": true, "expressionType": "Literal" } }
                 ],
                 "outputs": []
               },

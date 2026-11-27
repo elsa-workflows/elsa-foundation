@@ -157,10 +157,21 @@ public sealed class JsonConversionContract
                 foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, contract)) report?.Invoke(diagnostic);
             return value.Deserialize(type, JsonBaseline.Options);
         }
+        // An enum value authored by name: the activity catalog records an enum input's default and options by the member
+        // name (ClrAssemblyScanner), and Studio offers those names, so a literal carries "Sync" rather than 1. The baseline
+        // writes and reads enums as numbers; at the root this also takes the exact name a member declares. Writing is unchanged.
+        if (contract.memberConverter is null && value.ValueKind == JsonValueKind.String && (Nullable.GetUnderlyingType(type) ?? type) is { IsEnum: true } enumType)
+            return ReadEnumName(value.GetString()!, enumType);
         var operation = new Operation();
         foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, contract, operation)) report?.Invoke(diagnostic);
         return value.Deserialize(type, operation.GetOptions(contract));
     }
+
+    /// <summary>The member <paramref name="name"/> names exactly (ordinal); a number, a different case or a flags list is refused.</summary>
+    private static object ReadEnumName(string name, Type enumType) =>
+        Array.Find(Enum.GetNames(enumType), declared => string.Equals(declared, name, StringComparison.Ordinal)) is { } member
+            ? Enum.Parse(enumType, member)
+            : throw new JsonException($"'{name}' is not a member of '{enumType.FullName}'. Expected one of: {string.Join(", ", Enum.GetNames(enumType))}.");
 
     private static bool IsBaselineScalar(Type type) => type == typeof(string) || type == typeof(bool) || type == typeof(char) ||
         type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) || type == typeof(ushort) ||
