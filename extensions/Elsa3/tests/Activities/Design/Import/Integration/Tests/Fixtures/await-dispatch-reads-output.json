@@ -20,12 +20,12 @@
     {
       "id": "decision",
       "name": "decision",
-      "typeName": "String"
+      "typeName": "Object"
     },
     {
       "id": "decisionFromMap",
       "name": "decisionFromMap",
-      "typeName": "String"
+      "typeName": "Object"
     }
   ],
   "inputs": [],
@@ -173,10 +173,10 @@
         "variable": {
           "id": "decision",
           "name": "decision",
-          "typeName": "String"
+          "typeName": "Object"
         },
         "value": {
-          "typeName": "String",
+          "typeName": "Object",
           "expression": {
             "type": "JavaScript",
             "value": "return getAddress().Decision;"
@@ -208,10 +208,10 @@
         "variable": {
           "id": "decisionFromMap",
           "name": "decisionFromMap",
-          "typeName": "String"
+          "typeName": "Object"
         },
         "value": {
-          "typeName": "String",
+          "typeName": "Object",
           "expression": {
             "type": "JavaScript",
             "value": "return getAddressMap().Decision;"

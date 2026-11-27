@@ -15,27 +15,27 @@
     {
       "id": "decision",
       "name": "decision",
-      "typeName": "String"
+      "typeName": "Object"
     },
     {
       "id": "status",
       "name": "status",
-      "typeName": "String"
+      "typeName": "Object"
     },
     {
       "id": "subStatus",
       "name": "subStatus",
-      "typeName": "String"
+      "typeName": "Object"
     },
     {
       "id": "instanceId",
       "name": "instanceId",
-      "typeName": "String"
+      "typeName": "Object"
     },
     {
       "id": "whole",
       "name": "whole",
-      "typeName": "String"
+      "typeName": "Object"
     }
   ],
   "inputs": [],
@@ -133,10 +133,10 @@
         "variable": {
           "id": "decision",
           "name": "decision",
-          "typeName": "String"
+          "typeName": "Object"
         },
         "value": {
-          "typeName": "String",
+          "typeName": "Object",
           "expression": {
             "type": "JavaScript",
             "value": "return getCredit().Output.Decision;"
@@ -168,10 +168,10 @@
         "variable": {
           "id": "status",
           "name": "status",
-          "typeName": "String"
+          "typeName": "Object"
         },
         "value": {
-          "typeName": "String",
+          "typeName": "Object",
           "expression": {
             "type": "JavaScript",
             "value": "return getCredit().Status;"
@@ -203,10 +203,10 @@
         "variable": {
           "id": "subStatus",
           "name": "subStatus",
-          "typeName": "String"
+          "typeName": "Object"
         },
         "value": {
-          "typeName": "String",
+          "typeName": "Object",
           "expression": {
             "type": "JavaScript",
             "value": "return getCredit().SubStatus;"
@@ -238,10 +238,10 @@
         "variable": {
           "id": "instanceId",
           "name": "instanceId",
-          "typeName": "String"
+          "typeName": "Object"
         },
         "value": {
-          "typeName": "String",
+          "typeName": "Object",
           "expression": {
             "type": "JavaScript",
             "value": "return getCredit().WorkflowInstanceId;"
@@ -273,10 +273,10 @@
         "variable": {
           "id": "whole",
           "name": "whole",
-          "typeName": "String"
+          "typeName": "Object"
         },
         "value": {
-          "typeName": "String",
+          "typeName": "Object",
           "expression": {
             "type": "JavaScript",
             "value": "return JSON.stringify(getCredit());"
