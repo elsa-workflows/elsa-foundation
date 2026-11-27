@@ -15,5 +15,5 @@ The database lives on a local filesystem with one process per file. Use the data
 
 This composition uses the owned writer in either fence mode.
 
-Format 27 takes self-sends and actor-owned timers, including the timers used by Delay. Use
-`SqliteEmbeddedHosting.TakesSelfSends` and `TakesTimers` when configuring a model for the shipped profile.
+The shipped profile takes self-sends, actor-owned Delay timers, and attached or detached child starts. Use
+`SqliteEmbeddedHosting.TakesSelfSends`, `TakesTimers` and `TakesChildren` when configuring a model.
