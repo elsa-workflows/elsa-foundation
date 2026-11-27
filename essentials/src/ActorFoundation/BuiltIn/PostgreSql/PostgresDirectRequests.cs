@@ -48,7 +48,9 @@ public sealed class PostgresDirectRequests : IReplyTransport
     void IReplyTransport.Send(string destination, Reply reply)
     {
         if (destination == Node) edge.Send(destination, reply);
-        else Volatile.Read(ref _liveReplies)?.Send(destination, reply);
+        // Only a reset on the receiving node ends its wait. The durable route can follow a remote handoff.
+        else if (reply is not { Key: "lost", Channel: null, Error: "lost" })
+            Volatile.Read(ref _liveReplies)?.Send(destination, reply);
     }
 
     internal Task<PostgresReplyRelay> OpenLiveRepliesAsync(Func<KernelDb> create, Action<Exception> onFault, CancellationToken token) =>

@@ -12,7 +12,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
+using LiveRequest = Kernel.Durable.Request;
 using NativeHttpRequest = Kernel.Native.HttpRequest;
 using NativeHttpResponse = Kernel.Native.HttpResponse;
 using LiveWorkflowActor = Kernel.WorkflowActor.WorkflowActor;
@@ -30,6 +32,13 @@ internal static class PostgresLiveRemoteHttpChecks
             ?? throw new InvalidOperationException("Supply a fresh PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         KernelDb Open() => KernelDb.ForPostgresRootShipped(options);
+        var ownerConnection = new NpgsqlConnectionStringBuilder(connection)
+        {
+            ApplicationName = "elsa-live-reply-owner",
+            MaxPoolSize = 1,
+            Timeout = 3
+        };
+        var ownerOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(ownerConnection.ConnectionString).Options;
         await using var db = Open();
         Check(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the PostgreSQL database is empty");
         var store = new EfStore(Open, postgres: true);
@@ -64,14 +73,17 @@ internal static class PostgresLiveRemoteHttpChecks
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, model.Type, edge, cancellationToken: stop);
         void Escalate(string message) => throw new InvalidOperationException(message);
         var refusedWire = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var flushTimedOut = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var first = await PostgresPreviewHosting.StartAsync(Open, owner, model, Escalate, loops, stop,
             onFault: error =>
             {
                 if (error is InvalidDataException) refusedWire.TrySetResult();
+                if (error is TimeoutException) flushTimedOut.TrySetResult();
             }, requests: ownerEdge);
         while (await db.Partitions.AsNoTracking().Where(row => row.Id == 0).Select(row => row.Owner).SingleAsync(stop) != owner)
             await Task.Delay(25, stop);
-        await using var second = await PostgresPreviewHosting.StartAsync(Open, caller, model, Escalate, loops, stop, requests: edge);
+        await using var second = await PostgresPreviewHosting.StartAsync(Open, caller, model, Escalate, loops, stop,
+            onFault: error => Console.WriteLine($"receiver: {error.GetType().Name}: {error.Message}"), requests: edge);
 
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
@@ -91,8 +103,9 @@ internal static class PostgresLiveRemoteHttpChecks
         await application.StartAsync(stop);
         using var client = new HttpClient { BaseAddress = new Uri(application.Urls.Single()) };
         using var delivered = await client.PostAsync("/reply", new StringContent(""), stop);
-        Check(delivered.StatusCode == HttpStatusCode.Accepted && await delivered.Content.ReadAsStringAsync(stop) == body,
-            "the live HTTP response reconstructs all notification frames in order");
+        var received = await delivered.Content.ReadAsStringAsync(stop);
+        Check(delivered.StatusCode == HttpStatusCode.Accepted && received == body,
+            $"the live HTTP response reconstructs all notification frames in order (HTTP {(int)delivered.StatusCode}, {received.Length} characters)");
         var run = new Contract.ActorRef(delivered.Headers.GetValues("X-Elsa-Workflow-Instance-Id").Single());
         var actor = await foundation.GetAsync(scope, run, stop);
         var checkpoint = await store.ReadFirstRootAsync(scope.Tenant, run.Id, stop);
@@ -122,14 +135,89 @@ internal static class PostgresLiveRemoteHttpChecks
         using var endOnly = await client.PostAsync("/end-only", new StringContent(""), stop);
         Check(endOnly.StatusCode == HttpStatusCode.NoContent && endOnly.Headers.Contains(KernelHttpEdge.WorkflowInstanceIdHeader),
             "an actor that ends without emitting still answers with its committed terminal status");
+
+        var deadline = await edge.ReadClockAsync(stop) + 10_000;
+        var remoteWait = edge.Pending.OpenBound("remote-handoff", deadline, scope.Tenant, ambient: null);
+        var localWait = edge.Pending.OpenBound("local-reset", deadline, scope.Tenant, ambient: null);
+        Reply Lose(LiveRequest request) => new(request.Registration, "lost", null, null, Error: "lost") { Tenant = scope.Tenant };
+        var ownerTransport = (IReplyTransport)ownerEdge;
+        ownerTransport.Send(caller, Lose(remoteWait));
+        ownerTransport.Send(caller, new(remoteWait.Registration, "answer", LiveRequest.Response, "successor") { Tenant = scope.Tenant });
+        ((IReplyTransport)edge).Send(caller, Lose(localWait));
+        Check((await edge.Pending.CompletionOf(remoteWait).WaitAsync(stop)).Item is "successor" &&
+              (await edge.Pending.CompletionOf(localWait).WaitAsync(stop)).Error == "lost",
+            "remote handoff keeps the receiving wait open and local reset ends it");
+
+        using (var narrowStop = CancellationTokenSource.CreateLinkedTokenSource(stop))
+        {
+            var narrow = await PostgresReplyRelay.OpenAsync(OpenOwner, "single-connection-relay", _ => { }, onFault: null, stop);
+            var listening = narrow.RunAsync(narrowStop.Token);
+            try
+            {
+                await narrow.ReadyAsync(stop);
+                var pending = edge.Pending.OpenBound("single-pool", deadline, scope.Tenant, ambient: null);
+                narrow.Send(caller, new(pending.Registration, "answer", LiveRequest.Response, "one connection") { Tenant = scope.Tenant });
+                Check((await edge.Pending.CompletionOf(pending).WaitAsync(TimeSpan.FromSeconds(5), stop)).Item is "one connection",
+                    "the listener and publisher share a pool of one when the context opens its own connection");
+            }
+            finally
+            {
+                await narrowStop.CancelAsync();
+                await listening;
+            }
+        }
+
+        var stall = new StalledValue();
+        ownerTransport.Send(caller, new("detached", "stalled", LiveRequest.Response, stall) { Tenant = scope.Tenant });
+        try
+        {
+            await stall.Entered.Task.WaitAsync(stop);
+            await first.StopAsync(stop).AsTask().WaitAsync(TimeSpan.FromSeconds(6), stop);
+            Check(flushTimedOut.Task.IsCompletedSuccessfully && await db.Partitions.AsNoTracking().Where(row => row.Id == 0)
+                .Select(row => row.Owner).SingleAsync(stop) != owner,
+                "a stalled reply publisher cannot hold shutdown after durable ownership is released");
+        }
+        finally { stall.Release.TrySetResult(); }
+
         await application.StopAsync(stop);
         return 0;
+
+        KernelDb OpenOwner()
+        {
+            var context = KernelDb.ForPostgresRootShipped(ownerOptions);
+            try
+            {
+                context.Database.OpenConnection();
+                return context;
+            }
+            catch
+            {
+                context.Dispose();
+                throw;
+            }
+        }
 
         KernelHttpStart Start(string workflow)
         {
             var path = "/" + workflow;
             return KernelHttpEdge.Match(serving, new NativeHttpRequest("POST", path, new JsonObject()), path)
                 ?? throw new InvalidOperationException("The fixture route does not start its registered workflow.");
+        }
+    }
+
+    private sealed class StalledValue
+    {
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string Value
+        {
+            get
+            {
+                Entered.TrySetResult();
+                Release.Task.GetAwaiter().GetResult();
+                return "released";
+            }
         }
     }
 

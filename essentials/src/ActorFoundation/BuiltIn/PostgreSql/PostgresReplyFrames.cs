@@ -1,8 +1,11 @@
+using System.Buffers;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Kernel.Durable;
 
 namespace Kernel.Foundation.Postgres;
@@ -16,6 +19,11 @@ internal sealed class PostgresReplyFrames(byte[] key)
     private const int NonceBytes = 12;
     private const int TagBytes = 16;
     private const int Overhead = NonceBytes + TagBytes;
+    private const int StringSegment = 4_096;
+    private static readonly JsonSerializerOptions WriterOptions = new()
+    {
+        Converters = { new SegmentedString(), new SegmentedNode() }
+    };
 
     private enum ItemKind { Json, Text, Boolean, Creation }
     private sealed record WireReply(Reply Reply, ItemKind Item);
@@ -35,9 +43,10 @@ internal sealed class PostgresReplyFrames(byte[] key)
             CreationResult => ItemKind.Creation,
             _ => ItemKind.Json
         };
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new WireReply(reply, kind));
-        if (bytes.Length > MaxReplyBytes)
-            throw new InvalidDataException("The live PostgreSQL reply exceeds the receiver's message size limit.");
+        var buffer = new ReplyBuffer();
+        using (var writer = new Utf8JsonWriter(buffer))
+            JsonSerializer.Serialize(writer, new WireReply(reply, kind), WriterOptions);
+        var bytes = buffer.Written;
 
         var count = (bytes.Length + ChunkBytes - 1) / ChunkBytes;
         var id = Guid.NewGuid();
@@ -47,7 +56,7 @@ internal sealed class PostgresReplyFrames(byte[] key)
         {
             var header = FormattableString.Invariant($"{id:N}/{index}/{(index == count - 1 ? '1' : '0')}/");
             var offset = index * ChunkBytes;
-            var data = bytes.AsSpan(offset, Math.Min(ChunkBytes, bytes.Length - offset));
+            var data = bytes.Slice(offset, Math.Min(ChunkBytes, bytes.Length - offset));
             var frame = new byte[Overhead + data.Length];
             var nonce = frame.AsSpan(0, NonceBytes);
             RandomNumberGenerator.Fill(nonce);
@@ -60,6 +69,105 @@ internal sealed class PostgresReplyFrames(byte[] key)
     internal Reader Open(string channel) => new(channel, new AesGcm(key, TagBytes));
 
     private static byte[] AssociatedData(string channel, string header) => Encoding.ASCII.GetBytes(channel + "/" + header);
+
+    private static InvalidDataException TooLarge() =>
+        new("The live PostgreSQL reply exceeds the receiver's message size limit.");
+
+    private static void WriteString(Utf8JsonWriter writer, string value)
+    {
+        var remaining = value.AsSpan();
+        while (remaining.Length > StringSegment)
+        {
+            writer.WriteStringValueSegment(remaining[..StringSegment], isFinalSegment: false);
+            writer.Flush();
+            remaining = remaining[StringSegment..];
+        }
+        writer.WriteStringValueSegment(remaining, isFinalSegment: true);
+    }
+
+    private sealed class SegmentedString : JsonConverter<string>
+    {
+        public override string Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => WriteString(writer, value);
+
+        public override void WriteAsPropertyName(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value.Length > MaxReplyBytes) throw TooLarge();
+            writer.WritePropertyName(value);
+        }
+    }
+
+    private sealed class SegmentedNode : JsonConverter<JsonNode>
+    {
+        public override bool CanConvert(Type type) => typeof(JsonNode).IsAssignableFrom(type);
+        public override JsonNode Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
+
+        public override void Write(Utf8JsonWriter writer, JsonNode value, JsonSerializerOptions options)
+        {
+            switch (value)
+            {
+                case JsonObject properties:
+                    writer.WriteStartObject();
+                    foreach (var (name, item) in properties)
+                    {
+                        if (name.Length > MaxReplyBytes) throw TooLarge();
+                        writer.WritePropertyName(name);
+                        WriteItem(item);
+                    }
+                    writer.WriteEndObject();
+                    break;
+                case JsonArray items:
+                    writer.WriteStartArray();
+                    foreach (var item in items) WriteItem(item);
+                    writer.WriteEndArray();
+                    break;
+                case JsonValue scalar when scalar.TryGetValue<JsonElement>(out var element):
+                    var raw = JsonMarshal.GetRawUtf8Value(element);
+                    if (raw.Length > MaxReplyBytes) throw TooLarge();
+                    writer.WriteRawValue(raw, skipInputValidation: true);
+                    break;
+                case JsonValue scalar when scalar.TryGetValue<string>(out var text):
+                    WriteString(writer, text);
+                    break;
+                default:
+                    value.WriteTo(writer, options);
+                    break;
+            }
+
+            void WriteItem(JsonNode? item)
+            {
+                if (item is null) writer.WriteNullValue();
+                else Write(writer, item, options);
+            }
+        }
+    }
+
+    private sealed class ReplyBuffer : IBufferWriter<byte>
+    {
+        // A writer may reserve space for one escaped segment or padding beyond the bytes it advances.
+        private const int CapacityLimit = MaxReplyBytes + 8 * StringSegment;
+        private byte[] _buffer = [];
+        private int _length;
+        internal ReadOnlySpan<byte> Written => _buffer.AsSpan(0, _length);
+
+        public void Advance(int count)
+        {
+            if (count < 0 || count > _buffer.Length - _length) throw new ArgumentOutOfRangeException(nameof(count));
+            if (count > MaxReplyBytes - _length) throw TooLarge();
+            _length += count;
+        }
+
+        public Memory<byte> GetMemory(int sizeHint = 0)
+        {
+            var required = (long)_length + Math.Max(sizeHint, 1);
+            if (required > CapacityLimit) throw TooLarge();
+            if (required > _buffer.Length)
+                Array.Resize(ref _buffer, (int)Math.Min(CapacityLimit, Math.Max(required, Math.Max(256L, 2L * _buffer.Length))));
+            return _buffer.AsMemory(_length);
+        }
+
+        public Span<byte> GetSpan(int sizeHint = 0) => GetMemory(sizeHint).Span;
+    }
 
     internal sealed class Reader(string channel, AesGcm cipher) : IDisposable
     {

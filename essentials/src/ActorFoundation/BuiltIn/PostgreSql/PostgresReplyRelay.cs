@@ -81,10 +81,7 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
             try
             {
                 var channel = frames.Channel(node);
-                await using var db = create();
-                var source = (NpgsqlConnection)db.Database.GetDbConnection();
-                var settings = new NpgsqlConnectionStringBuilder(source.ConnectionString) { Pooling = false, Multiplexing = false };
-                await using var connection = await source.CloneWithAsync(settings.ConnectionString, token);
+                await using var connection = await CreateListenerAsync(token);
                 await connection.OpenAsync(token);
                 using var reader = frames.Open(channel);
                 connection.Notification += OnNotification;
@@ -123,6 +120,14 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
         _ready.TrySetCanceled(token);
     }
 
+    private async Task<NpgsqlConnection> CreateListenerAsync(CancellationToken token)
+    {
+        await using var db = create();
+        var source = (NpgsqlConnection)db.Database.GetDbConnection();
+        var settings = new NpgsqlConnectionStringBuilder(source.ConnectionString) { Pooling = false, Multiplexing = false };
+        return await source.CloneWithAsync(settings.ConnectionString, token);
+    }
+
     private async Task PublishAsync(CancellationToken token)
     {
         try
@@ -134,8 +139,8 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
                     var channel = frames.Channel(outgoing.Node);
                     var payloads = frames.Encode(channel, outgoing.Reply);
                     await using var db = create();
+                    await db.Database.OpenConnectionAsync(token);
                     var connection = (NpgsqlConnection)db.Database.GetDbConnection();
-                    await connection.OpenAsync(token);
                     // Keep all chunks for one reply in one transaction, in send order. The owner checkpoint
                     // never joins this transaction, so sending or losing the reply cannot move its fence.
                     await using var transaction = await connection.BeginTransactionAsync(token);

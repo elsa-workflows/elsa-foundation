@@ -275,35 +275,55 @@ public static class PostgresPreviewHosting
             OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error)
         };
         var host = DurableHost.ForNode(node, watched, adapter, partitions, replies is null ? workers : workers with { Transport = replies });
+        var relayStop = relay is null ? null : new CancellationTokenSource();
+        Task? relaying = null;
+        var relayStopping = 0;
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: RunBesideAsync,
             beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
         {
             AfterReleaseAsync = relay is null ? null : relay.FlushAsync
         };
         Volatile.Write(ref reporter, runtime);
-        if (relay is not null) edge!.AttachLiveReplies(relay);
         try
         {
+            if (relay is not null)
+            {
+                edge!.AttachLiveReplies(relay);
+                relaying = Task.Run(() => relay.RunAsync(relayStop!.Token), CancellationToken.None);
+                await relay.ReadyAsync(cancellationToken);
+            }
             await runtime.StartAsync(host, cancellationToken);
-            if (relay is not null) await relay.ReadyAsync(cancellationToken);
             return runtime;
         }
         catch
         {
-            if (relay is not null) edge!.DetachLiveReplies(relay);
+            StopRelay();
             await runtime.KillAsync();
             throw;
         }
 
         async Task RunBesideAsync(CancellationToken stop)
         {
-            if (relay is null)
+            try { await watchdog.RunAsync(stop); }
+            finally { StopRelay(); }
+        }
+
+        void StopRelay()
+        {
+            if (relay is null || Interlocked.Exchange(ref relayStopping, 1) != 0) return;
+            edge!.DetachLiveReplies(relay);
+            // The relay does not own durable work. Its connection cancellation must never hold up the watchdog.
+            if (relaying is { } running) _ = StopRelayAsync(relayStop!, running);
+            else relayStop!.Dispose();
+        }
+
+        async Task StopRelayAsync(CancellationTokenSource stop, Task relaying)
+        {
+            using (stop)
             {
-                await watchdog.RunAsync(stop);
-                return;
+                try { await Task.WhenAll(stop.CancelAsync(), relaying); }
+                catch (Exception error) { Volatile.Read(ref reporter)?.RecordLoopError(error); }
             }
-            try { await Task.WhenAll(watchdog.RunAsync(stop), relay.RunAsync(stop)); }
-            finally { edge!.DetachLiveReplies(relay); }
         }
     }
 }
