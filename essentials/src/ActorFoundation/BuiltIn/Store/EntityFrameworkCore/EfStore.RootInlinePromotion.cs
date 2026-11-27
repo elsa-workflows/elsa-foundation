@@ -55,8 +55,7 @@ public sealed partial class EfStore
         return worker.TryQueueQualifiedInlineStart(creator, material, inline) is { } receipt ? (new(reference), receipt) : null;
     }
 
-    // A sealed Running checkpoint can be promoted with its first subscriptions. The direct
-    // qualification path exercises the same preparation and binding as the owned worker.
+    // The direct qualification path exercises the same preparation and binding as the owned worker.
     internal async ValueTask<Committed> PromoteInlineRootAsync(Contract.BoundScope scope, Message creator, TurnCommit turn, PartitionFence fence,
         TimeSpan lease, TimeSpan receiptWindow, ProtectRootStartAsync protect, CancellationToken token)
     {
@@ -78,38 +77,47 @@ public sealed partial class EfStore
             !RootPreparedStarts.IsInlineOperation(creator.Id) ||
             creator.Due is not null || creator.ReplyTo is not null || creator.KeepUntil is not null ||
             turn is not { Expected: null, Journal: not null, FoundationHeader: { } header,
-                Row: { Status: InstanceStatus.Running, Revision: > 0, FoundationInlineBirth: { } birth } row } ||
+                Row: { Revision: > 0, FoundationInlineBirth: { } birth } row } ||
             turn.Instance != binding.Actor || birth != (binding.Tenant, creator.InboxKey) ||
             receiptWindow <= TimeSpan.Zero)
             throw RootShape();
+        var ended = row.Status is InstanceStatus.Finished or InstanceStatus.Faulted;
         await using (var profile = create())
-            if (row.Revision != 1 && !profile.UsesRootInlinePromotion) throw RootShape();
+            if (!profile.UsesRootInlinePromotion && (row.Revision != 1 || ended || turn.Sent.Count != 0)) throw RootShape();
 
         var fingerprint = CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload)!;
         var supported = new TurnCommit(row.Id, row, null, turn.Consumed, turn.Done, turn.Sent,
-            turn.Subscribed, turn.Unsubscribed, turn.Journal, Held: turn.Held) { FoundationHeader = header };
-        var expected = new InstanceRow(binding.Actor, spec.Model, spec.Definition, InstanceStatus.Running,
-            row.State, row.Revision, Parent: null, History: spec.History, StateVersion: row.StateVersion, Creation: 1, StartIntent: fingerprint)
+            turn.Subscribed, turn.Unsubscribed, turn.Journal, Unsubscribe: ended, Held: turn.Held)
+        {
+            FoundationHeader = header,
+            FoundationTerminalOutput = row.Status == InstanceStatus.Finished ? turn.FoundationTerminalOutput : null
+        };
+        var expected = new InstanceRow(binding.Actor, spec.Model, spec.Definition, row.Status,
+            row.State, row.Revision, Parent: null, Jobs: RootJobsEnabled ? row.Jobs : null, History: spec.History,
+            StateVersion: row.StateVersion, Creation: 1, StartIntent: fingerprint)
         {
             FoundationInlineBirth = birth, FoundationInlineHeader = row.FoundationInlineHeader,
             FoundationNullState = row.FoundationNullState, FoundationDispatchHeader = row.FoundationDispatchHeader,
             NextJobGeneration = row.NextJobGeneration
         };
-        if (turn != supported || row != expected || row.NextJobGeneration is not (null or 0) ||
-            turn.Consumed.Count + turn.Done.Count + turn.Sent.Count +
-            turn.Unsubscribed.Count + (turn.Held?.Count ?? 0) != 0 ||
+        if (turn != supported || row != expected || row.Status != InstanceStatus.Running && !ended ||
+            row.Status == InstanceStatus.Faulted && !RootTimedJobSettlementEnabled ||
+            !RootJobsEnabled && row.NextJobGeneration is not (null or 0) ||
+            ended && (turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || row.Jobs is not null) ||
+            turn.Consumed.Count + turn.Done.Count + turn.Unsubscribed.Count + (turn.Held?.Count ?? 0) != 0 ||
             row.FoundationDispatchHeader is not { } dispatch || dispatch.Tenant != binding.Tenant ||
             dispatch.Reference != binding.Reference || dispatch.Header.TypeData != header.TypeData ||
             dispatch.Header.Labels.Count != header.Labels.Count ||
             dispatch.Header.Labels.Any(label => header.Labels.GetValueOrDefault(label.Key) != label.Value))
             throw RootShape();
 
+        var root = new WorkerRoot(binding.Tenant, binding.Reference, binding.Actor, fence.Partition, fingerprint);
+        var sends = EncodeRootFirstSends(root, row, turn, promotingInline: true);
         var first = PrepareFirstRoot(binding.Tenant, binding.Reference, creator, fence,
             row.FoundationNullState ? null : row.State, row.StateVersion, header.TypeData, header.Labels, turn.Journal,
-            jobState: row.NextJobGeneration is null ? null : new RootJobState(null, row.NextJobGeneration),
-            terminalGrowth: dispatch.TerminalGrowth, revision: row.Revision);
-        var root = new WorkerRoot(binding.Tenant, binding.Reference, binding.Actor, fence.Partition, fingerprint);
-        var journal = RootEventWaits.Lower(root, turn, first.JournalTurn!);
+            jobState: row.NextJobGeneration is null ? null : new RootJobState(row.Jobs, row.NextJobGeneration),
+            status: row.Status, terminalGrowth: dispatch.TerminalGrowth, revision: row.Revision);
+        var journal = RootEventWaits.Lower(root, turn, first.JournalTurn! with { Sent = sends });
         PreparedRootStart stage;
         PendingRootStart offer;
         (uint Marker, uint Namespace, long Table)? source;
@@ -141,7 +149,8 @@ public sealed partial class EfStore
 
         if (leaseRemaining() <= TimeSpan.Zero) return null;
         var checkpoint = new InlineRootCheckpoint((FirstRootCheckpoint)first.Checkpoint, scope, stage, offer.Issuance,
-            source, (long)receiptWindow.TotalMilliseconds, 0, turn.Journal, fence.Epoch, witness?.LeaseRemaining);
+            source, (long)receiptWindow.TotalMilliseconds, 0, turn.Journal, fence.Epoch, witness?.LeaseRemaining,
+            turn.FoundationTerminalOutput is { } output ? new RootTerminalOutputCheckpoint(root, row.Revision, output) : null);
         return new(journal, checkpoint);
 
         async Task<(PreparedRootStart, PendingRootStart, (uint Marker, uint Namespace, long Table)?, TimeSpan)?> PrepareAsync(CancellationToken ct)
@@ -183,7 +192,8 @@ public sealed partial class EfStore
     }
 
     private sealed record InlineRootCheckpoint(FirstRootCheckpoint First, Contract.BoundScope Scope, PreparedRootStart Stage, string Issuance,
-        (uint Marker, uint Namespace, long Table)? Postgres, long ReceiptWindow, long Position, string Journal, long Epoch, Func<TimeSpan>? LeaseRemaining)
+        (uint Marker, uint Namespace, long Table)? Postgres, long ReceiptWindow, long Position, string Journal, long Epoch,
+        Func<TimeSpan>? LeaseRemaining, RootTerminalOutputCheckpoint? Output)
         : QualifiedRootCheckpoint(First.JournalRevision)
     {
         internal override bool WritesJournal(string actor) => actor == Stage.Actor;
@@ -210,17 +220,21 @@ public sealed partial class EfStore
                 FROM source WHERE "SourceReady"
                 """, origin.Bind), token);
             if (journaled != 1) return false;
+            var ended = First.Row.Status != InstanceStatus.Running;
             var updated = await db.Database.ExecuteSqlInterpolatedAsync(RootPreparedStarts.Bind(db, $"""
                 WITH source AS MATERIALIZED (/*prepared-start-source*/)
                 UPDATE /*prepared-only*/"Instances" SET "FoundationReference" = {Stage.Reference}, "FoundationTenant" = {Stage.Tenant},
                     "FoundationHeader" = {First.Header}, "FoundationStateWire" = {First.Wire},
-                    "FoundationWriteRevision" = {Stage.FirstRevision},
+                    "FoundationWriteRevision" = {Stage.FirstRevision}, "FoundationTerminalRevision" = {(ended ? JournalRevision : (long?)null)},
+                    "FoundationTerminalAt" = {(ended ? now : (long?)null)},
                     "State" = {RootStatePrefix(db)} || "State"
                 WHERE "Id" = {Stage.Actor} AND "Partition" = {Stage.Partition} AND "Revision" = {JournalRevision}
-                    AND "Status" = {(int)InstanceStatus.Running} AND "FoundationReference" IS NULL
+                    AND "Status" = {(int)First.Row.Status} AND "FoundationReference" IS NULL
+                    AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Stage.Actor}))
                     AND (SELECT "SourceReady" FROM source)
                 """, origin.Bind), token);
-            return updated == 1 && await ReadInlineClockAsync(db, token) < Math.Min(Stage.Deadline, currentLease) &&
+            return updated == 1 && (Output is null || await Output.BindCheckpointAsync(db, token)) &&
+                await ReadInlineClockAsync(db, token) < Math.Min(Stage.Deadline, currentLease) &&
                 !(LeaseRemaining?.Invoke() <= TimeSpan.Zero);
         }
     }

@@ -749,11 +749,10 @@ public sealed partial class EfStore
 
         if (RootTimedJobIssuanceEnabled && turn.Expected is not null ||
             RootTimedJobs && !RootTimedJobPreviewEnabled && turn.Expected is null && !RootJobTicket.StartsTimedPair(turn.Sent, root.Actor, row.Model)) throw RootShape();
-        var wires = EncodeRootSends(root, row, turn.Sent);
         var jobState = RootJobsEnabled ? new RootJobState(row.Jobs, row.NextJobGeneration) : null;
-        PreparedRoot WithSends(PreparedRoot prepared)
+        PreparedRoot WithSends(PreparedRoot prepared, Message[] sends)
         {
-            if (wires.Length != 0) prepared = prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };
+            if (sends.Length != 0) prepared = prepared with { JournalTurn = prepared.JournalTurn! with { Sent = sends } };
             return WithRootChildEffects(prepared, childEffects, row.Parent);
         }
         var state = row.FoundationNullState ? null : row.State;
@@ -769,13 +768,13 @@ public sealed partial class EfStore
                     : await ReadSqlitePendingCreatorAsync(root.Tenant, root.Reference, cancellationToken));
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History || row.Parent != creator.Start.Parent) throw RootShape();
-            if (RootTimedJobPreviewEnabled) RequireRootTimedIssuance(turn, row);
-            if (RootJobsEnabled) ValidateRootJobChange(null, row, [], turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs);
             return WithSends(PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, state, row.StateVersion,
                 change.TypeData, change.Labels, turn.Journal, jobState, row.Status, header.TerminalGrowth,
-                creatorSource: observedCreator is null ? null : (observedCreator.BirthTableOid, observedCreator.Sequence)));
+                creatorSource: observedCreator is null ? null : (observedCreator.BirthTableOid, observedCreator.Sequence)),
+                EncodeRootFirstSends(root, row, turn));
         }
 
+        var wires = EncodeRootSends(root, row, turn.Sent);
         if (turn.Done.Count + turn.Consumed.Count == 0 || !InputsMatch(root, turn, RootJobsEnabled))
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
@@ -846,6 +845,6 @@ public sealed partial class EfStore
         if (RootJobsEnabled) ValidateRootJobChange(current, row, inputs, turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs);
         return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
             row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, recalls?.Select(key => key.Id).ToArray(),
-            jobState: jobState, jobCompletion: turn.FoundationRootJobCompletion, values: values, terminalGrowth: header.TerminalGrowth));
+            jobState: jobState, jobCompletion: turn.FoundationRootJobCompletion, values: values, terminalGrowth: header.TerminalGrowth), wires);
     }
 }

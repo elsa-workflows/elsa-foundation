@@ -156,7 +156,19 @@ internal static class InlineRootPromotionChecks
                     { ExecutableSelection = "private-125-material" };
                 var shortWait = new Workflow("inline-wait", Wf.Event("event", "no-message")) { ExecutableSelection = "private-125-wait" };
                 var pure = new Workflow("inline-pure", Wf.WriteLine("pure", "pure work")) { ExecutableSelection = "private-125-pure" };
-                var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure);
+                var longTimer = new Workflow("inline-long-timer", Wf.Sequence("run", Wf.Delay("long", 2_800),
+                    Wf.WriteLine("finish", "durable timer finished"))) { ExecutableSelection = "private-125-timer" };
+                var earlyTimers = new Workflow("inline-earlier-timer", Wf.Parallel("both", null,
+                    Wf.Delay("first", 100), Wf.Delay("earlier", 1_100))) { ExecutableSelection = "private-125-earlier-timer" };
+                var job = new Node("timed", typeof(CallService)) { JobTimeout = TimeSpan.FromSeconds(3) };
+                job.Inputs.Add("Service", "inline-service");
+                job.Inputs.Add("Milliseconds", 250);
+                var timedJob = new Workflow("inline-timed", Wf.Sequence("run", Wf.Delay("short", 50), job,
+                    Wf.SetOutput("job-output", "result", Binding.Result("timed")))) { ExecutableSelection = "private-125-timed" };
+                var terminal = new Workflow("inline-terminal", Wf.Sequence("run", Wf.Delay("short", 50),
+                    Wf.Node<FinishAcrossCutoff>("finish-across-cutoff"),
+                    Wf.SetOutput("set-output", "result", "committed terminal"))) { ExecutableSelection = "private-125-terminal" };
+                var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure).Add(longTimer).Add(earlyTimers).Add(timedJob).Add(terminal);
                 var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
                 var actor = new WorkflowActorType([model]);
                 var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
@@ -167,9 +179,11 @@ internal static class InlineRootPromotionChecks
                 PendingRootStart? offered = null;
                 string? acceptedWait = null;
                 string? refusedWait = null;
+                string? refusedActor = null;
                 string? protectionDeadline = null;
                 var protectorCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var preparedBatchActors = new HashSet<string>(StringComparer.Ordinal);
+                var firstRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
                 await physical.EnableInlinePromotionAsync(scope, (requested, material) =>
                     WorkflowActorType.DescribeStart(requested.Model, requested.Definition) is { } selected &&
                     model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection),
@@ -188,15 +202,21 @@ internal static class InlineRootPromotionChecks
                             return offer.Actor.Id == acceptedWait;
                         }
                         offered = offer;
-                        return RootPreparedStarts.Verify(key, scope, offer.Actor, offer.Issuance) is { FirstRevision: 3 } &&
-                            await CreateCanReadPreparationAsync(offer, ct);
+                        return firstRevisions.TryGetValue(offer.Actor.Id, out var firstRevision) &&
+                            RootPreparedStarts.Verify(key, scope, offer.Actor, offer.Issuance) is { } stage &&
+                            stage.FirstRevision == firstRevision && await CreateCanReadPreparationAsync(offer, stage.Actor, ct);
                     }, TimeSpan.FromHours(1), token);
                 var ownerOptions = new WorkerOptions
                 {
+                    ShortWait = TimeSpan.FromMilliseconds(1_400),
                     OnKeptInMemory = (_, revision) => unwrittenRevision = revision,
                     OnPreparedCheckpoint = (sealedTurn, _, accepted) =>
                     {
-                        if (accepted?.FoundationRootBinding is { } identity) preparedBatchActors.Add(identity.Reference);
+                        if (accepted?.FoundationRootBinding is { } identity)
+                        {
+                            preparedBatchActors.Add(identity.Reference);
+                            if (identity.Reference == refusedWait) refusedActor = identity.Actor;
+                        }
                         checkpoint = sealedTurn;
                         firstCreator = accepted;
                     }
@@ -208,7 +228,7 @@ internal static class InlineRootPromotionChecks
                     : physical.BindSqliteWorkerNode(ActorAdapter.RootWithholding(actor, null));
                 await using var owner = Worker.ForNode("inline-promoting-owner", physical,
                     new ActorAdapter(physical.WorkerHeaders(firstRoots), actor, physical.RootSelfIssuer, physical.RootJobHandle,
-                        rootTimedJobClock: physical.ReadRootTimedJobPublicationTimeAsync), ownerOptions);
+                        rootTimedJobClock: physical.ReadRootTimedJobPublicationTimeAsync, rootTerminalOutputLimit: 1_024), ownerOptions);
                 Check(await owner.GainAsync(0, token), "the real provider owner claims the inline partition");
                 var firstPosition = owner.PositionOf(0);
                 var originalTrace = WriteLine.Out;
@@ -220,6 +240,7 @@ internal static class InlineRootPromotionChecks
                         throw new InvalidOperationException("Could not admit the local fixture turn.");
                     var reference = admitted.Reference.Id;
                     var receipt = admitted.Outcome;
+                    firstRevisions.Add(reference, 3);
                     await WaitUnwrittenAsync(1);
                     Check(!receipt.IsCompleted && checkpoint is null && await store.ReadFirstRootAsync(scope.Tenant, reference, token) is null,
                         "the first short Delay has no physical checkpoint or receipt");
@@ -265,7 +286,7 @@ internal static class InlineRootPromotionChecks
                             """).SingleAsync(token) == 3, "the physical birth protects the authenticated first revision from update");
                     }
                     var beforeMixed = owner.PositionOf(0);
-                    var refused = Queue("refused-inline-wait", shortWait);
+                    var refused = Queue("refused-inline-timer", longTimer);
                     var accepted = Queue("accepted-inline-wait", shortWait);
                     var writeFree = Queue("write-free-inline", pure);
                     acceptedWait = accepted.Reference.Id;
@@ -282,19 +303,49 @@ internal static class InlineRootPromotionChecks
                             WHERE b."Reference" = {acceptedWait}
                             """).SingleAsync(token);
                         var residue = await db.Database.SqlQuery<int>($"""
-                            SELECT CAST(count(*) AS integer) AS "Value" FROM "FoundationPreparedRootStarts"
-                            WHERE "Reference" = {refusedWait} OR "Reference" = {writeFree.Reference.Id}
+                            SELECT CAST(count(*) AS integer) AS "Value" FROM (
+                                SELECT "Reference" FROM "FoundationPreparedRootStarts"
+                                UNION ALL SELECT "Reference" FROM "FoundationRootReceipts"
+                                UNION ALL SELECT "Reference" FROM "FoundationRootBirths"
+                            ) physical WHERE "Reference" = {refusedWait} OR "Reference" = {writeFree.Reference.Id}
                             """).SingleAsync(token);
-                        Check(written == owner.PositionOf(0) && residue == 0 &&
+                        Check(written == owner.PositionOf(0) && residue == 0 && refusedActor is not null &&
+                            !await db.Messages.AnyAsync(message => message.Target == refusedActor, token) &&
                             await writeFree.Outcome == new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished) &&
                             await physical.ReadFirstRootAsync(scope.Tenant, writeFree.Reference.Id, token) is null &&
                             trace.ToString().Split("pure work", StringSplitOptions.None).Length == 2,
                             "the committed journal uses the fenced position and pure completion leaves no durable run or preparation");
                     }
+                    await QualifyTerminalAsync();
+                    var delayed = QueueExpected("long-timer", longTimer, 1);
+                    var runningJob = QueueExpected("timed-job", timedJob, 2);
+                    await WaitForAsync(Task.WhenAll(delayed.Outcome, runningJob.Outcome));
+                    Check(await delayed.Outcome == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, delayed.Reference.Id, token) is { Revision: 1 },
+                        "a long authored Delay promotes on its first turn");
+                    var jobCheckpoint = await physical.ReadFirstRootAsync(scope.Tenant, runningJob.Reference.Id, token) ??
+                        throw new InvalidOperationException($"The timed job did not promote: {await runningJob.Outcome}.");
+                    await using (var db = Open())
+                    {
+                        var rows = await db.Messages.AsNoTracking().Where(message => message.Target == jobCheckpoint.Actor.Id)
+                            .OrderBy(message => message.Seq).ToArrayAsync(token);
+                        Check(await runningJob.Outcome == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                            jobCheckpoint is { Revision: 2, NextJobGeneration: 1, Jobs: not null } &&
+                            rows is [{ Kind: Kinds.JobDeadline, InboxScope: EfStore.RootTimedJobScope, JobGeneration: 0, Due: > 0 },
+                                { Kind: Kinds.Job, InboxScope: EfStore.RootTimedJobScope, JobGeneration: 0, Due: 0 }],
+                            "the first durable timed-job checkpoint commits its exact generation, deadline and ticket without a creator row");
+                    }
+                    await WaitForFinishAsync(owner, physical, runningJob.Reference.Id);
+                    Check(await physical.ReadFirstRootAsync(scope.Tenant, runningJob.Reference.Id, token) is
+                        { Revision: 4, NextJobGeneration: 1, Jobs: null, Status: InstanceStatus.Finished } jobEnd &&
+                        await physical.ReadRootTerminalOutputAsync(scope.Tenant, runningJob.Reference.Id, jobEnd.TerminalAt!.Value, true, token) is { Values: not null } jobOutput &&
+                        System.Text.Encoding.UTF8.GetString(jobOutput.Values).Contains("answer of inline-service", StringComparison.Ordinal),
+                        "the normal owner records and delivers the job result and stores the terminal output exactly once");
+                    var early = await QualifyEarlierTimerAsync();
                     await owner.ReleaseAsync(token);
 
                     var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
-                    var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow),
+                    var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow).Add(longTimer).Add(earlyTimers),
                         new NativeExecutionOptions { UseStructuralJournal = true });
                     var coldActor = new WorkflowActorType([coldModel]);
                     await cold.EnableRootSelfSendsAsync(token);
@@ -334,6 +385,12 @@ internal static class InlineRootPromotionChecks
                         trace.ToString().Split("volatile work", StringSplitOptions.None).Length == 2 &&
                         trace.ToString().Split("cold work", StringSplitOptions.None).Length == 2,
                         "a restarted owner appends revision four and does not replay the earlier volatile work");
+                    await WaitForFinishAsync(coldOwner, cold, early.Id);
+                    await WaitForFinishAsync(coldOwner, cold, delayed.Reference.Id);
+                    Check(await cold.ReadFirstRootAsync(scope.Tenant, early.Id, token) is { Revision: 3, Status: InstanceStatus.Finished } &&
+                        await cold.ReadFirstRootAsync(scope.Tenant, delayed.Reference.Id, token) is { Revision: 2, Status: InstanceStatus.Finished } &&
+                        trace.ToString().Split("durable timer finished", StringSplitOptions.None).Length == 2,
+                        "the cold owner authenticates both timer origins and settles each without replaying the creator");
                     await coldOwner.ReleaseAsync(token);
 
                     var shortLease = TimeSpan.FromMilliseconds(1_200);
@@ -358,6 +415,60 @@ internal static class InlineRootPromotionChecks
                     physical.QueueInlineRoot(target ?? owner, operation, WorkflowActorType.Start(NativeExecutionModel.Start(selected, Modes.Ephemeral)),
                         model.CaptureInlineMaterial(selected)) ?? throw new InvalidOperationException("Could not queue an inline workflow.");
 
+                (Contract.ActorRef Reference, Task<InlineRootResult> Outcome) QueueExpected(string operation, Workflow selected, long revision)
+                {
+                    var queued = Queue(operation, selected);
+                    firstRevisions.Add(queued.Reference.Id, revision);
+                    return queued;
+                }
+
+                async Task QualifyTerminalAsync()
+                {
+                    unwrittenRevision = 0;
+                    var queued = QueueExpected("terminal-first-write", terminal, 2);
+                    await WaitUnwrittenAsync(1);
+                    Check(!queued.Outcome.IsCompleted && await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token) is null,
+                        "the finishing workflow begins with an entirely volatile Delay");
+                    // Enter before the cutoff, then let the in-flight turn finish during owner drain.
+                    await WaitForAsync(FinishAcrossCutoff.Entered.Task);
+                    await Task.Delay(ownerOptions.ShortWait + TimeSpan.FromMilliseconds(25), token);
+                    FinishAcrossCutoff.Release.SetResult();
+                    await owner.DrainEnteredTurnsAsync(token);
+                    var disposition = await queued.Outcome.WaitAsync(token);
+                    var row = await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token);
+                    Check(disposition == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Finished) &&
+                        row is
+                            { Revision: 2, TerminalRevision: 2, TerminalAt: { } ended, Status: InstanceStatus.Finished } &&
+                        await physical.ReadRootTerminalOutputAsync(scope.Tenant, queued.Reference.Id, ended, true, token) is { Values: not null } output &&
+                        System.Text.Encoding.UTF8.GetString(output.Values).Contains("committed terminal", StringComparison.Ordinal),
+                        $"the first durable terminal checkpoint records its output and terminal time in the same commit ({disposition}, row status {row?.Status}, prepared {checkpoint?.Row?.Status})");
+                }
+
+                async Task<Contract.ActorRef> QualifyEarlierTimerAsync()
+                {
+                    unwrittenRevision = 0;
+                    var queued = QueueExpected("promote-earlier-timer", earlyTimers, 2);
+                    await WaitUnwrittenAsync(2);
+                    Check(!queued.Outcome.IsCompleted && await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token) is null,
+                        "the first branch finishes without writing its parallel sibling's earlier timer");
+                    await Task.Delay(ownerOptions.ShortWait + TimeSpan.FromMilliseconds(25), token);
+                    await owner.FlushAsync(token);
+                    Check(await queued.Outcome == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                        checkpoint?.Sent is [var earlier] && FoundationSelfSend.AuthoredRevision(earlier) == 1 &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token) is { Revision: 2 },
+                        "flush promotes the pending timer under its original authored revision and the checkpoint's first durable revision");
+                    return queued.Reference;
+                }
+
+                async Task WaitForFinishAsync(Worker selected, EfStore backend, string reference)
+                {
+                    while (await backend.ReadFirstRootAsync(scope.Tenant, reference, token) is { Status: InstanceStatus.Running })
+                    {
+                        await selected.RunAsync(token);
+                        await Task.Delay(5, token);
+                    }
+                }
+
                 async Task WaitForAsync(Task receipt)
                 {
                     while (!receipt.IsCompleted)
@@ -378,13 +489,14 @@ internal static class InlineRootPromotionChecks
                     }
                 }
 
-                async ValueTask<bool> CreateCanReadPreparationAsync(PendingRootStart offer, CancellationToken ct)
+                async ValueTask<bool> CreateCanReadPreparationAsync(PendingRootStart offer, string exactActor, CancellationToken ct)
                 {
                     await using var db = Open();
                     return await db.Database.SqlQuery<int>($"""
                         SELECT CAST(count(*) AS integer) AS "Value" FROM "FoundationPreparedRootStarts"
                         WHERE "Reference" = {offer.Actor.Id}
-                        """).SingleAsync(ct) == 1 && await store.ReadFirstRootAsync(scope.Tenant, offer.Actor.Id, ct) is null;
+                        """).SingleAsync(ct) == 1 && !await db.Messages.AnyAsync(message => message.Target == exactActor, ct) &&
+                        await store.ReadFirstRootAsync(scope.Tenant, offer.Actor.Id, ct) is null;
                 }
             }
 
@@ -418,6 +530,19 @@ internal static class InlineRootPromotionChecks
             }
         }
         finally { directory?.Delete(recursive: true); }
+    }
+
+    public sealed class FinishAcrossCutoff : Activity
+    {
+        internal static readonly TaskCompletionSource Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal static readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async ValueTask<Transition> ExecuteAsync(ActivityContext context)
+        {
+            Entered.TrySetResult();
+            await Release.Task.WaitAsync(context.CancellationToken);
+            return Complete();
+        }
     }
 
     private static void Check(bool result, string description)

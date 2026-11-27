@@ -463,7 +463,7 @@ public sealed class DurableTurn
         var ordinal = _ordinal++;
         var id = FoundationSelfSend.Issue(issue, Origin, Revision, ordinal, dueAt);
         var message = FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt);
-        if (recordOrdinal) FoundationSelfSend.RememberOrdinal(message, ordinal);
+        if (recordOrdinal) FoundationSelfSend.RememberIssuance(message, Revision, ordinal);
         _sent.Add(message);
         return id;
     }
@@ -695,7 +695,7 @@ public sealed class DurableTurn
                 TargetCreation: _input.Creation, SenderCreation: _input.Creation)
                 { FoundationPublish = new(key, id, Guid.Empty, Authored: new(tenant, duration)) };
             var authored = ticket.AsIssued().AsKernelTicket();
-            if (issue is not null) FoundationSelfSend.RememberOrdinal(authored, _ordinal);
+            if (issue is not null) FoundationSelfSend.RememberIssuance(authored, Revision, _ordinal);
             _sent.Add(authored);
             _ordinal++;
         }
