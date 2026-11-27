@@ -11,9 +11,10 @@ namespace Elsa3.Mapping.Tests;
 /// <summary>
 /// #5873: Elsa 3 <c>For</c> and <c>ForEach</c> declare per-pass variables on their body (<c>ForEach</c>: <c>CurrentValue</c>
 /// and <c>CurrentIndex</c>; <c>For</c>: <c>CurrentValue</c>), which a body script reads by name ahead of any workflow
-/// variable of that name. The nearest enclosing loop that declares the name owns the read, which converts to that loop's
-/// Elsa 4 variable pinned to the loop node; only a variable declared inside the body comes first. A computed name inside
-/// such a body is refused.
+/// variable of that name. The read converts to the owning loop's Elsa 4 variable, pinned to the loop node, where Elsa 3
+/// read the pass value on every run; a variable Elsa 3 found first (one of a container nested inside the body) keeps
+/// today's handling, and a read Elsa 3 resolved differently from run to run is refused. A computed name inside such a body
+/// is refused.
 /// </summary>
 public sealed class Elsa3LoopPassVariableReadTests
 {
@@ -169,6 +170,43 @@ public sealed class Elsa3LoopPassVariableReadTests
     }
 
     [Fact]
+    public async Task A_read_while_a_parallel_loop_shares_its_variable_is_refused()
+    {
+        // Both loops' bodies find the outer pass's CurrentValue in the Parallel and overwrite it in turn, so 'first''s read
+        // could see 'second''s item.
+        var parallel = Activity("parallel", "Elsa.Parallel");
+        parallel.Activities =
+        [
+            ForEach("first", Sequence("first-body", Read("getVariable('CurrentValue')"))),
+            ForEach("second", Sequence("second-body", Activity("second-node", "Elsa.WriteLine", ("text", Literal("acme"))))),
+        ];
+
+        var result = await ConvertAsync(Sequence("root", ForEach("outer", parallel)));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'second'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_read_after_a_reusable_activity_in_the_body_is_refused()
+    {
+        // A reusable workflow runs inline in Elsa 3; a loop inside it would overwrite the pass's CurrentValue.
+        var body = Sequence("body", Activity("acme-child", "Acme.ChildWorkflow"), Read("getVariable('CurrentValue')"));
+        var replacements = new Dictionary<string, Elsa3.Mapping.Mappings.Elsa3ActivityExactReplacement>(StringComparer.Ordinal)
+        {
+            ["acme-child"] = new("acme-child-v1", [], new HashSet<string>(StringComparer.Ordinal)),
+        };
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", ForEach("loop", body))), replacements: replacements);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'acme-child'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_generated_accessor_registered_after_a_body_variable_of_another_case_reads_the_pass()
     {
         // Elsa 3 registered the body's currentValue, then the per-pass CurrentValue on the same scope, which replaced it.
@@ -190,6 +228,7 @@ public sealed class Elsa3LoopPassVariableReadTests
 
         var result = await ConvertAsync(Sequence("root", ForEach("loop", body)));
 
+        Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ResolutionDiffers);
     }
 
@@ -244,7 +283,7 @@ public sealed class Elsa3LoopPassVariableReadTests
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic =>
-            diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability && diagnostic.Message.Contains("loop", StringComparison.Ordinal));
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability && diagnostic.Message.Contains("a loop's current value", StringComparison.Ordinal));
     }
 
     private static Elsa3Activity Read(string read) =>

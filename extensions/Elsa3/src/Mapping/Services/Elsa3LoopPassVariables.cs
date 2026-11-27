@@ -1,5 +1,6 @@
 using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Mapping.Conversion;
+using Elsa3.Mapping.Resolution;
 using Elsa3.Models;
 
 namespace Elsa3.Mapping.Services;
@@ -87,10 +88,28 @@ internal static class Elsa3LoopPassVariables
         }
 
         var verdicts = locations.Select(location => (location.Writer, Wins: PassWins(plan, read, path, location.Container, location.Fresh, name))).ToArray();
-        if (verdicts.All(verdict => verdict.Wins))
-            return new Elsa3PassRead(Elsa3PassReadKind.Loop, name, NodeId(owner), loopVariable);
         if (verdicts.All(verdict => !verdict.Wins))
             return Elsa3PassRead.None(name);
+
+        // The block the read finds is written by every loop that reaches it: one in the owner's body, or one that may run
+        // alongside the read, changes the value under it. A reusable workflow runs inline, and a loop inside it is one too.
+        foreach (var reusable in plan.Nodes.Values.Where(node => node.Resolved?.Source == Elsa3ResolvedSource.Replacement).Select(node => node.Node))
+        {
+            if (IsDescendant(plan, reusable, owner))
+                return Ambiguous(name, $"reusable activity '{NodeId(reusable)}' in loop '{NodeId(owner)}''s body runs inline, and a loop inside it that declares '{name}' overwrites the same Elsa 3 variable");
+            if (SharesBlock(plan, reusable, top, topContainer, fresh: true, container: null) && MayRunAlongside(plan, reusable, read))
+                return Ambiguous(name, $"reusable activity '{NodeId(reusable)}' may run alongside the read, and a loop inside it that declares '{name}' overwrites the same Elsa 3 variable");
+        }
+
+        foreach (var loop in others)
+        {
+            var (container, fresh) = Location(plan, loop);
+            if (SharesBlock(plan, loop, top, topContainer, fresh, container) && MayRunAlongside(plan, loop, read))
+                return Ambiguous(name, $"loop '{NodeId(loop)}' may run alongside the read and overwrite the same Elsa 3 variable");
+        }
+
+        if (verdicts.All(verdict => verdict.Wins))
+            return new Elsa3PassRead(Elsa3PassReadKind.Loop, name, NodeId(owner), loopVariable);
 
         var writer = verdicts.First(verdict => verdict.Writer is not null).Writer!;
         return Ambiguous(name, $"loop '{NodeId(writer)}' may run first and leave its '{name}' where a variable named '{name}' hides it");
@@ -159,6 +178,61 @@ internal static class Elsa3LoopPassVariables
         if (body is not null && IsContainer(body))
             return (body, true);
         return (Ancestors(plan, loop).FirstOrDefault(IsContainer), false);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="writer"/> writes the block the read finds: it sits under the outermost declaring loop or the
+    /// container holding that loop's block, or (with a block of its own in an enclosing container) above that block.
+    /// </summary>
+    private static bool SharesBlock(Elsa3ConversionPlan plan, Elsa3Activity writer, Elsa3Activity top, Elsa3Activity? topContainer, bool fresh, Elsa3Activity? container) =>
+        IsDescendant(plan, writer, top) ||
+        topContainer is null ||
+        IsDescendant(plan, writer, topContainer) ||
+        !fresh && (container is null || ReferenceEquals(container, topContainer) || IsDescendant(plan, topContainer, container));
+
+    /// <summary>
+    /// Whether two activities may run interleaved: their nearest common ancestor runs its children concurrently (a
+    /// <c>Parallel</c> or <c>Fork</c>), or is a <c>Flowchart</c> with no connection path between their branches.
+    /// </summary>
+    private static bool MayRunAlongside(Elsa3ConversionPlan plan, Elsa3Activity first, Elsa3Activity second)
+    {
+        var firstChain = new[] { first }.Concat(Ancestors(plan, first)).ToList();
+        var secondChain = new[] { second }.Concat(Ancestors(plan, second)).ToList();
+        var common = firstChain.FirstOrDefault(node => secondChain.Contains(node));
+        if (common is null)
+            return true;
+        if (ReferenceEquals(common, first) || ReferenceEquals(common, second))
+            return false;
+
+        if (common.Type is "Elsa.Parallel" or "Elsa.Fork")
+            return true;
+        if (common.Type != "Elsa.Flowchart")
+            return false;
+
+        var firstBranch = firstChain[firstChain.IndexOf(common) - 1];
+        var secondBranch = secondChain[secondChain.IndexOf(common) - 1];
+        return !Reaches(common, firstBranch.Id, secondBranch.Id) && !Reaches(common, secondBranch.Id, firstBranch.Id);
+    }
+
+    /// <summary>Whether a flowchart's connections lead from one child to another.</summary>
+    private static bool Reaches(Elsa3Activity flowchart, string from, string to)
+    {
+        var connections = flowchart.Connections ?? [];
+        var seen = new HashSet<string>(StringComparer.Ordinal) { from };
+        var pending = new Queue<string>([from]);
+        while (pending.TryDequeue(out var current))
+        {
+            foreach (var target in connections.Where(connection => connection.Source?.Activity == current).Select(connection => connection.Target?.Activity))
+            {
+                if (target is null || !seen.Add(target))
+                    continue;
+                if (StringComparer.Ordinal.Equals(target, to))
+                    return true;
+                pending.Enqueue(target);
+            }
+        }
+
+        return false;
     }
 
     private static Elsa3PassRead Ambiguous(string name, string reason) => new(Elsa3PassReadKind.Ambiguous, name, Reason: reason);
