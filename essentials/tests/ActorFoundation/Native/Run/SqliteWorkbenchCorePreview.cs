@@ -56,7 +56,7 @@ internal static partial class WorkbenchPostgresPreview
                 "the stopped SQLite file contains the published flowchart checkpoint and journal");
 
             var empty = Path.Combine(workspace.FullName, "empty.sqlite");
-            await SqliteEmbeddedHosting.InstallShippedAsync(empty, token);
+            await SqliteEmbeddedHosting.InstallShippedAsync(empty, WorkflowActorType.ActorType, protectsStarts: false, token);
             await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = empty }.ConnectionString))
             {
                 await db.OpenAsync(token);

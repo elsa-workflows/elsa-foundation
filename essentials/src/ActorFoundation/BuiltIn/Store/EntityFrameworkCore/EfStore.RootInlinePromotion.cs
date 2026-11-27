@@ -35,8 +35,8 @@ public sealed partial class EfStore
             throw new ArgumentException("An additional inline tenant requires its own completion policy.", nameof(additionalScope));
         await using var db = create();
         if (!db.UsesRootInlinePromotion || !OwnedCommit ||
-            additionalScope is not null && !db.RequiredFormat.SupportsIsolatedInlineQualification)
-            throw new NotSupportedException("Inline starts require the private owned promotion profile.");
+            additionalScope is not null && !db.UsesRootEphemeralTestRuns)
+            throw new NotSupportedException("Inline starts require an owned promotion profile that supports the selected scope.");
         await using var transaction = await (Engine?.BeginAsync(db, token) ?? db.Database.BeginTransactionAsync(token));
         var origin = await PinInlineRootSourceAsync(db, token);
         await transaction.CommitAsync(token);
@@ -46,7 +46,7 @@ public sealed partial class EfStore
                 throw new InvalidOperationException("Configure inline starts once before binding the worker.");
             _inlineStarts = new(scope, origin.Key, origin.Postgres, validate, protect, receiptWindow,
                 additionalScope, allowsAdditionalWriteFreeCompletion,
-                db.RequiredFormat == StoreFormat.RootHeldEphemeralHttpQualification && additionalScope is not null);
+                db.UsesRootHeldEphemeralHttpTestRuns && additionalScope is not null);
         }
     }
 

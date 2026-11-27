@@ -89,6 +89,20 @@ public sealed partial class KernelPublishedExecuteTests
         return RunAsync(true, directTests: true, recordEphemeralTestCompletion: recordCompletion, heldEphemeralTests: true);
     }
 
+    [Fact]
+    public Task Sqlite_shipped_test_runs_keep_held_http_and_exact_children() => ShippedTestRunsAsync(postgres: false);
+
+    [SkippableFact]
+    public Task PostgreSql_shipped_test_runs_keep_held_http_and_exact_children()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return ShippedTestRunsAsync(postgres: true);
+    }
+
+    private static Task ShippedTestRunsAsync(bool postgres) =>
+        RunAsync(postgres, directTests: true, recordEphemeralTestCompletion: false, heldEphemeralTests: true, shippedTestRuns: true);
+
     [SkippableFact]
     public Task PostgreSql_ephemeral_test_runs_attach_the_exact_compiled_child()
     {
@@ -138,7 +152,7 @@ public sealed partial class KernelPublishedExecuteTests
     }
 
     private static async Task RunAsync(bool postgres, bool directTests = false, bool inline = false, bool? recordEphemeralTestCompletion = null,
-        bool attachedTests = false, bool heldEphemeralTests = false)
+        bool attachedTests = false, bool heldEphemeralTests = false, bool shippedTestRuns = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var directory = postgres ? null : Directory.CreateTempSubdirectory("kernel-published-execute-");
@@ -152,13 +166,13 @@ public sealed partial class KernelPublishedExecuteTests
             if (postgres) Assert.NotEqual(new Npgsql.NpgsqlConnectionStringBuilder(foundation).Database,
                 new Npgsql.NpgsqlConnectionStringBuilder(runtime).Database);
             await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, directTests, inline,
-                recordEphemeralTestCompletion, attachedTests, heldEphemeralTests, deadline.Token);
+                recordEphemeralTestCompletion, attachedTests, heldEphemeralTests, shippedTestRuns, deadline.Token);
         }
         finally { directory?.Delete(recursive: true); }
     }
 
     private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, bool directTests, bool inline,
-        bool? recordEphemeralTestCompletion, bool attachedTests, bool heldEphemeralTests, CancellationToken token)
+        bool? recordEphemeralTestCompletion, bool attachedTests, bool heldEphemeralTests, bool shippedTestRuns, CancellationToken token)
     {
         var canonical = ExecutableOf("execute-native", "canonical-publication", Sequence("sequence",
             SetOutput("input", "message", Request("input", "message")), SetOutput("variable", "seed", VariableRead("input", "seed-key"))),
@@ -249,7 +263,9 @@ public sealed partial class KernelPublishedExecuteTests
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
         };
-        if (heldEphemeralTests)
+        if (shippedTestRuns)
+            kernelHosting.ConfigureServices(builder.Services);
+        else if (heldEphemeralTests)
             kernelHosting.ConfigureServices(builder.Services,
                 KernelShellStorage.CreateHeldEphemeralHttpQualification(provider, kernelHosting.SqlitePath, foundation),
                 protectChildExecutables: true);
@@ -679,10 +695,9 @@ public sealed partial class KernelPublishedExecuteTests
                 if (directory is not null && otherSelection is null)
                 {
                     var pathToFoundation = Path.Combine(directory, "foundation.db");
-                    var ingress = await Kernel.Foundation.Sqlite.SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(pathToFoundation,
-                        Kernel.WorkflowActor.WorkflowActor.ActorType,
+                    var ingress = await app.Services.GetRequiredService<KernelShellStorage>().OpenOperatorsAsync(
                         (scope, target, kind) => scope.Tenant == bound.Tenant && target == actor && kind == Contract.Kinds.Recover,
-                        cancellationToken: token);
+                        token);
                     await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
                         { DataSource = pathToFoundation, Pooling = false }.ToString());
                     await connection.OpenAsync(token);

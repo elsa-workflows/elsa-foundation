@@ -10,7 +10,8 @@ namespace Kernel.Native.Run;
 
 internal static partial class KernelAuthoredEventChecks
 {
-    internal static async Task<int> RunPublicEventHostAsync(string provider, bool inBatch, bool protectedStarts, bool observeReplies = false)
+    internal static async Task<int> RunPublicEventHostAsync(string provider, bool inBatch, bool protectedStarts, bool observeReplies = false,
+        bool shipped = false)
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = stop.Token;
@@ -28,7 +29,7 @@ internal static partial class KernelAuthoredEventChecks
                 observeReplies: observeReplies ? transport => new EventReplyObserver(transport, reply =>
                 {
                     if (reply.Status is not null) frames.TrySetResult(reply);
-                }) : null);
+                }) : null, shipped: shipped);
             await using (owner)
             {
                 const string startKey = "outside-start";
@@ -37,6 +38,22 @@ internal static partial class KernelAuthoredEventChecks
                     await RequireRefusalAsync<NotSupportedException>(() => ingress.SetStartAsync(scope, startKey, "start", creator, token).AsTask());
                 else
                     await ingress.SetStartAsync(scope, startKey, "start", creator, token);
+
+                if (shipped)
+                {
+                    var keyed = new Contract.Target.Key("caller-key", creator);
+                    if (protectedStarts)
+                        await RequireRefusalAsync<NotSupportedException>(() => ingress.SendAsync(scope, keyed, "keyed", Contract.Kinds.Start,
+                            cancellationToken: token).AsTask());
+                    else
+                    {
+                        var started = await ingress.SendAsync(scope, keyed, "keyed", Contract.Kinds.Start, cancellationToken: token);
+                        var duplicate = await ingress.SendAsync(scope, keyed, "keyed", Contract.Kinds.Start, cancellationToken: token);
+                        Check(started is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null } &&
+                            duplicate is { Outcome: Contract.AdmissionOutcome.Duplicate } && duplicate.Actor == started.Actor,
+                            "the shipped generic host admits one exact caller-key life");
+                    }
+                }
 
                 var startReply = await RequestAsync(startKey, "creator", "start item");
                 Check(protectedStarts ? startReply.Error == "no waiter" :
@@ -69,7 +86,7 @@ internal static partial class KernelAuthoredEventChecks
                 var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(source.Database.GetConnectionString()).Options;
                 await RequireRefusalAsync<StoreFormatException>(() => InstallAsync(model.Type, !protectedStarts));
                 await RequireRefusalAsync<StoreFormatException>(() => InstallAsync("different-actor", protectedStarts));
-                KernelDb WrongMode() => PostgresPreviewHosting.CreatePublicEventHostQualificationContext(options, model.Type, !protectedStarts);
+                KernelDb WrongMode() => Context(model.Type, !protectedStarts);
                 await RequireRefusalAsync<StoreFormatException>(() =>
                     PostgresPreviewHosting.OpenFoundationAsync(WrongMode, model.Type, cancellationToken: token));
                 var standalone = await PostgresPreviewHosting.OpenFoundationAsync(open, model.Type, cancellationToken: token);
@@ -80,25 +97,30 @@ internal static partial class KernelAuthoredEventChecks
 
                 async Task InstallAsync(string actorType, bool protectsStarts)
                 {
-                    await using var db = PostgresPreviewHosting.CreatePublicEventHostQualificationContext(options, actorType, protectsStarts);
+                    await using var db = Context(actorType, protectsStarts);
                     await PostgresRootAdmission.InstallAsync(db, token);
                 }
+
+                KernelDb Context(string actorType, bool protectsStarts) => shipped
+                    ? PostgresPreviewHosting.CreateShippedContext(options, actorType, protectsStarts)
+                    : PostgresPreviewHosting.CreatePublicEventHostQualificationContext(options, actorType, protectsStarts);
             }
             else
             {
-                var wrong = SqliteEmbeddedFoundation.ForPublicEventHostQualification(path, "reopened", model.Type,
-                    protectedStarts ? null : (_, _) => ValueTask.FromResult(true));
-                await RequireRefusalAsync<StoreFormatException>(() => wrong.InstallShippedAsync(token));
-                var wrongType = SqliteEmbeddedFoundation.ForPublicEventHostQualification(path, "reopened", "different-actor",
-                    protectedStarts ? (_, _) => ValueTask.FromResult(true) : null);
-                await RequireRefusalAsync<StoreFormatException>(() => wrongType.InstallShippedAsync(token));
+                await RequireRefusalAsync<StoreFormatException>(() => InstallAsync(model.Type, !protectedStarts));
+                await RequireRefusalAsync<StoreFormatException>(() => InstallAsync("different-actor", protectedStarts));
                 if (protectedStarts)
                 {
                     var wrongRequests = SqliteEmbeddedHosting.CreateRequests(path, "reopened", model.Type,
-                        qualificationFormat: StoreFormat.RootPublicEventHostQualification);
+                        qualificationFormat: shipped ? null : StoreFormat.RootPublicEventHostQualification);
                     await RequireRefusalAsync<StoreFormatException>(() =>
                         SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(path, model.Type, wrongRequests, token));
                 }
+
+                Task InstallAsync(string actorType, bool protectsStarts) => shipped
+                    ? SqliteEmbeddedHosting.InstallShippedAsync(path, actorType, protectsStarts, token)
+                    : SqliteEmbeddedFoundation.ForPublicEventHostQualification(path, "reopened", actorType,
+                        protectsStarts ? (_, _) => ValueTask.FromResult(true) : null).InstallShippedAsync(token);
             }
 
             await using var resumed = await restart(token);
@@ -106,6 +128,19 @@ internal static partial class KernelAuthoredEventChecks
                 cancellationToken: token);
             Check(following is { Outcome: Contract.AdmissionOutcome.Accepted, Publication.EventId: "outside" },
                 "the exact owner reopens without changing public publication authority");
+            if (shipped)
+            {
+                Check(following.Publication?.Status == Contract.PublicationStatus.Pending, "the shipped outside broadcast has its own pending owner ticket");
+                Contract.Admission replay;
+                do
+                {
+                    await Task.Delay(25, token);
+                    replay = await ingress.SendAsync(scope, new Contract.Target.Event("after-reopen"), "outside", "ignored", cancellationToken: token);
+                } while (replay.Publication is { Status: Contract.PublicationStatus.Pending });
+                Check(replay is { Outcome: Contract.AdmissionOutcome.Duplicate, Publication.Status: Contract.PublicationStatus.Matched } &&
+                    replay.Publication.Incarnation == following.Publication!.Incarnation,
+                    "the shipped owner matches the same admitted outside publication");
+            }
             return 0;
 
             async Task<Contract.Reply> RequestAsync(string key, string id, string item, object? callerAmbient = null)

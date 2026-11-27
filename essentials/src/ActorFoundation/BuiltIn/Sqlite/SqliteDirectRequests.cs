@@ -23,7 +23,9 @@ public static partial class SqliteEmbeddedHosting
         using var file = AcquireFile(databasePath);
         using var db = KernelDb.ForSqliteRootShipped(file.Options, qualificationFormat);
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
-        return new(file.Path, node, actorType, window, db.UsesRootPublicEventStarts, pressure, qualificationFormat, protectRootStart);
+        var publicEventHost = db.UsesRootPublicEventHost ? new RootPublicEventHost(actorType, protectRootStart is not null) : null;
+        return new(file.Path, node, actorType, window, db.UsesRootPublicEventStarts, db.UsesRootKeyedStarts, publicEventHost,
+            pressure, qualificationFormat, protectRootStart);
     }
 
     internal sealed class SqliteDirectRequests : IReplyTransport
@@ -36,22 +38,22 @@ public static partial class SqliteEmbeddedHosting
         private readonly ProtectRootStartAsync? protectRootStart;
 
         internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window, bool supportsPublicEvents,
-            RootAdmissionPressure? pressure = null, StoreFormat? qualificationFormat = null,
+            bool supportsKeys, RootPublicEventHost? publicEventHost, RootAdmissionPressure? pressure = null, StoreFormat? qualificationFormat = null,
             ProtectRootStartAsync? protectRootStart = null)
         {
             (this.path, this.node, this.actorType, DeduplicationWindow) = (path, node, actorType, window);
             Pressure = pressure;
             QualificationFormat = qualificationFormat;
+            PublicEventHost = publicEventHost;
             this.protectRootStart = protectRootStart;
-            admission = new(this, path, window, protectRootStart, supportsPublicEvents);
+            admission = new(this, path, window, protectRootStart, supportsPublicEvents, supportsKeys);
             edge = new(admission, node, actorType);
         }
 
         internal TimeSpan DeduplicationWindow { get; }
         internal RootAdmissionPressure? Pressure { get; }
         internal StoreFormat? QualificationFormat { get; }
-        internal RootPublicEventHost? PublicEventHost => QualificationFormat == StoreFormat.RootPublicEventHostQualification
-            ? new(actorType, protectRootStart is not null) : null;
+        internal RootPublicEventHost? PublicEventHost { get; }
         internal Requests Pending => edge.Pending;
         internal HeldRootRequests HeldEdge => edge;
 
@@ -157,7 +159,7 @@ public static partial class SqliteEmbeddedHosting
         }
 
         private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window, ProtectRootStartAsync? protectRootStart,
-            bool supportsPublicEvents) : IHeldRootAdmission
+            bool supportsPublicEvents, bool supportsKeys) : IHeldRootAdmission
         {
             public bool SupportsEvents => SupportsPublicEvents || (owner.QualificationFormat is { } format
                 ? format == StoreFormat.RootLiveEventQualification || format == StoreFormat.RootPlaybackDescendantsQualification ||
@@ -175,7 +177,7 @@ public static partial class SqliteEmbeddedHosting
 
             public bool SupportsPublicEvents { get; } = supportsPublicEvents;
 
-            public bool SupportsKeys => owner.QualificationFormat == StoreFormat.RootKeyedStartsQualification;
+            public bool SupportsKeys { get; } = supportsKeys;
 
             public Task<Contract.Admission?> AdmitKeyAsync(HeldRootRequest request, Contract.Target.Key key, string kind,
                 string? payload, CancellationToken token)
