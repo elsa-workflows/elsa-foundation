@@ -284,6 +284,139 @@ public sealed class KernelInstalledEventStartsTests
                 Assert.True(await port.ConfirmDrainedAsync(registered.Slot.SlotId, registered.Slot.Revision, token));
             }
 
+            await CheckStartupSupersessionAsync(afterProvider: false);
+            await CheckStartupSupersessionAsync(afterProvider: true);
+            await CheckActiveStartupSupersessionAsync();
+            await CheckCurrentStartupConflictAsync();
+
+            async Task CheckStartupSupersessionAsync(bool afterProvider)
+            {
+                var definition = afterProvider ? "startup-successor-ack" : "startup-successor-stale";
+                var previous = ExecutableOf(definition + "-previous", definition,
+                    Node("start", Types.Event, [Literal("EventName", "Changed", "String")]));
+                var successor = ExecutableOf(definition + "-new", definition,
+                    Node("start", Types.Event, [Literal("EventName", "Changed", "String")]));
+                await using var competitor = OpenShell();
+                var storage = competitor.Services.GetRequiredService<KernelShellStorage>();
+                await storage.InstallAsync(token, (_, _) => ValueTask.FromResult(false));
+                var competitorScopes = competitor.Services.GetRequiredService<IServiceScopeFactory>();
+                var published = await PublishAsync(competitorScopes, previous, 0, Tenant.Tenant);
+                Assert.True(published.Succeeded, published.Failure?.Message);
+                await using var competition = await competitorScopes.CreateAsyncScopeAsync(Persistence);
+                var services = competition.ServiceProvider;
+                gate.InterruptRevision = published.Slot.Revision + 1;
+                gate.FailBeforeCommit = true;
+                await Assert.ThrowsAsync<PublicationActivationException>(() => services.GetRequiredService<UnpublishPublicationSlotRequestHandler>()
+                    .UnpublishAsync(definition, KernelServing.DefaultSlotName, token));
+                var reviewed = await services.GetRequiredService<IWorkflowActivationAuthority>()
+                    .FindAsync(definition, KernelServing.DefaultSlotName, token);
+                Assert.NotNull(reviewed);
+                Assert.Null(reviewed.ActiveActivationId);
+                var publications = services.GetRequiredService<IRuntimeKernelEventPublicationStore>();
+                var through = await publications.ReadScanTailAsync(Scope, token);
+                Assert.Contains(await publications.ListScanAsync(Scope, false, 0, through, 16, token),
+                    item => item.Publication.SlotId == reviewed.SlotId && item.Publication.Revision == reviewed.Revision);
+
+                var race = new ApplyRace(reviewed.SlotId, reviewed.Revision, afterProvider, async () =>
+                {
+                    if (afterProvider) gate.InterruptRevision = reviewed.Revision + 1;
+                    var result = await PublishAsync(competitorScopes, successor, reviewed.Revision, Tenant.Tenant);
+                    Assert.Equal(!afterProvider, result.Succeeded);
+                    Assert.Equal(reviewed.Revision + 1, result.Slot.Revision);
+                    if (afterProvider) Assert.Equal(PublicationStatus.Candidate, result.Publication.Status);
+                });
+                gate.Race = race;
+                await using var starting = OpenShell();
+                var startup = starting.Services.GetRequiredService<KernelShellRuntime>();
+                await startup.StartAsync(token);
+                try
+                {
+                    Assert.Equal(afterProvider ? EventRegistrationResult.Applied : EventRegistrationResult.Stale, race.Observed);
+                    var current = await publications.FindCurrentAsync(Scope, reviewed.SlotId, token);
+                    Assert.Equal(reviewed.Revision + 1, current!.Revision);
+                    Assert.Equal(successor.Identity.ArtifactId, current.Source!.Executable.ArtifactId);
+                    var currentThrough = await publications.ReadScanTailAsync(Scope, token);
+                    Assert.True(currentThrough > through);
+                    Assert.DoesNotContain(await publications.ListScanAsync(Scope, false, 0, currentThrough, 16, token),
+                        item => item.Publication.SlotId == current.SlotId);
+                    Assert.Equal(EventRegistrationResult.Stale,
+                        await starting.Services.GetRequiredService<KernelShellStorage>().BindEventStarts(Tenant)
+                            .ApplyAsync(reviewed.SlotId, reviewed.Revision, [], token));
+
+                    if (!afterProvider)
+                    {
+                        await using var serving = await starting.Services.GetRequiredService<IServiceScopeFactory>()
+                            .CreateAsyncScopeAsync(Persistence);
+                        var currentServices = serving.ServiceProvider;
+                        var unpublish = new UnpublishPublicationSlotRequestHandler(new SlotSnapshot(reviewed),
+                            currentServices.GetRequiredService<IWorkflowActivationCoordinator>(), currentServices.GetRequiredService<IPublicationRecordStore>(),
+                            currentServices.GetRequiredService<IWorkflowExecutableStore>(), currentServices.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
+                            TimeProvider.System);
+                        var refusal = await Assert.ThrowsAsync<PublicationActivationException>(() =>
+                            unpublish.UnpublishAtRevisionAsync(definition, KernelServing.DefaultSlotName, reviewed.Revision, token));
+                        Assert.Equal(PublicationFailureCodes.SlotRevisionConflict, refusal.Code);
+                        var stillServing = await services.GetRequiredService<IWorkflowActivationAuthority>()
+                            .FindAsync(definition, KernelServing.DefaultSlotName, token);
+                        Assert.Equal(current.Source.ActivationId, stillServing!.ActiveActivationId);
+                    }
+                }
+                finally { await startup.StopAsync(token); }
+            }
+
+            async Task CheckActiveStartupSupersessionAsync()
+            {
+                const string definition = "startup-active-slot";
+                var executable = ExecutableOf(definition, definition,
+                    Node("start", Types.Event, [Literal("EventName", "Changed", "String")]));
+                await using var competitor = OpenShell();
+                await competitor.Services.GetRequiredService<KernelShellStorage>().InstallAsync(token, (_, _) => ValueTask.FromResult(false));
+                var competitorScopes = competitor.Services.GetRequiredService<IServiceScopeFactory>();
+                gate.InterruptRevision = 1;
+                gate.FailBeforeCommit = true;
+                var pending = await PublishAsync(competitorScopes, executable, 0, Tenant.Tenant);
+                Assert.False(pending.Succeeded);
+                Assert.NotNull(pending.Slot.ActiveActivationId);
+
+                var race = new ApplyRace(pending.Slot.SlotId, pending.Slot.Revision, false, async () =>
+                {
+                    await using var scope = await competitorScopes.CreateAsyncScopeAsync(Persistence);
+                    var withdrawn = await scope.ServiceProvider.GetRequiredService<UnpublishPublicationSlotRequestHandler>()
+                        .UnpublishAsync(definition, KernelServing.DefaultSlotName, token);
+                    Assert.Null(withdrawn.ActiveActivationId);
+                    Assert.Equal(pending.Slot.Revision + 1, withdrawn.Revision);
+                });
+                gate.Race = race;
+                await using var starting = OpenShell();
+                var startup = starting.Services.GetRequiredService<KernelShellRuntime>();
+                await startup.StartAsync(token);
+                try
+                {
+                    Assert.Equal(EventRegistrationResult.Stale, race.Observed);
+                    Assert.Null(starting.Services.GetRequiredService<KernelServing>().Find(pending.Slot.SlotId));
+                }
+                finally { await startup.StopAsync(token); }
+            }
+
+            async Task CheckCurrentStartupConflictAsync()
+            {
+                const string definition = "startup-current-conflict";
+                var executable = ExecutableOf(definition, definition,
+                    Node("start", Types.Event, [Literal("EventName", "Changed", "String")]));
+                await using var staging = OpenShell();
+                var storage = staging.Services.GetRequiredService<KernelShellStorage>();
+                await storage.InstallAsync(token, (_, _) => ValueTask.FromResult(false));
+                var scopes = staging.Services.GetRequiredService<IServiceScopeFactory>();
+                gate.InterruptRevision = 1;
+                gate.FailBeforeCommit = true;
+                var pending = await PublishAsync(scopes, executable, 0, Tenant.Tenant);
+                Assert.False(pending.Succeeded);
+                Assert.Equal(EventRegistrationResult.Applied, await storage.BindEventStarts(Tenant)
+                    .ApplyAsync(pending.Slot.SlotId, pending.Slot.Revision, [], token));
+                var relay = staging.Services.GetRequiredService<KernelEventPublicationRelay>();
+                var conflict = await Assert.ThrowsAsync<InvalidOperationException>(() => relay.RestoreAsync(token));
+                Assert.Contains(nameof(EventRegistrationResult.Conflict), conflict.Message, StringComparison.Ordinal);
+            }
+
             WebApplication OpenShell()
             {
                 var builder = WebApplication.CreateBuilder();
@@ -399,8 +532,27 @@ public sealed class KernelInstalledEventStartsTests
         internal PersistenceMode DefaultMode = PersistenceMode.Balanced;
         internal long? InterruptRevision;
         internal bool FailBeforeCommit;
+        internal ApplyRace? Race;
         internal volatile string? BlockedTarget;
         internal readonly TaskCompletionSource TimedOut = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed record ApplyRace(string Slot, long Revision, bool AfterProvider, Func<Task> Win)
+    {
+        internal EventRegistrationResult? Observed;
+    }
+
+    private sealed class SlotSnapshot(WorkflowActivationSlot snapshot) : IWorkflowActivationAuthority
+    {
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<WorkflowActivationSlot?>(snapshot);
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(string workflowDefinitionId, string slotName,
+            WorkflowActivationSource source, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class PausableAdmissions(IEventStartAdmissions inner, RelayGate gate) : IOrderedEventStartAdmissions
@@ -412,7 +564,19 @@ public sealed class KernelInstalledEventStartsTests
                 gate.InterruptRevision = null;
                 throw new IOException("Injected interruption before provider registration.");
             }
+            var race = gate.Race;
+            if (race is not null && race.Slot == slot && race.Revision == revision)
+            {
+                gate.Race = null;
+                if (!race.AfterProvider) await race.Win();
+            }
+            else race = null;
             var result = await inner.ApplyAsync(slot, revision, items, token);
+            if (race is not null)
+            {
+                race.Observed = result;
+                if (race.AfterProvider) await race.Win();
+            }
             if (gate.InterruptRevision == revision)
             {
                 gate.InterruptRevision = null;

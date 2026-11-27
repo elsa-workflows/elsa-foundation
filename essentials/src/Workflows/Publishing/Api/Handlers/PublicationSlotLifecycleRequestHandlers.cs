@@ -52,14 +52,15 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         var slot = await activationAuthority.FindAsync(workflowDefinitionId, slotName, cancellationToken)
             ?? throw new PublicationSlotNotFoundException($"Publication slot '{slotName}' does not exist.");
         if (expectedRevision is { } reviewedRevision && slot.Revision != reviewedRevision)
-            throw new PublicationActivationException(new PublicationFailure(
-                PublicationFailureCodes.SlotRevisionConflict,
-                $"Publication slot '{slotName}' changed after it was reviewed. Review the current slot before unpublishing it."));
+            throw SlotChanged();
         if (slot.ActiveActivationId is not { } publicationId)
         {
             if (activationCoordinator.RequiresInactiveAcknowledgment)
             {
                 var completion = await activationCoordinator.EnsureServingAsync(workflowDefinitionId, slotName, cancellationToken);
+                if (completion.Slot.SlotId != slot.SlotId || completion.Slot.Revision != slot.Revision ||
+                    completion.Slot.ActiveActivationId is not null)
+                    throw SlotChanged();
                 if (!completion.Succeeded)
                     throw new PublicationActivationException(new(PublicationFailureCodes.ProjectionActivationFailed,
                         completion.Diagnostic ?? "The external publication withdrawal has not been confirmed."));
@@ -129,6 +130,10 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         if (awaitingAcknowledgment)
             throw new PublicationActivationException(new(PublicationFailureCodes.ProjectionActivationFailed, deactivation.Diagnostic!));
         return deactivation.Slot;
+
+        PublicationActivationException SlotChanged() => new(new PublicationFailure(
+            PublicationFailureCodes.SlotRevisionConflict,
+            $"Publication slot '{slotName}' changed after it was reviewed. Review the current slot before unpublishing it."));
     }
 
     private static bool IsOwnedByPublishing(WorkflowActivationSlot slot) =>
