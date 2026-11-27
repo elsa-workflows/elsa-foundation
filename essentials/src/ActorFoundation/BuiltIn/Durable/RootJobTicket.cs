@@ -44,8 +44,8 @@ internal static class RootJobTicket
 
     internal static bool IsTimedSend(Message message) => message.Kind is Kinds.Job or Kinds.JobDeadline or Kinds.JobFinished;
 
-    internal static bool IsCompletion(Delivery delivery, InstanceRow row, bool timed = false) =>
-        delivery is { Durable: true, IsWorkerJobCompletion: true, Original: { } original } &&
+    internal static bool IsCompletion(Delivery delivery, InstanceRow row, bool timed = false, bool allowVolatile = false) =>
+        (allowVolatile || delivery.Durable) && delivery is { IsWorkerJobCompletion: true, Original: { } original } &&
         Read(original, row.Id, row.Model, timed) is { } ticket &&
         JobRegistry.Generation(row, ticket.Key) == original.JobGeneration &&
         MatchesCompletion(original, delivery.Message, ticket.Key);

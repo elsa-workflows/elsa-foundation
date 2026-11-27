@@ -63,6 +63,7 @@ internal sealed record InlineRootCreatorWitness(object Issuer, Message Creator, 
     : RootCreatorWitness(Creator);
 internal sealed record InlineParkInput(Message Envelope, bool Failed);
 internal sealed record InlineParkWitness(InstanceRow? Checkpoint, IReadOnlyList<InlineParkInput> Inputs);
+internal sealed record InlineJobWinner(InstanceRow Checkpoint, Message Ticket, Message Deadline, Message Result, RootJobCompletion? Callback);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
 public sealed record SubscriptionRow(
@@ -187,6 +188,7 @@ public sealed record TurnCommit(
     internal FoundationHeaderChange? FoundationHeader { get; init; }
     internal RootCreatorWitness? RootCreator { get; init; }
     internal InlineParkWitness? FoundationInlinePark { get; init; }
+    internal InlineJobWinner? FoundationInlineJob { get; init; }
     // The qualified writer compares the exact envelope the owner dispatched with the locked occurrence.
     internal Message? FoundationRootOperator { get; init; }
     internal Message? FoundationRootRefusedInput { get; init; }

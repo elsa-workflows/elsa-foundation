@@ -559,9 +559,12 @@ internal sealed partial class ActorAdapter
     private Durable.TurnOutcome? SettleRootTimedJob(Durable.TurnInput input)
     {
         if (!rootTimedJobSettlement || input.Row is not { Status: Durable.InstanceStatus.Running, Creation: 1 } row ||
-            input.Taken is not [var item] || !item.Durable) return null;
-        if (Durable.RootJobTicket.IsCompletion(item, row, timed: true))
+            input.Taken is not [var item]) return null;
+        var inline = !item.Durable && roots?.SupportsInlineStarts == true && input.Unwritten && row.FoundationInlineBirth is not null;
+        if (!inline && !item.Durable) return null;
+        if (Durable.RootJobTicket.IsCompletion(item, row, timed: true, allowVolatile: inline))
         {
+            if (inline) return WriteInlineWinner();
             var original = item.Original!;
             return SettleJob(input, row, item.Message.Read<Durable.JobFinished>(), original.JobGeneration,
                 original.Read<Durable.JobTicket>().Timer, cancel: false, root: true);
@@ -569,7 +572,15 @@ internal sealed partial class ActorAdapter
         if (item.Message is { Kind: Durable.Kinds.JobDeadline, Due: { } due } deadline &&
             deadline.Read<Durable.JobDeadline>() is { Key: var key } && Durable.JobRegistry.Generation(row, key) is { } generation &&
             deadline.WithoutTicketAuthority() == Durable.RootJobTicket.Deadline(row.Id, key, generation, due))
-            return SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), generation, null, cancel: true, root: true);
+            return inline ? WriteInlineWinner() :
+                SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), generation, null, cancel: true, root: true);
         return null;
+
+        Durable.TurnOutcome WriteInlineWinner()
+        {
+            var outcome = Write(row, input.State, input.Pending);
+            outcome.Consumed.Add(item);
+            return outcome;
+        }
     }
 }

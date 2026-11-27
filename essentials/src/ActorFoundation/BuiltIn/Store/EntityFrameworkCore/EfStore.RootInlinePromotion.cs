@@ -113,6 +113,7 @@ public sealed partial class EfStore
             FoundationHeader = header,
             OpensPark = parked,
             FoundationInlinePark = turn.FoundationInlinePark,
+            FoundationInlineJob = turn.FoundationInlineJob,
             FoundationKept = parked && turn.FoundationKept is { Count: 0 } ? turn.FoundationKept : null,
             FoundationRootChildSends = turn.FoundationRootChildSends,
             FoundationTerminalOutput = row.Status == InstanceStatus.Finished ? turn.FoundationTerminalOutput : null
@@ -140,7 +141,11 @@ public sealed partial class EfStore
         if (children is { Starts.Length: > 0, PendingBirths: null }) return null;
 
         var park = turn.FoundationInlinePark is { } parkWitness ? LowerInlinePark(root, turn, row, parkWitness, witness) : null;
-        var sends = EncodeRootFirstSends(root, row, turn, promotingInline: true);
+        var capturedJob = turn.FoundationInlineJob;
+        if (capturedJob is not null && (installed is null || witness is null || !RootTimedJobSettlementEnabled || parked ||
+            !MatchesInlineJob(row, capturedJob, turn.Sent))) throw RootShape();
+        var sends = capturedJob is null ? EncodeRootFirstSends(root, row, turn, promotingInline: true)
+            : EncodeRootSends(root, row, turn.Sent, promotingInline: true);
         var first = WithRootChildEffects(PrepareFirstRoot(binding.Tenant, binding.Reference, creator, fence,
             row.FoundationNullState ? null : row.State, row.StateVersion, header.TypeData, header.Labels, turn.Journal,
             jobState: row.NextJobGeneration is null ? null : new RootJobState(row.Jobs, row.NextJobGeneration), status: row.Status,
@@ -180,7 +185,8 @@ public sealed partial class EfStore
         if (leaseRemaining() <= TimeSpan.Zero) return null;
         var checkpoint = new InlineRootCheckpoint((FirstRootCheckpoint)first.Checkpoint, scope, stage, offer.Issuance,
             source, (long)receiptWindow.TotalMilliseconds, 0, turn.Journal, fence.Epoch, witness?.LeaseRemaining,
-            turn.FoundationTerminalOutput is { } output ? new RootTerminalOutputCheckpoint(root, row.Revision, output) : null, park);
+            turn.FoundationTerminalOutput is { } output ? new RootTerminalOutputCheckpoint(root, row.Revision, output) : null, park,
+            capturedJob);
         return new(journal, checkpoint);
 
         async ValueTask<bool> ProtectChildrenAsync(RootChildEffects effects, CancellationToken ct)
@@ -227,6 +233,23 @@ public sealed partial class EfStore
         }
     }
 
+    private static bool MatchesInlineJob(InstanceRow row, InlineJobWinner captured, IReadOnlyList<Message> sends) =>
+        row is { Status: InstanceStatus.Running, Creation: 1, Jobs: not null } && captured.Checkpoint is
+            { Status: InstanceStatus.Running, Creation: 1, FoundationInlineBirth: not null } previous &&
+        row.Id == previous.Id && row.Model == previous.Model && row.StartIntent == previous.StartIntent && row.Revision >= previous.Revision &&
+        row.FoundationInlineBirth == previous.FoundationInlineBirth && row.Jobs == previous.Jobs && row.NextJobGeneration == previous.NextJobGeneration &&
+        JobRegistry.Read(row.Jobs) is [var registered] && registered.Generation >= 0 && registered.Generation + 1 == row.NextJobGeneration &&
+        captured.Ticket is { HasIssuedTicket: true } original && RootJobTicket.Read(original, row.Id, row.Model, timed: true) is { } ticket &&
+        ticket.Key == registered.Key && original.JobGeneration == registered.Generation && captured.Deadline.HasIssuedTicket &&
+        captured.Deadline.WithoutTicketAuthority() == RootJobTicket.Deadline(row.Id, ticket) &&
+        RootJobTicket.IsRecordedResult(captured.Result, row) &&
+        (captured.Callback is { } callback
+            ? callback is { Result.HasIssuedTicket: true, PublishedAt: >= 0 } && callback.PublishedAt < ticket.Deadline &&
+                callback.Original == original && callback.Result.Payload == captured.Result.Payload &&
+                RootJobTicket.MatchesCompletion(original, callback.Result, ticket.Key)
+            : captured.Result.Read<JobFinished>() is { Result: null, Error: "timeout" }) &&
+        sends.Where(RootJobTicket.IsTimedSend).SequenceEqual([captured.Result]);
+
     private sealed record InlineParkWire(Message Input, Message Wire, bool Failed);
     private sealed record InlineParkOpening(IReadOnlyList<InlineParkWire> Inputs, FoundationSelfIssuer Issuer);
 
@@ -263,7 +286,7 @@ public sealed partial class EfStore
 
     private sealed record InlineRootCheckpoint(FirstRootCheckpoint First, Contract.BoundScope Scope, PreparedRootStart Stage, string Issuance,
         (uint Marker, uint Namespace, long Table)? Postgres, long ReceiptWindow, long Position, string Journal, long Epoch,
-        Func<TimeSpan>? LeaseRemaining, RootTerminalOutputCheckpoint? Output, InlineParkOpening? Park)
+        Func<TimeSpan>? LeaseRemaining, RootTerminalOutputCheckpoint? Output, InlineParkOpening? Park, InlineJobWinner? Job)
         : QualifiedRootCheckpoint(First.JournalRevision)
     {
         internal override bool WritesJournal(string actor) => actor == Stage.Actor;
@@ -309,8 +332,18 @@ public sealed partial class EfStore
             return updated == 1 && (Output is null || await Output.BindCheckpointAsync(db, token)) &&
                 (First.ChildEffects is null || await First.ChildEffects.BindAsync(db, Stage.Tenant, token)) &&
                 (Park is null || await BindParkAsync(db, origin, Park, now, token)) &&
+                (Job is null || await VerifyInlineJobAsync(db, Job, now, token)) &&
                 await ReadInlineClockAsync(db, token) < Math.Min(Stage.Deadline, currentLease) &&
                 !(LeaseRemaining?.Invoke() <= TimeSpan.Zero);
+        }
+
+        private async Task<bool> VerifyInlineJobAsync(KernelDb db, InlineJobWinner job, long at, CancellationToken token)
+        {
+            if (!db.UsesRootInlinePromotion || !db.UsesRootTimedJobSettlement ||
+                (job.Callback?.PublishedAt is { } publication ? publication > at : job.Deadline.Due > at)) return false;
+            var rows = await db.Messages.AsNoTracking().Where(message => message.Target == Stage.Actor && message.Partition == Stage.Partition &&
+                message.InboxScope == RootTimedJobScope && !message.Done).Take(2).ToListAsync(token);
+            return rows is [var stored] && DecodeRootTimedRow(stored) == job.Result;
         }
 
         private async Task<bool> BindParkAsync(KernelDb db, InlineRootSource source, InlineParkOpening park, long at, CancellationToken token)

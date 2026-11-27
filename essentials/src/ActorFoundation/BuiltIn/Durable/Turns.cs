@@ -254,6 +254,7 @@ public sealed class TurnOutcome(string instance)
     internal bool ClearsPrivateTimersOnEnd;
     internal ParkKeepReason? FoundationKeep;
     internal ParkPageClear? FoundationParkClear;
+    internal InlineJobWinner? FoundationInlineJob;
     internal ParkRecoveryPage? FoundationRecoveryPage;
     internal ParkRetryOpen? FoundationRetry;
     internal ParkTimerOpen? FoundationRecoveryTimers;
@@ -721,8 +722,12 @@ public sealed class DurableTurn
     internal bool CanKeepInlineMailbox()
     {
         var consumed = _input.Taken.Select(item => item.Message.InboxKey).ToHashSet();
-        return ParkRecoveryCredit.FitsInlineMailbox(_input.VolatileMessages.Where(message =>
-            !consumed.Contains(message.InboxKey) && !_cancelled.Contains(message.InboxKey)).Concat(_sent));
+        var mailbox = _input.VolatileMessages.Where(message =>
+            !consumed.Contains(message.InboxKey) && !_cancelled.Contains(message.InboxKey)).Concat(_sent).ToArray();
+        // With a job and independent local inputs, those inputs may open a Park while the job is active.
+        // Commit the mixed mailbox first so ordinary recovery can keep the job's durable registration.
+        return (!mailbox.Any(RootJobTicket.IsTimedSend) || mailbox.All(RootJobTicket.IsTimedSend)) &&
+            ParkRecoveryCredit.FitsInlineMailbox(mailbox);
     }
 
     /// <summary>Everything this turn sends stays in memory: none of it is a row.</summary>

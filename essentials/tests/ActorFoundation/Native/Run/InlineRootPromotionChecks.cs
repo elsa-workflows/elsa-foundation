@@ -184,12 +184,22 @@ internal static class InlineRootPromotionChecks
                     Wf.Sequence("right", Wf.Delay("right-timer", 90), Wf.WriteLine("right-output", "right after recovery")),
                     Wf.Sequence("later", Wf.Delay("later-timer", 1_200), Wf.WriteLine("later-output", "later after recovery"))))
                     { ExecutableSelection = "private-125-ordered-park" };
+                var shortJob = new Node("short-job", typeof(PostgresRootTimedJobSettlement.ControlledJob)) { JobTimeout = TimeSpan.FromMilliseconds(900) };
+                var catchTimeout = Wf.Node<PostgresRootTimedJobSettlement.CatchTimeout>("catch-timeout").With(shortJob);
+                var volatileJobWorkflow = new Workflow("inline-volatile-job", Wf.Sequence("run", catchTimeout,
+                    Wf.SetOutput("job-result", "result", Binding.Result("catch-timeout")))) { ExecutableSelection = "private-125-volatile-job" };
+                var mixedJob = new Node("mixed-job", typeof(CallService)) { JobTimeout = TimeSpan.FromMilliseconds(900) };
+                mixedJob.Inputs.Add("Milliseconds", 100);
+                var mixedMailbox = new Workflow("inline-mixed-mailbox", Wf.Parallel("parallel", null, Wf.Delay("independent-timer", 350), mixedJob))
+                    { ExecutableSelection = "private-125-mixed-mailbox" };
                 var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure).Add(longTimer).Add(earlyTimers).Add(timedJob).Add(terminal)
-                    .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow).Add(orderedParkWorkflow);
+                    .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow).Add(orderedParkWorkflow).Add(volatileJobWorkflow).Add(mixedMailbox);
                 var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
                 var actor = new WorkflowActorType([model]);
                 var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
                 long unwrittenRevision = 0;
+                string? unwrittenActor = null;
+                var jobPublications = 0;
                 TurnCommit? checkpoint = null;
                 Message? firstCreator = null;
                 PendingRootStart? offered = null;
@@ -229,7 +239,8 @@ internal static class InlineRootPromotionChecks
                 var ownerOptions = new WorkerOptions
                 {
                     ShortWait = TimeSpan.FromMilliseconds(1_400),
-                    OnKeptInMemory = (_, revision) => unwrittenRevision = revision,
+                    OnKeptInMemory = (instance, revision) => (unwrittenActor, unwrittenRevision) = (instance, revision),
+                    AfterJobPublication = () => Interlocked.Increment(ref jobPublications),
                     OnTurn = (instance, messages, _) =>
                     {
                         if (messages.All(message => message.Due is not null)) volatileCohorts[instance.Id] = messages.Select(message => message.InboxKey.Id).ToArray();
@@ -375,6 +386,16 @@ internal static class InlineRootPromotionChecks
 
                     var parkedRun = await QualifyParkAsync();
                     var orderedPark = await QualifyOrderedParkAsync();
+                    var jobWinner = await QualifyVolatileJobAsync(callbackWins: true);
+                    var jobDeadline = await QualifyVolatileJobAsync(callbackWins: false);
+                    var mixed = QueueExpected("mixed-mailbox-promotes", mixedMailbox, 1);
+                    unwrittenRevision = 0;
+                    await WaitForAsync(mixed.Outcome);
+                    var mixedRoot = await physical.ReadFirstRootAsync(scope.Tenant, mixed.Reference.Id, token);
+                    Check(await mixed.Outcome == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                        mixedRoot is { Revision: 1, Jobs: not null } && unwrittenRevision == 0,
+                        "an independent short timer and job commit their mixed mailbox before either can create an unsafe volatile Park");
+                    await WaitForFinishAsync(owner, physical, mixed.Reference.Id);
                     var initialPark = Queue("park-before-first-checkpoint", initialParkWorkflow, values: new() { ["marker"] = "original initial input" });
                     firstRevisions.Add(initialPark.Reference.Id, 1);
                     await WaitForAsync(initialPark.Outcome);
@@ -395,7 +416,7 @@ internal static class InlineRootPromotionChecks
 
                     var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
                     var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow).Add(longTimer).Add(earlyTimers)
-                        .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow).Add(orderedParkWorkflow),
+                        .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow).Add(orderedParkWorkflow).Add(volatileJobWorkflow),
                         new NativeExecutionOptions { UseStructuralJournal = true });
                     var coldActor = new WorkflowActorType([coldModel]);
                     await cold.EnableRootSelfSendsAsync(token);
@@ -455,6 +476,10 @@ internal static class InlineRootPromotionChecks
                         "a fresh owner resolves the exact selected child and resumes the parent without replaying its creator");
                     await RecoverParkAsync(coldOwner, cold, parkedRun);
                     await RecoverInitialParkAsync(coldOwner, cold, initialPark.Reference);
+                    await CheckColdJobAsync(jobWinner, "captured before deadline");
+                    await CheckColdJobAsync(jobDeadline, "timeout");
+                    Check(PostgresRootTimedJobSettlement.ControlledJob.Attempts.IsEmpty,
+                        "the successor never starts a new job for either already selected volatile winner");
                     FailOrderedTurn.Allow = true;
                     await AdmitRecoveryAsync(coldOwner, cold, orderedPark.Reference, "recover-ordered-mailbox");
                     EfStore.RootImage? orderedResult;
@@ -486,6 +511,16 @@ internal static class InlineRootPromotionChecks
                     Check(await blocked.Outcome is { Disposition: InlineRootDisposition.Refused or InlineRootDisposition.OwnershipLost } &&
                         await physical.ReadFirstRootAsync(scope.Tenant, protectionDeadline, token) is null,
                         "the owner lease bounds an unresponsive protector and no continuation is reported committed");
+
+                    async Task CheckColdJobAsync(Contract.ActorRef actor, string value)
+                    {
+                        await WaitForFinishAsync(coldOwner, cold, actor.Id);
+                        var finished = await cold.ReadFirstRootAsync(scope.Tenant, actor.Id, token);
+                        Check(finished is { Status: InstanceStatus.Finished, Revision: 2, TerminalAt: { } ended } &&
+                            await cold.ReadRootTerminalOutputAsync(scope.Tenant, actor.Id, ended, true, token) is { Values: not null } output &&
+                            System.Text.Encoding.UTF8.GetString(output.Values).Contains(value, StringComparison.OrdinalIgnoreCase),
+                            "a fresh owner runs the authored callback once with the committed volatile winner");
+                    }
                 }
                 finally { WriteLine.Out = originalTrace; }
 
@@ -585,6 +620,37 @@ internal static class InlineRootPromotionChecks
                         volatileCohorts[actor].SequenceEqual(rows.Take(2).Select(row => row.Id)),
                         "the first commit keeps the selected two occurrences and preserves the not-yet-due timer after them");
                     return (queued.Reference, actor, rows.Select(row => row.Id).ToArray());
+                }
+
+                async Task<Contract.ActorRef> QualifyVolatileJobAsync(bool callbackWins)
+                {
+                    unwrittenRevision = 0;
+                    var quotedPublications = Volatile.Read(ref jobPublications);
+                    var queued = QueueExpected(callbackWins ? "volatile-job-winner" : "volatile-deadline-winner", volatileJobWorkflow, 1);
+                    await WaitUnwrittenAsync(1);
+                    var actor = unwrittenActor!;
+                    while (!PostgresRootTimedJobSettlement.ControlledJob.Attempts.TryPeek(out _)) await Task.Delay(5, token);
+                    Check(PostgresRootTimedJobSettlement.ControlledJob.Attempts.TryDequeue(out var attempt) &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token) is null,
+                        "the timed activity enters as a volatile attempt before its first durable checkpoint");
+                    if (callbackWins)
+                    {
+                        attempt.Exit!.SetResult("captured before deadline");
+                        while (Volatile.Read(ref jobPublications) == quotedPublications) await Task.Delay(5, token);
+                    }
+                    else await Task.Delay(950, token);
+
+                    owner.RunTurn(actor);
+                    await owner.FlushAsync(token);
+                    Check(await queued.Outcome.WaitAsync(token) == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running),
+                        "the selected timed winner promotes the last sealed checkpoint before running the authored callback");
+                    await using var db = Open();
+                    var stored = await db.Messages.AsNoTracking().Where(message => message.Target == actor && !message.Done).ToArrayAsync(token);
+                    Check(stored is [{ Kind: Kinds.JobFinished, JobGeneration: 0, Payload: not null } result] &&
+                        (callbackWins ? Durable.Json.Read<JobFinished>(result.Payload).Result?.Contains("captured before deadline", StringComparison.Ordinal) == true
+                            : Durable.Json.Read<JobFinished>(result.Payload) is { Result: null, Error: "timeout" }),
+                        "the first durable write contains exactly the selected recorded result and no execution ticket or deadline");
+                    return queued.Reference;
                 }
 
                 async Task RecoverParkAsync(Worker successor, EfStore backend, Contract.ActorRef parked)

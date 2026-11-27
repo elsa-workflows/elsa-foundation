@@ -3595,12 +3595,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 unit.Consumed is [{ Durable: true, RootCreator: { } witness } source] && ReferenceEquals(source.Message, witness.Envelope)
                 ? witness : null),
             FoundationInlinePark = inlinePark,
+            FoundationInlineJob = unit.FoundationInlineJob,
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
                     unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })
                     ? qualified.Message : null,
             FoundationRootRefusedInput = unit.FoundationRootRefusedInput,
-            FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
+            FoundationRootJobCompletion = unit.FoundationInlineJob is null && unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
                 (completed.JobDeadline is null || _type.RootTimedJobPublicationClock is not null)
                     ? new((original with { }).AsKernelTicket(), (completed.Message with { }).AsKernelTicket(),
@@ -3751,6 +3752,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // inserted, not updated at its revision.
         if (unit.Row is not null) unit.Expected = null;
         if (Has(Flaw.ForgetShortWaits)) return;
+        CaptureInlineJobWinner(unit);
         // Public results held by the turn already have their settled row staged above. Legacy jobs retain their F7 ticket.
         var prior = _items.Values.Where(i => !i.Durable && Canonical(i.Message.Target.Id) == unit.Instance && !unit.Consumed.Contains(i)
                      && !unit.Cancelled.Contains(i.Message.InboxKey) && unit.HeldJobResults?.ContainsKey(i) != true)
@@ -3760,6 +3762,37 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Promoted.Add(item.Message.InboxKey);
         }
         unit.Sent.InsertRange(0, prior.Select(item => item.Original ?? item.Message));
+    }
+
+    private void CaptureInlineJobWinner(TurnOutcome unit)
+    {
+        if (_type.RootTimedJobPublicationClock is null || unit.OpensPark || unit.FoundationInlineJob is not null ||
+            unit.Row is not { Status: InstanceStatus.Running, Jobs: not null } row ||
+            unit.Slot?.Row is not { FoundationInlineBirth: not null, Jobs: not null } checkpoint || row.Jobs != checkpoint.Jobs ||
+            PendingPromotion(unit) is not InlineRootCreatorWitness || JobRegistry.Read(row.Jobs) is not [var registered]) return;
+        var key = InboxKey.Ticket(row.Id, registered.Key, row.Creation, registered.Generation);
+        if (_items.GetValueOrDefault(key) is not { Durable: false } item || unit.Cancelled.Contains(key)) return;
+        var original = item.Original ?? item.Message;
+        if (!original.HasIssuedTicket || RootJobTicket.Read(original, row.Id, row.Model, timed: true) is not { } ticket) return;
+        var deadline = RootJobTicket.Deadline(row.Id, ticket);
+        if (_items.GetValueOrDefault(deadline.InboxKey) is not { Durable: false, Message: { } timer } ||
+            !timer.HasIssuedTicket || timer.WithoutTicketAuthority() != deadline) return;
+
+        RootJobCompletion? callback = null;
+        string payload;
+        if (item.IsWorkerJobCompletion && item.CompletedAt < ticket.Deadline && RootJobTicket.MatchesCompletion(original, item.Message, ticket.Key))
+        {
+            callback = new(original, (item.Message with { }).AsKernelTicket(), item.CompletedAt);
+            payload = item.Message.Payload!;
+        }
+        else if (item.JobDeadlineClosed && Now >= ticket.Deadline)
+            payload = Json.Write(new JobFinished(ticket.Key, null, "timeout"));
+        else return;
+        var result = RootJobTicket.RecordedResult(row.Id, ticket.Key, registered.Generation, payload);
+        unit.FoundationInlineJob = new(checkpoint, original, timer, result, callback);
+        unit.Cancelled.Add(key);
+        unit.Cancelled.Add(deadline.InboxKey);
+        unit.Sent.Add(result);
     }
 
     /// <summary>Decision 4: an instance kept in memory ended there, and its turn leaves nothing that is a row.</summary>
