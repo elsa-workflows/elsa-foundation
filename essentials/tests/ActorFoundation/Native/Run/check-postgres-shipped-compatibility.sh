@@ -6,8 +6,15 @@ output=bin/Release/net10.0/Kernel.Native.Run.dll
 repo=$(git -C "$(dirname "$0")" -c core.fsmonitor=false rev-parse --show-toplevel)
 prior_revision=fad467643e13087ea77707fb41ee5c667ba4479b
 shipped_revision=8b97c31d018d1a2b5aa2dd0f38fd947f4d2bbd73
+provider=PostgreSQL
+definition_engine=1
+prior_markers='1=3/27/1 2=1/6/0'
+candidate_markers='1=3/28/1 2=1/7/0'
+# shellcheck source=shipped-compatibility-pair.sh
+source "$repo/$runner/shipped-compatibility-pair.sh"
+read_compatibility_pair "$@"
 fixture_revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse HEAD)
-logs=$(mktemp -d "${1:-${TMPDIR:-/tmp}}/kernel-postgres-compatibility.XXXXXXXX")
+logs=$(mktemp -d "$receipt_directory/kernel-postgres-compatibility.XXXXXXXX")
 scratch=$(mktemp -d)
 owner=
 container=
@@ -21,6 +28,7 @@ cleanup() {
 }
 trap cleanup EXIT
 echo "logs $logs"
+record_compatibility_pair > "$logs/compatibility-pair.txt"
 
 build_driver() {
     local name=$1 revision=$2 source="$scratch/$1"
@@ -84,6 +92,10 @@ SELECT format(
     schemaname, tablename)
 FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;
 \gexec
+SELECT format('SELECT %L, last_value, is_called FROM %I.%I', c.relname, n.nspname, c.relname)
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relkind = 'S' ORDER BY c.relname;
+\gexec
 COMMIT;
 SQL
     } | shasum -a 256
@@ -115,10 +127,6 @@ expect_refusal() {
 }
 
 marker='SELECT string_agg("Id" || $$=$$ || "StoreSchema" || $$/$$ || "MessageProtocol" || $$/$$ || "JournalCodec", $$ $$ ORDER BY "Id") FROM "KernelStoreVersions"'
-prior_markers='1=3/27/1 2=1/6/0'
-candidate_markers='1=3/28/1 2=1/7/0'
-prior_refusal='Unsupported kernel store versions. Stored schema=3, message protocol=28, journal codec=1. This build reads schema=3, message protocol=27, journal codec=1.'
-candidate_refusal='Unsupported kernel store versions. Stored schema=3, message protocol=27, journal codec=1. This build reads schema=3, message protocol=28, journal codec=1.'
 roles=(install cold-owner take sweeper projector edge journal)
 for fence in checked in-batch; do
     lane="$scratch/$fence"
@@ -133,6 +141,7 @@ for fence in checked in-batch; do
     start_owner "$prior" prior "$out/prior-owner.log"
     wait_line '^ready prior partition [0-9]+ epoch 1$' "$out/prior-owner.log"
     [[ $(sql "$prior_db" "$marker") == "$prior_markers" ]]
+    sql "$prior_db" 'SELECT count(*) FROM "Partitions"' > "$out/prior-partition-count.txt"
     fingerprint "$prior_db" yes > "$out/prior-before-live.sha256"
     for role in "${roles[@]}"; do
         expect_refusal "$candidate" "$role" prior "$candidate_refusal" "$out/candidate-prior-live-$role-refused.log"
@@ -145,14 +154,17 @@ for fence in checked in-batch; do
     wait "$owner"
     owner=
     fingerprint "$prior_db" no > "$out/prior-before-cold.sha256"
-    expect_refusal "$candidate" install prior "$candidate_refusal" "$out/candidate-prior-cold-install-refused.log"
-    fingerprint "$prior_db" no > "$out/prior-after-cold.sha256"
-    cmp "$out/prior-before-cold.sha256" "$out/prior-after-cold.sha256"
-    echo "ok $fence candidate roles refused the live prior and the installer refused the closed prior"
+    for role in install cold-owner take; do
+        expect_refusal "$candidate" "$role" prior "$candidate_refusal" "$out/candidate-prior-cold-$role-refused.log"
+        fingerprint "$prior_db" no > "$out/prior-after-cold-$role.sha256"
+        cmp "$out/prior-before-cold.sha256" "$out/prior-after-cold-$role.sha256"
+    done
+    echo "ok $fence candidate roles refused the live and closed prior"
 
     start_owner "$candidate" candidate "$out/candidate-owner.log"
     wait_line '^ready candidate partition [0-9]+ epoch 1$' "$out/candidate-owner.log"
     [[ $(sql "$candidate_db" "$marker") == "$candidate_markers" ]]
+    sql "$candidate_db" 'SELECT count(*) FROM "Partitions"' > "$out/candidate-partition-count.txt"
     fingerprint "$candidate_db" yes > "$out/candidate-before-live.sha256"
     for role in "${roles[@]}"; do
         expect_refusal "$prior" "$role" candidate "$prior_refusal" "$out/prior-candidate-live-$role-refused.log"

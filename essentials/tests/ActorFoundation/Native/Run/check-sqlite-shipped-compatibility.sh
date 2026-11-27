@@ -6,8 +6,15 @@ output=bin/Release/net10.0/Kernel.Native.Run.dll
 repo=$(git -C "$(dirname "$0")" -c core.fsmonitor=false rev-parse --show-toplevel)
 prior_revision=92c54ac8797af9d087a8046c28aa5e1ac5ff8a4b
 shipped_revision=fad467643e13087ea77707fb41ee5c667ba4479b
+provider=SQLite
+definition_engine=2
+prior_markers='1=3/26/1 2=2/9/0'
+candidate_markers='1=3/27/1 2=2/10/0'
+# shellcheck source=shipped-compatibility-pair.sh
+source "$repo/$runner/shipped-compatibility-pair.sh"
+read_compatibility_pair "$@"
 fixture_revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse HEAD)
-logs=$(mktemp -d "${1:-${TMPDIR:-/tmp}}/kernel-sqlite-compatibility.XXXXXXXX")
+logs=$(mktemp -d "$receipt_directory/kernel-sqlite-compatibility.XXXXXXXX")
 scratch=$(mktemp -d)
 owner=
 cleanup() {
@@ -19,6 +26,7 @@ cleanup() {
 }
 trap cleanup EXIT
 echo "logs $logs"
+record_compatibility_pair > "$logs/compatibility-pair.txt"
 
 build_driver() {
     local name=$1 revision=$2 source="$scratch/$1"
@@ -85,8 +93,6 @@ fingerprint() {
     probe "$candidate" snapshot "$1" | grep -E '^[A-F0-9]{64}$'
 }
 
-prior_refusal='Stored schema=3, message protocol=27, journal codec=1. This build reads schema=3, message protocol=26, journal codec=1.'
-candidate_refusal='Stored schema=3, message protocol=26, journal codec=1. This build reads schema=3, message protocol=27, journal codec=1.'
 for fence in checked in-batch; do
     lane="$scratch/data-$fence"
     out="$logs/$fence"
@@ -95,7 +101,7 @@ for fence in checked in-batch; do
 
     start_owner "$prior" prior "$out/prior-owner.log"
     wait_line '^ready prior epoch 1$' "$out/prior-owner.log"
-    grep -Fxq 'installed 1=3/26/1 2=2/9/0' "$out/prior-owner.log"
+    grep -Fxq "installed $prior_markers" "$out/prior-owner.log"
     expect_refusal 9 'refused host lock install' "$candidate" install prior "$out/candidate-live-install-refused.log"
     touch "$lane/continue-prior"
     wait_line '^continued prior epoch 1$' "$out/prior-owner.log"
@@ -118,7 +124,7 @@ for fence in checked in-batch; do
 
     start_owner "$candidate" candidate "$out/candidate-owner.log"
     wait_line '^ready candidate epoch 1$' "$out/candidate-owner.log"
-    grep -Fxq 'installed 1=3/27/1 2=2/10/0' "$out/candidate-owner.log"
+    grep -Fxq "installed $candidate_markers" "$out/candidate-owner.log"
     expect_refusal 9 'refused host lock cold-owner' "$prior" cold-owner candidate "$out/prior-live-start-refused.log"
     expect_refusal 9 'refused host lock projected-list' "$prior" projected-list candidate "$out/prior-live-read-refused.log"
     touch "$lane/continue-candidate"
@@ -138,10 +144,12 @@ for fence in checked in-batch; do
     done
 
     probe "$candidate" resume candidate > "$out/floor-owner.log" 2>&1
-    grep -Fxq 'resumed exact actor at 1=3/27/1 2=2/10/0 epoch 2 with its physical journal prefix' "$out/floor-owner.log"
+    grep -Fxq "resumed exact actor at $candidate_markers epoch 2 with its physical journal prefix" "$out/floor-owner.log"
     probe "$candidate" projected-list candidate > "$out/floor-list-compatible.log"
     probe "$candidate" journal candidate > "$out/floor-journal-compatible.log"
     probe "$candidate" sweeper candidate > "$out/floor-sweep-compatible.log"
     grep -Eq '^swept [1-9][0-9]*$' "$out/floor-sweep-compatible.log"
-    printf 'ok %s SQLite pre-GA recreation, process exclusion and tested floor %s at 3/27/1 plus 2/10/0\n' "$fence" "$shipped_revision"
+    shared_marker=${candidate_markers#1=}
+    printf 'ok %s SQLite pre-GA recreation, process exclusion and tested floor %s at %s plus %s\n' \
+        "$fence" "$shipped_revision" "${shared_marker%% *}" "${candidate_markers#* 2=}"
 done
