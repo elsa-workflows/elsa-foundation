@@ -23,14 +23,9 @@ internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenan
                 TimeSpan pause;
                 try
                 {
-                    if (!activated)
-                    {
-                        if (!await activate(token)) return;
-                        activated = true;
-                    }
-                    else if (!await refresh(token)) return;
-
-                    next = (await pass.RunAsync(tenant, next, token)).Next;
+                    var enabled = activated ? await refresh(token) : await activate(token);
+                    activated = true;
+                    next = enabled ? (await pass.RunAsync(tenant, next, token)).Next : null;
                     pause = next is null ? BetweenSweeps : BetweenPages;
                 }
                 catch (Exception error) when (error is DbException { IsTransient: true } or TimeoutException)
