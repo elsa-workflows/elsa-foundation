@@ -21,7 +21,8 @@ converter) needs the activity in the catalog.
   - routing by outcome and completion, with the ended-index state of plan §2 (FR-006);
   - the cap (FR-007);
   - faults, child and descendant: intervene and defer, never absorb (FR-008);
-  - the `Items` durable-binding treatment and same-iteration-id slots (plan §2).
+  - the `Items` durable-binding treatment, and slots scheduled with the pass's iteration id and their own
+    `LoopIterationScopeRequest` (plan §2).
 - [ ] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
 - [ ] T006 [P] [US1] Check in Studio that the designer shows the three slots through the generic rendering, and that
   the instance view shows the per-item `Dispatch` executions. Add no Studio-specific code (FR-003).

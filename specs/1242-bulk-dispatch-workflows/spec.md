@@ -296,6 +296,11 @@ and on-completed-callbacks suites pass.
     This spec does not change the analyzer.
   - The README explains the lost-update risk and the alternative: record per-child results in the child workflow, or
     read them after the bulk activity.
+- **FR-010b**: The README also states:
+  - that a slot holding a `Flowchart` or another composite that handles its own child faults reports the fault as the
+    slot's direct child, so the activity to retry is that direct child;
+  - that a faulted pass keeps its place in the window of 16 until it is retried, so 16 open incidents stall the
+    activity.
 
 **Converter**
 
@@ -342,8 +347,8 @@ and on-completed-callbacks suites pass.
   - **The static `Input`**: a literal or Object map is checked with the #5808 rules. A JavaScript map is embedded. Any
     other language is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
   - **Script form**: the generated script names declared inputs literally and reads item members only through
-    `Object.entries`/`filter`/`Object.fromEntries`. Elsa 4 publish refuses computed member access as workflow-state
-    access (VF-STATE-002).
+    `Object.entries`/`filter`/`Object.fromEntries`, never by computed member access, which the Elsa 4 read analysis
+    treats as possible workflow-state access.
   - **`ParentInstanceId`** is not passed, because the parent link lives in the dispatch record.
   - **Warning**: a conversion raises warning `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. It says that only declared
     inputs are passed, that a child-declared `ParentInstanceId` is no longer filled, that the static `Input` is now

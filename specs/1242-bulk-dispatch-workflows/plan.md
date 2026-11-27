@@ -102,9 +102,13 @@ the design side), and converter rules.
   callback cannot exceed the window. There is no recount and no new store method.
 - **`OnChildCompletedAsync`**:
   - For the `Dispatch` node, route by outcome (FR-006).
-  - For a slot child, end the pass. A slot is scheduled with the same iteration id as its pass's `Dispatch`, so a
-    `RetryFaultedActivity` successor maps back to the right pass (`ActivitySuccessorStaging` copies the frame
-    request).
+  - For a slot child, end the pass.
+  - **Slot scheduling**: a slot is scheduled with the same iteration id as its pass's `Dispatch`, and with its own
+    `LoopIterationScopeRequest(bulkNodeId, iterationId, {currentItem, currentIndex})`, rebuilt from `Items` at that
+    index.
+    - A frame belongs to one activity execution, not to an iteration id (`RuntimeContainerScopeService`), so without
+      that request `variables.currentItem` fails at run time in the slot, even though publish passes.
+    - A `RetryFaultedActivity` successor gets its frame from the source's frame (`ActivitySuccessorStaging`).
   - Complete with `Done` when the set holds every index.
 - **`OnChildFaultedAsync`**:
   - Every fault, child or descendant: `RequestChildFaultIntervention` and `Defer`. Nothing is absorbed (spec FR-008).
@@ -165,7 +169,8 @@ the design side), and converter rules.
   - It does not go through the Elsa 3 lowerer, so the item is always the item. Elsa 3 merged it in C#, never through a
     getter, so a variable or input with the key's name never wins there.
   - Declared names appear as literals, and item members are reached via `Object.entries`/`filter`/`Object.fromEntries`,
-    never `item[name]` (VF-STATE-002).
+    never `item[name]`, because the read analysis treats computed member access as possible state access (the comment
+  in `Elsa3HttpTriggerResponseModeRewrite`).
   - The static `Input` follows the #5808 rules (literal or Object). A JavaScript `Input` is lowered on its own by the
     existing JavaScript rewrite; Elsa 3 evaluated it without the item. Its lowered text and bindings are embedded as
     the first operand.
@@ -178,8 +183,9 @@ the design side), and converter rules.
 - **Branches with a literal-false wait** (spec FR-018): the rewrite does not call `AddChild` for them, and raises
   `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` for each dropped branch.
 - **Outer writes** (spec FR-010a, FR-019): after lowering, a write inside a converted branch or the `Dispatch` child to
-  a variable declared outside the bulk node is refused with `…-BULK-DISPATCH-OUTER-WRITE`. This check runs before
-  publish would refuse the same write with a generic unordered-write error.
+  a variable declared outside the bulk node is refused with `…-BULK-DISPATCH-OUTER-WRITE`. Publish would only warn
+  (spec 266, `ValueFlow/ConcurrentWrite`). This converter refusal is what stops a converted counter from silently losing
+  updates (spec Q5). It is required, and it has its own test.
 - **Child-result reads** (spec FR-019): resolved to `…-CHILD-RESULT-READ` in name resolution for nodes inside the
   converted slots, before the generic missing-name failures.
 - **Codes**: 4 errors and 2 warnings in `extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`.
@@ -207,6 +213,8 @@ the design side), and converter rules.
   - the window of 16: never more than 16 passes open, including under repeated callbacks;
   - publish refuses an empty or wrong `Dispatch` slot (`BulkDispatch/DispatchSlot`);
   - `variables.currentItem` reads in `Dispatch` and in the slots resolve at publish;
+  - at run time, `ChildCompleted` and `ChildFaulted` read the right `currentItem` and `currentIndex` for their pass, also
+    after a retry;
   - a fault inside a `Sequence` in a slot takes the intervention path (descendant fault);
   - parent cancellation cancels the waiting children;
   - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`;
