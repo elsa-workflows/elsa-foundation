@@ -102,7 +102,12 @@ public sealed record WorkflowInstanceDetailsView(
     string PersistenceMode,
     string InspectionGranularity,
     string? ActivityNextContinuationToken = null,
-    WorkflowInstancePermissionsView? Permissions = null);
+    WorkflowInstancePermissionsView? Permissions = null)
+{
+    /// <summary>The activity timeline loads separately through the activity browse operation.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ActivitiesDeferred { get; init; }
+}
 
 /// <summary>
 /// A named workflow output on the instance details view (#254 Seam R1): the durably captured value a

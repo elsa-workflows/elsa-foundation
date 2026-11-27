@@ -58,6 +58,7 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
     public void Publish(string key, string? payload, TimeSpan keep) => turn.Publish(key, payload, keep);
     public void Emit(string channel, object? item) => turn.Emit(channel, item);
     public void Record(string entry) => turn.Record(entry);
+    public void RecordFrameStart(Frame frame) => Record($"b:{frame.Id}:{frame.Node}:{frame.Parent}");
     public void SetStatus(Contract.ActorStatus status, string? subStatus, JsonNode? output) => turn.SetStatus(status, subStatus, output);
     public void SetLabel(string name, string? value) => turn.SetLabel(name, value);
     public string EffectKey(string node, string iteration, int attempt) => Models.EffectKey.For(Actor.Id, node, iteration, attempt);

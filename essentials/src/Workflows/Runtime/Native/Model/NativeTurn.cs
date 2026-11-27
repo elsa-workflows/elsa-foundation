@@ -34,6 +34,7 @@ internal interface INativeTurn
     void Publish(string key, string? payload, TimeSpan keep);
     void Emit(string channel, object? item);
     void Record(string entry);
+    void RecordFrameStart(Frame frame) { }
     void SetStatus(Contract.ActorStatus status, string? subStatus, JsonNode? output);
     /// <summary>One of the instance's own labels (Set Correlation Id, Set Instance Name); null removes it.</summary>
     void SetLabel(string name, string? value);

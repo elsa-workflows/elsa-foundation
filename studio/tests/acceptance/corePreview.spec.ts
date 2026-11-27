@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { corePreviewSmokeJourney, type CorePreviewStack } from "./corePreviewSmokeJourney";
+import { corePreviewActivityTimelineJourney } from "./corePreviewActivityTimelineJourney";
 
 // The Core Preview journeys (tools/ux-acceptance/core_preview.py): a Workbench whose default shell serves its
 // publications on the kernel, on a throwaway PostgreSQL store, with Studio and a local HTTP stub.
@@ -44,3 +45,4 @@ test.afterEach(async ({ page }) => {
 });
 
 test("core preview stack is ready", async ({ page, request }, info) => corePreviewSmokeJourney(page, request, info, stack, capture, receipt));
+test("Studio opens the committed kernel activity timeline", async ({ page }, info) => corePreviewActivityTimelineJourney(page, info, stack, capture, receipt));

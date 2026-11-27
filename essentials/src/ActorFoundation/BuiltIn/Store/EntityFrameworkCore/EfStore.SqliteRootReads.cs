@@ -66,13 +66,17 @@ public sealed partial class EfStore
         var rows = await db.Database.SqlQuery<RootJournalEntry>($"""
             /* sqlite-root-journal */
             WITH root AS MATERIALIZED (
-                SELECT b."Partition", b."Actor", i."Revision"
+                SELECT b."Partition", b."Actor", i."Revision",
+                    CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalRevision" END AS "CancellationRevision",
+                    CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalAt" END AS "CancellationAt"
                 FROM "FoundationRootBirths" b JOIN "Instances" i
                     ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                     AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"
                 WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
             )
-            SELECT j."Position", j."Revision", j."Entries" FROM "Journal" j
+            SELECT j."Position", j."Revision", j."Entries", (SELECT "Revision" FROM root) AS "HeadRevision",
+                (SELECT "CancellationRevision" FROM root) AS "CancellationRevision", (SELECT "CancellationAt" FROM root) AS "CancellationAt"
+            FROM "Journal" j
             WHERE (j."Partition", j."Instance") = (SELECT "Partition", "Actor" FROM root)
                 AND j."Position" >= {fromPosition} AND j."Revision" BETWEEN 1 AND (SELECT "Revision" FROM root)
             ORDER BY j."Position" LIMIT {limit}

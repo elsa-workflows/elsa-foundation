@@ -19,25 +19,29 @@ public sealed class WorkflowInstanceDetailsService(
     RuntimePersistenceModeInspector persistenceModeInspector,
     IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
 {
-    public Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken) =>
-        ReadAsync(request, testRunTenant: null, cancellationToken);
-
-    /// <summary>Reads a legacy authoring test run in the request's tenant while a kernel shell serves published runs.</summary>
-    public Task<WorkflowInstanceDetailsView?> GetTestRunAsync(GetWorkflowInstance request, string tenant, CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(tenant);
-        return ReadAsync(request, tenant, cancellationToken);
-    }
-
-    private async Task<WorkflowInstanceDetailsView?> ReadAsync(GetWorkflowInstance request, string? testRunTenant,
-        CancellationToken cancellationToken)
+    public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
-
         var state = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
-        if (state is null ||
-            testRunTenant is not null && (state.RunKind != WorkflowRunKind.TestRun ||
-                !string.Equals(state.TenantId, testRunTenant, StringComparison.Ordinal)) ||
+        return state is null ? null : await GetAsync(state, request, cancellationToken);
+    }
+
+    /// <summary>Reads a legacy authoring test run in the request's tenant while a kernel shell serves published runs.</summary>
+    public async Task<WorkflowInstanceDetailsView?> GetTestRunAsync(GetWorkflowInstance request, string tenant, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenant);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
+        var state = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
+        return state is { RunKind: WorkflowRunKind.TestRun } && state.TenantId == tenant
+            ? await GetAsync(state, request, cancellationToken)
+            : null;
+    }
+
+    /// <summary>Reads legacy details for an exact workflow execution already located by the caller.</summary>
+    public async Task<WorkflowInstanceDetailsView?> GetAsync(WorkflowExecutionState state, GetWorkflowInstance request,
+        CancellationToken cancellationToken)
+    {
+        if (state.WorkflowExecutionId != request.WorkflowExecutionId ||
             !await authorization.CanInspectStructureAsync(state, cancellationToken))
             return null;
 

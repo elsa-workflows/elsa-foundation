@@ -267,6 +267,40 @@ describe("RunActivitiesTimeline", () => {
     expect(onLoaded).toHaveBeenCalledWith([extra]);
   });
 
+  it("opens a deferred timeline and follows its older cursor without a summary activity page", async () => {
+    const parent = execution({ activityExecutionId: "exec-parent", executionSequence: 1 });
+    const child = execution({ activityExecutionId: "exec-child", executionSequence: 2, parentActivityExecutionId: "exec-parent" });
+    runtimeApi.browseActivityExecutions
+      .mockResolvedValueOnce({ items: [{ execution: child }], totalCount: 2, previousCursor: "older", nextCursor: null })
+      .mockResolvedValueOnce({ items: [{ execution: parent }], totalCount: 2, previousCursor: null, nextCursor: "newer" });
+    const context = {} as StudioEndpointContext;
+    const onLoaded = vi.fn();
+    flushSync(() => root.render(
+      <RunActivitiesTimeline
+        context={context}
+        workflowExecutionId="run-1"
+        activities={[]}
+        activitiesDeferred
+        labelForActivity={item => item.activityExecutionId}
+        onSelectActivity={() => {}}
+        onRefresh={() => {}}
+        onExecutionsLoaded={onLoaded}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-timeline-row")?.textContent).toContain("exec-child"));
+    expect(runtimeApi.browseActivityExecutions).toHaveBeenNthCalledWith(1, context, "run-1", { limit: 100 }, expect.any(AbortSignal));
+    const loadMore = container.querySelector<HTMLButtonElement>(".wf-history-more")!;
+    flushSync(() => loadMore.click());
+    await vi.waitFor(() => {
+      expect([...container.querySelectorAll(".wf-activity-timeline-row")].map(item => item.getAttribute("data-activity-execution-id")))
+        .toEqual(["exec-parent", "exec-child"]);
+      expect(container.querySelector(".wf-history-more")).toBeNull();
+    });
+    expect(runtimeApi.browseActivityExecutions).toHaveBeenNthCalledWith(2, context, "run-1", { limit: 100, cursor: "older" }, expect.any(AbortSignal));
+    expect(onLoaded).toHaveBeenNthCalledWith(2, [parent]);
+  });
+
   it("collapses and expands container subtrees, flags faulted hidden steps, renders span bars, and auto-expands external selection", async () => {
     const items = [
       execution({

@@ -35,9 +35,11 @@ SUITE = 'core-preview'
 PROJECT = 'desktop-light'
 CAPTURES = {
     'core preview stack is ready': ['reference'],
+    'Studio opens the committed kernel activity timeline': ['activity-timeline', 'activity-selection'],
 }
 EVIDENCE = {
     'core preview stack is ready': ['core-preview-smoke.json'],
+    'Studio opens the committed kernel activity timeline': ['activity-timeline.json'],
 }
 JOURNEYS = set(CAPTURES)
 # The tenant the Workbench's kernel edge starts workflows in, and its reads list from.

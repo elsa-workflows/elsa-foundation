@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Activity, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleCheck, CirclePlay, CircleSlash, Pause, RefreshCw } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
@@ -258,6 +258,7 @@ export function RunActivitiesTimeline({
   context,
   workflowExecutionId,
   activities,
+  activitiesDeferred = false,
   hasMoreFromSummary = false,
   selectedActivityExecutionId,
   labelForActivity,
@@ -268,6 +269,7 @@ export function RunActivitiesTimeline({
   context: StudioEndpointContext;
   workflowExecutionId: string;
   activities: readonly ActivityExecutionStateSummary[];
+  activitiesDeferred?: boolean;
   hasMoreFromSummary?: boolean;
   selectedActivityExecutionId?: string | null;
   labelForActivity(execution: ActivityExecutionStateSummary): string;
@@ -406,10 +408,11 @@ export function RunActivitiesTimeline({
 
   const showQuickFilters = counts.faulted > 0 || counts.waiting > 0 || counts.running > 0;
   const currentExtras = extraActivities.runId === workflowExecutionId ? extraActivities : null;
-  const canLoadMore = hasMoreFromSummary && browsingSupported !== false && !(currentExtras?.exhausted);
+  const canLoadMore = activitiesDeferred
+    ? Boolean(currentExtras?.nextCursor)
+    : hasMoreFromSummary && browsingSupported !== false && !(currentExtras?.exhausted);
 
-  const loadMoreActivities = async () => {
-    if (loadingMore || !canLoadMore) return;
+  const loadActivityPage = useCallback(async (cursor?: string | null, replace = false) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -419,29 +422,36 @@ export function RunActivitiesTimeline({
       const page = await browseActivityExecutions(
         context,
         workflowExecutionId,
-        { limit: 100, ...(currentExtras?.nextCursor ? { cursor: currentExtras.nextCursor } : {}) },
+        { limit: 100, ...(cursor ? { cursor } : {}) },
         controller.signal
       );
       if (controller.signal.aborted) return;
       const loaded = page.items.map(item => item.execution);
+      const nextCursor = activitiesDeferred ? page.previousCursor : page.nextCursor;
       setExtraActivities(previous => {
-        const base = previous.runId === workflowExecutionId ? previous.items : [];
+        const base = !replace && previous.runId === workflowExecutionId ? previous.items : [];
         const byId = new Map(base.map(item => [item.activityExecutionId, item]));
         for (const item of loaded) byId.set(item.activityExecutionId, item);
         return {
           runId: workflowExecutionId,
           items: [...byId.values()],
-          nextCursor: page.nextCursor,
-          exhausted: !page.nextCursor
+          nextCursor,
+          exhausted: !nextCursor
         };
       });
       onExecutionsLoaded?.(loaded);
     } catch {
-      if (!controller.signal.aborted) setLoadMoreError("Could not load more activities.");
+      if (!controller.signal.aborted) setLoadMoreError(replace ? "Could not load activities." : "Could not load more activities.");
     } finally {
       if (!controller.signal.aborted) setLoadingMore(false);
     }
-  };
+  }, [activitiesDeferred, context, onExecutionsLoaded, workflowExecutionId]);
+
+  useEffect(() => {
+    if (!activitiesDeferred) return;
+    void loadActivityPage(undefined, true);
+    return () => abortRef.current?.abort();
+  }, [activitiesDeferred, loadActivityPage]);
 
   return (
     <section className="wf-run-activities" aria-label="Executed activities">
@@ -473,7 +483,10 @@ export function RunActivitiesTimeline({
             className="wf-history-toolbar-btn"
             aria-label="Refresh activities"
             title="Refresh activities"
-            onClick={onRefresh}
+            onClick={() => {
+              onRefresh();
+              if (activitiesDeferred) void loadActivityPage(undefined, true);
+            }}
           >
             <RefreshCw size={14} aria-hidden="true" />
           </StudioButton>
@@ -634,8 +647,9 @@ export function RunActivitiesTimeline({
             })}
           </ol>
         ) : (
-          <p className="wf-history-empty">
-            {isFiltered ? "No activities match the current filter." : "No activities have been recorded for this run yet."}
+          <p className="wf-history-empty" role={loadingMore && activitiesDeferred ? "status" : undefined}>
+            {loadingMore && activitiesDeferred ? "Loading activities…" : isFiltered
+              ? "No activities match the current filter." : "No activities have been recorded for this run yet."}
           </p>
         )}
 
@@ -646,7 +660,7 @@ export function RunActivitiesTimeline({
             type="button"
             size="sm"
             disabled={loadingMore}
-            onClick={() => { void loadMoreActivities(); }}
+            onClick={() => { void loadActivityPage(currentExtras?.nextCursor); }}
           >
             {loadingMore ? "Loading more activities…" : "Load more activities"}
           </StudioButton>

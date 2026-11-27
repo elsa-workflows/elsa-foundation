@@ -96,11 +96,20 @@ internal static partial class SqliteHostLifetimeChecks
                 "held Terminate ends a creator Park in one fenced checkpoint");
             Require((await reads.GetAsync(scope, plain, token)) is { Header.Status: Contract.ActorStatus.Cancelled, Park: null, Selection: not null },
                 "the read projection exposes the terminal selection after the Park closes");
+            Require((await reads.TailAsync(scope, plain, cancellationToken: token)) is
+                { JournalHeadRevision: 2, JournalCancellation: { Revision: 2, At: > 0 } },
+                "the public SQLite journal snapshot includes the committed revision and cancellation of the retained Park");
             Require(await deleteReply is { Channel: Request.Response, Item: "deleted" } && await reads.GetAsync(scope, delete, token) is null &&
                 await compound is { Channel: Request.Response, Item: "deleted" } && await reads.GetAsync(scope, pair, token) is null,
                 "held Delete and compound Terminate and Delete each retire one selected Park");
             Require(await protectedReply is { Error: "protected" } && await WaitAsync(owner, protectedActor, 3) is
                 { Status: InstanceStatus.Faulted, TerminalRevision: null, ParkAt: > 0 }, "a protected Delete preserves the same Park");
+            Require(await CallAsync(protectedActor, "protected-compound", Contract.Kinds.Terminate,
+                    (await ReadAsync(protectedActor)).Selection!, thenDelete: true) is { Channel: Request.Response, Item: "terminated and kept" } &&
+                await WaitAsync(owner, protectedActor, 4) is { Status: InstanceStatus.Cancelled, TerminalRevision: 4, TerminalAt: > 0 } kept &&
+                (await reads.TailAsync(scope, protectedActor, cancellationToken: token)) is
+                    { JournalHeadRevision: 4, JournalCancellation: { Revision: 4 } cancelled } && cancelled.At == kept.TerminalAt,
+                "the protected SQLite compound settles the Park and the journal exposes the exact retained terminal mark");
             var outstandingReply = await outstanding;
             var parkedJob = await store.ReadFirstRootAsync(scope.Tenant, withJob.Id, token);
             Require(outstandingReply is { Error: "park outstanding" } && parkedJob is
