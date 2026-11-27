@@ -52,23 +52,29 @@ public sealed partial class EfStore
             ? SqliteOwnedFormat.NameFor(connection) : null;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         if (formatFunction is null) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
-        if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
-            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
+        long? checkedMarkTime = null;
         if (root is PostgresMarkPreparation marks)
         {
-            // Discover the exact binding while the same transaction already holds the format and source pins.
-            // Only the existing fenced checkpoint binder writes the marks.
-            try { root = await marks.PrepareAsync(db, cancellationToken); }
+            // The ordered pin prepares the exact mark binding and can check an unchanged fence in checked mode.
+            // Only the later fenced checkpoint binder writes Seen and Trial, in their own durable commit.
+            try
+            {
+                var (checkpoints, fenceChecked, fenceTime) = await marks.PrepareAsync(db, cancellationToken);
+                if (fenceChecked && fenceTime is null) return new Committed(false, 0, []);
+                (root, checkedMarkTime) = (checkpoints, fenceTime);
+            }
             catch (Exception error) { throw new RootMarkPreparationFailure(error); }
         }
+        else if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
+            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
         var commands = new List<OwnedCommand>();
-        var c = new OwnedCommand(dialect) { HasFence = true };
+        var c = new OwnedCommand(dialect) { HasFence = checkedMarkTime is null };
         if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);
         var window = batch.Window;
         // The fence is the first write (E9: the partition rows are locked first, k of them in ascending partition id).
         // The checked mode sends other writes after the fence holds. The in-batch mode sends them with the fence.
         var fences = Fenced(batch);
-        dialect.Fence(c, fences, window, Unfenced, FenceIgnoresCount);
+        if (c.HasFence) dialect.Fence(c, fences, window, Unfenced, FenceIgnoresCount);
         // An owned batch, one fence or several: each turn writes its own partition's rows and journal, each mark takes the
         // epoch of its message's partition, and a mark, consume or done may touch only the fenced partitions' messages
         // (InboxKey does not name its partition, so the statements carry the bound and their counts check it).
@@ -77,7 +83,7 @@ public sealed partial class EfStore
         var bound = owned ? $""" AND "Partition" IN ({string.Join(", ", epochs.Keys.Order())})""" : "";
         var markEpoch = epochs.Count == 1 ? Lit(batch.Epoch) : $"""CASE "Partition" {string.Join(" ", epochs.Select(e => $"WHEN {e.Key} THEN {Lit(e.Value)}"))} END""";
         int Home(string instance) => owned ? StoreBatchRules.AddressPartition(instance) ?? batch.Partition : batch.Partition;
-        if (!FenceInBatch) { commands.Add(c); c = new OwnedCommand(dialect); }
+        if (!FenceInBatch && c.HasFence) { commands.Add(c); c = new OwnedCommand(dialect); }
 
         var exact = Engine is SqlServerEngine or MySqlEngine;      // keys carry IssuedWire
         var instances = db.Model.FindEntityType(typeof(InstanceEntity))!;
@@ -181,7 +187,7 @@ public sealed partial class EfStore
         rows.Flush(c);
         if (c.Text.Length > 0) commands.Add(c);
 
-        var (now, seqs) = (0L, new List<long>());
+        var (now, seqs) = (checkedMarkTime ?? 0L, new List<long>());
         foreach (var command in commands)
         {
             Ran result;
@@ -481,9 +487,15 @@ public sealed partial class EfStore
             var fence = owned.Single();
             return await PollAsync(fence.Partition, fence.Epoch, horizon, limit, cancellationToken);
         }
-        var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
+        return await PollOwnedAsync(db, owned, horizon, limit, cancellationToken);
+    }
+
+    private async ValueTask<Polled> PollOwnedAsync(KernelDb db, IReadOnlyCollection<PartitionFence> owned,
+        TimeSpan horizon, int limit, CancellationToken cancellationToken)
+    {
+        var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         var poll = PollSql(db);
         if (!poll.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
