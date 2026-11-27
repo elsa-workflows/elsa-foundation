@@ -3604,6 +3604,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationSelfRecalls = unit.FoundationSelfRecalls,
             FoundationValues = unit.FoundationValues,
             FoundationRootChildSends = unit.FoundationRootChildSends,
+            FoundationRootPublications = unit.FoundationRootPublications,
             FoundationTerminalOutput = unit.FoundationTerminalOutput,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,

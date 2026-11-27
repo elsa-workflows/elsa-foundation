@@ -16,7 +16,8 @@ public sealed class WorkflowExecutionStartService : IWorkflowExecutionStartServi
     private const string RequestedBy = "runtime-api";
     private static readonly RuntimeVariableDeclarationProjector VariableDeclarations = new();
     private readonly IWorkflowStartDispatcher _startDispatcher;
-    private readonly IWorkflowExecutableStore _executableStore;
+    private readonly IWorkflowExecutableStore? _executableStore;
+    private readonly string? _publishedTenant;
     private readonly IHttpContextAccessor? _httpContextAccessor;
     private readonly NormalizedPrincipalValidator? _principalValidator;
 
@@ -44,18 +45,29 @@ public sealed class WorkflowExecutionStartService : IWorkflowExecutionStartServi
         _principalValidator = principalValidator;
     }
 
+    internal WorkflowExecutionStartService(IWorkflowStartDispatcher publishedDispatcher, string publishedTenant,
+        IHttpContextAccessor? httpContextAccessor, NormalizedPrincipalValidator? principalValidator)
+    {
+        _startDispatcher = publishedDispatcher;
+        _publishedTenant = publishedTenant;
+        _httpContextAccessor = httpContextAccessor;
+        _principalValidator = principalValidator;
+    }
+
     public async Task<WorkflowExecutionStartDispatchView> ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken)
     {
         // Resolve authority before looking up the requested artifact. A malformed HTTP principal
         // must not be interpreted as a global-tenant request or learn whether an artifact exists.
         var identity = ResolveIdentity();
         var tenantId = identity.TenantId;
+        if (_publishedTenant is not null && (tenantId ?? PersistenceScope.DefaultValue) != _publishedTenant)
+            throw new RuntimeResourceMissingSignal();
 
         // Seed authored workflow variable defaults so `variables.*` input expressions resolve to their
         // declared values in production (Seam C, #254). The defaults are read from the compiled executable's
         // workflow-scope declarations, not the design document, keeping authored content separate from the
         // runtime artifact. A missing executable is left to the dispatcher to reject with its own diagnostics.
-        var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken);
+        var executable = _executableStore is null ? null : await _executableStore.FindAsync(request.ArtifactId, cancellationToken);
         var variables = executable is null
             ? EmptyVariables
             : VariableDeclarations.ProjectDeclaredVariableDefaultsByName(executable.WorkflowVariables);

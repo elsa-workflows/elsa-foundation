@@ -47,6 +47,7 @@ internal sealed partial class PostgresRootAdmission
         RequirePressureProfile(db);
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         var pin = await PinScheduleStoreAsync(db, writing: true, token);
+        await RequireScheduleOwnerAsync(db, pin, actorType, token);
         if (await RootScheduleInventory.FindAsync(db, tenant, occurrence.Schedule, actorType, token, Bind) != occurrence.ScheduleReference)
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
 

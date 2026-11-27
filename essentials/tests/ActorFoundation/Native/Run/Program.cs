@@ -65,6 +65,8 @@ if (args is ["inline-root-promotion", var inlineProvider and ("postgres" or "sql
     return await InlineRootPromotionChecks.RunAsync(inlineProvider == "postgres", inlineFence == "in-batch");
 if (args is ["inline-root-promotion", var lateInlineProvider and ("postgres" or "sqlite"), var lateInlineFence and ("checked" or "in-batch"), "125"])
     return await InlineRootPromotionChecks.RunAsync(lateInlineProvider == "postgres", lateInlineFence == "in-batch", laterRevision: true);
+if (args is ["shipped-schedule-owner-mode", var modeProvider and ("postgres" or "sqlite"), var mode and ("standalone" or "managed")])
+    return await ShippedScheduleOwnerModeChecks.RunAsync(modeProvider == "postgres", mode == "managed");
 if (args is ["root-auxiliary-owner", var auxiliaryProvider and ("postgres" or "sqlite"), var auxiliaryFence and ("checked" or "in-batch")])
     return await RootAuxiliaryOwnerChecks.RunAsync(auxiliaryProvider == "postgres", auxiliaryFence == "in-batch");
 if (args is ["root-schedule-controls", var controlsProvider and ("postgres" or "sqlite"), var controlsFence and ("checked" or "in-batch")])
@@ -81,6 +83,8 @@ if (args is ["root-schedule-lineage", var lineageProvider and ("postgres" or "sq
     return await RootScheduleInventoryChecks.RunAsync(lineageProvider == "postgres", settleOccurrences: true,
         fenceInBatch: lineageFence == "in-batch", trackLineage: true);
 if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
+if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunAsync(authoredEventProvider, authoredEventFence == "in-batch");
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
 if (args is ["kernel-http-waits", var httpWaitProvider and ("postgres" or "sqlite"), var httpWaitFence and ("checked" or "in-batch")])
     return await KernelHttpWaitChecks.RunAsync(httpWaitProvider, httpWaitFence == "in-batch");

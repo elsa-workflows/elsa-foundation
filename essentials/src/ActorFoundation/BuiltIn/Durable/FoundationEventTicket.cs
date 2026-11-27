@@ -7,6 +7,9 @@ internal static class FoundationEventTicket
 {
     private const string Version = "1|";
 
+    internal static string Issue(Func<string, string> handle, string origin, long revision, int ordinal) =>
+        handle(FormattableString.Invariant($"event:{origin}#{revision}.{ordinal:D4}"));
+
     internal static string Encode(EventRow publication)
         => Encode(publication.Key, publication.Id, publication.Payload, publication.KeepUntil);
 

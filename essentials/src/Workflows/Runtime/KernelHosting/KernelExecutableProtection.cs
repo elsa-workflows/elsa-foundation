@@ -75,7 +75,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         while (true)
         {
             token.ThrowIfCancellationRequested();
-            try { return await TryPinAsync(pins, token); }
+            try { return await TryPinAsync(pins, token, selected.PublishedStart is null ? null : selected); }
             catch (Exception error) when (error is WorkflowExecutableDependencyGraphException or InvalidDataException)
             {
                 logger.LogWarning(error, "Held executable protection refused the selected identity for tenant {Tenant}.", actors.Tenant);
@@ -91,12 +91,33 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         }
     }
 
-    private async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token)
+    private async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token,
+        KernelExecutableSelection? selected = null)
     {
         using var bounded = Limit(token);
         await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
-        var store = runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>();
-        return await store.TryPinAsync(pins, bounded.Token);
+        var services = runtime.ServiceProvider;
+        var store = services.GetRequiredService<IRuntimeKernelExecutablePinStore>();
+        if (selected?.PublishedStart is not { } publication) return await store.TryPinAsync(pins, bounded.Token);
+
+        // The preparation fingerprints the complete start header. The Runtime transaction fences the
+        // exact current rows before it makes the pin and its GC root visible.
+        if (publication is not { SourceReferenceId.Length: > 0, SlotName.Length: > 0, ActivationId.Length: > 0, SlotRevision: > 0 } ||
+            publication.SubjectId is not null && string.IsNullOrWhiteSpace(publication.SubjectId)) return false;
+        var source = await services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+            .FindAsync(publication.SourceReferenceId, bounded.Token);
+        if (source is null || source.ArtifactId != selected.Workflow || source.DefinitionId != selected.Definition ||
+            source.Scope != WorkflowExecutableReferenceScope.Published || source.ActivationId != publication.ActivationId ||
+            source.SourceKind != publication.SourceKind || source.SourceId != publication.SourceId || source.SourceVersion != publication.SourceVersion ||
+            source.DefinitionVersionId != publication.DefinitionVersionId || source.ArtifactVersion != publication.ArtifactVersion ||
+            source.SlotId != publication.SlotId || (source.TenantId ?? PersistenceScope.DefaultValue) != actors.Tenant ||
+            source.PublicationScope is { } protectedScope && protectedScope != scope || !source.IsLive(clock.GetUtcNow()) ||
+            KernelPublishedRunDispatcher.SourceDigest(source) != publication.SourceDigest) return false;
+        var slot = await services.GetRequiredService<IWorkflowActivationAuthority>()
+            .FindAsync(selected.Definition, publication.SlotName, bounded.Token);
+        if (slot is null || slot.SlotId != publication.SlotId || slot.ActiveActivationId != publication.ActivationId ||
+            slot.Revision != publication.SlotRevision) return false;
+        return await store.TryPinPublishedAsync(pins.Single(), slot, source, bounded.Token);
     }
 
     internal async Task RunAsync(CancellationToken token)

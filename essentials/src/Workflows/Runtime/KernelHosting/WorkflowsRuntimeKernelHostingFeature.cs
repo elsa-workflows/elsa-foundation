@@ -9,6 +9,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Modularity.Core.Models;
 using Elsa.Workflows.Runtime.Api.Authorization;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
@@ -20,6 +21,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -62,8 +64,11 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Retention confirmation", Description = "Receipt from the retention policy preview for this tenant and store.", Category = "Retention")]
     public string? RetentionConfirmation { get; set; }
 
-    public void ConfigureServices(IServiceCollection services) =>
-        ConfigureServices(services, KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString));
+    public void ConfigureServices(IServiceCollection services)
+    {
+        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
+        ConfigureServices(services, storage, protectChildExecutables: storage.TakesPreparedStarts);
+    }
 
     internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
@@ -88,6 +93,14 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
             persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables));
+        if (storage.TakesPreparedStarts)
+            services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionStartService>(sp =>
+            {
+                var dispatcher = new KernelPublishedRunDispatcher(sp.GetRequiredService<IServiceScopeFactory>(),
+                    sp.GetRequiredService<KernelServing>(), persistenceScope, sp.GetRequiredService<KernelShellRuntime>().StartPublishedAsync);
+                return new WorkflowExecutionStartService(dispatcher, tenant.Tenant, sp.GetService<IHttpContextAccessor>(),
+                    sp.GetService<NormalizedPrincipalValidator>());
+            }));
         services.AddSingleton(sp => new KernelRuns(tenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync));
         services.AddSingleton(sp =>
         {

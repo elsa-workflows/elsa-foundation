@@ -298,6 +298,7 @@ public sealed class TurnOutcome(string instance)
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls;
     internal IReadOnlyList<FoundationValue>? FoundationValues;
     internal IReadOnlyList<Message>? FoundationRootChildSends;
+    internal IReadOnlyList<Message>? FoundationRootPublications;
     internal TerminalOutput? FoundationTerminalOutput;
     public List<Message> Sent = [];
     public HashSet<InboxKey> Fresh = [], Volatile = [];
@@ -679,10 +680,10 @@ public sealed class DurableTurn
     // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
     public string Publish(string key, string? payload, TimeSpan keep) => Publish(key, payload, keep, null, null);
 
-    internal string Publish(string key, string? payload, TimeSpan keep, InMemoryStore? store, string? tenant)
+    internal string Publish(string key, string? payload, TimeSpan keep, Func<string, string>? issue, string? tenant)
     {
-        var wire = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}");
-        var id = store?.MessageHandle("event:" + wire) ?? wire;
+        var id = issue is null ? FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}") :
+            FoundationEventTicket.Issue(issue, Origin, Revision, _ordinal);
         if (tenant is null)
             SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)));
         else
@@ -693,7 +694,9 @@ public sealed class DurableTurn
             var ticket = new Message(id[1..], Actor, Kinds.Publish, FoundationEventTicket.Encode(key, id, payload, duration), Id,
                 TargetCreation: _input.Creation, SenderCreation: _input.Creation)
                 { FoundationPublish = new(key, id, Guid.Empty, Authored: new(tenant, duration)) };
-            _sent.Add(ticket.AsIssued().AsKernelTicket());
+            var authored = ticket.AsIssued().AsKernelTicket();
+            if (issue is not null) FoundationSelfSend.RememberOrdinal(authored, _ordinal);
+            _sent.Add(authored);
             _ordinal++;
         }
         return id;

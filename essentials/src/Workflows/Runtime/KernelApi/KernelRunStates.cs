@@ -26,6 +26,7 @@ internal static class KernelRunStates
         // A run whose header holds no start (one started before the actor kept it) has an unknown start: the epoch, which
         // is stable across reads, so the run keeps its place in pages and windows.
         var created = run.StartedAt ?? UnknownStart;
+        var publication = run.PublishedStart;
         return new WorkflowExecutionState(
             header.Ref.Id,
             // An artifact the store does not hold has no version or hash to show.
@@ -41,9 +42,21 @@ internal static class KernelRunStates
             TenantId: tenant,
             SystemMetadata: new Dictionary<string, string>())
         {
-            RunKind = WorkflowRunKind.PublishedRun
+            RunKind = WorkflowRunKind.PublishedRun,
+            PinnedSource = publication is null ? null : new(publication.SourceReferenceId, publication.SourceKind, publication.SourceId,
+                publication.SourceVersion, run.Definition, publication.DefinitionVersionId, publication.ArtifactVersion,
+                publication.ActivationId, publication.SlotId),
+            Partition = publication is null ? null : new(tenant),
+            Authority = publication is null ? null : PublishedAuthority(publication.SubjectId)
         };
     }
+
+    private static WorkflowExecutionAuthoritySnapshot PublishedAuthority(string? subjectId) =>
+        WorkflowExecutionAuthoritySnapshot.CreateRoot("runtime-api", subjectId is null ? null : new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["elsa.identity.subject-kind"] = "persisted-user",
+            ["elsa.identity.subject-id"] = subjectId
+        });
 
     internal static WorkflowExecutionStatus Status(ActorStatus status, bool suspended) => status switch
     {

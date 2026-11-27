@@ -29,6 +29,11 @@ public interface IRuntimeKernelExecutablePinStore
     /// </summary>
     ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken cancellationToken = default);
 
+    /// <summary>Protects one prepared root and verifies its exact live publication in the same Runtime transaction.</summary>
+    ValueTask<bool> TryPinPublishedAsync(RuntimeKernelExecutablePin pin, WorkflowActivationSlot slot,
+        WorkflowExecutableSourceReference source, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<bool>(new NotSupportedException("The Runtime provider does not fence published executable pins."));
+
     /// <summary>Returns the inclusive upper cursor for this cleanup pass, or null when there are no open pins.</summary>
     ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken cancellationToken = default);
 

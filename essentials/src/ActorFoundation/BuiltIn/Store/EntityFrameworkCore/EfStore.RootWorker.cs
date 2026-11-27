@@ -40,6 +40,7 @@ public sealed partial class EfStore
         internal bool KeepsPrivateParkInputs { get; set; }
         internal bool RecoversPark { get; set; }
         internal bool TakesLiveEventWaits { get; set; }
+        internal bool PublishesAuthoredEvents { get; set; }
         internal bool MeasuresDueBacklog { get; set; }
         internal bool RefusesParkedOperators { get; set; }
         internal Func<StartSpec, object, bool>? ValidateInlineMaterial { get; set; }
@@ -85,6 +86,7 @@ public sealed partial class EfStore
         public bool KeepsPrivateParkInputs => roots.KeepsPrivateParkInputs;
         public bool RecoversPark => roots.RecoversPark;
         public bool TakesLiveEventWaits => roots.TakesLiveEventWaits;
+        public bool PublishesAuthoredEvents => roots.PublishesAuthoredEvents;
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
         public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
         public Func<StartSpec, object, bool>? ValidateInlineMaterial => roots.ValidateInlineMaterial;
@@ -152,6 +154,9 @@ public sealed partial class EfStore
             scope.KeepsPrivateParkInputs = db.UsesRootPrivateParkInputs;
             scope.RecoversPark = db.UsesRootParkRecovery;
             scope.TakesLiveEventWaits = db.UsesRootLiveEventWaits;
+            scope.PublishesAuthoredEvents = db.UsesRootAuthoredEvents;
+            if (scope.PublishesAuthoredEvents && RootSelfIssuer is null)
+                throw new StoreFormatException("Authored event publication requires the bound root issuer.");
             scope.MeasuresDueBacklog = db.UsesRootDueBacklog;
             if (db.UsesRootChildren != (_rootChildReference is not null))
                 throw new StoreFormatException("The root owner must initialize the child capability before binding.");
@@ -398,6 +403,7 @@ public sealed partial class EfStore
         bool SqliteRuntime)
         : QualifiedRootCheckpoint(0)
     {
+        internal IReadOnlyList<EventRow> Publications { get; init; } = [];
         internal override long RevisionFor(string actor) => Revisions[actor];
 
         internal RootCheckpoints BindRefusalSource(uint? marker) => Commands.Any(command => command is RefusedRootInput)
@@ -505,6 +511,7 @@ public sealed partial class EfStore
         var commands = PrepareWorkerMarks(roots, batch, byPartition);
         var turns = new List<TurnCommit>();
         var revisions = new Dictionary<string, long>(StringComparer.Ordinal);
+        List<EventRow>? publications = null;
         var positions = batch.Fenced.ToDictionary(fence => fence.Partition, fence => fence.Position);
         var deferred = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string>? inlineRefusals = null;
@@ -540,6 +547,13 @@ public sealed partial class EfStore
                 continue;
             }
             var root = roots.ForActor(turn.Instance);
+            if (turn.FoundationRootPublications is { } authored)
+            {
+                if (_ordinaryRoots?.PublishesAuthoredEvents != true || RootSelfIssuer is not { } issuer)
+                    throw RootShape();
+                RootEventWaits.CollectPublications(root, turn, authored, issuer, publications ??= []);
+                turn = turn with { FoundationRootPublications = null };
+            }
             var prepared = await PrepareWorkerTurnAsync(root, turn, FenceFor(root), cancellationToken, db, creator);
             if (prepared is null) return null;
             var checkpoint = prepared.Checkpoint;
@@ -564,7 +578,8 @@ public sealed partial class EfStore
             if (turn.FoundationTerminalOutput is { } output)
                 commands.Add(new RootTerminalOutputCheckpoint(root, checkpoint.JournalRevision, output));
         }
-        return (batch with { Turns = turns, Seen = [], Trial = [] }, WorkerCheckpoints(commands, revisions, deferred), inlineRefusals);
+        return (batch with { Turns = turns, Seen = [], Trial = [] },
+            WorkerCheckpoints(commands, revisions, deferred) with { Publications = publications ?? [] }, inlineRefusals);
     }
 
     private static bool IsOrdinaryFirstTurn(TurnCommit turn) =>
@@ -652,7 +667,8 @@ public sealed partial class EfStore
                     : await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
         }
         if (turn.OpensPark && turn.Expected is null &&
-            (!postgres || _rootChildReference is not null && turn.Row?.Parent is not null))
+            (!postgres || _ordinaryRoots?.PublishesAuthoredEvents == true ||
+                _rootChildReference is not null && turn.Row?.Parent is not null))
             return await PrepareRootCreatorParkAsync(root, turn, fence, cancellationToken);
         if (turn.OpensPark || turn.FoundationKept is { Count: > 0 })
         {

@@ -227,7 +227,13 @@ internal sealed partial class ActorAdapter
         {
             HeaderLimits.RequireName(key, nameof(key));
             HeaderLimits.RequireContent(payload, nameof(payload), Durable.FoundationMetadataLimits.EventContentBytes);
-            return _turn.Publish(Qualify(key), payload, keepFor, Store, Header.Tenant);
+            if (_roots?.PublishesAuthoredEvents == true && _issueSelf is { } issuer)
+            {
+                if (!Durable.FoundationMetadataLimits.FitsLiveWaitName(key))
+                    throw new ArgumentException("The event key must fit the relational text encoding.", nameof(key));
+                return _turn.Publish(Qualify(key), payload, keepFor, issuer.Handle, Header.Tenant);
+            }
+            return _turn.Publish(Qualify(key), payload, keepFor, Store.MessageHandle, Header.Tenant);
         }
 
         public void Record(object entry)

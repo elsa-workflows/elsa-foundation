@@ -14,7 +14,12 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending, bool Parked, string? Header);
     private sealed class PreparationExpired : Exception;
 
-    internal Task<int> VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
+    internal Task<int> VerifyAsync(CancellationToken token) => VerifyAsync(bindOwner: false, auxiliaryActor: null, token);
+
+    internal Task<int> VerifyOwnerAsync(string? auxiliaryActor, CancellationToken token) =>
+        VerifyAsync(bindOwner: true, auxiliaryActor, token);
+
+    private Task<int> VerifyAsync(bool bindOwner, string? auxiliaryActor, CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
         var issuer = await ReadIssuerAsync(db, ct);
         if (!await db.Database.SqlQuery<bool>($"""
@@ -22,6 +27,13 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             FROM "Partitions"
             """).SingleAsync(ct))
             throw new StoreFormatException("The SQLite root issuer and installed virtual partitions must agree.");
+        if (bindOwner)
+        {
+            if (RootScheduleOwnerMode.Applies(db))
+                await RootScheduleOwnerMode.BindAsync(db, auxiliaryActor, ct);
+            else if (db.UsesRootScheduleControls && auxiliaryActor is null)
+                throw new NotSupportedException("This SQLite root profile requires a schedule owner.");
+        }
         return issuer.Partitions;
     }, token);
 

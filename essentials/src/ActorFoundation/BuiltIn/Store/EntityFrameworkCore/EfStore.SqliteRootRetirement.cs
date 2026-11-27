@@ -72,7 +72,7 @@ public sealed partial class EfStore
             var message = PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? PostgresRootAdmission.DecodeOperator(row, root.Reference, terminations: true, retirements: true, terminateThenDelete: true,
                     retentionDeletes: true, operatorReplies: true, parkedTerminate: true)
-                : PostgresRootAdmission.DecodeDirect(row, root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits, scheduleControls: db.UsesRootScheduleControls);
+                : PostgresRootAdmission.DecodeDirect(row, root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits, scheduleControls: db.UsesRootScheduleControls, authoredEvents: db.UsesRootAuthoredEvents);
             if (message.ReplyTo is { } route)
                 (db.RetiredReplies ??= []).Add(new(row.Id, new(route, root.Tenant)));
         }

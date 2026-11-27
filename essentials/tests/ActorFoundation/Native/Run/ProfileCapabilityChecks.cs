@@ -67,7 +67,8 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery |
                 RootCapabilities.SelfProtocol | RootCapabilities.Timers | RootCapabilities.TimerRearm | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput |
                 RootCapabilities.Children | RootCapabilities.SequencedJournal | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy |
-                RootCapabilities.Playback | RootCapabilities.PlaybackDescendants)
+                RootCapabilities.Playback | RootCapabilities.PlaybackDescendants | RootCapabilities.ScheduleInventory |
+                RootCapabilities.ScheduleSettlement | RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage | RootCapabilities.PreparedStarts)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -96,9 +97,10 @@ internal static class ProfileCapabilityChecks
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
             ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootChildren", "UsesRootComposedParkRecovery", "UsesRootDueBacklog", "UsesRootJobProtocol", "UsesRootLiveEventWaits",
                 "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening",
-                "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootPlayback", "UsesRootPlaybackDescendants",
-                "UsesRootPrivateParkInputs", "UsesRootReplyProtocol", "UsesRootRetention",
-                "UsesRootRetentionPolicy", "UsesRootRetirement", "UsesRootSelfProtocol", "UsesRootSequencedJournal", "UsesRootStableBody", "UsesRootTerminalOutput", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
+                "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootPlayback", "UsesRootPlaybackDescendants", "UsesRootPreparedStarts",
+                "UsesRootPrivateParkInputs", "UsesRootReplyProtocol", "UsesRootRetention", "UsesRootRetentionPolicy", "UsesRootRetirement",
+                "UsesRootScheduleControls", "UsesRootScheduleInventory", "UsesRootScheduleLineage", "UsesRootScheduleSettlement",
+                "UsesRootSelfProtocol", "UsesRootSequencedJournal", "UsesRootStableBody", "UsesRootTerminalOutput", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
                 "UsesRootTimedJobPreview", "UsesRootTimedJobSettlement", "UsesRootTimerRearm", "UsesRootTimers"],
         };
         // S3: each profile's root state family, the prefix bytes written before S3 and the statuses besides Finished that end it.
@@ -217,14 +219,15 @@ internal static class ProfileCapabilityChecks
             "protocol 113 qualifies terminal output alongside the S6 timers with separate definition stamps");
         using var sharedPostgres = KernelDb.ForPostgresRootShipped(options);
         using var sharedSqlite = KernelDb.ForSqliteRootShipped(sqliteOptions);
-        Check(sharedPostgres.RequiredFormat == new StoreFormat(3, 34, 1) && sharedSqlite.RequiredFormat == sharedPostgres.RequiredFormat &&
+        Check(sharedPostgres.RequiredFormat == StoreFormat.RootShipped && sharedSqlite.RequiredFormat == sharedPostgres.RequiredFormat &&
             sharedPostgres.Capabilities == (s6TerminalOutput.Capabilities | RootCapabilities.DueBacklog | RootCapabilities.Children |
                 RootCapabilities.SequencedJournal | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy |
-                RootCapabilities.Playback | RootCapabilities.PlaybackDescendants) &&
+                RootCapabilities.Playback | RootCapabilities.PlaybackDescendants | RootCapabilities.ScheduleInventory |
+                RootCapabilities.ScheduleSettlement | RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage | RootCapabilities.PreparedStarts) &&
             sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
-            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 14, JournalCodec: 0 } &&
-            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 17, JournalCodec: 0 },
-            "the shipped format composes owned children, admission pressure, terminal output, sequencing, live event waits, tenant retention and Playback");
+            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 20, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 23, JournalCodec: 0 },
+            "the shared shipped format composes managed schedules and prepared starts with the previous provider capabilities");
         using var sequencedPostgres = KernelDb.ForPostgresRootSequencedJournalQualification(options);
         using var sequencedSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
             StoreFormat.RootSequencedJournalQualification);
@@ -266,7 +269,6 @@ internal static class ProfileCapabilityChecks
             descendantsPostgres.Capabilities == (playbackPostgres.Capabilities | RootCapabilities.LiveEventWaits |
                 RootCapabilities.RetentionPolicy | RootCapabilities.PlaybackDescendants) &&
             descendantsSqlite.Capabilities == descendantsPostgres.Capabilities &&
-            sharedPostgres.Capabilities == descendantsPostgres.Capabilities &&
             RootProfiles.MissingPrerequisites(descendantsPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(descendantsPostgres.RequiredFormat) &&
             StoreDefinitionsRevision.Seed(descendantsPostgres) is { StoreSchema: 1, MessageProtocol: 14, JournalCodec: 0 } &&
@@ -276,7 +278,6 @@ internal static class ProfileCapabilityChecks
         using var scheduleSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootScheduleInventoryQualification);
         Check(schedulePostgres.RequiredFormat == new StoreFormat(3, 119, 1) && scheduleSqlite.RequiredFormat == schedulePostgres.RequiredFormat &&
             schedulePostgres.UsesRootScheduleInventory && scheduleSqlite.Capabilities == schedulePostgres.Capabilities &&
-            !sharedPostgres.UsesRootScheduleInventory && !sharedSqlite.UsesRootScheduleInventory &&
             RootProfiles.MissingPrerequisites(schedulePostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(schedulePostgres.RequiredFormat) &&
             StoreDefinitionsRevision.Seed(schedulePostgres) is { StoreSchema: 1, MessageProtocol: 15, JournalCodec: 0 } &&
@@ -287,7 +288,7 @@ internal static class ProfileCapabilityChecks
         Check(settlementPostgres.RequiredFormat == new StoreFormat(3, 120, 1) && settlementSqlite.RequiredFormat == settlementPostgres.RequiredFormat &&
             settlementPostgres.Capabilities == (schedulePostgres.Capabilities | RootCapabilities.ScheduleSettlement) &&
             settlementSqlite.Capabilities == settlementPostgres.Capabilities &&
-            !sharedPostgres.UsesRootScheduleSettlement && !schedulePostgres.UsesRootScheduleSettlement &&
+            !schedulePostgres.UsesRootScheduleSettlement &&
             RootProfiles.MissingPrerequisites(settlementPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(settlementPostgres.RequiredFormat),
             "scheduled occurrence settlement has a private protocol and retains the installed inventory definitions");
@@ -296,7 +297,6 @@ internal static class ProfileCapabilityChecks
         Check(controlsPostgres.RequiredFormat == new StoreFormat(3, 121, 1) && controlsSqlite.RequiredFormat == controlsPostgres.RequiredFormat &&
             controlsPostgres.Capabilities == (settlementPostgres.Capabilities | RootCapabilities.ScheduleControls) &&
             controlsSqlite.Capabilities == controlsPostgres.Capabilities &&
-            !sharedPostgres.UsesRootScheduleControls && !sharedSqlite.UsesRootScheduleControls &&
             !schedulePostgres.UsesRootScheduleControls && !settlementPostgres.UsesRootScheduleControls &&
             RootProfiles.MissingPrerequisites(controlsPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(controlsPostgres.RequiredFormat) &&
@@ -309,7 +309,7 @@ internal static class ProfileCapabilityChecks
         Check(lineagePostgres.RequiredFormat == new StoreFormat(3, 122, 1) && lineageSqlite.RequiredFormat == lineagePostgres.RequiredFormat &&
             lineagePostgres.Capabilities == (settlementPostgres.Capabilities | RootCapabilities.ScheduleLineage) &&
             lineageSqlite.Capabilities == lineagePostgres.Capabilities &&
-            !sharedPostgres.UsesRootScheduleLineage && !settlementPostgres.UsesRootScheduleLineage &&
+            !settlementPostgres.UsesRootScheduleLineage &&
             !lineagePostgres.UsesRootScheduleControls && !controlsPostgres.UsesRootScheduleLineage &&
             RootProfiles.MissingPrerequisites(lineagePostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(lineagePostgres.RequiredFormat) &&
@@ -323,6 +323,7 @@ internal static class ProfileCapabilityChecks
             inlineSqlite.RequiredFormat == inlinePostgres.RequiredFormat &&
             preparedPostgres.UsesRootPreparedStarts && !preparedPostgres.UsesRootInlinePromotion &&
             !sharedPostgres.UsesRootInlinePromotion && !sharedSqlite.UsesRootInlinePromotion &&
+            !inlinePostgres.UsesRootAuthoredEvents && !inlineSqlite.UsesRootAuthoredEvents &&
             inlinePostgres.Capabilities == (preparedPostgres.Capabilities | RootCapabilities.InlinePromotion) &&
             inlineSqlite.Capabilities == inlinePostgres.Capabilities &&
             RootProfiles.MissingPrerequisites(inlinePostgres.Capabilities) == RootCapabilities.None &&
@@ -330,9 +331,23 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(inlinePostgres) is { StoreSchema: 1, MessageProtocol: 21, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(inlineSqlite) is { StoreSchema: 2, MessageProtocol: 24, JournalCodec: 0 },
             "inline promotion has its own private protocol and exact provider definitions");
+        using var authoredPostgres = KernelDb.ForPostgresRootAuthoredEventsQualification(options);
+        using var authoredSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootAuthoredEventsQualification);
+        Check(authoredPostgres.RequiredFormat == new StoreFormat(3, 126, 1) && authoredSqlite.RequiredFormat == authoredPostgres.RequiredFormat &&
+            authoredPostgres.Capabilities == (RootProfiles.PreparedStartsQualification | RootCapabilities.AuthoredEvents) &&
+            authoredSqlite.Capabilities == authoredPostgres.Capabilities &&
+            authoredPostgres.UsesRootAuthoredEvents && authoredSqlite.UsesRootAuthoredEvents &&
+            !authoredPostgres.UsesRootInlinePromotion && !authoredSqlite.UsesRootInlinePromotion &&
+            !sharedPostgres.UsesRootAuthoredEvents && !sharedSqlite.UsesRootAuthoredEvents &&
+            RootScheduleOwnerMode.Applies(authoredPostgres) && RootScheduleOwnerMode.Applies(authoredSqlite) &&
+            RootProfiles.MissingPrerequisites(authoredPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(authoredPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(authoredPostgres) is { StoreSchema: 1, MessageProtocol: 20, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(authoredSqlite) is { StoreSchema: 2, MessageProtocol: 23, JournalCodec: 0 },
+            "private authored events only widen the protocol-35 wire and write path on both physical providers");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
             playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
-            inlinePostgres.Capabilities;
+            inlinePostgres.Capabilities | authoredPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -366,6 +381,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
             [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
             [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
+            [RootCapabilities.AuthoredEvents] = RootCapabilities.LiveEventWaits | RootCapabilities.SelfProtocol,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
             [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,

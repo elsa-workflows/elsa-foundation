@@ -22,6 +22,7 @@ internal interface IRootDispatchHeaders
     bool KeepsPrivateParkInputs { get; }
     bool RecoversPark { get; }
     bool TakesLiveEventWaits => false;
+    bool PublishesAuthoredEvents => false;
     bool RefusesParkedOperators { get; }
     bool SettlesEndedMailbox { get; }
 }
@@ -472,6 +473,12 @@ internal sealed partial class ActorAdapter
         if (inline && outcome.Row is null && !outcome.Durable &&
             outcome.Status is Durable.InstanceStatus.Finished or Durable.InstanceStatus.Faulted or Durable.InstanceStatus.Cancelled)
             return;
+        if (roots?.PublishesAuthoredEvents == true && outcome.Sent.Any(IsAuthoredPublication))
+        {
+            // The store binds these effects in the same transaction as the checkpoint, using the qualified wait rows.
+            outcome.FoundationRootPublications = outcome.Sent.Where(IsAuthoredPublication).ToArray();
+            outcome.Sent.RemoveAll(IsAuthoredPublication);
+        }
 
         if (roots?.SupportsChildren == true && outcome.Sent.Any(IsChildEffect))
         {
@@ -525,6 +532,8 @@ internal sealed partial class ActorAdapter
             outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory && !inline)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
+
+        static bool IsAuthoredPublication(Durable.Message message) => message.FoundationPublish?.Authored is not null;
 
         static bool IsChildEffect(Durable.Message message) =>
             message.BindFoundationChild || message.FoundationRootChildInput || message.CascadeOrigin || message.Kind == Durable.Kinds.ChildFinished;

@@ -22,6 +22,14 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public SqliteEmbeddedFoundation(string databasePath, string node, string actorType)
         : this(databasePath, node, actorType, qualificationFormat: null) { }
 
+    /// <summary>Binds the shipped Embedded composition with trusted protection for held root starts.</summary>
+    public static SqliteEmbeddedFoundation WithRootStartProtection(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, qualificationFormat: null, protectRootStart);
+    }
+
     /// <summary>Composes the dedicated preview format for qualifying retained terminal output.</summary>
     public static SqliteEmbeddedFoundation ForTerminalOutputQualification(string databasePath, string node, string actorType,
         bool withTimers = false) =>
@@ -32,6 +40,9 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
 
     internal static SqliteEmbeddedFoundation ForLiveEventQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootLiveEventQualification);
+
+    internal static SqliteEmbeddedFoundation ForAuthoredEventsQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootAuthoredEventsQualification);
 
     /// <summary>Composes the dedicated preview format for qualifying indexed playback.</summary>
     public static SqliteEmbeddedFoundation ForPlaybackQualification(string databasePath, string node, string actorType) =>
