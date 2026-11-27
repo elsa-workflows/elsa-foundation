@@ -1,5 +1,6 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Postgres;
@@ -7,8 +8,8 @@ namespace Kernel.Foundation.Postgres;
 public static partial class PostgresPreviewHosting
 {
     /// <summary>Binds the trusted occurrence relay to an installed tenant, workflow type and schedule actor type.</summary>
-    public static Contract.IScheduleOccurrenceAdmissions BindScheduleOccurrences(Func<KernelDb> create, Contract.BoundScope tenant,
-        string workflowType, string scheduleActorType, PostgresDirectRequests? requests = null)
+    public static async Task<Contract.IScheduleOccurrenceAdmissions> OpenScheduleOccurrencesAsync(Func<KernelDb> create, Contract.BoundScope tenant,
+        string workflowType, string scheduleActorType, PostgresDirectRequests? requests = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentNullException.ThrowIfNull(tenant);
@@ -16,8 +17,18 @@ public static partial class PostgresPreviewHosting
         RootScheduleInventory.RequireActorType(scheduleActorType);
         if (workflowType == scheduleActorType)
             throw new ArgumentException("The workflow type must differ from the schedule actor type.", nameof(scheduleActorType));
+        var pressure = requests?.Pressure;
+        bool usesPressure;
+        await using (var db = create())
+        {
+            if (!db.Database.IsNpgsql() || !db.UsesRootScheduleSettlement)
+                throw new NotSupportedException("The PostgreSQL store profile does not admit scheduled workflow occurrences.");
+            usesPressure = db.UsesRootDueBacklog;
+        }
+        if (usesPressure && pressure is null)
+            pressure = await EfStore.OpenStandalonePostgresPressureAsync(create, cancellationToken);
         return new ScheduleOccurrenceAdmissions(new PostgresRootAdmission(create, TimeSpan.Zero,
-            pressure: requests?.Pressure, scheduleActorType: scheduleActorType), tenant, workflowType);
+            pressure: pressure, scheduleActorType: scheduleActorType), tenant, workflowType);
     }
 
     private sealed class ScheduleOccurrenceAdmissions(PostgresRootAdmission admission, Contract.BoundScope scope, string workflowType)

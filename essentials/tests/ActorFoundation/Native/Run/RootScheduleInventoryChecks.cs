@@ -191,8 +191,29 @@ internal static class RootScheduleInventoryChecks
             "scheduled-occurrence-relay", pinned.Model);
         if (foundation is not null) await foundation.InstallShippedAsync(token);
         var bound = EmbeddedTenant.Bind(tenant);
+        if (postgres)
+        {
+            var pressure = RootAdmissionPressure.CreateDefault().Backlog.HighWater + 1;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Partitions" SET "Backlog" = "Backlog" + {pressure}
+                """, token);
+            try
+            {
+                var throttled = await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(open, bound, pinned.Model,
+                    ScheduleActor.ActorType, cancellationToken: token);
+                var denied = await throttled.AdmitAsync(Wire(occurrence), new(pinned.Model, pinned.Definition, pinned.Input), token);
+                Require(denied is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.InboxFull, RetryAfter: not null },
+                    "a PostgreSQL relay without shared requests still honors the persisted partition backlog");
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Partitions" SET "Backlog" = "Backlog" - {pressure}
+                    """, token);
+            }
+        }
         var relay = postgres
-            ? PostgresPreviewHosting.BindScheduleOccurrences(open, bound, pinned.Model, ScheduleActor.ActorType)
+            ? await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(open, bound, pinned.Model, ScheduleActor.ActorType, cancellationToken: token)
             : foundation!.BindScheduleOccurrences(bound, ScheduleActor.ActorType);
         try
         {
