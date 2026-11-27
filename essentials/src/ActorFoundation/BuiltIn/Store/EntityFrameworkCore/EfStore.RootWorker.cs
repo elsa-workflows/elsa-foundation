@@ -198,6 +198,31 @@ public sealed partial class EfStore
         return InstallWorkerScope(new(bindings[0].Partition, bindings));
     }
 
+    private sealed record WorkerRootLoad(string Tenant, string Reference, string Actor, int Partition, string Fingerprint,
+        string? Id, long Creation, string? State, byte[]? Wire, int? StateVersion, long? Revision, string? Header,
+        History? History, InstanceStatus? Status, bool? Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
+        string? Jobs, long? NextJobGeneration, string? Fault, long? ParkAt, string? Parent, string? Children);
+
+    private IReadOnlyList<InstanceRow> MaterializeWorkerRoots(KernelDb db, WorkerRoots scope,
+        IReadOnlyList<WorkerRootLoad> rows, int requestedCount)
+    {
+        if (rows.Count != requestedCount) throw RootShape();
+        var result = new List<InstanceRow>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (!scope.Includes(row.Partition) || new InstanceRef(row.Actor).Partition != row.Partition) throw RootShape();
+            if (row.Id is not { } id) continue;
+            if (row is not { State: { } state, StateVersion: { } version, Revision: { } revision, Header: { } header,
+                    History: { } history, Status: { } status, Suspended: { } suspended }) throw RootShape();
+            var binding = new WorkerRoot(row.Tenant, row.Reference, row.Actor, row.Partition, row.Fingerprint);
+            var physical = new PhysicalRoot(id, row.Creation, state, row.Wire, version, revision, header, history, status,
+                suspended, row.TerminalRevision, row.TerminalAt, row.AsOf, row.Jobs, row.NextJobGeneration, row.Fault, row.ParkAt,
+                row.Parent, row.Children);
+            result.Add(WorkerRow(binding, DecodePhysicalRoot(db, physical)));
+        }
+        return result;
+    }
+
     private InstanceRow WorkerRow(WorkerRoot root, RootImage image)
     {
         if (RootJobsEnabled)

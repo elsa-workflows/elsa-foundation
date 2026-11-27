@@ -128,6 +128,22 @@ internal static class PostgresShippedFormatChecks
         var scope = EmbeddedTenant.Bind("shipped");
         var operators = await store.OpenSelectedRootIngressAsync(WorkflowActor.WorkflowActor.ActorType, TimeSpan.FromHours(1),
             (bound, _) => ReferenceEquals(bound, scope), stop, (bound, _) => ReferenceEquals(bound, scope));
+        await store.EnableRootSelfSendsAsync(stop);
+        await store.EnableRootJobsAsync(stop);
+        store.BindWorkerNode();
+        var waiting = await StartAsync("waits", "waits-1");
+        var waitingActor = (await clock.ResolveAsync(scope.Tenant, waiting.Id, stop))!.Id;
+        Require((await store.LoadAsync([waitingActor, waitingActor], stop)).Count == 0,
+            "a batched PostgreSQL worker load recognizes a pending life without a checkpoint");
+        try
+        {
+            await store.LoadAsync([waitingActor, InstanceRef.In(0, "unadmitted").Id], stop);
+            throw new InvalidOperationException("A batched PostgreSQL worker load accepted an actor without a birth.");
+        }
+        catch (NotSupportedException)
+        {
+            Require(true, "a batched PostgreSQL worker load refuses an actor without a birth");
+        }
         var escalated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var service = new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message),
             new() { PollInterval = TimeSpan.FromMilliseconds(20) }, requests: foundation.Requests);
@@ -143,8 +159,9 @@ internal static class PostgresShippedFormatChecks
             var fetched = await SettledAsync(answered);
             Require(fetched is { Status: InstanceStatus.Finished } && Variable(fetched, "outcome") == "200" && partner.Calls("/ok") == 1,
                 "its SendHttpRequest job runs after the answer, settles, and the root commits Finished");
+            var fetchedActor = fetched!.Actor.Id;
             await using (var guard = Open())
-                await PostgresRootRetirementChecks.CheckRetirementFootprintAsync(guard, fetched!.Actor.Id, stop);
+                await PostgresRootRetirementChecks.CheckRetirementFootprintAsync(guard, fetchedActor, stop);
 
             // A timed job that passes its deadline settles on the Timeout outcome.
             var stuck = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("stuck")), "stuck-1", Contract.Kinds.Start,
@@ -162,9 +179,12 @@ internal static class PostgresShippedFormatChecks
 
 
             // A selected Terminate of a running root.
-            var waiting = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("waits")), "waits-1", Contract.Kinds.Start,
-                cancellationToken: stop)).Actor!.Value;
             await RunningAsync(waiting);
+            Require((await store.LoadAsync([waitingActor, fetchedActor, waitingActor], stop)) is
+                [{ Status: InstanceStatus.Running } live, { Status: InstanceStatus.Finished } ended] &&
+                live.Id == waitingActor && live.FoundationDispatchHeader?.Reference == waiting.Id &&
+                ended.Id == fetchedActor && ended.FoundationDispatchHeader?.Reference == answered.Id,
+                "one batched PostgreSQL worker load restores exact checkpoints in distinct request order");
             var running = (await foundation.GetAsync(scope, waiting, stop))!;
             Require((await operators.SendAsync(scope, new Contract.Target.Ref(waiting), "terminate-1", Contract.Kinds.Terminate,
                     JsonSerializer.Serialize(new Contract.OperatorCommand(running.Selection)), cancellationToken: stop)).Outcome ==
@@ -184,6 +204,8 @@ internal static class PostgresShippedFormatChecks
             }
             Require(await HistoryRowsAsync(answered) == 0 && await foundation.GetAsync(scope, answered, stop) is null,
                 "the node retires the deleted root, and its history row goes with it");
+            Require((await store.LoadAsync([fetchedActor], stop)).Count == 0,
+                "a retired PostgreSQL life retains its birth but has no worker checkpoint");
 
             Require(!escalated.Task.IsCompleted && service.LastError is null, "the node ran on the shipped format without a fault");
         }
