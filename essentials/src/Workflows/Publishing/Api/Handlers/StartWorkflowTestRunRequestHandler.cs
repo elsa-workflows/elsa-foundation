@@ -266,13 +266,17 @@ public sealed class StartWorkflowTestRunRequestHandler(
     public async Task<WorkflowTestRunView?> GetAsync(string testRunId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(testRunId);
-        var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
-        if (testRun is null)
-            return null;
-
         var scopeRecord = await FindCurrentTestScopeAsync(testRunId, cancellationToken);
         if (scopeRecord is null && (accessContextAccessor is not null || partitionAccessor is not null))
             return null;
+
+        var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
+        if (scopeRecord?.Scope.IsExpired(timeProvider.GetUtcNow()) == true) return null;
+        if (testRun is null || FindDirectDispatcher(testRun, scopeRecord) is not null &&
+            testRun.Status is not (WorkflowTestRunStatus.Rejected or WorkflowTestRunStatus.DispatchRejected) &&
+            (scopeRecord!.State != WorkflowTestScopeState.Open || testRun.WorkflowExecutionId is null && scopeRecord.IsolatedActor is not null))
+            return await RecoverDirectRunAsync(scopeRecord, testRun, cancellationToken) is { } recovered
+                ? WorkflowTestRunView.From(recovered.Run, recovered.Command) : null;
 
         if (testRun.Status == WorkflowTestRunStatus.StopRequested && testRun.WorkflowExecutionId is { } stoppingExecutionId)
         {
@@ -314,13 +318,14 @@ public sealed class StartWorkflowTestRunRequestHandler(
     public async Task<WorkflowTestRunView?> StopAsync(string testRunId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(testRunId);
-        var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
-        if (testRun is null)
-            return null;
-
         var scopeRecord = await FindCurrentTestScopeAsync(testRunId, cancellationToken);
         if (scopeRecord is null && (accessContextAccessor is not null || partitionAccessor is not null))
             return null;
+
+        var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
+        if (scopeRecord?.Scope.IsExpired(timeProvider.GetUtcNow()) == true) return null;
+        testRun ??= (await RecoverDirectRunAsync(scopeRecord, null, cancellationToken))?.Run;
+        if (testRun is null) return null;
 
         var targetBeforeStop = testRunTargetStore is null
             ? null
@@ -337,33 +342,33 @@ public sealed class StartWorkflowTestRunRequestHandler(
             await StopTargetAfterScopeCloseAsync(testRunId, cancellationToken);
         }
 
-        var workflowExecutionId = targetBeforeStop?.DispatchResult?.Dispatch.WorkflowExecutionId ??
-                                  (targetBeforeStop?.State == TestRunTargetState.Dispatching ? targetBeforeStop.WorkflowExecutionId : null) ??
-                                  testRun.WorkflowExecutionId;
         var direct = FindDirectDispatcher(testRun, scopeRecord);
         if (direct is not null)
         {
             var closed = await FindCurrentTestScopeAsync(testRunId, cancellationToken);
-            // The provider pins its actual actor under the same scope fence. A target may still be dispatching or may
-            // have returned an operation ID on refusal, so its preallocated legacy identity cannot select a kernel root.
-            workflowExecutionId = closed?.IsolatedActor?.ActorReference ??
-                (testRun.Status is WorkflowTestRunStatus.DispatchAccepted or WorkflowTestRunStatus.DispatchDuplicate or WorkflowTestRunStatus.StopRequested
-                    ? testRun.WorkflowExecutionId : null);
-        }
-        if (workflowExecutionId is not null && scopeRecord is not null)
-        {
-            if (direct is not null)
-                await direct.RequestStopAsync(scopeRecord.Scope, workflowExecutionId, cancellationToken);
-            else if (rootCanceller is not null)
-                await rootCanceller.RequestCancelAsync(testRunId, workflowExecutionId, scopeRecord.Scope.Partition, cancellationToken);
+            // The Runtime fence records the provider's preparation. The preallocated legacy id cannot select a root.
+            if (closed?.IsolatedActor is { } actor)
+            {
+                try { await direct.RequestStopAsync(closed.Scope, actor.ActorReference, cancellationToken); }
+                catch (TimeoutException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // The scope remains closed. A later Stop can settle the same outstanding preparation or actor.
+                }
+            }
+            var recovered = await RecoverDirectRunAsync(closed, testRun, cancellationToken);
+            return recovered is { } result ? WorkflowTestRunView.From(result.Run) : null;
         }
 
-        var executionState = workflowExecutionId is null || executionStateStore is null || direct is not null
+        var workflowExecutionId = targetBeforeStop?.DispatchResult?.Dispatch.WorkflowExecutionId ??
+                                  (targetBeforeStop?.State == TestRunTargetState.Dispatching ? targetBeforeStop.WorkflowExecutionId : null) ??
+                                  testRun.WorkflowExecutionId;
+        if (workflowExecutionId is not null && scopeRecord is not null && rootCanceller is not null)
+            await rootCanceller.RequestCancelAsync(testRunId, workflowExecutionId, scopeRecord.Scope.Partition, cancellationToken);
+
+        var executionState = workflowExecutionId is null || executionStateStore is null
             ? null
             : await executionStateStore.FindAsync(workflowExecutionId, cancellationToken);
-        var rootWasCancelled = workflowExecutionId is not null && direct is not null
-            ? await direct.IsStoppedAsync(scopeRecord!.Scope, workflowExecutionId, cancellationToken)
-            : executionState?.Status == WorkflowExecutionStatus.Cancelled;
+        var rootWasCancelled = executionState?.Status == WorkflowExecutionStatus.Cancelled;
         var noRootWasStarted = workflowExecutionId is null ||
                                targetBeforeStop is { State: TestRunTargetState.Prepared, DispatchResult: null } && executionState is null;
 
@@ -1149,6 +1154,48 @@ public sealed class StartWorkflowTestRunRequestHandler(
         scope is not null && run.Metadata.GetValueOrDefault("runtime.sourceReferenceId") == scope.Scope.ScopeId
             ? ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>()
             : null;
+
+    private async Task<(WorkflowTestRun Run, WorkflowExecutionCommandDispatchStatus? Command)?> RecoverDirectRunAsync(
+        WorkflowTestScopeRecord? scope, WorkflowTestRun? presentation, CancellationToken cancellationToken)
+    {
+        if (scope is null || ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>() is not { } direct ||
+            await sourceReferenceStore.FindAsync(scope.Scope.ScopeId, cancellationToken) is not { } source ||
+            !source.IsLive(timeProvider.GetUtcNow()) ||
+            await direct.ObserveAsync(scope, source, cancellationToken) is not { } observation)
+            return null;
+
+        var started = observation is WorkflowDirectTestRunObservation.Started or WorkflowDirectTestRunObservation.Ended;
+        var status = (scope.State, observation) switch
+        {
+            (not WorkflowTestScopeState.Open, WorkflowDirectTestRunObservation.Started or WorkflowDirectTestRunObservation.Pending) =>
+                WorkflowTestRunStatus.StopRequested,
+            (not WorkflowTestScopeState.Open, _) or (_, WorkflowDirectTestRunObservation.Retired) => WorkflowTestRunStatus.Stopped,
+            (_, WorkflowDirectTestRunObservation.Prepared) => WorkflowTestRunStatus.Prepared,
+            (_, WorkflowDirectTestRunObservation.Pending) => WorkflowTestRunStatus.DispatchDeferred,
+            (_, WorkflowDirectTestRunObservation.Disarmed) => WorkflowTestRunStatus.DispatchRejected,
+            _ => WorkflowTestRunStatus.DispatchAccepted
+        };
+        var command = status switch
+        {
+            WorkflowTestRunStatus.DispatchAccepted => WorkflowExecutionCommandDispatchStatus.Accepted,
+            WorkflowTestRunStatus.DispatchDeferred => WorkflowExecutionCommandDispatchStatus.Deferred,
+            WorkflowTestRunStatus.DispatchRejected => WorkflowExecutionCommandDispatchStatus.Rejected,
+            _ => (WorkflowExecutionCommandDispatchStatus?)null
+        };
+        var run = new WorkflowTestRun(scope.Scope.ScopeId, source.DefinitionId, source.DefinitionVersionId, source.ArtifactId,
+            started ? scope.IsolatedActor!.ActorReference : null, status, RequestedBy, scope.CreatedAt, scope.Scope.ExpiresAt,
+            status switch
+            {
+                WorkflowTestRunStatus.DispatchDeferred => "The isolated Test Run has not yet appeared.",
+                WorkflowTestRunStatus.DispatchRejected => "The isolated Test Run did not start.",
+                WorkflowTestRunStatus.StopRequested => "The Test Run scope is closed. Stop can be retried until the actor settles.",
+                _ => null
+            }, presentation?.Metadata ?? new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["runtime.sourceReferenceId"] = source.SourceReferenceId
+            });
+        return (run, command);
+    }
 
     private sealed record ResolvedTestRunTrigger(
         TestRunTriggerContext Context,

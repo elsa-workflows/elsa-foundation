@@ -133,7 +133,8 @@ internal sealed class TestRunWaitOperations(
     {
         if (kernel is null || run is not { WorkflowExecutionId: { } execution, ArtifactId: { } artifact } ||
             await scopes.FindAsync(run.TestRunId, token) is not { State: WorkflowTestScopeState.Open } scope ||
-            scope.Scope.IsExpired(time.GetUtcNow()) || await executables.FindAsync(artifact, token) is not { } executable)
+            scope.IsolatedActor?.ActorReference != execution || scope.Scope.IsExpired(time.GetUtcNow()) ||
+            await executables.FindAsync(artifact, token) is not { } executable)
             return null;
         return new(execution, executable, scope);
     }

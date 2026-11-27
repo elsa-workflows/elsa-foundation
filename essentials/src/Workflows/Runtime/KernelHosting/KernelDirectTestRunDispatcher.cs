@@ -134,6 +134,33 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             test.ScopeId, executable.Identity, provenance, new(AdmissionOutcome.Refused), clock.GetUtcNow(), reason);
     }
 
+    public async ValueTask<WorkflowDirectTestRunObservation?> ObserveAsync(WorkflowTestScopeRecord scope,
+        WorkflowExecutableSourceReference source, CancellationToken cancellationToken = default)
+    {
+        var exact = scope.Scope;
+        if ((exact.TenantId ?? PersistenceScope.DefaultValue) != persistence.Value ||
+            source.Scope != WorkflowExecutableReferenceScope.TestRun || source.SourceReferenceId != exact.ScopeId ||
+            source.TenantId != exact.TenantId || source.CreatedAt != scope.CreatedAt || source.ExpiresAt != exact.ExpiresAt)
+            return null;
+        if (scope.IsolatedActor is not { } binding) return WorkflowDirectTestRunObservation.Prepared;
+
+        var actor = new ActorRef(binding.ActorReference);
+        var result = await testRuns.Reads.GetAsync(actor, cancellationToken);
+        if (result.Missing)
+            return (await runtime.ConfirmPreparedTestAsync(actor, binding.Issuance, cancellationToken)) switch
+            {
+                RootStartProof.PreparationDisarmed => WorkflowDirectTestRunObservation.Disarmed,
+                RootStartProof.BirthRetired => WorkflowDirectTestRunObservation.Retired,
+                _ => WorkflowDirectTestRunObservation.Pending
+            };
+        if (result.Run is not { Run: { TestStart: { } selected } run } found || !MatchesScope(selected, exact) ||
+            run.Model != NativeExecutionModel.ModelKey || run.Workflow != source.ArtifactId || run.Definition != source.DefinitionId ||
+            selected.SourceDigest != KernelPublishedRunDispatcher.SourceDigest(source))
+            return null;
+
+        return IsStopped(found.View) ? WorkflowDirectTestRunObservation.Ended : WorkflowDirectTestRunObservation.Started;
+    }
+
     public async ValueTask RequestStopAsync(WorkflowTestScope scope, string workflowExecutionId,
         CancellationToken cancellationToken = default)
     {
@@ -191,10 +218,12 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
     private async ValueTask<ActorView?> FindActorAsync(WorkflowTestScope scope, ActorRef actor, CancellationToken token)
     {
         var run = await testRuns.Reads.GetAsync(actor, token);
-        return run.Run is { Run.TestStart: { } selection } test && selection.ScopeId == scope.ScopeId &&
-            selection.Tenant == scope.TenantId && selection.Partition == scope.Partition.Value &&
-            selection.ExpiresAt == scope.ExpiresAt ? test.View : null;
+        return run.Run is { Run.TestStart: { } selection } test && MatchesScope(selection, scope) ? test.View : null;
     }
+
+    private static bool MatchesScope(WorkflowTestStart selection, WorkflowTestScope scope) =>
+        selection.ScopeId == scope.ScopeId && selection.SourceReferenceId == scope.ScopeId && selection.Tenant == scope.TenantId &&
+        selection.Partition == scope.Partition.Value && selection.ExpiresAt == scope.ExpiresAt;
 
     private static bool IsStopped(ActorView? view) =>
         view is { Header.Status: not ActorStatus.Running, Park: null };
