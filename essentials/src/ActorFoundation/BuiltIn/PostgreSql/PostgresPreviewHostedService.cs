@@ -27,10 +27,16 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
     /// <summary>Creates one owner for the primary actor and a distinct auxiliary actor on a qualified store.</summary>
     public static PostgresPreviewHostedService CreateWithAuxiliaryActor(Func<KernelDb> create, string node, IActorType actor,
         IActorType auxiliaryActor, Action<string> endProcess, LoopOptions? options = null,
-        ILogger<PostgresPreviewHostedService>? logger = null, PostgresDirectRequests? requests = null)
+        ILogger<PostgresPreviewHostedService>? logger = null, PostgresDirectRequests? requests = null) =>
+        CreateWithAuxiliaryActorAndRetention(create, node, actor, auxiliaryActor, endProcess, null, options, logger, requests);
+
+    /// <summary>Creates the shared owner with the host's current retention policy.</summary>
+    public static PostgresPreviewHostedService CreateWithAuxiliaryActorAndRetention(Func<KernelDb> create, string node, IActorType actor,
+        IActorType auxiliaryActor, Action<string> endProcess, Func<ActorHeader, TimeSpan?>? retentionWindow,
+        LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null, PostgresDirectRequests? requests = null)
     {
         Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
-        return new(create, node, actor, endProcess, options, logger, requests, auxiliaryActor);
+        return new(create, node, actor, endProcess, options, logger, requests, auxiliaryActor) { RetentionWindow = retentionWindow };
     }
 
     private PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor, Action<string> endProcess,
