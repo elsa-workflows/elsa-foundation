@@ -31,10 +31,13 @@ internal static partial class RootPublicEventStarts
     internal static string TargetColumns(bool sqlite)
     {
         var text = TextType(sqlite);
+        var boolean = sqlite ? "INTEGER" : "boolean";
         return $"""
             "Tenant" {text} NOT NULL, "Publication" {text} NOT NULL, "Registration" {text} NOT NULL,
             "Key" {text} NOT NULL, "Wait" {text} NOT NULL, "EventId" {text} NOT NULL,
-            "Start" {text} NOT NULL, "Payload" {text}, "Reference" {text} UNIQUE REFERENCES "FoundationRootBirths" ("Reference"),
+            "Start" {text} NOT NULL, "Payload" {text},
+            "PayloadEscaped" {boolean} NOT NULL CHECK (NOT "PayloadEscaped" OR "Payload" IS NOT NULL),
+            "Reference" {text} UNIQUE REFERENCES "FoundationRootBirths" ("Reference"),
             PRIMARY KEY ("Tenant", "Publication", "Registration")
             """;
     }
@@ -43,7 +46,7 @@ internal static partial class RootPublicEventStarts
 
     private sealed record CaptureQuote(bool SourceReady, long Count, long Bytes);
     private sealed record CapturedStart(bool SourceReady, string? Registration, string? Key, string? Wait, string? EventId,
-        string? Start, string? Payload);
+        string? Start, string? Payload, bool? PayloadEscaped);
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StoredInput(string Id, long Scope, string Kind, string Header, string? Payload, long? KeepUntil, string? ReplyTo);
     private sealed record PreparedStart(string Registration, InstanceRef Actor, string Reference, string Fingerprint, StoredInput Creator, StoredInput Event);
@@ -76,15 +79,13 @@ internal static partial class RootPublicEventStarts
                     AND (SELECT "SourceReady" FROM source)
                 """
             : $"""
-                WITH source AS MATERIALIZED (/*public-event-start-source*/), coverage AS (
-                    SELECT coalesce(max("Ordinal"), 0) AS "Through" FROM "FoundationPublicEventPublications"
-                    WHERE "Tenant" = {tenant} AND "Key" = {key} AND "KeepUntil" >= {retainedFrom} AND "CleanupAt" = "KeepUntil"
-                        AND (SELECT "SourceReady" FROM source)
-                )
+                WITH source AS MATERIALIZED (/*public-event-start-source*/)
                 INSERT INTO "FoundationPublicEventStarts"
                     ("Tenant", "Key", "Wait", "Incarnation", "Start", "RetainFrom", "CatchAfter", "CatchThrough")
-                SELECT {tenant}, {key}, {wait}, {Guid.NewGuid().ToString("N")}, {DurableKeyJson.Write(spec)}, {retainedFrom}, 0, coverage."Through"
-                FROM coverage, source WHERE "SourceReady"
+                SELECT {tenant}, {key}, {wait}, {Guid.NewGuid().ToString("N")}, {DurableKeyJson.Write(spec)}, {retainedFrom}, 0,
+                    coalesce((SELECT p."Ordinal" FROM "FoundationPublicEventPublications" p
+                        WHERE p."Tenant" = {tenant} AND p."Key" = {key} ORDER BY p."Ordinal" DESC LIMIT 1), 0)
+                FROM source WHERE "SourceReady"
                 ON CONFLICT ("Tenant", "Key", "Wait") DO UPDATE
                     SET "Incarnation" = excluded."Incarnation", "Start" = excluded."Start", "RetainFrom" = excluded."RetainFrom",
                         "CatchAfter" = excluded."CatchAfter", "CatchThrough" = excluded."CatchThrough"
@@ -123,16 +124,16 @@ internal static partial class RootPublicEventStarts
         var quote = await db.Database.SqlQuery<CaptureQuote>(Bind(quoteSql, bind)).SingleAsync(token);
         RequireSource(quote.SourceReady);
         if (quote.Count == 0) return default;
-        var packed = payload is null ? null : DurableKeyJson.Write(payload);
-        var bytes = quote.Bytes + quote.Count * ((packed is null ? 0 : Encoding.UTF8.GetByteCount(packed)) + 2 * replyAddressBytes);
+        var (text, escaped) = EncodePayload(payload);
+        var bytes = quote.Bytes + quote.Count * ((text is null ? 0 : Encoding.UTF8.GetByteCount(text)) + 2 * replyAddressBytes);
         if (quote.Count > available || bytes > availableBytes)
             throw new FanoutExceeded("The event's start subscriptions exceed the atomic delivery limit.");
 
         var captured = await db.Database.ExecuteSqlInterpolatedAsync(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
             INSERT INTO "FoundationPublicEventTargets"
-                ("Tenant", "Publication", "Registration", "Key", "Wait", "EventId", "Start", "Payload")
-            SELECT "Tenant", {publication}, "Incarnation", "Key", "Wait", {DurableKeyJson.Write(eventId)}, "Start", CAST({packed} AS TEXT)
+                ("Tenant", "Publication", "Registration", "Key", "Wait", "EventId", "Start", "Payload", "PayloadEscaped")
+            SELECT "Tenant", {publication}, "Incarnation", "Key", "Wait", {DurableKeyJson.Write(eventId)}, "Start", CAST({text} AS TEXT), {escaped}
             FROM "FoundationPublicEventStarts"
             WHERE "Tenant" = {tenant} AND "Key" = {key} AND (SELECT "SourceReady" FROM source)
             ORDER BY "Wait"
@@ -147,7 +148,7 @@ internal static partial class RootPublicEventStarts
         RequireTransaction(db, bind);
         var targets = await db.Database.SqlQuery<CapturedStart>(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
-            SELECT source."SourceReady", t."Registration", t."Key", t."Wait", t."EventId", t."Start", t."Payload"
+            SELECT source."SourceReady", t."Registration", t."Key", t."Wait", t."EventId", t."Start", t."Payload", t."PayloadEscaped"
             FROM source LEFT JOIN "FoundationPublicEventTargets" t
                 ON source."SourceReady" AND t."Tenant" = {tenant} AND t."Publication" = {publication} AND t."Reference" IS NULL
             ORDER BY t."Wait"
@@ -172,7 +173,7 @@ internal static partial class RootPublicEventStarts
             var creator = FoundationRootCreator.Create(actor, operation, FoundationRootCreator.OperationDigest(operation), spec, null, replyAddress);
             var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
             var (creatorHeader, input) = EncodeCreator(creator);
-            var payload = target.Payload is { } packed ? DurableKeyJson.Read<string>(packed) : null;
+            var payload = DecodePayload(target.Payload, target.PayloadEscaped == true);
             var id = DurableKeyJson.Read<string>(target.EventId!);
             var (eventHeader, eventPayload, kind) = EncodeDirect(id, 1, Kinds.Event, payload, null, held: replyAddress is not null,
                 new(target.Key!, target.Wait!), eventOccurrence: publication);

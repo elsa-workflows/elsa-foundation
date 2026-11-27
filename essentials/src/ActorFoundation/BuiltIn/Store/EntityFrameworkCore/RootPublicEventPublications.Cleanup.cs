@@ -69,7 +69,7 @@ internal static partial class RootPublicEventPublications
         var mutation = expired.ReceiptUntil >= now
             ? (FormattableString)$"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/)
-                UPDATE "FoundationPublicEventPublications" SET "Payload" = NULL, "KeepUntil" = NULL, "CleanupAt" = "ReceiptUntil"
+                UPDATE "FoundationPublicEventPublications" SET "Payload" = NULL, "PayloadEscaped" = false, "KeepUntil" = NULL, "CleanupAt" = "ReceiptUntil"
                 WHERE "Tenant" = {target.Tenant} AND "Key" = {target.Key} AND "Ordinal" = {target.Ordinal}
                     AND (SELECT "SourceReady" FROM source)
                 """

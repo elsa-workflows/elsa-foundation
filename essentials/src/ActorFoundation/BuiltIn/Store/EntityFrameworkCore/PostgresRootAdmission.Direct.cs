@@ -395,6 +395,8 @@ internal sealed partial class PostgresRootAdmission
             authoredEvent ? AuthoredEventDirectPrefix : heldKeyed ? HeldKeyedDirectPrefix :
             keyed ? KeyedDirectPrefix : IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
         var header = DurableKeyJson.Read<StoredDirect>(wire![prefix.Length..]);
+        if (header is not { Creation: 1 })
+            throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
         var matchesOccurrence = publicEvent
             ? FoundationRootCreator.IsGeneratedReference(header.EventOccurrence) && header.EventWait?.Wait is { } publicWait &&
                 header.Operation is { } eventId && occurrence == PublicEventOccurrence(reference, header.EventOccurrence!, eventId, publicWait)
@@ -402,7 +404,7 @@ internal sealed partial class PostgresRootAdmission
                 ? header.Operation is { } id && FoundationSelfSend.IsHandle(id) &&
                     header.EventWait?.Wait is { } wait && occurrence == AuthoredEventOccurrence(reference, id, wait)
                 : MatchesDirectOccurrence(reference, header.Operation, occurrence, keyed: keyed));
-        if (header is not { Creation: 1 } || !matchesOccurrence || keyed && (header.EventWait is not null || header.ScheduleControl is not null))
+        if (!matchesOccurrence || keyed && (header.EventWait is not null || header.ScheduleControl is not null))
             throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
         return header;
     }
