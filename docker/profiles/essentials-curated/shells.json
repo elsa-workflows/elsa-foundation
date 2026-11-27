@@ -151,16 +151,15 @@
           "StudioPreferencesApi": {},
           "StudioPreferencesEntityFrameworkCore": {},
           "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256
           },
           "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {
             "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
           },
           "KernelActivitiesScheduling": {},
-          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {
-            "CacheWorkflowExecutables": true,
-            "WorkflowExecutableCacheCapacity": 256
-          }
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {}
         },
         "Configuration": {
           "WebRouting": {
