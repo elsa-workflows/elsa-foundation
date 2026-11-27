@@ -1,3 +1,4 @@
+using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
@@ -40,14 +41,18 @@ internal static class RootAdmissionPressureChecks
                 await EfStore.InstallSqliteShippedAsync(db, 1, token);
 
             const string node = "pressure-node";
-            var scope = EmbeddedTenant.Bind("pressure-probe");
-            var other = EmbeddedTenant.Bind("separate-tenant");
+            var scope = ContractScopes.Bind("pressure-probe");
+            var other = ContractScopes.Bind("separate-tenant");
             var actor = new PressureActor();
             var rateClock = new RateClock();
             var pressure = new RootAdmissionPressure(
                 new(2, 1, TimeSpan.FromMilliseconds(75), TimeSpan.FromMilliseconds(100)),
                 ordinaryCapacity: 1, operatorCapacity: 1, ordinaryRate: new(1, 3), operatorRate: new(1, 2), rateClock);
-            var loops = new LoopOptions { BalanceEvery = TimeSpan.FromMilliseconds(150), PollInterval = TimeSpan.FromMilliseconds(30) };
+            var loops = new LoopOptions
+            {
+                BalanceEvery = TimeSpan.FromMilliseconds(150), HeartbeatEvery = TimeSpan.FromMilliseconds(150),
+                PollInterval = TimeSpan.FromMilliseconds(30)
+            };
             void Fatal(string cause) => throw new InvalidOperationException(cause);
             bool Authorize(Contract.BoundScope caller, Contract.ActorRef _, string kind) =>
                 ReferenceEquals(caller, scope) && kind == Contract.Kinds.Terminate;
