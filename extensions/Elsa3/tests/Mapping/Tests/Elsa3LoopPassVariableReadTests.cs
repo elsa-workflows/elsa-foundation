@@ -140,6 +140,21 @@ public sealed class Elsa3LoopPassVariableReadTests
         Assert.Equal(("orders", "currentItem"), (parameter.DeclaringScopeNodeId, parameter.VariableKey));
     }
 
+    [Fact]
+    public async Task An_inner_loops_items_read_after_a_resume_in_its_body_is_refused()
+    {
+        // A Delay suspends the workflow; on resume Elsa 3 evaluates the inner items again, after its passes overwrote the
+        // outer CurrentValue.
+        var inner = Activity("inner", "Elsa.ForEach", ("items", Expression("JavaScript", "getVariable('CurrentValue').lines", "Object")));
+        inner.AdditionalProperties["body"] = Port(Activity("inner-delay", "Elsa.Delay"));
+
+        var result = await ConvertAsync(Sequence("root", ForEach("orders", Sequence("body", inner))));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'inner'", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -189,7 +204,7 @@ public sealed class Elsa3LoopPassVariableReadTests
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic =>
-            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'CurrentValue'", StringComparison.Ordinal));
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("until the workflow suspends", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -420,6 +435,18 @@ public sealed class Elsa3LoopPassVariableReadTests
         Assert.False(result.Succeeded);
         var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.ValueOutsideContract);
         Assert.Contains("literal", refusal.Guidance, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_computed_name_after_a_loop_that_left_its_pass_behind_is_refused()
+    {
+        var result = await ConvertAsync(
+            Sequence("root", ForEach("loop", Activity("loop-node", "Elsa.WriteLine", ("text", Literal("acme")))), Read("getVariable(['Current', 'Value'].join(''))")),
+            WorkflowCurrentValue);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ActivityDiagnosticCodes.ValueOutsideContract && diagnostic.Message.Contains("left behind by a loop", StringComparison.Ordinal));
     }
 
     [Theory]

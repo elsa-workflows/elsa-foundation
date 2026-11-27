@@ -86,7 +86,7 @@ internal static class Elsa3LoopPassVariables
             .ToArray();
 
         // An inner loop that declares the name overwrites the block the read would find, unless the read always runs before
-        // that loop's passes in the owner's pass (in the inner loop's own inputs, or ahead of it in a sequence).
+        // that loop's passes in the owner's pass (in the inner loop's own inputs, or ahead of it in a sequence or flowchart).
         if (others.FirstOrDefault(node => IsDescendant(plan, node, owner) && !RunsBefore(plan, read, node, owner)) is { } inner)
             return Ambiguous(name, $"loop '{NodeId(inner)}' in loop '{NodeId(owner)}''s body also declares '{name}' and overwrites the same Elsa 3 variable");
 
@@ -278,8 +278,9 @@ internal static class Elsa3LoopPassVariables
     /// </summary>
     private static bool RunsBefore(Elsa3ConversionPlan plan, Elsa3Activity read, Elsa3Activity loop, Elsa3Activity owner)
     {
+        // Elsa 3 evaluates a loop's inputs again after a resume inside its body, when its passes have overwritten the value.
         if (ReferenceEquals(read, loop))
-            return !MayRepeat(plan, loop, owner);
+            return !MayRepeat(plan, loop, owner) && !MaySuspend(plan, loop);
 
         var readChain = new[] { read }.Concat(Ancestors(plan, read)).ToList();
         var loopChain = new[] { loop }.Concat(Ancestors(plan, loop)).ToList();
@@ -314,6 +315,17 @@ internal static class Elsa3LoopPassVariables
 
         return true;
     }
+
+    /// <summary>Elsa 3 activities that complete in the same burst, so nothing under them suspends the workflow.</summary>
+    private static readonly HashSet<string> NonSuspendingTypes = new(
+    [
+        "Elsa.WriteLine", "Elsa.SetVariable", "Elsa.RunJavaScript", "Elsa.If", "Elsa.Switch", "Elsa.FlowDecision",
+        "Elsa.FlowSwitch", "Elsa.Sequence", "Elsa.Flowchart", "Elsa.For", "Elsa.ForEach", "Elsa.Break", "Elsa.SetName",
+    ], StringComparer.Ordinal);
+
+    /// <summary>Whether anything under <paramref name="activity"/> may suspend the workflow (anything not known not to).</summary>
+    private static bool MaySuspend(Elsa3ConversionPlan plan, Elsa3Activity activity) =>
+        plan.Nodes.Keys.Any(node => IsDescendant(plan, node, activity) && !NonSuspendingTypes.Contains(node.Type));
 
     private static Elsa3Activity? Body(Elsa3ConversionPlan plan, Elsa3Activity loop) =>
         plan.Nodes.Values.FirstOrDefault(node => ReferenceEquals(node.Parent, loop))?.Node;

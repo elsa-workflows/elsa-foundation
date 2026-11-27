@@ -1162,7 +1162,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
     /// <summary>
     /// A computed name (<c>getVariable(expr)</c>, <c>variables[expr]</c>, a computed <c>setVariable</c>) inside an Elsa 3
-    /// loop body could name the loop's per-pass variable, which the Elsa 4 run-time lookup does not know (#5873, spec 1243
+    /// loop body, or where a loop left its last pass's variable behind, could name that per-pass variable, which the Elsa 4 run-time lookup does not know (#5873, spec 1243
     /// FR-013): refused with guidance to use a literal name, which converts to the loop's own variable.
     /// </summary>
     private static bool RefusedComputedPassRead(
@@ -1180,7 +1180,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             input,
             property,
             Elsa3ActivityDiagnosticCodes.ValueOutsideContract,
-            $"JavaScript reaches variables by a computed name inside a loop body, where Elsa 3 could also reach the per-pass variables {names}. Elsa 4's run-time lookup does not know these names.",
+            $"JavaScript reaches variables by a computed name where Elsa 3 could also reach the per-pass variables {names} (inside a loop body, or left behind by a loop). Elsa 4's run-time lookup does not know these names.",
             $"Use a literal name for the loop's per-pass value, such as getVariable('{reachable[0].Name}'), which converts to the loop's own variable, in the Elsa 3 workflow before import.",
             $"{property.JsonPath}.expression.value"));
         return true;
