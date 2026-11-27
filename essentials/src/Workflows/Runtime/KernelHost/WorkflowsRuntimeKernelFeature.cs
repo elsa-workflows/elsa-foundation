@@ -34,7 +34,7 @@ namespace Elsa.Workflows.Runtime.KernelHost;
     name: FeatureName,
     DisplayName = "Workflows Runtime Kernel",
     Description = "Serves this shell's publications on the clean-slate kernel: replaces the default activation coordinator and trigger extractor with the kernel's, and leaves out the old core's HTTP route table. Requires a host that composes the kernel's serving state.",
-    DependsOn = new object[] { "WorkflowsPublishing", "WorkflowsRuntimeTriggers" })]
+    DependsOn = new object[] { "WorkflowsPublishing" })]
 public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellServices
 {
     public const string FeatureName = "WorkflowsRuntimeKernel";
