@@ -227,32 +227,38 @@ public sealed partial class EfStore
         }
     }
 
-    private sealed record InlineParkOpening(Message Input, Message Wire, FoundationSelfIssuer Issuer);
+    private sealed record InlineParkWire(Message Input, Message Wire, bool Failed);
+    private sealed record InlineParkOpening(IReadOnlyList<InlineParkWire> Inputs, FoundationSelfIssuer Issuer);
 
     private InlineParkOpening LowerInlinePark(WorkerRoot root, TurnCommit turn, InstanceRow row, InlineParkWitness park,
         InlineRootCreatorWitness? witness)
     {
         if (witness is null || _ordinaryRoots?.KeepsPrivateParkInputs != true || RootSelfIssuer is not { } issuer ||
             turn is not { FoundationKept.Count: 0, FoundationRootChildSends: null, Subscribed.Count: 0, Sent.Count: 0 } ||
-            row is not { Status: InstanceStatus.Faulted, Fault: { } fault } || park.Inputs is not [var failed])
+            row is not { Status: InstanceStatus.Faulted, Fault: { } fault })
             throw RootShape();
         if (park.Checkpoint is null)
         {
             if (row is not { Revision: 1, FoundationNullState: true, Jobs: null, Children: null } ||
-                row.StartIntent != root.Fingerprint || !ReferenceEquals(failed, witness.Creator) ||
+                row.StartIntent != root.Fingerprint || park.Inputs is not [{ Failed: true, Envelope: var failed }] ||
+                !ReferenceEquals(failed, witness.Creator) ||
                 turn.FoundationHeader is not { Labels.Count: 0 } header || header.TypeData != row.Definition)
                 throw RootShape();
             var retry = FoundationInlineRetry.Create(issuer, failed);
             if (!FoundationInlineRetry.Matches(issuer, row, retry)) throw RootShape();
-            return new(retry, EncodeRootSelf(root.Actor, 1, FoundationInlineRetry.Ordinal, retry), issuer);
+            return new([new(retry, EncodeRootSelf(root.Actor, 1, FoundationInlineRetry.Ordinal, retry), Failed: true)], issuer);
         }
         if (park.Checkpoint is not { Status: InstanceStatus.Running, Revision: > 0, Suspended: false, Jobs: null,
                 Children: null, FoundationDispatchHeader: not null } before ||
             row != (before with { Status = InstanceStatus.Faulted, Revision = checked(before.Revision + 1), Fault = fault }) ||
-            !FoundationSelfSend.IsSelfInput(failed, root.Actor, 1))
+            !park.Inputs.Any(input => input.Failed) ||
+            park.Inputs.Select(input => input.Envelope.InboxKey).Distinct().Count() != park.Inputs.Count ||
+            !ParkRecoveryCredit.FitsInlineMailbox(park.Inputs.Select(input => input.Envelope)) ||
+            park.Inputs.Any(input => !FoundationSelfSend.IsSelfInput(input.Envelope, root.Actor, 1)))
             throw RootShape();
 
-        return new(failed, EncodeRootSends(root, before, [failed], promotingInline: true).Single(), issuer);
+        var wires = EncodeRootSends(root, before, park.Inputs.Select(input => input.Envelope).ToArray(), promotingInline: true);
+        return new(park.Inputs.Select((input, index) => new InlineParkWire(input.Envelope, wires[index], input.Failed)).ToArray(), issuer);
     }
 
     private sealed record InlineRootCheckpoint(FirstRootCheckpoint First, Contract.BoundScope Scope, PreparedRootStart Stage, string Issuance,
@@ -309,28 +315,47 @@ public sealed partial class EfStore
 
         private async Task<bool> BindParkAsync(KernelDb db, InlineRootSource source, InlineParkOpening park, long at, CancellationToken token)
         {
-            // The checkpoint holds the previous sealed model state or an exact, unentered restart recipe.
-            // Both occurrences were never durably consumed. Recover releases them as arrived inputs.
-            var input = park.Wire;
-            var inserted = await db.Database.ExecuteSqlInterpolatedAsync(RootPreparedStarts.Bind(db, RootChildDialectQuery(db, $"""
-                WITH source AS MATERIALIZED (/*prepared-start-source*/)
+            if (park.Inputs.Any(input => input.Failed && input.Wire.Due > at)) return false;
+            // Preserve the local mailbox order in physical sequences, including a pending timer that matures before Recover.
+            var payload = Json.Write(park.Inputs.Select((input, position) => new
+            {
+                Id = input.Wire.InboxKey.Id, input.Wire.Kind, input.Wire.Payload, Due = input.Wire.Due ?? 0, Position = position
+            }).ToArray());
+            var inlineRows = db.UsesSqliteRootRuntime
+                ? """
+                    SELECT json_extract(value, '$.Id') AS "Id", json_extract(value, '$.Kind') AS "Kind",
+                        json_extract(value, '$.Payload') AS "Payload", json_extract(value, '$.Due') AS "Due", CAST(key AS integer) AS "Position"
+                    FROM json_each(/*rows*/)
+                    """
+                : """
+                    SELECT * FROM jsonb_to_recordset(/*rows*/::jsonb) AS x("Id" text, "Kind" text, "Payload" text, "Due" bigint, "Position" integer)
+                    """;
+            FormattableString insert = $"""
+                WITH source AS MATERIALIZED (/*prepared-start-source*/), arrivals AS MATERIALIZED (/*inline-rows*/)
                 INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Payload", "Sender",
                     "Due", "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy"/*seq-column*/)
-                SELECT {input.InboxKey.Id}, {input.InboxScope}, {input.Target.Id}, {input.Target.Partition}, {input.Kind}, {input.Payload},
-                    {input.Sender}, {input.Due ?? 0}, true, 0, 0, 0, 0, {(short)ParkKeepReason.Arrived}/*seq*/
-                FROM source WHERE "SourceReady" AND {input.Due ?? 0} <= {at}
-                """), source.Bind), token);
-            if (inserted != 1) return false;
+                SELECT arrivals."Id", {RootSelfScope}, {Stage.Actor}, {Stage.Partition}, arrivals."Kind", arrivals."Payload", {Stage.Actor},
+                    arrivals."Due", arrivals."Due" <= {at}, 0, 0, 0, 0, CASE WHEN arrivals."Due" <= {at} THEN {(short)ParkKeepReason.Arrived} END/*inline-seq*/
+                FROM arrivals CROSS JOIN source WHERE "SourceReady" ORDER BY arrivals."Position"
+                """;
+            insert = FormattableStringFactory.Create(insert.Format
+                .Replace("/*inline-rows*/", inlineRows.Replace("/*rows*/", "{" + insert.ArgumentCount + "}", StringComparison.Ordinal), StringComparison.Ordinal)
+                .Replace("/*inline-seq*/", db.UsesSqliteRootRuntime ? """, (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages") + arrivals."Position" """ : "", StringComparison.Ordinal),
+                [.. insert.GetArguments(), payload]);
+            if (await db.Database.ExecuteSqlInterpolatedAsync(RootPreparedStarts.Bind(db, RootChildDialectQuery(db, insert), source.Bind), token) != park.Inputs.Count)
+                return false;
             var relation = db.UsesSqliteRootRuntime ? "\"Messages\"" : PostgresPrivateInboxView;
             FormattableString read = $"""
                 SELECT * FROM /*inline-park-inputs*/ WHERE "Target" = {Stage.Actor} AND "Partition" = {Stage.Partition}
-                    AND "InboxScope" = {input.InboxScope} AND "Id" = {input.InboxKey.Id}
-                    AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "Trial" = 0
+                    AND "InboxScope" = {RootSelfScope} AND "EventMatch" IS NULL AND "Trial" = 0
+                    AND (("Due" <= {at} AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}) OR
+                        ("Due" > {at} AND NOT "Done" AND "FoundationKeptBy" IS NULL))
                 """;
+            var ids = park.Inputs.Select(input => input.Wire.InboxKey.Id).ToArray();
             var kept = await db.Messages.FromSqlInterpolated(FormattableStringFactory.Create(
                 read.Format.Replace("/*inline-park-inputs*/", relation, StringComparison.Ordinal), read.GetArguments()))
-                .AsNoTracking().SingleOrDefaultAsync(token);
-            return kept is not null && DecodeRootInput(db, kept, Stage.Reference, park.Issuer, timed: false) == park.Input &&
+                .AsNoTracking().Where(message => ids.Contains(message.Id)).OrderBy(message => message.Seq).ToArrayAsync(token);
+            return kept.Select(row => DecodeRootInput(db, row, Stage.Reference, park.Issuer, timed: false)).SequenceEqual(park.Inputs.Select(input => input.Input)) &&
                 await VerifyRootParkProjectionAsync(db, Stage.Tenant, Stage.Reference, JournalRevision, First.Row.Fault!, token);
         }
     }

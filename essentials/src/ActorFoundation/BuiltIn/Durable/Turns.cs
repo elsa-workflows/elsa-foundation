@@ -233,6 +233,7 @@ public sealed class TurnInput
     internal bool RecoveryHandedOff(InboxKey key) => _worker.RecoveryHandedOff(key);
 
     internal Message? VolatileMessage(InboxKey id) => _volatile?.GetValueOrDefault(id);
+    internal IEnumerable<Message> VolatileMessages => _volatile?.Values ?? Enumerable.Empty<Message>();
 
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
     public long CheckpointTime => _worker.Now;
@@ -715,6 +716,13 @@ public sealed class DurableTurn
             (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable) &&
             _sent.TrueForAll(m => m.Target == Actor && !m.ActorControl && m.Kind is not (Kinds.Publish or Kinds.Meet) &&
                 (m.Kind == Kinds.Job || (m.Due ?? now) <= until));
+    }
+
+    internal bool CanKeepInlineMailbox()
+    {
+        var consumed = _input.Taken.Select(item => item.Message.InboxKey).ToHashSet();
+        return ParkRecoveryCredit.FitsInlineMailbox(_input.VolatileMessages.Where(message =>
+            !consumed.Contains(message.InboxKey) && !_cancelled.Contains(message.InboxKey)).Concat(_sent));
     }
 
     /// <summary>Everything this turn sends stays in memory: none of it is a row.</summary>

@@ -179,8 +179,13 @@ internal static class InlineRootPromotionChecks
                     { ExecutableSelection = "private-125-park" };
                 var initialParkWorkflow = new Workflow("inline-park-first", Wf.Sequence("run", Wf.Node<FailInitialTurn>("first-failure"),
                     Wf.SetOutput("result", "input", Binding.Var("input", "marker")))) { ExecutableSelection = "private-125-initial-park" };
+                var orderedParkWorkflow = new Workflow("inline-park-ordered", Wf.Parallel("fork", null,
+                    Wf.Sequence("left", Wf.Delay("left-timer", 90), Wf.Node<FailOrderedTurn>("ordered-failure"), Wf.WriteLine("left-output", "left after recovery")),
+                    Wf.Sequence("right", Wf.Delay("right-timer", 90), Wf.WriteLine("right-output", "right after recovery")),
+                    Wf.Sequence("later", Wf.Delay("later-timer", 1_200), Wf.WriteLine("later-output", "later after recovery"))))
+                    { ExecutableSelection = "private-125-ordered-park" };
                 var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure).Add(longTimer).Add(earlyTimers).Add(timedJob).Add(terminal)
-                    .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow);
+                    .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow).Add(orderedParkWorkflow);
                 var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
                 var actor = new WorkflowActorType([model]);
                 var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
@@ -194,6 +199,7 @@ internal static class InlineRootPromotionChecks
                 string? protectionDeadline = null;
                 var protectorCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var preparedBatchActors = new HashSet<string>(StringComparer.Ordinal);
+                var volatileCohorts = new Dictionary<string, string[]>(StringComparer.Ordinal);
                 var firstRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
                 var childOffers = new Dictionary<string, (PendingChildBirth Offer, string RootIssuance, string Child, int Attempts)>(StringComparer.Ordinal);
                 string? refusedParent = null;
@@ -224,6 +230,10 @@ internal static class InlineRootPromotionChecks
                 {
                     ShortWait = TimeSpan.FromMilliseconds(1_400),
                     OnKeptInMemory = (_, revision) => unwrittenRevision = revision,
+                    OnTurn = (instance, messages, _) =>
+                    {
+                        if (messages.All(message => message.Due is not null)) volatileCohorts[instance.Id] = messages.Select(message => message.InboxKey.Id).ToArray();
+                    },
                     OnPreparedCheckpoint = (sealedTurn, _, accepted) =>
                     {
                         if (accepted?.FoundationRootBinding is { } identity)
@@ -364,6 +374,7 @@ internal static class InlineRootPromotionChecks
                         "definitive host refusal prevents the parent checkpoint and child birth together");
 
                     var parkedRun = await QualifyParkAsync();
+                    var orderedPark = await QualifyOrderedParkAsync();
                     var initialPark = Queue("park-before-first-checkpoint", initialParkWorkflow, values: new() { ["marker"] = "original initial input" });
                     firstRevisions.Add(initialPark.Reference.Id, 1);
                     await WaitForAsync(initialPark.Outcome);
@@ -384,7 +395,7 @@ internal static class InlineRootPromotionChecks
 
                     var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
                     var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow).Add(longTimer).Add(earlyTimers)
-                        .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow),
+                        .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow).Add(orderedParkWorkflow),
                         new NativeExecutionOptions { UseStructuralJournal = true });
                     var coldActor = new WorkflowActorType([coldModel]);
                     await cold.EnableRootSelfSendsAsync(token);
@@ -396,10 +407,16 @@ internal static class InlineRootPromotionChecks
                         rootTimedJobClock: cold.ReadRootTimedJobPublicationTimeAsync, rootTerminalOutputLimit: 1_024);
                     var observed = 0;
                     var turns = 0;
+                    var replayedOrder = new List<string>();
                     await using var coldOwner = Worker.ForNode("inline-cold-owner", cold, adapter, new WorkerOptions
                     {
                         OnObservedDelivery = _ => observed++,
-                        OnTurn = (_, _, _) => turns++
+                        OnTurn = (instance, messages, _) =>
+                        {
+                            turns++;
+                            if (instance.Id == orderedPark.Actor) replayedOrder.AddRange(messages.Where(message => message.Due is not null)
+                                .Select(message => message.InboxKey.Id));
+                        }
                     });
                     Check(await coldOwner.GainAsync(0, token), "a fresh physical owner claims the promoted root's partition");
                     var input = Durable.Json.Write(new ResumeStimulus("resume"));
@@ -438,6 +455,20 @@ internal static class InlineRootPromotionChecks
                         "a fresh owner resolves the exact selected child and resumes the parent without replaying its creator");
                     await RecoverParkAsync(coldOwner, cold, parkedRun);
                     await RecoverInitialParkAsync(coldOwner, cold, initialPark.Reference);
+                    FailOrderedTurn.Allow = true;
+                    await AdmitRecoveryAsync(coldOwner, cold, orderedPark.Reference, "recover-ordered-mailbox");
+                    EfStore.RootImage? orderedResult;
+                    do
+                    {
+                        await coldOwner.RunAsync(token);
+                        await Task.Delay(5, token);
+                        orderedResult = await cold.ReadFirstRootAsync(scope.Tenant, orderedPark.Reference.Id, token);
+                    } while (orderedResult?.Status != InstanceStatus.Finished);
+                    Check(replayedOrder.SequenceEqual(orderedPark.Expected) && FailOrderedTurn.Entries == 2 &&
+                        trace.ToString().Split("left after recovery", StringSplitOptions.None).Length == 2 &&
+                        trace.ToString().Split("right after recovery", StringSplitOptions.None).Length == 2 &&
+                        trace.ToString().Split("later after recovery", StringSplitOptions.None).Length == 2,
+                        "cold Recover offers the exact failed cohort and later timer in their original order without losing a branch");
                     await coldOwner.ReleaseAsync(token);
 
                     var shortLease = TimeSpan.FromMilliseconds(1_200);
@@ -535,6 +566,25 @@ internal static class InlineRootPromotionChecks
                         trace.ToString().Split("before inline Park", StringSplitOptions.None).Length == 2,
                         "Park keeps the exact failed local timer and committed history without a replay creator or pseudo revision");
                     return queued.Reference;
+                }
+
+                async Task<(Contract.ActorRef Reference, string Actor, string[] Expected)> QualifyOrderedParkAsync()
+                {
+                    unwrittenRevision = 0;
+                    var queued = QueueExpected("park-ordered-mailbox", orderedParkWorkflow, 2);
+                    await WaitUnwrittenAsync(1);
+                    await WaitForAsync(queued.Outcome);
+                    var parked = await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token);
+                    Check(await queued.Outcome == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Faulted) &&
+                        parked is { Revision: 2, Status: InstanceStatus.Faulted, ParkAt: > 0 } && FailOrderedTurn.Entries == 1,
+                        "several volatile inputs can open one protected Park at the last sealed checkpoint");
+                    await using var db = Open();
+                    var actor = parked!.Actor.Id;
+                    var rows = await db.Messages.Where(row => row.Target == actor).OrderBy(row => row.Seq).AsNoTracking().ToArrayAsync(token);
+                    Check(rows is [{ Done: true }, { Done: true }, { Done: false }] && rows.All(row => row.InboxScope == EfStore.RootSelfScope) &&
+                        volatileCohorts[actor].SequenceEqual(rows.Take(2).Select(row => row.Id)),
+                        "the first commit keeps the selected two occurrences and preserves the not-yet-due timer after them");
+                    return (queued.Reference, actor, rows.Select(row => row.Id).ToArray());
                 }
 
                 async Task RecoverParkAsync(Worker successor, EfStore backend, Contract.ActorRef parked)
@@ -778,6 +828,22 @@ internal static class InlineRootPromotionChecks
         {
             Interlocked.Increment(ref Entries);
             if (!Allow) throw new InvalidOperationException("The Native first turn could not execute.");
+            context.Complete();
+        }
+
+        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+            throw new InvalidOperationException("This activity does not start any children.");
+    }
+
+    public sealed class FailOrderedTurn : CompositeActivity
+    {
+        internal static bool Allow;
+        internal static int Entries;
+
+        protected override void Execute(CompositeContext context)
+        {
+            Interlocked.Increment(ref Entries);
+            if (!Allow) throw new InvalidOperationException("The ordered Native cohort could not execute.");
             context.Complete();
         }
 

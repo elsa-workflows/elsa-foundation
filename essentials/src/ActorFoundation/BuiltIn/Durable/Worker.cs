@@ -3582,15 +3582,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
             ? unit.Slot!.Inbox.Where(i => i.Held && i.Durable && !i.Taken && i.InboxOrder < stimulus.InboxOrder).Select(i => i.Message.InboxKey).ToArray()
             : null;
         var promotion = PendingPromotion(unit);
-        var inlinePark = promotion is InlineRootCreatorWitness creator && unit.OpensPark && unit.Slot is { } parked &&
-            unit.Consumed.Count != 0 && unit.Consumed.TrueForAll(delivery => !delivery.Durable && delivery.Original is null) &&
-            (parked is { Unwritten: true, Row: not null } || parked.Row is null && unit.Consumed is [var initial] &&
-                ReferenceEquals(initial.Message, creator.Creator))
-            ? new InlineParkWitness(parked.Row, unit.Consumed.Select(delivery => delivery.Message).ToArray()) : null;
+        var inlinePark = PrepareInlinePark(unit, promotion);
         return new TurnCommit(unit.Instance, unit.Row, unit.Expected,
             Has(Flaw.KeepConsumedMessages) ? [] : [.. consumed, .. settled, .. cancelled],
             Has(Flaw.KeepConsumedMessages) ? [] : done.ToList(),
-            unit.Sent.Where(m => !unit.Volatile.Contains(m.InboxKey)).ToList(), unit.Subscribed, unit.Unsubscribed, unit.Journal, unit.Unsubscribe,
+            inlinePark is null ? unit.Sent.Where(m => !unit.Volatile.Contains(m.InboxKey)).ToList() : [],
+            unit.Subscribed, unit.Unsubscribed, unit.Journal, unit.Unsubscribe,
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
@@ -3634,6 +3631,25 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationPublicationSequence = unit.FoundationPublicationSequence,
             FoundationCascade = unit.FoundationCascade
         };
+    }
+
+    private InlineParkWitness? PrepareInlinePark(TurnOutcome unit, RootCreatorWitness? promotion)
+    {
+        if (promotion is not InlineRootCreatorWitness creator || !unit.OpensPark || unit.Slot is not { } parked ||
+            unit.Consumed.Count == 0 || unit.Consumed.Exists(delivery => delivery.Durable || delivery.Original is not null)) return null;
+        if (parked.Row is null && unit.Consumed is [var initial] && unit.Sent.Count == 0 && ReferenceEquals(initial.Message, creator.Creator))
+            return new(null, [new(initial.Message, Failed: true)]);
+        if (!parked.Unwritten || parked.Row is null) return null;
+
+        var inputs = new List<(long Order, InlineParkInput Input)>();
+        inputs.AddRange(unit.Consumed.Select(delivery => (delivery.InboxOrder, new InlineParkInput(delivery.Message, Failed: true))));
+        foreach (var message in unit.Sent)
+        {
+            if (_items.GetValueOrDefault(message.InboxKey) is not { Durable: false, Original: null } delivery ||
+                !ReferenceEquals(delivery.Message, message)) return null;
+            inputs.Add((delivery.InboxOrder, new(message, Failed: false)));
+        }
+        return new(parked.Row, inputs.OrderBy(input => input.Order).Select(input => input.Input).ToArray());
     }
 
     private Dictionary<InboxKey, ParkKeepReason>? PrepareKeptInputs(TurnOutcome unit)
@@ -3800,6 +3816,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Consumed.Exists(item => !item.Durable && item.Message.Start?.FoundationInlineTenant is not null)))
         {
             lock (_turnSync) inlineReceipt = _pendingInlineRoots.GetValueOrDefault(unit.Instance)?.Receipt;
+        }
+        if (release == ReplyRelease.AfterCommit && unit.OpensPark && unit.Sent.Count != 0 && PendingPromotion(unit) is InlineRootCreatorWitness)
+        {
+            // The provider wrote these inputs as part of the ordered Park, without generic sends or handover sequences.
+            foreach (var message in unit.Sent)
+                if (_items.TryGetValue(message.InboxKey, out var local)) Forget(local);
+            unit.Sent.Clear();
+            _caughtUp = false;
+            _woken = true;
         }
         if (unit.Row is { } ending && unit.FoundationCascade is { Input: null } cascade)
             foreach (var job in cascade.Entries.Jobs)
