@@ -27,7 +27,7 @@ No direct package ID has multiple direct versions.
 
 ## Runtime/Design Reference Signal
 
-- Elsa.Workflows.Runtime.KernelHosting -> Elsa.Activities.Design.Core
+No direct runtime-path project reference to an `Elsa.*Design*` project was found by the Maps v1 heuristic.
 
 ## Next Map Work
 

@@ -11,9 +11,9 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 - Source extension catalogs indexed from root: 128
 - Discovered source catalogs not linked from root index: 0
 - Root-indexed catalogs missing on disk: 0
-- Runtime-to-design direct reference signals: 1
+- Runtime-to-design direct reference signals: 0
 - Design-to-runtime direct reference signals: 22
-- Bridge-like direct reference shapes: 28
+- Bridge-like direct reference shapes: 27
 
 ## Reference Signals
 
@@ -39,7 +39,6 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 - Elsa3.Activities.Design.Import -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa3.Activities.Design.Import.Reconciliation -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Workflows.Runtime.KernelHosting -> Elsa.Activities.Design.Core (runtime-to-design): review signal.
 
 ## Next Map Work
 

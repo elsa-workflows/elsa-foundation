@@ -8192,11 +8192,6 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Activities.Design.Core",
-          "path": "essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
           "path": "essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj"
         },
@@ -8234,11 +8229,6 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.KernelHost",
           "path": "essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Http",
-          "path": "extensions/Http/src/Activities/Elsa.Activities.Http.csproj"
         },
         {
           "type": "external",
