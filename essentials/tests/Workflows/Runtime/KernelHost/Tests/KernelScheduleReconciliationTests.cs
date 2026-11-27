@@ -122,10 +122,10 @@ public sealed class KernelScheduleReconciliationTests
             await running.WaitAsync(TimeSpan.FromSeconds(5));
         }
         Require(log.Errors.IsEmpty, "ordinary cancellation does not report a schedule fault");
-        var failure = new InvalidOperationException("Schedule timer creation failed.");
+        var failure = new InvalidOperationException("Reading the reconciliation clock failed.");
         var faulted = new KernelScheduleReconciliationWorker(runtime.GetRequiredService<IServiceScopeFactory>(), Named,
             ContractScopes.Bind("default"), KernelHostCapabilities.All, null, provider,
-            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), new FailingTimerClock(failure), log);
+            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), new FailingTimestampClock(failure), log);
         await faulted.RunAsync(deadline.Token);
         Require(log.Errors.TryDequeue(out var reported) && ReferenceEquals(reported, failure),
             "an escaping schedule fault is reported immediately, without waiting for shell shutdown");
@@ -375,10 +375,9 @@ public sealed class KernelScheduleReconciliationTests
         }
     }
 
-    private sealed class FailingTimerClock(Exception failure) : TimeProvider
+    private sealed class FailingTimestampClock(Exception failure) : TimeProvider
     {
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
-            throw failure;
+        public override long GetTimestamp() => throw failure;
     }
 
     private sealed class RecordingLogger : ILogger<KernelScheduleReconciliationWorker>
