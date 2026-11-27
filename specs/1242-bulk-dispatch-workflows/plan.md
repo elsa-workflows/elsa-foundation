@@ -252,8 +252,9 @@ the design side), and converter rules.
   - a slot binding to the `Dispatch` node's result is refused at publish: an optional binding with
     `ValueFlow/EarlierProducerRun`, a required one with `ValueFlow/UnavailableProducer`;
   - a result binding between two activities inside one slot `Sequence` publishes;
-  - a binding from a node in `ChildFaulted` to a node in `ChildCompleted` is refused, and so is an optional binding from a
-    `Dispatch` input to a node inside `ChildCompleted`.
+  - a binding whose producer is the direct `ChildFaulted` child, consumed in `ChildCompleted`, is refused with
+    `EarlierProducerRun` (optional) or `UnavailableProducer` (required). So is an optional binding from a `Dispatch`
+    input to a node inside `ChildCompleted`. A producer nested inside a slot composite gets `ValueFlow/ScopeBoundary`.
 - **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; an item key
   that clashes with a workflow variable (the item wins in `Inputs`, and the variable wins in the correlation function,
   as in Elsa 3); the item-read

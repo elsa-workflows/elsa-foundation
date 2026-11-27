@@ -294,7 +294,9 @@ and on-completed-callbacks suites pass.
   child's result in a slot is not part of this spec (Out of Scope). Publish MUST refuse a direct, unscoped result
   binding between two different children of the bulk node (`Dispatch`, `ChildCompleted`, `ChildFaulted`, in any
   direction), with `ValueFlow/EarlierProducerRun` for an optional binding and `ValueFlow/UnavailableProducer` for a
-  required one. Passes run concurrently, so such a binding cannot tell which item's run it reads. Result bindings between activities inside one slot are not affected. Bindings that declare a scope, and script expression parameters,
+  required one. Passes run concurrently, so such a binding cannot tell which item's run it reads. A binding from a
+  node nested inside one slot's composite to another slot is refused earlier, by the scope check
+  (`ValueFlow/ScopeBoundary`). Result bindings between activities inside one slot are not affected. Bindings that declare a scope, and script expression parameters,
   keep their existing rules (#4056).
 - **FR-010a**: Passes run concurrently, so `Dispatch` and both slots are unordered with themselves across passes.
   - A variable write under the bulk node, from `Dispatch` (an output capture) or from either slot, raises spec 266's
