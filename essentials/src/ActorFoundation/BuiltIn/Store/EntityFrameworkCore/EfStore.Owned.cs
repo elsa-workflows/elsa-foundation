@@ -52,15 +52,15 @@ public sealed partial class EfStore
             ? SqliteOwnedFormat.NameFor(connection) : null;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         if (formatFunction is null) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
-        if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
-            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
         if (root is PostgresMarkPreparation marks)
         {
-            // Discover the exact binding while the same transaction already holds the format and source pins.
-            // Only the existing fenced checkpoint binder writes the marks.
+            // Discover the binding in the ordered, read-only format/namespace pin batch. Only the
+            // later fenced checkpoint binder writes Seen and Trial, in their own durable commit.
             try { root = await marks.PrepareAsync(db, cancellationToken); }
             catch (Exception error) { throw new RootMarkPreparationFailure(error); }
         }
+        else if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
+            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = true };
         if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);
@@ -481,9 +481,15 @@ public sealed partial class EfStore
             var fence = owned.Single();
             return await PollAsync(fence.Partition, fence.Epoch, horizon, limit, cancellationToken);
         }
-        var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
+        return await PollOwnedAsync(db, owned, horizon, limit, cancellationToken);
+    }
+
+    private async ValueTask<Polled> PollOwnedAsync(KernelDb db, IReadOnlyCollection<PartitionFence> owned,
+        TimeSpan horizon, int limit, CancellationToken cancellationToken)
+    {
+        var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         var poll = PollSql(db);
         if (!poll.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");

@@ -117,7 +117,7 @@ public sealed class Watchdog
 /// heartbeats. Every member of <see cref="IKernelStore"/> is its own, so no default of the interface stands in for the
 /// inner store's (a reflection check in the runtime conformance's <c>WatchdogChecks</c>, run by <c>semantic</c>, holds it to that).
 /// </summary>
-public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
+public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore, IOwnerPollLookups
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
@@ -157,6 +157,11 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
         watchdog.RunAsync("poll", cancellationToken, token => inner.PollAsync(partition, epoch, horizon, limit, token));
     public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>
         watchdog.RunAsync("poll", cancellationToken, token => inner.PollAsync(owned, horizon, limit, token));
+    bool IOwnerPollLookups.CanPollLookups => inner is IOwnerPollLookups { CanPollLookups: true };
+    ValueTask<(Polled Poll, IReadOnlyList<ActorLookup>? Lookups)> IOwnerPollLookups.PollLookupsAsync(IReadOnlyCollection<PartitionFence> fences,
+        TimeSpan horizon, int limit, Func<Polled, string[]> selectLookups, CancellationToken cancellationToken) =>
+        watchdog.RunAsync("poll and load", cancellationToken,
+            token => ((IOwnerPollLookups)inner).PollLookupsAsync(fences, horizon, limit, selectLookups, token));
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
         watchdog.RunAsync("load", cancellationToken, token => inner.LoadAsync(ids, token));
     public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>

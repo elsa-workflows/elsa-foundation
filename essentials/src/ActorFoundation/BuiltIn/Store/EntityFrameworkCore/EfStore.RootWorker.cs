@@ -389,7 +389,11 @@ public sealed partial class EfStore
         {
             if (!db.UsesRootParkOpening || db.Database.CurrentTransaction is null)
                 throw new StoreFormatException("The PostgreSQL mark plan requires the pinned owned transaction.");
-            var roots = await Store.ResolveWorkerRootsAsync(Scope, [], Batch.Seen.Concat(Batch.Trial), token, db);
+            var inputs = Batch.Seen.Concat(Batch.Trial).Select(InputBinding).ToLookup(input => input.Creator, input => input.Name);
+            var matches = await PostgresRootAdmission.PinRootMarkBindingsAsync(db, Scope.FixedPartition,
+                inputs[true].Distinct(StringComparer.Ordinal).ToArray(), inputs[false].Distinct(StringComparer.Ordinal).ToArray(), token);
+            if (matches.Any(root => !Scope.Includes(root.Partition) || new InstanceRef(root.Actor).Partition != root.Partition)) throw RootShape();
+            var roots = new WorkerRoots(Scope.FixedPartition, matches);
             return Store.WorkerCheckpoints(PrepareWorkerMarks(roots, Batch, Batch.Fenced.ToDictionary(fence => fence.Partition)), [], []);
         }
 

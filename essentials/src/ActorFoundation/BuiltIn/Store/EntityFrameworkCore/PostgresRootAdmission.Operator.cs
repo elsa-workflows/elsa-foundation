@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using NpgsqlTypes;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
@@ -382,8 +383,36 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
     }
 
+    internal static async Task<IReadOnlyList<EfStore.WorkerRoot>> PinRootMarkBindingsAsync(KernelDb db, int? partition,
+        string[] actors, string[] references, CancellationToken token)
+    {
+        var bindings = new NpgsqlBatchCommand("""
+            SELECT marker.oid, marker.relnamespace, b."Tenant", b."Reference", b."Actor", b."Partition", b."Fingerprint"
+            FROM pg_catalog.pg_class marker
+            LEFT JOIN "FoundationRootBirths" b ON ($1::integer IS NULL OR b."Partition" = $1) AND b."Creation" = 1
+                AND (b."Actor" = ANY($2) OR b."Reference" = ANY($3))
+            WHERE marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+                AND EXISTS (SELECT 1 FROM pg_catalog.pg_class birth
+                    WHERE birth.oid = pg_catalog.to_regclass('"FoundationRootBirths"')
+                        AND birth.relnamespace = marker.relnamespace AND birth.relkind = 'r')
+            """);
+        bindings.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = (object?)partition ?? DBNull.Value });
+        bindings.Parameters.Add(new NpgsqlParameter<string[]> { TypedValue = actors });
+        bindings.Parameters.Add(new NpgsqlParameter<string[]> { TypedValue = references });
+        var result = new List<EfStore.WorkerRoot>();
+        try
+        {
+            await PinRootParkSourcesAsync(db, loadIssuer: false, pinSequencedJournal: false, token, bindings, result);
+        }
+        catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
+        {
+            throw new StoreFormatException("The qualified root store schema is unreadable.", error);
+        }
+        return result;
+    }
+
     private static Task<PinnedRootSource> PinRootParkSourcesAsync(KernelDb db, bool loadIssuer, bool pinSequencedJournal,
-        CancellationToken token)
+        CancellationToken token, NpgsqlBatchCommand? markBindings = null, List<EfStore.WorkerRoot>? marks = null)
     {
         // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
         var receipts = db.UsesRootOperatorProtocol;
@@ -428,6 +457,7 @@ internal sealed partial class PostgresRootAdmission
             commands.Add(new("""LOCK TABLE "Journal", "FoundationSequencedJournal" IN ROW EXCLUSIVE MODE"""));
         commands.Add(validate);
         if (loadIssuer) commands.Add(new("""SELECT issuer."Key", issuer."Partitions", marker.oid """ + RootIssuerSource));
+        if (markBindings is not null) commands.Add(markBindings);
         return ReadGuardedAdmissionAsync<PinnedRootSource>(db, commands, async (reader, marker, ct) =>
         {
             if (!await reader.ReadAsync(ct) || reader.GetFieldValue<uint>(1) != marker)
@@ -440,6 +470,19 @@ internal sealed partial class PostgresRootAdmission
                     : "Park requires the source tables in the marker schema.");
             if (pinSequencedJournal && !reader.GetBoolean(3))
                 throw new StoreFormatException("The installed sequenced journal projection is incomplete.");
+            if (markBindings is not null)
+            {
+                if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct))
+                    throw new StoreFormatException("The qualified root mark source is unreadable.");
+                do
+                {
+                    if (reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema)
+                        throw new StoreFormatException("The qualified root mark source changed its physical schema.");
+                    if (!reader.IsDBNull(2))
+                        marks!.Add(new(reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.GetString(6)));
+                }
+                while (await reader.ReadAsync(ct));
+            }
             if (!loadIssuer) return new(marker, schema, null);
             if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct))
                 throw new StoreFormatException(RootIssuerMissing);

@@ -560,8 +560,15 @@ internal static class PostgresShippedFormatChecks
         var partition = new InstanceRef(actor).Partition;
         var lease = await store.TakeAsync(partition, "creator-witness-owner", leaseTime, token)
             ?? throw new InvalidOperationException("The creator-witness fixture could not take its partition.");
-        var polled = await store.PollAsync(partition, lease.Epoch, TimeSpan.Zero, 8, token);
-        var admitted = polled.Messages.Single(item => item.Message.Target.Id == actor);
+        IOwnerPollLookups ownerRead = store;
+        var projected = await ownerRead.PollLookupsAsync([lease.For(partition)], TimeSpan.Zero, 8, _ => [actor], token);
+        Require(projected.Lookups is [{ Row: null } lookup] && lookup.Requested == actor && lookup.Canonical == actor,
+            "the pinned owner poll projects exact absence for a pending birth");
+        var failed = await ownerRead.PollLookupsAsync([lease.For(partition)], TimeSpan.Zero, 8,
+            _ => [actor, InstanceRef.In(partition, "unadmitted").Id], token);
+        Require(failed.Lookups is null && failed.Poll.Messages.Select(row => (row.Seq, row.Message)).SequenceEqual(projected.Poll.Messages.Select(row => (row.Seq, row.Message))),
+            "an unknown speculative lookup discards its projection and preserves the inbox page");
+        var admitted = projected.Poll.Messages.Single(item => item.Message.Target.Id == actor);
         var creator = admitted.Message;
         Require(admitted.RootCreator is { } witness && ReferenceEquals(witness.Envelope, creator),
             "the PostgreSQL poll issues a witness for its exact admitted creator");

@@ -437,7 +437,7 @@ public class KernelDb : DbContext
 /// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
 /// (<see cref="FenceInBatch"/>).
 /// </summary>
-public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore, IDueBacklogStore
+public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore, IDueBacklogStore, IOwnerPollLookups
 {
     public Func<long>? FoundationClock => null;
 
@@ -909,6 +909,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
+        return await PollOneAsync(db, partition, epoch, horizon, limit, cancellationToken);
+    }
+
+    private async ValueTask<Polled> PollOneAsync(KernelDb db, int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken)
+    {
         // A plain read. The left join returns database time even when no message does.
         var sql = PollSql(db);
         if (_ordinaryRoots is { } root)
