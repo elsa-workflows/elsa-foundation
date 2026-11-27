@@ -53,7 +53,7 @@ internal sealed class PublisherReusableActivityImportPublisher(
         {
             return ReusableActivityImportPublishOutcome.Refused(Specific(rejection.ErrorCode, rejection.Diagnostics), rejection.Diagnostics);
         }
-        catch (Exception exception) when (DataSelectionRejection(exception) is { } rejection)
+        catch (Exception exception) when (Find<ActivityDataSelectionRejectedException>(exception) is { } rejection)
         {
             // The graph provider refused the imported manifest with located findings (#5850). They are what Studio's
             // publish endpoint reports for the same refusal, so the import reports them too, not "failed unexpectedly".
@@ -62,28 +62,29 @@ internal sealed class PublisherReusableActivityImportPublisher(
         }
         catch (Exception exception) when (Find<SchemaWriteRefusedException>(exception) is { } refusal)
         {
-            // The store refused a write that needs a later schema version than this host may write, or the operation needs
-            // a dormant one (#5972). Studio's publish endpoint answers it with its code, family and both versions; so does
-            // the import, not with "failed unexpectedly".
+            // The store refused a write to a schema family: the value needs a version this host may not write yet, the family
+            // is finalized at one this host cannot read, or the operation needs a dormant one (#5972). Studio's publish
+            // endpoint answers it with its code, family and both versions; so does the import, not "failed unexpectedly".
             return ReusableActivityImportPublishOutcome.Refused(refusal.Code, [FromSchemaRefusal(refusal, request)]);
         }
     }
 
-    /// <summary>The exception itself, or the one a compiler or store wrapped it in, as the publish endpoint finds it.</summary>
-    private static T? Find<T>(Exception exception) where T : Exception
+    /// <summary>
+    /// The exception itself, or the one a compiler or store wrapped it in, following every exception an
+    /// <see cref="AggregateException"/> holds, not only its first.
+    /// </summary>
+    private static T? Find<T>(Exception exception) where T : Exception => exception switch
     {
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-            if (current is T match)
-                return match;
-        return null;
-    }
-
-    private static ActivityDataSelectionRejectedException? DataSelectionRejection(Exception exception) =>
-        Find<ActivityDataSelectionRejectedException>(exception);
+        T match => match,
+        AggregateException aggregate => aggregate.InnerExceptions.Select(Find<T>).FirstOrDefault(found => found is not null),
+        { InnerException: { } inner } => Find<T>(inner),
+        _ => null
+    };
 
     /// <summary>
     /// The refusal as one diagnostic carrying what <c>SchemaWriteRefusalProblem</c> gives every API: the code, the family and
-    /// both versions, and for a dormancy refusal its feature and reason. Its message already names the family and versions.
+    /// both versions, and for a dormancy refusal its feature and reason. Its message names the family and versions and,
+    /// since the cause differs by refusal, what this host needs before it can write the family.
     /// </summary>
     private static ActivityDiagnostic FromSchemaRefusal(SchemaWriteRefusedException refusal, ReusableActivityImportPublishRequest request)
     {
@@ -105,10 +106,10 @@ internal sealed class PublisherReusableActivityImportPublisher(
             ActivityDiagnosticSeverity.Error,
             refusal.Message,
             new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision),
-            Remediation: $"Nothing was published for this version; the imported rows are kept. Publishing it needs schema version " +
-                         $"'{refusal.RequiredVersion}' of schema family '{refusal.Family}', and this host may write only " +
-                         $"'{refusal.WriteVersion}' so far. Once that version is finalized for this host, upload the same export " +
-                         "again and apply it under a new idempotency key; only the versions that are not yet published publish.",
+            Remediation: $"Nothing was published for this version; the imported rows are kept. This host refused to write schema " +
+                         $"family '{refusal.Family}'; the message says why and what the host needs. Once that is resolved, upload " +
+                         "the same export again and apply it under a new idempotency key; only the versions that are not yet " +
+                         "published publish.",
             Metadata: metadata);
     }
 

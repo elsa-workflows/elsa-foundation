@@ -1,6 +1,7 @@
 using System.Net;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -118,12 +119,13 @@ public sealed class PublisherBridgeTests
     public async Task A_publish_whose_schema_write_is_refused_refuses_with_the_family_and_both_versions()
     {
         // #5972: the store refuses a write that needs a later schema version than this host may write. The import reports
-        // what Studio's publish endpoint reports for it, however deep the publisher wrapped it, not "failed unexpectedly".
+        // what Studio's publish endpoint reports for it, however deep the publisher wrapped it and wherever an aggregate
+        // holds it, not "failed unexpectedly".
         var refusal = new StoreRefusal("activity-definitions", "3", "4");
         var publisher = new FakeActivityPublisher
         {
             Preflight = Preflight(isPublishable: true),
-            PublishFailure = new InvalidOperationException("Saving failed.", new AggregateException(refusal))
+            PublishFailure = new InvalidOperationException("Saving failed.", new AggregateException(new TimeoutException("Unrelated."), refusal))
         };
 
         var outcome = await new PublisherReusableActivityImportPublisher(publisher, new Tenant("tenant-a")).PublishAsync(Request);
@@ -137,7 +139,7 @@ public sealed class PublisherBridgeTests
         Assert.Equal(
             ["family=activity-definitions", "requiredVersion=4", "writeVersion=3"],
             diagnostic.Metadata.Select(entry => $"{entry.Key}={entry.Value}").Order(StringComparer.Ordinal));
-        Assert.Contains("'4'", diagnostic.Remediation);
+        Assert.Contains("'activity-definitions'", diagnostic.Remediation);
         Assert.Contains("new idempotency key", diagnostic.Remediation);
         Assert.Equal(1, publisher.PublishCalls);
     }
@@ -146,7 +148,7 @@ public sealed class PublisherBridgeTests
     public async Task A_dormant_schema_refuses_with_its_own_code_feature_and_reason()
     {
         // A dormancy refusal is a schema write refusal with its own stable code; the preflight raises it unwrapped.
-        var refusal = new Elsa.Primitives.Exceptions.SchemaDormancyRefusedException(
+        var refusal = new SchemaDormancyRefusedException(
             "activity-definitions", "3", "4", "ActivityGraphs", "Version '4' is not finalized yet.");
         var publisher = new FakeActivityPublisher { PreflightFailure = refusal };
 
@@ -226,7 +228,7 @@ public sealed class PublisherBridgeTests
 
     /// <summary>A store-level schema write refusal, as a persistence provider raises it.</summary>
     private sealed class StoreRefusal(string family, string writeVersion, string requiredVersion)
-        : Elsa.Primitives.Exceptions.SchemaWriteRefusedException(family, writeVersion, requiredVersion,
+        : SchemaWriteRefusedException(family, writeVersion, requiredVersion,
             $"Writing to schema family '{family}' needs version '{requiredVersion}'; this host may write only '{writeVersion}'.");
 
     private sealed class Tenant(string? tenantId) : IActivityPublishingAuthorizationContext
