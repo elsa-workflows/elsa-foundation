@@ -38,5 +38,6 @@ public sealed class WorkflowsRuntimeKernelRetainedHostingFeature : WorkflowsRunt
     {
         if (services.Count(descriptor => !descriptor.IsKeyedService && descriptor.ServiceType == typeof(KernelShellStorage)) != 1)
             throw new InvalidOperationException("A shell must select exactly one Actor Foundation hosting feature.");
+        services.TryAddSingleton<IWorkflowExecutableStartPolicy, AllowWorkflowExecutableStartPolicy>();
     }
 }
