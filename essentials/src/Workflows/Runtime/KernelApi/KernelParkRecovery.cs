@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
@@ -78,9 +76,8 @@ internal sealed class KernelParkRecovery(KernelRunReader runs, KernelRuns founda
         var actor = view.Header.Ref;
         var ingress = await operators.Open((scope, target, operation) =>
             scope.Tenant == binding.Tenant && target == actor && operation == Kinds.Recover, token);
-        // Reads reseal selections with a fresh nonce. Admission verifies the caller's token against the exact Park mark.
-        var operationId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(selected)));
-        var admission = await ingress.SendAsync(binding, new Target.Ref(actor), operationId, Kinds.Recover,
+        // Each submission checks the presented mark. An earlier command's receipt cannot acknowledge a new Park.
+        var admission = await ingress.SendAsync(binding, new Target.Ref(actor), Guid.NewGuid().ToString("N"), Kinds.Recover,
             JsonSerializer.Serialize(new OperatorCommand(selected, ExpectedTarget: actor)), cancellationToken: token);
         if (admission.Outcome is AdmissionOutcome.Accepted or AdmissionOutcome.Duplicate) return Results.Accepted();
         if (admission.Reason is RefusalReason.RateLimited or RefusalReason.NodeBusy or RefusalReason.InboxFull)

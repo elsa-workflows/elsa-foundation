@@ -276,7 +276,24 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
                 Assert.NotNull((await reads.GetAsync(bound, actor, token))?.Park);
 
-                expressions.IsAvailable = true;
+                if (directory is not null && otherSelection is null)
+                {
+                    var pathToFoundation = Path.Combine(directory, "foundation.db");
+                    var ingress = await Kernel.Foundation.Sqlite.SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(pathToFoundation,
+                        Kernel.WorkflowActor.WorkflowActor.ActorType,
+                        (scope, target, kind) => scope.Tenant == bound.Tenant && target == actor && kind == Contract.Kinds.Recover,
+                        cancellationToken: token);
+                    await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+                        { DataSource = pathToFoundation, Pooling = false }.ToString());
+                    await connection.OpenAsync(token);
+                    await using var competingWriter = connection.BeginTransaction(deferred: false);
+                    var refused = await ingress.SendAsync(bound, new Contract.Target.Ref(actor), "fixture-writer-held", Contract.Kinds.Recover,
+                        JsonSerializer.Serialize(new Contract.OperatorCommand(selected, ExpectedTarget: actor)), cancellationToken: token);
+                    Assert.Equal(Contract.AdmissionOutcome.Refused, refused.Outcome);
+                    Assert.Equal(Contract.RefusalReason.NodeBusy, refused.Reason);
+                    Assert.Equal(TimeSpan.FromSeconds(1), refused.RetryAfter);
+                }
+
                 using var accepted = await RecoveryAsync(HttpMethod.Post, selection: selected);
                 Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
                 while (await reads.GetAsync(bound, actor, token) is not { Park: null }) await Task.Delay(40, token);
@@ -285,10 +302,29 @@ public sealed class KernelPublishedExecuteTests
                 using var retiredSelection = await RecoveryAsync(HttpMethod.Post, selection: selected);
                 Assert.Equal(HttpStatusCode.Conflict, retiredSelection.StatusCode);
 
+                using var repark = await http.PostAsync(waitRoute, null, token);
+                using var parkedAgain = await RecoveryAsync(HttpMethod.Get);
+                Assert.Equal(HttpStatusCode.OK, parkedAgain.StatusCode);
+                var newPark = await parkedAgain.Content.ReadFromJsonAsync<JsonElement>(token);
+                Assert.Equal("Available", newPark.GetProperty("status").GetString());
+                var freshSelection = Assert.IsType<string>(newPark.GetProperty("token").GetString());
+                using var previousPark = await RecoveryAsync(HttpMethod.Post, selection: selected);
+                Assert.Equal(HttpStatusCode.Conflict, previousPark.StatusCode);
+                Assert.NotNull((await reads.GetAsync(bound, actor, token))?.Park);
+                expressions.IsAvailable = true;
+                using var acceptedAgain = await RecoveryAsync(HttpMethod.Post, selection: freshSelection);
+                Assert.Equal(HttpStatusCode.Accepted, acceptedAgain.StatusCode);
+                while (await reads.GetAsync(bound, actor, token) is not { Park: null }) await Task.Delay(40, token);
+
                 using var second = await http.PostAsync(waitRoute, null, token);
                 Assert.Equal(HttpStatusCode.OK, second.StatusCode);
                 Assert.Equal("recovered", await second.Content.ReadAsStringAsync(token));
-                Assert.Equal(Contract.ActorStatus.Finished, (await reads.GetAsync(bound, actor, token))?.Header.Status);
+                var ended = Assert.IsType<Contract.ActorView>(await reads.GetAsync(bound, actor, token));
+                Assert.Equal(Contract.ActorStatus.Finished, ended.Header.Status);
+                var output = await Assert.IsAssignableFrom<Contract.IActorTerminalOutputReads>(reads)
+                    .ReadTerminalOutputAsync(bound, actor, Assert.IsType<long>(ended.Header.EndedAt), includeValues: true, cancellationToken: token);
+                using var values = JsonDocument.Parse(Assert.IsType<byte[]>(output?.Values));
+                Assert.Equal("recovered", values.RootElement.GetProperty("result").GetString());
                 return selected;
 
                 async Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null,
