@@ -434,13 +434,13 @@ public sealed class KernelCoordinatorTests
         Assert.Empty(await host.Bindings.ListAllByActivationAsync("legacy-ticks"));
 
         host.Restart();
-        var coordinator = host.NewCoordinator(new AdoptingScheduleSwitch(host.Bindings));
+        var coordinator = host.NewCoordinator(new AdoptingScheduleSwitch(host.Bindings), new RuntimeManagedScheduleActors());
         var restored = Assert.Single(await coordinator.ServeActiveSlotsAsync());
 
         Assert.True(restored.Succeeded);
         Assert.Equal(previous.Slot, restored.Slot);
         Assert.Equal("ticks@1", Assert.Single(host.Serving.Schedules.All).Workflow);
-        Assert.Equal(["register schedule-start:ticks:tick ticks@1", "set schedule:ticks:tick 1 interval:PT1M"], host.Schedules.Calls);
+        Assert.True(Assert.Single(await host.Bindings.ListAllByActivationAsync("legacy-ticks")).IsActive);
     }
 
     [Fact]
