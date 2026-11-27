@@ -119,9 +119,11 @@
             "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
             "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
           },
-          "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
-          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeKernelHosting": {
+            "Provider": "SQLite",
+            "SqlitePath": "/app/data/elsa-kernel.db",
+            "Tenant": "default"
+          },
           "WorkflowsRuntimeApi": {
             "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
             "WorkflowAlterationPayloadProtectionKeys": {
