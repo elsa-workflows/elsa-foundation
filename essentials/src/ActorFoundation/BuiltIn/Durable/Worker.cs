@@ -3423,6 +3423,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                         completed.JobDeadline is null ? null : completed.CompletedAt) : null,
             FoundationSelfRecalls = unit.FoundationSelfRecalls,
             FoundationValues = unit.FoundationValues,
+            FoundationRootChildSends = unit.FoundationRootChildSends,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,
             OpensPark = unit.OpensPark,

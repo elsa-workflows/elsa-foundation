@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -312,7 +313,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         {
             // Lock the shared marker first. A fresh statement then samples both markers, including a revision row
             // inserted by the transaction that held the lock. Batch the statements to keep one round trip.
-            var separateLock = db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootDueBacklog;
+            var separateLock = db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootDueBacklog || db.UsesRootChildren;
             var marker = new NpgsqlBatchCommand(StoreDefinitionsRevision.AddPostgresStampSql("""
                 SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", /*definitions-stamp*/
                 FROM "KernelStoreVersions" v WHERE v."Id" = $1
@@ -386,19 +387,29 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             ON b."Creator" = m."Id" AND m."InboxScope" = 0 AND b."Actor" = m."Target"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND NOT m."Done"
             """).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
-        return row is null ? null : DecodeCreator(row);
+        return row is null ? null : DecodeCreator(row, db.UsesRootChildren);
     }
 
-    internal static Message DecodeCreator(MessageEntity row)
+    internal static Message DecodeCreator(MessageEntity row, bool children = false)
     {
-        if (row.JobGeneration != 0 || !IsStoredCreator(row.Start) || row.Kind != Kinds.Start || row.Id != "root:" + row.Target || row.Sender is not null)
+        if (row.JobGeneration != 0 || !IsStoredCreator(row.Start) || row.Kind != Kinds.Start || row.Id != "root:" + row.Target || !children && row.Sender is not null)
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL generated root creator.");
         var stored = DurableKeyJson.Read<StoredRoot>(row.Start![CreatorPrefix.Length..]);
         var digest = FoundationRootCreator.OperationDigest(stored.Id);
-        if (stored.Spec is not { Creation: { Generation: 1, Previous: 0 } creation, Parent: null } || creation.Intent != digest ||
+        var child = row.Sender is not null;
+        var validIdentity = child
+            ? new InstanceRef(row.Target).ChildAddress && CreationProtocol.IsPhysicalAddress(row.Target) && stored.Spec.Creation?.Intent ==
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(row.Target))) &&
+                (stored.Spec.Parent == row.Sender && stored.Spec.ParentCreation == 1 || stored.Spec.Parent is null && stored.Spec.ParentCreation == 0) &&
+                row.ReplyTo is null && row.Due == 0 && !stored.ExplicitZeroDue
+            : stored.Spec.Parent is null && stored.Spec.ParentCreation == 0 && stored.Spec.Creation?.Intent == digest;
+        if (stored.Spec is not { Creation: { Generation: 1, Previous: 0 } } || !validIdentity ||
             (stored.EscapedInput ? row.Payload is not null : stored.Spec.Input is not null))
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL generated root creation or input.");
         var spec = stored.Spec with { Input = stored.EscapedInput ? stored.Spec.Input : row.Payload };
-        return FoundationRootCreator.Create(new(row.Target), stored.Id, digest, spec, row.Due != 0 || stored.ExplicitZeroDue ? row.Due : null, row.ReplyTo);
+        return child
+            ? new Message(stored.Id, new(row.Target), Kinds.Start, spec.Input, row.Sender, spec, TargetCreation: 1, SenderCreation: 1)
+                { BindFoundationChild = true, StorageId = row.Id }
+            : FoundationRootCreator.Create(new(row.Target), stored.Id, digest, spec, row.Due != 0 || stored.ExplicitZeroDue ? row.Due : null, row.ReplyTo);
     }
 }

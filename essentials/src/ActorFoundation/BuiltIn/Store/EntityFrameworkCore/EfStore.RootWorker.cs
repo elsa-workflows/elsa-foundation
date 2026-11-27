@@ -48,7 +48,7 @@ public sealed partial class EfStore
         }
     }
 
-    internal sealed class RootHeaders(WorkerRoots roots) : IRootDispatchHeaders
+    internal sealed class RootHeaders(WorkerRoots roots, Func<string, CreationAddress, string>? childReference = null) : IRootDispatchHeaders
     {
         public (string Tenant, string Reference) Creator(Message creator)
         {
@@ -62,6 +62,9 @@ public sealed partial class EfStore
             var root = roots.ForActor(creator.Target.Id);
             return root.Owns(creator.InboxKey) ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
         }
+
+        public bool SupportsChildren => childReference is not null;
+        public string? ChildReference(string tenant, CreationAddress address) => childReference?.Invoke(tenant, address);
 
         public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
         public bool KeepsParkInputs => roots.KeepsParkInputs;
@@ -103,6 +106,8 @@ public sealed partial class EfStore
         return InstallWorkerScope(new(null, [], discover: true) { AuthoredWithholds = withholds, SettlesEndedMailbox = withholds is not null });
     }
 
+    internal RootHeaders WorkerHeaders(WorkerRoots roots) => new(roots, _rootChildReference);
+
     private bool AuthoredWithholding(WorkerRoot root, RootImage current) =>
         AuthoredWithholding(new(new(root.Reference), current.Model, root.Tenant, (Contract.ActorStatus)current.Status,
             current.Fault, null, current.TerminalAt, current.TypeData, current.Labels));
@@ -128,6 +133,8 @@ public sealed partial class EfStore
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
             scope.RecoversPark = db.UsesRootParkRecovery;
             scope.MeasuresDueBacklog = db.UsesRootDueBacklog;
+            if (db.UsesRootChildren != (_rootChildReference is not null))
+                throw new StoreFormatException("The root owner must initialize the child capability before binding.");
             scope.RefusesParkedOperators = db.UsesRootParkedOperators;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
@@ -199,9 +206,10 @@ public sealed partial class EfStore
                     image.Status != InstanceStatus.Running && !parked)) throw RootShape();
         }
         else if (image.Jobs is not null || image.NextJobGeneration is > 0) throw RootShape();
-        return new InstanceRow(image.Actor.Id, image.Model, image.Definition, image.Status, "null", image.Revision, null,
+        return new InstanceRow(image.Actor.Id, image.Model, image.Definition, image.Status, "null", image.Revision, image.Parent,
             Fault: image.Fault, History: image.History, Suspended: image.Suspended, StateVersion: image.StateVersion, Creation: image.Actor.Creation,
-            StartIntent: root.Fingerprint, Jobs: image.Jobs).WithFoundationState(image.State)
+            StartIntent: root.Fingerprint, Jobs: image.Jobs, Children: image.Children,
+            ParentCreation: image.Parent is not null ? 1 : 0).WithFoundationState(image.State)
             with
             {
                 NextJobGeneration = image.NextJobGeneration ?? 0,
@@ -396,7 +404,8 @@ public sealed partial class EfStore
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
         turn.Done.All(k => k.Scope == InboxKey.FoundationOccurrenceScope && root.Owns(k)) &&
-        turn.Consumed.All(k => (k.Scope == -1 || jobs && k.Scope > 0) && root.Owns(k));
+        turn.Consumed.All(k => (k.Scope == -1 || jobs && k.Scope > 0 ||
+            k.Scope == InboxKey.FoundationOccurrenceScope && k.Id.StartsWith(root.Reference + "/child/", StringComparison.Ordinal)) && root.Owns(k));
 
     private static bool SameInputs(IEnumerable<Message> inputs, IEnumerable<InboxKey> expected)
     {
@@ -460,6 +469,8 @@ public sealed partial class EfStore
                 WithoutParkFacts(held), settled));
         }
         var row = turn.Row;
+        if (turn.FoundationRootChildSends is not null && _rootChildReference is null) throw RootShape();
+        var childEffects = PrepareRootChildEffects(root, row, turn.FoundationRootChildSends ?? []);
         var recalls = turn.FoundationSelfRecalls;
         var values = turn.FoundationValues;
         if (values is not null && (!RootValuesEnabled || turn.Expected is null || turn.FoundationRootOperator is not null))
@@ -488,11 +499,14 @@ public sealed partial class EfStore
                 (terminated || (timedFault || row.Status == InstanceStatus.Finished) && turn.FoundationRootOperator is null) &&
                 RootTimedJobSettlementEnabled ? jobs : null,
             FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null,
-            FoundationValues = values
+            FoundationValues = values,
+            FoundationRootChildSends = turn.FoundationRootChildSends
         };
-        var supportedRow = new InstanceRow(row.Id, row.Model, row.Definition, row.Status, row.State, row.Revision, null,
+        var supportedRow = new InstanceRow(row.Id, row.Model, row.Definition, row.Status, row.State, row.Revision,
+            _rootChildReference is null ? null : row.Parent,
             History: row.History, Suspended: row.Suspended, StateVersion: row.StateVersion, Creation: 1, StartIntent: root.Fingerprint,
-            Jobs: RootJobsEnabled ? row.Jobs : null)
+            Jobs: RootJobsEnabled ? row.Jobs : null, Children: childEffects?.Children,
+            ParentCreation: _rootChildReference is not null && row.Parent is not null ? 1 : 0)
             { NextJobGeneration = row.NextJobGeneration, FoundationNullState = row.FoundationNullState, FoundationDispatchHeader = header };
         if (turn != supported || row != supportedRow) throw RootShape();
         var change = turn.FoundationHeader;
@@ -505,8 +519,11 @@ public sealed partial class EfStore
             turn.Sent.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
                 ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root.Actor, row.Revision, index, message)).ToArray();
         var jobState = RootJobsEnabled ? new RootJobState(row.Jobs, row.NextJobGeneration) : null;
-        PreparedRoot WithSends(PreparedRoot prepared) => wires.Length == 0 ? prepared :
-            prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };
+        PreparedRoot WithSends(PreparedRoot prepared)
+        {
+            if (wires.Length != 0) prepared = prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };
+            return WithRootChildEffects(prepared, childEffects, row.Parent);
+        }
         var state = row.FoundationNullState ? null : row.State;
         if (turn.Expected is null)
         {
@@ -517,7 +534,7 @@ public sealed partial class EfStore
                 ? await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken)
                 : await ReadSqlitePendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
-            if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
+            if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History || row.Parent != creator.Start.Parent) throw RootShape();
             if (RootTimedJobPreviewEnabled) RequireRootTimedIssuance(turn, row);
             if (RootJobsEnabled) ValidateRootJobChange(null, row, [], turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs);
             return WithSends(PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, state, row.StateVersion,
@@ -527,7 +544,7 @@ public sealed partial class EfStore
         if (turn.Done.Count + turn.Consumed.Count == 0 || !InputsMatch(root, turn, RootJobsEnabled))
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
-        if (current?.Revision != turn.Expected) return null;
+        if (current?.Revision != turn.Expected || row.Parent != current.Parent) return null;
         // A Terminate, or a Faulted or Finished end, of a root with outstanding timed jobs settles them: its cascade names exactly the root's
         // jobs, and their ticket and deadline rows leave in its terminal commit.
         IReadOnlyList<InboxKey> inputKeys = turn.Consumed;
@@ -544,7 +561,10 @@ public sealed partial class EfStore
             change is null && (header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
         if (settledJobs is null && RootTimedJobSettlementEnabled && (!RootTimedJobPreviewEnabled || turn.Consumed.Any(key => key.Scope == -1 || key.Scope > 0)))
-            return await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
+        {
+            var timed = await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
+            return timed is null ? null : WithRootChildEffects(timed, childEffects, row.Parent);
+        }
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var ids = turn.Done.Concat(inputKeys).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();

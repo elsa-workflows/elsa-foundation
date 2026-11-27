@@ -55,6 +55,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootParkArrivals => Current with { MessageProtocol = 21 };
     internal static StoreFormat RootParkRecovery => Current with { MessageProtocol = 22 };
     internal static StoreFormat SqliteParkArrivalsQualification => Current with { MessageProtocol = 85 };
+    internal static StoreFormat PostgresRootChildrenQualification => Current with { MessageProtocol = 111 };
     internal static StoreFormat RootDueBacklogQualification => Current with { MessageProtocol = 110 };
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
 
@@ -94,7 +95,8 @@ internal enum RootCapabilities
     ParkInspection = 1 << 18,
     ParkArrivals = 1 << 19,
     ParkRecovery = 1 << 20,
-    DueBacklog = 1 << 21
+    DueBacklog = 1 << 21,
+    Children = 1 << 22
 }
 
 internal static class RootProfiles
@@ -286,7 +288,7 @@ public sealed partial class EfStore
     {
         var (stored, definitions) = await ReadVersionMarkersAsync(db, formatLock, token);
         // A locked read can wait for a concurrent change. Re-sample both rows after the lock on the same transaction.
-        if ((db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootDueBacklog) &&
+        if ((db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootDueBacklog || db.UsesRootChildren) &&
             formatLock != FormatLock.None && db.Database.IsNpgsql())
             (stored, definitions) = await ReadVersionMarkersAsync(db, FormatLock.None, token);
         RequireSnapshotFormat(db, stored.StoreSchema, stored.MessageProtocol, stored.JournalCodec,
@@ -357,6 +359,7 @@ internal static class StoreDefinitionsRevision
     private const int Sqlite = 2;
     private const int LegacyPostgreSqlRevision = 1;
     private const int PostgreSqlRevision = 5;
+    private const int PostgreSqlChildrenRevision = 6;
     private const int SqliteRevision = 9;
     private const int SqliteParkRecoverRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -365,7 +368,7 @@ internal static class StoreDefinitionsRevision
     {
         var sqliteQualification = db.UsesSqliteShippedInstall &&
             (db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification || db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification);
-        if (db.RequiredFormat != StoreFormat.RootShipped && !sqliteQualification && !db.UsesRootDueBacklog) return null;
+        if (db.RequiredFormat != StoreFormat.RootShipped && !sqliteQualification && !db.UsesRootDueBacklog && !db.UsesRootChildren) return null;
         var sqlite = db.Database.IsSqlite();
         return new StoreVersionEntity
         {
@@ -373,7 +376,7 @@ internal static class StoreDefinitionsRevision
             StoreSchema = sqlite ? Sqlite : PostgreSql,
             MessageProtocol = sqliteQualification
                 ? db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ? SqliteParkRecoverRevision : 1
-                : sqlite ? db.UsesRootDueBacklog ? SqliteDueBacklogRevision : SqliteRevision : PostgreSqlRevision,
+                : sqlite ? db.UsesRootDueBacklog ? SqliteDueBacklogRevision : SqliteRevision : db.UsesRootChildren ? PostgreSqlChildrenRevision : PostgreSqlRevision,
             JournalCodec = 0
         };
     }

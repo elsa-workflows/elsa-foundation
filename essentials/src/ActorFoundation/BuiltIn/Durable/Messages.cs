@@ -114,6 +114,7 @@ public sealed record Message(
     // Qualified identity returned with a generated creator by its PostgreSQL poll. Never accepted from external ingress.
     internal (string Actor, string Tenant, string Reference)? FoundationRootBinding { get; init; }
     internal bool BindFoundationChild { get; init; }
+    internal bool FoundationRootChildNotice { get; init; }
     internal bool StoreStartInputOnce { get; init; }
     internal Message? StoredEnvelope { get; init; }
     internal EventMatch? ProjectedEvent { get; init; }
@@ -154,7 +155,8 @@ public sealed record Message(
     // Creation provenance is assigned by the accepted event insert or StartChild. Outside entry points
     // discard their supplied scope. Ordinary application sends can address an already running child.
     internal bool SuppliedCreator => Start is not null &&
-        (Target.ChildAddress && InboxScope != InboxKey.ChildCreatorScope ||
+        (Target.ChildAddress && InboxScope != InboxKey.ChildCreatorScope &&
+            !(BindFoundationChild && FoundationRootBinding is not null) ||
          Target.EventStartAddress && (EventMatch is null || InboxScope > -2));
     public T Read<T>() => Json.Read<T>(Payload!);
 }

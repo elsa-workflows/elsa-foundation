@@ -375,7 +375,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var ambient = local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
-        var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf, rootJobHandle,
+        var turn = new ActorTurn(inMemory, roots, input, header, ambient, issueSelf, rootJobHandle,
             rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray(), turn.Now);
         await actor.TurnAsync(turn, CancellationToken.None);

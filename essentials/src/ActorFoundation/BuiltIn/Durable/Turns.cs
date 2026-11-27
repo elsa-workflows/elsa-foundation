@@ -291,6 +291,7 @@ public sealed class TurnOutcome(string instance)
     public List<InboxKey> Cancelled = [];
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls;
     internal IReadOnlyList<FoundationValue>? FoundationValues;
+    internal IReadOnlyList<Message>? FoundationRootChildSends;
     public List<Message> Sent = [];
     public HashSet<InboxKey> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];

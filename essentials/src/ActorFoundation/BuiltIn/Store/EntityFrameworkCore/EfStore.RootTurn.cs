@@ -12,6 +12,8 @@ public sealed partial class EfStore
         IReadOnlyList<FoundationValue>? Values, string[]? SettledJobs = null, bool WithheldInputs = false)
         : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
+        internal RootChildEffects? ChildEffects { get; init; }
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (db.UsesSqliteRootRuntime) return await BindSqliteRootTurnAsync(db, this, cancellationToken);
@@ -87,6 +89,7 @@ public sealed partial class EfStore
                     "Status" = {(int)Status}, "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Suspended" = {OperatorSuspension ?? Current.Suspended},
                     "Jobs" = {jobs}, "NextJobGeneration" = {nextJobGeneration},
+                    "Children" = CASE WHEN {ChildEffects is not null} THEN {ChildEffects?.Children} ELSE "Children" END,
                     "FoundationTerminalRevision" = CASE WHEN {ended} THEN {JournalRevision} ELSE NULL END,
                     "FoundationTerminalAt" = CASE WHEN {ended} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE NULL END
                 WHERE "Id" = {Current.Actor.Id} AND "Partition" = {home} AND "FoundationTenant" = {Tenant}
@@ -94,7 +97,8 @@ public sealed partial class EfStore
                     AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
                         WHERE "Instance" = {Current.Actor.Id}))
                 """, Wire), cancellationToken);
-            return updated == 1 && (Values is not { Count: > 0 } values ||
+            return updated == 1 && (ChildEffects is null || await ChildEffects.BindAsync(db, Tenant, cancellationToken)) &&
+                (Values is not { Count: > 0 } values ||
                 await WriteRootValuesAsync(db, Current.Actor, values, cancellationToken));
         }
     }
@@ -132,7 +136,12 @@ public sealed partial class EfStore
             DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope} AND "Id" = ANY({consumed})
                  AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
             """, cancellationToken) != consumed.Length) return false;
-        var ids = expected.Where(k => k.Scope == InboxKey.FoundationOccurrenceScope).Select(k => k.Id).ToArray();
+        var notices = messages.Where(message => message.FoundationRootChildNotice).Select(message => message.InboxKey.Id).ToArray();
+        if (notices.Length > 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "Messages" WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({notices})
+                AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
+            """, cancellationToken) != notices.Length) return false;
+        var ids = expected.Where(k => k.Scope == InboxKey.FoundationOccurrenceScope && !notices.Contains(k.Id)).Select(k => k.Id).ToArray();
         if (ids.Length == 0) return true;
         var settled = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
@@ -148,6 +157,8 @@ public sealed partial class EfStore
             RootJobScope => jobs ? DecodeRootJob(row) : throw RootShape(),
             RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
+            InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && IsStoredRootChildNotice(row.Start) =>
+                DecodeRootChildNotice(row, reference),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? db.UsesSqliteRootRuntime
                     ? PostgresRootAdmission.DecodeOperator(row, reference, terminations: true, retirements: true,

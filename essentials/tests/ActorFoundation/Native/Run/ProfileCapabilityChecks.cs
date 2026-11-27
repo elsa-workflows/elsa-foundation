@@ -174,7 +174,12 @@ internal static class ProfileCapabilityChecks
             backlog.Capabilities == (RootProfiles.Shipped | RootCapabilities.DueBacklog) &&
             !RootProfiles.Formats.ContainsKey(backlog.RequiredFormat) && !mapped.HasFlag(RootCapabilities.DueBacklog),
             "due backlog is isolated to a private qualification format");
-        mapped |= backlog.Capabilities;
+        using var children = KernelDb.ForPostgresRootChildrenQualification(options);
+        Check(children.RequiredFormat == StoreFormat.PostgresRootChildrenQualification && children.UsesRootChildren &&
+            children.Capabilities == (RootProfiles.Shipped | RootCapabilities.Children) &&
+            !RootProfiles.Formats.ContainsKey(children.RequiredFormat) && !mapped.HasFlag(RootCapabilities.Children),
+            "child workflows are isolated to a private PostgreSQL qualification format");
+        mapped |= backlog.Capabilities | children.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped

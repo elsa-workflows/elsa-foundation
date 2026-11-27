@@ -26,6 +26,8 @@ public sealed partial class EfStore
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
     {
+        internal string? Parent { get; init; }
+        internal string? Children { get; init; }
         internal string? Fault { get; init; }
         internal long? ParkAt { get; init; }
         internal string? Jobs { get; init; }
@@ -61,6 +63,8 @@ public sealed partial class EfStore
     private sealed record FirstRootCheckpoint(string Tenant, string Reference, Message Creator, InstanceRow Row, string Header,
         byte[]? Wire, long Growth) : QualifiedRootCheckpoint(1)
     {
+        internal RootChildEffects? ChildEffects { get; init; }
+
         internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
         {
             var (escape, state) = StoredState.EncodingParts(Row);
@@ -109,13 +113,15 @@ public sealed partial class EfStore
                 SELECT consumed.* FROM consumed JOIN bound ON bound."Id" = consumed."Target"
                 """, Wire)).AsNoTracking().ToListAsync(cancellationToken);
             if (candidates.Count != 1) return false;
-            return MatchesCreator(PostgresRootAdmission.DecodeCreator(candidates[0]));
+            return MatchesCreator(PostgresRootAdmission.DecodeCreator(candidates[0], db.UsesRootChildren)) &&
+                (ChildEffects is null || await ChildEffects.BindAsync(db, Tenant, cancellationToken));
         }
 
         internal bool MatchesCreator(Message admitted) =>
             admitted.Id == Creator.Id && admitted.Target == Creator.Target && admitted.InboxKey == Creator.InboxKey &&
             admitted.Start == Creator.Start && admitted.Payload == Creator.Payload && admitted.Due == Creator.Due &&
-            admitted.KeepUntil == Creator.KeepUntil && admitted.ReplyTo == Creator.ReplyTo && admitted.SenderCreation == Creator.SenderCreation;
+            admitted.KeepUntil == Creator.KeepUntil && admitted.ReplyTo == Creator.ReplyTo &&
+            admitted.Sender == Creator.Sender && admitted.SenderCreation == Creator.SenderCreation;
     }
 
     /// <summary>The manual first Running checkpoint of a generated root, with its creator as the sole input.
@@ -131,10 +137,11 @@ public sealed partial class EfStore
         string? creatorFault = null)
     {
         RequireQualifiedRootWriter();
-        if (creator.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 } } start ||
+        if (creator.Start is not { Creation: { Generation: 1, Previous: 0 } } start ||
             creator.TargetCreation != 1 || creator.Kind != Kinds.Start || creator.Target.Partition != fence.Partition ||
-            creator.InboxKey != new InboxKey("root:" + creator.Target.Id) || creator.Payload != start.Input || creator.Sender is not null ||
-            start.Creation.Intent != FoundationRootCreator.OperationDigest(creator.Id))
+            creator.InboxKey != new InboxKey("root:" + creator.Target.Id) || creator.Payload != start.Input ||
+            (creator.BindFoundationChild ? _rootChildReference is null || creator.Sender is null || creator.SenderCreation != 1
+                : start.Parent is not null || creator.Sender is not null || start.Creation.Intent != FoundationRootCreator.OperationDigest(creator.Id)))
             throw new ArgumentException("First root checkpoint requires the admitted exact creator.", nameof(creator));
         var stable = RootStableBody;
         var (storedState, header) = EncodeRootContent(start.Model, start.Definition, stable && state is not null ? StableBodyMarker : state, stateVersion, typeData, labels, journal);
@@ -216,7 +223,7 @@ public sealed partial class EfStore
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, byte[]? Wire, int StateVersion, long Revision, string Header,
         History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
-        string? Jobs, long? NextJobGeneration, string? Fault, long? ParkAt);
+        string? Jobs, long? NextJobGeneration, string? Fault, long? ParkAt, string? Parent, string? Children);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
@@ -230,7 +237,7 @@ public sealed partial class EfStore
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
                 /*root-read-clock*/ AS "AsOf",
-                i."Jobs", i."NextJobGeneration", i."Fault", /*root-park-at*/ AS "ParkAt"
+                i."Jobs", i."NextJobGeneration", i."Fault", /*root-park-at*/ AS "ParkAt", i."Parent", i."Children"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
@@ -267,7 +274,7 @@ public sealed partial class EfStore
                 History = physical.History, Status = physical.Status, Suspended = physical.Suspended, TerminalRevision = physical.TerminalRevision,
                 Fault = (db.UsesRootParkArrivals || physical.ParkAt is not null) && physical.Fault is not null
                     ? DurableKeyJson.Read<string>(physical.Fault) : null,
-                ParkAt = physical.ParkAt,
+                Parent = physical.Parent, Children = physical.Children, ParkAt = physical.ParkAt,
                 TerminalAt = physical.TerminalAt, AsOf = physical.AsOf, Jobs = physical.Jobs, NextJobGeneration = physical.NextJobGeneration
             };
     }
