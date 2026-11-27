@@ -106,6 +106,9 @@ export async function corePreviewParkRecoveryJourney(page: Page, info: TestInfo,
   await page.getByRole("button", { name: "Refresh execution", exact: true }).click();
   await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible();
   await expect(cleared).toHaveCount(0);
+  const activities = page.getByRole("region", { name: "Executed activities", exact: true });
+  await expect(activities.locator('[data-status="Completed"]').filter({ hasText: /Write Http Response/i })).toBeVisible();
+  await expect(activities.locator('[data-status="Running"]')).toHaveCount(0);
   await capture(page, info, "park-run-completed");
   await receipt(info, "park-recovery.json", { runId: started.workflowExecutionId,
     authorization: "browser visibility after controlled 403; actual server grants qualified by #6039",
