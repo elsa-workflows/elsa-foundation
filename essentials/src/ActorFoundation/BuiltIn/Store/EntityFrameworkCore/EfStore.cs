@@ -874,6 +874,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? PostgresOperatorPollFilter(db) : "")}
+             {(db.UsesRootChildren && _ordinaryRoots.Discover ? RootChildCascadePollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
@@ -900,6 +901,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             : db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
             : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
             : RootOperatorPollFilter;
+        filter = filter.Replace("/*root-child-cascade*/", db.UsesRootChildren ? RootChildCascadeRow + " OR " : "", StringComparison.Ordinal);
         // A running actor can withhold even when the physical suspension flag is clear. Offer the first due operator
         // beside earlier ordinary inputs so the owner can choose from its committed header.
         return _ordinaryRoots?.AuthoredWithholds is null ? filter : filter.Replace("/*authored-withholding*/",
@@ -909,7 +911,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
     private static readonly string RootOperatorPollTemplate = $"""
-         AND (m."InboxScope" = 0 OR EXISTS (
+         AND (m."InboxScope" = 0 OR /*root-child-cascade*/ EXISTS (
              SELECT 1 FROM "Instances" target
              WHERE target."Id" = m."Target" AND target."Partition" = m."Partition"
                AND (CASE WHEN m."Id" LIKE 'operator/%' THEN

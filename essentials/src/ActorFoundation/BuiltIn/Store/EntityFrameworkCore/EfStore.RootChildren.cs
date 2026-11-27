@@ -16,7 +16,8 @@ public sealed partial class EfStore
         await using var db = create();
         if (!db.UsesRootChildren) return;
         if (!db.Database.IsNpgsql()) throw new StoreFormatException("The child qualification profile requires PostgreSQL.");
-        await RequireStoreVersionsAsync(db, token);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, token);
+        if (pinned is null) await RequireStoreVersionsAsync(db, token);
         var key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
         _rootChildReference = (tenant, address) => FoundationRootCreator.ReferenceFor(key, tenant, address);
         _rootChildMessageHandle = seed => FoundationSelfSend.Handle(key, "child-" + seed);

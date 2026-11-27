@@ -258,7 +258,8 @@ internal sealed partial class ActorAdapter
         if (input.Taken is not [{ Durable: true, Message: { Operator: { } command } message }] ||
             message.Kind != Durable.Kinds.Delete && !command.RootThenDelete) return null;
         var row = input.Row;
-        if (row is not { Creation: 1, Retired: false, Parent: null, Children: null, Jobs: null, FoundationDispatchHeader: { } header } ||
+        if (row is not { Creation: 1, Retired: false, Children: null, Jobs: null, FoundationDispatchHeader: { } header } ||
+            row.Parent is not null && (roots?.SupportsChildren != true || row.Status == Durable.InstanceStatus.Running) ||
             row.Model != actor.Type || row.Id != message.Target.Id || message.TargetCreation != row.Creation ||
             (command.RootThenDelete ? command.DeleteTarget != header.Reference : header.Terminal is null || header.Terminal != command.QualifiedTerminal))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");

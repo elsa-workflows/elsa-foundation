@@ -5,6 +5,12 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private const string RootChildCascadeWire = "!kernel-child-cascade/1";
+    private static readonly string RootChildCascadeRow =
+        FormattableString.Invariant($"""(m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Start" = '{RootChildCascadeWire}')""");
+    private static readonly string RootChildCascadePollFilter = $"""
+        AND ({RootChildCascadeRow} OR NOT EXISTS (
+            SELECT 1 FROM "FoundationRootChildCascades" children WHERE children."Reference" = b."Reference"))
+        """;
     private sealed record RootChildCascade(WorkerRoot Parent, long Revision, int Cursor, CreationAddress[] Children);
     private sealed record StoredChildCascade(long Revision, int Cursor, string Children);
 

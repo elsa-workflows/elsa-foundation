@@ -337,18 +337,25 @@ internal sealed partial class PostgresRootAdmission
         {
             // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
             var receipts = db.UsesRootOperatorProtocol;
-            await db.Database.ExecuteSqlRawAsync(receipts ? ParkRecoverySources : ParkSources, token);
+            var childLedger = db.UsesRootChildren;
+            var lockTables = receipts ? ParkRecoverySources : ParkSources;
+            if (childLedger)
+                lockTables = lockTables.Replace("IN ACCESS SHARE MODE", ", \"FoundationRootChildCascades\" IN ACCESS SHARE MODE", StringComparison.Ordinal);
+            await db.Database.ExecuteSqlRawAsync(lockTables, token);
             var parkSources = await db.Database.SqlQuery<bool>($"""
-                SELECT count(*) = {(receipts ? 14 : 13)} AS "Value"
+                SELECT count(*) = {(receipts ? 14 : 13) + (childLedger ? 1 : 0)} AS "Value"
                 FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
                     ('"Instances"'), ('"Messages"'), ('"Partitions"'), ('"Nodes"'), ('"Journal"'), ('"Subscriptions"'),
                     ('"FoundationDirectReceipts"'), ('"FoundationActorList"'), ('"FoundationRootReceipts"'), ('"Events"'),
-                    ('"FoundationOperatorReceipts"')) required(name)
+                    ('"FoundationOperatorReceipts"'), ('"FoundationRootChildCascades"')) required(name)
                 JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name) AND c.relkind = 'r'
                 JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = {source}
-                WHERE {receipts} OR required.name <> '"FoundationOperatorReceipts"'
+                WHERE ({receipts} OR required.name <> '"FoundationOperatorReceipts"')
+                    AND ({childLedger} OR required.name <> '"FoundationRootChildCascades"')
                 """).SingleAsync(token);
-            if (!parkSources) throw new StoreFormatException("Park requires the source tables in the marker schema.");
+            if (!parkSources) throw new StoreFormatException(childLedger
+                ? "The child profile requires its source tables in the marker schema."
+                : "Park requires the source tables in the marker schema.");
             return;
         }
         await db.Database.ExecuteSqlRawAsync("""

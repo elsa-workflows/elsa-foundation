@@ -113,7 +113,8 @@ public sealed partial class EfStore
                     AND i."Suspended" = {Current.Suspended}
                     AND i."FoundationTerminalRevision" IS NOT DISTINCT FROM {Current.TerminalRevision}
                     AND i."FoundationTerminalAt" IS NOT DISTINCT FROM {Current.TerminalAt}
-                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."Parent" IS NULL AND i."CustomHandles" IS NULL
+                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
+                    AND (i."Parent" IS NULL OR {db.UsesRootChildren && !ending} AND i."FoundationTerminalRevision" = i."Revision")
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = i."Id")
                     AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
                         AND NOT m."Done" AND (m."InboxScope" <> {occurrence} OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL))
@@ -137,7 +138,7 @@ public sealed partial class EfStore
                         ELSE {Current.TerminalAt} END AS "At")
                 UPDATE "Instances" i SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
                     "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal},
-                    "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true,
+                    "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true, "Parent" = NULL,
                     "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                     "Status" = {(int)status}, /*park*/
                     "FoundationTerminalRevision" = CASE WHEN {ending} THEN {revision} ELSE "FoundationTerminalRevision" END,

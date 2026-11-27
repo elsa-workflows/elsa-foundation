@@ -219,6 +219,9 @@ public sealed partial class EfStore
         .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
         .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
         .Replace("/*root-retirement-footprint*/", db.UsesRootRetirement ? RootRetirementFootprint : "", StringComparison.Ordinal)
+        .Replace("""/*retire-parent*/ AND OLD."Parent" IS NULL""", db.UsesRootChildren
+            ? """AND NEW."Parent" IS NULL AND (OLD."Parent" IS NULL OR OLD."FoundationTerminalRevision" = OLD."Revision")"""
+            : """AND OLD."Parent" IS NULL""", StringComparison.Ordinal)
         .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal);
 
     private static string RootRecoverFootprint(KernelDb db, string actor, bool journaling)

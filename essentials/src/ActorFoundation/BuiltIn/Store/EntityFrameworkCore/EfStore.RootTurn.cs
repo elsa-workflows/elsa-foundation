@@ -114,6 +114,8 @@ public sealed partial class EfStore
 
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
+        var cascadeOnly = db.UsesRootChildren && expected.Any(key => key.Id.StartsWith(ChildCascadePrefix(reference), StringComparison.Ordinal))
+            ? "AND " + RootChildCascadeRow : "";
         var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
         var parkArrivals = parked && db.UsesRootComposedParkRecovery ? """AND ("ReplyTo" IS NULL OR "Id" LIKE 'operator/%')""" : "";
         // The settled prefix follows the poll's order, which puts a pending released cohort first.
@@ -122,7 +124,7 @@ public sealed partial class EfStore
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
                 AND ("InboxScope" = {2} OR {5} AND "InboxScope" = {3}) AND "EventMatch" IS NULL
-                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{parkArrivals}} {{cohort}}
+                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{parkArrivals}} {{cohort}} {{cascadeOnly}}
             ORDER BY "Seq" LIMIT {4} FOR UPDATE OF m
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count, includePrivateInputs).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))

@@ -74,7 +74,7 @@ internal static class PostgresChildWorkflowChecks
         const string nextNode = "child-workflow-successor";
         var nextFoundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, actor.Type,
             (bound, target, kind) => ReferenceEquals(bound, scope) &&
-                (kind == Contract.Kinds.Terminate || target == childReference && kind == Contract.Kinds.Recover),
+                (kind == Contract.Kinds.Terminate || target == childReference && kind is Contract.Kinds.Recover or Contract.Kinds.Delete),
             PostgresPreviewHosting.CreateRequests(Open, nextNode, actor.Type), cancellationToken: token);
         await using var successor = StartService(nextNode, nextFoundation.Requests);
         await successor.StartAsync(token);
@@ -102,6 +102,13 @@ internal static class PostgresChildWorkflowChecks
             Check(await store.ReadFirstRootAsync(scope.Tenant, childRef, token) is { Status: InstanceStatus.Finished, Revision: 4 } &&
                 parent.Children is null, "the child finished once and the parent removed it from the live registry");
             Check(!await db.Messages.AnyAsync(message => !message.Done, token), "the creator and notice are consumed");
+            var endedChild = (await nextFoundation.GetAsync(scope, childReference, token))!;
+            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(childReference), "delete-child", Contract.Kinds.Delete,
+                Json.Write(new Contract.OperatorCommand(endedChild.Selection)), cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the exact terminal selection admits attached child retirement");
+            while (await nextFoundation.GetAsync(scope, childReference, token) is not null) await Task.Delay(15, token);
+            Check(await nextFoundation.GetAsync(scope, reference, token) is { Header.Status: Contract.ActorStatus.Finished },
+                "retiring the attached child preserves the parent's committed continuation");
             var cancellation = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
                 WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("cancel-parent"))), "cancel-parent-1", Contract.Kinds.Start,
                 cancellationToken: token);
