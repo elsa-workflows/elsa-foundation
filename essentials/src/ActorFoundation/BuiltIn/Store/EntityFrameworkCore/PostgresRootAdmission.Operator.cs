@@ -74,7 +74,9 @@ internal sealed partial class PostgresRootAdmission
         var window = keepFor is { } keep && keep < deduplicationWindow ? keep : deduplicationWindow;
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         var windowMs = (long)window.TotalMilliseconds;
+        using var attempt = retentionDelete ? null : pressure?.Begin(tenant, RootAdmissionPressure.Operator(kind));
         await using var db = create();
+        RequirePressureProfile(db);
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
         // The standalone recovery profile admits only Recover. The composition also admits the root operator chain.
         var recover = kind == Kinds.Recover;
@@ -122,7 +124,7 @@ internal sealed partial class PostgresRootAdmission
             else
                 await EfStore.RequireStoreVersionsAsync(db, token);
             // Serialize only held admissions for the same birth. NO KEY UPDATE remains compatible with receipt FKs.
-            var address = reply is null ? await RootAddressAsync(db, tenant, reference, token) :
+            var address = reply is null || attempt?.IsBusy == true ? await RootAddressAsync(db, tenant, reference, token) :
                 await db.Database.SqlQuery<CreationAddress>($"""
                     SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
                     WHERE "Tenant" = {tenant} AND "Reference" = {reference} FOR NO KEY UPDATE
@@ -138,6 +140,22 @@ internal sealed partial class PostgresRootAdmission
             }
             var digest = FoundationRootCreator.OperationDigest(operation);
 
+            Task<string?> LiveReceiptAsync() => db.Database.SqlQuery<string>($"""
+                SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
+                WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                """).SingleOrDefaultAsync(token);
+
+            async Task<Receipt?> ReplayAsync(string prior)
+            {
+                await tx.CommitAsync(token);
+                return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
+            }
+            if (attempt?.IsBusy == true)
+            {
+                if (await LiveReceiptAsync() is { } winner) return await ReplayAsync(winner);
+                attempt.RequireCapacity();
+            }
+
             // Lock the selected checkpoint before reading its receipt. If the command already
             // ended this actor, the receipt committed before the owner could consume it.
             var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
@@ -147,15 +165,8 @@ internal sealed partial class PostgresRootAdmission
             var selectedStatus = selected && !deletion && park is null
                 ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
                 : null;
-            var prior = await db.Database.SqlQuery<string>($"""
-                SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
-                WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
-                """).SingleOrDefaultAsync(token);
-            if (prior is not null)
-            {
-                await tx.CommitAsync(token);
-                return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
-            }
+            var prior = await LiveReceiptAsync();
+            if (prior is not null) return await ReplayAsync(prior);
             if (!deletion && park is null)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
             // S5b: a composed Park set admits a Terminate, or a Terminate and delete, for a parked root, held or not, only with the
@@ -188,6 +199,13 @@ internal sealed partial class PostgresRootAdmission
                 if (atCapacity) throw new OperatorReplyCapacity();
             }
 
+            var actor = new InstanceRef(address.Id);
+            try { attempt?.Require(actor.Partition); }
+            catch (RootAdmissionRefused)
+            {
+                if (await LiveReceiptAsync() is { } winner) return await ReplayAsync(winner);
+                throw;
+            }
             var receipt = await db.Database.SqlQuery<long>($"""
                 INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
                 VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
@@ -201,10 +219,8 @@ internal sealed partial class PostgresRootAdmission
                 prior = await db.Database.SqlQuery<string>($"""
                     SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
                     """).SingleAsync(token);
-                await tx.CommitAsync(token);
-                return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
+                return await ReplayAsync(prior);
             }
-            var actor = new InstanceRef(address.Id);
             var replyAddress = reply?.Address;
             var (id, header) = EncodeOperator(reference, operation, digest, address.Creation, kind, due, terminal, park,
                 park is not null ? (long)deduplicationWindow.TotalMilliseconds : null, thenDelete, retentionDelete, replyAddress);
@@ -213,6 +229,7 @@ internal sealed partial class PostgresRootAdmission
                 VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0, {replyAddress})
                 """, token);
             await tx.CommitAsync(token);
+            attempt?.Committed();
             return new(reference, false);
         }
         catch (PostgresException error) when (selected && IsUnavailableSelectedSchema(error))

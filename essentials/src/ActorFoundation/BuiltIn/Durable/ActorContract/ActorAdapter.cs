@@ -47,7 +47,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => roots is null && row?.Model == actor.Type;
     bool Durable.IActorType.AcceptsFoundationOperator(Durable.InstanceRow? row, Durable.Message message) =>
-        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type && (IsRootControl(message) || IsRootRecover(message));
+        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type &&
+            (IsRootControl(message) || IsRootRecover(message) ||
+                roots.SupportsChildren && message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, message));
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
@@ -122,6 +124,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         SettlesEndedChildNotice(row, delivery.Message) ||
+        roots?.SupportsChildren == true && delivery.Message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, delivery.Message) ||
         roots is not null && delivery.Message.Operator is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null } ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
             delivery.IsWorkerJobCompletion && (rootJobHandle is not null || delivery.JobDeadline is not null || IsParked(row)));

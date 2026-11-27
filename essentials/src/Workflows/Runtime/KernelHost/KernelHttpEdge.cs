@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Kernel.Native;
 using Contract = Kernel.Foundation.Contracts;
@@ -64,6 +65,16 @@ public static class KernelHttpEdge
     public static KernelHttpAnswer Answer(Contract.Reply reply)
     {
         ArgumentNullException.ThrowIfNull(reply);
+        if (reply is { RetryAfter: { } retry, RefusalReason: Contract.RefusalReason.RateLimited or
+            Contract.RefusalReason.NodeBusy or Contract.RefusalReason.InboxFull })
+        {
+            var seconds = Math.Max(1, Math.Ceiling(retry.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+            var status = reply.RefusalReason == Contract.RefusalReason.RateLimited ? 429 : 503;
+            return Text(status, reply.RefusalReason.Value.ToString()) with
+            {
+                Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Retry-After"] = seconds }
+            };
+        }
         KernelHttpAnswer answer = reply switch
         {
             { Error: "no waiter" or "missing" } => Text(404, "no workflow serves this route"),

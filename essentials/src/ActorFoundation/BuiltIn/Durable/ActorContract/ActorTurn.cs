@@ -112,8 +112,9 @@ internal sealed partial class ActorAdapter
                 return _turn.SendToSelf(_issueSelf.Handle, kind, payload, dueAt, recordOrdinal: true);
             if (target != Header.Ref && _roots?.ChildMessageHandle is { } issue)
             {
-                if (!_children.Contains(address) || dueAt is not null || !Durable.FoundationMetadataLimits.IsOrdinaryKind(kind))
-                    throw new NotSupportedException("This profile sends only immediate ordinary inputs to an attached child.");
+                if (!_children.Contains(address) || dueAt is not null ||
+                    !(Durable.FoundationMetadataLimits.IsOrdinaryKind(kind) || kind == Contract.Kinds.Terminate && payload is null))
+                    throw new NotSupportedException("This profile sends only immediate ordinary inputs or Terminate to an attached child.");
                 return _turn.SendFromActor(issue, new(address.Id), address.Creation, kind, payload, dueAt, rootChild: true);
             }
             return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
@@ -135,6 +136,8 @@ internal sealed partial class ActorAdapter
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
         {
             HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
+            if (_roots?.SupportsChildren == true && placement != Contract.Placement.WithParent)
+                throw new NotSupportedException("This PostgreSQL profile places children in their parent's partition.");
             var destination = placement == Contract.Placement.Spread
                 ? InstanceRef.Spread(FormattableString.Invariant($"{Header.Ref.Id}/{_turn.Revision}/{_turn.Ordinal}"), _input.Services.Partitions)
                 : _turn.Actor.Partition;

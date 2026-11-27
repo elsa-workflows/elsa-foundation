@@ -182,7 +182,8 @@ public class KernelDb : DbContext
     internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootChildrenQualification(DbContextOptions<KernelDb> options) =>
-        ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification, RootProfiles.Shipped | RootCapabilities.Children);
+        ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification,
+            RootProfiles.TimerRearmQualification | RootCapabilities.Children);
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
@@ -903,7 +904,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                    {(db.UsesRootComposedParkRecovery ? $"""
                      AND (i."FoundationParkAt" IS NULL OR m."InboxScope" IN ({ParkInputScopes(db)}) AND (m."ReplyTo" IS NULL OR m."Id" LIKE 'operator/%'))
                      """ : "")}
-                   {(db.UsesRootChildren ? $"""AND (i."FoundationParkAt" IS NULL OR NOT {RootChildNoticePredicate("m")})""" : "")}
+                   {(db.UsesRootChildren ? "AND " + RootChildParkInputs("m", "i") : "")}
                    {RootPollCohortFilter(db)})))
             """;
     private string PostgresOperatorPollFilter(KernelDb db)
@@ -914,11 +915,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 /*root-child-prior*/
                 """, StringComparison.Ordinal)
             .Replace("/*root-child-prior*/", db.UsesRootChildren
-                ? $"""AND (target."FoundationParkAt" IS NULL OR NOT {RootChildNoticePredicate("prior")})""" : "", StringComparison.Ordinal)
+                ? "AND " + RootChildParkInputs("prior", "target") : "", StringComparison.Ordinal)
             : db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
             : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
             : RootOperatorPollFilter;
-        filter = filter.Replace("/*root-child-cascade*/", db.UsesRootChildren ? RootChildCascadeRow + " OR " : "", StringComparison.Ordinal);
+        filter = filter.Replace("/*root-child-cascade*/", db.UsesRootChildren ? $"""
+            {RootChildCascadeRow} OR EXISTS (SELECT 1 FROM "Instances" child
+                WHERE child."Id" = m."Target" AND child."Partition" = m."Partition" AND child."Suspended"
+                AND {RootChildTerminatePredicate("m", "child")}) OR
+            """ : "", StringComparison.Ordinal);
         // A running actor can withhold even when the physical suspension flag is clear. Offer the first due operator
         // beside earlier ordinary inputs so the owner can choose from its committed header.
         filter = filter.Replace("/*root-self-predecessor*/",

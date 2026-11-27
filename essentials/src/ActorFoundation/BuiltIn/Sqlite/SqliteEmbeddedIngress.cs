@@ -53,9 +53,26 @@ public static partial class SqliteEmbeddedHosting
 
         using var file = AcquireFile(databasePath, requests: requests);
         requests?.RequireBinding(file.Path, actorType);
-        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+        var pressure = requests?.Pressure;
+        using (var db = KernelDb.ForSqliteRootShipped(file.Options))
+            if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
+        var admission = CreateAdmission(file, window, pressure);
         await admission.VerifyAsync(cancellationToken);
-        return new Ingress(file.Path, actorType, window, requests, authorizeOperator);
+        var path = file.Path;
+        if (pressure is not null && requests?.Pressure is null)
+        {
+            await ReadPressureAsync(cancellationToken);
+            pressure.RefreshOnDemand(ReadPressureAsync);
+        }
+        return new Ingress(path, actorType, window, requests, pressure, authorizeOperator);
+
+        async Task ReadPressureAsync(CancellationToken token)
+        {
+            using var lease = AcquireFile(path);
+            var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(lease.Options, lease.AdmissionDefinitions), postgres: false)
+                { AdmissionPressure = pressure };
+            await store.PrimeAdmissionPressureAsync(token);
+        }
     }
 
     private static void RequireFoundationActorType(string actorType)
@@ -65,11 +82,21 @@ public static partial class SqliteEmbeddedHosting
             throw new ArgumentException("Invalid SQLite root actor type.", nameof(actorType));
     }
 
-    private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests,
+    private static SqliteRootAdmission CreateAdmission(FileLease file, TimeSpan window, RootAdmissionPressure? pressure) =>
+        new(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions, pressure);
+
+    private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests, RootAdmissionPressure? pressure,
         Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator) : Contract.IIngress
     {
         public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
             string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            try { return await SendCoreAsync(scope, target, id, kind, payload, options, cancellationToken); }
+            catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+        }
+
+        private async ValueTask<Contract.Admission> SendCoreAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+            string? payload, Contract.AddOptions? options, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(scope);
             ArgumentNullException.ThrowIfNull(target);
@@ -81,13 +108,13 @@ public static partial class SqliteEmbeddedHosting
                 var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
                 if (command is null) return new(Contract.AdmissionOutcome.Refused, Reason: refusal);
                 using var write = AcquireFile(path);
-                var operators = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(write.Options), window, write.AdmissionDefinitions);
+                var operators = CreateAdmission(write, window, pressure);
                 return await operators.OperateAsync(scope.Tenant, actor, id, kind, command.Selection!, options?.DueAt, options?.KeepFor,
                     cancellationToken, thenDelete: command.ThenDelete);
             }
 
             using var file = AcquireFile(path);
-            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+            var admission = CreateAdmission(file, window, pressure);
             if (target is Contract.Target.Start start)
             {
                 var spec = start.Spec;

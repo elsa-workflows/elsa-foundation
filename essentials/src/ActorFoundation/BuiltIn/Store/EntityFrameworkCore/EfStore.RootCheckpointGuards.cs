@@ -8,7 +8,8 @@ public sealed partial class EfStore
     internal static Task InstallFirstRootCheckpointsAsync(KernelDb db, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlRawAsync(RenderPostgresFirstRootGuards(db), cancellationToken);
 
-    internal static string RenderPostgresFirstRootGuards(KernelDb db) => RenderRootGuards(db, PostgresFirstRootGuards);
+    internal static string RenderPostgresFirstRootGuards(KernelDb db) => RenderRootGuards(db, PostgresFirstRootGuards) +
+        (db.UsesRootChildren ? "\n" + RequireSettledTerminalChildNotice : "");
 
     private const string RootCheckpointWriteAllowed = """
         NEW."FoundationWriteRevision" = OLD."Revision" + 1
@@ -74,15 +75,7 @@ public sealed partial class EfStore
                 ORDER BY m."Seq", m."Id" LIMIT 3 FOR UPDATE OF m;
             END IF;
             """ + "\n" : "", StringComparison.Ordinal)
-        .Replace("    /*terminal-child-registry*/\n", db.UsesRootChildren ? """
-            IF TG_OP = 'UPDATE' AND COALESCE(OLD."FoundationTerminalRevision" = OLD."Revision", false)
-                AND NOT OLD."Retired" AND OLD."Children" IS NOT NULL AND
-                (to_jsonb(NEW) - 'Children') = (to_jsonb(OLD) - 'Children')
-                AND coalesce(NEW."Children"::jsonb, '[]'::jsonb) <@ OLD."Children"::jsonb
-                AND jsonb_array_length(coalesce(NEW."Children"::jsonb, '[]'::jsonb)) <
-                    jsonb_array_length(OLD."Children"::jsonb)
-            THEN RETURN NEW; END IF;
-            """ + "\n" : "", StringComparison.Ordinal)
+        .Replace("    /*terminal-child-registry*/\n", db.UsesRootChildren ? TerminalChildRegistryWrite + "\n" : "", StringComparison.Ordinal)
         .Replace("/*checkpoint-write-allowed*/", RootCheckpointWriteAllowed, StringComparison.Ordinal)
         .Replace("/*journal-write-refused*/", RootJournalWriteRefused, StringComparison.Ordinal)
         .Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """

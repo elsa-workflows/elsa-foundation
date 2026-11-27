@@ -120,15 +120,22 @@ public sealed partial class EfStore
         var includePrivate = includePrivateInputs || db.UsesRootPrivateParkInputs && parked && !suspended;
         var cascadeOnly = db.UsesRootChildren && expected.Any(key => key.Id.StartsWith(ChildCascadePrefix(reference), StringComparison.Ordinal))
             ? "AND " + RootChildCascadeRow : "";
-        var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
+        var operatorOnly = !suspended ? "" : db.UsesRootChildren && !parked ? $"""
+            AND (m."Id" LIKE 'operator/%' OR EXISTS (SELECT 1 FROM "Instances" i
+                WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND {RootChildTerminatePredicate("m", "i")}))
+            """ : """AND "Id" LIKE 'operator/%'""";
         var parkArrivals = parked && db.UsesRootComposedParkRecovery ? """AND ("ReplyTo" IS NULL OR "Id" LIKE 'operator/%')""" : "";
+        var childPark = parked && db.UsesRootChildren ? $"""
+            AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
+                AND {RootChildParkInputs("m", "i")})
+            """ : "";
         // The settled prefix follows the poll's order, which puts a pending released cohort first.
         var cohort = db.UsesRootParkRecovery && !(db.UsesRootComposedParkRecovery && (parked || suspended))
             ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter(db)})""" : "";
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
                 AND ("InboxScope" = {2} OR {5} AND "InboxScope" = {3}) AND "EventMatch" IS NULL
-                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{parkArrivals}} {{cohort}} {{cascadeOnly}}
+                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{parkArrivals}} {{childPark}} {{cohort}} {{cascadeOnly}}
             ORDER BY "Seq" LIMIT {4} FOR UPDATE OF m
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count, includePrivate).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))

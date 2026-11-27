@@ -312,11 +312,14 @@ public sealed partial class EfStore
     {
         // S5b: a Terminate that names a parked root's Park reads the same facts in a parked-operator set.
         if (!db.UsesRootParkRecovery && !db.UsesRootParkedOperators ||
-            !polled.Messages.Any(item => item.Message.Operator?.RootParkMark is not null)) return polled;
+            !polled.Messages.Any(item => item.Message.Operator?.RootParkMark is not null || db.UsesRootChildren && IsRootChildTerminate(item.Message)))
+            return polled;
         var messages = new List<Stored>(polled.Messages.Count);
         foreach (var item in polled.Messages)
         {
-            if (item.Message is not { Operator: { RootParkMark: not null } command } message)
+            var message = item.Message;
+            var childTerminate = db.UsesRootChildren && IsRootChildTerminate(message);
+            if (message.Operator is not { RootParkMark: not null } && !childTerminate)
             {
                 messages.Add(item);
                 continue;
@@ -336,6 +339,17 @@ public sealed partial class EfStore
                     {clearing}, "Jobs", {jobPin} AS "ParkJobResult", {livePin} AS "ParkLiveJob" FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
+            var command = message.Operator;
+            if (childTerminate)
+            {
+                if (park is not { At: { } parkAt, Revision: { } parkRevision })
+                {
+                    messages.Add(item);
+                    continue;
+                }
+                command = new(null) { RootParkMark = new(parkRevision, parkAt), RootParkWindow = (long)TimeSpan.FromHours(1).TotalMilliseconds };
+            }
+            if (command is null) throw RootShape();
             var recover = message.Kind == Kinds.Recover;
             var quoteFits = true;
             List<KeptRow> kept;

@@ -47,10 +47,14 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
                 !PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id) ||
                 (authorizeExactOperator?.Invoke(scope, exact.Actor, kind) ?? authorizeOperator?.Invoke(scope, kind)) != true)
                 return new(Contract.AdmissionOutcome.Refused);
-            var control = await admission.AdmitRootOperatorAsync(scope.Tenant, exact.Actor.Id, id, kind, options?.DueAt,
-                options?.KeepFor, cancellationToken, requireExactTarget: authorizeExactOperator is not null);
-            return control is null ? new(Contract.AdmissionOutcome.Refused) :
-                new(control.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(control.Reference));
+            try
+            {
+                var control = await admission.AdmitRootOperatorAsync(scope.Tenant, exact.Actor.Id, id, kind, options?.DueAt,
+                    options?.KeepFor, cancellationToken, requireExactTarget: authorizeExactOperator is not null);
+                return control is null ? new(Contract.AdmissionOutcome.Refused) :
+                    new(control.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(control.Reference));
+            }
+            catch (RootAdmissionRefused refusal) { return refusal.Admission; }
         }
         return await ingress.SendAsync(scope, target, id, kind, payload, options, cancellationToken);
     }

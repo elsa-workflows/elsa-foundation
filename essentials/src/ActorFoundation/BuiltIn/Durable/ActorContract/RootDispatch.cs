@@ -119,14 +119,16 @@ internal sealed partial class ActorAdapter
         if (roots is not { RefusesParkedOperators: true } || input.Row is not
             { Status: Durable.InstanceStatus.Faulted, Retired: false, Creation: 1, FoundationDispatchHeader: { Terminal: null } header } row ||
             input.Taken is not [{ Durable: true, Message: var control } refused] ||
-            !IsRootControl(control) || control.Target.Id != row.Id) return null;
+            !(IsRootControl(control) || roots.SupportsChildren && control is
+                { Kind: Durable.Kinds.Terminate, Operator.RootParkMark: not null } && MatchesRootChildInput(row, control)) ||
+            control.Target.Id != row.Id) return null;
         var revision = checked(row.Revision + 1);
         var (mark, facts, clear) = (control.Operator!.RootParkMark, control.Operator.RootParkFacts, control.Operator.RootParkClear);
         var deletes = control.Kind == Durable.Kinds.Delete || control.Operator.RootThenDelete;
         var reason = control.Kind is not (Durable.Kinds.Terminate or Durable.Kinds.Delete) || mark is null || facts is null ? "parked"
             : clear ? facts.Clearing != control.Id || facts.Mark != mark ? "selection" : null
             : facts.Clearing is not null ? "clearing" : facts.Mark != mark ? "selection"
-            : facts.Outstanding || deletes && facts.Residue ? "outstanding" : null;
+            : facts.Outstanding || deletes && (facts.Residue || roots.SupportsChildren && row.Parent is not null) ? "outstanding" : null;
         // S5b-3b: a Delete runs ProtectsDeletion at its Open, as the in-memory OpenParkDelete does. A protected root, or one
         // whose protection cannot be read, is refused with its Park and kept rows as they are. A single page is its own Open.
         if (reason is null && !clear && control.Kind == Durable.Kinds.Delete)
@@ -173,6 +175,8 @@ internal sealed partial class ActorAdapter
                 Journal = kept ? Durable.Json.Write(new { Outcome = "protected", Disposition = "terminated", Operation = control.Id, Cleared = cleared })
                     : Durable.Json.Write(new { Outcome = "terminated", Operation = control.Id, Cleared = cleared })
             };
+            if (roots.SupportsChildren && ended.Parent is not null)
+                terminated.FoundationRootChildSends = [Durable.FoundationChildNotice.Create(ended, null, final: true)];
             terminated.ReplyTo(refused, kept ? "terminated and kept" : "terminated");
             return terminated;
         }
@@ -336,6 +340,11 @@ internal sealed partial class ActorAdapter
         return outcome;
     }
 
+    private static bool MatchesRootChildInput(Durable.InstanceRow? row, Durable.Message message) =>
+        message.FoundationRootChildInput && row is { Parent: not null } child &&
+        message.Target.Id == child.Id && message.TargetCreation == child.Creation &&
+        message.Sender == child.Parent && message.SenderCreation == child.ParentCreation;
+
     private string? RootRefusal(Durable.TurnInput input)
     {
         if ((input.Row?.Model ?? input.Spec?.Model) != actor.Type) return "UnknownActorType";
@@ -364,9 +373,7 @@ internal sealed partial class ActorAdapter
             }
             if (roots?.SupportsChildren == true && message.FoundationRootChildInput && delivery.Durable)
             {
-                if (input.Row is not { Parent: not null } child || message.Target.Id != child.Id ||
-                    message.TargetCreation != child.Creation || message.Sender != child.Parent ||
-                    message.SenderCreation != child.ParentCreation) return "WrongParent";
+                if (!MatchesRootChildInput(input.Row, message)) return "WrongParent";
                 continue;
             }
             var childStart = roots?.SupportsChildren == true && message.BindFoundationChild && message.Start is not null;

@@ -74,7 +74,7 @@ internal static class PostgresChildWorkflowChecks
         const string nextNode = "child-workflow-successor";
         var nextFoundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, actor.Type,
             (bound, target, kind) => ReferenceEquals(bound, scope) &&
-                (kind == Contract.Kinds.Terminate || target == childReference && kind is Contract.Kinds.Recover or Contract.Kinds.Delete),
+                (kind is Contract.Kinds.Terminate or Contract.Kinds.Delete || target == childReference && kind == Contract.Kinds.Recover),
             PostgresPreviewHosting.CreateRequests(Open, nextNode, actor.Type), cancellationToken: token);
         await using var successor = StartService(nextNode, nextFoundation.Requests);
         await successor.StartAsync(token);
@@ -126,6 +126,10 @@ internal static class PostgresChildWorkflowChecks
             var afterCancel = await WaitForAsync(cancelParent, image => image.Children is null, successor);
             Check(cancelledChild.Revision == 2 && afterCancel.Revision == 2 && afterCancel.Status == InstanceStatus.Finished,
                 "the losing Dispatch cancels its exact child and the ended parent settles the final notice without a new model turn");
+
+            await CheckParkedAttachedTerminationAsync("authored", fromParent: true);
+            await CheckParkedAttachedTerminationAsync("selected", fromParent: false);
+
             var cascadeAdmitted = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
                 WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("cascade-parent"))), "cascade-parent-1", Contract.Kinds.Start,
                 cancellationToken: token);
@@ -139,14 +143,18 @@ internal static class PostgresChildWorkflowChecks
                     """).ToListAsync(token);
                 if (children.Count != 2) await Task.Delay(15, token);
             } while (children.Count != 2);
+            var parkedCascadeChild = new Contract.ActorRef(children[0]);
+            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(parkedCascadeChild), "park-for-cascade", ChildFixtureActor.Fault,
+                cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the cascade fixture admits a fault on an attached child");
+            await WaitForAsync(parkedCascadeChild, image => image.ParkAt is not null, successor);
             var selected = (await nextFoundation.GetAsync(scope, cascadeReference, token))!.Selection;
             Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(cascadeReference), "terminate-parent", Contract.Kinds.Terminate,
                 Json.Write(new Contract.OperatorCommand(selected)), cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
                 "the operator terminates the exact parent while both children are waiting");
             var terminated = await WaitForAsync(cascadeReference, image => image.Status == InstanceStatus.Cancelled, successor);
             foreach (var childToCancel in children)
-                await WaitForAsync(new(childToCancel), image => image.Status == InstanceStatus.Cancelled, successor);
-            Check(terminated is { Revision: 2, Children: null }, "the committed parent Terminate cascades to both exact children");
+                await WaitForAsync(new(childToCancel), image => image is { Status: InstanceStatus.Cancelled, ParkAt: null }, successor);
+            Check(terminated.Children is null, "the committed parent Terminate cascades to both exact children, including the parked child");
             var bulkAdmitted = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
                 WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("bulk-parent"))), "bulk-parent-1", Contract.Kinds.Start,
                 cancellationToken: token);
@@ -175,6 +183,52 @@ internal static class PostgresChildWorkflowChecks
             new(Open, name, actor, message => throw new InvalidOperationException(message),
                 new() { PollInterval = TimeSpan.FromMilliseconds(15) }, requests: requests);
 
+        async Task CheckParkedAttachedTerminationAsync(string lane, bool fromParent)
+        {
+            var added = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
+                WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("parent"))), lane + "-parent", Contract.Kinds.Start, cancellationToken: token);
+            var parent = added.Actor!.Value;
+            var waitingParent = await WaitForAsync(parent, image => image.Children is not null, successor);
+            var childLife = ChildRegistry.Read(waitingParent.Children).Single();
+            var childId = await db.Database.SqlQuery<string>($"""
+                SELECT "Reference" AS "Value" FROM "FoundationRootBirths" WHERE "Actor" = {childLife.Id}
+                """).SingleAsync(token);
+            var attached = new Contract.ActorRef(childId);
+            await WaitForAsync(attached, image => image.Status == InstanceStatus.Running, successor);
+            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(attached), lane + "-park", ChildFixtureActor.Fault,
+                cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, $"the {lane} child fault is admitted");
+            var parkedChild = await WaitForAsync(attached, image => image.ParkAt is not null, successor);
+            var view = (await nextFoundation.GetAsync(scope, attached, token))!;
+            if (fromParent)
+            {
+                Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(attached), "attached-park-delete", Contract.Kinds.Delete,
+                    Json.Write(new Contract.OperatorCommand(view.Selection)), cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                    "the selected parked Delete reaches the attached child for durable refusal");
+                await WaitForAsync(attached, image => image.ParkAt == parkedChild.ParkAt && image.Revision == parkedChild.Revision + 1, successor);
+                Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(attached), "attached-park-then-delete", Contract.Kinds.Terminate,
+                    Json.Write(new Contract.OperatorCommand(view.Selection, ThenDelete: true, ExpectedTarget: attached)),
+                    cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                    "the selected parked compound reaches the attached child for durable refusal");
+                await WaitForAsync(attached, image => image.ParkAt == parkedChild.ParkAt && image.Revision == parkedChild.Revision + 2, successor);
+                var refusals = await db.Database.SqlQuery<string>($"""
+                    SELECT "Entries" AS "Value" FROM "Journal"
+                    WHERE "Instance" = {parkedChild.Actor.Id} AND "Revision" > {parkedChild.Revision} ORDER BY "Revision"
+                    """).ToArrayAsync(token);
+                Check(refusals.Length == 2 && refusals.All(entry => entry.Contains("\"Reason\":\"outstanding\"", StringComparison.Ordinal)),
+                    "unsupported parked Delete and compound leave the exact Park held with durable refusal entries");
+                Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(parent), lane + "-terminate", ChildFixtureActor.TerminateChild,
+                    childId, cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                    "the exact parent receives an authored request to use the foundation Terminate control");
+            }
+            else
+                Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(attached), lane + "-terminate", Contract.Kinds.Terminate,
+                    Json.Write(new Contract.OperatorCommand(view.Selection)), cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                    "the selected Terminate admits an exact parked attached child");
+            await WaitForAsync(attached, image => image is { Status: InstanceStatus.Cancelled, ParkAt: null }, successor);
+            await WaitForAsync(parent, image => image.Children is null, successor);
+            Check(true, $"the {lane} Terminate closes Park and the committed final notice removes the child from its parent");
+        }
+
         async Task<EfStore.RootImage> WaitForAsync(Contract.ActorRef target, Func<EfStore.RootImage, bool> ready, PostgresPreviewHostedService owner)
         {
             while (true)
@@ -192,6 +246,7 @@ internal static class PostgresChildWorkflowChecks
         internal const string ArmFault = "arm-child-fault";
         internal const string Fault = "fault-child";
         internal const string Spawn = "bulk-spawn";
+        internal const string TerminateChild = "terminate-child";
         public string Type => workflow.Type;
         public bool Withholds(Contract.ActorHeader header) => workflow.Withholds(header);
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => workflow.RestoreWaits(header, state);
@@ -204,6 +259,11 @@ internal static class PostgresChildWorkflowChecks
             if (turn.Inbox.Any(message => message.Kind == ArmFault))
             {
                 turn.Send(turn.Header.Ref, Fault, dueAt: turn.Now + 50);
+                return ValueTask.CompletedTask;
+            }
+            if (turn.Inbox.FirstOrDefault(message => message.Kind == TerminateChild) is { Payload: { } child })
+            {
+                turn.Send(new(child), Contract.Kinds.Terminate);
                 return ValueTask.CompletedTask;
             }
             if (!turn.Inbox.Any(message => message.Kind == Spawn)) return workflow.TurnAsync(turn, token);

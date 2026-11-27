@@ -8,7 +8,7 @@ public sealed partial class EfStore
     private Func<string, string>? _rootChildMessageHandle;
     private const string RootChildNoticePrefix = "!kernel-child-notice/1:";
     private const string RootChildInputPrefix = "!kernel-child-input/1:";
-    private sealed record StoredChildNotice(string Id, string Payload);
+    private sealed record StoredChildNotice(string Id, string Payload, bool Final);
     private sealed record StoredChildInput(string Id, string Kind, string? Payload);
 
     internal async Task EnableRootChildrenAsync(CancellationToken token)
@@ -36,7 +36,8 @@ public sealed partial class EfStore
             await BindRootChildInputsAsync(db, tenant, Inputs, token);
             if (Cascade is { } cascade && !await OpenRootChildCascadeAsync(db, cascade, token)) return false;
             if (Notice is not { } notice) return true;
-            var stored = RootChildNoticePrefix + DurableKeyJson.Write(new StoredChildNotice(notice.Id, notice.Payload!));
+            var final = DurableKeyJson.Read<FoundationChildNotice>(notice.Payload!).Final;
+            var stored = RootChildNoticePrefix + DurableKeyJson.Write(new StoredChildNotice(notice.Id, notice.Payload!, final));
             if (!RootAdmissionWire.FitsEnvelope(stored, null))
                 throw new StoreException(Failure.Definite, "The child result exceeds its storage budget.");
             var target = notice.Target;
@@ -49,8 +50,7 @@ public sealed partial class EfStore
                 JOIN "Instances" i ON i."Partition" = b."Partition" AND i."Id" = b."Actor" AND i."FoundationReference" = b."Reference"
                 WHERE b."Tenant" = {tenant} AND b."Actor" = {target.Id} AND b."Partition" = {target.Partition}
                     AND b."Creation" = {notice.TargetCreation} AND NOT i."Retired"
-                    AND (i."FoundationTerminalRevision" IS NULL OR i."Children" IS NOT NULL
-                        AND {DurableKeyJson.Read<FoundationChildNotice>(notice.Payload!).Final})
+                    AND (i."FoundationTerminalRevision" IS NULL OR i."Children" IS NOT NULL AND {final})
                 """, token);
             return true;
         }
@@ -126,7 +126,8 @@ public sealed partial class EfStore
                 if (message is not { Kind: Kinds.Start, Start: { Creation: { Generation: 1, Previous: 0 } } start, TargetCreation: 1 } ||
                     message.InboxScope != InboxKey.ChildCreatorScope || message.Sender != root.Actor || message.SenderCreation != 1 ||
                     start.Parent is not null && (start.Parent != root.Actor || start.ParentCreation != 1) ||
-                    start.Parent is null && start.ParentCreation != 0 || !message.Target.ChildAddress || !CreationProtocol.IsPhysicalAddress(message.Target.Id))
+                    start.Parent is null && start.ParentCreation != 0 || message.Target.Partition != root.Partition ||
+                    !message.Target.ChildAddress || !CreationProtocol.IsPhysicalAddress(message.Target.Id))
                     throw RootShape();
                 var child = new CreationAddress(message.Target.Id, 1);
                 starts.Add(new(reference(root.Tenant, child), (message with { StorageId = "root:" + child.Id, Payload = start.Input })
@@ -143,7 +144,8 @@ public sealed partial class EfStore
             }
             else if (message.FoundationRootChildInput)
             {
-                if (!message.ActorAuthored || !FoundationSelfSend.IsHandle(message.Id) || !FoundationMetadataLimits.IsOrdinaryKind(message.Kind) ||
+                if (!message.ActorAuthored || !FoundationSelfSend.IsHandle(message.Id) ||
+                    !(FoundationMetadataLimits.IsOrdinaryKind(message.Kind) || message.Kind == Kinds.Terminate && message.Payload is null) ||
                     message.Due is not null || message.TargetCreation != 1 || message.Sender != root.Actor || message.SenderCreation != 1 ||
                     message.InboxKey != InboxKey.Issued(CreationProtocol.Origin(root.Actor, 1) + "#" + message.Id))
                     throw RootShape();
@@ -220,6 +222,21 @@ public sealed partial class EfStore
     private static string RootChildNoticePredicate(string alias) =>
         $"""(COALESCE({alias}."Start", '') LIKE '{RootChildNoticePrefix}%' OR COALESCE({alias}."Start", '') LIKE '{RootChildInputPrefix}%' OR COALESCE({alias}."Start", '') = '{RootChildCascadeWire}')""";
 
+    private static string RootChildTerminatePredicate(string input, string target) =>
+        FormattableString.Invariant($"""
+            ({input}."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND {input}."Kind" = '{Kinds.Terminate}'
+                AND {input}."Start" LIKE '{RootChildInputPrefix}%' AND {input}."Sender" = {target}."Parent")
+            """);
+
+    private static string RootChildParkInputs(string input, string target) => $"""
+        ({target}."FoundationParkAt" IS NULL OR NOT {RootChildNoticePredicate(input)} OR
+            {RootChildTerminatePredicate(input, target)} AND {target}."FoundationParkClearing" IS NULL
+            AND {target}."Jobs" IS NULL AND {target}."Children" IS NULL AND {target}."CustomHandles" IS NULL
+            AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = {target}."Id"))
+        """;
+
+    private static bool IsRootChildTerminate(Message message) => message.FoundationRootChildInput && message.Kind == Kinds.Terminate;
+
     private static bool IsStoredRootChildInput(string? header) =>
         header?.StartsWith(RootChildInputPrefix, StringComparison.Ordinal) == true;
 
@@ -255,11 +272,63 @@ public sealed partial class EfStore
         if (row.InboxScope != InboxKey.FoundationOccurrenceScope || row.Kind != Kinds.ChildFinished || row.Sender != notice.Child ||
             row.JobGeneration != 0 || row.Due != 0 || row.KeepUntil is not null || row.ReplyTo is not null || row.Payload is not null ||
             notice.Creation != 1 || notice.Status is not (InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled) ||
-            !notice.Final && notice.Status != InstanceStatus.Faulted || !CreationProtocol.IsTerminalHandle(stored.Id, CreationProtocol.Origin(notice.Child, 1)) ||
+            stored.Final != notice.Final || !notice.Final && notice.Status != InstanceStatus.Faulted ||
+            !CreationProtocol.IsTerminalHandle(stored.Id, CreationProtocol.Origin(notice.Child, 1)) ||
             row.Id != ChildOccurrence(reference, stored.Id))
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL child notice.");
         return (new Message(stored.Id, new(row.Target), Kinds.ChildFinished, stored.Payload,
             row.Sender, TargetCreation: 1, SenderCreation: 1) { FoundationRootChildNotice = true, StorageId = row.Id })
             .WithInboxScope(InboxKey.FoundationOccurrenceScope);
     }
+
+    private const string RemovedTerminalChildren = """
+        SELECT 1 FROM jsonb_array_elements(OLD."Children"::jsonb) AS removed(child)
+        WHERE NOT coalesce(NEW."Children"::jsonb, '[]'::jsonb) @> jsonb_build_array(removed.child)
+        """;
+
+    // The parent can close a registry entry only against the final notice of that exact committed child life.
+    private static readonly string PendingFinalChildNotice = FormattableString.Invariant($"""
+        SELECT 1 FROM "Messages" m JOIN "FoundationRootBirths" b
+            ON b."Actor" = m."Sender" AND b."Partition" = m."Partition" AND b."Tenant" = OLD."FoundationTenant"
+        JOIN "Instances" child ON child."Id" = b."Actor" AND child."Partition" = b."Partition"
+            AND child."FoundationReference" = b."Reference" AND child."FoundationTenant" = b."Tenant"
+        CROSS JOIN LATERAL (SELECT CASE WHEN left(m."Start", {RootChildNoticePrefix.Length}) = '{RootChildNoticePrefix}'
+            THEN substring(m."Start" FROM {RootChildNoticePrefix.Length + 1})::jsonb END AS wire) notice
+        WHERE m."Target" = OLD."Id" AND m."Partition" = OLD."Partition" AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
+            AND m."Kind" = '{Kinds.ChildFinished}' AND m."Due" = 0 AND m."EventMatch" IS NULL AND NOT m."Done"
+            AND m."ReplyTo" IS NULL AND m."KeepUntil" IS NULL AND m."Payload" IS NULL AND m."JobGeneration" = 0
+            AND m."Id" LIKE OLD."FoundationReference" || '/child/%'
+            AND b."Actor" = removed.child->>'Id' AND to_jsonb(b."Creation") = removed.child->'Creation'
+            AND child."FoundationTerminalRevision" > 0 AND child."FoundationTerminalAt" IS NOT NULL
+            AND (child."Parent" = OLD."Id" OR child."Retired")
+            AND notice.wire->'Final' = 'true'::jsonb
+            AND notice.wire->>'Id' = 'c' || length(b."Actor") || '_' || b."Actor" || '_' || b."Creation"
+                || '#' || child."FoundationTerminalRevision" || '.end'
+        """);
+
+    private static readonly string TerminalChildRegistryWrite = $"""
+        IF TG_OP = 'UPDATE' AND COALESCE(OLD."FoundationTerminalRevision" = OLD."Revision", false)
+            AND NOT OLD."Retired" AND OLD."Children" IS NOT NULL
+            AND (to_jsonb(NEW) - 'Children') = (to_jsonb(OLD) - 'Children')
+            AND coalesce(NEW."Children"::jsonb, '[]'::jsonb) <@ OLD."Children"::jsonb
+            AND NOT EXISTS ({RemovedTerminalChildren} AND NOT EXISTS ({PendingFinalChildNotice}))
+            AND jsonb_array_length(coalesce(NEW."Children"::jsonb, '[]'::jsonb)) < jsonb_array_length(OLD."Children"::jsonb)
+        THEN RETURN NEW; END IF;
+        """;
+
+    // The owner must consume its selected notice in the same fenced commit as the registry change.
+    private static readonly string RequireSettledTerminalChildNotice = $"""
+        CREATE OR REPLACE FUNCTION kernel_require_terminal_child_notice_settlement() RETURNS trigger LANGUAGE plpgsql AS $fn$
+        BEGIN
+            IF EXISTS ({RemovedTerminalChildren} AND EXISTS ({PendingFinalChildNotice}))
+            THEN RAISE EXCEPTION 'A closed child registry entry must settle its final notice' USING ERRCODE = '23514'; END IF;
+            RETURN NEW;
+        END
+        $fn$;
+        DROP TRIGGER IF EXISTS kernel_require_terminal_child_notice_settlement ON "Instances";
+        CREATE CONSTRAINT TRIGGER kernel_require_terminal_child_notice_settlement AFTER UPDATE ON "Instances"
+        DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (OLD."Revision" = NEW."Revision"
+            AND OLD."Children" IS DISTINCT FROM NEW."Children" AND OLD."FoundationReference" IS NOT NULL)
+        EXECUTE FUNCTION kernel_require_terminal_child_notice_settlement();
+        """;
 }
