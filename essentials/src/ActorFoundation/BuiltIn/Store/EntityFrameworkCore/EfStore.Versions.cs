@@ -55,6 +55,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootParkArrivals => Current with { MessageProtocol = 21 };
     internal static StoreFormat RootParkRecovery => Current with { MessageProtocol = 22 };
     internal static StoreFormat SqliteParkArrivalsQualification => Current with { MessageProtocol = 85 };
+    internal static StoreFormat PostgresRootChildrenQualification => Current with { MessageProtocol = 111 };
     internal static StoreFormat RootDueBacklogQualification => Current with { MessageProtocol = 110 };
     internal static StoreFormat RootTerminalOutputQualification => new(3, 112, 1);
     internal static StoreFormat RootS6TerminalOutputQualification => new(3, 113, 1);
@@ -101,6 +102,7 @@ internal enum RootCapabilities
     ParkRecovery = 1 << 20,
     DueBacklog = 1 << 21,
     TimerRearm = 1 << 22,
+    Children = 1 << 23,
     TerminalOutput = 1 << 24
 }
 
@@ -377,6 +379,7 @@ internal static class StoreDefinitionsRevision
     private const int Sqlite = 2;
     private const int LegacyPostgreSqlRevision = 1;
     private const int PostgreSqlRevision = 8;
+    private const int PostgreSqlChildrenRevision = 9;
     private const int SqliteRevision = 12;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
@@ -402,6 +405,7 @@ internal static class StoreDefinitionsRevision
             {
                 _ when sqliteQualification => db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ? SqliteParkRecoverRevision : 1,
                 _ when db.RequiredFormat == StoreFormat.RootDueBacklogQualification => sqlite ? SqliteDueBacklogRevision : PostgreSqlDueBacklogRevision,
+                _ when db.RequiredFormat == StoreFormat.PostgresRootChildrenQualification => PostgreSqlChildrenRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision

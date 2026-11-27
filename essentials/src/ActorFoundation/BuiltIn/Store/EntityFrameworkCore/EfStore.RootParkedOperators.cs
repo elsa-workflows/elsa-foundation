@@ -46,7 +46,8 @@ public sealed partial class EfStore
             header.Tenant != root.Tenant || header.Reference != root.Reference)
             throw RootShape();
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
-            new RootParkedRefusal(root, expected, WithoutParkFacts(command)!, row.Suspended, refusedCount));
+            new RootParkedRefusal(root, expected, WithoutParkFacts(command)!, row.Suspended, refusedCount,
+                _rootChildReference is null ? null : RootSelfIssuer));
     }
 
     private async Task<PreparedRoot?> PrepareRecoveredParkRefusalAsync(WorkerRoot root, TurnCommit turn, Message command, CancellationToken token)
@@ -156,9 +157,12 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareRootParkedTerminateAsync(WorkerRoot root, TurnCommit turn, CancellationToken token)
     {
         var command = turn.FoundationRootOperator!;
+        var parentTerminate = _rootChildReference is not null && IsRootChildTerminate(command);
+        var settled = parentTerminate ? turn.Consumed : turn.Done;
         if (turn.Row is not { Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
-            turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
-            !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
+            turn.Expected is not { } expected || settled is not [var key] || key != command.InboxKey || !root.Owns(key) ||
+            turn.Consumed.Count + turn.Done.Count != 1 ||
+            !PostgresRootAdmission.IsOperatorOccurrence(key) && !parentTerminate || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
             command is not { Kind: Kinds.Terminate or Kinds.Delete, Operator: { RootParkMark: { } mark, RootParkWindow: >= 0, RootParkFacts: { } facts } } ||
             (command.ReplyTo is not null) != command.Operator.RootHeldReply || facts.Mark != mark ||
             (facts.Outstanding || (command.Kind == Kinds.Delete || command.Operator.RootThenDelete) && facts.Residue) && !command.Operator.RootParkClear ||
@@ -179,22 +183,50 @@ public sealed partial class EfStore
             discards && !command.Operator.RootParkClear ||
             ends && !discards && row.Suspended || turn.Journal != journal ||
             turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
-                turn.Journal, Unsubscribe: ends, Held: turn.Held) { FoundationRootOperator = command } ||
-            turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 })
+                turn.Journal, Unsubscribe: ends, Held: turn.Held)
+                { FoundationRootOperator = command, FoundationRootChildSends = turn.FoundationRootChildSends, FoundationCascade = turn.FoundationCascade } ||
+            turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 })
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
         if (current is not { Status: InstanceStatus.Faulted, TerminalRevision: null } || current.Revision != expected) return null;
+        if (parentTerminate && (current.Parent is null || current.Parent != command.Sender || command.SenderCreation != 1)) return null;
+        var sends = turn.FoundationRootChildSends;
+        var attached = _rootChildReference is not null && !discards && current.Parent is not null && command.Kind == Kinds.Terminate;
+        var endsAttached = attached && ends;
+        RootChildEffects? effects = null;
+        if (endsAttached)
+        {
+            if (sends?.LastOrDefault() != FoundationChildNotice.Create(row, null, final: true)) throw RootShape();
+            effects = PrepareRootChildEffects(root, row, sends!) ?? throw RootShape();
+        }
+        else if (sends is not null) throw RootShape();
+        if (endsAttached && (current.Children is not null || current.Jobs is not null))
+        {
+            if (turn.FoundationCascade is not { Input: null } cascade ||
+                !JobRegistry.Read(current.Jobs).SequenceEqual(cascade.Entries.Jobs)) throw RootShape();
+            if (!cascade.Entries.Children.IsEmpty)
+                effects = WithPendingChildCascade(root, row, current, cascade, effects);
+            else if (current.Children is not null) throw RootShape();
+        }
+        else if (turn.FoundationCascade is not null) throw RootShape();
         if (row != WorkerRow(root, current) with
             {
                 Status = row.Status, Suspended = ends && !discards ? false : current.Suspended, Revision = checked(expected + 1), Fault = row.Fault,
-                FoundationDispatchHeader = header
+                FoundationDispatchHeader = header, Children = endsAttached ? null : current.Children,
+                Jobs = endsAttached ? null : current.Jobs
             } || header.Tenant != root.Tenant || header.Reference != root.Reference || header.Header.TypeData != current.TypeData ||
             header.Header.Labels.Count != current.Labels.Count ||
             current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))
             throw RootShape();
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
             new RootParkedTerminate(root, expected, WithoutParkFacts(command)!, mark, facts.KeptDigest, current.Suspended,
-                facts.Clearing, facts.Cleared, ends ? facts.Arrived + facts.Consumed : facts.Page, ends));
+                facts.Clearing, facts.Cleared, ends ? facts.Arrived + facts.Consumed : facts.Page, ends)
+            {
+                ChildEffects = effects,
+                Children = attached ? current.Children : null,
+                Jobs = attached ? current.Jobs : null,
+                SelfIssuer = _rootChildReference is null ? null : RootSelfIssuer
+            });
     }
 
     // The checkpoint writer's branch for that commit: a parked root becomes Cancelled and unsuspended with its Park mark
@@ -209,8 +241,12 @@ public sealed partial class EfStore
             ROW(_."State", _."StateVersion", _."FoundationHeader", _."Fault", _."History", _."Jobs", _."Children", _."Parent",
                 _."Model", _."Definition", _."NextJobGeneration", _."CustomHandles" /*wire*/)
             """;
-        string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
+        string Row(string side, bool endsAttached = false) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
+            .Replace("OLD.\"Children\"", ParkedRegistry("Children", endsAttached), StringComparison.Ordinal)
+            .Replace("OLD.\"Jobs\"", ParkedRegistry("Jobs", endsAttached), StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
+        static string ParkedRegistry(string column, bool endsAttached) => endsAttached
+            ? $"""(CASE WHEN OLD."Parent" IS NOT NULL THEN NULL ELSE OLD."{column}" END)""" : $"OLD.\"{column}\"";
         var keptScope = db.UsesSqliteShippedInstall ? "" : """k."InboxScope" = -4 AND """;
         const string pageKind = """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """;
         string End(string ended, string kind, string entries) => $$$"""
@@ -220,7 +256,7 @@ public sealed partial class EfStore
                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
                 AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL AND OLD."Fault" IS NOT NULL
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
-                AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD")}}}
+                AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD", db.UsesRootChildren && kind == Kinds.Terminate)}}}
                 AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
                     AND {{{keptScope}}}k."FoundationKeptBy" IS NOT NULL)
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
@@ -387,6 +423,19 @@ public sealed partial class EfStore
                     AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing",%' OR i."FoundationParkClearing" IS NOT NULL)
         """;
 
+    private static string ClearAttachedParkJobPin(KernelDb db, string column) => db.UsesRootChildren ? $"""
+         OR (OLD."Status" = 2 AND NEW."Status" = 3 AND OLD."Parent" IS NOT NULL
+            AND NEW."FoundationParkAt" IS NULL AND NEW."{column}" IS NULL AND NEW."Jobs" IS NULL)
+        """ : "";
+
+    private static readonly string SettledParkedChildJob = $$$"""
+         AND (NEW."Entries" NOT LIKE '{{"Outcome":"terminated",%' OR i."Parent" IS NULL OR
+            (i."FoundationParkJobResult" IS NULL AND i."FoundationParkLiveJob" IS NULL
+                AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
+                    AND m."InboxScope" = {{{RootTimedJobScope}}})
+                AND NOT EXISTS (SELECT 1 FROM "FoundationProtectedTimedJobs" p WHERE p."Actor" = i."Id")))
+        """;
+
     private const string StoppedParkOutcomeCheckpoint = """
         AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing-stopped",%' OR
             i."Status" = 2 AND NOT i."Retired" AND i."FoundationParkAt" IS NOT NULL
@@ -408,8 +457,10 @@ public sealed partial class EfStore
             """, token);
 
     private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, string? ClearingKind);
+    private sealed record ParkedJobPins(string? Result, string? Live);
 
-    private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, long? ProtectionRefusals)
+    private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, long? ProtectionRefusals,
+        FoundationSelfIssuer? Issue)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal bool Retries => ProtectionRefusals is not null;
@@ -442,7 +493,7 @@ public sealed partial class EfStore
             if (locked is not [var prior] || !await MatchesProtectionRefusalsAsync(db, token)) return false;
             // Without Park arrivals, or while its Park is being cleared, the parked root withholds its ordinary inputs, so the
             // settled prefix is its operator rows. The envelope comparison binds a held command's exact reply address.
-            if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
+            if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], Issue,
                     suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false, parked: true)) return false;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
@@ -486,10 +537,16 @@ public sealed partial class EfStore
     private sealed record RootParkedTerminate(WorkerRoot Root, long Expected, Message Command, FoundationParkMark Mark, string KeptDigest,
         bool Suspended, string? Clearing, long Cleared, int Count, bool Ends) : QualifiedRootCheckpoint(checked(Expected + 1))
     {
+        internal RootChildEffects? ChildEffects { get; init; }
+        internal string? Children { get; init; }
+        internal string? Jobs { get; init; }
+        internal FoundationSelfIssuer? SelfIssuer { get; init; }
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
         {
             if (!db.UsesRootParkedOperators) return false;
             if (db.UsesSqliteRootRuntime) return await BindSqliteParkedTerminateAsync(db, this, token);
+            var parentTerminate = db.UsesRootChildren && IsRootChildTerminate(Command);
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
@@ -500,7 +557,9 @@ public sealed partial class EfStore
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND i."Suspended" = {Suspended}
                     AND i."Status" = {(int)InstanceStatus.Faulted} AND i."Revision" = {Expected} AND i."FoundationParkAt" = {Mark.At}
                     AND i."FoundationParkRevision" = {Mark.Revision} AND i."Fault" IS NOT NULL AND i."FoundationTerminalRevision" IS NULL
-                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
+                    AND i."Jobs" IS NOT DISTINCT FROM {Jobs}::text AND i."Children" IS NOT DISTINCT FROM {Children}::text
+                    AND i."CustomHandles" IS NULL
+                    AND (NOT {parentTerminate} OR i."Parent" = {Command.Sender})
                     AND i."FoundationParkClearing" IS NOT DISTINCT FROM {Clearing}::text
                     AND ({Clearing}::text IS NULL OR i."FoundationParkClearingKind" = {Command.Kind})
                     AND coalesce(i."FoundationParkCleared", 0) = {Cleared}
@@ -508,14 +567,25 @@ public sealed partial class EfStore
                 FOR UPDATE OF i
                 """).ToListAsync(token);
             if (locked is not [var prior]) return false;
+            RecoverableRootJob? job = null;
+            if (Ends && Jobs is not null)
+            {
+                var pins = await db.Database.SqlQuery<ParkedJobPins>($"""
+                    SELECT "FoundationParkJobResult" AS "Result", "FoundationParkLiveJob" AS "Live"
+                    FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                    """).SingleAsync(token);
+                job = await ReadRecoverableRootJobAsync(db, Root.Actor, Root.Partition, Jobs, pins.Result, pins.Live, token);
+                if (job is null) return false;
+            }
             // Nothing is kept while a clearing is open, so a page reads and locks only its rows and one more; Open reads them all.
             var kept = await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token, Clearing is null ? int.MaxValue : InMemoryStore.ParkPageLimit + 1);
             var page = kept.Take(PageLength(kept)).ToArray();
             // While a clearing is open the root receives only operator rows, so the settled prefix is its operator rows.
             // The digest refuses a row kept since the facts were read (M8): on one page the page count refuses it too, but on a
             // multi-page Open the page count stays the same, so the digest is the only check there.
+            var persistedCommand = parentTerminate ? Command with { Operator = null } : Command;
             if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
-                !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
+                !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [persistedCommand], SelfIssuer,
                     suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false, parked: true)) return false;
             var window = Command.Operator!.RootParkWindow!.Value;
             if (!await ClearPostgresParkRowsAsync(db, Root, page, window, token)) return false;
@@ -523,9 +593,12 @@ public sealed partial class EfStore
             // S5b-3b: a protected Delete's end keeps the row Faulted and its Suspended flag.
             var discards = Ends && Command.Kind == Kinds.Delete;
             var status = Ends && !discards ? InstanceStatus.Cancelled : InstanceStatus.Faulted;
+            if (Ends && db.UsesRootChildren && !await ClearTerminalRootSelfAsync(db, new(Root.Actor, 1), Root.Partition,
+                Expected, SelfIssuer, includeImmediate: false, token)) return false;
             FormattableString end = $"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
-                    "Status" = {(int)status}, "Suspended" = {discards} AND "Suspended", "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL,
+                    "Status" = {(int)status}, "Suspended" = {discards} AND "Suspended", "Children" = NULL, "Jobs" = NULL,
+                    "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL /*park-job-result*/,
                     "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
                     "FoundationTerminalRevision" = {JournalRevision},
                     "FoundationTerminalAt" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint
@@ -537,7 +610,11 @@ public sealed partial class EfStore
                     "FoundationParkClearing" = {Command.Id}, "FoundationParkClearingKind" = {Command.Kind}, "FoundationParkCleared" = {total}
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """;
-            if (await db.Database.ExecuteSqlInterpolatedAsync(Ends ? end : advance, token) != 1) return false;
+            if (await db.Database.ExecuteSqlInterpolatedAsync(Ends ? ClearParkJobPins(db, end, job is not null) : advance, token) != 1)
+                return false;
+            if (job is { } pinnedJob && (pinnedJob.Live is { } live
+                ? !await DeleteRootTimedRowsAsync(db, new(Root.Actor, 1), live.Ids, token)
+                : !await ClearConsumedRootJobAsync(db, Root.Actor, Root.Partition, pinnedJob.ConsumedId, token))) return false;
             // An Open withholds the root's inputs until the end: one the owner read ahead is marked unseen, and the owner forgets
             // its copy by the same predicate (Worker), so the next poll reads it again under the clearing's filter.
             if (Clearing is null && !Ends && ClearsParkInPages(db))
@@ -559,7 +636,8 @@ public sealed partial class EfStore
                         floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}, false, 0, 0, 0)
                     """, token);
             }
-            if (!await VerifyClearedPostgresParkRowsAsync(db, Root, page, window, token)) return false;
+            if (!await VerifyClearedPostgresParkRowsAsync(db, Root, page, window, token) ||
+                ChildEffects is not null && !await ChildEffects.BindAsync(db, Root.Tenant, token)) return false;
             return await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}

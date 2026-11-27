@@ -12,6 +12,7 @@ internal sealed partial class ActorAdapter
     private sealed class ActorTurn : Contract.IActorTurn, IRootValueTurn
     {
         private readonly Durable.InMemoryStore? _inMemory;
+        private readonly IRootDispatchHeaders? _roots;
         private readonly Durable.FoundationSelfIssuer? _issueSelf;
         private readonly Func<string, string>? _rootJobHandle;
         private readonly bool _rootTimedJobIssuance;
@@ -33,11 +34,12 @@ internal sealed partial class ActorAdapter
         private bool _emitted;
         private bool _migrated;
 
-        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
+        public ActorTurn(Durable.InMemoryStore? store, IRootDispatchHeaders? roots, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
             Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance, RootValueReader? readRootValue,
             int terminalOutputLimit)
         {
             _inMemory = store;
+            _roots = roots;
             _issueSelf = issueSelf;
             _rootJobHandle = rootJobHandle;
             _rootTimedJobIssuance = rootTimedJobIssuance;
@@ -106,14 +108,26 @@ internal sealed partial class ActorAdapter
             HeaderLimits.RequireKind(kind, nameof(kind));
             HeaderLimits.RequireContent(payload, nameof(payload));
             var address = target == Header.Ref ? new Durable.CreationAddress(_row.Id, _row.Creation)
-                : _stagedChildren.GetValueOrDefault(target) ?? Store.FoundationTarget(Header.Tenant, target.Id) ??
+                : _stagedChildren.GetValueOrDefault(target) ?? KnownTarget(target) ??
                   throw new ArgumentException("The actor reference was not found.", nameof(target));
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
             if (_issueSelf is not null && _issueSelf.Allows(dueAt) && target == Header.Ref)
                 return _turn.SendToSelf(_issueSelf.Handle, kind, payload, dueAt, recordOrdinal: true);
+            if (target != Header.Ref && _roots?.ChildMessageHandle is { } issue)
+            {
+                if (!_children.Contains(address) || dueAt is not null ||
+                    !(Durable.FoundationMetadataLimits.IsOrdinaryKind(kind) || kind == Contract.Kinds.Terminate && payload is null))
+                    throw new NotSupportedException("This profile sends only immediate ordinary inputs or Terminate to an attached child.");
+                return _turn.SendFromActor(issue, new(address.Id), address.Creation, kind, payload, dueAt, rootChild: true);
+            }
             return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
         }
+
+        private Durable.CreationAddress? KnownTarget(Contract.ActorRef target) =>
+            _roots?.SupportsChildren == true
+                ? _children.FirstOrDefault(child => _roots.ChildReference(Header.Tenant, child) == target.Id)
+                : Store.FoundationTarget(Header.Tenant, target.Id);
 
         public void Recall(string id)
         {
@@ -126,13 +140,16 @@ internal sealed partial class ActorAdapter
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
         {
             HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
+            if (_roots?.SupportsChildren == true && placement != Contract.Placement.WithParent)
+                throw new NotSupportedException("This PostgreSQL profile places children in their parent's partition.");
             var destination = placement == Contract.Placement.Spread
                 ? InstanceRef.Spread(FormattableString.Invariant($"{Header.Ref.Id}/{_turn.Revision}/{_turn.Ordinal}"), _input.Services.Partitions)
                 : _turn.Actor.Partition;
             var creator = new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input, detached ? null : _row.Id, spec.Ephemeral,
                 (Durable.History)spec.History, ParentCreation: detached ? 0 : _row.Creation);
             var child = new Durable.CreationAddress(_turn.StartFoundationChild(creator, destination).Id, 1);
-            var reference = new Contract.ActorRef(Store.ReferenceFor(Header.Tenant, child));
+            var reference = new Contract.ActorRef(_roots?.ChildReference(Header.Tenant, child) ??
+                Store.ReferenceFor(Header.Tenant, child));
             _stagedChildren.Add(reference, child);
             if (!detached) _children.Add(child);
             return reference;
@@ -306,13 +323,19 @@ internal sealed partial class ActorAdapter
 
         private string Qualify(string key) => Header.Tenant + "_" + key;
 
+        private string? SenderReference(string sender, long creation) =>
+            _roots is null ? Store.FoundationReferenceOf(Header.Tenant, sender, creation) :
+                _roots.ChildReference(Header.Tenant, new(sender, creation));
+
         private Contract.Message Project(Durable.Message message)
         {
             var sender = message.Sender == _row.Id && message.SenderCreation == _row.Creation ? Header.Ref
-                : message.Sender is not null && Store.FoundationReferenceOf(Header.Tenant, message.Sender, message.SenderCreation) is { } reference
+                : message.Sender is { } source && SenderReference(source, message.SenderCreation) is { } reference
                     ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;
             var logicalId = message.Kind == Contract.Kinds.JobFinished && !message.FoundationJobResult ? message.Id + "/result" : message.Id;
-            var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
+            var id = _roots?.SupportsChildren == true && (message.BindFoundationChild || message.FoundationRootChildNotice)
+                ? "~" + Durable.FoundationRootCreator.OperationDigest(message.Id)
+                : (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
                 ? message.Kind == Contract.Kinds.JobFinished && _rootJobHandle is { } handle
                     ? handle("inbox:" + logicalId) : Store.MessageHandle("inbox:" + logicalId)
                 : message.Id;

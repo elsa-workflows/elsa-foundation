@@ -3439,6 +3439,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                         completed.JobDeadline is null ? null : completed.CompletedAt) : null,
             FoundationSelfRecalls = unit.FoundationSelfRecalls,
             FoundationValues = unit.FoundationValues,
+            FoundationRootChildSends = unit.FoundationRootChildSends,
             FoundationTerminalOutput = unit.FoundationTerminalOutput,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,
@@ -3674,6 +3675,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _caughtUp = false;
             _woken = true;
         }
+        if (unit.OpensPark && unit.Row is { FoundationDispatchHeader: not null } parked &&
+            (parked.Parent is not null || parked.Children is not null) && unit.Slot is { } parkedSlot)
+        {
+            // Child mail read while Running has to go through the committed Park's new eligibility and proof.
+            foreach (var item in parkedSlot.Inbox.Where(item => item.Durable && !item.Taken &&
+                (item.Message.FoundationRootChildInput || item.Message.FoundationRootChildNotice)).ToArray())
+                Forget(item);
+            if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
+            _caughtUp = false;
+            _woken = true;
+        }
         if (unit.FoundationKeep is not null && unit.Slot is { } keeping &&
             keeping.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Operator?.RootParkFacts is { Rereads: true }).ToArray() is { Length: > 0 } stale)
         {
@@ -3689,7 +3701,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             // The store marks every withheld input unseen at Open. Drop the local copies and any poll response
             // still in flight, so ordinary deliveries and private continuations are sampled again under the clearing.
-            foreach (var item in opened.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Operator is null).ToArray())
+            foreach (var item in opened.Inbox.Where(item => item.Durable && !item.Taken &&
+                (item.Message.Operator is null || item.Message.FoundationRootChildInput)).ToArray())
                 Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
             _caughtUp = false;
