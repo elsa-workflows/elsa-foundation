@@ -1,6 +1,7 @@
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.KernelApi;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -41,6 +42,13 @@ public sealed class RuntimeExecutionSliceDependencyTests
         Assert.DoesNotContain(engine.GetReferencedAssemblies(), reference => reference.Name == "Elsa.Workflows.Runtime");
         Assert.DoesNotContain(typeof(Elsa.Workflows.Runtime.Extensions.WorkflowPublicationDefaults).Assembly.GetReferencedAssemblies(),
             reference => reference.Name == "Elsa.Workflows.Runtime");
+    }
+
+    [Fact]
+    public void KernelApi_DoesNotReferenceBroadRuntimeApi()
+    {
+        Assert.DoesNotContain(typeof(WorkflowsRuntimeKernelRetainedApiFeature).Assembly.GetReferencedAssemblies(),
+            reference => reference.Name == "Elsa.Workflows.Runtime.Api");
     }
 
     private static void AssertNoReferences(System.Reflection.Assembly assembly, params string[] forbiddenPrefixes)

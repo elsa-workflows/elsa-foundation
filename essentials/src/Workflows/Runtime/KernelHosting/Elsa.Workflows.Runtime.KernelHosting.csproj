@@ -18,6 +18,7 @@
     <ProjectReference Include="../../../Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="../../../Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj" />
     <ProjectReference Include="../../../Modularity/Core/Elsa.Modularity.Core.csproj" />
+    <ProjectReference Include="../Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="../KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
     <ProjectReference Include="../KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
   </ItemGroup>

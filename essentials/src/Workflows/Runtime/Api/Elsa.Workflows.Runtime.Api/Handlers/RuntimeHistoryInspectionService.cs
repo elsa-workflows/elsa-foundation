@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore workflows,
     IActivityInspectionContextAsync authorization, TimeProvider time, IRuntimeHistoryStore? history = null,
     IBookmarkStateStore? bookmarks = null, IActivityExecutionStateStore? activities = null,
-    ILogger<RuntimeHistoryInspectionService>? logger = null) : IRuntimeHistoryPageReader, IRuntimeHistoryOccurrencePageReader
+    ILogger<RuntimeHistoryInspectionService>? logger = null) : IRuntimeHistoryPageReader, IRuntimeHistoryOccurrencePageReader, ILegacyRuntimeHistoryReader
 {
     // Supplied by API composition and resolved only after authorization/read. Optional capture-owner
     // outages must not hide readable retained evidence or eagerly activate writers on denied reads.
@@ -258,18 +258,11 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
         (OperationCanceledException or RuntimeHistoryIntegrityException or ArgumentException or
          OutOfMemoryException or StackOverflowException or AccessViolationException);
 
-    private static void EnsureEventOwner(string run, RuntimeHistoryEvent item)
-    {
-        if (item.WorkflowExecutionId != run)
-            throw new RuntimeHistoryIntegrityException(run, "event belongs to a different run");
-    }
+    private static void EnsureEventOwner(string run, RuntimeHistoryEvent item) =>
+        RuntimeHistoryOccurrenceProjection.EnsureEventOwner(run, item);
 
-    private static void EnsureEventPosition(RuntimeHistoryEvent item, RuntimeHistoryHead? head)
-    {
-        if (head is null || item.Sequence <= 0 || item.Sequence < head.FirstSequence ||
-            item.Sequence <= head.PurgedThroughSequence || item.Sequence > head.LastSequence)
-            throw new RuntimeHistoryIntegrityException(item.WorkflowExecutionId, "event has no acknowledged retained position");
-    }
+    private static void EnsureEventPosition(RuntimeHistoryEvent item, RuntimeHistoryHead? head) =>
+        RuntimeHistoryOccurrenceProjection.EnsureEventPosition(item, head);
 
     private static void EnsureBookmarkPosition(RuntimeHistoryBookmark item, RuntimeHistoryHead? head)
     {
