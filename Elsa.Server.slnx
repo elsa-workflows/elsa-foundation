@@ -600,7 +600,6 @@
     <Project Path="essentials/tests/Testing/Elsa.Testing.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Activities/">
-    <Project Path="essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Activities/Behavioral/">
     <Project Path="essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj" />

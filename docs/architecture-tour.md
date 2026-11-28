@@ -2,7 +2,7 @@
 
 The published Curated Essentials server runs Native and Flowchart workflows on the built-in Actor
 Foundation. The stock Workbench source configuration uses the same engine. The default switch
-(K13) is published. Retirement of the earlier runtime (K14) is in progress. See the
+(K13) is published, and K14 removes the earlier engine from the active source tree. See the
 [K13 publication receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7231238178)
 and [program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
 

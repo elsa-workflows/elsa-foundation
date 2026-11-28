@@ -1,18 +1,21 @@
 # Agent publication and lifecycle research
 
-Historical M0 witness: its expected BPMN dependency-gap assertion is source-bound. For current M4
-package-boundary qualification use the [new conformance profile](../conformance/README.md#bpmn-package-boundary-profile).
-The original research fixture intentionally refuses an unexpected closure change and is not the current
-product acceptance runner.
+This historical M0 witness depends on the archived classic and BPMN engines. The
+[historical conformance profile](../conformance/README.md#bpmn-package-boundary-profile)
+covers their later package boundary. The original M0 fixture checks its source-bound
+BPMN dependency gap.
 
 Bounded M0 witness for [#3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533),
 within [Elsa Agents #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519).
 These external fixture packages are experiments, not shipped extension APIs.
 
-Run with .NET 10 and Python 3.12 or later, from the repository, using a new absolute output
+Run with .NET 10 and Python 3.12 or later, from the pinned classic source, using a new absolute output
 directory outside the checkout and a unique local package version:
 
 ```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" 18a16dee878106ac525aa9a861d851a200e43c55
+cd "$archive/source"
 python3 tools/agents/publication/qualify.py \
   --output /absolute/new-agent-proof \
   --version 4.0.0-agent3533.local1

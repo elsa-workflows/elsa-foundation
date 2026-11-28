@@ -1,5 +1,9 @@
 # Agent kernel package qualification
 
+These external package consumers use the classic Elsa engine. Replay the historical contract
+from source `18a16dee878106ac525aa9a861d851a200e43c55`. The checked-in [Agent extension
+tests](../../../extensions/Agent/tests/Tests/) cover its maintained contracts.
+
 This is the bounded M2 consumer proof for [Program #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519).
 It builds actual committed product packages, an independent deterministic model package, an authoring
 process and a Runtime process. All consumer references are package references. Nothing is pushed or
@@ -9,7 +13,7 @@ Run with the bundled Python 3.12+ runtime and the normal build-slot-wrapped .NET
 
 ```bash
 python3 tools/agents/conformance/qualify.py \
-  --source HEAD --version 4.0.0-agent3548.kernel1 \
+  --source 18a16dee878106ac525aa9a861d851a200e43c55 --version 4.0.0-agent3548.kernel1 \
   --output /private/tmp/elsa-agent-kernel-proof
 ```
 

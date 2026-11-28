@@ -1,5 +1,11 @@
 # Independent Weaver conformance witness
 
+This package witness uses the classic engine and its execution and disclosure routes. Replay it
+from committed source `18a16dee878106ac525aa9a861d851a200e43c55`. The manual CI suite
+`weaver` checks out that revision and records the result as a classic replay. The active
+[Weaver Runtime tests](../../../extensions/Weaver/tests/Workflows/Runtime/Tests/) exercise the
+retained Actor read path.
+
 The complete package witness at `76ec58d0061135cfa028e1bc47ec7639fd139e7f` qualifies the bounded M1 contribution contract: all 38 cases completed (that historical run had 135 stages; no stage count is a requirement), with 16 positives and 22 recognized Failed controls. Original and restored resource/workflow journeys run through both actual Copilot and Anthropic adapters. See the [owning #3438 receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830), [curated evidence](../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json), and [artifact identities](../../../specs/1174-weaver-package-witness/quickstart.md#qualified-code-baseline).
 
 The qualified code baseline has 80 product packages and a retained SDK tgz, external module authors, and two package-only consumers. All 155 backend and 10,108 Studio common baseline files remain identical through native add/remove/incompatible/restore transitions. Consumer product-source references and frontend invocations are zero. Both owned hosts exit 0 with empty runtime caches. This is deterministic provider-protocol evidence; live-provider success is unclaimed.
@@ -8,9 +14,12 @@ Follow [owning issue #3438](https://github.com/elsa-workflows/elsa-foundation/is
 
 ## Reproduce
 
-Run from committed source with a new absolute output directory outside the checkout and a unique local version:
+Use a new absolute output directory outside the classic checkout and a unique local version:
 
 ```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" 18a16dee878106ac525aa9a861d851a200e43c55
+cd "$archive/source"
 python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
   --output /absolute/new-owned-weaver-proof \
   --version 4.0.0-weaver3438.local1
@@ -18,7 +27,7 @@ python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
 
 Producer/module-author steps need .NET 10, Python 3, Node/pnpm 11.9 and Chromium automation. Ordinary consumer restore/build/publish/run uses the prebuilt distributions with frontend tools denied and audited. The driver retains locks, closure/cache/archive hashes, common published bytes, actual native membership/serving generations and owner/browser receipts. It only starts owned processes with isolated native state and normal authentication. Nothing publishes remotely or consumes existing developer credentials/hosts. [Consumer recipes](../../../specs/1174-weaver-package-witness/contracts/hosts.md) and the [validation guide](../../../specs/1174-weaver-package-witness/quickstart.md) describe the sequence.
 
-The [integration workflow](../../../.github/workflows/ci.yml) runs the same complete qualifier with read-only repository permissions. Partial execution, missing observations, wrong-cause failures, altered artifacts and source/frontend consumer shortcuts cannot qualify. Common changes require fresh complete distributions and all cases again.
+The [manual replay workflow](../../../.github/workflows/ci.yml) runs the same complete qualifier with read-only repository permissions. Partial execution, missing observations, wrong-cause failures, altered artifacts and source/frontend consumer shortcuts cannot qualify.
 
 ## Cross-domain contributions
 
