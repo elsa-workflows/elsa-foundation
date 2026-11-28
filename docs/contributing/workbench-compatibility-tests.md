@@ -114,6 +114,7 @@ existing deployments.
 git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-bpmn" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
 (
   cd "$compatibility_root/classic-bpmn"
+  python3 tools/bpmn/restore_evidence.py
   dotnet test extensions/Bpmn/tests/Tests/Elsa.Activities.Bpmn.Tests.csproj -c Release -p:RestoreLockedMode=true
   dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj -c Release -p:RestoreLockedMode=true
   dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -c Release -p:RestoreLockedMode=true \
