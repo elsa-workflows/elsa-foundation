@@ -226,7 +226,8 @@ public sealed class MappingStructureTests
 
     /// <summary>A placed reusable activity: its boundary declares an input, a variable, two outputs and an outcome mapping.</summary>
     internal static ExecutableNode Graph(string id, out string body, string? assignedOutputReference = "result", bool isNullable = false,
-        RuntimeInputBinding? amount = null, string outputDriver = WellKnownRuntimeDurableValueStorageDrivers.Json, ValueProtectionPolicy? outputPolicy = null)
+        RuntimeInputBinding? amount = null, string outputDriver = WellKnownRuntimeDurableValueStorageDrivers.Json, ValueProtectionPolicy? outputPolicy = null,
+        string outputType = "Int32")
     {
         body = "body";
         var descriptor = new
@@ -234,7 +235,7 @@ public sealed class MappingStructureTests
             definitionId = "approve-def", definitionVersionId = "approve-v1", version = "1", templateHash = "sha256:approve", entryNodeId = "body",
             inputs = new[] { new { referenceKey = "amount", type = new { alias = "Int32" }, storageDriverKey = "json", @default = new { syntax = "Literal", value = (object)5 } } },
             variables = new[] { new { referenceKey = "v-total", name = "total", type = new { alias = "Int32" }, storageDriverKey = "json", initialValue = new { syntax = "Input", value = (object)new { referenceKey = "amount" } } } },
-            outputs = new[] { new { referenceKey = "result", type = new { alias = "Int32" }, storageDriverKey = "json" }, new { referenceKey = "echo", type = new { alias = "Int32" }, storageDriverKey = "json" } },
+            outputs = new[] { new { referenceKey = "result", type = new { alias = outputType }, storageDriverKey = outputDriver }, new { referenceKey = "echo", type = new { alias = "Int32" }, storageDriverKey = "json" } },
             outputMappings = new[] { new { outputReferenceKey = "echo", source = new { syntax = "Variable", value = (object)new { referenceKey = "v-total" } } } },
             requiredInputReferenceKeys = new[] { "amount" },
             requiredOutputReferenceKeys = new[] { "result" },
@@ -243,7 +244,10 @@ public sealed class MappingStructureTests
         };
         var bodyNode = Sequence("body",
             Set("body-set", "v-total", Request("value", "amount")),
-            ScopedSetOutput(assignedOutputReference, VariableRead("value", "v-total", policy: outputPolicy), isNullable, outputDriver));
+            ScopedSetOutput(assignedOutputReference,
+                new RuntimeInputBinding("value", new(outputType), outputPolicy ?? Durable, RuntimeInputBindingSource.VariableRead,
+                    variable: new RuntimeVariableReference("v-total", WorkflowScope)),
+                isNullable, outputDriver));
         return Node(id, "Acme.Approve", [amount ?? Literal("amount", 7, "Int32")], slots: [Slot("activity-graph", bodyNode)],
             captures: [Capture("result", "out")], descriptorType: "elsa.graph-activity", descriptor: descriptor);
     }

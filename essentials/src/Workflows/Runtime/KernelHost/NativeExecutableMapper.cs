@@ -538,8 +538,7 @@ public static class NativeExecutableMapper
                 throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
                     "This Set Output cannot preserve its value's protection policy. Bind a value that can be stored inline.");
 
-            if (!nullable.GetBoolean())
-                node.Inputs[nameof(Native.SetOutput.RejectNull)] = Native.Binding.Literal(true);
+            node.OutputAssignment = new(value.TargetType.Alias, value.TargetType.CollectionKind.ToString(), nullable.GetBoolean());
             return Native.Binding.Literal(key.GetString());
         }
 

@@ -10,7 +10,7 @@ internal sealed partial class Burst
         switch (activity)
         {
             case SetOutput output:
-                Output(frame, output.Name, output.Value, output.RejectNull);
+                Output(frame, output.Name, output.Value);
                 return true;
             case SetCorrelationId correlation:
                 Label(frame, NativeLabels.CorrelationId, correlation.Value);
@@ -29,7 +29,7 @@ internal sealed partial class Burst
     }
 
     // A workflow output is a field of the workflow's output object; inside a GraphActivity's body, an output of the boundary.
-    private void Output(Frame frame, string name, JsonNode? value, bool rejectNull)
+    private void Output(Frame frame, string name, JsonNode? value)
     {
         if (Boundary(frame) is { } boundary)
         {
@@ -39,10 +39,18 @@ internal sealed partial class Burst
                 Fail(frame, new ActivityFault("activity.graph.output-unassignable", $"Set Output '{frame.Node}' names '{name}', which GraphActivity '{boundary.Node}' does not declare as an output to assign."));
                 return;
             }
-            if (rejectNull && value is null)
+            if (_wf.Nodes[frame.Node].OutputAssignment is { } assignment)
             {
-                Fail(frame, new ActivityFault("activity.graph.output-null", $"Activity output '{name}' does not accept null."));
-                return;
+                if (value is null && !assignment.IsNullable)
+                {
+                    Fail(frame, new ActivityFault("activity.graph.output-null", $"Activity output '{name}' does not accept null."));
+                    return;
+                }
+                if (value is not null && options.ValidateGraphOutput?.Invoke(assignment, value) != true)
+                {
+                    Fail(frame, new ActivityFault("activity.graph.output-invalid", $"Activity output '{name}' does not match its declared type '{assignment.TypeAlias}'."));
+                    return;
+                }
             }
             var state = Values.To<GraphState>(boundary.State)!;
             var assigned = new Dictionary<string, JsonNode?>(state.Assigned ?? [], StringComparer.Ordinal) { [name] = value?.DeepClone() };

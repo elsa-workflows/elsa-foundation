@@ -99,6 +99,9 @@ public sealed record GraphVariable(string Name, Binding? Value = null);
 /// </summary>
 public sealed record GraphOutput(string Name, Binding? Value = null, bool Required = false);
 
+/// <summary>The value contract pinned on a Set Output assignment in a placed reusable activity.</summary>
+public sealed record GraphOutputAssignment(string TypeAlias, string CollectionKind, bool IsNullable);
+
 /// <summary>A flowchart connection from a source's outcome to a target.</summary>
 public sealed record Connection(string Source, string Target, string Outcome = "Done");
 
@@ -116,6 +119,8 @@ public sealed class Node(string id, Type type)
     public List<SwitchCase> Cases { get; } = [];
     /// <summary>For a GraphActivity: what it declares.</summary>
     public GraphBoundary? Graph { get; set; }
+    /// <summary>The pinned contract on an authored reusable activity's Set Output node.</summary>
+    public GraphOutputAssignment? OutputAssignment { get; set; }
     /// <summary>Output captures: variable name to a path in the result ("" is the whole result).</summary>
     public Dictionary<string, string> Captures { get; } = new(StringComparer.Ordinal);
     /// <summary>The named child slot this node fills in its parent, where the parent has slots (If: Then, Else).</summary>
