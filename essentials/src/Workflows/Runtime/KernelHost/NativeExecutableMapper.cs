@@ -115,7 +115,7 @@ public static class NativeExecutableMapper
     {
         private const string WorkflowScopeId = VariableReference.WorkflowScopeId;
         private const string LegacyGraphScopeId = "activity-graph";
-        private const string WorkflowVariableValueIdPrefix = "variable:";
+        private const string WorkflowVariableValueIdPrefix = RuntimeOutputCapture.WorkflowVariableValueIdPrefix;
         private const string GraphVariableValueIdPrefix = "graph-variable:";
         private const string WholeResult = "$result";
         private const string InputVariable = "input";

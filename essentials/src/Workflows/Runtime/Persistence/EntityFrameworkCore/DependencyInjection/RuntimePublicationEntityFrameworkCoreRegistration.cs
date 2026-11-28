@@ -52,7 +52,9 @@ internal static class RuntimePublicationEntityFrameworkCoreRegistration
         var switches = services.Where(descriptor => descriptor.ServiceType == typeof(IWorkflowActivationSwitch)).ToArray();
         if (switches.Length == 1 && switches[0].ImplementationType == typeof(EfWorkflowActivationSwitch))
             return;
-        if (switches.Any(descriptor => descriptor.ImplementationType != typeof(InMemoryWorkflowActivationSwitch)))
+        if (switches.Any(descriptor => descriptor.IsKeyedService ||
+            descriptor.ImplementationType != typeof(InMemoryWorkflowActivationSwitch) &&
+            descriptor.ImplementationType != typeof(PublicationActivationSwitch)))
             throw new InvalidOperationException("An explicit workflow activation switch registration is already present; Runtime EF persistence refuses to replace it implicitly.");
 
         foreach (var descriptor in switches)

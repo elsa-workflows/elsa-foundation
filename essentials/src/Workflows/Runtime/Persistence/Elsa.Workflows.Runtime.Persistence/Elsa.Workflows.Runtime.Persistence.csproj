@@ -8,12 +8,15 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
-    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Tests" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Api" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Tests" />
+    <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 
