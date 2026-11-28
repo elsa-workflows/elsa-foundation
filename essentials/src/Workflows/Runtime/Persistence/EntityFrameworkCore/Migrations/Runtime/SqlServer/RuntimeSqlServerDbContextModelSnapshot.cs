@@ -1360,12 +1360,21 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)")
+                        .HasDefaultValue("1.0.0");
+
                     b.Property<string>("SourceFingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_runtime_authored_event_cohort", (string)null);
                 });
