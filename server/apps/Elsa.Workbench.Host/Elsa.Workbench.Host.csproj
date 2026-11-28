@@ -198,6 +198,7 @@
 		<ProjectReference Include="../../../essentials/src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
 		<ProjectReference Include="../../../essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj" />
 		<ProjectReference Include="../../../essentials/src/Workflows/Runtime/Api/StandaloneTriggers/Elsa.Workflows.Runtime.Api.StandaloneTriggers.csproj" />
+		<ProjectReference Include="../../../essentials/src/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj" />
 		<!--
 			Hosts the WorkflowsRuntimeAttention and WorkflowsRuntimeTracing features. Tracing swaps the no-op
 			IWorkflowEngineTracer for the ActivitySource-backed tracer so the runtime emits drain/dispatch/activity/checkpoint
