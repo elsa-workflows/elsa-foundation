@@ -75,6 +75,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Task inbox", exact: true })).toHaveCount(0);
     const detail = page.getByRole("region", { name: title, exact: true });
+    const taskHeading = detail.getByRole("heading", { name: title, exact: true });
     const note = detail.getByRole("textbox", { name: /^Note/ });
     await note.fill("Reviewed purchase request");
     expect(new URL(page.url()).searchParams.get("backend")).toBe(signedInBackend);
@@ -90,7 +91,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).click();
     await page.getByRole("dialog", { name: "Discard task response?", exact: true }).getByRole("button", { name: "Keep editing", exact: true }).click();
     await expect(note).toHaveValue("Reviewed purchase request");
-    await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "task-detail");
+    await taskHeading.scrollIntoViewIfNeeded(); await capture(page, info, "task-detail");
     await detail.getByRole("button", { name: "Approve", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-actions");
     await detail.getByRole("button", { name: "Approve", exact: true }).press("Enter");
     await expect.poll(async () => (await get(`/runtime/user-tasks/${id}`)).status, { timeout: 30_000 }).toBe("Completed");
@@ -114,7 +115,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await expect(record).toBeDisabled(); await expect(record).toHaveCSS("resize", "none");
     expect(await record.evaluate(element => { const frame = element.closest(".studio-form-control"); const style = frame ? getComputedStyle(frame) : null; return { border: style?.borderTopWidth, opacity: style?.opacity }; })).toEqual({ border: "0px", opacity: "1" });
     await expect(detail.locator(".user-task-actions")).toHaveCount(0);
-    await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "completed");
+    await taskHeading.scrollIntoViewIfNeeded(); await capture(page, info, "completed");
     await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true })).toBeEnabled();
     await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).click();
     await expect(page.getByRole("region", { name: title, exact: true })).toHaveCount(0);
