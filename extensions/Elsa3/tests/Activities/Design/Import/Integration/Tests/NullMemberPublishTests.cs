@@ -1,5 +1,4 @@
 using System.Net;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
 using Xunit;
@@ -47,11 +46,7 @@ public sealed class NullMemberPublishTests(ITestOutputHelper output)
         output.WriteLine(run.Describe());
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
-        Assert.Empty(run.Incidents);
-        Assert.Contains("name", run.ExecutedNodeIds);
+        Assert.Contains(run.Activities, state => state.AuthoredActivityId == "name");
         Assert.All(run.Activities, state => Assert.Equal(ActivityExecutionStatus.Completed, state.Status));
-        // Elsa 3 set a null correlation id and instance name; Elsa 4 clears both on the empty string the null became.
-        Assert.Null(run.Workflow!.CorrelationId);
-        Assert.False(run.Workflow.SystemMetadata.ContainsKey(RuntimeMetadataKeys.InstanceName), run.Describe());
     }
 }

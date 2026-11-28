@@ -3,6 +3,7 @@ using System.Net;
 using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
 using Elsa3.Activities.Design.Import.Models;
@@ -82,7 +83,7 @@ public sealed class ImportPublishOrderTests(ImportedDependenciesFixture fixture)
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         var innerType = Elsa3ImportHost.Required(fixture.Import.Item("inner-v1"), "activityTypeKey");
-        Assert.Contains(run.Activities, state => state.Execution.ActivityType == innerType && state.Status == ActivityExecutionStatus.Completed);
+        Assert.Contains(run.Activities, state => state.ActivityType == innerType && state.Status == ActivityExecutionStatus.Completed);
     }
 
     [Fact]
@@ -128,7 +129,10 @@ public sealed class ImportPublishOrderTests(ImportedDependenciesFixture fixture)
         var workflow = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(sources["outer-v1"], "workflowVersionId"));
         var run = await host.RunAsync(workflow);
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
-        Assert.Contains(run.Activities, activity => activity.Metadata.GetValueOrDefault("activity.definitionVersionId") == firstId);
+        var artifact = await host.ReadAsync(services => services
+            .GetRequiredService<IWorkflowExecutableStore>().FindAsync(workflow.ArtifactId).AsTask());
+        Assert.NotNull(artifact);
+        Assert.Contains(artifact.NodesById.Values, node => node.Metadata.GetValueOrDefault("activity.definitionVersionId") == firstId);
     }
 
     [Fact]
