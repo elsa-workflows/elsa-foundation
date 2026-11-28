@@ -404,6 +404,9 @@ jobs:
           docker save "$IMAGE" | gzip -1 > "$bundle/image.tar.gz"
           archive_digest=$(sha256sum "$bundle/image.tar.gz" | cut -d ' ' -f 1)
           cp "docker/profiles/$PROFILE/"{Dockerfile,packages.txt,packages.lock.json,nuplane.lock.json,shells.json} "$bundle/"
+          if [ "$PROFILE" = essentials ]; then
+            cp -r "docker/profiles/$PROFILE/presets" "$bundle/"
+          fi
           if [ "$PROFILE" = essentials-curated ]; then
             cp -r "docker/profiles/$PROFILE/settings" "$bundle/"
             cp "docker/profiles/$PROFILE/shells.Production.json" "$bundle/"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise a fresh, network-isolated Elsa image through its authenticated workflow API."""
+"""Exercise one immutable profile image through its authenticated workflow API."""
 
 import argparse
 import copy
@@ -21,6 +21,11 @@ from profile_acceptance import (
 
 CURATED = "essentials-curated"
 LEAN = "essentials"
+ESSENTIALS_PRESETS = Path(__file__).resolve().parents[2] / "docker/profiles/essentials/presets"
+POSTGRES_IMAGE = "postgres:17-alpine"
+SHELL_FEATURES = "CShells__Shells__default__Features__"
+POSTGRES_KERNEL_CONNECTION = f"{SHELL_FEATURES}WorkflowsRuntimeKernelOptionalHttpHosting__PostgresConnectionString"
+SMOKE_TLS_DIRECTORY = "/run/elsa-smoke-tls"
 ACTOR_PROFILES = {LEAN, CURATED, "elsa3-import"}
 WRITE_LINE = "Elsa.Activities.Primitives.Activities.WriteLine"
 WRITE_LINE_NODE = "write-line"
@@ -50,7 +55,13 @@ def docker(*args, input_text=None, strip=True):
 
 
 def request(container, path, data=None, *, authenticated=True, header_file=COOKIE_HEADER):
-    args = ["exec", "-i", container, "curl", "-sS", "--max-time", "5",
+    # Send the session cookie only to the same loopback origin used for sign-in.
+    script = '''path=$1; shift
+if [ -n "${ELSA_PROFILE_SMOKE_HTTPS:-}" ]; then
+    exec curl --cacert /run/elsa-smoke-tls/cert.pem "$@" "https://127.0.0.1:8443$path"
+fi
+exec curl "$@" "http://127.0.0.1:8080$path"'''
+    args = ["exec", "-i", container, "sh", "-ec", script, "sh", path, "-sS", "--max-time", "5",
             "-w", "\n%{http_code}\n%{redirect_url}"]
     if authenticated:
         args.extend(["-H", f"@{header_file}"])
@@ -58,7 +69,6 @@ def request(container, path, data=None, *, authenticated=True, header_file=COOKI
         args.extend(["-c", COOKIE_JAR])
     if data is not None:
         args.extend(["-H", "Content-Type: application/json", "--data-binary", "@-"])
-    args.append(f"http://127.0.0.1:8080{path}")
     response = docker(*args, input_text=json.dumps(data) if data is not None else None, strip=False)
     body, status, redirect = response.rsplit("\n", 2)
     return int(status), body, redirect
@@ -96,10 +106,10 @@ def prepare_cookie_header(container):
     # libcurl 8.5 omits chunks when a session cookie exceeds 8190 bytes. Keep the complete
     # header in the container and send it only to the same loopback HTTP origin as the login.
     script = r'''umask 077
-awk -v now="$3" -F '\t' '
+awk -v now="$3" -v https="${ELSA_PROFILE_SMOKE_HTTPS:-}" -F '\t' '
     BEGIN { printf "Cookie: " }
     NF == 7 && ($1 == "127.0.0.1" || $1 == "#HttpOnly_127.0.0.1") &&
-      $3 == "/" && $4 == "FALSE" && ($5 == 0 || $5 > now) {
+      $3 == "/" && ($4 == "FALSE" || https == 1) && ($5 == 0 || $5 > now) {
         printf "%s%s=%s", separator, $6, $7
         separator = "; "
     }
@@ -114,7 +124,7 @@ def authenticate(container, args):
     cookie_challenge = unauthenticated_status == 302 and urlsplit(redirect).path == LOGIN_PATH
     if unauthenticated_status not in (401, 403) and not cookie_challenge:
         raise RuntimeError(f"Unauthenticated {path} returned HTTP {unauthenticated_status}")
-    docker("exec", container, "mkdir", "-m", "700", COOKIE_DIRECTORY)
+    docker("exec", container, "mkdir", "-p", "-m", "700", COOKIE_DIRECTORY)
     login = read_json(container, LOGIN_PATH, {"username": args.username, "password": args.password}, authenticated=False)
     if login["status"] != "authenticated":
         raise RuntimeError(f"Identity did not report an authenticated session: {login['status']}")
@@ -325,11 +335,23 @@ def verify_lean_triggers(container, expected_types):
     return result
 
 
-def smoke(args, migrated_directory=None):
-    create = ["create", "--pull", "never", "--network", "none",
-              "-e", "ASPNETCORE_ENVIRONMENT=Development"]
+def smoke(args, migrated_directory=None, *, preset=None, network="none", verify_resume=False):
+    environment = "Production" if preset else "Development"
+    create = ["create", "--pull", "never", "--network", network,
+              "-e", f"ASPNETCORE_ENVIRONMENT={environment}"]
+    if preset:
+        create.extend(["--env-file", str(ESSENTIALS_PRESETS / f"{preset}.env")])
     if args.env_file:
         create.extend(["--env-file", str(args.env_file)])
+    if preset:
+        create.extend([
+            "-e", "ELSA_PROFILE_SMOKE_HTTPS=1",
+            "-e", "ASPNETCORE_URLS=http://+:8080;https://+:8443",
+            "-e", f"ASPNETCORE_Kestrel__Certificates__Default__Path={SMOKE_TLS_DIRECTORY}/cert.pem",
+            "-e", f"ASPNETCORE_Kestrel__Certificates__Default__KeyPath={SMOKE_TLS_DIRECTORY}/key.pem",
+            "-e", f"{SHELL_FEATURES}FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__IsDevelopmentOrDemo=false",
+            "--mount", f"type=bind,source={args.tls_directory},target={SMOKE_TLS_DIRECTORY},readonly",
+        ])
     if args.shells:
         create.extend(["--mount", f"type=bind,source={args.shells.resolve()},target=/app/shells.json,readonly"])
     if migrated_directory:
@@ -347,8 +369,10 @@ def smoke(args, migrated_directory=None):
         docker("start", container)
         ready_seconds, readiness = wait_ready(container, started, args.timeout)
         results = {"image": args.image, "imageId": args.image_id, "mountedShells": args.shells is not None,
-                   "network": "none", "initialNuplaneCacheEmpty": True,
+                   "network": "none" if network == "none" else "internal", "initialNuplaneCacheEmpty": True,
                    "readySeconds": ready_seconds, "readiness": readiness}
+        if preset:
+            results["databasePreset"] = preset
         if args.variant:
             results["pinnedPackageCount"] = args.pinned_package_count
         if migrated_directory:
@@ -380,6 +404,10 @@ def smoke(args, migrated_directory=None):
                 for line in lines:
                     if "not available in the runtime feature catalog" in line:
                         raise RuntimeError(line.strip())
+                if preset:
+                    verify_run_after_restart(container, args, results, preset)
+                if verify_resume:
+                    results["suspendedRunAfterRestart"] = verify_delayed_run_after_restart(container, args)
             except (RuntimeError, KeyError, ValueError, subprocess.CalledProcessError):
                 print(json.dumps(results), flush=True)
                 raise
@@ -398,12 +426,129 @@ def smoke(args, migrated_directory=None):
             docker("rm", "-f", container)
 
 
+def verify_run_after_restart(container, args, results, preset):
+    started = time.monotonic()
+    docker("restart", container)
+    wait_ready(container, started, args.timeout)
+    authenticate(container, args)
+    instance = read_json(container, f"/runtime/workflows/instances/{results['executionId']}")["instance"]
+    if instance["status"] != results["workflowStatus"] or instance["incidentCount"] != 0:
+        raise RuntimeError(f"The {preset} preset lost the completed workflow after restart: {instance}")
+    if preset == "sqlite":
+        docker("exec", container, "sh", "-ec", "test -s /app/data/elsa.db && test -s /app/data/elsa-kernel.db")
+    else:
+        docker("exec", container, "sh", "-ec", "test ! -e /app/data/elsa.db && test ! -e /app/data/elsa-kernel.db")
+    results["completedRunAfterRestart"] = "verified"
+
+
+def verify_delayed_run_after_restart(container, args):
+    marker = f"elsa-profile-restart-{uuid4().hex}"
+    _, version = submit_lean_sequence(container, marker, [
+        profile_activity(container, "Elsa.Activities.Scheduling.Activities.Delay", "delay", {"Duration": "00:00:20"}),
+        profile_activity(container, WRITE_LINE, WRITE_LINE_NODE, {"text": marker}),
+    ])
+    publication = read_json(container, f"/publishing/workflows/{version}/publish", {})
+    started = time.monotonic()
+    execution = read_json(container, f"/runtime/workflows/executables/{publication['artifactId']}/execute", {
+        "sourceReferenceId": publication["sourceReferenceId"],
+    })["workflowExecutionId"]
+    path = f"/runtime/workflows/instances/{execution}"
+    observed = None
+    while time.monotonic() - started < 16:
+        status, body, _ = request(container, path)
+        if status == 200:
+            instance = json.loads(body)["instance"]
+            observed = (instance["status"], instance.get("subStatus"), instance["incidentCount"])
+            if instance["status"] in ("Completed", "Finished", "Faulted", "Cancelled"):
+                raise RuntimeError(f"The delayed workflow ended before restart: {observed}")
+            # A pending durable timer can project as Running. Require a committed
+            # Delay start and no Delay completion before the server stops.
+            history = read_json(container, f"{path}/history")
+            events = {event["name"] for event in history["items"]
+                      if event["executableNodeId"] == "delay" and event["authority"] == "CommittedTransition"}
+            if "ActivityStarted" in events and "ActivityCompleted" not in events:
+                break
+        elif status != 404:
+            raise RuntimeError(f"Could not inspect delayed workflow: HTTP {status}: {body}")
+        time.sleep(0.25)
+    else:
+        raise RuntimeError(f"The delayed workflow did not suspend: {execution}, last status: {observed}")
+
+    docker("stop", "--time", "3", container)
+    if time.monotonic() - started >= 20:
+        raise RuntimeError("The restart probe did not stop the server before the delay elapsed")
+    started = time.monotonic()
+    docker("start", container)
+    wait_ready(container, started, args.timeout)
+    authenticate(container, args)
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline:
+        instance = read_json(container, path)["instance"]
+        if instance["status"] == "Completed" and instance["incidentCount"] == 0:
+            if marker not in docker("logs", container).splitlines():
+                raise RuntimeError("WriteLine output after the delay was absent from container logs")
+            return verify_actor_workflow_history(container, instance, execution, version, publication)
+        if instance["status"] in ("Faulted", "Cancelled") or instance["incidentCount"] != 0:
+            raise RuntimeError(f"The delayed workflow failed after restart: {instance}")
+        time.sleep(0.25)
+    raise RuntimeError(f"The delayed workflow did not resume after restart: {execution}")
+
+
+def verify_postgres_preset(args, directory, scheduling):
+    if subprocess.run(["docker", "image", "inspect", POSTGRES_IMAGE], capture_output=True).returncode:
+        docker("pull", POSTGRES_IMAGE)
+    password = secrets.token_hex(24)
+    network = docker("network", "create", "--internal", f"elsa-profile-smoke-{uuid4().hex}")
+    database = None
+    try:
+        database = docker("create", "--pull", "never", "--network", network, "--network-alias", "postgres",
+                          "-e", f"POSTGRES_PASSWORD={password}", POSTGRES_IMAGE)
+        docker("start", database)
+        deadline = time.monotonic() + args.timeout
+        while time.monotonic() < deadline:
+            if not subprocess.run(["docker", "exec", database, "pg_isready", "-h", "127.0.0.1", "-U", "postgres",
+                                   "-d", "postgres"], capture_output=True).returncode:
+                break
+            time.sleep(0.25)
+        else:
+            raise RuntimeError("PostgreSQL did not become ready for the Essentials preset")
+        def connection(database_name):
+            return f"Host=postgres;Database={database_name};Username=postgres;Password={password}"
+
+        # The Actor store binds its schedule owner at initialization. Qualify
+        # the default and scheduling shells against separate fresh databases.
+        for label, variant, verify_resume in (("default", args, False), ("scheduling", scheduling, True)):
+            module_database, actor_database = f"elsa_{label}", f"elsa_{label}_kernel"
+            for name in (module_database, actor_database):
+                docker("exec", database, "createdb", "-U", "postgres", name)
+            postgres = copy.copy(variant)
+            postgres.env_file = directory / f"postgresql-{label}.env"
+            postgres.env_file.write_text(args.env_file.read_text() + (
+                f"ConnectionStrings__Elsa={connection(module_database)}\n"
+                f"{POSTGRES_KERNEL_CONNECTION}={connection(actor_database)}\n"
+            ))
+            if args.log:
+                postgres.log = args.log.with_suffix(f".postgresql-{label}.log")
+            smoke(postgres, preset="postgresql", network=network, verify_resume=verify_resume)
+            for name in (module_database, actor_database):
+                count = docker("exec", database, "psql", "-U", "postgres", "-d", name,
+                               "-Atc", "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')")
+                if int(count) == 0:
+                    raise RuntimeError(f"The Essentials preset did not initialize PostgreSQL database {name}")
+    finally:
+        try:
+            if database:
+                docker("rm", "-f", "-v", database)
+        finally:
+            docker("network", "rm", network)
+
+
 def read_image_file(image_id, path):
     return docker("run", "--rm", "--pull", "never", "--network", "none",
                   "--entrypoint", "cat", image_id, path)
 
 
-def verify_pinned_packages(image_id, allow_add_ons):
+def verify_pinned_packages(image_id, allow_add_ons, required_packages=()):
     settings = json.loads(read_image_file(image_id, "/app/appsettings.json"))["Nuplane"]
     feed_name = "profile-packages"
     manifest_path = "/app/profile-desired.json"
@@ -435,6 +580,9 @@ def verify_pinned_packages(image_id, allow_add_ons):
     ]
     if not pins or manifest != {"schemaVersion": "1.0", "generatedAtUtc": lock["generatedAt"], "packages": pins}:
         raise RuntimeError("The baked desired manifest differs from the Nuplane lock")
+    missing = set(required_packages).difference(package["id"].lower() for package in pins)
+    if missing:
+        raise RuntimeError(f"The baked lock omits required provider archives: {sorted(missing)}")
     return len(pins)
 
 
@@ -452,12 +600,13 @@ def smoke_migrated_files(args, directory):
 
 
 def verify_profile(args):
-    args.pinned_package_count = verify_pinned_packages(args.image_id, allow_add_ons=args.variant == CURATED)
+    providers = ("microsoft.entityframeworkcore.sqlite", "npgsql.entityframeworkcore.postgresql") if args.variant == LEAN else ()
+    args.pinned_package_count = verify_pinned_packages(args.image_id, allow_add_ons=args.variant == CURATED,
+                                                     required_packages=providers)
     with tempfile.TemporaryDirectory(prefix="elsa-profile-smoke-") as temporary:
         directory = Path(temporary)
         args.env_file = directory / "smoke.env"
         args.password = f"Smoke1!{secrets.token_hex(16)}"
-        feature = "CShells__Shells__default__Features__"
         settings = {
             "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword": args.password,
             "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__IsDevelopmentOrDemo": "true",
@@ -465,7 +614,7 @@ def verify_profile(args):
         settings["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey"] = secrets.token_hex(32)
         if args.variant == CURATED:
             settings["Secrets__EncryptionKey"] = secrets.token_hex(32)
-        lines = [f"{feature}{name}={value}\n" for name, value in settings.items()]
+        lines = [f"{SHELL_FEATURES}{name}={value}\n" for name, value in settings.items()]
         if args.variant == CURATED:
             args.management_key = secrets.token_hex(32)
             lines.append(f"Elsa__ModuleManagement__ApiKey={args.management_key}\n")
@@ -480,6 +629,18 @@ def verify_profile(args):
 
         args.omit_trigger.extend(ALL_OPTIONAL_TRIGGER_TYPES)
         smoke(args)
+        args.tls_directory = directory / "tls"
+        args.tls_directory.mkdir()
+        cert, key = (args.tls_directory / filename for filename in ("cert.pem", "key.pem"))
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                        "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1",
+                        "-out", str(cert), "-keyout", str(key)], capture_output=True, check=True)
+        # The container user reads the fixture key through a read-only mount. The parent temp directory is private.
+        key.chmod(0o644)
+        sqlite = copy.copy(args)
+        if args.log:
+            sqlite.log = args.log.with_suffix(".sqlite.log")
+        smoke(sqlite, preset="sqlite")
         shell_file = read_image_file(args.image_id, "/app/shells.json")
         for trigger, feature_names in OPTIONAL_TRIGGER_FEATURES.items():
             mounted = copy.copy(args)
@@ -495,7 +656,11 @@ def verify_profile(args):
                 features.pop(name, None)
             features.update({name: {} for name in feature_names})
             mounted.shells.write_text(json.dumps(composition))
-            smoke(mounted)
+            if trigger == "cron":
+                smoke(mounted, preset="sqlite", verify_resume=True)
+                verify_postgres_preset(args, directory, mounted)
+            else:
+                smoke(mounted)
 
 
 def main():

@@ -1,5 +1,6 @@
-# Engine and available trigger packages for shells.json.
+# Engine, optional trigger packages, and providers for both deployment presets.
 @actor-engine
 @http-trigger
 @schedule-trigger
 @sqlite
+Npgsql.EntityFrameworkCore.PostgreSQL [10.0.0]
