@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Decisions.Core;
@@ -5,6 +6,8 @@ using Elsa.Decisions.Core;
 namespace Elsa.Decisions.Workflows.Runtime.Activities;
 
 /// <summary>The published Evaluate Decision contract. Actor Foundation executes it from the exact compiled executable.</summary>
+// Preserve the previous declaring assembly's category in existing catalog hashes.
+[Category("Runtime")]
 [Activity(Icon = "TableProperties")]
 [ActivityOutcome("Done")]
 [ActivityOutcome("NoMatch")]
