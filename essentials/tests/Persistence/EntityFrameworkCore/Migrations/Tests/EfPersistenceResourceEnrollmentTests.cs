@@ -23,6 +23,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
     private static readonly Assembly[] FeatureAssemblies =
     [
         .. ModuleContextCatalog.Modules,
+        typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly
     ];
@@ -86,7 +87,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
             ["ConnectionStrings:Shared"] = "Host=localhost;Database=elsa;Username=test;Password=secret-canary"
         }).Build();
 
-        var result = EfPersistencePreparation.Prepare(context, configuration);
+        var result = EfPersistencePreparation.Prepare(context, configuration, FeatureAssemblies);
 
         Assert.True(result.HasApplicableResource);
         Assert.Empty(result.RefusalCodes);

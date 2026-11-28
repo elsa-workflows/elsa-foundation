@@ -103,6 +103,7 @@ public static class EfPersistencePreparation
 
         if (applicable && refusals.Count == 0)
         {
+            // A feature may live outside the package that declares and owns its EF module.
             var validation = EfPersistenceResourceValidator.Validate(
                 resolution,
                 EfModuleCatalog.Discover(loadedAssemblies.Concat(featureAssemblies)),
