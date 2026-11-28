@@ -24,13 +24,12 @@ public sealed class ModulePayloadColumnTests
         ["RuntimeDbContext"] = new(StringComparer.Ordinal)
         {
             // Includes standalone triggers, kernel Event publications, schedule controls and occurrences, and executable pins.
-            ["ContentJson"] = 51,
+            ["ContentJson"] = 52,
             ["PayloadJson"] = 1,
             ["MetadataJson"] = 1,
             ["CleanupSafeFailureJson"] = 1,
             ["TimerHistoryOwnerJson"] = 1
         },
-        ["ExecutionCommandTransportDbContext"] = new(StringComparer.Ordinal) { ["PayloadJson"] = 1 },
         ["WorkflowsDesignDbContext"] = new(StringComparer.Ordinal)
         {
             ["ContentJson"] = 2,

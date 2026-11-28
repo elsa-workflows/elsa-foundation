@@ -37,9 +37,7 @@ public sealed class CliAcceptanceLegTests
         "Studio.Preferences",
         "Workflows.Design",
         "Workflows.Publishing",
-        "Workflows.Runtime",
-        "Workflows.Runtime.Distributed.CommandTransport",
-        "Workflows.Runtime.Distributed.Placement"
+        "Workflows.Runtime"
     ];
 
     /// <summary>
@@ -67,9 +65,7 @@ public sealed class CliAcceptanceLegTests
         "StudioPreferencesEntityFrameworkCore",
         "WorkflowsDesignEntityFrameworkCore",
         "WorkflowsPublishingEntityFrameworkCore",
-        "WorkflowsRuntimeEntityFrameworkCore",
-        "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence"
+        "WorkflowsRuntimeEntityFrameworkCore"
     ];
 
     [SkippableFact]

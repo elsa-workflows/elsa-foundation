@@ -513,11 +513,6 @@
       "medianMinutes": 0.37
     },
     {
-      "project": "essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.01
-    },
-    {
       "project": "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
       "tier": "integration",
       "trait": "child-process",
@@ -627,22 +622,6 @@
       "project": "essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.37
-    },
-    {
-      "project": "essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
-    },
-    {
-      "project": "essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.12
-    },
-    {
-      "project": "essentials/tests/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.03
     },
     {
       "project": "extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj",
@@ -849,8 +828,6 @@
           "name": "workbench-native-hosting",
           "classes": [
             "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests",
-            "Elsa.Workbench.Tests.NativeHostingConformanceTests",
-            "Elsa.Workbench.Tests.NativeHostingGracefulHandoffTests",
             "Elsa.Workbench.Tests.WorkbenchProcessTests"
           ]
         },
@@ -950,7 +927,6 @@
           "essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj",
           "essentials/tests/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj",
           "extensions/Secrets/tests/Tests/Elsa.Secrets.Tests.csproj",
-          "essentials/tests/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj",
           "essentials/tests/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj",
           "essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
           "essentials/tests/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj",
@@ -987,7 +963,6 @@
           "essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj",
           "essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj",
           "essentials/tests/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj",
-          "essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj",
           "essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj",
           "essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
           "extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj",
@@ -1003,7 +978,6 @@
           "extensions/Diagnostics/tests/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj",
           "essentials/tests/Cluster/Tests/Elsa.Cluster.Tests.csproj",
           "extensions/Bpmn/tests/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
-          "essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj",
           "essentials/tests/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
           "essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
           "essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj",
@@ -1170,11 +1144,6 @@
       "require": "ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
-      "suite": "runtime-distributed",
-      "project": "essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj",
-      "require": "ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS"
-    },
-    {
       "suite": "dashboard",
       "project": "essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS"
@@ -1317,21 +1286,6 @@
   },
   "slowAllowList": [],
   "quarantine": [
-    {
-      "test": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Original_uncancelled_checkpoint_is_rejected_after_a_real_successor_acquires",
-      "issue": 3147,
-      "since": "2026-10-22"
-    },
-    {
-      "test": "Elsa.Workbench.Tests.NativeHostingGracefulHandoffTests.Draining_owner_hands_off_accepted_execution_while_survivor_admits_work",
-      "issue": 3252,
-      "since": "2026-10-22"
-    },
-    {
-      "test": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor",
-      "issue": 3259,
-      "since": "2026-10-22"
-    },
     {
       "test": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation",
       "issue": 3260,

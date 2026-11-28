@@ -21,9 +21,9 @@
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "Connections": {},
+          "ActorHttpConnections": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},
-          "ConnectionsWorkflows": {},
           "WorkflowsDesignApi": {},
           "WorkflowDesignValidations": {},
           "ActivitiesDesignApi": {},
@@ -36,7 +36,6 @@
           "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
           "ActivitiesFlowchart": {},
-          "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
           "ActivitiesSequence": {},
           "ActivitiesDesignReconciliation": {},
@@ -48,30 +47,8 @@
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingEntityFrameworkCore": {},
-          "WorkflowsRuntimeApi": {
-            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
-            "WorkflowAlterationPayloadProtectionKeys": {
-              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-            }
-          },
-          "WorkflowsRuntimeResumption": {},
-          "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Balanced",
-            "MaxActivitiesPerCommit": 50
-          },
-          "WorkflowsRuntimeTriggers": {},
-          "WorkflowsRuntimeEntityFrameworkCore": {
-            "CacheWorkflowExecutables": true,
-            "WorkflowExecutableCacheCapacity": 256,
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
-            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
-          },
           "ActivitiesDesignEntityFrameworkCore": {},
           "WorkflowsDesignEntityFrameworkCore": {},
-          "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
-          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
-          "WorkflowsDashboardEntityFrameworkCore": {},
           "Weaver": {},
           "WeaverApi": {},
           "WeaverWorkflows": {},
@@ -88,8 +65,27 @@
           "StudioDashboardEntityFrameworkCore": {
             "ConnectionString": "Data Source=elsa-studio-dashboards.db"
           },
-          "WorkflowDashboardQueries": {},
-          "StudioDashboardWeaver": {}
+          "StudioDashboardWeaver": {},
+          "KernelWorkflowDashboardQueries": {},
+          "KernelActivitiesHttp": {},
+          "WorkflowsRuntimeKernelRetainedApi": {},
+          "WorkflowsRuntimeKernelHosting": {
+            "Provider": "SQLite"
+          },
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
+            "Provider": "SQLite",
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+          },
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {
+            "Provider": "SQLite"
+          },
+          "KernelActivitiesScheduling": {},
+          "WorkflowsDashboardRetained": {},
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {},
+          "WorkflowsRuntimeRetainedAttention": {}
         },
         "Configuration": {
           "WebRouting": {

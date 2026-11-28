@@ -281,16 +281,16 @@ public sealed partial class ArchitectureGuardTests
 
         foreach (var feature in new[]
                  {
-                     "WorkflowsRuntimeEntityFrameworkCore",
+                     "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
+                     "WorkflowsRuntimePublicationEntityFrameworkCorePersistence",
+                     "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence",
                      "ActivitiesDesignEntityFrameworkCore",
                      "WorkflowsDesignEntityFrameworkCore",
-                     "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence",
-                     "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
                      "WorkflowsPublishingEntityFrameworkCore",
                      "DiagnosticsOpenTelemetryEntityFrameworkCore",
                      "DiagnosticsStructuredLogsEntityFrameworkCore",
                      "SecretsEntityFrameworkCore",
-                     "WorkflowsDashboardEntityFrameworkCore"
+                     "WorkflowsDashboardPortfolioEntityFrameworkCore"
                  })
         {
             Assert.True(features.ContainsKey(feature), $"Docker shell must explicitly enable {feature}.");
@@ -300,7 +300,7 @@ public sealed partial class ArchitectureGuardTests
         // and resolves ConnectionStrings:Elsa, which docker-compose.yml supplies.
         Assert.Equal(
             "PostgreSql",
-            Assert.IsType<JsonObject>(features["WorkflowsRuntimeEntityFrameworkCore"])["Provider"]?.GetValue<string>());
+            Assert.IsType<JsonObject>(features["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"])["Provider"]?.GetValue<string>());
     }
 
     [Fact]
@@ -744,8 +744,7 @@ internal static class PersistenceProviderNeutralityBoundary
         "Elsa.Foundation.Identity.Core",
         "Elsa.Foundation.Identity",
         "Elsa.Secrets.Core",
-        "Elsa.Connections.Core",
-        "Elsa.Workflows.Runtime.Distributed"
+        "Elsa.Connections.Core"
     ];
 
     public static bool IsConcreteProviderPackage(string packageName) =>

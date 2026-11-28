@@ -82,8 +82,6 @@ using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Distributed;
-using Elsa.Workflows.Runtime.Distributed.Placement;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
@@ -128,6 +126,7 @@ builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
 var configuration = builder.Configuration;
+WorkbenchRuntimeProfile.Configure(configuration, builder.Environment, args);
 // With the Core Preview serving publications (Elsa:CorePreview:Publications), the default shell composes the kernel's shell
 // feature, so the one switch composes the host's serving state below and the shell's coordinator.
 var kernelShell = WorkbenchCorePreview.ComposeKernelShell(builder.Configuration);
@@ -239,9 +238,6 @@ builder.Services.AddEfPendingMigrationActivationGuard();
 // composed here, on the host container. It brings the in-process default, so an unclustered Workbench is a cluster of
 // one that reports the schema families it has loaded without any further configuration.
 builder.Services.AddEfSchemaReadability();
-// Beside it, on the same host container: what each shell's workflow runtime can activate, so the
-// host's member report carries one runnability entry per shell that runs the distributed runtime.
-builder.Services.AddWorkflowRuntimeRunnabilityReport();
 // The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it, and then
 // requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
 builder.Services.AddConfiguredClusterMembership(configuration);
@@ -297,7 +293,6 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
 
             // The persistence modules the shells select are discovered from this host's project
             // references by WithHostAssemblies(); only assemblies with no reference edge are listed here.
-            typeof(WorkflowsRuntimeDistributedFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 

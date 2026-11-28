@@ -2831,28 +2831,6 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
-      "elsa.workflows.runtime.distributed": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Cluster.Core": "[4.0.0-dev, )",
-          "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
-          "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.workflows.runtime.distributed.persistence.entityframeworkcore": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Distributed": "[4.0.0-dev, )",
-          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
-        }
-      },
       "elsa.workflows.runtime.graph": {
         "type": "Project"
       },
@@ -2910,9 +2888,9 @@
       "elsa.workflows.runtime.kernelhosting": {
         "type": "Project",
         "dependencies": {
-          "Cronos": "[0.13.0, )",
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Cronos": "[0.13.0, )",
           "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.Sqlite": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",

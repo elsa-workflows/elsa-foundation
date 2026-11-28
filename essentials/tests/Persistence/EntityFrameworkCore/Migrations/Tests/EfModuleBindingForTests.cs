@@ -9,7 +9,6 @@ using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Xunit;
@@ -56,18 +55,6 @@ public sealed class EfModuleBindingForTests
             typeof(RuntimeDbContext).Assembly,
             RuntimeEfModule.DefaultConnectionName,
             RuntimeEfModule.DefaultSqliteConnectionString)),
-        (typeof(ExecutionPlacementDbContext), new EfModuleBinding(
-            "Distributed runtime execution placement",
-            ExecutionPlacementEfModule.HistoryTableName,
-            typeof(ExecutionPlacementDbContext).Assembly,
-            ExecutionPlacementEfModule.DefaultConnectionName,
-            ExecutionPlacementEfModule.DefaultSqliteConnectionString)),
-        (typeof(ExecutionCommandTransportDbContext), new EfModuleBinding(
-            "Distributed runtime execution command transport",
-            ExecutionCommandTransportEfModule.HistoryTableName,
-            typeof(ExecutionCommandTransportDbContext).Assembly,
-            ExecutionCommandTransportEfModule.DefaultConnectionName,
-            ExecutionCommandTransportEfModule.DefaultSqliteConnectionString)),
         (typeof(IdentityIamDbContext), new EfModuleBinding(
             "Identity IAM",
             IdentityIamEfModule.HistoryTableName,
