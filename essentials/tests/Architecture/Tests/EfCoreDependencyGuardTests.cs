@@ -222,25 +222,6 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
-    public void Every_admitted_Runtime_placement_project_resolves_only_its_reviewed_EF_closure()
-    {
-        var offenders = Adr0073RuntimePlacementEf.ExpectedEfPackagesByProject
-            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
-            {
-                var resolved = ReadProjectEfPackages(project.Key, configuration);
-                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
-                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
-                var missing = FindUnexpectedEfPackages(project.Value, resolved)
-                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
-                return unexpected.Concat(missing);
-            }))
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        Assert.True(offenders.Length == 0, Report("drift from the reviewed Runtime placement EF closure", offenders));
-    }
-
-    [Fact]
     public void Every_admitted_Activities_Design_project_resolves_only_its_reviewed_EF_closure()
     {
         var offenders = Adr0073ActivitiesDesignEf.ExpectedEfPackagesByProject
@@ -780,7 +761,6 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
                     Adr0073OpenTelemetryEf.IsProjectPath(relativePath) ||
                     Adr0073IdentityEf.IsProjectPath(relativePath) ||
-                    Adr0073RuntimePlacementEf.IsProjectPath(relativePath) ||
                     Adr0073RuntimeBookmarksEf.IsProjectPath(relativePath) ||
                     Adr0073DashboardRunHealthEf.IsProjectPath(relativePath) ||
                     Adr0073PublishingSnapshotReviewEf.IsProjectPath(relativePath) ||
@@ -1103,47 +1083,6 @@ public sealed class EfCoreDependencyGuardTests
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
         public static bool IsProjectPath(string relativePath) => ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
         private static string[] CorePackages() => ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
-    }
-
-    /// <summary>
-    /// The Runtime repository-first admission for issue #1717. The production
-    /// adapter is provider-neutral; provider engines remain in focused test projects.
-    /// </summary>
-    internal static class Adr0073RuntimePlacementEf
-    {
-        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
-            new Dictionary<string, string[]>(StringComparer.Ordinal)
-            {
-                ["essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj"] =
-                [
-                    .. CorePackages(),
-                    "Microsoft.EntityFrameworkCore.Sqlite",
-                    "Microsoft.EntityFrameworkCore.Sqlite.Core"
-                ],
-                ["essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
-                [
-                    .. CorePackages(),
-                    "Microsoft.EntityFrameworkCore.Sqlite",
-                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
-                    "Microsoft.EntityFrameworkCore.SqlServer",
-                    "MySql.EntityFrameworkCore",
-                    "Npgsql.EntityFrameworkCore.PostgreSQL"
-                ]
-            };
-
-        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-
-        public static bool IsProjectPath(string relativePath) =>
-            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
-
-        private static string[] CorePackages() =>
-        [
-            "Microsoft.EntityFrameworkCore",
-            "Microsoft.EntityFrameworkCore.Abstractions",
-            "Microsoft.EntityFrameworkCore.Analyzers",
-            "Microsoft.EntityFrameworkCore.Relational"
-        ];
     }
 
     /// <summary>

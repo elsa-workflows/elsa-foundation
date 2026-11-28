@@ -113,11 +113,10 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   the row; both hold by review until #2606 restores compiled checks. A column that restates
   part of a row's content and is compared with it, such as a bookmark's payload or a checkpoint marker's id sets, is
   content, so both sides of the comparison are in one format.
-- **A golden-fixture gate freezes the wire format for the Distributed leaf only.** The
-  `Elsa.Workflows.Runtime.Distributed.Tests` suite re-serializes a canonical instance of the placement and
-  transport payloads and compares each semantically against a committed `Fixtures/v1/*.json` expectation,
-  so a field add/rename/remove/retype on those two payloads cannot land without an explicit, versioned
-  decision (see [`GoldenFixtureTestSupport`](../essentials/tests/Workflows/Runtime/Distributed/Tests/GoldenFixtureTestSupport.cs)).
+- **Historical clustered runner wire format.** The previous engine's placement and transport payloads were
+  checked against committed `Fixtures/v1/*.json` expectations. Use the installed version and its matching wire
+  fixtures when inspecting or draining an old installation.
+  [Previous distributed workflow suite](https://github.com/elsa-workflows/elsa-foundation/tree/18a16dee878106ac525aa9a861d851a200e43c55/essentials/tests/Workflows/Runtime/Distributed/Tests)
   The rest of the Runtime EF Core module (bookmarks, executables, execution/scheduler/operational/
   control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox, the durable
   scheduler work queue, workflow trigger bindings) has no such fixture today; its state-record shapes are
