@@ -323,6 +323,6 @@ DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` again
   holds the secrets lane. The dashboard projection feature
   is enabled explicitly so run-health and portfolio queries do not fall back to unavailable/in-memory sources.
 
-The explicit mixed Core Preview still uses the `WorkflowsRuntimeEntityFrameworkCore` recovery and
-hierarchy signing keys. Its separate `shells.CorePreview.Production.json` overlay clears those development
+The explicit mixed Core Preview is a single-host developer profile. It still uses the
+`WorkflowsRuntimeEntityFrameworkCore` recovery and hierarchy signing keys. Its separate `shells.CorePreview.Production.json` overlay clears those development
 values when the preview runs in Production.

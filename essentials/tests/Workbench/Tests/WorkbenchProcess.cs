@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Workbench.Tests;
 
@@ -108,6 +109,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         CopySourceFile("shells.Actor.Production.json", directory);
         CopySourceFile("shells.CorePreview.json", directory);
         CopySourceFile("shells.CorePreview.Production.json", directory);
+        if (shell.UseLegacyRuntime)
+            OverlayLegacyRuntime(directory);
         if (shell.EnvironmentOverlay is not null)
             CopySourceFile(shell.EnvironmentOverlay, directory, $"shells.{shell.Environment}.json");
         CopySourceFile("appsettings.json", directory);
@@ -514,6 +517,19 @@ public sealed class WorkbenchProcess : IAsyncDisposable
             Uri.TryCreate(line[(index + marker.Length)..].Trim(), UriKind.Absolute, out var address) &&
             address.Host == "127.0.0.1" && address.Port > 0)
             _listeningAddress.TrySetResult(address);
+    }
+
+    // The old-engine witnesses select the legacy feature set explicitly and own its additional test features.
+    private static void OverlayLegacyRuntime(string directory)
+    {
+        var shellFile = Path.Combine(directory, "shells.json");
+        var shell = JsonNode.Parse(File.ReadAllText(shellFile))!;
+        var preview = JsonNode.Parse(File.ReadAllText(Path.Combine(directory, "shells.CorePreview.json")))!;
+        foreach (var (id, configuration) in Features(preview))
+            Features(shell)[id] = configuration?.DeepClone();
+        File.WriteAllText(shellFile, shell.ToJsonString());
+
+        static JsonObject Features(JsonNode root) => root["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
     }
 
     private static void CopySourceFile(string fileName, string directory, string? targetName = null) =>

@@ -18,6 +18,10 @@ public sealed record WorkbenchShell(
 
     public static readonly WorkbenchShell Development = new("Development", "shells.json", null, new Dictionary<string, string>());
 
+    internal static readonly WorkbenchShell LegacyRuntime = Development with { UseLegacyRuntime = true };
+
+    internal bool UseLegacyRuntime { get; init; }
+
     public static readonly WorkbenchShell Baseline = new("Development", "shells.baseline.json", null, new Dictionary<string, string>());
 
     /// <summary>

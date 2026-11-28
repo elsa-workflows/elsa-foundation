@@ -160,8 +160,52 @@ public sealed class WorkbenchShellActivationTests
         Assert.Contains("DecisionsWorkflowsDesign", active);
         Assert.Contains("WorkflowsRuntimeResumption", active);
         Assert.DoesNotContain("ActorHttpConnections", active);
+        Assert.DoesNotContain("WorkflowsRuntimeDistributed", active);
+        Assert.DoesNotContain("WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", active);
+        Assert.DoesNotContain("WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence", active);
         Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-preview.db")));
         Assert.False(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
+
+        const string publishedMarker = "mixed-preview-published-execute";
+        const string draftMarker = "mixed-preview-draft-test-run";
+        await NativeHostingScenario.LoginAsync(workbench);
+        var writeLine = await NativeHostingScenario.ActivityVersionAsync(workbench, "Elsa.Activities.Primitives.Activities.WriteLine");
+        var publishedVersion = await SubmitAsync("Mixed preview published execution", publishedMarker);
+        var published = await NativeHostingScenario.PostAsync(workbench, $"/publishing/workflows/{publishedVersion}/publish", new { });
+        var artifact = published["artifactId"]!.GetValue<string>();
+        var source = published["sourceReferenceId"]!.GetValue<string>();
+        var draft = await SubmitAsync("Mixed preview draft Test Run", draftMarker);
+        await ExecuteAndTestAsync(workbench);
+
+        await using var restarted = await workbench.CrashAndRestartAsync();
+        await NativeHostingScenario.LoginAsync(restarted);
+        await ExecuteAndTestAsync(restarted);
+
+        async Task<string> SubmitAsync(string name, string marker)
+        {
+            var root = NativeHostingScenario.Node("write", writeLine, [NativeHostingScenario.Input("text", marker)]);
+            var definition = await NativeHostingScenario.PostAsync(workbench, "/design/workflows/definitions/submit", new
+            {
+                name,
+                state = new { variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
+            });
+            return definition["version"]!["id"]!.GetValue<string>();
+        }
+
+        async Task ExecuteAndTestAsync(WorkbenchProcess app)
+        {
+            var execute = await NativeHostingScenario.PostAsync(app, $"/runtime/workflows/executables/{artifact}/execute",
+                new { sourceReferenceId = source });
+            Assert.False(string.IsNullOrWhiteSpace(execute["workflowExecutionId"]?.GetValue<string>()));
+            await WaitForOutputAsync(app, publishedMarker);
+            var testRun = await NativeHostingScenario.PostAsync(app, $"/publishing/workflows/{draft}/test-runs", new { });
+            Assert.False(string.IsNullOrWhiteSpace(testRun["workflowExecutionId"]?.GetValue<string>()));
+            await WaitForOutputAsync(app, draftMarker);
+        }
+
+        static Task WaitForOutputAsync(WorkbenchProcess app, string marker) => NativeHostingScenario.WaitForAsync(app,
+            () => app.Output.Split('\n').Any(line => line.TrimEnd('\r') == marker),
+            $"the local runner to write {marker}", timeout: TimeSpan.FromSeconds(20));
     }
 
     /// <summary>
@@ -197,17 +241,18 @@ public sealed class WorkbenchShellActivationTests
             Settings = new Dictionary<string, string>(withoutKey.Settings)
             {
                 ["Elsa:Readiness:DefaultShellName"] = "health-probe",
-                ["Elsa:Readiness:WarmDefaultShell"] = "false"
+                ["Elsa:Readiness:WarmDefaultShell"] = "false",
+                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:SqlitePath"] = "elsa-workbench-actors.db"
             }
         };
         await using var workbench = await WorkbenchProcess.StartAsync(shell, waitForReady: false);
 
-        var details = await workbench.ManagementClient.GetFromJsonAsync<RegisteredShell>("/_admin/shells/default");
-        var blueprint = Assert.IsType<RegisteredShell>(details).Blueprint;
-        Assert.Contains("WorkflowsRuntimeKernelHosting", blueprint.Features);
-        var key = Assert.Single(blueprint.ConfigurationData,
-            setting => string.Equals(setting.Key, actorRecoveryKey, StringComparison.OrdinalIgnoreCase));
-        Assert.Equal("", key.Value.GetString());
+        // Resolving a route in the real default shell still requires its own production key.
+        using var response = await workbench.Client.GetAsync("/modularity/features");
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        await NativeHostingScenario.WaitForAsync(workbench,
+            () => workbench.Output.Contains("Runtime recovery continuation signing key must be configured", StringComparison.Ordinal),
+            "the routable default shell to report the missing retained Runtime key", timeout: TimeSpan.FromSeconds(10));
     }
 
     private static async Task<HashSet<string>> ReadEffectiveFeatureClosureAsync(WorkbenchProcess workbench)
@@ -238,7 +283,7 @@ public sealed class WorkbenchShellActivationTests
     }
 
     private sealed record RegisteredShell(EffectiveBlueprint Blueprint, ActiveGeneration[] Generations);
-    private sealed record EffectiveBlueprint(string[] Features, Dictionary<string, JsonElement> ConfigurationData);
+    private sealed record EffectiveBlueprint(string[] Features);
     private sealed record ActiveGeneration(string State);
     private sealed record DependencyCatalog(RuntimeFeature[] Features);
     private sealed record RuntimeFeature(string Id, bool RuntimeAvailable, FeatureDependency[] Dependencies);

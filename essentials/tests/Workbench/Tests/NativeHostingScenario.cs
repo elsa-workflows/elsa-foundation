@@ -19,7 +19,7 @@ internal static class NativeHostingScenario
     internal static readonly TimeSpan WorkerPollInterval = TimeSpan.FromMilliseconds(100);
     internal static readonly TimeSpan WorkerRenewalInterval = TimeSpan.FromSeconds(1);
 
-    internal static WorkbenchShell WitnessShell() => WorkbenchShell.Development with
+    internal static WorkbenchShell WitnessShell() => WorkbenchShell.LegacyRuntime with
     {
         Settings = new Dictionary<string, string>
         {

@@ -12,9 +12,6 @@
             "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
             "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
           },
-          "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
-          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
           "WorkflowsDashboardEntityFrameworkCore": {},
           "AgentReview": {},
           "AgentReviewApi": {},
