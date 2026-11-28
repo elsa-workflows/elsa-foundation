@@ -123,12 +123,17 @@ internal sealed class KernelUserTaskRuntime(KernelShellStorage storage, IService
     {
         string? afterAccepted = null;
         string? afterOpen = null;
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            afterAccepted = await ScanAsync(accepted: true, afterAccepted, cancellationToken);
-            afterOpen = await ScanAsync(accepted: false, afterOpen, cancellationToken);
-            await Task.Delay(ScanDelay, clock, cancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                afterAccepted = await ScanAsync(accepted: true, afterAccepted, cancellationToken);
+                afterOpen = await ScanAsync(accepted: false, afterOpen, cancellationToken);
+                await Task.Delay(ScanDelay, clock, cancellationToken);
+            }
         }
+        catch (OperationCanceledException error) when
+            (cancellationToken.IsCancellationRequested && error.CancellationToken == cancellationToken) { }
     }
 
     private async Task<string?> ScanAsync(bool accepted, string? after, CancellationToken cancellationToken)

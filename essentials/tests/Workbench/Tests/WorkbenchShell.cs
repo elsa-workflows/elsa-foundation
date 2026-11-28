@@ -24,11 +24,13 @@ public sealed record WorkbenchShell(
         Settings = new Dictionary<string, string>
         {
             ["DOTNET_USE_POLLING_FILE_WATCHER"] = "true",
+            [$"{FeaturesPath}:ActorDecisionsWorkflows"] = "false",
             [$"{FeaturesPath}:ActorHttpConnections"] = "false",
             [$"{FeaturesPath}:KernelActivitiesHttp"] = "false",
             [$"{FeaturesPath}:KernelWorkflowDashboardQueries"] = "false",
             [$"{FeaturesPath}:WorkflowsRuntimeKernelHosting"] = "false",
-            [$"{FeaturesPath}:WorkflowsRuntimeKernelRetainedApi"] = "false"
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelRetainedApi"] = "false",
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelUserTasksApi"] = "false"
         }
     };
 
