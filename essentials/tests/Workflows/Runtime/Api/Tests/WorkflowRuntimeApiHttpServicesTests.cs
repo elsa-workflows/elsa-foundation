@@ -32,7 +32,7 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
         Assert.Contains(broad.Services.GetServices<IPermissionContributor>().SelectMany(contributor => contributor.Contribute()),
             permission => permission.Category == "User Tasks");
         WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(broad);
-        WorkflowsRuntimeApi.MapRetainedEndpoints(retained, includeExecute: true, includeDelete: true, includeInputSources: true);
+        RuntimeHttpApi.MapRetainedEndpoints(retained, includeExecute: true, includeDelete: true, includeInputSources: true);
 
         var broadRoutes = Routes(broad).ToDictionary(route => route.Key, route => route.Endpoint);
         var retainedRoutes = Routes(retained).ToArray();
@@ -57,7 +57,10 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
         static WebApplication BuildApp(bool includeLegacyUserTasks)
         {
             var builder = WebApplication.CreateBuilder();
-            builder.Services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks);
+            if (includeLegacyUserTasks)
+                builder.Services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: true);
+            else
+                builder.Services.AddRetainedRuntimeHttpServices();
             return builder.Build();
         }
 
@@ -105,9 +108,9 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
         Assert.Single(runtimeServices.GetServices<IPermissionContributor>().OfType<RetainedWorkflowRuntimePermissionContributor>());
         Assert.DoesNotContain(runtimeServices.GetRequiredService<IPermissionCatalog>().List(), permission => permission.Category == "User Tasks");
         Assert.IsType<WorkflowsRuntimeProblemWriter>(runtimeServices.GetRequiredKeyedService<IEndpointProblemWriter>(WorkflowsRuntimeApi.OwnerId));
-        Assert.IsType<WorkflowsRuntimeFaultRenderer>(runtimeServices.GetRequiredKeyedService<IEndpointFaultRenderer>(WorkflowsRuntimeApi.OwnerId));
+        Assert.IsType<RuntimeHttpFaultRenderer>(runtimeServices.GetRequiredKeyedService<IEndpointFaultRenderer>(WorkflowsRuntimeApi.OwnerId));
         Assert.Single(runtimeServices.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions.TypeInfoResolverChain
-            .OfType<WorkflowsRuntimeJsonTypeInfoResolver>());
+            .OfType<RuntimeHttpJsonTypeInfoResolver>());
 
         Assert.Null(runtimeServices.GetService<IWorkflowSchedulerDrainer>());
         Assert.Null(runtimeServices.GetService<IWorkflowExecutionActorProvider>());
@@ -122,7 +125,7 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddFoundationIdentityAbstractions();
-            services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: false);
+            services.AddRetainedRuntimeHttpServices();
         }
     }
 }

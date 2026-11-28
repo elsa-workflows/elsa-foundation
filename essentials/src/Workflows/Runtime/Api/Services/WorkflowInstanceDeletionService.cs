@@ -126,9 +126,3 @@ public sealed class WorkflowInstanceDeletionService(
     private static RuntimeRunDeletionRejectedSignal Changed() => new(StatusCodes.Status409Conflict,
         "The run changed while deletion was being prepared. Refresh its status and retry deletion.");
 }
-
-/// <summary>Performs an authorized deletion against the shell's workflow execution provider.</summary>
-public interface IWorkflowInstanceDeletionService
-{
-    Task<WorkflowInstanceDeletionView> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
-}

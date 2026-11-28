@@ -17,7 +17,7 @@
           "ActivitiesDesignReconciliation": {},
           "ActivitiesFlowchart": {},
           "ActivitiesPrimitives": {},
-          "ActivitiesRuntime": {},
+          "ActivitiesRuntimeHosting": {},
           "ActivitiesSequence": {},
           "ClrActivityReconciliation": {
             "Options": {
@@ -112,7 +112,7 @@
           "Primitives": {},
           "Secrets": {},
           "SecretsApi": {},
-          "SecretsWorkflows": {},
+          "ActorSecretsWorkflows": {},
           "Connections": {},
           "ActorHttpConnections": {},
           "ConnectionsApi": {},

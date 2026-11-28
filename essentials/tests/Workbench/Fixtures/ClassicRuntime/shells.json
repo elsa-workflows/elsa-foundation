@@ -3,6 +3,12 @@
     "Shells": {
       "default": {
         "Features": {
+          "ActivitiesRuntime": {},
+          "ActivitiesGraphRuntime": {},
+          "SecretsWorkflows": {},
+          "ActivitiesRuntimeHosting": false,
+          "ActivitiesGraphRuntimeHosting": false,
+          "ActorSecretsWorkflows": false,
           "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesHttp": {},
           "ActivitiesScheduling": {},

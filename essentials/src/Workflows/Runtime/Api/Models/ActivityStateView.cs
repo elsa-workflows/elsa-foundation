@@ -25,6 +25,3 @@ public sealed record ActivityStateView(
     /// <summary>No projector is registered for the private state's type alias.</summary>
     public const string NoProjector = "NoProjector";
 }
-
-/// <summary>The caller's permissions for one run (spec 260 FR-416). A display hint; the endpoints still enforce them.</summary>
-public sealed record WorkflowInstancePermissionsView(bool CanManage, bool CanInspectValues);

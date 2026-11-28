@@ -13226,3 +13226,24 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.Prepar
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.CanAdmit(Elsa.Workflows.Runtime.Core.Models.RuntimeStandaloneIngressSource! source, Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionRecipient! recipient) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowHttpConnectionApplier
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowHttpConnectionApplier.ApplyAsync(System.Net.Http.HttpRequestMessage! request, string! name, string! tenantId, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSecretMask! mask, string! executionId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.<Clone>$() -> Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection!
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.CaptureMode.get -> Elsa.Workflows.Runtime.Core.Models.RuntimePayloadCaptureMode?
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.CaptureMode.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.CapturedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.CapturedAt.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Deconstruct(out string! Name, out System.Text.Json.JsonElement? Value, out bool IsRedacted, out string? RedactionReason, out Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor! Type, out System.DateTimeOffset CapturedAt) -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Equals(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? other) -> bool
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.IsRedacted.get -> bool
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.IsRedacted.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Name.get -> string!
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Name.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.RedactionReason.get -> string?
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.RedactionReason.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Type.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor!
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Type.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Value.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Value.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.WorkflowOutputProjection(string! Name, System.Text.Json.JsonElement? Value, bool IsRedacted, string? RedactionReason, Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor! Type, System.DateTimeOffset CapturedAt) -> void
+static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator !=(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? left, Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? right) -> bool
+static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator ==(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? left, Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? right) -> bool
