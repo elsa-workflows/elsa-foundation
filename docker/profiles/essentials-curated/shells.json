@@ -84,6 +84,7 @@
           },
           "JavaScriptJintEngine": {},
           "JavaScriptActivities": {},
+          "ActivitiesScripting": {},
           "JavaScriptWorkflowsDesign": {},
           "JavaScriptEndpoints": {},
           "HttpJavaScript": {},
