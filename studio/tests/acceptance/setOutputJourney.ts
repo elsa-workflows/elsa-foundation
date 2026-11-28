@@ -101,8 +101,15 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   if (viewport.width < 600) await page.getByRole("button", { name: "Expand inspector panel", exact: true }).press("Enter");
   await target().scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-reopened");
+  const valueSource = page.getByRole("region", { name: "Value source for Sum", exact: true });
+  const revealOutputSource = async () => {
+    if (!await valueSource.isVisible())
+      await page.getByRole("button", { name: "Show output details for Sum", exact: true }).click();
+    await expect(valueSource).toBeVisible();
+  };
   await views.getByRole("tab", { name: /^Outputs/ }).click();
-  await page.locator(".ad-output-value-source").scrollIntoViewIfNeeded();
+  await revealOutputSource();
+  await valueSource.scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-connections");
   await expect(page.getByText("Assigned by Set Output in the designer.", { exact: true })).toBeVisible();
   const unchanged = await api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);
@@ -116,6 +123,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
     layout: unchanged.layout, activityPresentation: unchanged.activityPresentation ?? []
   });
   await page.reload(); await views.getByRole("tab", { name: /^Outputs/ }).click();
+  await revealOutputSource();
   await expect(page.getByText("This output also has a Set Output assignment. Remove this connection or the assignment before publishing.", { exact: true })).toBeVisible();
   await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
   const rejectedReview = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/publication-preflight"));
@@ -130,10 +138,11 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await expect(review).toContainText(/Remove|remove/);
   await capture(page, info, "set-output-conflict-review");
   await review.getByRole("button", { name: "Return to editor", exact: true }).click();
-  await page.getByRole("button", { name: "Remove connection", exact: true }).click();
+  await revealOutputSource();
+  await valueSource.getByRole("button", { name: "Remove connection", exact: true }).click();
   await expect(page.getByText("Assigned by Set Output in the designer.", { exact: true })).toBeVisible();
   await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
-  await page.locator(".ad-output-value-source").scrollIntoViewIfNeeded();
+  await valueSource.scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-conflict-repaired");
   const saved = await api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);
   expect(saved.contract.outputs).toHaveLength(1);
