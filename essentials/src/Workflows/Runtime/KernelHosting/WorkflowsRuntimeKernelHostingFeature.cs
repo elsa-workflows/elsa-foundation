@@ -80,7 +80,11 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
 
     public void ConfigureServices(IServiceCollection services)
     {
-        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
+        var storage = PreparedStandaloneStarts
+            ? KernelShellStorage.CreateRetainedHttpResponseQualification(Provider, SqlitePath, PostgresConnectionString)
+            : KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
+        PreparedStandaloneHttpFanOut = storage.TakesRetainedHttpResponse;
+        PreparedStandaloneHttpResponses = storage.TakesRetainedHttpResponse;
         ConfigureServices(services, storage, protectChildExecutables: storage.TakesPreparedStarts);
         services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
