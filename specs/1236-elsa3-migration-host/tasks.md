@@ -114,9 +114,11 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 - [X] T010 [US4] Start the repository's Studio host against the migration host. Sign in, open a definition, edit an
   expression, publish, and see the host run the new version. Record it in the PR, with the Studio host used and any
   Studio module that expects a capability the host doesn't advertise (R-8). Name that Studio host in the README.
-  **Done 2026-11-27 (PR #6031), with one block:** sign-in and the definitions list work (US4 scenario 1). Scenario 2 is
-  blocked outside this host: Studio opens a definition through its current draft and a reconciled definition has none
-  ("This workflow definition has no current draft"). The README says so and how to change a migrated workflow instead.
+  **Done 2026-11-27 (PR #6031)** for sign-in and the definitions list (US4 scenario 1). **Scenario 2 done 2026-11-28
+  (PR #6074, with #6088):** the host clones a draft for each reconciled definition that has none (#6070), and Studio
+  saves Boolean, number and list literals as typed JSON (#6078). In Studio, the migrated hello was opened, its Body
+  changed to a JavaScript expression and published; `GET /workflows/http/hello` returned the new body, also after a
+  restart.
 
 ## Phase 6: User Story 2 - JTest acceptance (P1)
 

@@ -65,6 +65,8 @@ public sealed class Elsa3MigrationCodeTableTests
         Assert.Equal([Elsa3ActivityDiagnosticCodes.NullPolicies], Elsa3MigrationCodeTable.Codes.Where(code => Elsa3MigrationCodeTable.Get(code).Routine));
         Assert.Equal(Elsa3MigrationRemedy.PatchDefinition, Elsa3MigrationCodeTable.Get(Elsa3ImportDiagnosticCodes.ReplacedFunctionReference).Remedy);
         Assert.Null(Elsa3MigrationCodeTable.Get(Elsa3ImportDiagnosticCodes.ReplacedFunctionReference).ComponentKind);
+        Assert.Equal(Elsa3MigrationRemedy.PatchDefinition, Elsa3MigrationCodeTable.Get(Elsa3ImportDiagnosticCodes.InputChangesVariable).Remedy);
+        Assert.Null(Elsa3MigrationCodeTable.Get(Elsa3ImportDiagnosticCodes.InputChangesVariable).ComponentKind);
         Assert.Equal(Elsa3MigrationRemedy.PatchDefinition, Elsa3MigrationCodeTable.Get(Elsa3ReconciliationDiagnosticCodes.BlockedByDependency).Remedy);
     }
 
