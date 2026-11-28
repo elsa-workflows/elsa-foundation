@@ -267,6 +267,10 @@ html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-se
   padding: 0 .75rem .625rem;
 }
 
+.wf-sequence-slots + .wf-sequence-runtime-strip {
+  padding-block-start: .5rem;
+}
+
 .wf-sequence-summary {
   display: -webkit-box;
   overflow: hidden;
