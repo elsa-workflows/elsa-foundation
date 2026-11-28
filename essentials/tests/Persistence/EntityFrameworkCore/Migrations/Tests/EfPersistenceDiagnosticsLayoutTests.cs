@@ -97,7 +97,7 @@ public sealed class EfPersistenceDiagnosticsLayoutTests
     {
         ShellFeaturePreparationDescriptor[] features =
         [
-            new("WorkflowsRuntimeEntityFrameworkCore", [], typeof(RuntimeEntityFrameworkCoreFeature), false),
+            new("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", [], typeof(RuntimeArtifactsEntityFrameworkCoreFeature), false),
             new("DiagnosticsStructuredLogsEntityFrameworkCore", [], typeof(StructuredLogsEntityFrameworkCoreFeature), false),
             new("DiagnosticsOpenTelemetryEntityFrameworkCore", [], typeof(EfOpenTelemetryFeature), false)
         ];

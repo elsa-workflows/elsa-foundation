@@ -1,5 +1,7 @@
 # Retained-boundary process witness
 
+Run this classic Runtime witness in a checkout of
+[`ef70e5acd7`](https://github.com/elsa-workflows/elsa-foundation/tree/ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a/specs/1183-runtime-efficiency-program/evidence/retained-boundaries).
 Prepare the frozen project/lock templates as described in the [manual fixture entrypoint](../README.md) before building.
 
 This bounded qualification fixture exercises real SQLite persistence, native Event suspension, pinned DispatchWorkflow,

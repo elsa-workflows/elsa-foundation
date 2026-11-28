@@ -47,9 +47,7 @@ public sealed class WorkbenchShellActivationTests
     private static readonly string[] CatalogedFeatures =
     [
         "ActivitiesBpmn",
-        // ActivitiesHttp depends on its route-table projection by feature name, and a name cannot make an assembly
-        // that is absent from the host discoverable. A shell that does not list it gets it as a dependency.
-        "WorkflowsRuntimeHttp",
+        "WorkflowsRuntimeStandaloneHttp",
         // File-based workflow deployment is opt-in: it needs a source and a path to register.
         "JsonWorkflowReconciliation"
     ];
@@ -119,6 +117,8 @@ public sealed class WorkbenchShellActivationTests
 
         Assert.False(Runs("ConnectionsWorkflows"));
         Assert.DoesNotContain("ActivitiesRuntime", catalog.Keys);
+        Assert.DoesNotContain("ActivitiesHttp", catalog.Keys);
+        Assert.DoesNotContain("WorkflowsRuntimeHttp", catalog.Keys);
         Assert.False(Runs("ActivitiesGraphRuntime"));
         Assert.False(Runs("SecretsWorkflows"));
         Assert.DoesNotContain("WorkflowsRuntimeApi", catalog.Keys);
@@ -135,6 +135,7 @@ public sealed class WorkbenchShellActivationTests
         {
             var active = await ReadEffectiveFeatureClosureAsync(workbench);
             Assert.Contains("ActorHttpConnections", active);
+            Assert.Contains("WorkflowsRuntimeStandaloneHttp", active);
             Assert.Contains("ActivitiesRuntimeHosting", active);
             Assert.Contains("ActivitiesGraphRuntimeHosting", active);
             Assert.Contains("ActorSecretsWorkflows", active);
@@ -189,6 +190,8 @@ public sealed class WorkbenchShellActivationTests
     [InlineData("custom", "0", "WorkflowsRuntimeApi")]
     [InlineData("custom", "0:Name", "WorkflowsRuntimeEntityFrameworkCore")]
     [InlineData("default", "WorkflowsRuntimeApi", null)]
+    [InlineData("default", "ActivitiesHttp", null)]
+    [InlineData("custom", "0", "WorkflowsRuntimeHttp")]
     public async Task Retired_classic_selector_in_any_shell_is_refused_before_opening_the_actor_store(
         string shellName, string selector, string? value)
     {

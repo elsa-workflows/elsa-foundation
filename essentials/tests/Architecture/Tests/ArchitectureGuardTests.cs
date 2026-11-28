@@ -591,7 +591,6 @@ public sealed partial class ArchitectureGuardTests
         ["Elsa.Workflows.Design.Reconciliation.Git"] = "extensions/Git/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.Git.csproj",
         // Workflow activities and endpoint routing share the HTTP capability.
         ["Elsa.Activities.Http"] = "extensions/Http/src/Activities/Elsa.Activities.Http.csproj",
-        ["Elsa.Activities.Http.IntegrationTests"] = "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
         ["Elsa.Activities.Http.Tests"] = "extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj",
         ["Elsa.Workflows.Runtime.Http"] = "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj",
         ["Elsa.Workflows.Runtime.Http.Tests"] = "extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj",

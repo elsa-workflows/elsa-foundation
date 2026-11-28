@@ -4,7 +4,7 @@
     "Shells": {
       "overlay": {
         "Features": {
-          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" }
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "Provider": "PostgreSql" }
         }
       }
     }
