@@ -265,10 +265,12 @@ internal sealed class JavaScriptHostFunctions
         }
     }
 
-    // A global the engine already holds read-only cannot be replaced; failing beats a silently missing function.
+    // A global the engine already holds read-only cannot be replaced; failing beats a silently missing function. The
+    // function is configurable, as the standard globals are, so an expression's own top-level declaration of the name
+    // hides it (spec 1223 FR-027: a warning, not an error) instead of failing as a redeclared global; it stays read-only.
     private static void Define(Engine engine, string name, JsValue value)
     {
-        if (!engine.Global.DefineOwnProperty(name, new PropertyDescriptor(value, writable: false, enumerable: false, configurable: false)))
+        if (!engine.Global.DefineOwnProperty(name, new PropertyDescriptor(value, writable: false, enumerable: false, configurable: true)))
             throw new InvalidOperationException($"JavaScript function '{name}' could not be installed: the engine already defines '{name}'.");
     }
 

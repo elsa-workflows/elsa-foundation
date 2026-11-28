@@ -339,6 +339,33 @@ public sealed class ExpressionCapabilityTests
         Assert.Equal(binding.GetRawText(), script.GetRawText());
     }
 
+    [Theory]
+    [InlineData("const structuredClone = o => 7; return structuredClone(1);")]
+    [InlineData("function structuredClone(o) { return 7; } return structuredClone(1);")]
+    [InlineData("const newGuid = () => 7; return newGuid();")]
+    public async Task A_declaration_of_a_built_in_name_hides_it_on_both_surfaces(string source)
+    {
+        // Spec 1223 FR-027: declaring a built-in name gets a warning and the declaration wins, also at the top level of
+        // a statement-form input expression, which runs unwrapped (issue #6215: structuredClone polyfills).
+        await using var provider = Build();
+        await using var scope = provider.CreateAsyncScope();
+        var binding = await EvaluateBindingAsync(scope, source);
+        var script = (await scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>()
+            .EvaluateAsync(new JavaScriptScriptEvaluationRequest(source, JsonSerializer.SerializeToElement(new { }), CancellationToken.None))).Value!.Value;
+
+        Assert.Equal(7, binding.GetInt32());
+        Assert.Equal(7, script.GetInt32());
+    }
+
+    [Fact]
+    public async Task A_built_in_stays_read_only()
+    {
+        var (binding, script) = await BothAsync("(() => { try { structuredClone = () => 7; return 'replaced'; } catch (e) { return e.name; } })()");
+
+        Assert.Equal("TypeError", binding.GetString());
+        Assert.Equal("TypeError", script.GetString());
+    }
+
     private static async Task<(JsonElement Binding, JsonElement Script)> BothAsync(string expression, Action<IServiceCollection>? configure = null)
     {
         await using var provider = Build(configure);

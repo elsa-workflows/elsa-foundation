@@ -371,7 +371,8 @@ and run the converted scripts.
   boolean, date or GUID) is left out, since a script cannot change a scalar in place; a scalar the script assigns is
   in the set.)* *(Clarified in implementation, 2026-11-28, #6215: a value passed directly as an argument to a built-in
   function, such as `structuredClone(variables.order)`, does not escape, since a built-in gets a JSON copy of it; this
-  does not hold when the script declares its own function of that name.)*
+  does not hold when the script declares its own function of that name, or when its source names `toJSON`, which
+  making the copy runs.)*
 - **FR-020**: Publish MUST refuse a script that: writes an undeclared literal name; reads or writes a transient
   variable by a literal name; or assigns, or directly assigns into, a read-only target by a literal name. Each refusal
   names the script position and the target.

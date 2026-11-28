@@ -89,7 +89,8 @@ them changes the variable.
   its JSON form, never the live object, or the call fails when it has none.
 - **Publish.** A value passed to `structuredClone` does not escape (spec 1231 FR-019), so
   `structuredClone(variables.order)` alone does not put `order` among the variables the step may write. A script that
-  declares its own `structuredClone` loses this.
+  declares its own `structuredClone`, or whose source names `toJSON` (making the copy runs it, and it can change the
+  value), loses this.
 - **Numbers.** A lossy number stays lossy in the copy: passing it raises `VF-PREC-002` like any host function
   argument, and writing it is refused (`VF-PREC-001`). Hold such numbers as strings.
 - **Name.** Built-in names are reserved and unprefixed (ADR 0045 §5 D-5): a script or expression that declares one

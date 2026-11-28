@@ -239,7 +239,8 @@ shares nothing with the variable ([value adapters](reference/value-adapters.md#c
 - **The may-write set.** Publish pins the variables a script may write as `runtime.mayWriteVariables`: each variable it
   writes literally, and each variable whose value it lets escape (into a local, an argument, a closure, or a method call
   on it, such as `push`), unless the variable is a scalar a script cannot change in place. An argument of a built-in
-  function (`structuredClone(variables.order)`) does not escape: the built-in gets a JSON copy. A loop's item or index is
+  function (`structuredClone(variables.order)`) does not escape: the built-in gets a JSON copy. It does when the script
+  declares its own function of that name or its source names `toJSON`, which making the copy runs. A loop's item or index is
   frozen, so it never counts. A computed or opaque write pins `runtime.mayWriteEveryVisibleVariable` instead. The
   concurrent-write warning and the overlap warning count these, and Studio shows the set in the node's properties
   (from the scoped-variable analysis). Run JavaScript, an engine script activity, carries the type-level free-name
