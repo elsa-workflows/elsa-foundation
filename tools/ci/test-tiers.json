@@ -104,12 +104,6 @@
       "medianMinutes": 0.08
     },
     {
-      "project": "extensions/Http/tests/Activities/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
-    },
-    {
       "project": "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
       "tier": "integration",
       "trait": "child-process",
@@ -646,11 +640,6 @@
       "medianMinutes": 0.09
     },
     {
-      "project": "essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.01
-    },
-    {
       "project": "essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02
@@ -886,7 +875,6 @@
           "essentials/tests/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj",
           "extensions/Diagnostics.OpenTelemetry/tests/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj",
           "essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
-          "essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj",
           "essentials/tests/Serialization/Tests/Elsa.Serialization.Tests.csproj",
           "essentials/tests/Locking/Tests/Elsa.Locking.Tests.csproj",
           "essentials/tests/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj",
@@ -1031,7 +1019,6 @@
         "suites": [
           "activities-design",
           "weaver-records",
-          "command-cost",
           "identity",
           "secrets-ef-composition",
           "secrets-mysql",
@@ -1167,11 +1154,6 @@
       "project": "essentials/tests/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj",
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX",
       "retryOnFailure": false
-    },
-    {
-      "suite": "command-cost",
-      "project": "extensions/Http/tests/Activities/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
-      "require": "ELSA_COMMAND_COST_REQUIRE_MEASUREMENT"
     },
     {
       "suite": "locking-database",

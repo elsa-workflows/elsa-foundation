@@ -201,7 +201,7 @@ The later parent-decision acknowledgement (#2584, below) lowers Durable ten Writ
 
 Raw command TSVs, run JSON and attribution/linear-fit report are in
 `/private/tmp/elsa-runtime-efficiency-program/m4-command-cost-qualified/`; rerun using the
-[tool instructions](../../Essentials/tests/Activities/Http/CommandCost/Tests/README.md). Nothing in this cohort is timed.
+[archived tool instructions](../contributing/classic-runtime-witnesses.md). Nothing in this cohort is timed.
 
 ## Avoiding a second queue write for a committed parent decision (#2584)
 

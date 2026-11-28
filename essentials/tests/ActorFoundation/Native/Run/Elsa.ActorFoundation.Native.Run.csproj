@@ -30,7 +30,6 @@
     <ProjectReference Include="../../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
     <ProjectReference Include="../../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
     <ProjectReference Include="../../../../src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj" />
-    <ProjectReference Include="../../../../src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <Compile Include="../../../Workflows/Runtime/KernelHost/Tests/Compiled.cs" Link="Compiled.cs" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
   </ItemGroup>

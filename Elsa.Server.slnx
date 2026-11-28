@@ -169,7 +169,6 @@
   <Folder Name="/tools/bpmn/">
     <Project Path="tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj" />
     <Project Path="tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj" />
-    <Project Path="tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj" />
   </Folder>
   <Folder Name="/tools/ef/">
     <Project Path="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj" />
@@ -535,7 +534,6 @@
     <Project Path="essentials/src/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Dashboard/">
-    <Project Path="essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj" />
     <Project Path="essentials/src/Workflows/Dashboard/Retained/Elsa.Workflows.Dashboard.Retained.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Dashboard/Persistence/">
@@ -606,7 +604,6 @@
     <Project Path="essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/PreparedSchedules/Elsa.Workflows.Runtime.PreparedSchedules.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj" />
-    <Project Path="essentials/src/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
   </Folder>
@@ -678,9 +675,6 @@
   <Folder Name="/extensions/Http/tests/Activities/">
     <Project Path="extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj" />
     <Project Path="extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj" />
-  </Folder>
-  <Folder Name="/extensions/Http/tests/Activities/CommandCost/">
-    <Project Path="extensions/Http/tests/Activities/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj" />
   </Folder>
   <Folder Name="/extensions/Http/tests/Activities/Fixtures/">
     <Project Path="extensions/Http/tests/Activities/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" />
@@ -1031,9 +1025,6 @@
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/">
     <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj" />
     <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
-  </Folder>
-  <Folder Name="/essentials/tests/Workflows/Runtime/Resumption/">
-    <Project Path="essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Scheduling/">
     <Project Path="essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj" />

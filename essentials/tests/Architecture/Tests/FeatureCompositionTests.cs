@@ -84,7 +84,6 @@ public sealed class FeatureCompositionTests
             [WorkflowsRuntimeKernelRetainedApiFeature.FeatureName], ["WorkflowsRuntimeApi"]),
         new("Legacy and retained HTTP features own the same routes.",
             ["WorkflowsRuntimeStandaloneHttp"], ["WorkflowsRuntimeHttp"]),
-        new("Legacy and retained workflow dashboards share the same routes.", ["WorkflowsDashboardRetained"], ["WorkflowsDashboard"]),
         new("Legacy and retained workflow attention provide the same contributor.",
             ["WorkflowsRuntimeRetainedAttention"], ["WorkflowsRuntimeAttention"]),
     ];
@@ -105,7 +104,6 @@ public sealed class FeatureCompositionTests
         "WorkflowsExecutionEvidence",
         "WorkflowsRuntimeHistory",
         "WorkflowsRuntimeRecurringTriggers",
-        "WorkflowsRuntimeReferenceGarbageCollection",
         "WorkflowsRuntimeResumption",
         "WorkflowsRuntimeScheduling"
     ];
