@@ -59,15 +59,9 @@ Retain source/admission evidence, each recipient phase, linked ordinary executio
 
 ## Actual Studio experience
 
-Extend the existing runner's finite journey/capture inventory before this run. It refuses a dirty checkout and owns its child hosts/ports/disposable stores.
+Replay the classic standalone browser matrix from the immutable Workbench checkout in the [compatibility guide](../../docs/contributing/workbench-compatibility-tests.md#standalone-trigger-browser-journeys). The pinned runner refuses a dirty checkout and owns its child hosts, ports and disposable stores. For the independently enrolled SDK consumer, use `--studio-shape coordinated-sdk`.
 
-```bash
-pnpm --dir Studio typecheck
-pnpm --dir Studio check:bundle:workflows
-python3 tools/ux-acceptance/standalone.py --suite standalone-triggers --studio-shape coordinated-sdk --output /tmp/standalone-triggers-ux-UNIQUE-RUN
-```
-
-Choose a new output path for every run; do not reuse or overwrite failed evidence. The standalone producer requires seven journeys in seven appearances (49 executions), uses the normal development seed and independently composes the SDK consumer's owned store. Its controlled identity/composition setup touches only stopped, token-marked disposable hosts. `--journey` runs all seven appearances of one selected journey and cannot certify the complete feature. The existing `run.py` retains its original suite as its default; it does not run this feature matrix. See [UX acceptance](ux-acceptance.md) for resource/association/input/mode/policy/delivery/permission states and named captures.
+Choose a new output path for every run; do not reuse or overwrite failed evidence. The standalone producer requires seven journeys in seven appearances (49 executions), uses the normal development seed and independently composes the SDK consumer's owned store. Its controlled identity/composition setup touches only stopped, token-marked disposable hosts. `--journey` runs all seven appearances of one selected journey and cannot certify the complete feature. Current `run.py` runs the composed Studio journeys against stock Workbench. See [UX acceptance](ux-acceptance.md) for resource/association/input/mode/policy/delivery/permission states and named captures.
 
 Open the actual screenshots, accessibility snapshots and traces. Independent inspection covers desktop/narrow/light/dark and the additional changed-surface checks named in that record. Retain keyboard/focus, empty/populated, validation/conflict/recovery, source-owned and denied states. Link current-commit downloadable CI artifacts; local paths alone are not shared acceptance evidence.
 

@@ -119,8 +119,7 @@ internal sealed class WorkflowArtifactExportFixture
 
     /// <summary>
     /// Runs an already compiled, content-verified executable through the production publish handler and activation
-    /// coordinator. This is the author-engine boundary used by the cross-process export/import proof: no test writes
-    /// the executable or its Published reference directly.
+    /// coordinator so the export reads a Published reference written by the actual publication path.
     /// </summary>
     public async Task<WorkflowExecutableSourceReference> PublishThroughProductionAsync(WorkflowExecutable executable)
     {

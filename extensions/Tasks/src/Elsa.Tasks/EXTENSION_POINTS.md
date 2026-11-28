@@ -84,7 +84,6 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 - `Elsa.Activities.Runtime` — `RegisterActivityTypesStartupTask` *(seeds the well-known-type registry with activity and I/O aliases)*
 - `Elsa.Activities.Design.Reconciliation` — `ActivityVersionReconcilerStartupTask` *(cross-domain; runs on every node at once, no lock, because its inputs are node-local and concurrent passes converge, #2189)*
 - `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain; the same, #2187 and #2189)*
-- `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
 - `Elsa3.Activities.Design.Import.Reconciliation` — `Elsa3FolderImportTask` *(cross-domain; `[Order(4)]`, imports a folder of Elsa 3 exports through the collection import and publishes them; every node, no lock, because the commit is idempotent and a publication another node made first is recognised; spec 235)*
 - `Elsa.Diagnostics.OpenTelemetry.Workflows` — `BridgeStartupTask` *(cross-domain; attaches the engine-span listener that forwards workflow engine spans into the OpenTelemetry ingestion store)*

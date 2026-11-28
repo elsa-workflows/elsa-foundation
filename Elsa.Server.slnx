@@ -190,11 +190,6 @@
     <Project Path="tools/studio/HostingReuse.Probe/Runner/HostingReuse.Probe.csproj" />
     <Project Path="tools/studio/HostingReuse.Probe/StorePruning/StorePruning.csproj" />
   </Folder>
-  <Folder Name="/tools/ux-acceptance/">
-    <Project Path="tools/ux-acceptance/extensions/TriggerAuthoring/Acme.TriggerAuthoring.csproj" />
-    <Project Path="tools/ux-acceptance/extensions/TriggerFaults/Acme.TriggerFaults.csproj" />
-    <Project Path="tools/ux-acceptance/setup/Elsa.UxAcceptance.Setup.csproj" />
-  </Folder>
   <Folder Name="/tools/versioning/">
     <Project Path="tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj" />
     <Project Path="tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj" />
@@ -612,10 +607,6 @@
     <Project Path="essentials/src/Workflows/Runtime/Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Api/StandaloneTriggers/Elsa.Workflows.Runtime.Api.StandaloneTriggers.csproj" />
   </Folder>
-  <Folder Name="/essentials/src/Workflows/Runtime/Reconciliation/">
-    <Project Path="essentials/src/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
-    <Project Path="essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj" />
-  </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/Persistence/">
     <Project Path="essentials/src/Workflows/Runtime/Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
@@ -675,9 +666,6 @@
   <Folder Name="/extensions/Http/tests/Activities/">
     <Project Path="extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj" />
     <Project Path="extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj" />
-  </Folder>
-  <Folder Name="/extensions/Http/tests/Activities/Fixtures/">
-    <Project Path="extensions/Http/tests/Activities/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Activities/Scripting/">
     <Project Path="essentials/tests/Activities/Scripting/Tests/Elsa.Activities.Scripting.Tests.csproj" />
@@ -1011,10 +999,6 @@
   <Folder Name="/extensions/Http/tests/Workflows/" />
   <Folder Name="/extensions/Http/tests/Workflows/Runtime/">
     <Project Path="extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
-  </Folder>
-  <Folder Name="/essentials/tests/Workflows/Runtime/Reconciliation/">
-    <Project Path="essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj" />
-    <Project Path="essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/">
     <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/TimerHistoryRestartHost/TimerHistoryRestartHost.csproj" />

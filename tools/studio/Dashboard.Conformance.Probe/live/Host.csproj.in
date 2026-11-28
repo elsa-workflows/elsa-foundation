@@ -163,7 +163,6 @@
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
-    <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj" />
