@@ -2126,7 +2126,7 @@ public sealed class Elsa3ExpressionRewriter(
             // a custom global. In a with statement's body a call may read the with object, which the with statement's
             // refusal covers.
             if (changeTarget is not null && _withBodyDepth == 0 && InstanceReaderOf(changeTarget) is { } instanceReader)
-                Issues.Add(InstanceValueChange(instanceReader));
+                Issues.Add(InstanceValueChange(instanceReader, changesMember: changeTarget is not CallExpression));
 
             if (changeTarget is not null && TargetReachesAmbientRoot(changeTarget))
             {
@@ -3460,8 +3460,9 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// The workflow instance built-in (<c>getCorrelationId</c>, …) a change of <paramref name="target"/> goes through
-        /// (#6230), followed along the object chain only, like <see cref="TargetReachesAmbientRoot"/>, so a computed key
-        /// that reads one stays a read; or null.
+        /// (#6230), or null. It follows the object chain and destructuring targets like
+        /// <see cref="TargetReachesAmbientRoot"/>, so a computed key that reads one stays a read; unlike it, an object it
+        /// does not follow is searched only where its value can come from, never as a whole.
         /// </summary>
         private string? InstanceReaderOf(Node target) => target switch
         {
@@ -3499,14 +3500,25 @@ public sealed class Elsa3ExpressionRewriter(
             (InstanceMembers.ContainsKey(reader.Name) || ConvertsWorkflowState && StateGetters.Contains(reader.Name)) &&
             !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, reader.Name["get".Length..])).Succeeded;
 
-        private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader) => new(
-            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-            $"JavaScript changes the value '{reader}()' returns, or a member of it. Scripts only read that workflow instance value " +
-            "(text or null), and Elsa 4 runs them in strict mode, where the conversion cannot reproduce what the change did in Elsa 3.",
-            $"Copy the value into a local first (let value = {reader}();) and work with the local, or remove the change{InstanceChangeRoute(reader)}, " +
-            "in the Elsa 3 workflow before import.");
+        /// <summary>
+        /// The refusal of a change through the value <paramref name="reader"/> returns (text or null): a member change, which
+        /// Elsa 3 ignored on text and Elsa 4's strict mode throws on, or an assignment to the value itself, which failed in
+        /// Elsa 3 and would assign to the script's own read in Elsa 4.
+        /// </summary>
+        private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader, bool changesMember) => changesMember
+            ? new(
+                Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                $"JavaScript sets a member of the value '{reader}()' returns. The value is text (or null): Elsa 3 ignored the change " +
+                "(or failed on null), and Elsa 4 runs scripts in strict mode, where it throws.",
+                "Remove the change, or keep the member on a value of the script's own (a local object or a variable), in the Elsa 3 workflow before import.")
+            : new(
+                Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                $"JavaScript assigns to the value '{reader}()' returns. That failed in Elsa 3; converted, it would assign to the script's " +
+                "own read of the workflow instance value instead.",
+                $"Copy the value into a local first (let value = {reader}();) and assign to the local{InstanceChangeRoute(reader)}, " +
+                "in the Elsa 3 workflow before import.");
 
-        /// <summary>How a script changes the instance value <paramref name="reader"/> reads itself, where it can.</summary>
+        /// <summary>Where the script runs, what changes the instance value <paramref name="reader"/> reads, if anything does.</summary>
         private string InstanceChangeRoute(string reader) => reader switch
         {
             "getCorrelationId" when ConvertsWorkflowState => "; to change the instance's correlation ID, call setCorrelationId(value)",

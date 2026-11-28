@@ -225,21 +225,22 @@ public sealed class Elsa3ExpressionRewriterTests
         Assert.False(result.Succeeded, result.Definition?.Source);
         var issue = Assert.Single(result.Issues);
         Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, issue.Code);
-        Assert.StartsWith($"JavaScript changes the value '{reader}()' returns, or a member of it.", issue.Message, StringComparison.Ordinal);
-        Assert.Contains($"let value = {reader}();", issue.Guidance, StringComparison.Ordinal);
+        Assert.Contains($" the value '{reader}()' returns.", issue.Message, StringComparison.Ordinal);
         Assert.EndsWith("in the Elsa 3 workflow before import.", issue.Guidance, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// #6230: the guidance names how the script changes the instance value itself, where it can: in a Run JavaScript body
-    /// the workflowState setter, elsewhere a Correlate activity for the correlation ID; the instance ID has no route.
+    /// #6230: a member change is told to go, an assignment to the value itself to go to a local copy, and the latter also
+    /// names what changes the instance value where the script runs: in a Run JavaScript body the workflowState setter,
+    /// elsewhere a Correlate activity for the correlation ID; the instance ID has no route.
     /// </summary>
     [Theory]
-    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "; to change the instance's correlation ID, call setCorrelationId(value), ")]
-    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Expression, false, "; to change the instance's correlation ID, use a Correlate activity, ")]
-    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, true, "; to change the instance's correlation ID, use a Correlate activity, ")]
-    [InlineData("getWorkflowInstanceName().x = 1", Elsa3JavaScriptMode.Script, false, "; to change the instance's name, call setWorkflowInstanceName(value), ")]
-    [InlineData("getWorkflowInstanceId().x = 1", Elsa3JavaScriptMode.Script, false, "or remove the change, in the Elsa 3 workflow before import.")]
+    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "Remove the change, or keep the member on a value of the script's own")]
+    [InlineData("getCorrelationId() += 'acme'", Elsa3JavaScriptMode.Script, false, "(let value = getCorrelationId();) and assign to the local; to change the instance's correlation ID, call setCorrelationId(value), ")]
+    [InlineData("getCorrelationId() = 'acme'", Elsa3JavaScriptMode.Expression, false, "; to change the instance's correlation ID, use a Correlate activity, ")]
+    [InlineData("getCorrelationId() = 'acme'", Elsa3JavaScriptMode.Script, true, "; to change the instance's correlation ID, use a Correlate activity, ")]
+    [InlineData("getWorkflowInstanceName() = 'acme'", Elsa3JavaScriptMode.Script, false, "; to change the instance's name, call setWorkflowInstanceName(value), ")]
+    [InlineData("getWorkflowInstanceId() = 'acme'", Elsa3JavaScriptMode.Script, false, "and assign to the local, in the Elsa 3 workflow before import.")]
     public void Change_through_a_workflow_instance_value_names_the_route_that_changes_the_instance(
         string source, Elsa3JavaScriptMode mode, bool reusable, string route)
     {
@@ -266,7 +267,7 @@ public sealed class Elsa3ExpressionRewriterTests
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Issues, issue => issue.Message.StartsWith("JavaScript changes the value 'getCorrelationId()' returns", StringComparison.Ordinal));
+        Assert.Contains(result.Issues, issue => issue.Message.StartsWith("JavaScript sets a member of the value 'getCorrelationId()' returns.", StringComparison.Ordinal));
         Assert.Contains(result.Issues, issue => issue.Message == otherMessage);
     }
 
@@ -287,10 +288,23 @@ public sealed class Elsa3ExpressionRewriterTests
 
         Assert.False(blockFunction.Succeeded);
         Assert.Contains(blockFunction.Issues, issue => issue.Message.StartsWith("JavaScript uses 'getCorrelationId' outside the block", StringComparison.Ordinal));
-        Assert.DoesNotContain(blockFunction.Issues, issue => issue.Message.StartsWith("JavaScript changes the value 'get", StringComparison.Ordinal));
+        Assert.DoesNotContain(blockFunction.Issues, issue => issue.Message.Contains("()' returns.", StringComparison.Ordinal));
         Assert.False(ambiguous.Succeeded);
         Assert.Contains(ambiguous.Issues, issue => issue.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
-        Assert.DoesNotContain(ambiguous.Issues, issue => issue.Message.StartsWith("JavaScript changes the value 'get", StringComparison.Ordinal));
+        Assert.DoesNotContain(ambiguous.Issues, issue => issue.Message.Contains("()' returns.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// #6230: a += or -= assignment makes a new value, so a change of what it returns is no change of the instance value.
+    /// </summary>
+    [Theory]
+    [InlineData("var a = ''; (a += getCorrelationId()).x = 1; return 1;", Elsa3JavaScriptMode.Expression, false)]
+    [InlineData("var n = 1; (n -= getWorkflowInstanceId()).x = 1; return 1;", Elsa3JavaScriptMode.Script, true)]
+    public void Change_of_a_compound_assignment_with_an_instance_value_is_no_instance_change(string source, Elsa3JavaScriptMode mode, bool reusable)
+    {
+        var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode, reusableWorkflow: reusable);
+
+        Assert.DoesNotContain(result.Issues, issue => issue.Message.Contains("()' returns.", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -309,9 +323,8 @@ public sealed class Elsa3ExpressionRewriterTests
 
     /// <summary>
     /// #6230: what only reads a workflow instance value still converts: a plain read, a local copy, a computed key
-    /// (#6222), a call's argument, a conditional's test, an array or object literal's element, a sequence's earlier
-    /// expression and the operand of a += or -= assignment, which makes a new value; as does, in a Run JavaScript body,
-    /// writing it into a variable (spec 1231 FR-032).
+    /// (#6222), a call's argument, a conditional's test, an array or object literal's element, and a sequence's earlier
+    /// expression; as does, in a Run JavaScript body, writing it into a variable (spec 1231 FR-032).
     /// </summary>
     [Theory]
     [InlineData("return getCorrelationId() + '-acme';", Elsa3JavaScriptMode.Expression, false)]
@@ -328,8 +341,6 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("[getCorrelationId()][0] = 1; return 1;", Elsa3JavaScriptMode.Script, true)]
     [InlineData("({ id: getWorkflowInstanceId() }).id = 'acme'; return 1;", Elsa3JavaScriptMode.Expression, false)]
     [InlineData("var a = {}; (a, getWorkflowInstanceName(), a).x = 1; return a;", Elsa3JavaScriptMode.Script, false)]
-    [InlineData("var a = ''; (a += getCorrelationId()).x = 1; return 1;", Elsa3JavaScriptMode.Expression, false)]
-    [InlineData("var n = 1; (n -= getWorkflowInstanceId()).x = 1; return 1;", Elsa3JavaScriptMode.Script, true)]
     public void Read_or_local_copy_of_a_workflow_instance_value_converts(string source, Elsa3JavaScriptMode mode, bool reusable)
     {
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode, reusableWorkflow: reusable);
