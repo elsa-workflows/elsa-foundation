@@ -2086,7 +2086,8 @@ public sealed class Elsa3ExpressionRewriter(
                     VisitArguments(call);
                     return;
                 case CallExpression call when IsInstanceReader(call):
-                    // The conversion's own checks of the call (its arguments, a clashing parameter or workflowState) still report.
+                    // The conversion's own checks of the call still report: its arguments, a clashing parameter or
+                    // workflowState.
                     Visit(call);
                     return;
                 case ChainExpression chain:
@@ -2111,21 +2112,6 @@ public sealed class Elsa3ExpressionRewriter(
             }
         }
 
-        private void RecordUndeclaredWrites(Node node)
-        {
-            foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
-            {
-                var takesEffect = node switch
-                {
-                    ForInStatement forIn => forIn.Left.End,
-                    ForOfStatement forOf => forOf.Left.End,
-                    _ => node.End,
-                };
-                _undeclaredWrites[written] = _undeclaredWrites.TryGetValue(written, out var earlier) ? Math.Min(earlier, takesEffect) : takesEffect;
-                Issues.Add(UndeclaredWrite(written));
-            }
-        }
-
         private void VisitNode(Node node)
         {
             var changeTarget = node switch
@@ -2135,19 +2121,10 @@ public sealed class Elsa3ExpressionRewriter(
                 _ => null,
             };
 
-            // #6230: a workflow instance value is read-only in Elsa 4. A destructuring target that also reaches an ambient
-            // value goes on to that refusal too.
+            // #6230: a workflow instance value is read-only in Elsa 4. The change is otherwise visited as usual, so the
+            // target's other checks still report: an ambient value it also reaches, an undeclared name, a custom global.
             if (changeTarget is not null && InstanceReaderOf(changeTarget) is { } instanceReader)
-            {
                 Issues.Add(InstanceValueChange(instanceReader));
-                if (!TargetReachesAmbientRoot(changeTarget))
-                {
-                    // A name the same destructuring target writes is still an undeclared write (VF-IMP-007).
-                    RecordUndeclaredWrites(node);
-                    VisitMutationOperands(node, changeTarget);
-                    return;
-                }
-            }
 
             if (changeTarget is not null && TargetReachesAmbientRoot(changeTarget))
             {
@@ -2188,7 +2165,17 @@ public sealed class Elsa3ExpressionRewriter(
                 _usesWith = true;
                 Issues.Add(WithStatementUse);
             }
-            RecordUndeclaredWrites(node);
+            foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
+            {
+                var takesEffect = node switch
+                {
+                    ForInStatement forIn => forIn.Left.End,
+                    ForOfStatement forOf => forOf.Left.End,
+                    _ => node.End,
+                };
+                _undeclaredWrites[written] = _undeclaredWrites.TryGetValue(written, out var earlier) ? Math.Min(earlier, takesEffect) : takesEffect;
+                Issues.Add(UndeclaredWrite(written));
+            }
             CheckThisAndArguments(node);
 
             // Names in a with statement's body resolve against its object first, so none of them is known to be a custom
@@ -3496,9 +3483,9 @@ public sealed class Elsa3ExpressionRewriter(
         /// Whether <paramref name="call"/> reads workflow instance metadata through an Elsa 3 built-in the conversion keeps:
         /// <c>getCorrelationId</c> and <c>getWorkflowInstanceId</c> (read as <c>args.workflowCorrelationId</c> and
         /// <c>args.workflowInstanceId</c>), and in a Run JavaScript body the <c>workflowState</c> getters, which take over
-        /// <c>getCorrelationId</c> there (<c>workflowState.getCorrelationId()</c>). The value is
-        /// read-only, so a change through it is refused (#6230). A built-in whose name a variable's or input's generated
-        /// getter shares is ambiguous, and a function the script declares in a block is its own; both stay reported as such.
+        /// <c>getCorrelationId</c> there (<c>workflowState.getCorrelationId()</c>). The value is read-only, so a change
+        /// through it is refused (#6230). A built-in whose name a variable's or input's generated getter shares is
+        /// ambiguous, and a function the script declares in a block is its own; both stay reported as such.
         /// </summary>
         private bool IsInstanceReader(CallExpression call) =>
             call.Callee is Identifier reader && !IsDeclared(reader.Name) && !IsBlockFunctionUse(reader.Name) &&
@@ -3508,9 +3495,9 @@ public sealed class Elsa3ExpressionRewriter(
         private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader) => new(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
             $"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.",
-            $"Copy the value into a local first (var value = {reader}();) and change the local, in the Elsa 3 workflow before import." +
+            $"Copy the value into a local first (let value = {reader}();) and change the local, in the Elsa 3 workflow before import." +
             (!ConvertsWorkflowState ? string.Empty
-                : reader == "getCorrelationId" ? " To change the instance's correlation id, call setCorrelationId(value)."
+                : reader == "getCorrelationId" ? " To change the instance's correlation ID, call setCorrelationId(value)."
                 : reader == "getWorkflowInstanceName" ? " To change the instance's name, call setWorkflowInstanceName(value)."
                 : string.Empty));
 

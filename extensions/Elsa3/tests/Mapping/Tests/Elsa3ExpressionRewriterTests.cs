@@ -219,19 +219,22 @@ public sealed class Elsa3ExpressionRewriterTests
         var issue = Assert.Single(result.Issues);
         Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, issue.Code);
         Assert.Equal($"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.", issue.Message);
-        Assert.Contains($"var value = {reader}();", issue.Guidance, StringComparison.Ordinal);
+        Assert.Contains($"let value = {reader}();", issue.Guidance, StringComparison.Ordinal);
         if (reader == "getWorkflowInstanceId")
             Assert.DoesNotContain("set", issue.Guidance, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// #6230: the instance refusal adds to the conversion's own checks rather than replacing them: a call with arguments,
-    /// a script's own workflowState and an ambient value in the same destructuring target are still reported.
+    /// a script's own workflowState, and an ambient value, an undeclared name, a custom global or 'arguments' in the same
+    /// destructuring target are still reported.
     /// </summary>
     [Theory]
     [InlineData("getCorrelationId(1).x = 2", Elsa3JavaScriptMode.Expression, "JavaScript calls 'getCorrelationId' with arguments, which it does not take.")]
     [InlineData("var workflowState = 1; getCorrelationId().x = 2;", Elsa3JavaScriptMode.Script, "JavaScript declares its own 'workflowState', and a converted read in its scope would become 'workflowState' too, reading the script's value instead of the workflow's.")]
     [InlineData("[getInput('a').x, getCorrelationId().y] = [1, 2]", Elsa3JavaScriptMode.Script, "JavaScript mutates an Elsa 3 ambient value.")]
+    [InlineData("[getCorrelationId().x, acme.y] = [1, 2]; return 1;", Elsa3JavaScriptMode.Script, "JavaScript uses 'acme', which neither the script, Elsa 4 nor a registered host function declares.")]
+    [InlineData("[getCorrelationId().x, arguments.y] = [1, 2]; return 1;", Elsa3JavaScriptMode.Script, "JavaScript uses 'arguments' outside a function. Elsa 3 failed there; Elsa 4 would return an empty value.")]
     [InlineData("[getCorrelationId().x, acme] = [1, 2]; return acme;", Elsa3JavaScriptMode.Script, "JavaScript assigns to 'acme', which it never declares. Elsa 3 created a global; Elsa 4 runs in strict mode, where the assignment fails.")]
     public void Change_through_a_workflow_instance_value_keeps_the_other_refusals(string source, Elsa3JavaScriptMode mode, string otherMessage)
     {
