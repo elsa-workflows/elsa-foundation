@@ -56,7 +56,7 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
             "Elsa.Workflows.Publishing.Core",
             "Elsa.Workflows.Runtime.Core",
-            "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore");
+            "Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore");
 
     // The EF bridge commits one import across both Design lanes and its own ledger, and reaches Runtime
     // only for the persistence access-context contract, so it cannot write Runtime templates or source
