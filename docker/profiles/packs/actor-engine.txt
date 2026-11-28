@@ -34,5 +34,6 @@ Elsa.Workflows.Runtime.Api.StandaloneTriggers
 Elsa.Workflows.Runtime.KernelApi
 Elsa.Workflows.Runtime.KernelHost
 Elsa.Workflows.Runtime.KernelHosting
-Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore
+Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore
+Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore
 Elsa.Workflows.Runtime.PreparedSchedules

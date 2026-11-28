@@ -25,6 +25,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
         .. ModuleContextCatalog.Modules,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
+        typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly
     ];

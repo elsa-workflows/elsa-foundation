@@ -71,9 +71,10 @@ public sealed class RuntimeExecutionSliceDependencyTests
     }
 
     [Fact]
-    public void ArtifactAndPublishingEf_DoNotReferenceClassicRuntimePersistence()
+    public void RetainedRuntimeAndPublishingEf_DoNotReferenceClassicRuntimePersistence()
     {
-        foreach (var module in new[] { typeof(RuntimeArtifactsEntityFrameworkCoreFeature), typeof(PublishingEntityFrameworkCoreFeature) })
+        foreach (var module in new[] { typeof(RuntimeArtifactsEntityFrameworkCoreFeature),
+                     typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature), typeof(PublishingEntityFrameworkCoreFeature) })
             Assert.DoesNotContain(module.Assembly.GetReferencedAssemblies(),
                 reference => reference.Name is "Elsa.Workflows.Runtime" or "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore");
     }

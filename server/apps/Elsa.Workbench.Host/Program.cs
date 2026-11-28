@@ -326,6 +326,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(StandaloneTriggersApiFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeDbContext).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.ActivitiesBpmnHostingFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature).Assembly,
