@@ -36,7 +36,7 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
 
     internal static void ConfigureRetainedServices(IServiceCollection services)
     {
-        services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: false);
+        services.AddRetainedRuntimeHttpServices();
         services.AddExecutableInspectionServices();
         services.AddRunInspectionServices(provider => new WorkflowRunInspection(
             provider.GetRequiredService<IWorkflowInstanceDetailsService>(),
@@ -48,7 +48,7 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
 
     internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints, bool includeExecute, bool includeDelete, bool includeInputSources)
     {
-        WorkflowsRuntimeApi.MapRetainedEndpoints(endpoints, includeExecute, includeDelete, includeInputSources);
+        RuntimeHttpApi.MapRetainedEndpoints(endpoints, includeExecute, includeDelete, includeInputSources);
         MapKernelEndpoints(endpoints);
     }
 

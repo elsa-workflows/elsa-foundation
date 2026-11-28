@@ -117,17 +117,3 @@ namespace Elsa.Workflows.Runtime.Api;
 [JsonSerializable(typeof(ActivityExecutionCursorProblemView))]
 [JsonSerializable(typeof(ActivityExecutionProblemDiagnosticView))]
 internal partial class WorkflowsRuntimeJsonContext : JsonSerializerContext;
-
-internal sealed record RuntimeProblemDetails(
-    string Type,
-    string Title,
-    int Status,
-    string Detail,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Instance,
-    IReadOnlyDictionary<string, string[]>? Errors = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Code = null);
-
-internal sealed record RuntimeValidationProblemDetails(
-    IReadOnlyDictionary<string, string[]> Errors,
-    string Message,
-    int StatusCode);

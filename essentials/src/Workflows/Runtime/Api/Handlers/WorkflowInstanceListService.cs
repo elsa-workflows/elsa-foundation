@@ -167,12 +167,3 @@ public sealed class WorkflowInstanceListService(
 
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }
-
-/// <summary>
-/// The workflow-instance list operation the runtime endpoints dispatch to. The request's paging contract selects
-/// the historical array route's bounds or the additive page route's bounded defaults.
-/// </summary>
-public interface IWorkflowInstanceListService
-{
-    Task<WorkflowInstanceListView> ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken);
-}

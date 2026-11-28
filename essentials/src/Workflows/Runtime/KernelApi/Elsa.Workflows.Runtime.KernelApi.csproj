@@ -4,6 +4,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../HttpApi/Elsa.Workflows.Runtime.Api.Http.csproj" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHost.Tests" />
     <PackageReference Include="CShells.Abstractions" />

@@ -8,41 +8,26 @@ namespace Elsa.Workflows.Runtime.Api;
 /// </summary>
 /// <remarks>
 /// This is the composition root only. Each endpoint declares its route, contract, permission, and
-/// failure family beside the dispatch it performs, under <c>Endpoints/</c>. The owner writes with
+/// failure family beside the dispatch it performs. The shared endpoint group lives in
+/// <c>Elsa.Workflows.Runtime.Api.Http</c>. The owner writes with
 /// its own source-generated serializer context and the published success content type carries the
 /// charset, so both are passed here explicitly. Routes are absolute and deliberately slashless —
 /// the frozen endpoint manifest pins the historical pattern text.
 /// </remarks>
 public static class WorkflowsRuntimeApi
 {
-    internal const string OwnerId = "Elsa.Workflows.Runtime.Api";
+    internal const string OwnerId = RuntimeHttpApi.OwnerId;
 
     public static void MapWorkflowsRuntimeApi(IEndpointRouteBuilder endpoints)
     {
-        // Endpoint classes are scanned from this module's own assembly: each declares its route,
-        // metadata, and permission on itself under Endpoints/<Resource>/<Operation>/Endpoint.cs.
-        MapGroup(endpoints).MapEndpointsFrom(typeof(WorkflowsRuntimeApi).Assembly);
+        var api = MapGroup(endpoints);
+        RuntimeHttpApi.MapEndpoints(api, includeExecute: true, includeDelete: true, includeInputSources: true);
+        api.MapEndpointsFrom(typeof(WorkflowsRuntimeApi).Assembly);
     }
 
-    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints, bool includeExecute, bool includeDelete, bool includeInputSources)
-    {
-        var api = MapGroup(endpoints);
-        api.MapEndpoint<Endpoints.Executables.List.Endpoint>();
-        api.MapEndpoint<Endpoints.Executables.Get.Endpoint>();
-        api.MapEndpoint<Endpoints.Executables.Provenance.Endpoint>();
-        if (includeInputSources) api.MapEndpoint<Endpoints.Executables.InputSources.Endpoint>();
-        if (includeExecute) api.MapEndpoint<Endpoints.Executables.Execute.Endpoint>();
-        api.MapEndpoint<Endpoints.ActivationSlots.List.Endpoint>();
-        api.MapEndpoint<Endpoints.ActivationSlots.Get.Endpoint>();
-        api.MapEndpoint<Endpoints.Instances.List.Endpoint>();
-        api.MapEndpoint<Endpoints.Instances.ListPage.Endpoint>();
-        api.MapEndpoint<Endpoints.Instances.Get.Endpoint>();
-        if (includeDelete) api.MapEndpoint<Endpoints.Instances.Delete.Endpoint>();
-        api.MapEndpoint<Endpoints.ActivityExecutions.List.Endpoint>();
-        api.MapEndpoint<Endpoints.ActivityExecutions.Get.Endpoint>();
-        api.MapEndpoint<Endpoints.History.Page.Endpoint>();
-        api.MapEndpoint<Endpoints.History.Occurrences.Endpoint>();
-    }
+    // An earlier KernelApi package can still be paired with this package by NuGet.
+    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints, bool includeExecute, bool includeDelete, bool includeInputSources) =>
+        RuntimeHttpApi.MapRetainedEndpoints(endpoints, includeExecute, includeDelete, includeInputSources);
 
     private static EndpointGroup MapGroup(IEndpointRouteBuilder endpoints)
     {
