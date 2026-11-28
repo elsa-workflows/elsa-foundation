@@ -470,7 +470,8 @@ public sealed partial class EfStore
         foreach (var projector in SqliteRootProjectors()) yield return projector;
         if (db.UsesAuthoredStandaloneEvents)
         {
-            yield return Table(RootAuthoredStandaloneEvents.Host, RootAuthoredStandaloneEvents.HostColumns(sqlite: true));
+            yield return Table(RootAuthoredStandaloneEvents.Host,
+                RootAuthoredStandaloneEvents.HostColumns(sqlite: true, db.AllowsDisabledAuthoredStandaloneEvents));
             yield return Table(RootAuthoredStandaloneEvents.Transfers, RootAuthoredStandaloneEvents.TransferColumns(sqlite: true));
             yield return Index(RootAuthoredStandaloneEvents.PageIndex, RootAuthoredStandaloneEvents.Transfers, RootAuthoredStandaloneEvents.PageColumns);
         }

@@ -166,6 +166,12 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
             StoreFormat.RootRetainedStandaloneSourcesQualification, protectRootStart);
     }
 
+    internal static SqliteEmbeddedFoundation ForOptionalAuthoredStandaloneEventsQualification(string databasePath, string node,
+        string actorType, Contract.BoundScope? publisherScope) => publisherScope is null
+        ? new(databasePath, node, actorType, StoreFormat.RootOptionalAuthoredStandaloneEventsQualification)
+        : ForStandaloneQualification(databasePath, node, actorType, publisherScope,
+            StoreFormat.RootOptionalAuthoredStandaloneEventsQualification, protectRootStart: null);
+
     private static SqliteEmbeddedFoundation ForStandaloneQualification(string databasePath, string node, string actorType,
         Contract.BoundScope publisherScope, StoreFormat format, ProtectRootStartAsync? protectRootStart)
     {
@@ -197,7 +203,8 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
             qualificationFormat is { SupportsAuthoredStandaloneEventQualification: true })
             publicEventHost = new(actorType, protectRootStart is not null) { AuthoredStandaloneTenant = publisherScope?.Tenant };
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
-            qualificationFormat: qualificationFormat, protectRootStart: protectRootStart), LazyThreadSafetyMode.PublicationOnly);
+            qualificationFormat: qualificationFormat, protectRootStart: protectRootStart, authoredStandaloneTenant: publisherScope?.Tenant),
+            LazyThreadSafetyMode.PublicationOnly);
     }
 
     /// <summary>Whether this profile supports managed schedule delivery and irreversible cohort retirement.</summary>

@@ -88,8 +88,10 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootAuthoredStandaloneEventQualification => new(3, 140, 1);
     internal static StoreFormat RootPreparedWaitQualification => new(3, 141, 1);
     internal static StoreFormat RootRetainedStandaloneSourcesQualification => new(3, 143, 1);
+    internal static StoreFormat RootOptionalAuthoredStandaloneEventsQualification => new(3, 144, 1);
     internal bool SupportsAuthoredStandaloneEventQualification =>
-        this == RootAuthoredStandaloneEventQualification || this == RootRetainedStandaloneSourcesQualification;
+        this == RootAuthoredStandaloneEventQualification || this == RootRetainedStandaloneSourcesQualification ||
+        this == RootOptionalAuthoredStandaloneEventsQualification;
     internal bool SupportsIsolatedInlineQualification =>
         this == RootEphemeralTestRunQualification || SupportsAttachedTestRunQualification;
     internal bool SupportsAttachedTestRunQualification =>
@@ -517,6 +519,8 @@ internal static class StoreDefinitionsRevision
     private const int SqliteAuthoredStandaloneEventRevision = 36;
     private const int PostgreSqlRetainedStandaloneSourcesRevision = 36;
     private const int SqliteRetainedStandaloneSourcesRevision = 39;
+    private const int PostgreSqlOptionalAuthoredStandaloneEventsRevision = 37;
+    private const int SqliteOptionalAuthoredStandaloneEventsRevision = 40;
     private const int PostgreSqlDirectTestRunRevision = 20;
     private const int SqliteDirectTestRunRevision = 23;
     private const int PostgreSqlPlaybackRevision = 12;
@@ -599,6 +603,8 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqliteAuthoredStandaloneEventRevision : PostgreSqlAuthoredStandaloneEventRevision,
                 _ when db.RequiredFormat == StoreFormat.RootRetainedStandaloneSourcesQualification =>
                     sqlite ? SqliteRetainedStandaloneSourcesRevision : PostgreSqlRetainedStandaloneSourcesRevision,
+                _ when db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification =>
+                    sqlite ? SqliteOptionalAuthoredStandaloneEventsRevision : PostgreSqlOptionalAuthoredStandaloneEventsRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPreparedWaitQualification =>
                     sqlite ? SqlitePreparedWaitRevision : PostgreSqlPreparedWaitRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPublicEventStartsQualification => sqlite ? 30 : 27,

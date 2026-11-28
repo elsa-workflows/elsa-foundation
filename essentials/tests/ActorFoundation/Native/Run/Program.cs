@@ -197,6 +197,10 @@ if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or 
     return await SqliteHostLifetimeChecks.RunHeldRepliesAsync(sqliteReplyFence == "in-batch");
 if (args is ["root-authored-standalone-events", var bridgeProvider and ("postgres" or "sqlite"), var bridgeFence and ("checked" or "in-batch")])
     return await AuthoredStandaloneEventOutboxChecks.RunAsync(bridgeProvider == "postgres", bridgeFence == "in-batch");
+if (args is ["root-authored-standalone-events", var optionalBridgeProvider and ("postgres" or "sqlite"),
+        var optionalBridgeFence and ("checked" or "in-batch"), var optionalRelay and ("enabled" or "disabled")])
+    return await AuthoredStandaloneEventOutboxChecks.RunAsync(optionalBridgeProvider == "postgres",
+        optionalBridgeFence == "in-batch", relayEnabled: optionalRelay == "enabled");
 if (args is ["sqlite-prepared-starts", var preparedFence and ("checked" or "in-batch")])
     return await SqlitePreparedStartChecks.RunAsync(preparedFence == "in-batch");
 if (args is ["sqlite-prepared-starts", var shippedPreparedFence and ("checked" or "in-batch"), "shipped"])

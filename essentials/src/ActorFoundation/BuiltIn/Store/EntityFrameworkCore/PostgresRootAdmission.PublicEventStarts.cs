@@ -113,7 +113,10 @@ internal sealed partial class PostgresRootAdmission
         var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
             throw new StoreFormatException("The public Event host requires the pinned PostgreSQL store.");
         await LockPublicEventStartTablesAsync(db, token);
-        await RootPublicEventHost.RequireAsync(db, host, sql => BindPublicEventStarts(db, sql, pin), token);
+        FormattableString Bind(FormattableString sql) => BindPublicEventStarts(db, sql, pin);
+        await RootPublicEventHost.RequireAsync(db, host, Bind, token);
+        if (db.AllowsDisabledAuthoredStandaloneEvents)
+            await RootAuthoredStandaloneEvents.ReadTenantAsync(db, Bind, token);
         await transaction.CommitAsync(token);
     }
 

@@ -107,7 +107,7 @@ internal static partial class RootEventStarts
         {
             if (createPublicAuthority)
                 await db.Database.ExecuteSqlRawAsync(BridgeTables(RootAuthoredStandaloneEvents.Host, RootAuthoredStandaloneEvents.Transfers,
-                    RootAuthoredStandaloneEvents.PageIndex), token);
+                    RootAuthoredStandaloneEvents.PageIndex, db.AllowsDisabledAuthoredStandaloneEvents), token);
             else
                 await db.Database.ExecuteSqlRawAsync("""
                     LOCK TABLE ONLY "FoundationAuthoredStandaloneEventHost", ONLY "FoundationAuthoredStandaloneEventTransfers" IN ACCESS SHARE MODE
@@ -171,7 +171,8 @@ internal static partial class RootEventStarts
                 CREATE INDEX "{publicTargets}_p" ON "{publicTargets}" {RootPublicEventStarts.PendingTargetColumns};
                 """, token);
 
-        if (bridge) await db.Database.ExecuteSqlRawAsync(BridgeTables(bridgeHost, bridgeTransfers, bridgeTransfers + "_p"), token);
+        if (bridge) await db.Database.ExecuteSqlRawAsync(BridgeTables(bridgeHost, bridgeTransfers, bridgeTransfers + "_p",
+            db.AllowsDisabledAuthoredStandaloneEvents), token);
 
         var same = await db.Database.SqlQuery<bool>($"""
             WITH pairs(expected, installed) AS (
@@ -224,8 +225,8 @@ internal static partial class RootEventStarts
         }
     }
 
-    private static string BridgeTables(string host, string transfers, string pageIndex) => $"""
-        CREATE TABLE "{host}" ({RootAuthoredStandaloneEvents.HostColumns(sqlite: false)});
+    private static string BridgeTables(string host, string transfers, string pageIndex, bool optionalPublisher) => $"""
+        CREATE TABLE "{host}" ({RootAuthoredStandaloneEvents.HostColumns(sqlite: false, optionalPublisher)});
         CREATE TABLE "{transfers}" ({RootAuthoredStandaloneEvents.TransferColumns(sqlite: false)});
         CREATE INDEX "{pageIndex}" ON "{transfers}" {RootAuthoredStandaloneEvents.PageColumns};
         """;

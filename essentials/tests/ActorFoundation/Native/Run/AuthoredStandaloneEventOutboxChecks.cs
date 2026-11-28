@@ -20,22 +20,29 @@ internal static class AuthoredStandaloneEventOutboxChecks
     private static readonly Contract.BoundScope Foreign = ContractScopes.Bind("foreign");
     private static readonly Contract.BoundScope Isolated = EmbeddedTenant.Isolate(Scope, "test-run");
 
-    internal static async Task<int> RunAsync(bool postgres, bool fenceInBatch)
+    internal static async Task<int> RunAsync(bool postgres, bool fenceInBatch, bool? relayEnabled = null)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(65));
         var token = deadline.Token;
         var actor = new Publisher();
         var loop = new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(20) };
+        var publisher = relayEnabled == false ? null : Scope;
         if (postgres)
         {
             var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
                 ?? throw new InvalidOperationException("Supply a dedicated PostgreSQL qualification database.");
             var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-            KernelDb Open() => PostgresPreviewHosting.CreateAuthoredStandaloneEventQualificationContext(options, actor.Type, false, Scope);
+            KernelDb OpenFor(Contract.BoundScope? scope) => relayEnabled.HasValue
+                ? PostgresPreviewHosting.CreateOptionalAuthoredStandaloneEventsQualificationContext(options, actor.Type, scope)
+                : PostgresPreviewHosting.CreateAuthoredStandaloneEventQualificationContext(options, actor.Type, false, scope!);
+            KernelDb Open() => OpenFor(publisher);
+            Task Install(Contract.BoundScope? scope) => relayEnabled.HasValue
+                ? PostgresPreviewHosting.InstallOptionalAuthoredStandaloneEventsQualificationAsync(options, actor.Type, scope, token)
+                : PostgresPreviewHosting.InstallAuthoredStandaloneEventQualificationAsync(options, actor.Type, false, scope!, token);
             await using (var db = Open())
                 Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the dedicated PostgreSQL database is empty");
             var store = new EfStore(Open, postgres: true);
-            await PostgresPreviewHosting.InstallAuthoredStandaloneEventQualificationAsync(options, actor.Type, false, Scope, token);
+            await Install(publisher);
 
             var requests = PostgresPreviewHosting.CreateRequests(Open, Node, actor.Type);
             var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, actor.Type, requests, cancellationToken: token);
@@ -45,6 +52,17 @@ internal static class AuthoredStandaloneEventOutboxChecks
                     fault, requests, fenceInBatch, _ => TimeSpan.Zero, new Kernel.WorkflowActor.ScheduleActor())
             };
             IAuthoredStandaloneEventOutbox Bind(Contract.BoundScope scope) => PostgresPreviewHosting.BindAuthoredStandaloneEvents(Open, scope);
+            if (relayEnabled.HasValue)
+            {
+                await using (hosted)
+                    await CheckAsync(hosted, foundation, foundation, Bind, token, relayEnabled.Value);
+                var wrong = relayEnabled.Value ? null : Scope;
+                await RequireRefusalAsync(() => PostgresPreviewHosting.OpenFoundationAsync(() => OpenFor(wrong), actor.Type,
+                    cancellationToken: token), "the PostgreSQL ingress refuses another relay mode");
+                await using var db = Open();
+                await CheckOptionalAuthorityAsync(db, publisher, Install, Bind, token);
+                return 0;
+            }
             await using (hosted)
                 await CheckAsync(hosted, foundation, foundation, Bind, token);
             KernelDb Stock() => PostgresPreviewHosting.CreateShippedContext(options, actor.Type, protectsStarts: false);
@@ -80,12 +98,24 @@ internal static class AuthoredStandaloneEventOutboxChecks
             try
             {
                 var path = Path.Combine(folder.FullName, "foundation.db");
-                var foundation = SqliteEmbeddedFoundation.ForAuthoredStandaloneEventQualification(path, Node, actor.Type, Scope);
+                SqliteEmbeddedFoundation OpenFor(string node, Contract.BoundScope? scope) => relayEnabled.HasValue
+                    ? SqliteEmbeddedFoundation.ForOptionalAuthoredStandaloneEventsQualification(path, node, actor.Type, scope)
+                    : SqliteEmbeddedFoundation.ForAuthoredStandaloneEventQualification(path, node, actor.Type, scope!);
+                var foundation = OpenFor(Node, publisher);
                 await foundation.InstallShippedAsync(token);
                 var hosted = foundation.CreateHostedServiceWithAuxiliaryActor(actor, new Kernel.WorkflowActor.ScheduleActor(), Refused,
                     _ => TimeSpan.Zero, loop, fenceInBatch);
                 await using (hosted)
-                    await CheckAsync(hosted, await foundation.OpenIngressAsync(token), foundation.CreateReads(), foundation.BindAuthoredStandaloneEvents, token);
+                    await CheckAsync(hosted, await foundation.OpenIngressAsync(token), foundation.CreateReads(),
+                        foundation.BindAuthoredStandaloneEvents, token, relayEnabled != false);
+                if (relayEnabled.HasValue)
+                {
+                    var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite($"Data Source={path};Pooling=False").Options;
+                    await using var db = new KernelDb(options);
+                    await CheckOptionalAuthorityAsync(db, publisher, scope => OpenFor("cold-reader", scope).InstallShippedAsync(token),
+                        foundation.BindAuthoredStandaloneEvents, token);
+                    return 0;
+                }
                 var reopened = SqliteEmbeddedFoundation.ForAuthoredStandaloneEventQualification(path, "cold-reader", actor.Type, Scope);
                 await reopened.InstallShippedAsync(token);
                 Require((await reopened.BindAuthoredStandaloneEvents(Scope).ReadAsync(cancellationToken: token)).Count == 0,
@@ -101,9 +131,30 @@ internal static class AuthoredStandaloneEventOutboxChecks
     }
 
     private static async Task CheckAsync(IHostedService owner, Contract.IIngress ingress, Contract.IActorReads reads,
-        Func<Contract.BoundScope, IAuthoredStandaloneEventOutbox> bind, CancellationToken token)
+        Func<Contract.BoundScope, IAuthoredStandaloneEventOutbox> bind, CancellationToken token, bool relayEnabled = true)
     {
         var outbox = bind(Scope);
+        if (!relayEnabled)
+        {
+            await RequireRefusalAsync(() => outbox.ReadAsync(cancellationToken: token).AsTask(),
+                "a disabled installation refuses the relay read");
+            await RequireRefusalAsync(() => outbox.AcknowledgeAsync(new string('A', 64), new string('B', 64), token).AsTask(),
+                "a disabled installation refuses the relay acknowledgement");
+            await owner.StartAsync(token);
+            try
+            {
+                var waiter = await StartAsync(Scope, "waiter");
+                await WaitForAsync(Scope, waiter, Contract.ActorStatus.Running);
+                var ordinary = await StartAsync(Scope, "single-author");
+                await WaitForAsync(Scope, ordinary, Contract.ActorStatus.Finished);
+                await WaitForAsync(Scope, waiter, Contract.ActorStatus.Finished);
+                Require((await reads.GetAsync(Scope, waiter, token))!.Header.TypeData == First,
+                    "the normal authored Event still reaches its live subscriber with the relay disabled");
+            }
+            finally { await StopAsync(); }
+            return;
+        }
+
         var author = await StartAsync(Scope, "author");
         var foreign = await StartAsync(Foreign, "foreign-author", "author");
         var isolated = await StartAsync(Isolated, "test-author", "author");
@@ -136,11 +187,7 @@ internal static class AuthoredStandaloneEventOutboxChecks
             await RequireRefusalAsync(() => bind(Isolated).AcknowledgeAsync(captured[0].Occurrence, captured[0].TransferFingerprint, token).AsTask(),
                 "an isolated TestRun host cannot acknowledge any ordinary transfer");
         }
-        finally
-        {
-            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await owner.StopAsync(stop.Token);
-        }
+        finally { await StopAsync(); }
 
         var cold = bind(Scope);
         Require((await cold.ReadAsync(cancellationToken: token)).SequenceEqual(captured),
@@ -157,6 +204,12 @@ internal static class AuthoredStandaloneEventOutboxChecks
         Require(await cold.AcknowledgeAsync(second.Occurrence, second.TransferFingerprint, token) &&
             (await cold.ReadAsync(cancellationToken: token)).Count == 0, "all destination acknowledgements clear the pending set");
 
+        async Task StopAsync()
+        {
+            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await owner.StopAsync(stop.Token);
+        }
+
         async Task<Contract.ActorRef> StartAsync(Contract.BoundScope scope, string operation, string? mode = null)
         {
             var result = await ingress.SendAsync(scope, new Contract.Target.Start(new(Publisher.ActorType, mode ?? operation, "{}")),
@@ -170,6 +223,35 @@ internal static class AuthoredStandaloneEventOutboxChecks
             while ((await reads.GetAsync(scope, reference, token))?.Header.Status != status)
                 await Task.Delay(20, token);
         }
+    }
+
+    private static async Task CheckOptionalAuthorityAsync(KernelDb db, Contract.BoundScope? publisher,
+        Func<Contract.BoundScope?, Task> install, Func<Contract.BoundScope, IAuthoredStandaloneEventOutbox> bind, CancellationToken token)
+    {
+        await install(publisher);
+        var tenant = publisher?.Tenant;
+        Require(await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "FoundationAuthoredStandaloneEventHost"
+                    WHERE "Singleton" = true AND "Tenant" IS NOT DISTINCT FROM {tenant})
+                    AND NOT EXISTS (SELECT 1 FROM "FoundationAuthoredStandaloneEventTransfers") AS "Value"
+                """).SingleAsync(token),
+            "the singleton records the configured relay mode and the transfer table has no pending rows");
+        await RequireRefusalAsync(() => install(publisher is null ? Scope : null), "an installed store refuses the other relay mode");
+        if (publisher is not null)
+            await RequireRefusalAsync(() => install(Foreign), "an installed relay refuses another publisher scope");
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "FoundationAuthoredStandaloneEventHost" SET "Tenant" = {Foreign.Tenant} WHERE "Singleton" = true
+            """, token);
+        await RequireRefusalAsync(() => bind(Scope).ReadAsync(cancellationToken: token).AsTask(),
+            "the relay transaction rejects drift in the physical publisher scope");
+        await RequireRefusalAsync(() => install(publisher), "installation rejects drift in the physical publisher scope");
+
+        await db.Database.ExecuteSqlRawAsync("""DELETE FROM "FoundationAuthoredStandaloneEventHost" """, token);
+        await RequireRefusalAsync(() => install(publisher), "installation refuses a missing relay singleton");
+        Require(!await db.Database.SqlQueryRaw<bool>("""
+                SELECT EXISTS (SELECT 1 FROM "FoundationAuthoredStandaloneEventHost") AS "Value"
+                """).SingleAsync(token), "the installer did not recreate the missing singleton");
     }
 
     private static async Task RequireRefusalAsync(Func<Task> work, string description)
@@ -204,13 +286,24 @@ internal static class AuthoredStandaloneEventOutboxChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             turn.State = "{}";
+            if (turn.Header.TypeData == "waiter")
+            {
+                if (turn.Inbox.Single().Event is null)
+                    turn.Subscribe(Key, "live");
+                else
+                {
+                    turn.SetHeader(turn.Inbox.Single().Payload!, turn.Header.Labels);
+                    turn.End(Contract.ActorStatus.Finished);
+                }
+                return ValueTask.CompletedTask;
+            }
             if (turn.Header.TypeData == "local")
                 turn.Emit(Key, First);
             else
             {
                 turn.Publish(Key, First, TimeSpan.Zero);
                 if (turn.Header.TypeData == "rollback") throw new InvalidOperationException("rollback authored Event");
-                turn.Publish(Key, Second, TimeSpan.Zero);
+                if (turn.Header.TypeData != "single-author") turn.Publish(Key, Second, TimeSpan.Zero);
             }
             turn.End(Contract.ActorStatus.Finished);
             return ValueTask.CompletedTask;

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Kernel.Durable;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -12,13 +13,14 @@ internal static class RootAuthoredStandaloneEvents
     internal const string PageColumns = """("CommittedAt", "Occurrence")""";
     private const int PageSize = 32;
 
-    internal static string HostColumns(bool sqlite)
+    internal static string HostColumns(bool sqlite, bool optionalPublisher)
     {
         var singleton = sqlite ? "INTEGER" : "boolean";
         var text = sqlite ? "TEXT COLLATE BINARY" : """text COLLATE "C" """;
+        var required = optionalPublisher ? "" : " NOT NULL";
         return $"""
             "Singleton" {singleton} PRIMARY KEY CHECK ("Singleton" = true) REFERENCES "FoundationRootIssuer" ("Singleton"),
-            "Tenant" {text} NOT NULL CHECK (length("Tenant") BETWEEN 1 AND 64)
+            "Tenant" {text}{required} CHECK (length("Tenant") BETWEEN 1 AND 64)
             """;
     }
 
@@ -44,7 +46,8 @@ internal static class RootAuthoredStandaloneEvents
         var expected = db.PublicEventHost?.AuthoredStandaloneTenant;
         if (create)
         {
-            if (expected is null) throw new StoreFormatException("Select an ordinary publisher scope for the authored standalone Event profile.");
+            if (expected is null && !db.AllowsDisabledAuthoredStandaloneEvents)
+                throw new StoreFormatException("Select an ordinary publisher scope for the authored standalone Event profile.");
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "FoundationAuthoredStandaloneEventHost" ("Singleton", "Tenant") VALUES (true, {expected})
                 """, token);
@@ -52,23 +55,35 @@ internal static class RootAuthoredStandaloneEvents
         await ReadTenantAsync(db, bind: null, token);
     }
 
-    private sealed record HostSelection(bool SourceReady, string? Tenant);
+    private sealed record HostSelection(bool SourceReady, bool? Installed, string? Tenant);
 
-    internal static async Task<string> ReadTenantAsync(KernelDb db, Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    internal static async Task<string?> ReadTenantAsync(KernelDb db, Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         if (!db.UsesAuthoredStandaloneEvents || db.Database.CurrentTransaction is null)
             throw new NotSupportedException("Authored standalone Events require the selected provider transaction.");
-        var selected = await db.Database.SqlQuery<HostSelection>(RootPublicEventStarts.Bind($"""
-            WITH source AS MATERIALIZED (/*public-event-start-source*/)
-            SELECT source."SourceReady", host."Tenant" FROM source
-            LEFT JOIN "FoundationAuthoredStandaloneEventHost" host ON source."SourceReady" AND host."Singleton" = true
-            """, bind)).SingleAsync(token);
-        if (!selected.SourceReady || selected.Tenant is not { Length: >= 1 and <= 64 } tenant ||
-            tenant.Any(value => value is not (>= 'a' and <= 'z' or >= '0' and <= '9' or '-')) ||
-            db.PublicEventHost?.AuthoredStandaloneTenant is { } expected && expected != tenant)
+        FormattableString query = $"""
+            WITH source AS MATERIALIZED (/*public-event-start-source*/), authority AS MATERIALIZED (
+                SELECT host."Singleton", host."Tenant" FROM source, "FoundationAuthoredStandaloneEventHost" host
+                WHERE source."SourceReady" AND host."Singleton" = true /*lock-host*/
+            )
+            SELECT source."SourceReady", authority."Singleton" AS "Installed", authority."Tenant"
+            FROM source LEFT JOIN authority ON true
+            """;
+        if (db.AllowsDisabledAuthoredStandaloneEvents && db.Database.IsNpgsql())
+            query = FormattableStringFactory.Create(query.Format.Replace("/*lock-host*/", "FOR SHARE OF host", StringComparison.Ordinal),
+                query.GetArguments());
+        var selected = await db.Database.SqlQuery<HostSelection>(RootPublicEventStarts.Bind(query, bind)).SingleAsync(token);
+        var expected = db.PublicEventHost?.AuthoredStandaloneTenant;
+        // A present singleton with SQL NULL explicitly disables the relay. Missing authority is invalid in either mode.
+        if (!selected.SourceReady || selected.Installed is not true ||
+            (selected.Tenant is { } tenant ? !IsOrdinaryTenant(tenant) : !db.AllowsDisabledAuthoredStandaloneEvents) ||
+            (db.AllowsDisabledAuthoredStandaloneEvents || expected is not null) && selected.Tenant != expected)
             throw new StoreFormatException("The selected authored standalone Event publisher scope does not belong to the installed store.");
-        return tenant;
+        return selected.Tenant;
     }
+
+    private static bool IsOrdinaryTenant(string tenant) => tenant.Length is >= 1 and <= 64 &&
+        tenant.All(value => value is >= 'a' and <= 'z' or >= '0' and <= '9' or '-');
 
     internal static async Task CaptureAsync(KernelDb db, EfStore.WorkerRoot root, RootPublicEventTicket ticket, string tenant,
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
