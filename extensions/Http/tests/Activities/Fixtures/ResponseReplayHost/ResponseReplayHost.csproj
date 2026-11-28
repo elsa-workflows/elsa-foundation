@@ -49,7 +49,7 @@
     <ProjectReference Include="../../../../../../essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="../../../../../../essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="../../../../../../essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../../../essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="../../../../../../essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="../../../../../../essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="../../../../../../essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="../../../../src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />

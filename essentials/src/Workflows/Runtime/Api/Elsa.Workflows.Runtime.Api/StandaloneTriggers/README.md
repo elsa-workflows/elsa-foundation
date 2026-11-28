@@ -1,6 +1,6 @@
 # Standalone trigger management API
 
-`StandaloneTriggersApiFeature` owns management endpoints, permission contributions, actor projection and capability `elsa.api.standalone-triggers` v1. It is independent of `WorkflowsRuntimeApiFeature` and does not call `AddWorkflowRuntime()`, install source intake or start a scheduler. The [operator guide](../../../../../../docs/standalone-triggers.md) contains the canonical request examples and recovery instructions. This API is an implementation candidate; host, provider, permissions and Studio acceptance remains open.
+`StandaloneTriggersApiFeature` owns management endpoints, permission contributions, actor projection and capability `elsa.api.standalone-triggers` v1. It is independent of `WorkflowsRuntimeApiFeature` and does not call `AddWorkflowRuntime()`, install source intake or start a scheduler. The [operator guide](../../../../../../../docs/standalone-triggers.md) contains the canonical request examples and recovery instructions. This API is an implementation candidate; host, provider, permissions and Studio acceptance remains open.
 
 ## Composition and discovery
 
@@ -41,9 +41,9 @@ Delivery controls share change preview/apply and require the latest delivery/rec
 
 ## Access and source ownership
 
-`TriggerRequestAccess` binds normalized current subject/tenant and one ordinary persistence scope from trusted request services. It evaluates resource permissions through Foundation Identity. Configuration JSON never chooses actor, tenant, target captures or grants. The seven `triggers:*` / `triggers/deliveries:*` permissions, grant requirements, provider-owned restrictions and accepted-work limits are documented in the [operator guide](../../../../../../docs/standalone-triggers.md#grants-and-publication-changes).
+`TriggerRequestAccess` binds normalized current subject/tenant and one ordinary persistence scope from trusted request services. It evaluates resource permissions through Foundation Identity. Configuration JSON never chooses actor, tenant, target captures or grants. The seven `triggers:*` / `triggers/deliveries:*` permissions, grant requirements, provider-owned restrictions and accepted-work limits are documented in the [operator guide](../../../../../../../docs/standalone-triggers.md#grants-and-publication-changes).
 
-The API owns no durable delivery store or second queue. It reads/writes through the actual selected physical participant, and unavailable capabilities refuse explicitly. Replacing internal projection services or API DTOs is not a public extension path; module authors use the [Core source/model/store contracts](../../Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries).
+The API owns no durable delivery store or second queue. It reads/writes through the actual selected physical participant, and unavailable capabilities refuse explicitly. Replacing internal projection services or API DTOs is not a public extension path; module authors use the [Core source/model/store contracts](../../../Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries).
 
 Schedule change review uses the installed module's pure `IStandaloneSchedulePlanner` and the actual owned cursor. It shows current and proposed UTC instants, timezone, offset and preserve/replace/pause/remove action when available. Missing or incompatible readers/planners produce an explicit unavailable preview. Review does not reserve a firing or change a cursor; apply rechecks the resource through the normal physical writer.
 
