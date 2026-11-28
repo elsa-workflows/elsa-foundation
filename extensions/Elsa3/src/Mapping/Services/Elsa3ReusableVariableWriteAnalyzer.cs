@@ -3,6 +3,7 @@ using System.Text.Json;
 using Acornima;
 using Acornima.Ast;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa3.Mapping.Internal;
 
 namespace Elsa3.Mapping.Services;
 
@@ -1562,7 +1563,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 if (arguments.Length > 0) Serialize(arguments[0]);
                 return Value.Local;
             }
-            if (JavaScriptBuiltInFunctions.Names.Contains(host.Name) || replacedGlobal?.Invoke(host.Name) == true)
+            if (Elsa3JavaScriptNames.Elsa4BuiltIns.Contains(host.Name) || replacedGlobal?.Invoke(host.Name) == true)
             {
                 // Faithful host helpers materialize all arguments as JSON (JavaScriptHostFunctions.Argument),
                 // then parse string/number data in .NET. They do not invoke a JS toString/valueOf hook, but argument

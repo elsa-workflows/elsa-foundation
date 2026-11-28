@@ -120,6 +120,73 @@ public sealed class Elsa3ExpressionRewriterTests
     }
 
     /// <summary>
+    /// #6222: a change to a local object whose computed key reads a variable changes only the local object; the key is a
+    /// read. So it converts, in an input and in a Run JavaScript body alike, through a member chain, an update or a
+    /// destructuring pattern.
+    /// </summary>
+    [Theory]
+    [InlineData("var result = {}; result[getHttpRequestBody().name] = 1; return result;", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var result = {}; result[getHttpRequestBody().name] = getHttpRequestBody().value; return result;", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var result = { lines: {} }; result.lines[getOrder().id] = 1; return result;", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var result = { lines: [{}] }; result.lines[getOrder().index].quantity = 2; return result;", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var counts = {}; counts[getVariable('Order').status] = 0; counts[getVariable('Order').status]++; return counts;", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var result = {}; result[getOrder()[getHttpRequestBody().name]] = 1; return result;", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var target = []; [target[getOrder().index]] = [1]; return target;", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var key; ({ [getOrder().field]: key } = { status: 'Paid' }); return key;", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var result = {}; result[getHttpRequestBody().name] = 1; return result;", Elsa3JavaScriptMode.Script)]
+    public void Change_of_a_local_object_whose_computed_key_reads_a_variable_converts(string source, Elsa3JavaScriptMode mode)
+    {
+        var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode);
+
+        Assert.True(result.Succeeded, string.Join(Environment.NewLine, result.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
+        Assert.Empty(result.Issues);
+    }
+
+    /// <summary>
+    /// #6222: only the object chain decides, so a change that reaches a variable through it is still refused as a change
+    /// of an ambient value (VF-IMP-005), whatever the keys read: the root itself, a nested member chain, a destructuring
+    /// target, an object the converter cannot follow, and a change made inside a computed key.
+    /// </summary>
+    [Theory]
+    [InlineData("getOrder().status = 'Paid'")]
+    [InlineData("getOrder()[getHttpRequestBody().name] = 1")]
+    [InlineData("getOrder().lines[getHttpRequestBody().index].quantity = 2")]
+    [InlineData("getVariable('Order')[getHttpRequestBody().name]++")]
+    [InlineData("variables.Order[getHttpRequestBody().name] = 1")]
+    [InlineData("({ status: getOrder()[getHttpRequestBody().name] } = { status: 'Paid' })")]
+    [InlineData("[getOrder().lines[getHttpRequestBody().index]] = [1]")]
+    [InlineData("(getHttpRequestBody().useOrder ? getOrder() : {}).status = 'Paid'")]
+    [InlineData("var result = {}; result[getOrder().count++] = 1; return result;")]
+    [InlineData("var result = {}; result[getOrder().status = 'Paid'] = 1; return result;")]
+    public void Change_through_an_ambient_object_chain_stays_refused(string source)
+    {
+        var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Issues, issue => issue.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+                                                issue.Message == "JavaScript mutates an Elsa 3 ambient value.");
+    }
+
+    /// <summary>
+    /// #6222: a local name or member that holds a value read from a variable is no local object, so a change through it
+    /// is still refused as an input changing a variable (#5894), with or without a computed key that reads a variable.
+    /// </summary>
+    [Theory]
+    [InlineData("var order = getOrder(); order[getHttpRequestBody().name] = 1; return order;")]
+    [InlineData("var order = getOrder(); order.lines[getHttpRequestBody().index].quantity = 2; return order;")]
+    [InlineData("var lines = getOrder().lines; lines[getHttpRequestBody().index]++; return lines;")]
+    [InlineData("var holder = { order: getOrder() }; holder.order[getHttpRequestBody().name] = 1; return holder;")]
+    [InlineData("var result = {}; result[getOrder().lines.push(1)] = 1; return result;")]
+    public void Change_through_an_alias_of_a_read_variable_stays_refused(string source)
+    {
+        var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables);
+
+        Assert.False(result.Succeeded);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.InputChangesVariable, issue.Code);
+    }
+
+    /// <summary>
     /// Every name a test script reads, through getVariable or a generated getter, is a workflow variable, except the
     /// workflow instance's correlation id, which no variable shadows.
     /// </summary>

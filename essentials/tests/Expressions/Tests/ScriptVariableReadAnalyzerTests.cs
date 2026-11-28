@@ -154,6 +154,35 @@ public sealed class ScriptVariableReadAnalyzerTests
     }
 
     [Theory]
+    [InlineData("const copy = deepClone(variables.order); copy.items.push(3); copy.customer.name = 'Bob'; return copy;", true)]
+    [InlineData("(() => { const copy = deepClone(variables.order); copy.items.push(3); return copy; })()", false)]
+    public void A_value_passed_to_deepClone_does_not_escape(string source, bool scriptBody)
+    {
+        // Issue #6215: the built-in gets a JSON copy, so changing what it returns cannot change the variable.
+        var analysis = _javaScript.Analyze(source, scriptBody)!;
+
+        Assert.Equal(["order"], analysis.LiteralNames);
+        Assert.False(analysis.HasComputedRead);
+        Assert.Empty(analysis.Writes);
+        Assert.Empty(analysis.Escapes);
+        Assert.False(analysis.HasComputedWrite);
+    }
+
+    [Theory]
+    // The script's own function of that name hides the built-in and can change its argument.
+    [InlineData("function deepClone(o) { o.items.push(3); return o; } deepClone(variables.order); return 1;")]
+    // Copying the argument runs the script's toJSON, which can change it (here: pop the variable's array).
+    [InlineData("Array.prototype.toJSON = Array.prototype.pop; deepClone(variables.order); return 1;")]
+    public void A_value_passed_to_deepClone_escapes_when_the_script_can_run_code_on_it(string source)
+    {
+        var analysis = _javaScript.Analyze(source, scriptBody: true)!;
+
+        Assert.Equal(["order"], analysis.Escapes);
+        // Nothing else marks the script opaque: the escape alone puts the variable in the may-write set.
+        Assert.False(analysis.HasComputedWrite);
+    }
+
+    [Theory]
     [InlineData("{{ variables.order.total }}", "order", false)]
     [InlineData("{{ variables['order'] }}", "order", false)]
     [InlineData("{% if variables.order %}x{% endif %}", "order", false)]

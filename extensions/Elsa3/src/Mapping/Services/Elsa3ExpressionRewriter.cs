@@ -1675,7 +1675,7 @@ public sealed class Elsa3ExpressionRewriter(
         /// </summary>
         private static readonly HashSet<string> NeverMatchedGlobals = new(
             PureGlobalCalls
-                .Concat(JavaScriptBuiltInFunctions.Names)
+                .Concat(Elsa3JavaScriptNames.Elsa4BuiltIns)
                 .Concat(["toJson", "setOutcome", "setOutcomes", "Date", "getVariable", "setVariable", "getInput", "getOutputFrom"])
                 .Concat(StateSetters).Concat(StateGetters).Concat(SetterCalls)
                 .Concat(InlineHelpers.Keys).Concat(InstanceMembers.Keys)
@@ -2109,8 +2109,8 @@ public sealed class Elsa3ExpressionRewriter(
 
         private void VisitNode(Node node)
         {
-            if (node is AssignmentExpression assignment && ContainsAmbientRoot(assignment.Left) ||
-                node is UpdateExpression update && ContainsAmbientRoot(update.Argument))
+            if (node is AssignmentExpression assignment && TargetReachesAmbientRoot(assignment.Left) ||
+                node is UpdateExpression update && TargetReachesAmbientRoot(update.Argument))
             {
                 // Spec 1231 FR-032: in a Run JavaScript body, a change to a member of a variable's value
                 // (getVariable('order').status = 'Paid') is a member change through variables, written with the step.
@@ -2423,7 +2423,7 @@ public sealed class Elsa3ExpressionRewriter(
                 }
 
                 // Elsa 3's GUID and Base64 functions are Elsa 4 built-ins that return the same text (FR-006, FR-007, FR-026).
-                if (JavaScriptBuiltInFunctions.Names.Contains(callee.Name))
+                if (Elsa3JavaScriptNames.Elsa4BuiltIns.Contains(callee.Name))
                 {
                     // Elsa 3 registered built-ins and generated accessors in an order its source does not fix (R-3).
                     if (callee.Name.StartsWith("get", StringComparison.Ordinal) &&
@@ -3422,6 +3422,23 @@ public sealed class Elsa3ExpressionRewriter(
             kind = Elsa3AmbientReferenceKind.Variable;
             return root.Equals("variables", StringComparison.Ordinal);
         }
+
+        /// <summary>
+        /// Whether an assignment or update target changes an ambient value (#6222): its object chain alone decides, that is
+        /// the root of a member chain and each target of a destructuring pattern. A computed key, a destructuring default
+        /// and a reader's arguments only read; the visit checks them as reads, so a change inside a key is still refused
+        /// (<c>result[getOrder().count++] = 1</c>). Any other object (a call, a conditional, a sequence) may hand back an
+        /// ambient value, so it keeps the whole walk.
+        /// </summary>
+        private bool TargetReachesAmbientRoot(Node target) => target switch
+        {
+            MemberExpression member => TargetReachesAmbientRoot(member.Object),
+            ChainExpression chain => TargetReachesAmbientRoot(chain.Expression),
+            ArrayPattern or ObjectPattern or RestElement => target.ChildNodes.Any(TargetReachesAmbientRoot),
+            Property property => TargetReachesAmbientRoot(property.Value),
+            AssignmentPattern assigned => TargetReachesAmbientRoot(assigned.Left),
+            _ => ContainsAmbientRoot(target),
+        };
 
         /// <summary>
         /// Whether a mutation target reaches an ambient value: the <c>variables</c> or <c>args</c> root, or a value read
