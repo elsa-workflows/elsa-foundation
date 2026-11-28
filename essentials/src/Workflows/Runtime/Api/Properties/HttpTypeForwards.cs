@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Capabilities.RuntimeApiCapabilities))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Coalescing.RuntimePersistenceModeProjection))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Contracts.AllowAllActivityExecutionInspectionAuthorizationContext))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Contracts.IWorkflowRuntimeOperatorAccess))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Endpoints.ActivationSlots.Get.Endpoint))]

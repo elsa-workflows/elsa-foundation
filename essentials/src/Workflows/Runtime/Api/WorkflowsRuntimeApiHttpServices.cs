@@ -11,8 +11,6 @@ using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api;
 
-internal sealed class LegacyRuntimeApiSelected;
-
 /// <summary>The Runtime HTTP endpoint conventions and request authority shared by workflow execution backends.</summary>
 internal static class WorkflowsRuntimeApiHttpServices
 {
