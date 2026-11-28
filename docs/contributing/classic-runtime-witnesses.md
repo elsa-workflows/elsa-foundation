@@ -119,8 +119,10 @@ dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj \
 
 The `WorkflowsDashboardEntityFrameworkCore` shell selector composed the classic
 checkpoint-backed run-health projection and the workflow portfolio in one
-feature. Use `385008d6459580ecf0c4566f0e8412bf9b10cf8c` for its activation and
-full Runtime registration tests:
+feature. It called `AddWorkflowRunHealthEntityFrameworkCore` in the Dashboard
+EF package's `DependencyInjection/WorkflowRunHealthEntityFrameworkCoreRegistration.cs`.
+Use `385008d6459580ecf0c4566f0e8412bf9b10cf8c` for both the selector and the
+registration's complete-provider and refusal tests:
 
 ```sh
 archive="$(mktemp -d)"
@@ -135,5 +137,18 @@ git -c core.fsmonitor=false worktree add --detach "$archive/source" 385008d64595
 
 Current shells select `WorkflowsDashboardPortfolioEntityFrameworkCore` for
 portfolio queries. The retained Dashboard reports Actor run-health statistics
-as unavailable. The EF package still exposes the guarded historical run-health
-reader over its original projection and keeps its physical provider tests.
+as unavailable. The EF package keeps the historical run-health reader, its
+original projection, and physical provider tests.
+
+The classic Workbench multi-selector case needs the older
+[`workbench-classic-default` checkout](workbench-compatibility-tests.md)
+at `18a16dee878106ac525aa9a861d851a200e43c55`. Its stock shell supplies the
+comprehensive Runtime feature that the test replaces. From that checkout,
+run:
+
+```sh
+ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1 \
+  dotnet test essentials/tests/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true \
+  --filter 'FullyQualifiedName~Partial_opt_in_runtime_stores_activate_without_the_comprehensive_execution_profile'
+```

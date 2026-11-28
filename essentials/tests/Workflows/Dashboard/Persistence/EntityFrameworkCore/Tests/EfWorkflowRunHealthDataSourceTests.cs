@@ -2,16 +2,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Dashboard;
-using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests;
@@ -114,16 +111,6 @@ public sealed class EfWorkflowRunHealthDataSourceTests
             .ToArray();
 
         await Assert.ThrowsAsync<WorkflowRunHealthQueryException>(() => source.QueryAsync(new(query, buckets)).AsTask());
-    }
-
-    [Fact]
-    public void Historical_health_registration_requires_the_complete_runtime_provider()
-    {
-        var services = new ServiceCollection();
-        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRunHealthEntityFrameworkCore());
-
-        services.AddRuntimeArtifactsEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRunHealthEntityFrameworkCore());
     }
 
     private static IReadOnlyCollection<WorkflowRunHealthBucketRange> Buckets(WorkflowRunHealthQuery query) =>
