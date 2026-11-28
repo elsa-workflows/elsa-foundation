@@ -8,7 +8,6 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Api.Services;
@@ -144,7 +143,7 @@ internal sealed class WorkflowRunInspection(
         // its sub-status), and a poisoned scheduler work item's message embeds an arbitrary handler's exception text.
         if (metadata.ContainsKey(RuntimeMetadataKeys.ChildControlActivityExecutionId)
             || metadata.TryGetValue(RuntimeMetadataKeys.FaultSubStatus, out var subStatus) && subStatus == ChildControlFaulted
-            || metadata.TryGetValue(RuntimeMetadataKeys.CheckpointReason, out var reason) && reason == PoisonedSchedulerWorkIncidentObserver.IncidentFailureType)
+            || metadata.TryGetValue(RuntimeMetadataKeys.CheckpointReason, out var reason) && reason == RuntimeIncidentFailureTypes.SchedulerWorkPoisoned)
             return true;
         if (await ActivitySensitiveAsync(workflowExecutionId, activityExecutionId, executableNodeId, sensitive, lookups, cancellationToken)) return true;
         // A causal child: the fault recorder's (IActivityFaultCausation), a structural parent's completed child, or the child

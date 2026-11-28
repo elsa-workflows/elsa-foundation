@@ -15,5 +15,6 @@
     <ProjectReference Include="../../../Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
     <ProjectReference Include="../../../Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="../../../Mediator/Core/Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="../../../Tasks/Core/Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 </Project>
