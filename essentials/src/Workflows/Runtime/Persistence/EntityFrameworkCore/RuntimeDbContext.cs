@@ -19,6 +19,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     internal DbSet<TriggerSubscriptionEntity> TriggerSubscriptions => Set<TriggerSubscriptionEntity>();
     internal DbSet<TriggerMutationEntity> TriggerMutations => Set<TriggerMutationEntity>();
     internal DbSet<RuntimeIngressReservationEntity> IngressReservations => Set<RuntimeIngressReservationEntity>();
+    internal DbSet<RuntimeAuthoredEventCohortEntity> AuthoredEventCohorts => Set<RuntimeAuthoredEventCohortEntity>();
     internal DbSet<RuntimeKernelScheduleOccurrenceEntity> KernelScheduleOccurrences => Set<RuntimeKernelScheduleOccurrenceEntity>();
     internal DbSet<RuntimeKernelScheduleControlEntity> KernelScheduleControls => Set<RuntimeKernelScheduleControlEntity>();
     internal DbSet<RuntimeKernelEventPublicationEntity> KernelEventPublications => Set<RuntimeKernelEventPublicationEntity>();
@@ -70,6 +71,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new TriggerSubscriptionConfiguration());
         modelBuilder.ApplyConfiguration(new TriggerMutationConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeIngressReservationConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeAuthoredEventCohortConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeKernelScheduleOccurrenceEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeKernelScheduleControlEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeKernelEventPublicationEntityConfiguration());
