@@ -6,6 +6,8 @@ The backend guide covers Workbench startup, its local Development seed, and its 
 
 For an optional setup that pairs source-built Studio with a published Workbench image, see [Use a packaged Workbench backend](studio-packaged-backend.md). That recipe is a recorded image pair, not this source-pair walkthrough.
 
+For the shared fixed-slot and collection-slot contract used by nested activities, see [Nested activity structures](../nested-activities.md).
+
 The commands below were executed on Linux/amd64 at Foundation `6adeeaa0aa731b8b62893f23d1d9d8e9519cd2fa`. Other operating systems were not verified in this pass.
 
 ## Prerequisites
