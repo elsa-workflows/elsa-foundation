@@ -21,7 +21,9 @@ public sealed class WorkbenchShellActivationTests
         // Activity Design advertises the graph authoring provider only when graph design is composed.
         "ActivitiesDesignApi",
         "ActivitiesGraphDesign",
-        "ActivitiesGraphRuntime",
+        "ActivitiesGraphRuntimeHosting",
+        "ActivitiesRuntimeHosting",
+        "ActorSecretsWorkflows",
         // Publishing and serving HTTP-triggered workflows.
         "KernelActivitiesHttp",
         "ActorHttpConnections",
@@ -43,6 +45,9 @@ public sealed class WorkbenchShellActivationTests
     /// <summary>Features a stock shell may leave unlisted that must still be in the runtime catalog.</summary>
     private static readonly string[] CatalogedFeatures =
     [
+        "ActivitiesRuntime",
+        "ActivitiesGraphRuntime",
+        "SecretsWorkflows",
         // ActivitiesHttp depends on its route-table projection by feature name, and a name cannot make an assembly
         // that is absent from the host discoverable. A shell that does not list it gets it as a dependency.
         "WorkflowsRuntimeHttp",
@@ -114,6 +119,9 @@ public sealed class WorkbenchShellActivationTests
             $"{feature} is not in the runtime catalog."));
 
         Assert.False(Runs("ConnectionsWorkflows"));
+        Assert.False(Runs("ActivitiesRuntime"));
+        Assert.False(Runs("ActivitiesGraphRuntime"));
+        Assert.False(Runs("SecretsWorkflows"));
         Assert.False(Runs("WorkflowsRuntimeApi"));
         Assert.False(Runs("WorkflowsRuntimeCheckpointPersistence"));
         Assert.False(Runs("WorkflowsRuntimeResumption"));
@@ -128,11 +136,17 @@ public sealed class WorkbenchShellActivationTests
         {
             var active = await ReadEffectiveFeatureClosureAsync(workbench);
             Assert.Contains("ActorHttpConnections", active);
+            Assert.Contains("ActivitiesRuntimeHosting", active);
+            Assert.Contains("ActivitiesGraphRuntimeHosting", active);
+            Assert.Contains("ActorSecretsWorkflows", active);
             Assert.Contains("DecisionsDesign", active);
             Assert.Contains("DecisionsApi", active);
             Assert.Contains("DecisionsEntityFrameworkCore", active);
             Assert.DoesNotContain("DecisionsWorkflowsDesign", active);
             Assert.DoesNotContain("ConnectionsWorkflows", active);
+            Assert.DoesNotContain("ActivitiesRuntime", active);
+            Assert.DoesNotContain("ActivitiesGraphRuntime", active);
+            Assert.DoesNotContain("SecretsWorkflows", active);
             Assert.DoesNotContain("WorkflowsRuntimeDistributed", active);
             Assert.DoesNotContain("WorkflowsRuntimeCheckpointPersistence", active);
             Assert.DoesNotContain("WorkflowsRuntimeResumption", active);
