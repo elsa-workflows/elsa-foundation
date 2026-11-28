@@ -171,7 +171,7 @@ internal sealed class MigrationComposition : IAsyncDisposable
         var missing = chain.OfType<FeatureNotFoundException>().Select(found => found.FeatureName).Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         // The migration host refuses a listed feature it cannot find in its own initializer, which names the features.
-        if (missing.Length == 0 && chain.Any(failure => failure.TargetSite?.DeclaringType?.Name == "ComposedFeaturesCheck"))
+        if (missing.Length == 0 && chain.Any(failure => ThrownBy(failure, "ComposedFeaturesCheck")))
             missing = listed.Where(feature => chain.Any(failure => NamesFeature(failure.Message, feature))).Order(StringComparer.Ordinal).ToArray();
         if (missing.Length > 0)
             return $"The composition lists feature(s) no project the migration host references provides: {string.Join(", ", missing)}. " +
@@ -186,19 +186,39 @@ internal sealed class MigrationComposition : IAsyncDisposable
             : $"The shell could not be composed ({chain[^1].GetType().Name}). Run the migration host with the same settings to see the cause.";
     }
 
-    /// <summary>Whether <paramref name="message"/> names <paramref name="feature"/> as a whole word.</summary>
+    /// <summary>
+    /// Whether <paramref name="failure"/> was thrown in a type named <paramref name="typeName"/>: an async method throws
+    /// from its compiler-generated state machine, a type nested in the method's own type.
+    /// </summary>
+    private static bool ThrownBy(Exception failure, string typeName)
+    {
+        for (var type = failure.TargetSite?.DeclaringType; type is not null; type = type.DeclaringType)
+        {
+            if (type.Name == typeName)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="message"/> names <paramref name="feature"/> as a whole word; a dotted name such as a namespace
+    /// or type (<c>Elsa.Http.Something</c>) is one word, so its segments do not count.
+    /// </summary>
     private static bool NamesFeature(string message, string feature)
     {
         for (var index = message.IndexOf(feature, StringComparison.Ordinal); index >= 0; index = message.IndexOf(feature, index + 1, StringComparison.Ordinal))
         {
-            var before = index == 0 || !char.IsLetterOrDigit(message[index - 1]);
+            var before = index == 0 || !IsWordCharacter(message[index - 1]);
             var end = index + feature.Length;
-            var after = end == message.Length || !char.IsLetterOrDigit(message[end]);
+            var after = end == message.Length || !IsWordCharacter(message[end]) || (message[end] == '.' && (end + 1 == message.Length || !char.IsLetterOrDigit(message[end + 1])));
             if (before && after)
                 return true;
         }
 
         return false;
+
+        static bool IsWordCharacter(char character) => char.IsLetterOrDigit(character) || character is '.' or '_';
     }
 
     /// <summary>The three configuration layers of T009, lowest first, and what the report records about them.</summary>
@@ -210,7 +230,10 @@ internal sealed class MigrationComposition : IAsyncDisposable
         RunFolders folders)
     {
         // 1. The host's layers behind the key filter. inventory reads only the committed files.
-        var host = Filtered(Build(builder => wiring.AddConfiguration(builder, wiring.HostProjectFolder, Environment, command == MigrationCommand.Assess)));
+        // The raw layers are read once and disposed, so their file watchers do not outlive the run.
+        IConfiguration host;
+        using (var raw = Build(builder => wiring.AddConfiguration(builder, wiring.HostProjectFolder, Environment, command == MigrationCommand.Assess)))
+            host = Filtered(raw);
 
         // 2. The addition list, from the CLI project folder only.
         var additionList = Path.Combine(wiring.CliProjectFolder, AdditionListFileName);
@@ -357,11 +380,11 @@ internal sealed class MigrationComposition : IAsyncDisposable
         key.StartsWith($"{ShellsSection}:{shellName}:", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("ConnectionStrings:", StringComparison.OrdinalIgnoreCase);
 
-    private static IConfigurationRoot Build(Action<IConfigurationBuilder> configure)
+    private static ConfigurationRoot Build(Action<IConfigurationBuilder> configure)
     {
         var builder = new ConfigurationBuilder();
         configure(builder);
-        return builder.Build();
+        return (ConfigurationRoot)builder.Build();
     }
 
     /// <summary>

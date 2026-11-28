@@ -13,6 +13,9 @@ internal static class MigrationCommandLine
     /// <summary>The exit code of a run cancelled with Ctrl+C (128 + SIGINT, as shells report it).</summary>
     public const int CancelledExitCode = 130;
 
+    /// <summary>The exit code of a run that stopped on an unexpected error (contracts/cli.md).</summary>
+    public const int FailedExitCode = 3;
+
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error, HostWiring wiring, CancellationToken cancellationToken)
     {
         var export = new Argument<string>("export") { Description = "An Elsa 3 export: a folder (searched recursively for *.json) or a .zip." };
@@ -61,6 +64,12 @@ internal static class MigrationCommandLine
         {
             error.WriteLine("elsa3-migration: cancelled; --out was left as it was.");
             return CancelledExitCode;
+        }
+        catch (Exception exception)
+        {
+            // Never the message or the stack: either can quote a setting value or definition content (FR-019).
+            error.WriteLine($"elsa3-migration: failed: the run stopped on an unexpected {exception.GetType().Name}; no report was written and --out was left as it was.");
+            return FailedExitCode;
         }
 
         if (result.Refusal is { } refusal)

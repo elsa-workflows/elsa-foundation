@@ -19,13 +19,15 @@ internal sealed class OutputSwap : IDisposable
     private static readonly TimeSpan StaleAfter = TimeSpan.FromHours(1);
 
     private readonly string _outputFolder;
+    private readonly bool _createdOutputFolder;
     private bool _committed;
     private bool _keepStaging;
 
-    private OutputSwap(string outputFolder, string stagingFolder)
+    private OutputSwap(string outputFolder, string stagingFolder, bool createdOutputFolder)
     {
         _outputFolder = outputFolder;
         StagingFolder = stagingFolder;
+        _createdOutputFolder = createdOutputFolder;
     }
 
     /// <summary>The staging folder the run writes into.</summary>
@@ -37,13 +39,23 @@ internal sealed class OutputSwap : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(outputFolder);
 
         var output = Path.GetFullPath(outputFolder);
+        var created = !Directory.Exists(output);
         Directory.CreateDirectory(output);
-        SweepStaleStaging(output);
-        var staging = Path.Combine(output, StagingPrefix + Guid.NewGuid().ToString("N"));
-        var info = Directory.CreateDirectory(staging);
-        if (OperatingSystem.IsWindows())
-            info.Attributes |= FileAttributes.Hidden;
-        return new OutputSwap(output, staging);
+        try
+        {
+            SweepStaleStaging(output);
+            var staging = Path.Combine(output, StagingPrefix + Guid.NewGuid().ToString("N"));
+            var info = Directory.CreateDirectory(staging);
+            if (OperatingSystem.IsWindows())
+                info.Attributes |= FileAttributes.Hidden;
+            return new OutputSwap(output, staging, created);
+        }
+        catch
+        {
+            if (created)
+                TryDeleteIfEmpty(output);
+            throw;
+        }
     }
 
     /// <summary>
@@ -124,6 +136,21 @@ internal sealed class OutputSwap : IDisposable
     {
         if (_committed ? !Directory.Exists(Path.Combine(StagingFolder, PreviousName)) : !_keepStaging && !HoldsPreviousOutput(StagingFolder))
             TryDelete(StagingFolder);
+        // A run that did not commit leaves a missing --out missing (contracts/cli.md, exit 2).
+        if (!_committed && _createdOutputFolder)
+            TryDeleteIfEmpty(_outputFolder);
+    }
+
+    private static void TryDeleteIfEmpty(string folder)
+    {
+        try
+        {
+            if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+                Directory.Delete(folder);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

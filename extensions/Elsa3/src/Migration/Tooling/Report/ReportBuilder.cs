@@ -218,9 +218,11 @@ internal static class ReportBuilder
         return [.. roots];
     }
 
+    /// <summary>An error other than being blocked by a dependency, at import or at publish.</summary>
     private static bool HasOwnError(CollectedDefinition definition) => definition.Findings.Any(finding =>
         finding.Severity == FindingSeverity.Error
-        && !string.Equals(finding.Code, Elsa3.Activities.Design.Import.Reconciliation.Models.Elsa3ReconciliationDiagnosticCodes.BlockedByDependency, StringComparison.Ordinal));
+        && !string.Equals(finding.Code, Elsa3.Activities.Design.Import.Reconciliation.Models.Elsa3ReconciliationDiagnosticCodes.BlockedByDependency, StringComparison.Ordinal)
+        && !string.Equals(finding.Code, Elsa3.Activities.Design.Import.Models.ReusableActivityImportDiagnosticCodes.DependencyNotPublished, StringComparison.Ordinal));
 
     private static IEnumerable<ReportFinding> OrderFindings(IEnumerable<ReportFinding> findings) => findings
         .OrderBy(finding => finding.Stage, StringComparer.Ordinal)

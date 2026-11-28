@@ -179,6 +179,7 @@ public sealed class MigrationCompositionTests
         Assert.Null(composition);
         Assert.Equal(MigrationRefusal.CompositionFailed, refusal?.Reason);
         Assert.Contains("NoSuchFeature1237", refusal!.Sentence);
+        Assert.Contains("no project the migration host references provides", refusal.Sentence);
     }
 
     [Fact]

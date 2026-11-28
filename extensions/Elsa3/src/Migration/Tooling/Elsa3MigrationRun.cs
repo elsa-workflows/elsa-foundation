@@ -5,6 +5,7 @@ using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
+using Elsa3.Activities.Design.Import.Services;
 using Elsa3.Activities.Design.Import.Reconciliation.Models;
 using Elsa3.Activities.Design.Import.Reconciliation.Services;
 using Elsa3.Migration.Tooling.Report;
@@ -138,6 +139,11 @@ internal static class Elsa3MigrationRun
         var reusables = results.SelectMany(result => result.ReusablePublications)
             .GroupBy(state => state.SourceVersionId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
+        // A publication state names the dependency that blocked it by its imported activity version id; the report names
+        // definitions by their Elsa 3 source version id.
+        var sourceOfActivityVersion = reusables.Values
+            .GroupBy(state => state.ActivityDefinitionVersionId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().SourceVersionId, StringComparer.Ordinal);
         var workflows = results.SelectMany(result => result.WorkflowPublications)
             .GroupBy(publication => publication.Workflow.SourceVersionId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
@@ -176,10 +182,16 @@ internal static class Elsa3MigrationRun
             reusables.TryGetValue(sourceVersionId, out var reusableState);
             var notPublished = planItem is { IsReusable: true } && reusableState is not null
                                && reusableState.Status is not (ReusableActivityPublicationStatus.Published or ReusableActivityPublicationStatus.AlreadyPublished);
-            var reusablePublishFindings = notPublished ? PublishFindings(reusableState!.Diagnostics ?? []).ToArray() : [];
-            // A reusable whose publication a dependency blocked names that dependency (FR-017).
-            if (notPublished && reusableState!.BlockedBy is not null)
-                blockedBy.Add(reusableState.BlockedBy);
+            // A reusable whose publication a dependency blocked names that dependency (FR-017) and reports one finding that
+            // points at it; publishing did not stop at it. Its own diagnostic's guidance speaks to the upload API.
+            var blockingDependency = notPublished && reusableState!.BlockedBy is { } blockedActivityVersion
+                ? sourceOfActivityVersion.GetValueOrDefault(blockedActivityVersion, blockedActivityVersion)
+                : null;
+            var reusablePublishFindings = !notPublished ? []
+                : blockingDependency is not null ? [DependencyNotPublishedFinding()]
+                : PublishFindings(reusableState!.Diagnostics ?? []).ToArray();
+            if (blockingDependency is not null)
+                blockedBy.Add(blockingDependency);
 
             // The same version twice in one file: each input gets one of its duplicate-input skips, in order.
             var key = (sourceVersionId, item.File);
@@ -204,7 +216,7 @@ internal static class Elsa3MigrationRun
 
                 // Otherwise the skip reports the publication, which stopped there unless a dependency blocked it. The skip
                 // of a reusable the publisher blocked carries no dependency; its publication state names it.
-                var dependency = skip.BlockedBy ?? (notPublished ? reusableState!.BlockedBy : null);
+                var dependency = skip.BlockedBy ?? blockingDependency;
                 var skipFinding = SkipFinding(skip, diagnostics, dependency);
                 if (publishSkip)
                     skipFinding = skipFinding with { Stage = FindingStage.Publish, PublishStoppedHere = dependency is null };
@@ -283,9 +295,10 @@ internal static class Elsa3MigrationRun
     {
         // A reusable publication with no error code is skipped under its status name ('Refused', 'NotPublishedDependency').
         var isStatusName = skip.Code.All(char.IsLetter);
+        // A refusal without a code is an Elsa 4 publication failure, which the code table's fixed text reports.
         var code = !isStatusName
             ? skip.Code
-            : dependency is not null ? ReusableActivityImportDiagnosticCodes.DependencyNotPublished : Elsa3MigrationToolingCodes.ImportRefused;
+            : dependency is not null ? ReusableActivityImportDiagnosticCodes.DependencyNotPublished : ReusableActivityImportPublishPhase.PublicationFailed;
         var matching = diagnostics.FirstOrDefault(diagnostic => diagnostic.Code == code);
         return new CollectedFinding(
             code,
@@ -297,6 +310,12 @@ internal static class Elsa3MigrationRun
             matching?.Guidance,
             matching is null ? null : ComponentName(matching));
     }
+
+    /// <summary>A reusable not published because a reusable it uses was not; its <c>blockedBy</c> names that one.</summary>
+    private static CollectedFinding DependencyNotPublishedFinding() =>
+        new(ReusableActivityImportDiagnosticCodes.DependencyNotPublished, FindingSeverity.Error, FindingStage.Publish, null, null,
+            "This reusable activity was not published because a reusable activity it uses was not published.",
+            "Fix the reusable activity its blockedBy names; this one publishes then.");
 
     /// <summary>A reusable's publication diagnostics: publish stops at the first error (FR-014).</summary>
     private static IEnumerable<CollectedFinding> PublishFindings(IReadOnlyList<ActivityDiagnostic> diagnostics)

@@ -21,7 +21,8 @@ dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows assess <exp
 - `--all-versions` converts every version. Without it, each definition converts its latest published version (its
   latest version when none is published), plus every version a reusable reference pins.
 
-Exit codes: `0` the report has no Must fix or Reconsider finding, `1` it has, `2` the run was refused. On `0` and `1`
+Exit codes: `0` the report has no Must fix or Reconsider finding, `1` it has, `2` the run was refused, `3` it stopped on
+an unexpected error, `130` it was cancelled. On `0` and `1`
 the last line printed is the output path; on `2` standard error carries one line,
 `elsa3-migration: refused: <reason>: <sentence>`. The reasons and the report format are the contracts in
 [contracts/cli.md](../../../../../specs/1237-elsa3-migration-cli/contracts/cli.md) and

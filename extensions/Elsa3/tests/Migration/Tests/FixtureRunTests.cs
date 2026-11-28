@@ -67,7 +67,8 @@ public sealed class FixtureRunTests
         Assert.Equal(hostFolderBefore, Entries(host.HostFolder));
         Assert.Equal(["host", "out"], Directory.EnumerateFileSystemEntries(host.Root).Select(Path.GetFileName).Order(StringComparer.Ordinal));
         Assert.Equal(["migrated", "report.html", "report.json"], Directory.EnumerateFileSystemEntries(output).Select(Path.GetFileName).Order(StringComparer.Ordinal));
-        Assert.Equal(runFoldersBefore, RunFolders());
+        // Only what appeared during this run: another process may hold run folders of its own.
+        Assert.Empty(RunFolders().Except(runFoldersBefore));
         Assert.False(Directory.Exists(Path.Combine(Environment.CurrentDirectory, "App_Data")));
     }
 

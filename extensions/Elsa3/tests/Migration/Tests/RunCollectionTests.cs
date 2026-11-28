@@ -28,14 +28,24 @@ public sealed class RunCollectionTests
     }
 
     [Fact]
-    public void A_reusable_blocked_at_publish_by_another_names_it_in_blocked_by()
+    public void A_reusable_blocked_at_publish_by_another_names_it_in_blocked_by_and_the_other_is_the_root()
     {
+        // As the publish phase reports them: the blocking dependency by its imported activity version id, with an error
+        // diagnostic of its own whose guidance speaks to the upload API.
         var refused = new ReusableActivityPublicationState("a-activity", "a-v1", ReusableActivityPublicationStatus.Refused, "activity.publication.invalid",
             [new ActivityDiagnostic("activity.publication.invalid", ActivityDiagnosticSeverity.Error, "Elsa 4 says no", new ActivityDiagnosticSubject("activity", "a"))]);
-        var blocked = new ReusableActivityPublicationState("b-activity", "b-v1", ReusableActivityPublicationStatus.NotPublishedDependency, BlockedBy: "a-v1");
-        var skip = new Elsa3SkippedItem("NotPublishedDependency", "b.json", "b", 1, "cause", SourceVersionId: "b-v1");
+        var blocked = new ReusableActivityPublicationState("b-activity", "b-v1", ReusableActivityPublicationStatus.NotPublishedDependency,
+            ReusableActivityImportDiagnosticCodes.DependencyNotPublished,
+            [new ActivityDiagnostic(ReusableActivityImportDiagnosticCodes.DependencyNotPublished, ActivityDiagnosticSeverity.Error, "Version 'b-activity' was not published",
+                new ActivityDiagnosticSubject("activity", "b"), Remediation: "apply it under a new idempotency key")],
+            BlockedBy: "a-activity");
+        var skips = new[]
+        {
+            new Elsa3SkippedItem("activity.publication.invalid", "a.json", "a", 1, "cause", SourceVersionId: "a-v1"),
+            new Elsa3SkippedItem(ReusableActivityImportDiagnosticCodes.DependencyNotPublished, "b.json", "b", 1, "cause", SourceVersionId: "b-v1")
+        };
 
-        var definitions = Collect([Reusable("a"), Reusable("b")], skips: [skip], reusables: [refused, blocked]).Definitions;
+        var definitions = Collect([Reusable("a"), Reusable("b")], skips: skips, reusables: [refused, blocked]).Definitions;
 
         var b = definitions.Single(definition => definition.DefinitionId == "b");
         Assert.Equal(["a-v1"], b.BlockedBy);
@@ -43,6 +53,10 @@ public sealed class RunCollectionTests
         Assert.Equal(ReusableActivityImportDiagnosticCodes.DependencyNotPublished, finding.Code);
         Assert.Equal(FindingStage.Publish, finding.Stage);
         Assert.False(finding.PublishStoppedHere);
+        Assert.DoesNotContain("idempotency", finding.Guidance);
+
+        var report = ReportBuilder.Build(new ReportInput("inventory", "0", false, definitions, [], [], [], [], [], [], true));
+        Assert.Equal(["a-v1"], report.Definitions.Single(definition => definition.DefinitionId == "b").BlockedBy);
     }
 
     [Fact]

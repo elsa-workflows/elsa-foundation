@@ -4,10 +4,17 @@ using Elsa3.Migration.Cli;
 
 // Ctrl+C cancels the run instead of ending the process, so the run removes its temporary folder, database and staging folder.
 using var cancellation = new CancellationTokenSource();
-Console.CancelKeyPress += (_, press) =>
+ConsoleCancelEventHandler cancel = (_, press) =>
 {
     press.Cancel = true;
     cancellation.Cancel();
 };
-
-return await MigrationCommandLine.RunAsync(args, Console.Out, Console.Error, CliHostWiring.Create(), cancellation.Token);
+Console.CancelKeyPress += cancel;
+try
+{
+    return await MigrationCommandLine.RunAsync(args, Console.Out, Console.Error, CliHostWiring.Create(), cancellation.Token);
+}
+finally
+{
+    Console.CancelKeyPress -= cancel;
+}

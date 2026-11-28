@@ -112,6 +112,15 @@ public sealed class OutputSwapTests : IDisposable
     }
 
     [Fact]
+    public void A_run_that_does_not_commit_leaves_a_missing_output_folder_missing()
+    {
+        using (var swap = OutputSwap.Begin(_out))
+            File.WriteAllText(Path.Combine(swap.StagingFolder, "report.json"), "partial");
+
+        Assert.False(Directory.Exists(_out));
+    }
+
+    [Fact]
     public void Commit_twice_is_refused()
     {
         using var swap = OutputSwap.Begin(_out);
