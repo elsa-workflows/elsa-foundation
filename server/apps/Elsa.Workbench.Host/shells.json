@@ -192,6 +192,7 @@
           "KernelWorkflowDashboardQueries": {},
           "KernelActivitiesHttp": {},
           "WorkflowsRuntimeKernelRetainedApi": {},
+          "WorkflowsRuntimeKernelUserTasksApi": {},
           "WorkflowsRuntimeKernelHosting": {
             "Provider": "SQLite",
             "PreparedStandaloneStarts": true
