@@ -186,13 +186,13 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
 
         if (!settling && JsonSerializer.Deserialize<NativeUserTaskWaits.OpenArguments>(body) is { } opening && OwnsWait(opening.Recipient))
         {
-            await jobs.OpenAsync(tenant, opening.Recipient, opening.NodeId, opening.Request, cancellationToken);
-            return new NativeUserTaskWaits.Opened(opening.Recipient.TaskId);
+            var opened = await jobs.OpenAsync(tenant, opening.Recipient, opening.NodeId, opening.Request, cancellationToken);
+            return new NativeUserTaskWaits.Opened(opening.Recipient.TaskId, opened);
         }
 
         throw new InvalidOperationException("The job does not own this Actor user task wait.");
 
-        bool OwnsWait(NativeUserTaskRecipient recipient) => recipient.Actor == job.Actor && recipient.Wait == wait;
+        bool OwnsWait(NativeUserTaskRecipient? recipient) => recipient is not null && recipient.Actor == job.Actor && recipient.Wait == wait;
     }
 
     internal static ValueTask<object?> ExecuteBackground(WorkflowRegistry registry, Contract.ActorRef actor,
@@ -236,8 +236,11 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
                 case "job" when !queuedResumes.Contains(wait):
                     jobs.Add(entry.Job ?? throw new InvalidOperationException("The job checkpoint has no invocation recipe."));
                     break;
-                case NativeUserTaskWaits.Kind when entry.Job is { } opening:
-                    jobs.Add(opening);
+                case NativeUserTaskWaits.Kind when entry.Job is { } journalJob:
+                    jobs.Add(journalJob);
+                    break;
+                case NativeUserTaskWaits.Kind when entry.TaskRetry is { } retry:
+                    timers.Add(retry.Timer);
                     break;
                 case "event":
                     subscriptions.Add(new(entry.Key, wait, Keep: false));

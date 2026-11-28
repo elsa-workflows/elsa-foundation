@@ -74,7 +74,7 @@ internal static class NativeUserTaskWaitChecks
             jobs.ReleaseOpen.TrySetResult();
             await jobs.Settled.Task.WaitAsync(token);
             await ObserveAsync(store, tenant.Tenant, opened.Recipient.Actor, row => row.Status == InstanceStatus.Finished, token);
-            Require(jobs.SettleCalls == 1, "The exact accepted response must finish the activity once.");
+            Require(jobs.SettleCalls == 2, "The exact accepted response must survive one uncertain settlement result.");
 
             await owner.StopAsync(token);
             Console.WriteLine("The committed Actor wait precedes task materialization, rejects ordinary resume and a mismatched frame, and settles an early response once.");
@@ -129,12 +129,13 @@ internal static class NativeUserTaskWaitChecks
             Require(row?.State?.Contains(completionId, StringComparison.Ordinal) == true &&
                 row.Jobs?.Contains("native.user-task.settle/" + recipient.Wait, StringComparison.Ordinal) == true,
                 "The exact accepted response and settlement job must already be committed.");
-            Interlocked.Increment(ref _settleCalls);
+            if (Interlocked.Increment(ref _settleCalls) == 1)
+                throw new InvalidOperationException("The settlement result was interrupted.");
             Settled.TrySetResult();
             return new(recipient.TaskId, completionId, "Approve", []);
         }
 
-        public async ValueTask OpenAsync(string tenant, NativeUserTaskRecipient recipient, string nodeId, NativeUserTaskRequest request,
+        public async ValueTask<bool> OpenAsync(string tenant, NativeUserTaskRecipient recipient, string nodeId, NativeUserTaskRequest request,
             CancellationToken cancellationToken)
         {
             Require(nodeId == "approval" && recipient.TaskId.Length == 64, "The journal must receive a stable task ID and the authored node.");
@@ -145,6 +146,7 @@ internal static class NativeUserTaskWaitChecks
             Interlocked.Increment(ref _openCalls);
             Opened.TrySetResult((tenant, recipient, request));
             await ReleaseOpen.Task.WaitAsync(cancellationToken);
+            return true;
         }
     }
 

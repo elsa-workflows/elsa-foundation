@@ -235,6 +235,9 @@ public sealed record WaitEntry(string Frame, string Kind, string Key, long Creat
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? AcceptedTaskCompletionId { get; init; }
+
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal NativeUserTaskWaits.Retry? TaskRetry { get; init; }
 }
 
 // ---- the model -----------------------------------------------------------------------------------------------------
@@ -336,6 +339,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 break;
             case NativeKinds.UserTaskAccepted:
                 AcceptUserTask(m.Payload);
+                break;
+            case NativeUserTaskWaits.RetryKind:
+                RetryUserTaskJob(m);
                 break;
             case NativeKinds.Resume:
             {
@@ -544,7 +550,12 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
         // The wait and the frame are gone by now, so a host expression that fails here faults the frame directly.
         IStateful? activity;
-        try { activity = (IStateful?)CreateActivity(frame, node, frame.RecoveryStateful ? (JsonObject)frame.RecoveryInputs!.DeepClone() : null, new FrameScope(this, frame)); }
+        try
+        {
+            activity = wait.Kind == NativeUserTaskWaits.Kind && node.Type == typeof(CreateUserTask)
+                ? new CreateUserTask()
+                : (IStateful?)CreateActivity(frame, node, frame.RecoveryStateful ? (JsonObject)frame.RecoveryInputs!.DeepClone() : null, new FrameScope(this, frame));
+        }
         catch (NativeExpressionException failed) { Fail(frame, ExpressionFault(frame, failed)); return; }
         if (activity is null) return;
         var context = Context(frame);
@@ -791,8 +802,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         {
             case "event": turn.Unsubscribe(wait.Key, id); break;
             case "job" when cancel: turn.CancelJob(wait.Key); break;
-            case NativeUserTaskWaits.Kind when cancel && wait.Job is { } opening:
-                turn.CancelJob(opening.Key);
+            case NativeUserTaskWaits.Kind when cancel:
+                if (wait.Job is { } journalJob) turn.CancelJob(journalJob.Key);
+                if (wait.TaskRetry is { } retry) turn.Recall(retry.Timer.Id);
                 break;
             case "child" when cancel:
                 turn.CancelChild(wait);

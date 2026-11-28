@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
@@ -12,14 +11,14 @@ public sealed record NativeUserTaskRecipient(Contract.ActorRef Actor, string Fra
 /// <summary>Delivery of the accepted journal receipt to its exact Actor wait.</summary>
 public sealed record NativeUserTaskAccepted(NativeUserTaskRecipient Recipient, string CompletionId);
 
-/// <summary>The response material from the accepted and settled task journal row.</summary>
-public sealed record NativeUserTaskResponse(string TaskId, string CompletionId, string Action, JsonObject Data);
-
 /// <summary>Runs the durable task journal effects of a qualified Actor wait.</summary>
 public interface INativeUserTaskJobs
 {
-    /// <summary>Opens the task after its owning wait commits. The same recipient always names the same task.</summary>
-    ValueTask OpenAsync(string tenant, NativeUserTaskRecipient recipient, string nodeId, NativeUserTaskRequest request,
+    /// <summary>
+    /// Opens the task after its owning wait commits. An exact repeated open succeeds.
+    /// False definitively refuses the request before creating a task. Uncertain attempts throw so they can replay.
+    /// </summary>
+    ValueTask<bool> OpenAsync(string tenant, NativeUserTaskRecipient recipient, string nodeId, NativeUserTaskRequest request,
         CancellationToken cancellationToken);
 
     /// <summary>Settles the exact accepted reply after Actor acceptance. A repeat returns the same frozen reply.</summary>
@@ -30,7 +29,9 @@ public interface INativeUserTaskJobs
 internal static class NativeUserTaskWaits
 {
     internal const string Kind = "user-task";
+    internal const string RetryKind = "native.user-task.retry";
     internal static readonly TimeSpan JournalJobTimeout = TimeSpan.FromMinutes(1);
+    internal static readonly TimeSpan JournalRetryDelay = TimeSpan.FromSeconds(5);
     private const string OpenJobPrefix = "native.user-task.open/";
     private const string SettleJobPrefix = "native.user-task.settle/";
 
@@ -47,7 +48,8 @@ internal static class NativeUserTaskWaits
 
     internal sealed record OpenArguments(NativeUserTaskRecipient Recipient, string NodeId, NativeUserTaskRequest Request);
     internal sealed record SettlementArguments(NativeUserTaskRecipient Recipient, string CompletionId);
-    internal sealed record Opened(string TaskId);
+    internal sealed record Opened(string TaskId, bool Succeeded);
+    internal sealed record Retry(Contract.TimerSpec Timer, Contract.JobSpec Job);
 
     internal static T? Read<T>(string? body) where T : class
     {
@@ -66,14 +68,16 @@ internal sealed partial class Burst
     private void RegisterUserTask(Frame frame, string wait, NativeUserTaskRequest request)
     {
         var effectKey = Kernel.Model.Contracts.EffectKey.For(turn.Actor.Id, frame.Id, wait, frame.Attempt);
-        var taskId = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectKey)));
+        var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectKey)));
+        // The physical journal distinguishes this namespace from existing classic hexadecimal task IDs.
+        var taskId = "t" + digest[1..];
         var recipient = new NativeUserTaskRecipient(turn.Actor, frame.Id, wait, taskId);
         var arguments = new NativeUserTaskWaits.OpenArguments(recipient, frame.Node, request);
         var job = StartUserTaskJob(NativeUserTaskWaits.OpenJobKey(wait), arguments);
         _s.Waits.Add(wait, new WaitEntry(frame.Id, NativeUserTaskWaits.Kind, taskId) { Job = job });
     }
 
-    private Contract.JobSpec StartUserTaskJob<T>(string key, T arguments) where T : class
+    private Contract.JobSpec StartUserTaskJob(string key, object arguments)
     {
         var timeout = NativeUserTaskWaits.JournalJobTimeout;
         turn.StartUserTaskJob(key, arguments, timeout);
@@ -93,7 +97,7 @@ internal sealed partial class Burst
         _s.Waits[recipient.Wait] = wait;
         // The task can be visible before its opening job reports back. Persist the accepted reply
         // while that job owns its slot, then start settlement from that exact committed wait.
-        if (wait.Job is null && !_s.Agenda.Exists(work => work.Resume && !work.Gone && work.Wait == recipient.Wait))
+        if (wait.Job is null && wait.TaskRetry is null && !_s.Agenda.Exists(work => work.Resume && !work.Gone && work.Wait == recipient.Wait))
             StartSettlement(recipient.Wait, wait);
     }
 
@@ -113,8 +117,9 @@ internal sealed partial class Burst
         _s.Waits[id] = wait with { Job = null };
         if (settling)
         {
-            if (result.Error is not null) return true;
-            if (NativeUserTaskWaits.Read<NativeUserTaskResponse>(result.Result) is { } response &&
+            if (result.Error is not null)
+                RetryUserTaskJob(id, wait);
+            else if (NativeUserTaskWaits.Read<NativeUserTaskResponse>(result.Result) is { } response &&
                 response.TaskId == wait.Key && response.CompletionId == wait.AcceptedTaskCompletionId)
                 Resume(id, Values.From(response));
             else
@@ -128,12 +133,41 @@ internal sealed partial class Burst
             return true;
         }
 
-        if (result.Error is null && NativeUserTaskWaits.Read<NativeUserTaskWaits.Opened>(result.Result)?.TaskId == wait.Key)
+        if (result.Error is null && NativeUserTaskWaits.Read<NativeUserTaskWaits.Opened>(result.Result) is { } opening &&
+            opening.TaskId == wait.Key)
+        {
+            if (opening.Succeeded) return true;
+            _s.Waits.Remove(id);
+            Fail(frame, new ActivityFault("user-task.open-refused", "The task assignment, form or input values could not be accepted."));
             return true;
+        }
 
-        // A failed or timed-out job may already have committed the journal record. Retain the
-        // exact wait so a later immutable response can still reach it.
-        turn.Record($"user-task.open-unconfirmed:{frame.Id}");
+        // A failed or timed-out job may already have committed the journal record. The exact
+        // wait and its original typed input survive a delayed retry and can accept an early reply.
+        RetryUserTaskJob(id, wait);
         return true;
+    }
+
+    private void RetryUserTaskJob(string id, WaitEntry wait)
+    {
+        var due = checked(turn.Now + (long)NativeUserTaskWaits.JournalRetryDelay.TotalMilliseconds);
+        var payload = new TimerFired(id);
+        var timer = new Contract.TimerSpec(turn.SendToSelf(NativeUserTaskWaits.RetryKind, payload, due),
+            NativeUserTaskWaits.RetryKind, JsonSerializer.Serialize(payload), due);
+        _s.Waits[id] = wait with { Job = null, TaskRetry = new(timer, wait.Job!) };
+    }
+
+    private void RetryUserTaskJob(Contract.Message message)
+    {
+        if (NativeUserTaskWaits.Read<TimerFired>(message.Payload) is not { Wait: { } id } ||
+            !_s.Waits.TryGetValue(id, out var wait) || wait.TaskRetry is not { } retry ||
+            retry.Timer.Id != message.Id || retry.Timer.Due > turn.Now)
+            return;
+
+        wait = wait with { TaskRetry = null };
+        if (wait.AcceptedTaskCompletionId is not null)
+            StartSettlement(id, wait);
+        else
+            _s.Waits[id] = wait with { Job = StartUserTaskJob(retry.Job.Key, JsonSerializer.Deserialize<JsonElement>(retry.Job.Arguments!)) };
     }
 }
