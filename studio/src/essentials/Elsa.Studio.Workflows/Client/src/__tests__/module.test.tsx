@@ -3535,9 +3535,9 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Start Test Run"));
     await waitForText(container, "test-run-1");
     expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
-      level: "success", title: "Test run started",
-      link: { label: "Open run", path: "/workflows/instances/wfexec-1" }
+      level: "success", title: "Test run started"
     }));
+    expect(vi.mocked(api.notifications!.notify).mock.calls[0]?.[0].link).toBeUndefined();
     expect(container.querySelector(".wf-editor-run-status")).toBeNull();
     expect(buttonByText(container, "Open run")).not.toBeNull();
 
