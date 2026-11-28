@@ -30865,6 +30865,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Scripting",
+          "path": "essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Sequence",
           "path": "essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
         },
