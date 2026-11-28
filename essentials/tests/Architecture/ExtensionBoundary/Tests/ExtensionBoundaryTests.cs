@@ -73,7 +73,6 @@ public sealed class ExtensionBoundaryTests
         ("Elsa.Integrations.Sdk", "Elsa.Activities.Http"),
         // These capabilities resolve stored credentials through the Secrets contracts.
         ("Elsa.Agent", "Elsa.Secrets.Core"),
-        ("Elsa.Agent.Review", "Elsa.Secrets.Core"),
         ("Elsa.Connections", "Elsa.Secrets.Core"),
         ("Elsa.Foundation.Identity.ExternalAuthentication.Core", "Elsa.Secrets.Core"),
         ("Elsa.Integrations.Connectors.OAuth2", "Elsa.Secrets.Core"),

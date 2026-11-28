@@ -101,3 +101,49 @@ checkpoint implementation.
   python3 tools/decisions/qualify-execution.py --output "$compatibility_root/decision-execution-classic"
 )
 ```
+
+## Classic reviews, Decisions, ETL and Rules in workflows
+
+`AgentReview`, `AgentReviewApi` and the Decisions, ETL, and Rules workflow
+adapters use the previous runner. Use the immutable sources below for those
+workflow activities and preserve any existing authored definitions, published
+material, and deployment data with their original host. Current source keeps
+the independent Agent and Decisions services, ETL pipelines and workers,
+Rules services, and their provider and Studio modules.
+
+The classic-default Workbench checkout above carries the matching API,
+publication, and runtime features. From that checkout, run the Decision
+browser and execution commands above, or the ETL HTTP and file process witnesses:
+
+```sh
+(
+  cd "$compatibility_root/workbench-classic-default"
+  dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Debug -p:RestoreLockedMode=true
+  pwsh -NoProfile -File e2e-tests/etl/Test-FiniteFileEtl.ps1
+  pwsh -NoProfile -File e2e-tests/etl/Test-FiniteHttpEtl.ps1
+)
+```
+
+The workflow adapter tests and the ETL frozen upgrade runner are available at
+the final source revision before this retirement. Use the framework and stores
+from that same revision:
+
+```sh
+git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-workflow-adapters" af562301713e49d879c7c0bf362efdbfaeb8a94e
+(
+  cd "$compatibility_root/classic-workflow-adapters"
+  dotnet test extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release -p:RestoreLockedMode=true \
+    --filter 'FullyQualifiedName~Editorial|FullyQualifiedName~HumanReview'
+  dotnet test extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj -c Release -p:RestoreLockedMode=true
+  dotnet test extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj -c Release -p:RestoreLockedMode=true
+  dotnet test extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj -c Release -p:RestoreLockedMode=true \
+    --filter 'FullyQualifiedName~EtlNative|FullyQualifiedName~EtlPublishedWorkflow|FullyQualifiedName~EtlWorkflowPublication|FullyQualifiedName~RunEtl'
+  dotnet test extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj -c Release -p:RestoreLockedMode=true \
+    --filter 'FullyQualifiedName~RulesNative|FullyQualifiedName~RulesPersisted|FullyQualifiedName~RulesCompiledPublication|FullyQualifiedName~RulesPublication|FullyQualifiedName~RulesWorkflows|FullyQualifiedName~RulesCheckpoint|FullyQualifiedName~RulesIntent|FullyQualifiedName~RunRules'
+  python3 extensions/Etl/tests/Shared/test-v1-native-upgrade.py --evidence-root "$compatibility_root/etl-v1-native-upgrade"
+)
+```
+
+The package-backed Rules Workbench witness has its own matching source and
+publish-state pins. Follow the immutable input recipe in the
+[Rules acceptance quickstart](../../specs/999-durable-rules/quickstart.md).

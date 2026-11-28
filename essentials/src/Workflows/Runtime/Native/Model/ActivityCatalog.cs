@@ -14,8 +14,8 @@ public sealed class NativeActivityUnsupportedException(string node, string activ
 
 /// <summary>
 /// The release 1 activity list (owner decision of 24 November, card 3 B): each designer activity the kernel runs, by its
-/// catalog type key (the old core's CLR type name), to the Native type that runs it, and the eight it leaves out. A kernel
-/// host hides those eight in Studio's toolbox with an availability set (<see cref="KernelUnsupportedSet"/>), configured in
+/// catalog type key (the old core's CLR type name), to the Native type that runs it, and the recognized classic-only types. A kernel
+/// host hides those classic-only types in Studio's toolbox with an availability set (<see cref="KernelUnsupportedSet"/>), configured in
 /// code from this list so that it is kept once:
 /// <code>
 /// services.Configure&lt;ActivityAvailabilityOptions&gt;(options =&gt;
@@ -78,7 +78,7 @@ public static class NativeActivityCatalog
         ["Elsa.CreateUserTask"] = "Elsa.Activities.Primitives.Activities.CreateUserTask",
     };
 
-    /// <summary>The eight the kernel leaves out of release 1: compensation, BPMN, user tasks and console input.</summary>
+    /// <summary>Recognized classic-only Designer activity keys.</summary>
     public static IReadOnlyList<string> Unsupported { get; } =
     [
         "Elsa.Activities.Compensation.Activities.CompensationScope",
@@ -89,6 +89,10 @@ public static class NativeActivityCatalog
         "Elsa.Activities.Bpmn.Activities.RunBpmn",
         "Elsa.Activities.Primitives.Activities.CreateUserTask",
         "Elsa.Activities.Primitives.Activities.ReadLine",
+        "Elsa.Agent.Review.Activities.HumanReview",
+        "Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision",
+        "Elsa.Etl.Workflows.Runtime.Activities.RunEtl",
+        "Elsa.Rules.Workflows.Runtime.Activities.RunRules",
     ];
 
     /// <summary>The designer activities the kernel runs, by catalog type key, to their Native types.</summary>

@@ -1,14 +1,14 @@
 namespace Kernel.Native.Run;
 
-/// <summary>The release 1 activity list (K6; GA test drive card 3 B): 26 designer activities run on Native types, 8 are refused.</summary>
+/// <summary>The release 1 activity list (K6; GA test drive card 3 B): 26 designer activities run on Native types, and recognized classic-only types are refused.</summary>
 internal static class CatalogChecks
 {
     internal static void Run(Action<bool, string> check)
     {
         Console.WriteLine("activity catalog");
         var supported = NativeActivityCatalog.Supported;
-        check(supported.Count == 26 && NativeActivityCatalog.Unsupported.Count == 8 && supported.Keys.Concat(NativeActivityCatalog.Unsupported).Distinct().Count() == 34,
-            $"26 activities run and 8 are left out, 34 in all, none in both ({supported.Count}, {NativeActivityCatalog.Unsupported.Count})");
+        check(supported.Count == 26 && NativeActivityCatalog.Unsupported.Count == 12 && supported.Keys.Concat(NativeActivityCatalog.Unsupported).Distinct().Count() == 38,
+            $"26 activities run and 12 classic-only types are refused, none in both ({supported.Count}, {NativeActivityCatalog.Unsupported.Count})");
         check(supported.Values.Distinct().Count() == 26 && supported.Values.All(t => typeof(ActivityBase).IsAssignableFrom(t)) &&
               supported.All(p => p.Key.EndsWith("." + p.Value.Name, StringComparison.Ordinal)),
             "each runs on its own Native activity type, named as the designer's");
@@ -21,7 +21,7 @@ internal static class CatalogChecks
         check(hidden is { Hidden: true, Node: "scope" } && hidden.Message.Contains("'scope'", StringComparison.Ordinal) &&
               hidden.Message.Contains(NativeActivityCatalog.KernelUnsupportedSet, StringComparison.Ordinal) && unknown is { Hidden: false, Node: "later" },
             "a left-out or unknown activity is refused, naming the node, and a left-out one names the set that hides it");
-        check(NativeActivityCatalog.Unsupported.All(key => Refusal(key, "n") is { Hidden: true }), "each of the eight is refused");
+        check(NativeActivityCatalog.Unsupported.All(key => Refusal(key, "n") is { Hidden: true }), "each recognized classic-only type is refused");
     }
 
     private static NativeActivityUnsupportedException? Refusal(string type, string node)
