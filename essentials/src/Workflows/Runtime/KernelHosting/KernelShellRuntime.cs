@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
     ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock,
     bool protectChildExecutables = false, BoundScope? testTenant = null, KernelEventPublicationRelay? events = null, bool preparedStandaloneStarts = false)
-    : IAsyncDisposable, IRuntimeAuthoredStandaloneEventAvailability
+    : IAsyncDisposable
 {
     private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan InlineSettlementBudget = TimeSpan.FromSeconds(5);
@@ -145,7 +145,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     internal IPreparedRootStartHandoff StandaloneStarts() => Volatile.Read(ref _standaloneStarts) ??
         throw new InvalidOperationException("The Foundation owner is not accepting prepared standalone starts.");
 
-    bool IRuntimeAuthoredStandaloneEventAvailability.Supports(PersistenceScope scope) =>
+    internal bool SupportsAuthoredStandaloneEvents(PersistenceScope scope) =>
         scope == persistenceScope && Volatile.Read(ref _authoredStandaloneEvents) is not null;
 
     private InlineRootRequests? CloseAdmissions()

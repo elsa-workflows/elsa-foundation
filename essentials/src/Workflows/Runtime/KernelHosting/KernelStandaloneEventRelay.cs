@@ -9,6 +9,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
+internal sealed class KernelStandaloneEventAvailability(KernelShellRuntime runtime) : IRuntimeAuthoredStandaloneEventAvailability
+{
+    public bool Supports(PersistenceScope scope) => runtime.SupportsAuthoredStandaloneEvents(scope);
+}
+
 /// <summary>Transfers committed workflow Events to the prepared standalone source owner.</summary>
 internal sealed class KernelStandaloneEventRelay(IAuthoredStandaloneEventOutbox outbox, IServiceScopeFactory scopes,
     TriggerScope scope, TimeProvider clock, ILogger<KernelStandaloneEventRelay> logger)
