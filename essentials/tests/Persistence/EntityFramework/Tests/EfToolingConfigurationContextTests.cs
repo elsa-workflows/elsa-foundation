@@ -17,6 +17,7 @@ public sealed class EfToolingConfigurationContextTests
 {
     private static readonly Assembly[] RuntimeFeatureAssemblies =
     [
+        typeof(RuntimeDbContext).Assembly,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsRuntimeResumptionFeature).Assembly,
         typeof(TasksFeature).Assembly

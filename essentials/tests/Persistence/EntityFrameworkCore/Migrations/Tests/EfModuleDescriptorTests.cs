@@ -179,7 +179,7 @@ public sealed class EfModuleDescriptorTests
         (typeof(StudioPreferencesDbContext).Assembly, "essentials/src/Preferences/Persistence/EntityFrameworkCore"),
         (typeof(WorkflowsDesignDbContext).Assembly, "essentials/src/Workflows/Design/Persistence/EntityFrameworkCore"),
         (typeof(PublishingSnapshotReviewDbContext).Assembly, "essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore"),
-        (typeof(RuntimeDbContext).Assembly, "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore"),
+        (typeof(RuntimeDbContext).Assembly, "essentials/src/Workflows/Runtime/Persistence/Schema/EntityFrameworkCore"),
         (typeof(Elsa3ImportDbContext).Assembly, "extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore")
     ];
 

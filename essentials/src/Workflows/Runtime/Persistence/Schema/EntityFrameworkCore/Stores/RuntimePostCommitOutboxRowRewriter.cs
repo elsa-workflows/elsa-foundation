@@ -18,12 +18,12 @@ internal sealed class RuntimePostCommitOutboxRowRewriter(RuntimeDbContext contex
         var row = await context.RuntimePostCommitOutbox.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (row is null) return EfSchemaRewriteOutcome.Missing;
         var scope = EfRelationalIdentity.Decode(row.ScopeKey);
-        var item = EfRuntimePostCommitOutboxStore.ReadChecked(row, scope);
+        var item = RuntimePostCommitOutboxRow.ReadChecked(row, scope);
         if (row.SchemaVersion == request.TargetVersion) return EfSchemaRewriteOutcome.AlreadyCurrent;
         var version = RuntimePostCommitOutboxWriteVersion.For(context, item);
         if (version != request.TargetVersion)
             throw new EfSchemaWriteRefusedException(RuntimePostCommitOutboxEfModule.SchemaFamily, version, request.TargetVersion);
-        EfRuntimePostCommitOutboxStore.Copy(row, item, scope, checked(row.Revision + 1), version);
+        RuntimePostCommitOutboxRow.Copy(row, item, scope, checked(row.Revision + 1), version);
         try
         {
             await context.SaveChangesAsync(cancellationToken);

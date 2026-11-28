@@ -312,6 +312,7 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
         services.AddCShells(shells =>
         {
             shells.WithAssemblies(
+                typeof(RuntimeDbContext).Assembly,
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(TasksFeature).Assembly,

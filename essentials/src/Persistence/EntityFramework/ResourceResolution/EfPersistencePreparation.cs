@@ -65,7 +65,10 @@ public static class EfPersistencePreparation
             .OfType<System.Reflection.Assembly>()
             .Distinct()
             .ToArray();
-        var discovered = EfPersistenceParticipantCatalog.Discover(loadedAssemblies)
+        var activeFeatures = context.OrderedFeatures.Select(feature => feature.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var (enrollment, modules) = EfPersistenceParticipantCatalog.DiscoverForPreparation(
+            loadedAssemblies, featureAssemblies, activeFeatures);
+        var discovered = enrollment
             .GroupBy(x => x.FeatureId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key,
                 group => group.Count() == 1 ? group.First() : group.First() with { ContextIdentity = string.Empty },
@@ -105,7 +108,7 @@ public static class EfPersistencePreparation
         {
             var validation = EfPersistenceResourceValidator.Validate(
                 resolution,
-                EfModuleCatalog.Discover(featureAssemblies),
+                modules,
                 context.ConfigurationData,
                 rootConfiguration,
                 verifyConnectionValues);
