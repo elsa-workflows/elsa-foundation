@@ -24,6 +24,23 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
       await views.getByRole("tab", { name: item.tab, exact: true }).click();
       await page.getByRole("button", { name: item.add, exact: true }).click();
       await page.getByRole("textbox", { name: item.field, exact: true }).fill(item.value);
+      if (item.tab === "Variables") {
+        if (width === 1440) await page.screenshot({ path: testInfo.outputPath("variables-tab.png") });
+        const controlBoxes = await page.locator(".wf-properties-table tbody tr .studio-form-control").evaluateAll(elements =>
+          elements.map(element => {
+            const legend = element.querySelector(".studio-form-legend");
+            const control = element.querySelector("[data-studio-field-control]");
+            return {
+              label: legend?.textContent?.trim(),
+              fieldset: Math.round(element.getBoundingClientRect().height),
+              legend: legend ? Math.round(legend.getBoundingClientRect().height) : 0,
+              control: control ? Math.round(control.getBoundingClientRect().height) : 0
+            };
+          })
+        );
+        expect(controlBoxes.length).toBeGreaterThanOrEqual(5);
+        expect(controlBoxes.map(b => b.fieldset), JSON.stringify(controlBoxes)).toEqual(controlBoxes.map(() => controlBoxes[0].fieldset));
+      }
     }
     const versions = views.getByRole("tab", { name: "Versions", exact: true });
     await versions.click();

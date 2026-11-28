@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +38,16 @@ public sealed class KernelFeatureTests
             services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors("no schedules here"));
         }
         return services;
+    }
+
+    [Fact]
+    public void The_host_refuses_an_unavailable_foundation_before_selecting_a_database_provider()
+    {
+        var host = new WorkflowsRuntimeKernelHostingFeature { Foundation = "Orleans" };
+
+        var failure = Assert.Throws<InvalidOperationException>(() => host.ConfigureServices(new ServiceCollection()));
+
+        Assert.Contains("BuiltIn Actor Foundation", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]

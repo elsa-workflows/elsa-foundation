@@ -39,6 +39,8 @@
 .ad-input-shell input { border: 0; background: transparent; }
 
 .ad-inline-status, .ad-inline-error, .ad-unavailable-note { margin: .75rem 0; padding: .75rem 1rem; border-radius: var(--studio-radius); background: var(--studio-surface-muted); color: var(--studio-text-muted); }
+.ad-inline-status:has(> svg), .ad-inline-error:has(> svg) { display: flex; align-items: flex-start; gap: .55rem; line-height: 1.45; }
+.ad-inline-status > svg, .ad-inline-error > svg { flex: none; margin-top: .125em; }
 .ad-inline-error { border-left: 4px solid var(--studio-danger); color: var(--studio-danger-fg); }
 .ad-unavailable-note { display: grid; gap: .25rem; border-left: 4px solid var(--studio-warning); }
 .ad-unavailable-note strong { color: var(--studio-warning-fg); }

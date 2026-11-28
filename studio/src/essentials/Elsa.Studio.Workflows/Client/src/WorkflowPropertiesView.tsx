@@ -252,11 +252,12 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
     if (value.trim()) {
       try { JSON.parse(value); } catch { error = "Enter a valid JSON value."; }
     }
-    return <div>
-      <textarea aria-label={ariaLabel} value={value} rows={3} placeholder="(empty)"
-        aria-invalid={error ? true : undefined} onChange={event => onChange(event.target.value)} />
-      {error ? <span role="alert">{error}</span> : null}
-    </div>;
+    return (
+      <StudioField label={ariaLabel} error={error ?? undefined} errorRole="alert">
+        <textarea aria-label={ariaLabel} value={value} rows={3} placeholder="(empty)"
+          aria-invalid={error ? true : undefined} onChange={event => onChange(event.target.value)} />
+      </StudioField>
+    );
   }
   const specialized = fitsEditor(editor, value);
   if (specialized && editor === "checkbox") {
@@ -271,24 +272,28 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
   }
   if (specialized && (editor === "number" || editor === "date")) {
     return (
-      <input
-        type={editor}
-        aria-label={ariaLabel}
-        value={value}
-        placeholder="(empty)"
-        onChange={event => onChange(event.target.value)}
-      />
+      <StudioField label={ariaLabel}>
+        <input
+          type={editor}
+          aria-label={ariaLabel}
+          value={value}
+          placeholder="(empty)"
+          onChange={event => onChange(event.target.value)}
+        />
+      </StudioField>
     );
   }
   return (
-    <input
-      type="text"
-      aria-label={ariaLabel}
-      value={value}
-      placeholder="(empty)"
-      disabled={editor === "none"}
-      onChange={event => onChange(event.target.value)}
-    />
+    <StudioField label={ariaLabel}>
+      <input
+        type="text"
+        aria-label={ariaLabel}
+        value={value}
+        placeholder="(empty)"
+        disabled={editor === "none"}
+        onChange={event => onChange(event.target.value)}
+      />
+    </StudioField>
   );
 }
 
@@ -344,8 +349,8 @@ function WorkflowInputDefaultCell({ input, editor, onChange }: {
         onChange={event => toggle(event.currentTarget.checked)}
       />
       {enabled ? (
-        <>
-          {valueEditor === "json" ? (
+        valueEditor === "json" ? (
+          <StudioField label="Input default value" error={error} errorRole="alert">
             <textarea
               aria-label="Input default value"
               value={draft}
@@ -354,7 +359,9 @@ function WorkflowInputDefaultCell({ input, editor, onChange }: {
               aria-invalid={error ? true : undefined}
               onChange={event => commit(event.currentTarget.value)}
             />
-          ) : valueEditor === "checkbox" ? (
+          </StudioField>
+        ) : valueEditor === "checkbox" ? (
+          <>
             <input
               type="checkbox"
               aria-label="Input default value"
@@ -363,7 +370,10 @@ function WorkflowInputDefaultCell({ input, editor, onChange }: {
               aria-invalid={error ? true : undefined}
               onChange={event => commit(event.currentTarget.checked ? "true" : "false")}
             />
-          ) : valueEditor === "number" || valueEditor === "date" ? (
+            {error ? <span role="alert">{error}</span> : null}
+          </>
+        ) : valueEditor === "number" || valueEditor === "date" ? (
+          <StudioField label="Input default value" error={error} errorRole="alert">
             <input
               type={valueEditor}
               aria-label="Input default value"
@@ -372,7 +382,9 @@ function WorkflowInputDefaultCell({ input, editor, onChange }: {
               aria-invalid={error ? true : undefined}
               onChange={event => commit(event.currentTarget.value)}
             />
-          ) : (
+          </StudioField>
+        ) : (
+          <StudioField label="Input default value" error={error} errorRole="alert">
             <input
               type="text"
               aria-label="Input default value"
@@ -381,9 +393,8 @@ function WorkflowInputDefaultCell({ input, editor, onChange }: {
               aria-invalid={error ? true : undefined}
               onChange={event => commit(event.currentTarget.value)}
             />
-          )}
-          {error ? <span role="alert">{error}</span> : null}
-        </>
+          </StudioField>
+        )
       ) : null}
     </div>
   );
@@ -533,7 +544,9 @@ function ArgumentsEditor({
         return (
           <tr key={index} data-variable-index={columns.default && !columns.workflowInputDefault ? index : undefined}>
             <td>
-              <input type="text" aria-label={`${namePrefix} name`} value={name} onChange={event => update(index, { name: event.target.value })} />
+              <StudioField label={`${namePrefix} name`}>
+                <input type="text" aria-label={`${namePrefix} name`} value={name} onChange={event => update(index, { name: event.target.value })} />
+              </StudioField>
               {warning ? <span className="wf-properties-warning" role="note" title={warning}>{warning}</span> : null}
             </td>
             <td>
