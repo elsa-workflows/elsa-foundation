@@ -2,12 +2,18 @@ using System.Runtime.CompilerServices;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Services.Values;
 
 [assembly: TypeForwardedTo(typeof(CachingWorkflowExecutableStore))]
 [assembly: TypeForwardedTo(typeof(HmacRuntimeRecoveryContinuationCodec))]
 [assembly: TypeForwardedTo(typeof(InvalidatingWorkflowExecutableStore))]
 [assembly: TypeForwardedTo(typeof(OccupiedActivationSlots))]
+[assembly: TypeForwardedTo(typeof(PreparedStandaloneAdmission))]
+[assembly: TypeForwardedTo(typeof(RuntimeIngressAdmissionValidation))]
+[assembly: TypeForwardedTo(typeof(RuntimeIngressControlRules))]
+[assembly: TypeForwardedTo(typeof(StandaloneTriggerProviderRegistration))]
+[assembly: TypeForwardedTo(typeof(TriggerSourcePipeline))]
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableCache))]
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableCacheTelemetry))]
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableDependencyGraph))]
