@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-26
 
-**Status**: Approved — coordinator answered Q1–Q5 and approved on 2026-11-27
+**Status**: Implemented — PR #6067 (2026-11-28); approved 2026-11-27 after the coordinator answered Q1–Q5
 
 **Issue**: #5833, part of initiative #3052 (Elsa 3 to Elsa 4 conversion). Parity record: #1152.
 

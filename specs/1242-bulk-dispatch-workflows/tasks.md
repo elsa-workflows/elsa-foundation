@@ -30,6 +30,7 @@ converter) needs the activity in the catalog.
 - [X] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
 - [ ] T006 [P] [US1] Check in Studio that the designer shows the three slots through the generic rendering, and that
   the instance view shows the per-item `Dispatch` executions. Add no Studio-specific code (FR-003).
+  - Not verified in PR #6067: no Studio code was added, and the generic slot rendering is not exercised here.
 - [X] T007 [P] Write the activity README section, covering the cap, batching, branches, FR-010a and FR-010b, and update the
   DispatchWorkflow `EXTENSION_POINTS.md` (FR-023). Also update
   `essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, whose `ProjectIterationVariables` entry says only the
@@ -61,10 +62,13 @@ converter) needs the activity in the catalog.
 - [X] T012 [P] [US3] [US4] Converter tests (plan, Test scope: Converter), including item members matched to declared names regardless of case, and two members that differ only in case, and a `DefaultItemInputKey` matched to a declared name in another case. Remove `no-counterpart:BulkDispatchWorkflows`
   from `Elsa3ConversionDiagnosticsTests` and keep ParallelForEach.
 - [X] T013 [P] Update the converter README and the spec 236 member map and diagnostic-code contract (FR-021, FR-023). The README states the outer-write rule (FR-010a).
-- [ ] T014 Convert `performance-concurrency.json` (with its child) and the composition root locally, and hand FR-022
+- [X] T014 Convert `performance-concurrency.json` (with its child) and the composition root locally, and hand FR-022
   over to S-15 through the shared notes. Ask S-15 to run the concurrency suite and record the 300-children result.
+  - Done: `performance-concurrency.json` converts unchanged with its child (warnings `BULK-DISPATCH-CAPPED`,
+    `ITEM-INPUTS`). The composition root is refused as FR-022 expects. An adjusted copy is in the shared notes for
+    S-15, awaiting coordinator approval.
 
 ## Phase 3: Finish
 
-- [ ] T015 Run the scoped tests and the gate checker, and set the spec status to Implemented in the PR that finishes
+- [X] T015 Run the scoped tests and the gate checker, and set the spec status to Implemented in the PR that finishes
   phase 2.

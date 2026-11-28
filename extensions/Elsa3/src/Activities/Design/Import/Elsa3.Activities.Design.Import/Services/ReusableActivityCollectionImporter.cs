@@ -129,7 +129,10 @@ public sealed class ReusableActivityCollectionImporter(
         }
 
         var mutation = await materializer.MaterializeAsync(
-            request.Collection, plan, selection, request.AccessScope?.TenantId ?? request.TenantId, cancellationToken);
+            request.Collection, plan, selection,
+            // The tenant stamped on the rows below and published under.
+            request.AccessScope is not null ? request.AccessScope.TenantId : request.TenantId,
+            cancellationToken);
         await AdmitAsync(mutation, cancellationToken);
         // After the conversion and admission findings, which the engineer must see first; before anything is written.
         if (requirePublishing && publishPhase is null && mutation.Activities.Count > 0)
