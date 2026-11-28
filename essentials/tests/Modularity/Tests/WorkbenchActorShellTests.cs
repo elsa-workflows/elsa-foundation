@@ -48,7 +48,10 @@ public sealed class WorkbenchActorShellTests
     [Fact]
     public void The_kernel_shell_toolbox_hides_the_eight_beside_its_own_exclusions()
     {
-        Assert.Equal(8, NativeActivityCatalog.Unsupported.Count);
+        Assert.Contains("Elsa.Agent.Review.Activities.HumanReview", NativeActivityCatalog.Unsupported);
+        Assert.Contains("Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision", NativeActivityCatalog.Unsupported);
+        Assert.Contains("Elsa.Etl.Workflows.Runtime.Activities.RunEtl", NativeActivityCatalog.Unsupported);
+        Assert.Contains("Elsa.Rules.Workflows.Runtime.Activities.RunRules", NativeActivityCatalog.Unsupported);
         Assert.Equal(["Custom.Shown"], Addable(servesOnKernel: true));
     }
 

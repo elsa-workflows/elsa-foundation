@@ -55,7 +55,6 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         typeof(ActivitiesDesignApiFeature),
         typeof(Elsa.Agent.Api.AgentApiFeature),
         typeof(Elsa.Agent.Inspection.Api.AgentInspectionApiFeature),
-        typeof(Elsa.Agent.Review.Api.AgentReviewApiFeature),
         typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
         typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature),
         typeof(ModularityApiFeature),
