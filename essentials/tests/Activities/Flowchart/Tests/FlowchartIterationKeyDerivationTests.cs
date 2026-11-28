@@ -22,7 +22,8 @@ namespace Elsa.Activities.Flowchart.Tests;
 public sealed class FlowchartIterationKeyDerivationTests
 {
     [Theory]
-    [MemberData(nameof(FlowchartConformanceCorpusTests.JoinPolicies), MemberType = typeof(FlowchartConformanceCorpusTests))]
+    [InlineData(FlowchartPolicyKinds.ReachabilityJoin)]
+    [InlineData(FlowchartPolicyKinds.DeadPathJoin)]
     public async Task EveryPathsIterationKey_MatchesItsNearestEnclosingLoopIterationScope(string joinPolicyKind)
     {
         var gate = new ScriptedPolicy("iteration/gate", "node-head", "node-head", "node-end");
