@@ -44,6 +44,7 @@ public sealed class EfConfigurationProbeTests : IDisposable
     internal static readonly Assembly[] HostAssemblies = new[]
     {
         typeof(EfToolingHostTests).Assembly,
+        typeof(RuntimeDbContext).Assembly,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
         typeof(StructuredLogsEntityFrameworkCoreFeature).Assembly,
         typeof(EfOpenTelemetryFeature).Assembly,

@@ -281,6 +281,7 @@ internal static class Program
                 typeof(ActivitiesSequenceFeature).Assembly,
                 typeof(ApiCapabilitiesFeature).Assembly,
                 typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(RuntimeDbContext).Assembly,
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(WorkflowsRuntimeTriggersFeature).Assembly,

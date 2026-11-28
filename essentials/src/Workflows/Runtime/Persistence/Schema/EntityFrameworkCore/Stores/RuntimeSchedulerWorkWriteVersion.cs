@@ -2,7 +2,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Triggers;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -34,10 +34,10 @@ internal static class RuntimeSchedulerWorkWriteVersion
 
     internal static bool IsIngress(RuntimeSchedulerWorkItem item)
     {
-        if (item.CommandMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata) ||
-            item.EnvelopeMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata)) return true;
-        if (item.CommandMetadata.ContainsKey(NativeStandaloneTriggerRuntimeTarget.OriginMetadata) ||
-            item.EnvelopeMetadata.ContainsKey(NativeStandaloneTriggerRuntimeTarget.OriginMetadata)) return true;
+        if (item.CommandMetadata.ContainsKey(RuntimeMetadataKeys.SavedStimulusStartOrigin) ||
+            item.EnvelopeMetadata.ContainsKey(RuntimeMetadataKeys.SavedStimulusStartOrigin)) return true;
+        if (item.CommandMetadata.ContainsKey(RuntimeMetadataKeys.StandaloneIngressOrigin) ||
+            item.EnvelopeMetadata.ContainsKey(RuntimeMetadataKeys.StandaloneIngressOrigin)) return true;
         if (item.Payload is not { ValueKind: JsonValueKind.Object } payload) return false;
         if (payload.EnumerateObject().Any(property => property.Name.Equals("stimulusDeliveryOrigin", StringComparison.OrdinalIgnoreCase))) return true;
         if (Defined(Property(payload, "ingressOrigin")) || Defined(Property(payload, "ingressWaitOrigin")) || Defined(Property(payload, "stimulusDeliveryOrigin"))) return true;

@@ -200,6 +200,7 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(
+                typeof(RuntimeDbContext).Assembly,
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(TasksFeature).Assembly,
