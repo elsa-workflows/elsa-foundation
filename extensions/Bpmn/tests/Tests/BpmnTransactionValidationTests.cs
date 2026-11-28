@@ -2,7 +2,6 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
-using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -23,11 +22,11 @@ public sealed class BpmnTransactionValidationTests
         var node = NewExecutableNode(
             elements:
             [
-                BpmnRuntimeFixture.StartEvent(),
+                BpmnTestNodes.StartEvent(),
                 new BpmnElement("t", BpmnElementTypes.Task, childNodeId: "node-t", isTransaction: true),
-                BpmnRuntimeFixture.EndEvent()
+                BpmnTestNodes.EndEvent()
             ],
-            flows: [BpmnRuntimeFixture.Flow("f1", "start", "t"), BpmnRuntimeFixture.Flow("f2", "t", "end")],
+            flows: [BpmnTestNodes.Flow("f1", "start", "t"), BpmnTestNodes.Flow("f2", "t", "end")],
             children: [Probe("node-t")]);
 
         var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
@@ -40,12 +39,12 @@ public sealed class BpmnTransactionValidationTests
         var node = NewExecutableNode(
             elements:
             [
-                BpmnRuntimeFixture.StartEvent(),
+                BpmnTestNodes.StartEvent(),
                 new BpmnElement("sub", BpmnElementTypes.SubProcess, childNodeId: "node-sub", isTransaction: true,
                     loopCharacteristics: new BpmnLoopCharacteristics(isSequential: true, cardinality: 2)),
-                BpmnRuntimeFixture.EndEvent()
+                BpmnTestNodes.EndEvent()
             ],
-            flows: [BpmnRuntimeFixture.Flow("f1", "start", "sub"), BpmnRuntimeFixture.Flow("f2", "sub", "end")],
+            flows: [BpmnTestNodes.Flow("f1", "start", "sub"), BpmnTestNodes.Flow("f2", "sub", "end")],
             children: [Probe("node-sub")]);
 
         var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
@@ -56,8 +55,8 @@ public sealed class BpmnTransactionValidationTests
     public void CancelEnd_OutsideTransactionStructure_IsRejected()
     {
         var node = NewExecutableNode(
-            elements: [BpmnRuntimeFixture.StartEvent(), BpmnRuntimeFixture.CancelEnd("cancel-end")],
-            flows: [BpmnRuntimeFixture.Flow("f1", "start", "cancel-end")],
+            elements: [BpmnTestNodes.StartEvent(), BpmnTestNodes.CancelEnd("cancel-end")],
+            flows: [BpmnTestNodes.Flow("f1", "start", "cancel-end")],
             isTransaction: false);
 
         var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
@@ -70,17 +69,17 @@ public sealed class BpmnTransactionValidationTests
         var node = NewExecutableNode(
             elements:
             [
-                BpmnRuntimeFixture.StartEvent(),
+                BpmnTestNodes.StartEvent(),
                 new BpmnElement("sub", BpmnElementTypes.SubProcess, childNodeId: "node-sub"),
-                BpmnRuntimeFixture.CancelBoundary("cb", "sub"),
-                BpmnRuntimeFixture.EndEvent(),
-                BpmnRuntimeFixture.EndEvent("cancelled-end")
+                BpmnTestNodes.CancelBoundary("cb", "sub"),
+                BpmnTestNodes.EndEvent(),
+                BpmnTestNodes.EndEvent("cancelled-end")
             ],
             flows:
             [
-                BpmnRuntimeFixture.Flow("f1", "start", "sub"),
-                BpmnRuntimeFixture.Flow("f2", "sub", "end"),
-                BpmnRuntimeFixture.Flow("f3", "cb", "cancelled-end")
+                BpmnTestNodes.Flow("f1", "start", "sub"),
+                BpmnTestNodes.Flow("f2", "sub", "end"),
+                BpmnTestNodes.Flow("f3", "cb", "cancelled-end")
             ],
             children: [Probe("node-sub")]);
 
@@ -94,20 +93,20 @@ public sealed class BpmnTransactionValidationTests
         var node = NewExecutableNode(
             elements:
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.TransactionSubProcess("txn", "node-txn"),
-                BpmnRuntimeFixture.CancelBoundary("cb1", "txn"),
-                BpmnRuntimeFixture.CancelBoundary("cb2", "txn"),
-                BpmnRuntimeFixture.EndEvent(),
-                BpmnRuntimeFixture.EndEvent("c1"),
-                BpmnRuntimeFixture.EndEvent("c2")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.TransactionSubProcess("txn", "node-txn"),
+                BpmnTestNodes.CancelBoundary("cb1", "txn"),
+                BpmnTestNodes.CancelBoundary("cb2", "txn"),
+                BpmnTestNodes.EndEvent(),
+                BpmnTestNodes.EndEvent("c1"),
+                BpmnTestNodes.EndEvent("c2")
             ],
             flows:
             [
-                BpmnRuntimeFixture.Flow("f1", "start", "txn"),
-                BpmnRuntimeFixture.Flow("f2", "txn", "end"),
-                BpmnRuntimeFixture.Flow("f3", "cb1", "c1"),
-                BpmnRuntimeFixture.Flow("f4", "cb2", "c2")
+                BpmnTestNodes.Flow("f1", "start", "txn"),
+                BpmnTestNodes.Flow("f2", "txn", "end"),
+                BpmnTestNodes.Flow("f3", "cb1", "c1"),
+                BpmnTestNodes.Flow("f4", "cb2", "c2")
             ],
             children: [Probe("node-txn")]);
 
@@ -121,12 +120,12 @@ public sealed class BpmnTransactionValidationTests
         var node = NewExecutableNode(
             elements:
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.TransactionSubProcess("txn", "node-txn"),
-                BpmnRuntimeFixture.CancelBoundary("cb", "txn"),
-                BpmnRuntimeFixture.EndEvent()
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.TransactionSubProcess("txn", "node-txn"),
+                BpmnTestNodes.CancelBoundary("cb", "txn"),
+                BpmnTestNodes.EndEvent()
             ],
-            flows: [BpmnRuntimeFixture.Flow("f1", "start", "txn"), BpmnRuntimeFixture.Flow("f2", "txn", "end")],
+            flows: [BpmnTestNodes.Flow("f1", "start", "txn"), BpmnTestNodes.Flow("f2", "txn", "end")],
             children: [Probe("node-txn")]);
 
         // A cancel boundary is not exempt from the ≥1-outbound rule (unlike a compensation boundary).
@@ -140,11 +139,11 @@ public sealed class BpmnTransactionValidationTests
         var node = NewExecutableNode(
             elements:
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("task", childNodeId: "node-task"),
-                BpmnRuntimeFixture.CancelEnd("cancel-end")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("task", childNodeId: "node-task"),
+                BpmnTestNodes.CancelEnd("cancel-end")
             ],
-            flows: [BpmnRuntimeFixture.Flow("f1", "start", "task"), BpmnRuntimeFixture.Flow("f2", "task", "cancel-end")],
+            flows: [BpmnTestNodes.Flow("f1", "start", "task"), BpmnTestNodes.Flow("f2", "task", "cancel-end")],
             children: [Probe("node-task")],
             isTransaction: true);
 
@@ -159,17 +158,17 @@ public sealed class BpmnTransactionValidationTests
         var node = NewExecutableNode(
             elements:
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.TransactionSubProcess("txn", "node-txn"),
-                BpmnRuntimeFixture.CancelBoundary("cb", "txn"),
-                BpmnRuntimeFixture.EndEvent(),
-                BpmnRuntimeFixture.EndEvent("cancelled-end")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.TransactionSubProcess("txn", "node-txn"),
+                BpmnTestNodes.CancelBoundary("cb", "txn"),
+                BpmnTestNodes.EndEvent(),
+                BpmnTestNodes.EndEvent("cancelled-end")
             ],
             flows:
             [
-                BpmnRuntimeFixture.Flow("f1", "start", "txn"),
-                BpmnRuntimeFixture.Flow("f2", "txn", "end"),
-                BpmnRuntimeFixture.Flow("f3", "cb", "cancelled-end")
+                BpmnTestNodes.Flow("f1", "start", "txn"),
+                BpmnTestNodes.Flow("f2", "txn", "end"),
+                BpmnTestNodes.Flow("f3", "cb", "cancelled-end")
             ],
             children: [Probe("node-txn")]);
 
@@ -180,7 +179,7 @@ public sealed class BpmnTransactionValidationTests
     }
 
     private static ExecutableNode Probe(string nodeId) =>
-        WorkflowExecutionHarness.NewProbeNode(nodeId);
+        BpmnTestNodes.Probe(nodeId);
 
     private static ExecutableNode NewExecutableNode(
         IReadOnlyCollection<BpmnElement> elements,

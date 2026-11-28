@@ -122,6 +122,15 @@ git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-b
 )
 ```
 
+The main BPMN test project in this checkout also runs the archived classic
+checkpoint/child/compensation journeys. For the actual BPMN CallActivity REST
+witness, run the following script from the classic-default checkout above
+against its matching owned Workbench URL:
+
+```sh
+pwsh -NoProfile -File e2e-tests/bpmn/Test-BpmnCallActivity.ps1 -BaseUrl "$classic_base_url"
+```
+
 Current source keeps BPMN structure, Design and XML interchange packages and
 their authoring tests. Its retained BPMN publication tests exercise provenance
 without starting a classic workflow.

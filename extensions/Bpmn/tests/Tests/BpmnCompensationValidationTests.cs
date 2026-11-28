@@ -18,24 +18,24 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed class BpmnCompensationValidationTests
 {
     private static BpmnElement CompHandler(string id, string childNodeId = "node-h") =>
-        BpmnRuntimeFixture.CompensationHandler(id, childNodeId);
+        BpmnTestNodes.CompensationHandler(id, childNodeId);
 
     private static readonly BpmnSequenceFlow[] MinimalFlows =
     [
-        BpmnRuntimeFixture.Flow("flow-1", "start", "host"),
-        BpmnRuntimeFixture.Flow("flow-2", "host", "throw"),
-        BpmnRuntimeFixture.Flow("flow-3", "throw", "end")
+        BpmnTestNodes.Flow("flow-1", "start", "host"),
+        BpmnTestNodes.Flow("flow-2", "host", "throw"),
+        BpmnTestNodes.Flow("flow-3", "throw", "end")
     ];
 
     private static BpmnElement[] MinimalElements(
         BpmnElement? boundary = null, BpmnElement? handler = null, BpmnElement? throwEvent = null, BpmnElement? host = null) =>
     [
-        BpmnRuntimeFixture.StartEvent(),
-        host ?? BpmnRuntimeFixture.Task("host", childNodeId: "node-host"),
-        boundary ?? BpmnRuntimeFixture.CompensationBoundary("cb", "host", "handler"),
+        BpmnTestNodes.StartEvent(),
+        host ?? BpmnTestNodes.Task("host", childNodeId: "node-host"),
+        boundary ?? BpmnTestNodes.CompensationBoundary("cb", "host", "handler"),
         handler ?? CompHandler("handler"),
-        throwEvent ?? BpmnRuntimeFixture.CompensateThrow("throw"),
-        BpmnRuntimeFixture.EndEvent()
+        throwEvent ?? BpmnTestNodes.CompensateThrow("throw"),
+        BpmnTestNodes.EndEvent()
     ];
 
     [Fact]
@@ -51,16 +51,16 @@ public sealed class BpmnCompensationValidationTests
     [Fact]
     public void CompensationBoundary_ReferencingMissingHandler_IsRejected() =>
         AssertRejects(
-            MinimalElements(boundary: BpmnRuntimeFixture.CompensationBoundary("cb", "host", "ghost"), handler: CompHandler("handler")),
+            MinimalElements(boundary: BpmnTestNodes.CompensationBoundary("cb", "host", "ghost"), handler: CompHandler("handler")),
             "does not exist");
 
     [Fact]
     public void CompensationBoundary_ReferencingNonHandler_IsRejected()
     {
         // The reference points at an ordinary task, not an isForCompensation element.
-        var elements = new List<BpmnElement>(MinimalElements(boundary: BpmnRuntimeFixture.CompensationBoundary("cb", "host", "plain")))
+        var elements = new List<BpmnElement>(MinimalElements(boundary: BpmnTestNodes.CompensationBoundary("cb", "host", "plain")))
         {
-            BpmnRuntimeFixture.Task("plain", childNodeId: "node-plain")
+            BpmnTestNodes.Task("plain", childNodeId: "node-plain")
         };
         AssertRejects(elements.ToArray(), "not a compensation handler", ["node-host", "node-h", "node-plain"]);
     }
@@ -68,7 +68,7 @@ public sealed class BpmnCompensationValidationTests
     [Fact]
     public void CompensationBoundary_WithOutboundFlow_IsRejected()
     {
-        var flows = MinimalFlows.Append(BpmnRuntimeFixture.Flow("flow-x", "cb", "end")).ToArray();
+        var flows = MinimalFlows.Append(BpmnTestNodes.Flow("flow-x", "cb", "end")).ToArray();
         AssertRejects(MinimalElements(), "cannot have outbound sequence flows", flows: flows);
     }
 
@@ -83,7 +83,7 @@ public sealed class BpmnCompensationValidationTests
     [Fact]
     public void CompensationBoundary_OnMultiInstanceHost_IsRejected() =>
         AssertRejects(
-            MinimalElements(host: BpmnRuntimeFixture.MultiInstanceTask("host", "node-host", cardinality: 2, isSequential: true)),
+            MinimalElements(host: BpmnTestNodes.MultiInstanceTask("host", "node-host", cardinality: 2, isSequential: true)),
             "multi-instance host");
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class BpmnCompensationValidationTests
     [Fact]
     public void Handler_WithSequenceFlow_IsRejected()
     {
-        var flows = MinimalFlows.Append(BpmnRuntimeFixture.Flow("flow-x", "handler", "end")).ToArray();
+        var flows = MinimalFlows.Append(BpmnTestNodes.Flow("flow-x", "handler", "end")).ToArray();
         AssertRejects(MinimalElements(), "cannot participate in sequence flows", flows: flows);
     }
 
@@ -125,9 +125,9 @@ public sealed class BpmnCompensationValidationTests
         // An (otherwise structurally valid) error boundary attached to the handler element.
         var elements = new List<BpmnElement>(MinimalElements())
         {
-            BpmnRuntimeFixture.BoundaryEvent("b-on-handler", "handler", BpmnEventDefinitionTypes.Error)
+            BpmnTestNodes.BoundaryEvent("b-on-handler", "handler", BpmnEventDefinitionTypes.Error)
         };
-        var flows = MinimalFlows.Append(BpmnRuntimeFixture.Flow("flow-b", "b-on-handler", "end")).ToArray();
+        var flows = MinimalFlows.Append(BpmnTestNodes.Flow("flow-b", "b-on-handler", "end")).ToArray();
         AssertRejects(elements.ToArray(), "cannot host attached boundary events", ["node-host", "node-h"], flows);
     }
 
@@ -148,19 +148,19 @@ public sealed class BpmnCompensationValidationTests
     [Fact]
     public void ActivityRef_NamingUnknownElement_IsRejected() =>
         AssertRejects(
-            MinimalElements(throwEvent: BpmnRuntimeFixture.CompensateThrow("throw", activityRef: "ghost")),
+            MinimalElements(throwEvent: BpmnTestNodes.CompensateThrow("throw", activityRef: "ghost")),
             "does not exist in this process");
 
     [Fact]
     public void ActivityRef_NamingHostWithoutCompensationBoundary_IsRejected() =>
         AssertRejects(
-            MinimalElements(throwEvent: BpmnRuntimeFixture.CompensateThrow("throw", activityRef: "start")),
+            MinimalElements(throwEvent: BpmnTestNodes.CompensateThrow("throw", activityRef: "start")),
             "has no attached compensation boundary");
 
     [Fact]
     public void ActivityRef_NamingCompensationHost_ValidatesCleanly()
     {
-        var node = NewNode(MinimalElements(throwEvent: BpmnRuntimeFixture.CompensateThrow("throw", activityRef: "host")), MinimalFlows, ["node-host", "node-h"]);
+        var node = NewNode(MinimalElements(throwEvent: BpmnTestNodes.CompensateThrow("throw", activityRef: "host")), MinimalFlows, ["node-host", "node-h"]);
         Assert.NotNull(BpmnGraphAdapter.Build(node));
     }
 
@@ -199,5 +199,5 @@ public sealed class BpmnCompensationValidationTests
                 JsonSerializer.SerializeToElement(new BpmnStructure(elements, flows))));
 
     private static ExecutableNode WorkflowChild(string nodeId) =>
-        Elsa.Activities.Testing.WorkflowExecutionHarness.NewProbeNode(nodeId);
+        BpmnTestNodes.Probe(nodeId);
 }

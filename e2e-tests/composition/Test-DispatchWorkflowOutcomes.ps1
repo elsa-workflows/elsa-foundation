@@ -20,8 +20,9 @@
       * 'DispatchFailed' needs child-start delivery to exhaust its retries, which no REST surface can force.
     Both are covered in-process by essentials/tests/Activities/Behavioral/Tests (DispatchWorkflowDrive).
 
-    The waited path is also exercised indirectly by bpmn/Test-BpmnCallActivity.ps1; this script removes the BPMN
-    engine from between the assertion and the activity. Fire-and-forget alone is covered by ../Test-ChildWorkflow.ps1.
+    The classic BPMN call-activity witness is documented in docs/contributing/workbench-compatibility-tests.md
+    under Classic BPMN direct execution. This script exercises the direct dispatch path;
+    ../Test-ChildWorkflow.ps1 covers fire-and-forget.
 
     Why the Sequence wrapper. The dispatch node is deliberately NOT the workflow root: the inspection read model
     does not project the ROOT activity's completion outcome (it is recorded durably as

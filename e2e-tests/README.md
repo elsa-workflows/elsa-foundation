@@ -220,7 +220,6 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `http/Test-HttpResponseFlowchart.ps1` | imports the corrected [HTTP demo export](http/fixtures/test-http.json), resolves activity versions from the local catalog, publishes, and asserts HTTP 200 with the authored JSON body through `HttpEndpoint → SetCorrelationId → WriteHttpResponse`. Owns an isolated Workbench with fresh SQLite databases; build Workbench first. `-WorkflowPath <original-export>` reproduces the missing-`ResponseMode: Sync` failure. |
 | `http/Test-RuntimeConcurrencyCorrectness.ps1` | the #2392 reference HTTP workflow under concurrent clients (default 16 × 4, `-PersistenceMode Durable`/`Balanced`): every request ends in HTTP 200 `Alice Smith`, one Completed instance per request, zero incidents. A 429 is admission backpressure: it is retried per `Retry-After` (`-MaxShedRetries`, default 30) and reported, and fails only if still shed after the last retry (#2548). Correctness only; no timings (#2532) |
 | `http/Test-SendHttpRequestStatusOutcomes.ps1` | the per-status outcome ports the compiler pins from `SendHttpRequest.ExpectedStatusCodes` are connectable on the PUBLISHED node and route correctly, including the `Unmatched status code` catch-all (#1119) |
-| `bpmn/Test-BpmnCallActivity.ps1` | BPMN `callActivity` bound to a REAL waited `DispatchWorkflow` child (spec 133): child completes -> parent resumes via `Completed`; child faults -> the error boundary routes (no parent incident) |
 | [Classic BPMN broadcast recovery](bpmn/RecoveryProbe/README.md) | Matching archived Workbench and checked reader reproduce the SQLite source, cohort, and delivery recovery cases. |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
@@ -368,7 +367,9 @@ Classic Elsa let each variable pick a storage driver (Memory vs WorkflowInstance
 is no Memory/WorkflowInstance dichotomy to select between, so the classic per-variable-driver tests do not
 reproduce. This is an architecture difference (like the removed flow-activity model), not a bug; no script.
 
-## Composition change: DispatchWorkflow (child workflows)
+## Classic DispatchWorkflow evidence
+
+The following observations describe the previous runtime. For current Actor child execution, see the [retained kernel tests](../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs).
 
 `Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
 Enabling it (separate from the bug fixes below):
@@ -382,15 +383,14 @@ outcome `Dispatched` while the child runs independently.
 **Waited path (`WaitForCompletion=true`) works again (re-verified 2026-07-23 @ `3dd732d07`).** The #1006
 hang is gone since the #982 node-scoped resume-target fix (`4c2386551`): the parent suspends at the dispatch
 node, the child runs, and the parent resumes with the child's terminal outcome (`Completed`/`Faulted`) —
-covered end-to-end by `bpmn/Test-BpmnCallActivity.ps1` (a BPMN `callActivity` is a waited `DispatchWorkflow`
-by convention). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
+covered end-to-end by the [archived BPMN call-activity witness](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
 
-**Known defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
+**Historical classic defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
 fault-recording checkpoint commit fails, so the child surfaces a
 `Critical`/`SchedulerWorkPoisoned` incident instead of the normal `ActivityReturnedFault` one and the faulted
 activity's state stays uncommitted (`Running`). Dispatched executions only; a directly-executed `Fault`
 workflow records its incident cleanly. Parent-side outcome delivery is unaffected (the waited parent still
-resumes with `Faulted`), which is why `bpmn/Test-BpmnCallActivity.ps1` scenario B passes despite it.
+resumes with `Faulted`), as verified by scenario B in the same archived witness.
 
 ## Server fixes made while building these tests
 
