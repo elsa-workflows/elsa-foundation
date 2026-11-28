@@ -63,21 +63,26 @@ class CorePreviewVerdictTests(unittest.TestCase):
 
 
 class CorePreviewCompositionTests(unittest.TestCase):
-    def test_the_kernel_switches_and_store_reach_only_this_composition(self):
-        env = acceptance.kernel_environment("Host=127.0.0.1;Port=1;Database=x")
-        self.assertEqual({"Elsa__CorePreview__Enabled": "true", "Elsa__CorePreview__Publications": "true",
-                          "Elsa__CorePreview__Tenant": acceptance.TENANT,
-                          "ConnectionStrings__KernelCorePreview": "Host=127.0.0.1;Port=1;Database=x"}, env)
+    def test_postgresql_actor_store_uses_the_stock_host_and_a_separate_platform_store(self):
+        connection = "Host=127.0.0.1;Port=1;Database=x"
+        runtime = Path("owned") / "runtime.sqlite"
+        env = acceptance.kernel_environment(runtime, connection)
+        feature = acceptance.KERNEL_HOSTING_FEATURE
+        self.assertEqual({f"{feature}__Provider": "PostgreSQL", f"{feature}__Tenant": acceptance.TENANT,
+                          f"{feature}__PostgresConnectionString": connection, f"{feature}__SqlitePath": "",
+                          "ConnectionStrings__Elsa": f"Data Source={runtime}"}, env)
 
     def test_sqlite_uses_only_its_owned_database(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "kernel.sqlite"
-            env = acceptance.kernel_environment(sqlite_path=path)
-            self.assertEqual({"Elsa__CorePreview__Enabled": "true", "Elsa__CorePreview__Publications": "true",
-                              "Elsa__CorePreview__Tenant": acceptance.TENANT, "Elsa__CorePreview__Provider": "SQLite",
-                              "Elsa__CorePreview__SqlitePath": str(path)}, env)
+            runtime = Path(directory) / "runtime.sqlite"
+            env = acceptance.kernel_environment(runtime, sqlite_path=path)
+            feature = acceptance.KERNEL_HOSTING_FEATURE
+            self.assertEqual({f"{feature}__Provider": "SQLite", f"{feature}__Tenant": acceptance.TENANT,
+                              f"{feature}__SqlitePath": str(path), f"{feature}__PostgresConnectionString": "",
+                              "ConnectionStrings__Elsa": f"Data Source={runtime}"}, env)
             with self.assertRaises(sqlite3.OperationalError):
-                acceptance.sqlite_markers(path, acceptance.sqlite_shipped_markers())
+                acceptance.sqlite_markers(path)
             self.assertFalse(path.exists())
 
     @staticmethod
@@ -87,6 +92,11 @@ class CorePreviewCompositionTests(unittest.TestCase):
             internal const int JournalCodecVersion = 1;
             internal static StoreFormat RootShipped => Current with { MessageProtocol = 34 };
             private const int Sqlite = 2;
+            private const int PostgreSql = 1;
+            private const int PostgreSqlShippedRevision = 19;
+            _ when db.RequiredFormat == StoreFormat.RootShipped ||
+                db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventQualification =>
+                sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
         """ + definitions
 
     def test_sqlite_markers_accept_a_decimal_or_a_same_file_alias(self):
@@ -100,7 +110,8 @@ class CorePreviewCompositionTests(unittest.TestCase):
         ):
             with self.subTest(declarations=declarations), patch.object(acceptance, "STORE_VERSIONS") as source:
                 source.read_text.return_value = self.marker_source(declarations)
-                self.assertEqual([(1, 3, 34, 1), (2, 2, 17, 0)], acceptance.sqlite_shipped_markers())
+                self.assertEqual([(1, 3, 34, 1), (2, 2, 17, 0)], acceptance.shipped_markers('sqlite'))
+                self.assertEqual([(1, 3, 34, 1), (2, 1, 19, 0)], acceptance.shipped_markers('postgres'))
 
     def test_sqlite_markers_refuse_an_unresolved_ambiguous_or_cyclic_alias(self):
         for declarations in (
@@ -111,13 +122,13 @@ class CorePreviewCompositionTests(unittest.TestCase):
         ):
             with self.subTest(declarations=declarations), patch.object(acceptance, "STORE_VERSIONS") as source:
                 source.read_text.return_value = self.marker_source("private const int SqliteShippedRevision = Revision;\n" + declarations)
-                with self.assertRaisesRegex(ValueError, "Cannot derive SQLite shipped markers"):
-                    acceptance.sqlite_shipped_markers()
+                with self.assertRaisesRegex(ValueError, "Cannot derive shipped markers"):
+                    acceptance.shipped_markers('sqlite')
 
     def test_a_different_sqlite_profile_is_refused_even_with_both_markers(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "kernel.sqlite"
-            expected = acceptance.sqlite_shipped_markers()
+            expected = acceptance.shipped_markers('sqlite')
             with closing(sqlite3.connect(path)) as store:
                 store.execute('PRAGMA journal_mode = WAL')
                 store.execute('CREATE TABLE "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")')
@@ -126,26 +137,12 @@ class CorePreviewCompositionTests(unittest.TestCase):
                 self.assertEqual((0, 0, 0), store.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone())
             checkpointed = path.with_name('checkpointed.sqlite')
             shutil.copyfile(path, checkpointed)
-            self.assertEqual(expected, acceptance.sqlite_markers(checkpointed, expected))
+            self.assertEqual(expected, acceptance.sqlite_markers(checkpointed))
             self.assertFalse(checkpointed.with_name('checkpointed.sqlite-shm').exists())
             with closing(sqlite3.connect(path)) as store, store:
                 store.execute('UPDATE "KernelStoreVersions" SET "MessageProtocol" = "MessageProtocol" + 1 WHERE "Id" = 1')
             with self.assertRaisesRegex(ValueError, "Expected SQLite shipped markers"):
-                acceptance.sqlite_markers(path, expected)
-
-    def test_kernel_serving_is_the_serving_line_and_its_failures_are_named(self):
-        with tempfile.TemporaryDirectory() as directory:
-            log = Path(directory) / "backend.log"
-            process = MagicMock(); process.poll.return_value = None
-            log.write_text("info: x[0]\n      The Core Preview serves the publications of shell default on the kernel: 0 of 0 active slots serve.\n")
-            self.assertIn(acceptance.SERVING_LINE, acceptance.wait_for_kernel_serving(log, process, timeout=1))
-            log.write_text("fail: x[0]\n      The Core Preview could not serve the publications of shell default on the kernel.\n")
-            with self.assertRaises(RuntimeError):
-                acceptance.wait_for_kernel_serving(log, process, timeout=1)
-            log.write_text("info: starting\n")
-            process.poll.return_value = 1
-            with self.assertRaises(RuntimeError):
-                acceptance.wait_for_kernel_serving(log, process, timeout=1)
+                acceptance.require_markers('SQLite', acceptance.sqlite_markers(path), expected)
 
     def test_the_password_stays_out_of_argv_and_an_interrupted_run_still_stops_its_container(self):
         calls = []
