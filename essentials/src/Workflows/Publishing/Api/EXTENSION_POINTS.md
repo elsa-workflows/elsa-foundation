@@ -56,7 +56,7 @@ reaches the decorated context unchanged.
   Replacements must distinguish whether cancellation is advertised from whether it is currently allowed. A
   denied or already-terminal request must not enqueue a Runtime command.
 - Template preparation qualifies the exact selected executable/reference stores through the
-  [template writer capability](../../Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iexecutableactivitytemplatestore-core--elsaworkflowsruntimecore)
+  [template writer capability](../../Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs)
   before atomic admission; a mixed composition creates no hidden root. Immutable material remains content-addressed,
   while each durable Test Run owns a stable expiring template reference derived from its run identity and template
   hash. Preparation uses the persisted winning reference; it cannot borrow a prior run's expiry/layout or restore

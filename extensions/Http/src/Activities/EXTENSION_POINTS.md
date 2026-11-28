@@ -31,8 +31,8 @@ Outbound logging (not an extension point): `KernelActivitiesHttpFeature` calls `
 
 ## Cross-references
 
-- Standalone HTTP source metadata, exclusive reservation planning, producer-bound intake and transport observations: [feature README](StandaloneTriggers/README.md). Public source/store/model contracts are owned by the [Runtime domain catalog](../../../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries); the feature's presence does not establish composed acceptance.
-- Test Run trigger and wait drivers (`ITestRunTriggerDriver`, `ITestRunWaitDriver`), including the authenticated Studio action contract: [`Elsa.Workflows.Runtime` extension points](../../../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
+- Standalone HTTP source metadata, exclusive reservation planning, producer-bound intake and transport observations: [feature README](StandaloneTriggers/README.md). Public source/store/model contracts are owned by the [Runtime source contracts](../../../../essentials/src/Workflows/Runtime/Core/StandaloneTriggers); the feature's presence does not establish composed acceptance.
+- Test Run [trigger driver](../../../../essentials/src/Workflows/Runtime/Core/Contracts/ITestRunTriggerDriver.cs) and [wait driver](../../../../essentials/src/Workflows/Runtime/Core/Contracts/ITestRunWaitDriver.cs) contracts. The [HTTP driver implementation](Services/HttpTestRunDriver.cs) handles the authenticated Studio action.
 - HTTP endpoint behaviour contracts (route resolution, authorization, fault mapping) + the route-table freshness seams: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../Workflows/Runtime/EXTENSION_POINTS.md).
 - HTTP content factories / downloadable content: [`Elsa.Http/EXTENSION_POINTS.md`](../Elsa.Http/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
