@@ -143,6 +143,7 @@ public sealed class WorkbenchShellActivationTests
             Assert.Contains("DecisionsDesign", active);
             Assert.Contains("DecisionsApi", active);
             Assert.Contains("DecisionsEntityFrameworkCore", active);
+            Assert.Contains("ActorDecisionsWorkflows", active);
             Assert.DoesNotContain("DecisionsWorkflowsDesign", active);
             Assert.DoesNotContain("ConnectionsWorkflows", active);
             Assert.DoesNotContain("ActivitiesRuntime", active);
