@@ -1650,7 +1650,7 @@ internal static class PostgresRootParkedOperatorChecks
                 throw new InvalidOperationException("A Terminate was admitted beside an unpinned receipts relation.");
             }
             catch (StoreFormatException error) when (error.Message == (shippedSet
-                ? "The child profile requires its source tables in the marker schema."
+                ? "The PostgreSQL schedule lineage source or its definitions are incomplete."
                 : "Park requires the source tables in the marker schema."))
             {
                 Check(true, "the Park pin refuses a Terminate whose receipts relation is not a marker-schema table");
