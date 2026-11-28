@@ -45,8 +45,7 @@ public sealed class WorkbenchShellActivationTests
     /// <summary>Features a stock shell may leave unlisted that must still be in the runtime catalog.</summary>
     private static readonly string[] CatalogedFeatures =
     [
-        "ActivitiesGraphRuntime",
-        "SecretsWorkflows",
+        "ActivitiesBpmn",
         // ActivitiesHttp depends on its route-table projection by feature name, and a name cannot make an assembly
         // that is absent from the host discoverable. A shell that does not list it gets it as a dependency.
         "WorkflowsRuntimeHttp",
@@ -225,9 +224,12 @@ public sealed class WorkbenchShellActivationTests
         // Resolving a route in the real default shell still requires its own production key.
         using var response = await workbench.Client.GetAsync("/modularity/features");
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        await NativeHostingScenario.WaitForAsync(workbench,
-            () => workbench.Output.Contains("Runtime recovery continuation signing key must be configured", StringComparison.Ordinal),
-            "the routable default shell to report the missing retained Runtime key", timeout: TimeSpan.FromSeconds(10));
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        while (!workbench.Output.Contains("Runtime recovery continuation signing key must be configured", StringComparison.Ordinal))
+        {
+            Assert.True(DateTimeOffset.UtcNow < deadline, $"The default shell did not report its missing Runtime key. {workbench.Output}");
+            await Task.Delay(100);
+        }
     }
 
     private static async Task<HashSet<string>> ReadEffectiveFeatureClosureAsync(WorkbenchProcess workbench)

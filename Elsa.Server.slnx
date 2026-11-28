@@ -86,9 +86,6 @@
     <Project Path="extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" />
     <Project Path="extensions/Etl/tests/WorkerHost/Elsa.Etl.WorkerHost.csproj" />
   </Folder>
-  <Folder Name="/extensions/Etl/tests/Hosting/">
-    <Project Path="extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj" />
-  </Folder>
   <Folder Name="/extensions/Etl/tests/Persistence/">
     <Project Path="extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj" />
   </Folder>
@@ -219,9 +216,6 @@
   </Folder>
   <Folder Name="/extensions/Rules/tests/">
     <Project Path="extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj" />
-  </Folder>
-  <Folder Name="/extensions/Rules/tests/Hosting/">
-    <Project Path="extensions/Rules/tests/Hosting/Tests/Elsa.Rules.Hosting.Tests.csproj" />
   </Folder>
   <Folder Name="/extensions/Rules/tests/Persistence/" />
   <Folder Name="/extensions/Rules/tests/Persistence/EntityFrameworkCore/">
@@ -929,7 +923,6 @@
     <Project Path="essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workbench/Fixtures/">
-    <Project Path="essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj" />
     <Project Path="essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/" />

@@ -1340,7 +1340,10 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.phase == "capture-baseline": result = capture(args)
-        elif args.phase == "resume-upgrade": result = resume_upgrade(args)
+        elif args.phase == "resume-upgrade":
+            if not (REPO / "extensions/Bpmn/tests/Hosting/Tests/OwnedWorkbench.cs").is_file():
+                raise ValueError("Run the classic BPMN apphost upgrade from the pinned checkout in docs/contributing/workbench-compatibility-tests.md.")
+            result = resume_upgrade(args)
         elif args.phase == "verify-upgrade": result = verify_upgrade(args.manifest.resolve(strict=True))
         else: result = verify_capture(args.manifest.resolve(strict=True))
         print(json.dumps(result, indent=2))

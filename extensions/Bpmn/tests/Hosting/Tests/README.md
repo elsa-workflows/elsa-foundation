@@ -1,5 +1,7 @@
 # Production BPMN hosting qualification
 
+The current project tests the read-only Runtime snapshot inspector. The apphost commands below run from the [pinned classic Workbench checkout](../../../../../docs/contributing/workbench-compatibility-tests.md).
+
 Integration-tier tests launch the built `Elsa.Workbench` as an owned child process. Its configuration is copied to a new temporary content root; Runtime and Design stores are isolated there, and the host chooses its own loopback port. Build-order references locate the actual host assembly even with `--artifacts-path`. Host composition and semantic implementations are not reproduced in the test process.
 
 The native witness publishes and executes through normal authenticated APIs, kills only its owned process, restarts against the same stores and verifies the retained execution/pin. The owned host selects the legacy in-process Runtime for these journeys. The direct witness opts into BPMN hosting with the single-node mailbox. It publishes immutable material, starts, observes a human wait, kills/restarts the actual process, verifies the full pin/incarnation/attempt, completes and verifies replay and absence of native workflow/activity/bookmark rows.
