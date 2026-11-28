@@ -620,7 +620,11 @@ async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane
       const integrations = combinedSidebar.getByRole("button", { name: "Integrations", exact: true });
       await expect(integrations).toBeVisible();
       await combinedSidebar.getByRole("navigation", { name: "Integrations", exact: true }).getByRole("link", { name: "Connections", exact: true }).click();
-      await expect(combined.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
+      const connections = combined.getByRole("region", { name: "Connections management", exact: true });
+      const readyTable = connections.getByRole("table", { name: "Connections", exact: true })
+        .and(connections.locator('table:not([aria-busy="true"])'));
+      const empty = connections.getByRole("heading", { name: "No connections yet", exact: true });
+      await expect(readyTable.or(empty)).toBeVisible();
       await capture(combined, info, "combined-integrations-return");
       observation.combinedReturn = { studio: combinedStudio, integrationsVisible: true, pageErrors: combinedErrors };
       expect(combinedErrors, "Uncaught browser errors on the combined return").toEqual([]);
