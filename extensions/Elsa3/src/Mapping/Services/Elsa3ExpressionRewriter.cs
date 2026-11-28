@@ -2121,7 +2121,7 @@ public sealed class Elsa3ExpressionRewriter(
                 _ => null,
             };
 
-            // #6230: a change through a workflow instance value (read-only text) fails in Elsa 4. It is otherwise visited
+            // #6230: scripts only read a workflow instance value, so a change through it is refused. It is otherwise visited
             // as usual, so the target's other checks still report: an ambient value it also reaches, an undeclared name,
             // a custom global. In a with statement's body a call may read the with object, which the with statement's
             // refusal covers.
@@ -3490,8 +3490,8 @@ public sealed class Elsa3ExpressionRewriter(
         /// Whether <paramref name="call"/> reads workflow instance metadata through an Elsa 3 built-in the conversion keeps:
         /// <c>getCorrelationId</c> and <c>getWorkflowInstanceId</c> (read as <c>args.workflowCorrelationId</c> and
         /// <c>args.workflowInstanceId</c>), and in a Run JavaScript body the <c>workflowState</c> getters, which take over
-        /// <c>getCorrelationId</c> there (<c>workflowState.getCorrelationId()</c>). The value is read-only, so a change
-        /// through it is refused (#6230). A built-in whose name a variable's or input's generated getter shares is
+        /// <c>getCorrelationId</c> there (<c>workflowState.getCorrelationId()</c>). Scripts only read the value, so a
+        /// change through it is refused (#6230). A built-in whose name a variable's or input's generated getter shares is
         /// ambiguous, and a function the script declares in a block is its own; both stay reported as such.
         /// </summary>
         private bool IsInstanceReader(CallExpression call) =>
@@ -3501,14 +3501,19 @@ public sealed class Elsa3ExpressionRewriter(
 
         private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader) => new(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-            $"JavaScript changes the workflow instance value '{reader}()' reads, or a member of it. Elsa 4 hands the value to scripts " +
-            "read-only, and it is text or empty: a member change had no effect in Elsa 3 and fails in Elsa 4's strict mode.",
-            "Remove a change of a member, which had no effect in Elsa 3. To work with a new value, copy the value into a local first " +
-            $"(let value = {reader}();) and give the local its new value, in the Elsa 3 workflow before import." +
-            (reader == "getCorrelationId"
-                ? ConvertsWorkflowState ? " To change the instance's correlation ID, call setCorrelationId(value)." : " To change the instance's correlation ID, use a Correlate activity."
-                : reader == "getWorkflowInstanceName" && ConvertsWorkflowState ? " To change the instance's name, call setWorkflowInstanceName(value)."
-                : string.Empty));
+            $"JavaScript changes the value '{reader}()' returns, or a member of it. Scripts only read that workflow instance value " +
+            "(text or null), and Elsa 4 runs them in strict mode, where the conversion cannot reproduce what the change did in Elsa 3.",
+            $"Copy the value into a local first (let value = {reader}();) and work with the local, or remove the change{InstanceChangeRoute(reader)}, " +
+            "in the Elsa 3 workflow before import.");
+
+        /// <summary>How a script changes the instance value <paramref name="reader"/> reads itself, where it can.</summary>
+        private string InstanceChangeRoute(string reader) => reader switch
+        {
+            "getCorrelationId" when ConvertsWorkflowState => "; to change the instance's correlation ID, call setCorrelationId(value)",
+            "getCorrelationId" => "; to change the instance's correlation ID, use a Correlate activity",
+            "getWorkflowInstanceName" => "; to change the instance's name, call setWorkflowInstanceName(value)",
+            _ => string.Empty,
+        };
 
         /// <summary>
         /// Whether a mutation target reaches an ambient value: the <c>variables</c> or <c>args</c> root, or a value read

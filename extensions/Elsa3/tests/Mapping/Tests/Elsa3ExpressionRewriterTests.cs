@@ -210,6 +210,8 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("getWorkflowInstanceName().x = 1", Elsa3JavaScriptMode.Script, false, "getWorkflowInstanceName")]
     [InlineData("(Math.random() > 0.5 ? getCorrelationId() : {}).x = 1", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
     [InlineData("var a = {}; (a || getCorrelationId()).x = 1", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
+    [InlineData("var a = {}; (Math.random() > 0.5 ? a : getWorkflowInstanceId()).x = 1", Elsa3JavaScriptMode.Script, false, "getWorkflowInstanceId")]
+    [InlineData("var a = {}; (getCorrelationId() ?? a).x = 1", Elsa3JavaScriptMode.Script, true, "getCorrelationId")]
     [InlineData("var a = {}; (a, getWorkflowInstanceId()).x = 1", Elsa3JavaScriptMode.Script, true, "getWorkflowInstanceId")]
     [InlineData("async function f() { (await getCorrelationId()).x = 1; } f(); return 1;", Elsa3JavaScriptMode.Script, false, "getCorrelationId")]
     [InlineData("var a; (a = getWorkflowInstanceId()).x = 1", Elsa3JavaScriptMode.Expression, false, "getWorkflowInstanceId")]
@@ -223,11 +225,28 @@ public sealed class Elsa3ExpressionRewriterTests
         Assert.False(result.Succeeded, result.Definition?.Source);
         var issue = Assert.Single(result.Issues);
         Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, issue.Code);
-        Assert.StartsWith($"JavaScript changes the workflow instance value '{reader}()' reads, or a member of it.", issue.Message, StringComparison.Ordinal);
+        Assert.StartsWith($"JavaScript changes the value '{reader}()' returns, or a member of it.", issue.Message, StringComparison.Ordinal);
         Assert.Contains($"let value = {reader}();", issue.Guidance, StringComparison.Ordinal);
-        Assert.StartsWith("Remove a change of a member, which had no effect in Elsa 3.", issue.Guidance, StringComparison.Ordinal);
-        if (reader == "getWorkflowInstanceId")
-            Assert.DoesNotContain("call set", issue.Guidance, StringComparison.Ordinal);
+        Assert.EndsWith("in the Elsa 3 workflow before import.", issue.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #6230: the guidance names how the script changes the instance value itself, where it can: in a Run JavaScript body
+    /// the workflowState setter, elsewhere a Correlate activity for the correlation ID; the instance ID has no route.
+    /// </summary>
+    [Theory]
+    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "; to change the instance's correlation ID, call setCorrelationId(value), ")]
+    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Expression, false, "; to change the instance's correlation ID, use a Correlate activity, ")]
+    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, true, "; to change the instance's correlation ID, use a Correlate activity, ")]
+    [InlineData("getWorkflowInstanceName().x = 1", Elsa3JavaScriptMode.Script, false, "; to change the instance's name, call setWorkflowInstanceName(value), ")]
+    [InlineData("getWorkflowInstanceId().x = 1", Elsa3JavaScriptMode.Script, false, "or remove the change, in the Elsa 3 workflow before import.")]
+    public void Change_through_a_workflow_instance_value_names_the_route_that_changes_the_instance(
+        string source, Elsa3JavaScriptMode mode, bool reusable, string route)
+    {
+        var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode, reusableWorkflow: reusable);
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Contains(route, issue.Guidance, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -247,7 +266,7 @@ public sealed class Elsa3ExpressionRewriterTests
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Issues, issue => issue.Message.StartsWith("JavaScript changes the workflow instance value 'getCorrelationId()' reads", StringComparison.Ordinal));
+        Assert.Contains(result.Issues, issue => issue.Message.StartsWith("JavaScript changes the value 'getCorrelationId()' returns", StringComparison.Ordinal));
         Assert.Contains(result.Issues, issue => issue.Message == otherMessage);
     }
 
@@ -268,10 +287,10 @@ public sealed class Elsa3ExpressionRewriterTests
 
         Assert.False(blockFunction.Succeeded);
         Assert.Contains(blockFunction.Issues, issue => issue.Message.StartsWith("JavaScript uses 'getCorrelationId' outside the block", StringComparison.Ordinal));
-        Assert.DoesNotContain(blockFunction.Issues, issue => issue.Message.StartsWith("JavaScript changes the workflow instance value", StringComparison.Ordinal));
+        Assert.DoesNotContain(blockFunction.Issues, issue => issue.Message.StartsWith("JavaScript changes the value 'get", StringComparison.Ordinal));
         Assert.False(ambiguous.Succeeded);
         Assert.Contains(ambiguous.Issues, issue => issue.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
-        Assert.DoesNotContain(ambiguous.Issues, issue => issue.Message.StartsWith("JavaScript changes the workflow instance value", StringComparison.Ordinal));
+        Assert.DoesNotContain(ambiguous.Issues, issue => issue.Message.StartsWith("JavaScript changes the value 'get", StringComparison.Ordinal));
     }
 
     /// <summary>
