@@ -9,8 +9,9 @@ reads.
 
 The classic test host also exercised the old stimulus endpoint, checkpoint
 payloads, activity completion envelopes, and private variable frames. The
-retained Event test verifies the exact starter publication and resumed run. Use the
-source revision that still composes those stores to replay the original suite:
+retained Event test verifies the exact starter publication and resumed run.
+Classic child calls with the imported cancellation policy also belong to the
+archived suite. Use the source revision that still composes those stores to replay the original suite:
 
 ```sh
 archive="$(mktemp -d)"

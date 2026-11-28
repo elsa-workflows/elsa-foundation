@@ -25,9 +25,10 @@ public sealed class ReusableFlaggedStartTests
         var run = await host.RunAsync(wrapper, new JsonObject());
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
-        Assert.Contains("start", run.ExecutedNodeIds);
-        Assert.Contains("approved", run.ExecutedNodeIds);
-        Assert.DoesNotContain("other", run.ExecutedNodeIds);
-        Assert.DoesNotContain("rejected", run.ExecutedNodeIds);
+        var executed = run.Activities.Select(activity => activity.ExecutableNodeId).ToArray();
+        Assert.Contains(await host.ResolveBodyNodeIdAsync(wrapper, "start"), executed);
+        Assert.Contains(await host.ResolveBodyNodeIdAsync(wrapper, "approved"), executed);
+        Assert.DoesNotContain(await host.ResolveBodyNodeIdAsync(wrapper, "other"), executed);
+        Assert.DoesNotContain(await host.ResolveBodyNodeIdAsync(wrapper, "rejected"), executed);
     }
 }
