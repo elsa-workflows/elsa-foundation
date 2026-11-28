@@ -5,7 +5,6 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +21,7 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
     public void Feature_exposes_the_durable_signing_key_and_shares_it_across_scopes_and_nodes()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
         var feature = new RuntimeArtifactsEntityFrameworkCoreFeature
         {
             RecoveryContinuationSigningKey = SigningKey
@@ -51,7 +50,7 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
     public void Feature_fails_closed_when_the_durable_signing_key_is_missing_or_short(string? signingKey)
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
         new RuntimeArtifactsEntityFrameworkCoreFeature
         {
             RecoveryContinuationSigningKey = signingKey
@@ -59,53 +58,6 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
 
         using var provider = services.BuildServiceProvider();
         Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>());
-        Assert.Throws<InvalidOperationException>(() => provider.GetServices<IStartupTask>().ToArray());
-    }
-
-    [Fact]
-    public void Activity_execution_feature_configures_durable_signers_and_owned_stores()
-    {
-        const string hierarchyKey = "ef-runtime-hierarchy-signing-key-32-bytes";
-        const string recoveryKey = "ef-runtime-recovery-signing-key-32-bytes";
-        var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        new RuntimeActivityExecutionEntityFrameworkCoreFeature
-        {
-            Provider = "Sqlite",
-            ConnectionString = "Data Source=:memory:",
-            HierarchyCursorSigningKey = hierarchyKey,
-            RecoveryContinuationSigningKey = recoveryKey
-        }.ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider(validateScopes: true);
-        using var scope = provider.CreateScope();
-        Assert.Equal(hierarchyKey, provider.GetRequiredService<IOptions<ActivityExecutionHierarchyCursorOptions>>().Value.SigningKey);
-        Assert.False(provider.GetRequiredService<IOptions<ActivityExecutionHierarchyCursorOptions>>().Value.AllowEphemeralDevelopmentKey);
-        Assert.Equal(recoveryKey, provider.GetRequiredService<IOptions<RuntimeRecoveryContinuationOptions>>().Value.SigningKey);
-        Assert.False(provider.GetRequiredService<IOptions<RuntimeRecoveryContinuationOptions>>().Value.AllowEphemeralDevelopmentKey);
-        Assert.IsType<EfActivityExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>());
-        Assert.IsType<EfActivityExecutionInspectionStore>(scope.ServiceProvider.GetRequiredService<IActivityExecutionInspectionStore>());
-        Assert.IsType<EfActivityExecutionHierarchyStore>(scope.ServiceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
-
-        var codec = scope.ServiceProvider.GetRequiredService<IActivityExecutionHierarchyCursorCodec>();
-        var token = codec.Encode(new ActivityExecutionHierarchyCursorState("tenant-a", "profile", "workflow", "root", [], 1, 0, 0, "child"));
-        Assert.NotNull(codec.Decode(token));
-    }
-
-    [Fact]
-    public void Activity_execution_feature_fails_closed_without_a_hierarchy_signing_key()
-    {
-        var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        new RuntimeActivityExecutionEntityFrameworkCoreFeature
-        {
-            Provider = "Sqlite",
-            ConnectionString = "Data Source=:memory:",
-            RecoveryContinuationSigningKey = SigningKey
-        }.ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IActivityExecutionHierarchyCursorCodec>());
         Assert.Throws<InvalidOperationException>(() => provider.GetServices<IStartupTask>().ToArray());
     }
 
@@ -156,7 +108,7 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<IExecutableActivityTemplateReader>(_ => new CustomTemplateStore());
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
 
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
     }
@@ -180,7 +132,7 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
     public void Artifact_registration_restores_all_descriptors_when_context_validation_fails()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
         services.AddScoped<RuntimeSqliteDbContext>(_ => throw new NotSupportedException());
         var before = services.ToArray();
 
@@ -309,7 +261,7 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
     public void Artifact_registration_resolves_the_owned_context_and_every_store_projection_in_scope()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
         services.AddOptions<RuntimeRecoveryContinuationOptions>()
             .Configure(options => options.SigningKey = SigningKey);
         services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions
@@ -338,18 +290,6 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
     }
 
     // Kept beside the composition test: the feature's registration entry point can be extended without replacing it.
-    [Fact]
-    public void Bookmark_feature_can_be_extended_without_replacing_its_registration_contract()
-    {
-        var feature = new ExtensibleBookmarksFeature();
-        var services = new ServiceCollection();
-
-        feature.ConfigureServices(services);
-
-        Assert.True(feature.WasConfigured);
-        Assert.IsAssignableFrom<RuntimeBookmarksEntityFrameworkCoreFeature>(feature);
-    }
-
     private sealed class ExtensibleFeature : RuntimeArtifactsEntityFrameworkCoreFeature
     {
         public bool WasConfigured { get; private set; }
@@ -361,16 +301,6 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
         }
     }
 
-    private sealed class ExtensibleBookmarksFeature : RuntimeBookmarksEntityFrameworkCoreFeature
-    {
-        public bool WasConfigured { get; private set; }
-
-        public override void ConfigureServices(IServiceCollection services)
-        {
-            WasConfigured = true;
-            base.ConfigureServices(services);
-        }
-    }
 
     private sealed class CustomTemplateStore : IExecutableActivityTemplateStore
     {

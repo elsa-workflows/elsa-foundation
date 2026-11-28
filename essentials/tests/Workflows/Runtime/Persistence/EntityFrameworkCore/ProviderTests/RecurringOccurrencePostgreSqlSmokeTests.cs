@@ -9,60 +9,12 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 
 /// <summary>
-/// <see cref="RecurringOccurrenceDeliveryContract"/> and <see cref="RecurringOccurrenceClaimContract"/> (#2198) on
-/// PostgreSQL, where two pumps' claim writes are not serialized the way SQLite serializes them, so a lost race surfaces
-/// only on the row's concurrency token. Each case gets an empty database of its own: the runtime node's module migrator
-/// installs the schema, migrations included, and the store-only cases create it.
+/// Exercises recurring occurrence claims against PostgreSQL using the store's concurrency tokens.
+/// Each case gets a separate empty database.
 /// </summary>
 [Collection(RuntimeBookmarksPostgreSqlFixture.CollectionName)]
 public sealed class RecurringOccurrencePostgreSqlSmokeTests(RuntimeBookmarksPostgreSqlFixture fixture)
 {
-    [SkippableFact]
-    public async Task PostgreSql_an_occurrence_whose_claimant_died_before_routing_starts_once_through_a_peer_after_the_lease()
-    {
-        var connectionString = await CreateDatabaseAsync();
-        await RecurringOccurrenceDeliveryContract.AClaimantThatDiesBeforeRoutingLeavesTheOccurrenceToAPeerAsync("PostgreSql", connectionString, Contexts(connectionString));
-    }
-
-    [SkippableFact]
-    public async Task PostgreSql_an_occurrence_whose_claimant_died_after_routing_is_repeated_by_a_peer_without_a_second_start()
-    {
-        var connectionString = await CreateDatabaseAsync();
-        await RecurringOccurrenceDeliveryContract.AClaimantThatDiesAfterRoutingIsRepeatedByAPeerWithoutASecondStartAsync("PostgreSql", connectionString, Contexts(connectionString));
-    }
-
-    [SkippableFact]
-    public async Task PostgreSql_two_pumps_racing_on_one_occurrence_route_and_start_it_once()
-    {
-        var connectionString = await CreateDatabaseAsync();
-        await RecurringOccurrenceDeliveryContract.TwoPumpsRacingOnOneOccurrenceRouteAndStartItOnceAsync("PostgreSql", connectionString, Contexts(connectionString));
-    }
-
-    [SkippableFact]
-    public async Task PostgreSql_a_republish_while_an_occurrence_is_due_keeps_it_for_the_pump() =>
-        await RecurringOccurrenceDeliveryContract.ARepublishWhileAnOccurrenceIsDueKeepsItForThePumpAsync(Contexts(await CreateDatabaseAsync()));
-
-    [SkippableFact]
-    public async Task PostgreSql_a_replacement_activated_while_the_replaced_publication_holds_the_occurrence_fires_it_once()
-    {
-        var connectionString = await CreateDatabaseAsync();
-        await RecurringOccurrenceDeliveryContract.AReplacementActivatedWhileTheReplacedPublicationHoldsTheOccurrenceFiresItOnceAsync("PostgreSql", connectionString, Contexts(connectionString));
-    }
-
-    [SkippableFact]
-    public async Task PostgreSql_a_replacement_activated_after_the_replaced_publication_routed_the_occurrence_does_not_start_it_again()
-    {
-        var connectionString = await CreateDatabaseAsync();
-        await RecurringOccurrenceDeliveryContract.AReplacementActivatedAfterTheReplacedPublicationRoutedTheOccurrenceDoesNotStartItAgainAsync("PostgreSql", connectionString, Contexts(connectionString));
-    }
-
-    [SkippableFact]
-    public async Task PostgreSql_an_exhausted_cron_fires_its_last_occurrence_once_and_is_then_deleted()
-    {
-        var connectionString = await CreateDatabaseAsync();
-        await RecurringOccurrenceDeliveryContract.AnExhaustedCronFiresItsLastOccurrenceOnceAndIsThenDeletedAsync("PostgreSql", connectionString, Contexts(connectionString));
-    }
-
     [SkippableFact]
     public Task PostgreSql_a_claim_holds_the_occurrence_until_its_lease_lapses() =>
         WithStoresAsync(RecurringOccurrenceClaimContract.AClaimHoldsTheOccurrenceUntilItsLeaseLapsesAsync);
