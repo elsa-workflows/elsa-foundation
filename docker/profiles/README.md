@@ -108,6 +108,8 @@ To enable standalone Timer and Cron, select `KernelActivitiesScheduling`, `Stand
 and `PreparedStandaloneScheduleTriggers`. The host loads these settings from the replacement shell file.
 The existing `WorkflowsRuntimeKernelHosting` selector includes HTTP. Lean Essentials uses
 `WorkflowsRuntimeKernelOptionalHttpHosting` to keep those routes off until the shell selects them.
+Before disabling a transport in a shell that keeps its databases, unpublish the active slots that require it.
+On startup the host reloads those publications and requires the transports they use.
 
 ## Build in GitHub Actions
 

@@ -31,6 +31,11 @@ OPTIONAL_TRIGGER_FEATURES = {
     "cron": ("KernelActivitiesScheduling", "StandaloneScheduleTriggerAuthoring", "PreparedStandaloneScheduleTriggers"),
 }
 OPTIONAL_TRIGGER_TYPES = {"http": ("http",), "cron": ("cron", "timer")}
+OPTIONAL_TRIGGER_ACTIVITIES = {
+    "http": "Elsa.Activities.Http.Activities.HttpEndpoint",
+    "cron": "Elsa.Activities.Scheduling.Activities.Cron",
+    "timer": "Elsa.Activities.Scheduling.Activities.Timer",
+}
 ALL_OPTIONAL_TRIGGER_TYPES = [kind for family in OPTIONAL_TRIGGER_TYPES.values() for kind in family]
 OPTIONAL_TRIGGER_FEATURE_NAMES = {name for group in OPTIONAL_TRIGGER_FEATURES.values() for name in group}
 
@@ -264,15 +269,27 @@ def submit_lean_sequence(container, name, activities):
 def verify_lean_triggers(container, expected_types):
     marker = f"elsa-lean-trigger-{uuid4().hex}"
     route = f"/workflows/http/{marker}"
+    catalog = read_json(container, "/design/activities/catalog?availability=Addable")
+    addable_types = {value["activityTypeKey"] for value in catalog["activities"]}
+    addable_triggers = {kind for kind, type_key in OPTIONAL_TRIGGER_ACTIVITIES.items() if type_key in addable_types}
+    if addable_triggers != set(expected_types):
+        raise RuntimeError(f"Lean Essentials advertised the wrong addable trigger activities: {sorted(addable_triggers)}")
+
+    catalog = read_json(container, "/design/activities/catalog?availability=All")
+    all_types = {value["activityTypeKey"] for value in catalog["activities"]}
+    missing_definitions = set(OPTIONAL_TRIGGER_ACTIVITIES.values()) - all_types
+    if missing_definitions:
+        raise RuntimeError(f"Lean Essentials omitted underlying trigger definitions: {sorted(missing_definitions)}")
+
     capabilities = {value["id"] for value in read_json(container, "/capabilities")["capabilities"]}
     expects_http = "http" in expected_types
     if ("elsa.http.workflow-endpoints" in capabilities) != expects_http:
         raise RuntimeError("Lean Essentials advertised the wrong authored HTTP endpoint capability")
 
-    result = {"authoredHttp": "disabled"}
+    result = {"authoredHttp": "disabled", "addableTriggerActivities": sorted(addable_triggers)}
     if expects_http:
         _, version = submit_lean_sequence(container, marker, [
-            profile_activity(container, "Elsa.Activities.Http.Activities.HttpEndpoint", "http",
+            profile_activity(container, OPTIONAL_TRIGGER_ACTIVITIES["http"], "http",
                              {"Path": marker, "SupportedMethods": ["POST"], "CanStartWorkflow": True}),
             profile_activity(container, "Elsa.Activities.Http.Activities.WriteHttpResponse", "respond",
                              {"StatusCode": 201, "Body": marker}),
@@ -286,7 +303,7 @@ def verify_lean_triggers(container, expected_types):
         raise RuntimeError("Lean Essentials served the authored HTTP route without the mounted feature")
 
     definition, version = submit_lean_sequence(container, marker + "-timer", [
-        profile_activity(container, "Elsa.Activities.Scheduling.Activities.Timer", "timer", {"Interval": "PT4S"}),
+        profile_activity(container, OPTIONAL_TRIGGER_ACTIVITIES["timer"], "timer", {"Interval": "PT4S"}),
         profile_activity(container, WRITE_LINE, WRITE_LINE_NODE, {"text": marker}),
     ])
     publish = f"/publishing/workflows/{version}/publish"
