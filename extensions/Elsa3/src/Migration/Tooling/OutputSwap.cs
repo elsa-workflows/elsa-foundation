@@ -42,9 +42,10 @@ internal sealed class OutputSwap : IDisposable
         // Without a trailing separator, so walking up the path reaches each created parent once.
         var output = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputFolder));
         var firstCreated = FirstMissingFolder(output);
-        Directory.CreateDirectory(output);
         try
         {
+            // Inside the try: a deeper folder that cannot be created must not leave the parents created before it.
+            Directory.CreateDirectory(output);
             SweepStaleStaging(output);
             var staging = Path.Combine(output, StagingPrefix + Guid.NewGuid().ToString("N"));
             var info = Directory.CreateDirectory(staging);

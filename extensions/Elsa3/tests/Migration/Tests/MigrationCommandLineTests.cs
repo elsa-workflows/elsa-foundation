@@ -65,6 +65,58 @@ public sealed class MigrationCommandLineTests
     }
 
     [Fact]
+    public async Task An_unexpected_failure_exits_3_with_one_line_naming_only_the_error_type()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "elsa3-migration-cli-" + Guid.NewGuid().ToString("N"));
+        var export = Path.Combine(root, "export");
+        Directory.CreateDirectory(export);
+        File.WriteAllText(Path.Combine(export, "w.json"), """{ "id": "w-v1", "definitionId": "w", "version": 1, "root": { "type": "Elsa.Flowchart" } }""");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        try
+        {
+            // A run that cannot start (no host wiring) stands for any error the run does not expect.
+            var exitCode = await MigrationCommandLine.RunAsync(["workflows", "inventory", export, "--out", Path.Combine(root, "out")], output, error, null!, CancellationToken.None);
+
+            Assert.Equal(MigrationCommandLine.FailedExitCode, exitCode);
+            var line = Assert.Single(error.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries));
+            Assert.StartsWith("elsa3-migration: failed: ", line);
+            Assert.Contains(nameof(ArgumentNullException), line);
+            Assert.DoesNotContain("Value cannot be null", line);
+            Assert.False(Directory.Exists(Path.Combine(root, "out")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_cancelled_run_exits_130_and_leaves_a_missing_out_missing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "elsa3-migration-cli-" + Guid.NewGuid().ToString("N"));
+        var export = Path.Combine(root, "export");
+        Directory.CreateDirectory(export);
+        File.WriteAllText(Path.Combine(export, "w.json"), """{ "id": "w-v1", "definitionId": "w", "version": 1, "root": { "type": "Elsa.Flowchart" } }""");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        try
+        {
+            var exitCode = await MigrationCommandLine.RunAsync(["workflows", "inventory", export, "--out", Path.Combine(root, "out")], output, error, CliHostWiring.Create(), cancellation.Token);
+
+            Assert.Equal(MigrationCommandLine.CancelledExitCode, exitCode);
+            Assert.StartsWith("elsa3-migration: cancelled", error.ToString().Trim());
+            Assert.False(Directory.Exists(Path.Combine(root, "out")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Help_prints_and_exits_0()
     {
         var (exitCode, output, error) = await RunAsync(["workflows", "inventory", "--help"]);
