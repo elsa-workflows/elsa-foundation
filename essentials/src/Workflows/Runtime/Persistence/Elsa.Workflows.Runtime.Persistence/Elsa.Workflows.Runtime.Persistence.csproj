@@ -1,16 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Provider-neutral workflow Runtime persistence support for continuation paging and protected source receipts.</Description>
+    <Description>Provider-neutral workflow Runtime persistence services.</Description>
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Api" />
-    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Tests" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Tests" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />

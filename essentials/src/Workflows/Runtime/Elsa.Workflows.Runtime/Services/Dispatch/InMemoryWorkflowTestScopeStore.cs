@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.TestScopes;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.Dispatch;
@@ -12,104 +13,40 @@ public sealed class InMemoryWorkflowTestScopeStore :
     IWorkflowTestScopeCleanupStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
+    private readonly InMemoryWorkflowTestScopeLifecycleStore _lifecycle;
 
-    public InMemoryWorkflowTestScopeStore(InMemoryRuntimeCheckpointStoreState? state = null) =>
+    public InMemoryWorkflowTestScopeStore(InMemoryRuntimeCheckpointStoreState? state = null)
+    {
         _state = state ?? new InMemoryRuntimeCheckpointStoreState();
+        _lifecycle = new(_state.SyncRoot, _state.WriteGate, _state.WorkflowTestScopes);
+    }
 
     public ValueTask<WorkflowTestScopeRecord> CreateAsync(
         WorkflowTestScope scope,
         DateTimeOffset createdAt,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(scope);
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (_state.SyncRoot)
-        {
-            _state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var existing);
-            var record = WorkflowTestScopeTransitions.Create(existing, scope, createdAt);
-            _state.WorkflowTestScopes[scope.ScopeId] = record;
-            return ValueTask.FromResult(record);
-        }
-    }
+        CancellationToken cancellationToken = default) =>
+        _lifecycle.CreateAsync(scope, createdAt, cancellationToken);
 
     public ValueTask<WorkflowTestScopeRecord?> FindAsync(
         string scopeId,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (_state.SyncRoot)
-        {
-            _state.WorkflowTestScopes.TryGetValue(scopeId, out var record);
-            return ValueTask.FromResult(record);
-        }
-    }
+        CancellationToken cancellationToken = default) =>
+        _lifecycle.FindAsync(scopeId, cancellationToken);
 
-    public async ValueTask<WorkflowTestScopeCloseResult> CloseAsync(
+    public ValueTask<WorkflowTestScopeCloseResult> CloseAsync(
         WorkflowTestScopeCloseRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        cancellationToken.ThrowIfCancellationRequested();
-        await _state.WriteGate.WaitAsync(cancellationToken);
-        try
-        {
-            lock (_state.SyncRoot)
-            {
-                _state.WorkflowTestScopes.TryGetValue(request.ScopeId, out var existing);
-                var result = WorkflowTestScopeTransitions.Close(existing, request);
-                if (result.Record is not null)
-                    _state.WorkflowTestScopes[request.ScopeId] = result.Record;
-                return result;
-            }
-        }
-        finally
-        {
-            _state.WriteGate.Release();
-        }
-    }
+        CancellationToken cancellationToken = default) =>
+        _lifecycle.CloseAsync(request, cancellationToken);
 
     public ValueTask<WorkflowTestScopeRecord> CompleteAsync(
         string scopeId,
         DateTimeOffset completedAt,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (_state.SyncRoot)
-        {
-            if (!_state.WorkflowTestScopes.TryGetValue(scopeId, out var existing))
-                throw new InvalidOperationException("The workflow test scope was not found for closure completion.");
-            var record = WorkflowTestScopeTransitions.Complete(existing, completedAt);
-            _state.WorkflowTestScopes[scopeId] = record;
-            return ValueTask.FromResult(record);
-        }
-    }
+        CancellationToken cancellationToken = default) =>
+        _lifecycle.CompleteAsync(scopeId, completedAt, cancellationToken);
 
     public ValueTask<WorkflowTestScopePage> QueryAsync(
         WorkflowTestScopePageQuery query,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(query);
-        query.Validate();
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (_state.SyncRoot)
-        {
-            var candidates = _state.WorkflowTestScopes.Values
-                .Where(record => query.State is { } state
-                    ? record.State == state
-                    : record.State == WorkflowTestScopeState.Closing ||
-                      record.State == WorkflowTestScopeState.Open && record.Scope.IsExpired(query.ObservedAt))
-                .Where(record => query.ContinuationToken is null ||
-                    StringComparer.Ordinal.Compare(record.Scope.ScopeId, query.ContinuationToken) > 0)
-                .OrderBy(record => record.Scope.ScopeId, StringComparer.Ordinal)
-                .Take(query.PageSize + 1)
-                .ToArray();
-            var items = candidates.Take(query.PageSize).ToArray();
-            var continuation = candidates.Length > query.PageSize ? items[^1].Scope.ScopeId : null;
-            return ValueTask.FromResult(new WorkflowTestScopePage(items, continuation));
-        }
-    }
+        CancellationToken cancellationToken = default) =>
+        _lifecycle.QueryAsync(query, cancellationToken);
 
     public ValueTask AssertOpenAsync(
         WorkflowTestScope scope,
