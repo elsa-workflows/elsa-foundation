@@ -44,4 +44,4 @@
 - Publication/refusal semantics and metadata bytes are retained from the existing implementation;
   runtime readers share the private Core codec and frozen key. The runtime hosting feature supplies no publisher contribution.
 
-See [authoring migration](README.md) and the [runtime responsibilities](../Elsa.Activities.Bpmn/EXTENSION_POINTS.md).
+See [authoring migration](README.md) and the [composite runtime adapter](../Composite/README.md).

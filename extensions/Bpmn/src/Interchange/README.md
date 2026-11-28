@@ -1,6 +1,6 @@
 # Elsa.Activities.Bpmn.Interchange
 
-The registered BPMN interchange module converts XML/BPMNDI through released `Bpmn.Interchange` **0.5.0**, then binds representable work to Foundation's existing `elsa.bpmn.structure` **1.0.0** authored envelope. Foundation retains `childNodeId`, `listenerNodeId`, exact catalog references, variables, default-flow markers and designer data. The runtime package carries the [host adapter](../Elsa.Activities.Bpmn/README.md); XML fidelity and host execution readiness are distinct results.
+The registered BPMN interchange module converts XML/BPMNDI through released `Bpmn.Interchange` **0.5.0**, then binds representable work to Foundation's existing `elsa.bpmn.structure` **1.0.0** authored envelope. Foundation retains `childNodeId`, `listenerNodeId`, exact catalog references, variables, default-flow markers and designer data. The [Composite package](../Composite/README.md) supplies the host adapter. XML fidelity and host execution readiness are distinct results.
 
 `IBpmnDocumentImporter` analyzes/imports and `IBpmnDocumentExporter` exports. `ActivitiesBpmnInterchangeFeature` registers both interfaces and `IBpmnHostWorkBinder`. It specializes the [Design feature](../Design/README.md), so standalone interchange also installs authored structure/lowering and model pin contributions without a concrete runtime dependency. The normal Workbench enables this module. APIs and Studio use the registered services; direct port-only conversions do not establish published or browser compatibility.
 
@@ -32,7 +32,9 @@ The optional authored element property `elsa.direct.binding` round-trips as `els
 
 Metadata retention alone does not validate an executable profile or publish a process. A publisher must validate the versioned binding's full schema, supported inventory and immutable dependencies before accepting execution. Native `childNodeId` and listener bindings keep their existing meaning. The remaining direct Studio journey is tracked in [spec1184](../../../../specs/1184-direct-bpmn-studio/spec.md).
 
-## Optional authored direct publication
+## Archived authored direct publication
+
+The following behavior belongs to the [classic BPMN host](../../../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution).
 
 `ActivitiesBpmnDirectPublishing` adds `POST interchange/bpmn/versions/{versionId}/publish-direct` with a `requestId` body. It reads an immutable saved version, checks normalized caller/tenant and both `bpmn:publish` and `workflows/publishing:manage` resource permissions, verifies the visible compatible root BpmnProcess catalog entry and projects its authoring structure into the existing direct runtime. The route chooses the source; body actor/tenant/source lookalikes are never trusted. Source-owned/deleted definitions and unsupported binding intent are refused.
 
