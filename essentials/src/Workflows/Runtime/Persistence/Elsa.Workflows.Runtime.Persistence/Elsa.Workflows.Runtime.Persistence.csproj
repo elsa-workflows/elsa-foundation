@@ -6,7 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Api" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" />

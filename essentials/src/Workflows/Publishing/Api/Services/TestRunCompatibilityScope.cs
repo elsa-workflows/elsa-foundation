@@ -11,7 +11,7 @@ internal static class TestRunCompatibilityScope
 
     static TestRunCompatibilityScope()
     {
-        Store = new InMemoryWorkflowTestScopeLifecycleStore();
+        Store = WorkflowTestScopeStoreFactory.CreateInMemory();
         Provider = new ServiceCollection()
             .AddSingleton<IWorkflowTestScopeStore>(Store)
             .BuildServiceProvider();

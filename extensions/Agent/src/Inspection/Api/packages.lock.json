@@ -285,6 +285,7 @@
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.PreparedSchedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Publications": "[4.0.0-dev, )"
         }
       },
@@ -303,6 +304,16 @@
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.preparedschedules": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Cronos": "[0.13.0, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
