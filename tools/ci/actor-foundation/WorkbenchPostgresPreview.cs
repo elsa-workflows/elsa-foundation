@@ -760,8 +760,8 @@ internal static partial class WorkbenchPostgresPreview
             }
             else
             {
-                var actor = RequireDatabase("KERNEL_WORKBENCH_ACTOR_POSTGRES");
-                var runtime = RequireDatabase("KERNEL_WORKBENCH_RUNTIME_POSTGRES");
+                var actor = StockPostgresDatabase("KERNEL_WORKBENCH_ACTOR_POSTGRES");
+                var runtime = StockPostgresDatabase("KERNEL_WORKBENCH_RUNTIME_POSTGRES");
                 Require((actor.Host, actor.Port, actor.Database) != (runtime.Host, runtime.Port, runtime.Database),
                     "the stock Workbench witness requires distinct disposable Actor and workflow-control databases");
                 settings[kernel + "Provider"] = "PostgreSql";
@@ -778,14 +778,14 @@ internal static partial class WorkbenchPostgresPreview
             }
 
             return Start(executable, "", enabled: false, profile: null, releaseFile: null, retainedWorkspace: workspace, stockSettings: settings);
+        }
 
-            static NpgsqlConnectionStringBuilder RequireDatabase(string key)
-            {
-                var connection = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(key) ?? "");
-                if (string.IsNullOrWhiteSpace(connection.Host) || string.IsNullOrWhiteSpace(connection.Database))
-                    throw new InvalidOperationException($"{key} must name a disposable PostgreSQL database.");
-                return connection;
-            }
+        internal static NpgsqlConnectionStringBuilder StockPostgresDatabase(string key)
+        {
+            var connection = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(key) ?? "");
+            if (string.IsNullOrWhiteSpace(connection.Host) || string.IsNullOrWhiteSpace(connection.Database))
+                throw new InvalidOperationException($"{key} must name a disposable PostgreSQL database.");
+            return connection;
         }
 
         internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile,

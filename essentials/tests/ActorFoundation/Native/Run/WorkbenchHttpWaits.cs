@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.KernelHost;
+using Npgsql;
 
 namespace Elsa.Workbench.Qualification;
 
@@ -20,15 +21,8 @@ internal static partial class WorkbenchPostgresPreview
         {
             using var host = stock ? WorkbenchProcess.StartStock(executable, workspace, sqlite)
                 : WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace);
-            await host.WaitReadyAsync(token);
-            if (!stock) await host.WaitForKernelServingAsync(token);
-            var address = new Uri(await host.ListeningAsync(token));
-            Require(address.IsLoopback && address.Port != 5095, "the Workbench uses a dedicated loopback listener");
-            using var client = new HttpClient(new HttpClientHandler { CookieContainer = new(), AllowAutoRedirect = false }) { BaseAddress = address };
-            if (stock) await WaitForStockShellAsync();
-            using (var login = await client.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" }, token))
-                Require(login.IsSuccessStatusCode, "the administrator signs in through the normal identity route");
-            if (stock) await CheckStockExecutionAsync();
+            using var client = await OpenClientAsync(host);
+            var stockExecution = stock ? await CheckStockExecutionAsync() : null;
 
             foreach (var (kind, flowchart) in new[] { ("native", false), ("chart", true) })
             {
@@ -80,14 +74,34 @@ internal static partial class WorkbenchPostgresPreview
             }
 
             await host.StopAsync();
-            if (stock && sqlite is not null)
-                Require(File.Exists(sqlite), "the stock SQLite owner persisted execution in its configured file.");
+            if (stockExecution is not null)
+            {
+                if (sqlite is null) await CheckStockPostgresAsync(stockExecution);
+                else await CheckStockSqliteRestartAsync(stockExecution, sqlite);
+            }
 
-            async Task WaitForStockShellAsync()
+            async Task<HttpClient> OpenClientAsync(WorkbenchProcess process)
+            {
+                await process.WaitReadyAsync(token);
+                if (!stock) await process.WaitForKernelServingAsync(token);
+                var address = new Uri(await process.ListeningAsync(token));
+                Require(address.IsLoopback && address.Port != 5095, "the Workbench uses a dedicated loopback listener");
+                var session = new HttpClient(new HttpClientHandler { CookieContainer = new(), AllowAutoRedirect = false }) { BaseAddress = address };
+                try
+                {
+                    if (stock) await WaitForStockShellAsync(session);
+                    using var login = await session.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" }, token);
+                    Require(login.IsSuccessStatusCode, "the administrator signs in through the normal identity route");
+                    return session;
+                }
+                catch { session.Dispose(); throw; }
+            }
+
+            async Task WaitForStockShellAsync(HttpClient session)
             {
                 while (true)
                 {
-                    using var response = await client.GetAsync("/health/ready", token);
+                    using var response = await session.GetAsync("/health/ready", token);
                     if (response.IsSuccessStatusCode) return;
                     var body = await response.Content.ReadAsStringAsync(token);
                     Require(response.StatusCode == HttpStatusCode.ServiceUnavailable && !body.Contains("shell_activation_failed", StringComparison.Ordinal),
@@ -96,7 +110,7 @@ internal static partial class WorkbenchPostgresPreview
                 }
             }
 
-            async Task CheckStockExecutionAsync()
+            async Task<StockWorkflowExecution> CheckStockExecutionAsync()
             {
                 _ = await ReadAsync("/runtime/workflows/retention");
                 Console.WriteLine("ok the configured Actor owner answers the standard retention endpoint");
@@ -108,23 +122,65 @@ internal static partial class WorkbenchPostgresPreview
                 if (!published.Ok)
                     throw new InvalidOperationException($"The stock Workbench refused the authored Sequence: {published.Body}");
                 using var receipt = JsonDocument.Parse(published.Body);
-                var artifact = Uri.EscapeDataString(receipt.RootElement.GetProperty("artifactId").GetString()!);
-                var sourceReferenceId = receipt.RootElement.GetProperty("sourceReferenceId").GetString();
-                var executed = await ReadAsync($"/runtime/workflows/executables/{artifact}/execute", new { sourceReferenceId });
+                var artifact = receipt.RootElement.GetProperty("artifactId").GetString()!;
+                var sourceReferenceId = receipt.RootElement.GetProperty("sourceReferenceId").GetString()!;
+                var execution = await ExecuteAsync(client, artifact, sourceReferenceId);
                 var testRun = await ReadAsync($"/publishing/workflows/{published.Version}/test-runs",
                     new { acknowledgeUnavailableExpressionValidation = true });
-                Require(executed.GetProperty("workflowExecutionId").GetString() != testRun.GetProperty("workflowExecutionId").GetString(),
-                    "published Execute and saved TestRun admit separate runs");
-                await ExpectCompletedRunAsync(executed, "PublishedRun");
-                await ExpectCompletedRunAsync(testRun, "TestRun");
+                var testActor = testRun.GetProperty("workflowExecutionId").GetString()!;
+                Require(execution != testActor, "published Execute and saved TestRun admit separate runs");
+                await ExpectCompletedRunAsync(client, execution, "PublishedRun");
+                await ExpectCompletedRunAsync(client, testActor, "TestRun");
+                return new(execution, testActor, artifact, sourceReferenceId);
             }
 
-            async Task ExpectCompletedRunAsync(JsonElement receipt, string kind)
+            async Task CheckStockSqliteRestartAsync(StockWorkflowExecution execution, string path)
             {
-                var actor = receipt.GetProperty("workflowExecutionId").GetString()!;
+                Require(File.Exists(path), "the stock SQLite owner persisted execution in its configured file.");
+                using var restarted = WorkbenchProcess.StartStock(executable, workspace, path);
+                using var session = await OpenClientAsync(restarted);
+                var route = $"/runtime/workflows/instances/{Uri.EscapeDataString(execution.PublishedActor)}";
+                var old = await ReadAsync(route, session: session);
+                var instance = old.GetProperty("instance");
+                Require(instance.GetProperty("workflowExecutionId").GetString() == execution.PublishedActor &&
+                    instance.GetProperty("status").GetString() == "Completed" &&
+                    instance.GetProperty("artifactId").GetString() == execution.ArtifactId &&
+                    instance.GetProperty("sourceReferenceId").GetString() == execution.SourceReferenceId,
+                    "stock SQLite restarts on the same file and reads the completed Actor with its exact publication.");
+                await RequireActivityTimelineAsync(session, route, execution.PublishedActor, token);
+                var rerun = await ExecuteAsync(session, execution.ArtifactId, execution.SourceReferenceId);
+                Require(rerun != execution.PublishedActor, "stock SQLite serves the restored publication after restart.");
+                await ExpectCompletedRunAsync(session, rerun, "PublishedRun");
+                await restarted.StopAsync();
+            }
+
+            async Task CheckStockPostgresAsync(StockWorkflowExecution execution)
+            {
+                await using var actor = new NpgsqlConnection(WorkbenchProcess.StockPostgresDatabase("KERNEL_WORKBENCH_ACTOR_POSTGRES").ConnectionString);
+                await actor.OpenAsync(token);
+                await using var roots = new NpgsqlCommand("""SELECT count(*) FROM "Instances" WHERE "Id" = ANY (@actors)""", actor);
+                roots.Parameters.AddWithValue("actors", new[] { execution.PublishedActor, execution.TestActor });
+                Require(await roots.ExecuteScalarAsync(token) is 2L,
+                    "the configured PostgreSQL Actor database contains both exact hosted workflow executions.");
+
+                await using var runtime = new NpgsqlConnection(WorkbenchProcess.StockPostgresDatabase("KERNEL_WORKBENCH_RUNTIME_POSTGRES").ConnectionString);
+                await runtime.OpenAsync(token);
+                await using var migrations = new NpgsqlCommand("""SELECT EXISTS (SELECT 1 FROM "__EFMigrationsHistory_ElsaRuntime")""", runtime);
+                Require(await migrations.ExecuteScalarAsync(token) is true,
+                    "the independently configured PostgreSQL Runtime database has the applied Runtime EF migrations.");
+            }
+
+            async Task<string> ExecuteAsync(HttpClient session, string artifact, string sourceReferenceId)
+            {
+                var receipt = await ReadAsync($"/runtime/workflows/executables/{Uri.EscapeDataString(artifact)}/execute", new { sourceReferenceId }, session);
+                return receipt.GetProperty("workflowExecutionId").GetString()!;
+            }
+
+            async Task ExpectCompletedRunAsync(HttpClient session, string actor, string kind)
+            {
                 while (true)
                 {
-                    using var response = await client.GetAsync($"/runtime/workflows/instances/{Uri.EscapeDataString(actor)}", token);
+                    using var response = await session.GetAsync($"/runtime/workflows/instances/{Uri.EscapeDataString(actor)}", token);
                     if (response.StatusCode != HttpStatusCode.NotFound)
                     {
                         var body = await response.Content.ReadAsStringAsync(token);
@@ -208,9 +264,10 @@ internal static partial class WorkbenchPostgresPreview
                     .Single(row => row.GetProperty("activityTypeKey").GetString() == type).GetProperty("headVersionId").GetString()!;
             }
 
-            async Task<JsonElement> ReadAsync(string path, object? data = null)
+            async Task<JsonElement> ReadAsync(string path, object? data = null, HttpClient? session = null)
             {
-                using var response = data is null ? await client.GetAsync(path, token) : await client.PostAsJsonAsync(path, data, token);
+                session ??= client;
+                using var response = data is null ? await session.GetAsync(path, token) : await session.PostAsJsonAsync(path, data, token);
                 var body = await response.Content.ReadAsStringAsync(token);
                 if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"{path} returned {(int)response.StatusCode}: {body}");
                 using var json = JsonDocument.Parse(body);
@@ -235,4 +292,6 @@ internal static partial class WorkbenchPostgresPreview
         };
         static object Edge(string from, string to) => new { id = $"{from}-{to}", source = new { nodeId = from, port = "Done" }, target = new { nodeId = to } };
     }
+
+    private sealed record StockWorkflowExecution(string PublishedActor, string TestActor, string ArtifactId, string SourceReferenceId);
 }
