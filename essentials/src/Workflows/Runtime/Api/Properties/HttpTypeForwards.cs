@@ -118,7 +118,7 @@ using System.Runtime.CompilerServices;
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.IWorkflowInstanceDeletionService))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.WorkflowExecutableInspector))]
 
-// The published KernelApi friend also references these implementation types.
+// Keep the existing implementation identities for companion assemblies.
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Capabilities.SelectedRunDeletionAvailable))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Endpoints.RuntimeResourceMissingSignal))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Endpoints.RuntimeRunDeletionRejectedSignal))]
@@ -126,6 +126,7 @@ using System.Runtime.CompilerServices;
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.IWorkflowExecutableRetentionReader))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.LegacyWorkflowExecutableRetentionReader))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.RuntimeHistoryOccurrenceAuthorization))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.WorkflowExecutableInspection))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.WorkflowExecutableRetention))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.WorkflowExecutableRetentionQuery))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.WorkflowRunInspection))]
