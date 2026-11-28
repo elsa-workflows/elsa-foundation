@@ -24,7 +24,7 @@ public sealed class ActivityConsumerCapabilityCompositionTests
     {
         var capabilities = Compose(
             services => new ActivitiesPrimitivesFeature().ConfigureServices(services),
-            services => new GraphActivitiesRuntimeFeature().ConfigureServices(services));
+            services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services));
 
         AssertBothConsumersAdvertised(capabilities);
     }
@@ -33,7 +33,7 @@ public sealed class ActivityConsumerCapabilityCompositionTests
     public void Both_activity_consumer_capabilities_survive_when_graph_composes_first()
     {
         var capabilities = Compose(
-            services => new GraphActivitiesRuntimeFeature().ConfigureServices(services),
+            services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services),
             services => new ActivitiesPrimitivesFeature().ConfigureServices(services));
 
         AssertBothConsumersAdvertised(capabilities);
@@ -44,9 +44,9 @@ public sealed class ActivityConsumerCapabilityCompositionTests
     {
         var capabilities = Compose(
             services => new ActivitiesPrimitivesFeature().ConfigureServices(services),
-            services => new GraphActivitiesRuntimeFeature().ConfigureServices(services),
+            services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services),
             services => new ActivitiesPrimitivesFeature().ConfigureServices(services),
-            services => new GraphActivitiesRuntimeFeature().ConfigureServices(services));
+            services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services));
 
         AssertBothConsumersAdvertised(capabilities);
         Assert.Equal(2, capabilities.Count);
@@ -57,7 +57,7 @@ public sealed class ActivityConsumerCapabilityCompositionTests
     {
         var capabilities = Compose(
             services => new ActivitiesPrimitivesFeature().ConfigureServices(services),
-            services => new GraphActivitiesRuntimeFeature().ConfigureServices(services));
+            services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services));
 
         var distinctTypes = capabilities.Select(capability => capability.GetType()).Distinct().Count();
 

@@ -27,10 +27,6 @@
   <Folder Name="/extensions/Agent/src/Inspection/">
     <Project Path="extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj" />
   </Folder>
-  <Folder Name="/extensions/Agent/src/Review/">
-    <Project Path="extensions/Agent/src/Review/Api/Elsa.Agent.Review.Api.csproj" />
-    <Project Path="extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj" />
-  </Folder>
   <Folder Name="/extensions/Agent/src/Persistence/">
     <Project Path="extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
@@ -77,10 +73,6 @@
   <Folder Name="/extensions/Etl/src/Sql/">
     <Project Path="extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj" />
     <Project Path="extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj" />
-  </Folder>
-  <Folder Name="/extensions/Etl/src/Workflows/">
-    <Project Path="extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
-    <Project Path="extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
   </Folder>
   <Folder Name="/extensions/Etl/tests/">
     <Project Path="extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" />
@@ -204,10 +196,6 @@
     <Project Path="extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />
     <Project Path="extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
-  <Folder Name="/extensions/Rules/src/Workflows/">
-    <Project Path="extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />
-    <Project Path="extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
-  </Folder>
   <Folder Name="/extensions/Rules/tests/">
     <Project Path="extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj" />
   </Folder>
@@ -277,11 +265,9 @@
   </Folder>
   <Folder Name="/extensions/Bpmn/" />
   <Folder Name="/extensions/Bpmn/src/">
-    <Project Path="extensions/Bpmn/src/Api/Elsa.Activities.Bpmn.Api.csproj" />
     <Project Path="extensions/Bpmn/src/Core/Elsa.Activities.Bpmn.Core.csproj" />
     <Project Path="extensions/Bpmn/src/Design/Elsa.Activities.Bpmn.Design.csproj" />
     <Project Path="extensions/Bpmn/src/Composite/Elsa.Activities.Bpmn.Composite.csproj" />
-    <Project Path="extensions/Bpmn/src/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
     <Project Path="extensions/Bpmn/src/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Activities/Graph/">
@@ -1000,11 +986,6 @@
   <Folder Name="/extensions/Http/tests/Workflows/Runtime/">
     <Project Path="extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
   </Folder>
-  <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/">
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/TimerHistoryRestartHost/TimerHistoryRestartHost.csproj" />
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/RuntimeHistoryRestartHost/RuntimeHistoryRestartHost.csproj" />
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/WorkerOidcHost.csproj" />
-  </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/" />
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/">
     <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj" />
@@ -1054,20 +1035,9 @@
   <Folder Name="/extensions/Decisions/tests/Design/">
     <Project Path="extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj" />
   </Folder>
-  <Folder Name="/extensions/Decisions/tests/Workflows/">
-    <Project Path="extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj" />
-  </Folder>
-  <Folder Name="/extensions/Decisions/tests/Workflows/Api/">
-    <Project Path="extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj" />
-  </Folder>
   <Folder Name="/extensions/Decisions/src/Persistence/">
     <Project Path="extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
     <Project Path="extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
-  </Folder>
-  <Folder Name="/extensions/Decisions/src/Workflows/">
-    <Project Path="extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
-    <Project Path="extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
-    <Project Path="extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
   </Folder>
   <Folder Name="/extensions/Examples/" />
   <Folder Name="/extensions/Examples/src/" />

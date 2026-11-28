@@ -15,7 +15,7 @@ Install the following features in the shell that owns the resources. Feature nam
 | Event configuration metadata and validation | `StandaloneEventTriggerAuthoring` |
 | Timer/Cron configuration metadata and validation | `StandaloneScheduleTriggerAuthoring` |
 | HTTP request intake | `ActivitiesHttp`, with its `WorkflowsRuntimeHttp` dependency and the ordinary Runtime composition |
-| Timer/Cron intake | `StandaloneScheduleTriggers`, with its `WorkflowsRuntimeRecurringTriggers` dependency, ordinary Runtime scheduling and the normal Tasks lifecycle |
+| Timer/Cron intake on Actor Foundation | `PreparedStandaloneScheduleTriggers`, with `WorkflowsRuntimePreparedStandaloneRecurringTriggers` and the selected prepared Actor persistence |
 | Workflow-origin broadcast Events | `ActivitiesPrimitives` and the ordinary durable `PublishEvent`/Runtime delivery composition |
 | Application-origin Event producer | `AddStandaloneEventIngress<TSource>` plus the application's trusted scoped source context; see the [Event module example](../essentials/src/Activities/Primitives/Elsa.Activities.Primitives/StandaloneTriggers/README.md#application-owned-event-producer) |
 | Restart-surviving storage candidate | The complete `WorkflowsRuntimeEntityFrameworkCore` provider, including its resource, ingress, publication, material, queue and checkpoint participants |

@@ -15,7 +15,7 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
   const before = await counters(); expect(before.counts["session.send"] ?? 0).toBe(0);
   async function feature(enabled: boolean) {
     const catalog = await backend.api<FeatureCatalog>("/modularity/features");
-    const current = catalog.features.find(item => item.id === "WorkflowDashboardQueries"); expect(current).toBeTruthy();
+    const current = catalog.features.find(item => item.id === "KernelWorkflowDashboardQueries"); expect(current).toBeTruthy();
     const applied = await backend.api<{ catalog: FeatureCatalog; reloadedShellCount: number }>("/modularity/features/apply", "POST", {
       revision: catalog.revision, features: catalog.features.filter(item => item.enabled || item.id === current!.id).map(item => ({ id: item.id, enabled: item.id === current!.id ? enabled : item.enabled, configuration: item.configuration }))
     });

@@ -1,8 +1,6 @@
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Agent.Review.Activities;
 using Elsa.Agent.Tests.Composition.Sample;
-using Elsa.Agent.Review.Models;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 

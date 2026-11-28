@@ -99,8 +99,7 @@ not automatic constitution violations.
 | OpenAI agent connections | [`extensions/Agent/src/OpenAI/EXTENSION_POINTS.md`](extensions/Agent/src/OpenAI/EXTENSION_POINTS.md) |
 | Agent authoring and immutable compilation | [`extensions/Agent/src/Design/EXTENSION_POINTS.md`](extensions/Agent/src/Design/EXTENSION_POINTS.md) |
 | Agent native execution | [`extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
-| Human review of agent output | [`extensions/Agent/src/Review/Elsa.Agent.Review/EXTENSION_POINTS.md`](extensions/Agent/src/Review/Elsa.Agent.Review/EXTENSION_POINTS.md) |
-| Agent human review API | [`extensions/Agent/src/Review/Api/EXTENSION_POINTS.md`](extensions/Agent/src/Review/Api/EXTENSION_POINTS.md) |
+| Agent human review | [Classic workflow compatibility](docs/contributing/workbench-compatibility-tests.md#classic-reviews-decisions-etl-and-rules-in-workflows) |
 | Agent authoring API | [`extensions/Agent/src/Api/EXTENSION_POINTS.md`](extensions/Agent/src/Api/EXTENSION_POINTS.md) |
 | Agent inspection API | [`extensions/Agent/src/Inspection/Api/EXTENSION_POINTS.md`](extensions/Agent/src/Inspection/Api/EXTENSION_POINTS.md) |
 | Foundation Identity external authentication | [`extensions/Identity/src/Core/EXTENSION_POINTS.md`](extensions/Identity/src/Core/EXTENSION_POINTS.md) |
@@ -170,10 +169,10 @@ not automatic constitution violations.
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
 | Activities graph release inspection — compiler-free captured provider, plan and overlay verification | [`essentials/src/Activities/Graph/Releases/EXTENSION_POINTS.md`](essentials/src/Activities/Graph/Releases/EXTENSION_POINTS.md) |
 | Primitive release inspection — explicit WriteLine CLR owner profile | [`essentials/src/Activities/Primitives/Releases/EXTENSION_POINTS.md`](essentials/src/Activities/Primitives/Releases/EXTENSION_POINTS.md) |
-| Activities BPMN (released-semantics host adapter, direct model hosting and native RunBpmn) | [`extensions/Bpmn/src/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](extensions/Bpmn/src/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
+| Activities BPMN composite (released-semantics adapter and authored trigger bindings) | [BPMN composite](extensions/Bpmn/src/Composite/README.md) |
 | Activities BPMN hosting contracts (scoped publication/execution/inspection replacement) | [`extensions/Bpmn/src/Core/EXTENSION_POINTS.md`](extensions/Bpmn/src/Core/EXTENSION_POINTS.md) |
 | Activities BPMN design (authored structure lowering and publication pinning) | [`extensions/Bpmn/src/Design/EXTENSION_POINTS.md`](extensions/Bpmn/src/Design/EXTENSION_POINTS.md) |
-| Activities BPMN hosting API (authenticated direct-model commands, cancellation, incident retry and inspection) | [`extensions/Bpmn/src/Api/EXTENSION_POINTS.md`](extensions/Bpmn/src/Api/EXTENSION_POINTS.md) |
+| Archived BPMN hosting API (authenticated direct-model commands, cancellation, incident retry and inspection) | [Classic API extension points](https://github.com/elsa-workflows/elsa-foundation/blob/ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a/extensions/Bpmn/src/Api/EXTENSION_POINTS.md) |
 | Activities BPMN interchange (document importer and exporter replacement) | [`extensions/Bpmn/src/Interchange/EXTENSION_POINTS.md`](extensions/Bpmn/src/Interchange/EXTENSION_POINTS.md) |
 
 ### Workflows
@@ -229,9 +228,7 @@ not automatic constitution violations.
 | Decision persistence ports | [Decisions persistence](extensions/Decisions/src/Persistence/Core/EXTENSION_POINTS.md) |
 | Decision authoring and completed tests | [Decisions design](extensions/Decisions/src/Design/EXTENSION_POINTS.md) |
 | Decision API and permission contributions | [Decisions API](extensions/Decisions/src/Api/EXTENSION_POINTS.md) |
-| Workflow publication | [Decisions workflow design](extensions/Decisions/src/Workflows/Design/EXTENSION_POINTS.md) |
-| Workflow execution authority | [Decisions workflow runtime](extensions/Decisions/src/Workflows/Runtime/EXTENSION_POINTS.md) |
-| Workflow disclosure | [Decisions workflow API](extensions/Decisions/src/Workflows/Api/EXTENSION_POINTS.md) |
+| Decisions in workflows | [Classic workflow compatibility](docs/contributing/workbench-compatibility-tests.md#classic-reviews-decisions-etl-and-rules-in-workflows) |
 | Studio authoring and version selection | [Decisions Studio](extensions/Decisions/studio/Elsa.Studio.Decisions/EXTENSION_POINTS.md) |
 
 ### Legacy

@@ -91,11 +91,6 @@
           "xunit.extensibility.execution": "2.4.0"
         }
       },
-      "DistributedLock.Core": {
-        "type": "Transitive",
-        "resolved": "1.0.8",
-        "contentHash": "LAOsY8WxX8JU/n3lfXFz+f2pfnv0+4bHkCrOO3bwa28u9HrS3DlxSG6jf+u76SqesKs+KehZi0CndkfaUXBKvg=="
-      },
       "JetBrains.Annotations": {
         "type": "Transitive",
         "resolved": "2025.2.4",
@@ -228,28 +223,6 @@
         "contentHash": "yMb6vMESlSrE3Wfj7V6cjQ3S4TXdXpRqYeNEI3zsX31uTsGMJjEw6oD5F5u1cHnMptjhEECnmZSsPxB6ChZHDQ==",
         "dependencies": {
           "xunit.extensibility.core": "[2.9.3]"
-        }
-      },
-      "dotnet-elsa": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Cli.Worker": "[4.0.0-dev, )",
-          "Elsa.Modularity.Planning": "[4.0.0-dev, )",
-          "System.CommandLine": "[2.0.8, )"
-        }
-      },
-      "elsa.activities.bpmn": {
-        "type": "Project",
-        "dependencies": {
-          "Bpmn.Model": "[0.5.0, )",
-          "Bpmn.Semantics": "[0.5.0, )",
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Bpmn.Composite": "[4.0.0-dev, )",
-          "Elsa.Activities.Bpmn.Core": "[4.0.0-dev, )",
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.activities.bpmn.composite": {
@@ -447,9 +420,6 @@
       "elsa.caching.core": {
         "type": "Project"
       },
-      "elsa.cli.worker": {
-        "type": "Project"
-      },
       "elsa.cluster.core": {
         "type": "Project",
         "dependencies": {
@@ -541,15 +511,6 @@
       "elsa.locking.core": {
         "type": "Project"
       },
-      "elsa.locking.filesystem": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "DistributedLock.FileSystem": "[1.0.3, )",
-          "Elsa.Cluster.Core": "[4.0.0-dev, )",
-          "Elsa.Locking.Core": "[4.0.0-dev, )"
-        }
-      },
       "elsa.mediator": {
         "type": "Project",
         "dependencies": {
@@ -576,9 +537,6 @@
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
-      },
-      "elsa.modularity.planning": {
-        "type": "Project"
       },
       "elsa.persistence.core": {
         "type": "Project"
@@ -956,15 +914,6 @@
           "JetBrains.Annotations": "2025.2.4"
         }
       },
-      "DistributedLock.FileSystem": {
-        "type": "CentralTransitive",
-        "requested": "[1.0.3, )",
-        "resolved": "1.0.3",
-        "contentHash": "Q88LTgHXzcQq9ATa6SZSqAE+VFyIapNGFs+XG7nHx+SpzUf1ACnZ8iyz6fAT/ojH+OLNnWwF3kCYh83s+vnCbA==",
-        "dependencies": {
-          "DistributedLock.Core": "[1.0.8, 1.1.0)"
-        }
-      },
       "Microsoft.EntityFrameworkCore": {
         "type": "CentralTransitive",
         "requested": "[10.0.10, )",
@@ -1008,12 +957,6 @@
           "SQLitePCLRaw.config.e_sqlite3": "3.0.3",
           "SourceGear.sqlite3": "3.50.4.5"
         }
-      },
-      "System.CommandLine": {
-        "type": "CentralTransitive",
-        "requested": "[2.0.8, )",
-        "resolved": "2.0.8",
-        "contentHash": "FbpgF8p/ClXnoXEWLjQB34kNh5rsLewEgIgLyVzLDucAOQ4cNs7ec9Cam7gdKPruSb6zp4Mx8htZGTL4/5PJPg=="
       },
       "ValenceWorks.MinimalEndpoints": {
         "type": "CentralTransitive",
