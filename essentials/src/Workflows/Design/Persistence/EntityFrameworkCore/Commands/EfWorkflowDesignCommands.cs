@@ -375,11 +375,13 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
 
 public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IDistributedLockProvider? lockProvider = null, IDeferredEventPublisher? deferredEvents = null) : EfDesignCommand(db, access, atomic), IDiscardDraftCommand
 {
+    public const string OperationKind = "workflow.draft.discard.v1";
+
     public async Task Execute(DesignOperationKey key, string draftId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(draftId); if (lockProvider is null) throw new InvalidOperationException("Workflow draft discard requires a distributed lock provider."); await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draftId), null, ct); await ExecuteCore(key, draftId, ct); }
     private async Task ExecuteCore(DesignOperationKey key, string draftId, CancellationToken ct)
     {
         string? definitionId = null;
-        var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.discard.v1", new DiscardDraftRequestMaterial(draftId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
+        var outcome = await Atomic.ExecuteAsync(key, OperationKind, new DiscardDraftRequestMaterial(draftId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
         {
             var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(draftId), token);
             if (row is null)
@@ -389,7 +391,7 @@ public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersiste
             Db.Drafts.Remove(row);
             return DesignAtomicWriteStage<bool>.Accepted(true);
         }, cancellationToken: ct);
-        RequireOutcome(outcome, "workflow.draft.discard.v1", key);
+        RequireOutcome(outcome, OperationKind, key);
         // The result intentionally remains a bool for compatibility with markers written by the
         // original EF implementation. Legacy replay has no definition id after the draft is gone,
         // so it cannot publish a duplicate discard event.
@@ -408,7 +410,7 @@ public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesign
     /// <summary>
     /// Removes, in the delete's own transaction, every operation marker the workflow reconciler wrote for
     /// <paramref name="row"/>: the materialization of the definition and of each version, each metadata write, each
-    /// draft clone (#6070), and the per-version metadata markers written before #2187. A source that still lists the definition imports it again
+    /// draft clone and draft discard (#6070), and the per-version metadata markers written before #2187. A source that still lists the definition imports it again
     /// under the same materialization keys, and a surviving marker would replay without writing a row, or conflict
     /// once the re-imported version carries a new id. Nothing looks the metadata markers up again, but they would be
     /// left behind for a definition that no longer exists.
@@ -424,6 +426,7 @@ public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesign
         await RetireAsync(EfMaterializeWorkflowDefinitionVersionCommand.OperationKind, versionSortKeys.Select(sortKey => WorkflowReconciliationOperationKeys.Version(row.Id, sortKey)));
         await RetireAsync(EfSaveWorkflowDefinitionCommand.OperationKind, versionSortKeys.Select(sortKey => WorkflowReconciliationOperationKeys.LegacyDefinitionMetadata(row.Id, sortKey)));
         await RetireAsync(EfCloneDraftFromVersionCommand.OperationKind, versionSortKeys.Select(sortKey => WorkflowReconciliationOperationKeys.DraftClone(row.Id, sortKey)));
+        await RetireAsync(EfDiscardDraftCommand.OperationKind, versionSortKeys.Select(sortKey => WorkflowReconciliationOperationKeys.DraftDiscard(row.Id, sortKey)));
 
         // Every metadata write has a key of its own, so they are found by the start their keys share. A substring
         // compare rather than LIKE: a provider that does not escape the pattern would read characters of the

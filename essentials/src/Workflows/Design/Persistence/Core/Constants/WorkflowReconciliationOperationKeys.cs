@@ -38,6 +38,14 @@ public static class WorkflowReconciliationOperationKeys
         new(Compose("draft-clone", definitionId, semVerSortKey));
 
     /// <summary>
+    /// Discards a reconciled definition's unsaved draft, cloned from an older version, before the draft of the newer
+    /// version (identified by its semantic-version sort key) is cloned (#6070). Nodes share the key, as for
+    /// <see cref="DraftClone"/>.
+    /// </summary>
+    public static DesignOperationKey DraftDiscard(string definitionId, string semVerSortKey) =>
+        new(Compose("draft-discard", definitionId, semVerSortKey));
+
+    /// <summary>
     /// The start every <see cref="DefinitionMetadataWrite"/> key of the definition shares. The identity is framed
     /// with its length, so no other definition's keys start the same way.
     /// </summary>

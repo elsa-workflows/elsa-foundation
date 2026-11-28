@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Reconciliation;
@@ -14,7 +15,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
 
 /// <summary>
 /// #6070: a reconciled definition without a draft gets one cloned from the newest version the pass reconciled, so
-/// Studio can open it; one with a draft keeps it; nodes share the clone key; a failure never escapes the handler.
+/// Studio can open it; a saved draft is kept and an unsaved one of an older version replaced; nodes share the clone key; a failure never escapes the handler.
 /// </summary>
 public sealed class CloneDraftsOfReconciledWorkflowsTests
 {
@@ -130,6 +131,76 @@ public sealed class CloneDraftsOfReconciledWorkflowsTests
     }
 
     [Fact]
+    public async Task Replaces_an_unsaved_draft_cloned_from_an_older_version()
+    {
+        // The folder got hello 2.0.0 after the first start cloned a draft of 1.0.0 that nobody saved.
+        var clone = new SpyClone();
+        var discard = new SpyDiscard();
+        var handler = NewHandler(clone,
+            versions: [Version("wf-a", "1.0.0", "ver-1"), Version("wf-a", "2.0.0", "ver-2")],
+            drafts: [Draft("draft-1", "wf-a", sourceVersionId: "ver-1", revision: 0)],
+            discard: discard);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "2.0.0")), CancellationToken.None);
+
+        var (discardKey, draftId) = Assert.Single(discard.Calls);
+        Assert.Equal("draft-1", draftId);
+        Assert.Equal(WorkflowReconciliationOperationKeys.DraftDiscard("wf-a", SemVer.ToSortKey("2.0.0")), discardKey);
+        var (cloneKey, versionId) = Assert.Single(clone.Calls);
+        Assert.Equal("ver-2", versionId);
+        Assert.Equal(WorkflowReconciliationOperationKeys.DraftClone("wf-a", SemVer.ToSortKey("2.0.0")), cloneKey);
+    }
+
+    [Fact]
+    public async Task Keeps_a_saved_draft_cloned_from_an_older_version()
+    {
+        var clone = new SpyClone();
+        var discard = new SpyDiscard();
+        var handler = NewHandler(clone,
+            versions: [Version("wf-a", "1.0.0", "ver-1"), Version("wf-a", "2.0.0", "ver-2")],
+            drafts: [Draft("draft-1", "wf-a", sourceVersionId: "ver-1", revision: 1)],
+            discard: discard);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "2.0.0")), CancellationToken.None);
+
+        Assert.Empty(discard.Calls);
+        Assert.Empty(clone.Calls);
+    }
+
+    [Fact]
+    public async Task Keeps_an_unsaved_draft_cloned_from_the_reconciled_version()
+    {
+        // Every restart reconciles the same version again; its unsaved draft stays.
+        var clone = new SpyClone();
+        var discard = new SpyDiscard();
+        var handler = NewHandler(clone,
+            versions: [Version("wf-a", "1.0.0", "ver-1")],
+            drafts: [Draft("draft-1", "wf-a", sourceVersionId: "ver-1", revision: 0)],
+            discard: discard);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
+
+        Assert.Empty(discard.Calls);
+        Assert.Empty(clone.Calls);
+    }
+
+    [Fact]
+    public async Task Keeps_an_unsaved_draft_that_was_not_cloned_from_a_version()
+    {
+        var clone = new SpyClone();
+        var discard = new SpyDiscard();
+        var handler = NewHandler(clone,
+            versions: [Version("wf-a", "1.0.0", "ver-1")],
+            drafts: [Draft("draft-1", "wf-a", sourceVersionId: null, revision: 0)],
+            discard: discard);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
+
+        Assert.Empty(discard.Calls);
+        Assert.Empty(clone.Calls);
+    }
+
+    [Fact]
     public async Task No_claims_means_no_work()
     {
         var clone = new SpyClone();
@@ -144,11 +215,14 @@ public sealed class CloneDraftsOfReconciledWorkflowsTests
         SpyClone clone,
         IReadOnlyList<WorkflowDefinitionVersion> versions,
         IReadOnlyList<WorkflowDefinitionDraft>? drafts = null,
-        ListLogger? logger = null)
+        ListLogger? logger = null,
+        SpyDiscard? discard = null)
     {
         var draftStore = new StubDraftStore(drafts ?? []);
         clone.Drafts = draftStore;
-        return new(draftStore, new StubVersionStore(versions), clone, logger ?? new ListLogger());
+        discard ??= new SpyDiscard();
+        discard.Drafts = draftStore;
+        return new(draftStore, new StubVersionStore(versions), clone, discard, logger ?? new ListLogger());
     }
 
     private static WorkflowVersionsReconciled Reconciled(params WorkflowVersionSourceClaim[] claims) => new(claims);
@@ -161,6 +235,22 @@ public sealed class CloneDraftsOfReconciledWorkflowsTests
 
     private static WorkflowDefinitionDraft Draft(string id, string definitionId) =>
         new() { Id = id, WorkflowDefinitionId = definitionId };
+
+    private static WorkflowDefinitionDraft Draft(string id, string definitionId, string? sourceVersionId, long revision) =>
+        new() { Id = id, WorkflowDefinitionId = definitionId, SourceVersionId = sourceVersionId, Source = new SourceWorkingCopy { Revision = revision } };
+
+    private sealed class SpyDiscard : IDiscardDraftCommand
+    {
+        public List<(DesignOperationKey Key, string DraftId)> Calls { get; } = [];
+        public StubDraftStore Drafts { get; set; } = null!;
+
+        public Task Execute(DesignOperationKey operationKey, string draftId, CancellationToken cancellationToken = default)
+        {
+            Calls.Add((operationKey, draftId));
+            Drafts.Items.RemoveAll(x => x.Id == draftId);
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class SpyClone : ICloneDraftFromVersionCommand
     {

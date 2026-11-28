@@ -106,7 +106,8 @@ draft one, cloned from its newest imported version, so Studio opens it in the de
 the host runs the new version, and it keeps running it after a restart, because reconciliation skips a version from
 `migrated/` that is older than the newest stored one. To change a workflow from your `migrated/` folder instead,
 give it a `version` newer than any version published from Studio (a stored version never changes) and restart the
-host.
+host. The designer then shows the new version, unless you saved the draft in Studio: a saved draft is kept, so a
+restart never throws away your edits.
 
 ## What your own host needs
 

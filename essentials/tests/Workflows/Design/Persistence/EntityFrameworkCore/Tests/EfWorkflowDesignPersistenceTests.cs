@@ -2472,10 +2472,11 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
-    public async Task Ef_permanent_delete_retires_the_reconcilers_draft_clone_marker()
+    public async Task Ef_permanent_delete_retires_the_reconcilers_draft_clone_and_discard_markers()
     {
-        // #6070: reconciliation clones a draft under a key per definition and version. A surviving marker would replay
-        // on re-import and leave the re-imported definition without a draft.
+        // #6070: reconciliation clones a draft, and discards an unsaved one of an older version, under keys per
+        // definition and version. A surviving marker would replay on re-import and leave the re-imported definition
+        // without a draft.
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         await using var db = Create(connection);
@@ -2492,14 +2493,21 @@ public sealed partial class EfWorkflowDesignPersistenceTests
             StateSource = serializer.Serialize(State())
         });
         await db.SaveChangesAsync();
-        await new EfCloneDraftFromVersionCommand(db, access, writer, new TestIdentity("cloned"), serializer, new TestLockProvider())
-            .Execute(WorkflowReconciliationOperationKeys.DraftClone("definition", Elsa.Primitives.Versioning.SemVer.ToSortKey("1.0.0")), "source-version");
-        Assert.Contains(await db.Operations.AsNoTracking().ToListAsync(), marker => marker.OperationKind == EfCloneDraftFromVersionCommand.OperationKind);
+        var sortKey = Elsa.Primitives.Versioning.SemVer.ToSortKey("1.0.0");
+        var draftId = await new EfCloneDraftFromVersionCommand(db, access, writer, new TestIdentity("cloned"), serializer, new TestLockProvider())
+            .Execute(WorkflowReconciliationOperationKeys.DraftClone("definition", sortKey), "source-version");
+        await new EfDiscardDraftCommand(db, access, writer, new TestLockProvider())
+            .Execute(WorkflowReconciliationOperationKeys.DraftDiscard("definition", sortKey), draftId);
+        var before = await db.Operations.AsNoTracking().ToListAsync();
+        Assert.Contains(before, marker => marker.OperationKind == EfCloneDraftFromVersionCommand.OperationKind);
+        Assert.Contains(before, marker => marker.OperationKind == EfDiscardDraftCommand.OperationKind);
 
         await new EfDeleteWorkflowDefinitionPermanentlyCommand(db, access, writer, [new PermittingPublicationGuard()])
             .Execute(new DesignOperationKey("delete-cloned"), "definition");
 
-        Assert.DoesNotContain(await db.Operations.AsNoTracking().ToListAsync(), marker => marker.OperationKind == EfCloneDraftFromVersionCommand.OperationKind);
+        var after = await db.Operations.AsNoTracking().ToListAsync();
+        Assert.DoesNotContain(after, marker => marker.OperationKind == EfCloneDraftFromVersionCommand.OperationKind);
+        Assert.DoesNotContain(after, marker => marker.OperationKind == EfDiscardDraftCommand.OperationKind);
     }
 
     [Fact]

@@ -38,6 +38,16 @@ public sealed class WorkflowReconciliationOperationKeysTests
     }
 
     [Fact]
+    public void A_draft_discard_key_is_distinct_from_the_clone_key_of_the_same_version()
+    {
+        var sortKey = Elsa.Primitives.Versioning.SemVer.ToSortKey("2.0.0");
+
+        Assert.Equal("workflow-reconciliation:draft-discard:7:wf-0110" + sortKey.Length + ":" + sortKey,
+            WorkflowReconciliationOperationKeys.DraftDiscard("wf-0110", sortKey).Value);
+        Assert.NotEqual(WorkflowReconciliationOperationKeys.DraftClone("wf-0110", sortKey), WorkflowReconciliationOperationKeys.DraftDiscard("wf-0110", sortKey));
+    }
+
+    [Fact]
     public void A_draft_clone_key_for_the_longest_definition_id_and_a_release_version_fits_the_operation_key_limit()
     {
         var key = WorkflowReconciliationOperationKeys.DraftClone(
