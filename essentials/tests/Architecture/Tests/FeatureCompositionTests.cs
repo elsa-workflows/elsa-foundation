@@ -131,7 +131,10 @@ public sealed class FeatureCompositionTests
         // A sweep that finds nothing passes vacuously; this floor sits well below today's count.
         Assert.True(features.Count >= 100, $"Only {features.Count} features were discovered; discovery has stopped finding them.");
 
-        await using var host = await CompositionHost.StartAsync(Compositions(features));
+        var (compositions, optionalHttp) = Compositions(features);
+        await using var host = await CompositionHost.StartAsync(compositions);
+        // Each Actor host owns its default shell and requires a host restart to change that selection.
+        await using var optionalHttpHost = await CompositionHost.StartAsync([optionalHttp]);
         var failures = new List<string>();
 
         // The manual expectations name features and settings; one that matches nothing has gone stale and configures
@@ -147,17 +150,21 @@ public sealed class FeatureCompositionTests
 
         foreach (var shell in host.Shells)
             failures.AddRange(await host.ResolveAsync(shell, names));
+        failures.AddRange((await optionalHttpHost.ResolveAsync(optionalHttp.Shell, names))
+            .Select(failure => $"[optional HTTP host] {failure}"));
 
         // A shell that refused to activate stopped composing at the failing feature, so the features after it were never
         // composed: the refusal is the cause, and listing them would bury it.
-        var composed = host.Recordings.SelectMany(recording => recording.Spans).Select(span => span.Feature).ToHashSet();
-        if (!host.AnyRefused)
+        var composed = host.Recordings.Concat(optionalHttpHost.Recordings)
+            .SelectMany(recording => recording.Spans).Select(span => span.Feature).ToHashSet();
+        if (!host.AnyRefused && !optionalHttpHost.AnyRefused)
             failures.AddRange(features
                 .Where(feature => !composed.Contains(feature))
                 .Select(feature => $"{Describe(feature)}: composed by no shell" +
                                    (feature.IsVisible ? "." : "; CShells discovers exported feature types only.")));
 
         failures.AddRange(host.Log.Failures());
+        failures.AddRange(optionalHttpHost.Log.Failures().Select(failure => $"[optional HTTP host] {failure}"));
 
         Assert.True(
             failures.Count == 0,
@@ -191,8 +198,8 @@ public sealed class FeatureCompositionTests
 
     private sealed record Composition(string Shell, IReadOnlyList<Type> Features);
 
-    /// <summary>Compose the Actor host and the earlier runner with complete or per-family persistence.</summary>
-    private static IReadOnlyList<Composition> Compositions(IReadOnlyList<Type> features)
+    /// <summary>Compose both Actor hosts and the earlier runner with complete or per-family persistence.</summary>
+    private static (IReadOnlyList<Composition> Main, Composition OptionalHttp) Compositions(IReadOnlyList<Type> features)
     {
         var catalog = FeatureDiscovery.DiscoverFeatures(features.Select(feature => feature.Assembly).Distinct())
             .ToDictionary(descriptor => descriptor.Id, StringComparer.OrdinalIgnoreCase);
@@ -211,17 +218,19 @@ public sealed class FeatureCompositionTests
                 .ToArray();
         }
 
+        var actorExclusions = Alternatives.SelectMany(alternative => alternative.Second).Concat(RequiresLegacyRuntime);
         var legacyExclusions = Alternatives.Where(alternative => alternative != RuntimePersistence)
             .SelectMany(alternative => alternative.First)
-            .Concat([WorkflowsRuntimeKernelHostingFeature.FeatureName, "WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence"])
+            .Concat([WorkflowsRuntimeKernelHostingFeature.FeatureName, WorkflowsRuntimeKernelOptionalHttpHostingFeature.FeatureName,
+                "WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence"])
             .ToArray();
 
-        return
+        return (
         [
-            new("default", Without(Alternatives.SelectMany(alternative => alternative.Second).Concat(RequiresLegacyRuntime))),
+            new("default", Without(actorExclusions.Append(WorkflowsRuntimeKernelOptionalHttpHostingFeature.FeatureName))),
             new("legacy-complete", Without(legacyExclusions.Concat(RuntimePersistence.First))),
             new("legacy-granular", Without(legacyExclusions.Concat(RuntimePersistence.Second)))
-        ];
+        ], new("default", Without(actorExclusions.Append(WorkflowsRuntimeKernelHostingFeature.FeatureName))));
     }
 
     /// <summary>A service type with its key, as one <see cref="ServiceDescriptor"/> registers it.</summary>
@@ -493,6 +502,7 @@ public sealed class FeatureCompositionTests
                 ["Elsa3JsonReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = Directory.CreateDirectory(Path.Join(directory, "elsa3")).FullName },
                 ["FileSystemDistributedLocking"] = new() { ["LocksFolderPath"] = Path.Join(directory, "locks") },
                 [WorkflowsRuntimeKernelHostingFeature.FeatureName] = new() { ["SqlitePath"] = Path.Join(directory, "kernel.db") },
+                [WorkflowsRuntimeKernelOptionalHttpHostingFeature.FeatureName] = new() { ["SqlitePath"] = Path.Join(directory, "kernel.db") },
                 ["EtlRuntime"] = new() { ["SnapshotRoot"] = Path.Join(directory, "etl-snapshots") },
                 // Medallion's providers connect when a lock is taken, not when they are constructed, and nothing takes one here.
                 ["DatabaseDistributedLocking"] = new() { ["Provider"] = "PostgreSql", ["ConnectionString"] = "Host=127.0.0.1;Database=elsa" },
