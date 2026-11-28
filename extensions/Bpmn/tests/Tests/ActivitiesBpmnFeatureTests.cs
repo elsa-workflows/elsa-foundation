@@ -68,23 +68,14 @@ public sealed class ActivitiesBpmnFeatureTests
     }
 
     [Fact]
-    public void Existing_runtime_assembly_forwards_models_and_composite_types_without_forwarding_authored_types()
+    public void Composite_owns_runtime_without_reaching_classic_execution()
     {
-        var classic = typeof(ActivitiesBpmnHostingFeature).Assembly;
         var composite = typeof(ActivitiesBpmnFeature).Assembly;
-        var forwarded = classic.GetForwardedTypes();
-        Assert.Contains(typeof(Models.BpmnStructure), forwarded);
-        Assert.Contains(typeof(Models.BpmnElement), forwarded);
-        Assert.Contains(typeof(Models.BpmnEventDefinition), forwarded);
-        Assert.Contains(typeof(Activities.BpmnProcess), forwarded);
-        Assert.Contains(typeof(IBpmnProcessRuntime), forwarded);
-        Assert.Contains(typeof(ActivitiesBpmnFeature), forwarded);
-        Assert.DoesNotContain(typeof(Models.BpmnAuthoredStructure), forwarded);
-        Assert.All(forwarded, type => Assert.Contains(type.Assembly.GetName().Name,
-            new[] { "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn.Composite" }));
+        Assert.Equal("Elsa.Activities.Bpmn.Composite", composite.GetName().Name);
+        Assert.Equal(composite, typeof(Activities.BpmnProcess).Assembly);
+        Assert.Equal(composite, typeof(IBpmnProcessRuntime).Assembly);
         Assert.DoesNotContain(composite.GetReferencedAssemblies(),
             assembly => assembly.Name is "Elsa.Activities.Bpmn" or "Elsa.Workflows.Runtime");
         Assert.Equal("Elsa.Activities.Bpmn.Design", typeof(Models.BpmnAuthoredStructure).Assembly.GetName().Name);
     }
-
 }

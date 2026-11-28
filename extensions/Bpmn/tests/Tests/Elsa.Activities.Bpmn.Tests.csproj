@@ -33,7 +33,7 @@
     <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../../../essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
-    <ProjectReference Include="..\..\src\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="../../src/Composite/Elsa.Activities.Bpmn.Composite.csproj" />
     <ProjectReference Include="../../src/Design/Elsa.Activities.Bpmn.Design.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />

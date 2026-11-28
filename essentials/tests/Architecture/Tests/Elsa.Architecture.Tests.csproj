@@ -97,7 +97,7 @@
     <ProjectReference Include="../../../../extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Weaver\src\Workflows\Elsa.Weaver.Workflows\Elsa.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Weaver\src\Workflows\Runtime\Elsa.Weaver.Workflows.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="../../../../extensions/Bpmn/src/Composite/Elsa.Activities.Bpmn.Composite.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Api\Elsa.Activities.Bpmn.Api.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Core\Elsa.Activities.Bpmn.Core.csproj" />
