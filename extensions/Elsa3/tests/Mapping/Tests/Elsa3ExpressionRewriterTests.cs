@@ -233,7 +233,7 @@ public sealed class Elsa3ExpressionRewriterTests
     /// #6230: the refusal fits the change. A member change is told to go; a change of the value itself (an assignment or
     /// update of the call, or the call as a destructuring target) is told to use a local copy, and in a non-reusable Run
     /// JavaScript body also the workflowState setter (setCorrelationId, setWorkflowInstanceName) that changes the instance
-    /// value; elsewhere, and for the instance ID, no route is named. The instance ID is never called empty.
+    /// value; elsewhere, and for the instance ID, no route is named. The instance ID is never described as possibly null.
     /// </summary>
     [Theory]
     [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "Remove the change, or keep the member on a local object of the script's own, ")]
