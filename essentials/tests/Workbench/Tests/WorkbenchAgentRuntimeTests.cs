@@ -21,9 +21,9 @@ public sealed class WorkbenchAgentRuntimeTests
     private const string AdminPassword = "Password123!";
 
     [Fact]
-    public async Task Stock_development_shell_offers_the_agent_runtime_to_publication_preflight()
+    public async Task Legacy_development_shell_offers_the_agent_runtime_to_publication_preflight()
     {
-        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.LegacyRuntime);
         using var client = await SignedInClientAsync(workbench);
         var draftId = await CreateAgentDraftAsync(client);
 
@@ -36,9 +36,9 @@ public sealed class WorkbenchAgentRuntimeTests
     }
 
     [Fact]
-    public async Task Stock_development_shell_reads_agent_evidence_through_the_generic_test_run()
+    public async Task Legacy_development_shell_reads_agent_evidence_through_the_generic_test_run()
     {
-        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.LegacyRuntime);
         using var client = await SignedInClientAsync(workbench);
         var draftId = await CreateAgentDraftAsync(client);
 
@@ -127,9 +127,9 @@ public sealed class WorkbenchAgentRuntimeTests
     }
 
     [Fact]
-    public async Task Stock_development_shell_reads_a_real_invocations_evidence_by_test_run_and_by_occurrence()
+    public async Task Legacy_development_shell_reads_a_real_invocations_evidence_by_test_run_and_by_occurrence()
     {
-        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.LegacyRuntime);
         using var client = await SignedInClientAsync(workbench);
         // A closed local port: the model request is admitted and dispatched, then refused locally, so nothing leaves the machine.
         var draftId = await CreateAgentDraftAsync(client, "unreachable-model", "https://localhost:9/", "localhost", withBrief: true);

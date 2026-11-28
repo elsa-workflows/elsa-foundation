@@ -440,7 +440,7 @@ public sealed class WorkbenchCompensationRecoveryTests
     private static string EffectMarkerPath(string journal, string operationKey) => Path.Combine(journal,
         $"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(operationKey)))[..24]}.effect");
 
-    private static WorkbenchShell WitnessShell() => WorkbenchShell.Development with
+    private static WorkbenchShell WitnessShell() => WorkbenchShell.LegacyRuntime with
     {
         Settings = new Dictionary<string, string>
         {

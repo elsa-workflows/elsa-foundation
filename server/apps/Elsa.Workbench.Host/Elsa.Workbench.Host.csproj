@@ -65,6 +65,9 @@
 		<Content Update="shells.Production.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
+		<Content Update="shells.CorePreview*.json;shells.Actor.Production.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
 	</ItemGroup>
 
 	<!-- The computed-vs-source-build production configuration swap this host shares with Elsa.Foundation.Host (#2084, #2126). -->

@@ -9,6 +9,8 @@ using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Native;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -54,6 +56,25 @@ public sealed class WorkbenchCorePreviewKernelShellTests
     public void Another_shell_toolbox_keeps_them()
     {
         Assert.Equal([.. NativeActivityCatalog.Unsupported, "Custom.Shown"], Addable(servesOnKernel: false));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("false")]
+    public void Production_actor_host_keeps_unselected_artifact_persistence_unconfigured(string? selection)
+    {
+        const string features = "CShells:Shells:default:Features";
+        const string artifact = $"{features}:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+        using var configuration = new ConfigurationManager();
+        configuration[$"{features}:WorkflowsRuntimeKernelHosting:Provider"] = "PostgreSql";
+        if (selection is not null)
+            configuration[artifact] = selection;
+        var environment = new HostingEnvironment { EnvironmentName = Environments.Production };
+
+        WorkbenchRuntimeProfile.Configure(configuration, environment, []);
+
+        Assert.Equal(selection, configuration[artifact]);
+        Assert.Empty(configuration.GetSection(artifact).GetChildren());
     }
 
     [Fact]
