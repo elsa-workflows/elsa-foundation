@@ -141,8 +141,10 @@ After every run, record the command, its exit code and the date as `Last report`
 1. Run `workflows inventory` on the export.
 2. Take the custom components from the report's `components` list only: activity types, JavaScript functions,
    variable types and storage drivers, with the number of definitions that use each (the length of its `definitions`
-   list) and the number of references (`usages`). Add one row per component to the plan with status `todo`. A component that exists in the
-   Elsa 3 source but that no definition uses is not migrated.
+   list) and the number of references (`usages`). Add one row per component to the plan with status `todo`. A
+   component that exists in the Elsa 3 source but that no definition uses is not migrated. The list can be incomplete:
+   a definition that uses an activity Elsa 4 does not know yet is not converted further, so a JavaScript function it
+   calls appears only in a later report, once that activity is ported. Every report adds rows (stage 3).
 3. Show the user the components with their counts.
 4. Mark the Elsa 3 built-ins: a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as `Elsa.SetVariable`), and a
    JavaScript function that case 14 of the porting catalog lists as one Elsa 3 defined itself. Record their source as
@@ -215,7 +217,8 @@ When every component is `ported`, `redesign`, `dropped` or `interviewed`, set `S
 
    For each finding:
    - `build-component`: go to the component row named by `componentKind` and `componentName`, and return it to
-     `porting`;
+     `porting`. When the plan has no row for it yet (the inventory can miss components, see stage 1), add the row,
+     search for its source as in stage 1 and prepare it as in stage 2;
    - `patch-definition`: show the user the definition and the finding's path, with the finding's guidance. Ask before
      opening the raw definition, naming the file and the JSON path;
    - `none`: record the user's decision: redesign, drop, or accept the refusal. Only the user adds an accepted refusal
