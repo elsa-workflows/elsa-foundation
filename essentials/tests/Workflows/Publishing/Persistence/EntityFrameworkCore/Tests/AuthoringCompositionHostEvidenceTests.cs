@@ -393,6 +393,7 @@ public sealed class AuthoringCompositionHostEvidenceTests : IDisposable
                 typeof(WorkflowsPublishingApiFeature).Assembly,
                 typeof(PublishingEntityFrameworkCoreFeature).Assembly,
                 typeof(RuntimePublicationEntityFrameworkCoreFeature).Assembly,
+                typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
                 typeof(TasksFeature).Assembly,
                 typeof(WorkflowsRuntimeApiFeature).Assembly)
             .WithConfigurationProvider(builder.Configuration)

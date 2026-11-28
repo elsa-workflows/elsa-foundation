@@ -626,6 +626,9 @@
     <Project Path="essentials/src/Workflows/Runtime/Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/essentials/src/Workflows/Runtime/Persistence/Artifacts/">
+    <Project Path="essentials/src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/Persistence/Schema/">
     <Project Path="essentials/src/Workflows/Runtime/Persistence/Schema/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore.csproj" />
   </Folder>

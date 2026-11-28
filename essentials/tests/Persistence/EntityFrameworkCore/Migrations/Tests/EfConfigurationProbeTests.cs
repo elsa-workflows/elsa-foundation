@@ -46,6 +46,7 @@ public sealed class EfConfigurationProbeTests : IDisposable
         typeof(EfToolingHostTests).Assembly,
         typeof(RuntimeDbContext).Assembly,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
+        typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(StructuredLogsEntityFrameworkCoreFeature).Assembly,
         typeof(EfOpenTelemetryFeature).Assembly,
         typeof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature).Assembly,

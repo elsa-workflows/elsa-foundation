@@ -314,6 +314,7 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
             shells.WithAssemblies(
                 typeof(RuntimeDbContext).Assembly,
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
+                typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(TasksFeature).Assembly,
                 typeof(RuntimeEntityFrameworkCoreFeatureTests.RuntimeRootFeature).Assembly);
