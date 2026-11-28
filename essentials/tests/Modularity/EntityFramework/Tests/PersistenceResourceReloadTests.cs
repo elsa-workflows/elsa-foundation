@@ -11,7 +11,10 @@ namespace Elsa.Modularity.EntityFramework.Tests;
 
 public sealed class PersistenceResourceReloadTests
 {
-    private const string FeatureId = "WorkflowsRuntimeEntityFrameworkCore";
+    private const string FeatureId = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+
+    // The storage schema now lives in a separate assembly from the feature.
+    static PersistenceResourceReloadTests() => _ = typeof(RuntimeDbContext).Assembly;
 
     [Fact]
     public async Task Authored_file_reload_changes_the_next_preparation_without_mutating_the_prior_patch()
@@ -144,7 +147,7 @@ public sealed class PersistenceResourceReloadTests
 
     private static ShellSettingsPreparationContext Context() =>
         new(new ShellId("default"), new Dictionary<string, string?>(), [FeatureId], [], [],
-            [new ShellFeaturePreparationDescriptor(FeatureId, [], typeof(RuntimeEntityFrameworkCoreFeature), false)],
+            [new ShellFeaturePreparationDescriptor(FeatureId, [], typeof(RuntimeArtifactsEntityFrameworkCoreFeature), false)],
             [FeatureId], [], []);
 
     private static MemoryStream Json(string value) => new(Encoding.UTF8.GetBytes(value));

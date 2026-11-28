@@ -6,7 +6,7 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 
 public sealed class PersistenceResourceResolverTests
 {
-    private const string FeatureId = "WorkflowsRuntimeEntityFrameworkCore";
+    private const string FeatureId = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
     private static readonly PersistenceSourceProvenance Root = new("root", "json", false, true);
     private static readonly PersistenceSourceProvenance Shell = new("shell", "composed", false, true);
     private static readonly PersistenceAuthoredValue Missing = new(PersistencePresence.Absent, null, Root);
