@@ -33,7 +33,7 @@ read by several agents and renders as an ordinary document on GitHub.
 | 6 | `[FlowNode(...)]`, `CompleteActivityWithOutcomesAsync` | `[ActivityOutcome]`, outcome in the completion | Direct. |
 | 7 | `[Port]` + `ScheduleActivityAsync` | Structural activities are engine-only | No author surface: redesign as a reusable Activity Graph definition or built-in composites. |
 | 8 | `CreateBookmark`, `SendSignalAsync`/`OnSignalReceived` | `StatefulActivity` suspend + `[ResumeTarget]`; signals engine-only | Bookmarks port; signals redesign. |
-| 9 | `Trigger.GetTriggerPayload`, `IsTriggerOfWorkflow` | `[TriggerActivity]` stateful trigger + trigger stimulus provider | Direct, with one extra registration. |
+| 9 | `Trigger.GetTriggerPayload`, `IsTriggerOfWorkflow` | `[TriggerActivity]` stateful trigger + trigger stimulus provider | Direct for the start form, with one extra registration. A custom trigger is a start node only (Joey, 2026-11-27: triggers will be reworked and decoupled from activities): publishing refuses a start trigger off the start path, so a mid-flow use is a redesign, and the converter need not carry Elsa 3's `canStartWorkflow` onto custom triggers. |
 | 10 | `context.GetRequiredService<T>()`; no constructor injection | Constructor injection only | Inverted; direct port. |
 | 11 | `Variable<T>.Get/Set`, `GetVariable`, `WorkflowExecutionContext.Properties` | `VariableReference<T>` + `context.Variables`; `[AccessesUndeclaredVariables]`; `[AccessesWorkflowState]` | Ports, except the properties bag, which has no counterpart. |
 | 12 | `ActivityKind.Job/Task`, `RunAsynchronously` | `[BackgroundExecutionSafe]` + author-chosen placement (ADR 0093) | Ports when eligible; otherwise the activity runs in the foreground. An effect that must not repeat is keyed on `LogicalInvocationId` (or `OperationKey`), which an operator retry keeps; `InvocationId` changes on a retry. |
@@ -101,7 +101,7 @@ the export under its assembly-qualified name, so it is found, like a storage dri
 before the comma; a storage
 driver by the type name before the comma in its assembly-qualified name.
 
-A component is an Elsa 3 built-in, recorded as such and not searched for, when it is a storage driver or activity type whose namespace starts with `Elsa.` (Elsa 3's own), or a JavaScript function that case 14 lists as one Elsa 3 defined itself (the names the
+A component is an Elsa 3 built-in, recorded as such and not searched for, when it is a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as `Elsa.SetVariable`), a storage driver whose type name before the comma is exactly `MemoryStorageDriver` (Elsa 3's Memory driver), or a JavaScript function that case 14 lists as one Elsa 3 defined itself (the names the
 Elsa 3 mapping README gives for functions a host function may take over: the configuration and definition readers,
 the last-result reader and the byte and stream helpers). These are names, not diagnostic codes.
 

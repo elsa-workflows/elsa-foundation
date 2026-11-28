@@ -36,6 +36,7 @@ Use the narrowest source that answers the task.
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
+| User-facing product skills (not contributor workflows) and their plugin metadata | `plugins/` and `.claude-plugin/marketplace.json` |
 
 Do not duplicate concept explanations in new docs. Link to the canonical glossary entry or map instead.
 
@@ -99,6 +100,7 @@ Maintainers publish organization-repository branches and contributors use fork P
 | Glossary lookup | [docs/glossary/root.md](docs/glossary/root.md) and [docs/glossary/elsa.md](docs/glossary/elsa.md) |
 | Feature composition | [Feature Composition Explorer](docs/skills/catalog.md#feature-composition-explorer) |
 | Architecture tour | [docs/architecture-tour.md](docs/architecture-tour.md) |
+| Changing the Elsa 3 converter or an Elsa 4 activity authoring API | Also update JTest suites and the Elsa 3 migration skill: [Changing the converter](extensions/Elsa3/src/Mapping/README.md#changing-the-converter) |
 
 ## Constitution boundary
 

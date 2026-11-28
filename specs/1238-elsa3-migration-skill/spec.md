@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-24
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: A guide that takes an Elsa 3 user through a test migration of their workflows to Elsa 4, ending in a
 complete report of what to patch, what to reconsider, what to take into account and what goes smoothly. The guide is a
@@ -65,7 +65,9 @@ journey to the end, start a new session halfway, and confirm it resumes from the
 5. **Given** a plan with stage "test migration", **When** a new session starts the skill, **Then** it reads the plan
    first and continues from the recorded stage and component statuses without rerunning finished work.
 6. **Given** every remaining definition converts or carries a refusal the user accepted in the plan, **When** the
-   skill finishes, **Then** it describes the handoff (FR-020) and changes nothing outside the workspace.
+   skill finishes, **Then** it describes the handoff (FR-020) and has changed nothing outside the workspace except, in
+   the user's clone, the migration host's references to the feature projects and its local settings (FR-011), which
+   the user makes or approves.
 
 ### User Story 2 - The same journey without an AI (Priority: P1)
 
@@ -74,8 +76,8 @@ by hand.
 
 **Why this priority**: The skill must not lock the migration to AI tooling, and the README promises a document.
 
-**Independent Test**: A reviewer who has not seen the skill follows the README section to the skill file and completes
-the inventory and one component port on the synthetic sample with no AI.
+**Independent Test**: A session that has not seen the skill follows the README section to the skill file literally and
+completes the inventory and one component port on the synthetic sample (SC-001; see its deviation note).
 
 **Acceptance Scenarios**:
 
@@ -175,7 +177,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   and the skill does not ask the user to act on them.
 - A finding has no Elsa 4 remedy (the report says neither patching the definition nor building a component helps):
   the skill records the user's decision in the plan (redesign, drop, or an accepted refusal) and writes no code.
-- The user's Elsa 3 activity uses several catalog cases at once (a trigger with bookmarks, services and outputs): the
+- The user's Elsa 3 activity uses several catalog cases at once (an activity with bookmarks, services and outputs): the
   plan lists every case, and the port follows them in catalog order.
 - A definition is refused only because a dependency was refused: the skill fixes the root first and does not work on
   the blocked definition.
@@ -235,7 +237,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   its type name. It records the source location, or "not found", in the plan. A component that is an Elsa 3
   built-in (the memory storage driver, or a built-in JavaScript function such as a configuration reader that a host
   function may take over) is not searched for: the plan records it as "Elsa 3 built-in". A component is an Elsa 3 built-in when it is
-  a storage driver or activity type whose namespace starts with `Elsa.` (Elsa 3's own), or a JavaScript function that case 14 lists as one Elsa 3 defined itself (research R-6). A storage-driver row is
+  a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as `Elsa.SetVariable`), a storage driver whose type name before the comma is exactly `MemoryStorageDriver` (Elsa 3's Memory driver), or a JavaScript function that case 14 lists as one Elsa 3 defined itself (research R-6). A storage-driver row is
   answered by the case 17 interview, not by a port.
 - **FR-010**: **Prepare.** For each component the skill MUST record in the plan its Elsa 4 target name, the Elsa 4
   feature and project it belongs to, the porting cases that apply, the tests to port, and its status; then port it
@@ -282,7 +284,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 6 | Outcomes | Outcome attributes on the class; select by name in the completion | port |
   | 7 | Scheduling child activities | None for activity authors: scheduling children is engine-only | redesign: a reusable Activity Graph definition, or the built-in composites |
   | 8 | Signals and bookmarks | Bookmarks: a stateful activity that suspends and resumes on a resume target. Signals: none | port (bookmarks); redesign (signals) |
-  | 9 | Triggers | A trigger activity plus a trigger stimulus provider registered in the feature | port |
+  | 9 | Triggers | A trigger activity plus a trigger stimulus provider registered in the feature; a custom trigger only starts workflows | port (start triggers); redesign (a trigger that waits mid-flow: split the workflow at the wait, or wait on Elsa 4's Event activity with CanStartWorkflow off) |
   | 10 | Services | Constructor injection; the execution context offers no service lookup | port |
   | 11 | Variables and workflow state | Variable-reference inputs read and written through the step's variables; undeclared names and workflow state need their access markers; a free-form properties bag has no counterpart | port; redesign for the properties bag |
   | 12 | Background and task activities | The background-execution-safe marker; the workflow author chooses background placement (spec 1230) | port when the activity meets the eligibility criteria |
@@ -341,10 +343,16 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 ### Measurable Outcomes
 
-- **SC-001**: A reviewer with no AI follows the README section and the skill file and completes the inventory and the
-  port of one custom activity on a synthetic export in one sitting, without asking for help.
-- **SC-002**: Two sessions of two different AI assistants, given the same synthetic export and source, produce plans
-  with the same components, target names and applicable cases.
+- **SC-001**: A session that follows the README section and the skill file literally, using no knowledge beyond them,
+  completes the inventory and the port of one custom activity on a synthetic export in one sitting, without asking
+  for help.
+- **SC-002**: Two independent sessions of two different AI models, given the same synthetic export and source, produce
+  plans with the same components, target names and applicable cases.
+
+*Deviation (2026-11-28, amended at implementation on the owner's decision)*: SC-001 first asked for a human reviewer
+with no AI, and SC-002 for assistants from two different vendors. The walkthrough on PR #5827 used an AI session
+restricted to the README and the skill file for SC-001, and two models from one vendor for SC-002. A human
+walkthrough and a second vendor's assistant remain worthwhile checks, but they no longer gate this spec.
 - **SC-003**: All 19 catalog cases carry a verdict and a "before" example; every *port* part carries an "after"
   example that matches its sample region, and the sample's tests pass.
 - **SC-004**: The skill folder contains zero diagnostic code literals and zero references to one AI vendor; the

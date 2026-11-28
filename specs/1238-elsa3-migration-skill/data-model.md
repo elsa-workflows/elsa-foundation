@@ -16,7 +16,7 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 | Features | Elsa 4 feature name → project → components | The migration host must reference every project and list every feature (FR-011). |
 | Components | One row per inventory item | See below. |
 | Accepted refusals | Definition, finding code, reason, date | Only the user adds a row. |
-| Last report | Path of the last `report.json`, the `dotnet run` command and its exit code | Updated after every run. |
+| Last report | Path of the last `report.json`, the `dotnet run` command, its exit code, the date, and the report's tool name and version | Updated after every run. |
 
 ### Component row
 
@@ -34,7 +34,7 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 `verified` means no finding of any category in the last assessment names this component (by kind and name).
 `interviewed` means the user's objective is recorded with the chosen Elsa 4 feature or the link to their own plan;
 the storage-driver finding repeats on every run and does not reopen the row. `redesign` and `dropped`
-need the user's decision recorded in the row.
+need the user's decision recorded in the plan's Notes.
 
 ## Porting case (repository, `porting-catalog.md`)
 

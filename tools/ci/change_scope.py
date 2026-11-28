@@ -34,6 +34,8 @@ INCLUDE = (
     # gap: RetiredPersistenceFamilyGuardTests scans tools/ for retired persistence-family names in .py/.json/.yml/.sh files,
     # so a change here is no longer checked by it before merge; it would only fail on the push to main.
     "tools/initiatives/**",
+    # User-facing product skills (spec 1238): markdown and plugin metadata; the migration skill's check runs on every PR.
+    "plugins/**",
     "*.md",  # root-level only; see _matches
 )
 
@@ -120,6 +122,9 @@ def self_test() -> int:
         (["tools/initiatives/Directory.Build.props"], False),
         (["tools/initiatives/Gate.cs"], False),
         (["tools/ci/change_scope.py"], False),
+        (["plugins/elsa3-migration/skills/elsa3-workflows-migration/porting-catalog.md"], True),
+        (["plugins/elsa3-migration/.claude-plugin/plugin.json"], True),
+        (["plugins/x/Sample.cs"], False),
         ([], False),
     ]
     failures = [(paths, want) for paths, want in cases if classify(paths)[0] != want]
