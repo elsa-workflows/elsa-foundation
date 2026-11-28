@@ -56,7 +56,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     }, { timeout: 30_000 }).not.toBe("");
     const named = await get(`/runtime/user-tasks/${id}`);
     expect(named.assigneeId).toBe(who.userId); expect(typeof named.assigneeName).toBe("string"); expect(named.assigneeName).not.toBe("");
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await page.getByRole("button", { name: "Refresh tasks", exact: true }).click();
     const row = page.getByRole("link", { name: title, exact: true });
     await expect(row).toBeVisible();
     // #4068: the assignee reads as a person, and no column is clipped or hidden off the side at 360 px.

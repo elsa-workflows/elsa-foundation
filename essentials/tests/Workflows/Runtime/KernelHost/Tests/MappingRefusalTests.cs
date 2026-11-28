@@ -76,18 +76,20 @@ public sealed class MappingRefusalTests
     }
 
     [Fact]
-    public void A_user_task_refuses_dynamic_actions_and_protected_task_values()
+    public void A_user_task_refuses_dynamic_and_protected_task_values()
     {
         var supported = KernelHostCapabilities.All with { UserTaskWaits = true };
         var actions = Literal("Actions", new[] { "Approve" });
-        var prefill = Request("Prefill", "Order");
-        var protectedPrefill = new RuntimeInputBinding(prefill.InputKey, prefill.TargetType,
-            new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true), prefill.Source,
-            workflowRequest: prefill.WorkflowRequest);
+        var title = Literal("Title", "Review purchase");
+        var protectedTitle = new RuntimeInputBinding(title.InputKey, title.TargetType,
+            new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true), title.Source,
+            literal: title.Literal);
 
         AssertExactRefusal("Actions", Request("Actions", "Actions"));
         AssertExactRefusal("Title", actions, Secret("Title", "task-title"));
-        AssertExactRefusal("Prefill", actions, protectedPrefill);
+        AssertExactRefusal("Title", actions, protectedTitle);
+        AssertExactRefusal("Title", actions, Request("Title", "Title"));
+        AssertExactRefusal("Prefill", actions, RequestMember("Prefill", "Order", "Details"));
 
         void AssertExactRefusal(string input, params RuntimeInputBinding[] bindings)
         {

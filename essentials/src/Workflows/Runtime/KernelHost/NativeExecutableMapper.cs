@@ -240,7 +240,7 @@ public static class NativeExecutableMapper
             var id = source.ExecutableNodeId;
             var type = _types[id];
             if (type == typeof(Native.EvaluateDecision)) RequireDecisionBindings(source, scope);
-            if (type == typeof(Native.CreateUserTask)) RequireUserTaskBindings(source, scope);
+            if (type == typeof(Native.CreateUserTask)) RequireUserTaskBindings(source);
             var child = type == typeof(Native.DispatchWorkflow) ? ReadTestRunChild(source) : null;
             if (type == typeof(Native.DispatchWorkflow) && requireTestRunChildren &&
                 (child is null || source.InputBindings.GetValueOrDefault("WaitForCompletion") is not
@@ -282,7 +282,7 @@ public static class NativeExecutableMapper
             }
         }
 
-        private static void RequireUserTaskBindings(ExecutableNode source, Scope scope)
+        private static void RequireUserTaskBindings(ExecutableNode source)
         {
             var id = source.ExecutableNodeId;
             const string actions = nameof(Native.CreateUserTask.Actions);
@@ -294,10 +294,10 @@ public static class NativeExecutableMapper
 
             foreach (var binding in source.InputBindings.Values)
             {
-                if (!IsPlainInputSource(binding, scope) || UnsupportedOutputPolicy(binding.EffectivePolicy) ||
+                if (binding.Source != RuntimeInputBindingSource.Literal || UnsupportedOutputPolicy(binding.EffectivePolicy) ||
                     binding.Literal is { } literal && UnsupportedOutputPolicy(literal.Policy))
                     throw NativeMappingRefusedException.Binding(id, binding.InputKey,
-                        "Use a plain literal or an unprotected workflow input for a user task field.");
+                        "Use a plain literal for a user task field.");
             }
         }
 
