@@ -42,6 +42,116 @@ for (const theme of ["light", "dark"]) {
   }
 }
 
+for (const { theme, width, useCatalogDescription } of [
+  { theme: "light", width: 1440, useCatalogDescription: false },
+  { theme: "dark", width: 360, useCatalogDescription: true }
+]) {
+  test(`CLR Activity Definition opens its interface and reveals exact ports (${theme}, ${width})`, async ({ page }, testInfo) => {
+    const state = await mockActivityDefinitionAuthoring(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText: async (text: string) => {
+          if (document.body.dataset.blockClipboard) throw new Error("Clipboard unavailable");
+          document.body.dataset.copiedSignature = text;
+        } }
+      });
+      Object.defineProperty(document, "execCommand", { value: () => false });
+    });
+    const description = "Sends an outbound HTTP request and captures the response.";
+    const providerKey = "elsa.clr-activity";
+    const identity = {
+      ...authoringDefinition(),
+      displayName: "Send Http Request",
+      activityTypeKey: "Elsa.Activities.Http.Activities.SendHttpRequest",
+      contentAuthority: { kind: "ProviderSource", authorityKey: providerKey, sourceId: "clr" },
+      description: useCatalogDescription ? null : description,
+      headVersionId: "newer-clr-version"
+    };
+    const method = { ...browserContractInput(), referenceKey: "method", name: "Method", isNullable: false, isRequired: true, default: { syntax: "Literal", value: "GET" } };
+    const contract = {
+      contractSchemaVersion: "1",
+      inputs: [{ ...browserContractInput(), referenceKey: "url", name: "Url" }, method],
+      outputs: [
+        { ...browserContractInput(), referenceKey: "status", name: "StatusCode", type: { alias: "Int32?", collectionKind: "Single" } },
+        { ...browserContractInput(), referenceKey: "body", name: "ResponseBody", type: { alias: "String", collectionKind: "List" } }
+      ],
+      outcomes: [{ referenceKey: "timeout", name: "Timeout", isEmitted: true, description: null }]
+    };
+    await page.route("**/design/activities/definitions/activity-def-browser", route => route.fulfill({
+      json: { ...authoringManagementDefinition(state), definition: identity, actions: [] }
+    }));
+    await page.route("**/design/activities/versions/clr-version", route => route.fulfill({
+      json: {
+        ...sourceVersionDetail(true), definition: identity, versionId: "clr-version", contract,
+        provider: { providerKey, schemaVersion: "1", manifestFingerprint: "sha256:clr" }
+      }
+    }));
+    await page.route(/\/design\/activities\/catalog(?:\?|$)/, route => {
+      const includesUnavailable = new URL(route.request().url()).searchParams.get("availability") === "All";
+      return route.fulfill({ json: {
+        activities: [
+          { ...catalogActivity("newer-clr-version", "Send Http Request"), paletteHints: { description: "A different version." } },
+          ...(includesUnavailable ? [{ ...catalogActivity("clr-version", "Send Http Request"), available: false, paletteHints: { description } }] : [])
+        ]
+      } });
+    });
+    await page.goto(`/?mode=activity-definitions&definition=activity-def-browser&section=editor&version=clr-version&theme=${theme}`);
+    const overview = page.getByRole("tab", { name: "Overview", exact: true });
+    await expect(overview).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Designer", exact: true })).toHaveCount(0);
+    const panel = page.getByRole("tabpanel", { name: "Overview", exact: true });
+    await expect(panel.getByText(description)).toBeVisible();
+    await expect(panel.getByText("Implemented in .NET · Read-only in Studio")).toBeVisible();
+    await expect(panel.getByText("A different version.")).toHaveCount(0);
+    await expect(page.getByText("Implementation payload unavailable")).toHaveCount(0);
+    await expect(page.getByText("Implementation editor unavailable")).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Method Text · Required" })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "StatusCode Int32?", exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "ResponseBody List<Text>?" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await panel.screenshot({ path: testInfo.outputPath(`clr-overview-${theme}-${width}.png`) });
+    const copy = panel.getByRole("button", { name: "Copy signature" });
+    await page.locator("body").evaluate(body => { body.dataset.blockClipboard = "true"; });
+    await copy.click();
+    const copyFailure = panel.getByRole("status");
+    await expect(copyFailure).toHaveText("Could not copy the signature.");
+    await expect(copyFailure).toBeInViewport({ ratio: 1 });
+    await page.locator("body").evaluate(body => { delete body.dataset.blockClipboard; });
+    await copy.click();
+    await expect(panel.getByText("Could not copy the signature.", { exact: true })).toHaveCount(0);
+    const copyConfirmation = page.getByRole("group", { name: "Signature copied.", exact: true });
+    await expect(copyConfirmation).toBeVisible();
+    await copyConfirmation.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(panel.getByText("Signature copied.", { exact: true })).toHaveCount(0);
+    await expect(page.locator("body")).toHaveAttribute("data-copied-signature", [
+      "activity Elsa.Activities.Http.Activities.SendHttpRequest",
+      "  inputs",
+      "    Url [key url]: String?",
+      '    Method [key method]: String (required) = "GET"',
+      "  outputs",
+      "    StatusCode [key status]: Int32?",
+      "    ResponseBody [key body]: List<String>?",
+      "  outcomes",
+      "    Timeout [key timeout]"
+    ].join("\n"));
+
+    for (const { name, tab, key } of [
+      { name: /^Method /, tab: "Inputs (2)", key: "method" },
+      { name: /^ResponseBody /, tab: "Outputs (2)", key: "body" },
+      { name: /^Timeout$/, tab: "Outcomes (1)", key: "timeout" }
+    ]) {
+      await panel.getByRole("button", { name }).press("Enter");
+      await expect(page.getByRole("tab", { name: tab, exact: true })).toHaveAttribute("aria-selected", "true");
+      const details = page.locator(`[data-contract-selected="true"][data-contract-reference-key="${key}"]`);
+      await expect(details).toBeFocused();
+      await expect(details.getByRole("textbox", { name: "Description" })).toBeDisabled();
+      await overview.click();
+    }
+    expect(state.draftCreationRequests).toHaveLength(0);
+  });
+}
+
 for (const theme of ["light", "dark"]) {
   for (const width of [1440, 390]) {
     test(`Activity Definition graph chrome stays joined around diagnostics (${theme}, ${width})`, async ({ page }, testInfo) => {

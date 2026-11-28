@@ -217,6 +217,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   const workflowExecutionId = view.workflowExecutionId;
   const triggerPrepared = view.status === "Prepared" && !workflowExecutionId;
   const execution = observation?.details?.instance;
+  const canOpenRun = !observation || Boolean(execution);
   const activityCount = execution?.activityCount ?? view.activityCount;
   const incidentCount = execution?.incidentCount ?? view.incidentCount;
   const acceptedWithIncidents = !rejected && (hasAcceptedRuntimeIssue({ ...view, incidentCount }) || execution?.status === "Faulted");
@@ -246,7 +247,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
         {/* Primary action */}
         {workflowExecutionId || view.artifactId ? (
           <div className="wf-runtime-actions">
-            {workflowExecutionId ? <StudioButton size="sm" variant="primary" onClick={() => onOpenRun(workflowExecutionId)}>Open run</StudioButton> : null}
+            {workflowExecutionId ? <StudioButton size="sm" variant="primary" disabled={!canOpenRun} onClick={() => onOpenRun(workflowExecutionId)}>Open run</StudioButton> : null}
             {view.artifactId ? <StudioLink className="wf-runtime-artifact-link" href={`/workflows/executables/${encodeURIComponent(view.artifactId)}`}>View artifact</StudioLink> : null}
           </div>
         ) : null}
@@ -271,7 +272,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
               <span>{incidentCount != null && incidentCount > 0
                 ? `The test run was accepted and recorded ${incidentCount} incident${incidentCount === 1 ? "" : "s"}. Review the incident details on the linked Run.`
                 : "The test run was accepted with a runtime issue. Incident details may be unavailable in this response; review the linked Run."}</span>
-              {workflowExecutionId ? <StudioButton size="sm" onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</StudioButton> : null}
+              {workflowExecutionId ? <StudioButton size="sm" disabled={!canOpenRun} onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</StudioButton> : null}
             </div>
           ) : null}
           {equivalent ? (

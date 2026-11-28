@@ -53,6 +53,7 @@ namespace Elsa.Activities.Http.Activities;
 // Static base outcomes. When ExpectedStatusCodes is authored, the compiler adds one outcome per code plus
 // "Unmatched status code" (derived from the input via ActivityValueOutcomes); Done is the no-codes success branch.
 [Activity(Icon = "Send")]
+[ActivityPalette(Description = "Sends an outbound HTTP request and captures the response.")]
 [ActivityOutcome(ActivityOutcomes.Done)]
 [ActivityOutcome(HttpActivityOutcomes.Failed)]
 [ActivityOutcome(HttpActivityOutcomes.Timeout)]
