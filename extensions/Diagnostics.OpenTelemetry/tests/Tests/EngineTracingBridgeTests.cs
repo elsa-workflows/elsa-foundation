@@ -6,10 +6,7 @@ using Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 using Elsa.Diagnostics.OpenTelemetry.Services;
 using Elsa.Diagnostics.OpenTelemetry.Workflows;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
-using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests;
@@ -23,7 +20,6 @@ public sealed class EngineTracingBridgeTests : IDisposable
     private readonly List<OpenTelemetryBatch> _ingested = [];
     private readonly InMemoryOpenTelemetryStore _store;
     private readonly ActivitySource _engineSource = new(WorkflowEngineTelemetry.ActivitySourceName);
-    private readonly ActivitySourceWorkflowEngineTracer _tracer;
     private readonly ActivitySource _hostSource = new("Test.Host.Request");
     private readonly ActivityListener _hostListener;
     private long _ticks;
@@ -33,7 +29,6 @@ public sealed class EngineTracingBridgeTests : IDisposable
     {
         var options = Microsoft.Extensions.Options.Options.Create(new OpenTelemetryDiagnosticsOptions());
         _store = new InMemoryOpenTelemetryStore(options, new OpenTelemetrySourceRegistry(options));
-        _tracer = new ActivitySourceWorkflowEngineTracer(_engineSource);
 
         // The bridge only listens to the engine source; the simulated ASP.NET request span needs its own listener.
         _hostListener = new ActivityListener
@@ -72,17 +67,17 @@ public sealed class EngineTracingBridgeTests : IDisposable
         Assert.NotNull(request);
 
         // Cycle 1: the dispatched work item faults.
-        using (var drain = _tracer.StartDrainCycle(new("wfexec-1")))
+        using (StartDrain("wfexec-1"))
         {
-            using var dispatch = _tracer.StartDispatch(NewWorkItem());
-            dispatch!.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeFaulted);
+            using var dispatch = StartSpan(WorkflowEngineTelemetry.DispatchSpanName, "wfexec-1");
+            dispatch.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeFaulted);
         }
 
         // Cycle 2 (after outbox delivery re-enqueued work): clean.
-        using (var drain = _tracer.StartDrainCycle(new("wfexec-1")))
+        using (StartDrain("wfexec-1"))
         {
-            using var dispatch = _tracer.StartDispatch(NewWorkItem());
-            dispatch!.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeCompleted);
+            using var dispatch = StartSpan(WorkflowEngineTelemetry.DispatchSpanName, "wfexec-1");
+            dispatch.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeCompleted);
         }
 
         // One batch per drain cycle, both under the request's trace id.
@@ -116,13 +111,14 @@ public sealed class EngineTracingBridgeTests : IDisposable
             requestTraceId = request!.TraceId.ToHexString();
 
             // A drained cycle publishes as usual...
-            using (var drain = _tracer.StartDrainCycle(new("wfexec-1")))
+            using (StartDrain("wfexec-1"))
             {
             }
 
             // ...then the coalescing quiescence flush emits a checkpoint-commit span AFTER the drain loop — no drain
             // span will ever close over it.
-            _tracer.StartCheckpointCommit(NewCommit())!.Dispose();
+            using var checkpoint = StartSpan(WorkflowEngineTelemetry.CheckpointCommitSpanName, "wfexec-1");
+            checkpoint.SetTag(WorkflowEngineTelemetry.CheckpointIdTag, "cp-1");
         }
 
         Assert.Single(_ingested);
@@ -131,7 +127,7 @@ public sealed class EngineTracingBridgeTests : IDisposable
         // drain, on its own trace) sweeps it out as a publication under the original trace id, so the store folds it
         // into the request's trace.
         Volatile.Write(ref _ticks, 31_000);
-        using (var unrelated = _tracer.StartDrainCycle(new("wfexec-other")))
+        using (StartDrain("wfexec-other"))
         {
         }
 
@@ -152,12 +148,11 @@ public sealed class EngineTracingBridgeTests : IDisposable
     {
         StartBridge();
 
-        using (var outer = _tracer.StartDrainCycle(new("wfexec-parent")))
+        using (StartDrain("wfexec-parent"))
         {
-            using (var dispatch = _tracer.StartDispatch(NewWorkItem()))
+            using (StartSpan(WorkflowEngineTelemetry.DispatchSpanName, "wfexec-parent"))
             {
-                // ChildStartExecutor drains the child workflow inside the parent's dispatch.
-                using var nested = _tracer.StartDrainCycle(new("wfexec-child"));
+                using var nested = StartDrain("wfexec-child", outermost: false);
             }
 
             // The nested drain has stopped, but nothing may publish while the outer tree is still open.
@@ -168,37 +163,21 @@ public sealed class EngineTracingBridgeTests : IDisposable
         Assert.Equal(3, batch.Spans.Count);
     }
 
-    private static RuntimeSchedulerWorkItem NewWorkItem() =>
-        new(
-            workItemId: "work-1",
-            workflowExecutionId: "wfexec-1",
-            commandId: "cmd-1",
-            commandKind: WorkflowExecutionCommandKind.InvokeActivity,
-            envelopeId: "env-1",
-            idempotencyKey: "idem-1",
-            enqueuedAt: DateTimeOffset.UnixEpoch,
-            recordedAt: DateTimeOffset.UnixEpoch);
+    private Activity StartDrain(string workflowExecutionId, bool outermost = true)
+    {
+        var drain = StartSpan(WorkflowEngineTelemetry.DrainSpanName, workflowExecutionId);
+        if (outermost)
+            drain.SetTag(WorkflowEngineTelemetry.DrainOutermostTag, true);
+        return drain;
+    }
 
-    private static RuntimeCheckpointCommit NewCommit() =>
-        new(
-            CommitId: "commit-1",
-            Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: "cp-1",
-                Name: "coalescing.flush",
-                WorkflowExecutionId: "wfexec-1",
-                OccurredAt: DateTimeOffset.UnixEpoch,
-                ActivityExecutionIds: [],
-                Metadata: new Dictionary<string, string>()),
-            StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
-                scheduler: null,
-                activityExecutions: [],
-                bookmarks: [],
-                durableValues: [],
-                incidents: [],
-                operational: []),
-            PostCommitIntents: [],
-            Metadata: new Dictionary<string, string>());
+    private Activity StartSpan(string name, string workflowExecutionId)
+    {
+        var activity = _engineSource.StartActivity(name, ActivityKind.Internal);
+        Assert.NotNull(activity);
+        activity.SetTag(WorkflowEngineTelemetry.WorkflowExecutionIdTag, workflowExecutionId);
+        return activity;
+    }
 
     /// <summary>Captures every ingested batch and forwards it to the in-memory store, mimicking the ingestor pipeline.</summary>
     private sealed class CapturingIngestor(List<OpenTelemetryBatch> ingested, InMemoryOpenTelemetryStore store) : IOpenTelemetryIngestor

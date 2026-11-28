@@ -1,8 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Checkpoints;
-using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -52,7 +51,7 @@ public sealed class RuntimeCoreEngineShapeGuardTests
         Assert.True(
             offenders.Length == 0,
             "Engine-shaped types found in Elsa.Workflows.Runtime.Core; they belong in the " +
-            "Elsa.Workflows.Runtime implementation package (ADR 0033):" + Environment.NewLine +
+            "runtime hosting or execution package:" + Environment.NewLine +
             string.Join(Environment.NewLine, offenders));
     }
 
@@ -64,27 +63,14 @@ public sealed class RuntimeCoreEngineShapeGuardTests
     [Fact]
     public void EngineAssembly_ContainsTheEngineShapedTypes()
     {
-        var engineAssembly = typeof(RuntimeCheckpointCommitter).Assembly;
+        var engineAssembly = typeof(KernelHttpRequestHandler).Assembly;
         Assert.NotEqual(typeof(WorkflowExecutable).Assembly, engineAssembly);
 
         var matches = EngineShapedTypes(engineAssembly).Select(type => type.Name).ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains("RuntimeCheckpointCommitter", matches);
-        Assert.Contains("WorkflowSchedulerDrainer", matches);
-        Assert.Contains("WorkflowDrainOrchestrator", matches);
-        Assert.Contains("StimulusRouter", matches);
-        Assert.Contains("RuntimeActivityInputMaterializer", matches);
-        Assert.Contains("RuntimeCoalescingSession", matches);
-        Assert.Contains("InMemoryRuntimeRecoveryScanner", matches);
-        Assert.Contains("RuntimePostCommitOutboxProcessor", matches);
-        Assert.Contains("InMemoryBookmarkStateStore", matches);
-    }
-
-    [Fact]
-    public void RuntimeRecoveryCursorStore_LivesInTheRuntimeImplementationAssembly()
-    {
-        Assert.Same(typeof(RuntimeCheckpointCommitter).Assembly, typeof(InMemoryRuntimeRecoverySweepCursorStore).Assembly);
-        Assert.NotSame(typeof(WorkflowExecutable).Assembly, typeof(InMemoryRuntimeRecoverySweepCursorStore).Assembly);
+        Assert.Contains(nameof(KernelHttpRequestHandler), matches);
+        Assert.Contains("KernelPublishedRunDispatcher", matches);
+        Assert.Contains("KernelDirectTestRunDispatcher", matches);
     }
 
     private static IEnumerable<Type> EngineShapedTypes(Assembly assembly) =>
