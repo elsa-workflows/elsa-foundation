@@ -9,6 +9,44 @@ namespace Kernel.Foundation.Postgres;
 
 public static partial class PostgresPreviewHosting
 {
+    /// <summary>Binds the private source-owned handoff to the same installed source and tenant as protected admission.</summary>
+    public static IPreparedRootStartHandoff BindPreparedRootStartQualification(Func<KernelDb> open, PostgresDirectRequests requests,
+        Contract.BoundScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(requests);
+        requests.RequireEventBinding(open);
+        _ = requests.BindProtectedRootStarts(scope);
+        return new BoundPreparedRootStartHandoff(protect => requests.BindProtectedRootStarts(scope, protect),
+            (actor, issuance, token) => HasAcceptedPreparedStartAsync(open, scope, actor, issuance, token),
+            (actor, issuance, token) => ConfirmPreparedStartAsync(open, scope, actor, issuance, token),
+            (actor, issuance, key, token) => ReadRetainedRootResponseAsync(open, scope, actor, issuance, key, token));
+    }
+
+    /// <summary>Creates the private PostgreSQL profile for retaining the first response of a prepared root.</summary>
+    public static KernelDb CreateRetainedResponseQualificationContext(DbContextOptions<KernelDb> options, string actorType)
+    {
+        RootPublicEventHost.RequireConfiguredActorType(actorType);
+        return KernelDb.ForPostgresRetainedRootResponseQualification(options, new(actorType, true));
+    }
+
+    /// <summary>Installs the private PostgreSQL retained response profile.</summary>
+    public static Task InstallRetainedResponseQualificationAsync(DbContextOptions<KernelDb> options, string actorType,
+        CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreateRetainedResponseQualificationContext(options, actorType), cancellationToken);
+
+    private static async Task<PreparedRootResponse?> ReadRetainedRootResponseAsync(Func<KernelDb> open, Contract.BoundScope scope,
+        Contract.ActorRef actor, string issuance, string responseKey, CancellationToken token)
+    {
+        await using var db = open();
+        if (!db.UsesRetainedRootResponse) return null;
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", token);
+        var (key, bindSource) = await PostgresRootAdmission.PinRootPreparedStartProofAsync(db, token);
+        var birth = RootPreparedStarts.Verify(key, scope, actor, issuance);
+        return birth is null ? null : await EfStore.ReadRetainedRootResponseAsync(db, birth, responseKey, token, bindSource);
+    }
+
     /// <summary>Creates a private PostgreSQL context that qualifies prepared held starts and managed schedules.</summary>
     public static KernelDb CreatePreparedStartsQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootPreparedStartsQualification(options);
@@ -82,6 +120,31 @@ public static partial class PostgresPreviewHosting
             error is TimeoutException or NpgsqlException { IsTransient: true })
         {
             return RootStartProof.Unresolved;
+        }
+    }
+
+    // Separately proves admission without changing the lifetime proof used for releasing executable pins.
+    internal static async Task<bool> HasAcceptedPreparedStartAsync(Func<KernelDb> open, Contract.BoundScope scope,
+        Contract.ActorRef actor, string issuance, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(scope);
+        try
+        {
+            await using var db = open();
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
+            await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", cancellationToken);
+            var (key, bind) = await PostgresRootAdmission.PinRootPreparedStartProofAsync(db, cancellationToken);
+            var stage = RootPreparedStarts.Verify(key, scope, actor, issuance);
+            if (stage is null) return false;
+            var accepted = await RootPreparedStarts.HasAcceptedBirthAsync(db, stage, cancellationToken, bind);
+            await transaction.CommitAsync(cancellationToken);
+            return accepted;
+        }
+        catch (Exception error) when (!cancellationToken.IsCancellationRequested &&
+            error is TimeoutException or NpgsqlException { IsTransient: true })
+        {
+            return false;
         }
     }
 

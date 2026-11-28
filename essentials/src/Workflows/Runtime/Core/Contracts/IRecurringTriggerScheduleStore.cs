@@ -121,6 +121,13 @@ public interface IRecurringTriggerScheduleStore
         RecurringTriggerOccurrenceClaimRequest request,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Claims a bounded page of resource-owned occurrences without touching workflow-owned schedules.</summary>
+    ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueResourceOccurrencesAsync(
+        RecurringTriggerOccurrenceClaimRequest request,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>>(
+            new NotSupportedException("This recurring store does not isolate resource-owned occurrence claims."));
+
     /// <summary>
     /// Extends a claim's visibility to <paramref name="now"/> plus <paramref name="visibilityTimeout"/> while its owner,
     /// fencing token and revision are current. Returns the renewed claim, or <see langword="null"/> when the claim no

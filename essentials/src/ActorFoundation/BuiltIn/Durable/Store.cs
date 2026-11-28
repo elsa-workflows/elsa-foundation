@@ -216,9 +216,11 @@ public sealed record TurnCommit(
     internal IReadOnlyList<Message>? FoundationRootChildSends { get; init; }
     internal IReadOnlyList<Message>? FoundationRootPublications { get; init; }
     internal TerminalOutput? FoundationTerminalOutput { get; init; }
+    internal RetainedRootResponse? FoundationRetainedResponse { get; init; }
 }
 
 internal sealed record TerminalOutput(string Names, byte[]? Value);
+internal sealed record RetainedRootResponse(string Key, long CapturedAt, bool Present, byte[]? Payload);
 
 internal sealed record FoundationDispatchHeader(string Tenant, string Reference, FoundationHeaderChange Header, long TerminalGrowth = 0)
 {

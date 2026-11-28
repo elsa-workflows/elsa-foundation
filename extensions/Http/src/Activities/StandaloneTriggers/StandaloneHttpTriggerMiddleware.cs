@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
 using Elsa.Http.Core;
@@ -61,7 +62,9 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
             { await ProblemAsync(context, 401, "SourceUnauthorized", "Sign in to invoke this HTTP trigger."); return; }
             owner = standalone[0];
             sourceContext.Bind(owner);
-            var waits = await ObserveWaitsAsync(owner.Scope, hash, context.RequestAborted);
+            var waits = deliveryStore?.RequiresEmptyHttpWaitCohort == true
+                ? Array.Empty<BookmarkStateObservation>()
+                : await ObserveWaitsAsync(owner.Scope, hash, context.RequestAborted);
             var waitOptions = HttpEndpointStimulusOptions.MergeForResume(waits.Select(item => (IReadOnlyDictionary<string, string>?)item.State.Metadata));
             if (waitOptions.Authorize && (authorization is null ||
                 !await HttpEndpointRequestAuthorization.AuthorizeAsync(authorization, context, waitOptions.Policies)))
@@ -202,6 +205,21 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
                     // Prompt the ordinary bounded processor; recovery and peer workers retain ownership afterwards.
                     await processor.ProcessAsync(new(1, intentKind: RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind), deadline.Token);
                 }
+                var retained = operation.ServiceProvider.GetService<IRuntimeStandaloneHttpResponseReader>();
+                if (retained is not null)
+                {
+                    var response = await retained.ReadAsync(scope, source.OutboxItemId, deadline.Token);
+                    if (response.State != RuntimeStandaloneHttpResponseState.Legacy)
+                    {
+                        if (response.State == RuntimeStandaloneHttpResponseState.Pending)
+                        {
+                            await Task.Delay(TimeSpan.FromMilliseconds(100), time, deadline.Token);
+                            continue;
+                        }
+                        await WriteRetainedAsync(context, source.OutboxItemId, response, operation.ServiceProvider, deadline.Token);
+                        return;
+                    }
+                }
                 var delivery = operation.ServiceProvider.GetRequiredService<HttpResponseInstructionDelivery>();
                 if (await delivery.TryDeliverAsync(context.Response, [executionId], deadline.Token)) return;
                 var state = await operation.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId, deadline.Token);
@@ -216,6 +234,27 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
         }
         catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested && deadline.IsCancellationRequested)
         { throw new HttpResponseDeadlineException(); }
+    }
+
+    private static async Task WriteRetainedAsync(HttpContext context, string sourceId, RuntimeStandaloneHttpResponse response,
+        IServiceProvider services, CancellationToken token)
+    {
+        if (response.State == RuntimeStandaloneHttpResponseState.Missing)
+        {
+            await ProblemAsync(context, 502, "ResponseMissing", "The workflow ended without a committed HTTP response instruction.", sourceId);
+            return;
+        }
+        if (response.State == RuntimeStandaloneHttpResponseState.TooLarge)
+        {
+            await ProblemAsync(context, 502, "ResponseTooLarge", "The committed workflow response exceeds the delivery limit.", sourceId);
+            return;
+        }
+        if (response is not { State: RuntimeStandaloneHttpResponseState.Ready, ActorReference: { } actor, Headers: { } headers })
+            throw new InvalidDataException("The committed HTTP response instruction is unavailable.");
+        var instruction = new HttpResponseInstruction(response.StatusCode,
+            headers.ToDictionary(pair => pair.Key, pair => new[] { pair.Value }, StringComparer.OrdinalIgnoreCase),
+            response.Body, response.ContentType);
+        await HttpResponseInstructionDelivery.WriteAsync(context.Response, instruction, actor, services.GetServices<IHttpContentFactory>(), token);
     }
 
     private ValueTask RecordAsync(TriggerScope scope, string sourceId, string exchangeId, RuntimeIngressTransportState state, int? status, CancellationToken ct) =>

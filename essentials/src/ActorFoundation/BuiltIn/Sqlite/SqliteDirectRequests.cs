@@ -71,9 +71,12 @@ public static partial class SqliteEmbeddedHosting
             ArgumentNullException.ThrowIfNull(scope);
             if (protectRootStart is not { } protect)
                 throw new InvalidOperationException("Configure SQLite root start protection before binding one-way starts.");
-            return new BoundProtectedRootStarts(actorType,
-                (operation, spec, token, _) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token));
+            return BindProtectedRootStarts(scope, protect);
         }
+
+        internal IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope, ProtectRootStartAsync protect) =>
+            new BoundProtectedRootStarts(actorType,
+                (operation, spec, token, _) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token));
 
         internal Task<EventRegistrationResult> ApplyEventStartsAsync(Contract.BoundScope scope, string slot, long revision,
             IReadOnlyList<EventStartRegistration> registrations, CancellationToken token) =>
@@ -101,6 +104,13 @@ public static partial class SqliteEmbeddedHosting
 
         internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
             CancellationToken token) => admission.ConfirmHeldStartAsync(scope, actor, issuance, token);
+
+        internal Task<PreparedRootResponse?> ReadRetainedRootResponseAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+            string issuance, string key, CancellationToken token) =>
+            admission.ReadRetainedRootResponseAsync(scope, actor, issuance, key, token);
+
+        internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
+            CancellationToken token) => admission.HasAcceptedPreparedStartAsync(scope, actor, issuance, token);
 
         internal Task<int> PruneHeldStartsAsync(Contract.BoundScope scope, CancellationToken token) => admission.PruneHeldStartsAsync(scope, token);
 
@@ -267,6 +277,16 @@ public static partial class SqliteEmbeddedHosting
                 CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
                     (admission, ct) => admission.ConfirmHeldStartAsync(scope, actor, issuance, ct), token), token);
+
+            internal Task<PreparedRootResponse?> ReadRetainedRootResponseAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+                string issuance, string key, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ReadRetainedRootResponseAsync(scope, actor, issuance, key, ct), token), token);
+
+            internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
+                CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.HasAcceptedPreparedStartAsync(scope, actor, issuance, ct), token), token);
 
             internal Task<int> PruneHeldStartsAsync(Contract.BoundScope scope, CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,

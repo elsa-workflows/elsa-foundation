@@ -542,6 +542,7 @@ public sealed partial class EfStore
             var turn = submitted.RootCreator is null ? submitted : submitted with { RootCreator = null };
             if (submitted.RootCreator is InlineRootCreatorWitness inline)
             {
+                if (submitted.FoundationRetainedResponse is not null) throw RootShape();
                 if (_inlineStarts is not { } installed || !ReferenceEquals(installed, inline.Issuer) ||
                     inline.Creator.FoundationRootBinding is not { } identity || installed.ScopeFor(identity.Tenant) is not { } scope ||
                     identity.Actor != turn.Instance || !byPartition.TryGetValue(inline.Creator.Target.Partition, out var fence))
@@ -607,6 +608,10 @@ public sealed partial class EfStore
             commands.Add(checkpoint);
             if (turn.FoundationTerminalOutput is { } output)
                 commands.Add(new RootTerminalOutputCheckpoint(root, checkpoint.JournalRevision, output));
+            if (turn.FoundationRetainedResponse is { } response)
+                commands.Add(checkpoint is RootRetirement retired
+                    ? new RetainedRootResponseCheckpoint(root, checked(retired.Current.Revision + 1), response, Retired: true)
+                    : new RetainedRootResponseCheckpoint(root, checkpoint.JournalRevision, response));
         }
         return (batch with { Turns = turns, Seen = [], Trial = [] },
             WorkerCheckpoints(commands, revisions, deferred) with { Publications = publications ?? [] }, inlineRefusals);
@@ -669,6 +674,10 @@ public sealed partial class EfStore
         if (turn.FoundationRootRefusedInput is { } refusal)
             return PrepareRootRefusal(root, turn, refusal);
         if (turn.FoundationRootTimerRearms is not null && turn.FoundationRootOperator?.Kind != Kinds.Recover)
+            throw RootShape();
+        if (turn.FoundationRetainedResponse is { } response &&
+            (turn.Row is not { Parent: null } || turn.OpensPark || turn.FoundationRootOperator is { Kind: Kinds.Delete } ||
+                turn.Delete && (response.Present || turn.FoundationRootOperator?.Operator?.RootThenDelete != true)))
             throw RootShape();
         if (turn.FoundationTerminalOutput is not null &&
             (turn.Row?.Status != InstanceStatus.Finished || turn.Delete || turn.OpensPark || turn.FoundationRootOperator is not null))
@@ -764,7 +773,8 @@ public sealed partial class EfStore
             FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null,
             FoundationValues = values,
             FoundationRootChildSends = turn.FoundationRootChildSends,
-            FoundationTerminalOutput = turn.FoundationTerminalOutput
+            FoundationTerminalOutput = turn.FoundationTerminalOutput,
+            FoundationRetainedResponse = turn.FoundationRetainedResponse
         };
         var supportedRow = new InstanceRow(row.Id, row.Model, row.Definition, row.Status, row.State, row.Revision,
             _rootChildReference is null ? null : row.Parent,

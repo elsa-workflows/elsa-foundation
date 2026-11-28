@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,6 +63,7 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
             throw new InvalidOperationException(
                 $"The {featureName} feature needs the host's {nameof(KernelRuns)} registration.");
         services.AddScoped<KernelRunReader>();
+        services.TryAddScoped<IRuntimePreparedStandaloneRunReader, KernelPreparedStandaloneRunReader>();
         services.AddScoped<KernelActivityTimeline>();
         services.AddScoped<KernelHistoryCursor>();
         services.AddScoped<KernelPlaybackCursor>();

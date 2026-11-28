@@ -7,7 +7,8 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 
 internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resources, IRuntimeIngressDeliveryStore delivery,
     TriggerTargetResolver targets, ITriggerInputMapper mapper, IEnumerable<IStandaloneTriggerRuntimeTarget> runtimeTargets, TimeProvider clock,
-    IWorkflowExecutableStartPolicy startPolicy, IRuntimePostCommitOutboxProcessor processor, IRuntimePostCommitIntentDispatcher dispatcher)
+    IWorkflowExecutableStartPolicy startPolicy, IRuntimePostCommitOutboxProcessor processor, IRuntimePostCommitIntentDispatcher dispatcher,
+    PreparedStandaloneAdmission? preparedAdmission = null, IRuntimePreparedStandaloneRecipient? prepared = null)
 {
     private readonly IReadOnlyDictionary<string, IStandaloneTriggerRuntimeTarget> runtimeTargets = runtimeTargets.ToDictionary(x => x.ModelKey, StringComparer.Ordinal);
 
@@ -27,6 +28,8 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             submittedIntent, context.Actor);
         // Saved acceptance wins before today's enabled state, targets, mappings, policy and publication are consulted.
         if (await delivery.FindAcceptedAsync(context.Scope, sourceId, requestFingerprint, ct) is { } prior) return prior;
+        if (preparedAdmission is not null && prepared is null)
+            throw new NotSupportedException("Prepared standalone admission requires the selected Foundation handoff.");
         if (!TriggerSourcePipeline.Supports(processor, dispatcher, RuntimeDeliverySourceKind.StandaloneIngress,
                 RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind))
             throw new NotSupportedException("The selected Runtime processing pipeline cannot drain standalone trigger work.");
@@ -57,9 +60,13 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             trigger = new { trigger.Id, trigger.Name, trigger.TypeKey, trigger.SchemaVersion, trigger.Revision,
                 trigger.ConfigurationRevision, trigger.AssociationRevision, trigger.Configuration }
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        if (preparedAdmission is not null) envelope = PreparedStandaloneAdmission.Capture(envelope);
         var source = new RuntimeStandaloneIngressSource(1, sourceId, sourceId, now, context.Scope.Persistence,
             context.Scope.TenantId, context.Partition, trigger.Id, trigger.Revision, trigger.AssociationRevision,
             producer.SourceFamily, signal.SourceKey, requestFingerprint, signal.PayloadSchema, envelope, policy, context.Actor);
+        if (preparedAdmission is not null && context.WaitCandidate is not null &&
+            !PreparedStandaloneHttp.HasEmptyWaitObservation(source, context.WaitCandidate))
+            throw new NotSupportedException("Prepared standalone admission requires an empty HTTP wait cohort.");
         var accepted = new List<RuntimeSubscriptionRecipient>();
         var refused = new List<RuntimeSubscriptionRefusal>();
         var observations = new List<RuntimeIngressTargetObservation>();
@@ -73,7 +80,9 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
                     ["grantId"] = subscription.Grant.Id, ["sourceFamily"] = producer.SourceFamily });
             string? reason = subscription.Grant is not { Status: TriggerGrantStatus.Granted } grant || grant.SourceTypeKey != trigger.TypeKey
                 ? "target-grant-revoked" : !target.Available ? target.Findings[0].Code : null;
-            if (reason is null && (!runtimeTargets.TryGetValue(target.Model!.ModelKey, out var adapter) || !adapter.Supports(target.Native, target.Material?.Model)))
+            if (reason is null && (preparedAdmission is not null
+                    ? target.Native is null || target.Material?.Model is not null
+                    : !runtimeTargets.TryGetValue(target.Model!.ModelKey, out var adapter) || !adapter.Supports(target.Native, target.Material?.Model)))
                 reason = "target-runtime-unavailable";
             if (reason is null && responseMode && !target.Model!.SupportsWorkflowOwnedHttpResponse)
                 reason = "target-http-response-unsupported";
@@ -94,13 +103,19 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             if (reason is not null)
             { refused.Add(new(subscription.Id, subscription.Revision, inputs is { IsValid: false } ? "Input" : "Admission", reason)); continue; }
             var identity = new RuntimeSubscriptionStartIdentity(1, context.Scope.Persistence, sourceId, subscription.Id);
-            accepted.Add(new(identity.Digest, subscription.Id, subscription.Revision, subscription.Grant!.Revision,
+            var recipient = new RuntimeSubscriptionRecipient(identity.Digest, subscription.Id, subscription.Revision, subscription.Grant!.Revision,
                 subscription.DefinitionId, target.Model!.ModelKey, target.Slot!.SlotId, target.Slot.Revision,
                 target.Slot.ActiveActivationId!, target.Identity, WorkflowExecutableSourceProvenance.From(target.Source!),
                 RuntimeIngressAdmission.ComputeInputContractFingerprint(target.InputContract!), subscription.MappingRevision, 1,
                 inputs!.NormalizedInputs, authority!, context.Scope.TenantId, context.Partition, identity,
                 target.Material?.Model?.Protocol, target.Material?.Model?.Profile,
-                target.Material?.Model is null ? null : target.Material.IncarnationId));
+                target.Material?.Model is null ? null : target.Material.IncarnationId);
+            if (preparedAdmission is not null && prepared?.Selects(source, recipient) != true)
+            {
+                refused.Add(new(subscription.Id, subscription.Revision, "Admission", "target-runtime-unavailable"));
+                continue;
+            }
+            accepted.Add(recipient);
         }
         if (accepted.Count == 0 || policy == RuntimeIngressAdmissionPolicy.RequireAll && refused.Count != 0)
             throw new StandaloneTriggerAdmissionRefusedException(accepted.Count == 0 ? "no-eligible-subscribers" : "all-subscribers-required", refused,

@@ -9,7 +9,7 @@ namespace Kernel.Durable;
 
 internal sealed partial class ActorAdapter
 {
-    private sealed class ActorTurn : Contract.IActorTurn, IRootValueTurn
+    private sealed class ActorTurn : Contract.IActorTurn, IRootValueTurn, Contract.IRetainedRootResponseTurn
     {
         private readonly Durable.InMemoryStore? _inMemory;
         private readonly IRootDispatchHeaders? _roots;
@@ -32,6 +32,7 @@ internal sealed partial class ActorAdapter
         private Durable.FoundationHeaderChange? _header;
         private Contract.ActorStatus _status;
         private object? _output;
+        private RetainedRootResponse? _retainedResponse;
         private bool _emitted;
         private bool _migrated;
 
@@ -89,6 +90,18 @@ internal sealed partial class ActorAdapter
             if (_readRootValue is null || _row.FoundationDispatchHeader is not { } header)
                 throw new NotSupportedException("Values require a persisted root in the qualification profile.");
             return _readRootValue(header, new(_row.Id, _row.Creation), reference, cancellationToken);
+        }
+
+        void Contract.IRetainedRootResponseTurn.RetainFirstResponse(string key, string? payload)
+        {
+            if (_roots is null || _row is not { Parent: null, FoundationInlineBirth: null })
+                throw new NotSupportedException("Retained responses require a persisted root.");
+            if (key is not { Length: 64 } || !key.All(char.IsAsciiHexDigitLower))
+                throw new ArgumentException("A retained response key must be a canonical SHA-256 digest.", nameof(key));
+            if (_retainedResponse is not null) return;
+            var present = payload is not null;
+            var bytes = present && FoundationMetadataLimits.FitsContent(payload) ? Encoding.UTF8.GetBytes(payload!) : null;
+            _retainedResponse = new(key, Now, present, bytes);
         }
 
         public void Emit(string channel, object? item)
@@ -275,6 +288,7 @@ internal sealed partial class ActorAdapter
             var ended = wasRunning && _status != Contract.ActorStatus.Running;
             var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
             outcome.FoundationValues = _values;
+            outcome.FoundationRetainedResponse = _retainedResponse;
             var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
                 ended && _status == Contract.ActorStatus.Cancelled;
             // A root provider settles the jobs still registered at the model's own end (Finished or Faulted; a cancelled job

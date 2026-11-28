@@ -15,7 +15,7 @@ internal static class SqlitePreparedStartChecks
 {
     private const string ActorType = "held-root-material-fixture";
 
-    internal static async Task<int> RunAsync(bool fenceInBatch)
+    internal static async Task<int> RunAsync(bool fenceInBatch, bool shipped = false)
     {
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var token = budget.Token;
@@ -34,9 +34,10 @@ internal static class SqlitePreparedStartChecks
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var calls = 0;
             var path = Path.Combine(folder.FullName, "held.db");
-            var foundation = SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, "prepared-start-owner", ActorType, ProtectAsync);
+            var foundation = OpenFoundation();
+            StoreFormat? format = shipped ? null : StoreFormat.RootPreparedStartsQualification;
             await foundation.InstallShippedAsync(token);
-            await CheckDeadlineAfterEnqueueAsync(path, foundation, scope, token);
+            if (!shipped) await CheckDeadlineAfterEnqueueAsync(path, foundation, scope, token);
             var ingress = await foundation.OpenIngressAsync(token);
             var oneWay = foundation.BindProtectedRootStarts(scope);
             var oneWaySpec = new Contract.StartSpec(ActorType, "one-way");
@@ -48,14 +49,24 @@ internal static class SqlitePreparedStartChecks
                 throw new InvalidOperationException("The one-way call completed before material protection.");
             var oneWayOffer = await oneWayPrepared.Task;
             Require(await foundation.ConfirmPreparedStartAsync(scope, oneWayOffer.Actor, oneWayOffer.Issuance, token) == RootStartProof.Unresolved &&
+                    !await foundation.HasAcceptedPreparedStartAsync(scope, oneWayOffer.Actor, oneWayOffer.Issuance, token) &&
                     await foundation.CreateReads().GetAsync(scope, oneWayOffer.Actor, token) is null,
-                "the one-way callback holds no SQLite transaction and has not admitted the actor");
+                "a committed preparation alone provides no positive birth proof");
             allowOneWay.SetResult();
             var accepted = await pending;
             Require(ordinary is { Outcome: Contract.AdmissionOutcome.Accepted } && ordinary.Actor != oneWayOffer.Actor &&
                     accepted is { Outcome: Contract.AdmissionOutcome.Accepted } && accepted.Actor == oneWayOffer.Actor &&
-                    await HasOneWayCreatorAsync(path, oneWayOffer, token),
+                    await HasOneWayCreatorAsync(path, format, oneWayOffer, token) &&
+                    await foundation.HasAcceptedPreparedStartAsync(scope, oneWayOffer.Actor, oneWayOffer.Issuance, token),
                 "one-way start returns its own durable creator without a held reply or a running owner");
+            await using (var proof = Open(path, format))
+            {
+                var wrongDigest = await PreparedBirthProofWitness.DifferentDigestAsync(proof, scope, oneWayOffer, token);
+                Require(!await foundation.HasAcceptedPreparedStartAsync(scope, oneWayOffer.Actor, wrongDigest, token) &&
+                        !await foundation.HasAcceptedPreparedStartAsync(ContractScopes.Bind("other"), oneWayOffer.Actor, oneWayOffer.Issuance, token) &&
+                        !await foundation.HasAcceptedPreparedStartAsync(scope, ordinary.Actor!.Value, oneWayOffer.Issuance, token),
+                    "positive birth proof requires the signed fingerprint, actor and tenant of the accepted birth");
+            }
             Require(await oneWay.StartAsync(oneWayOperation, oneWaySpec, token) is
                     { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } replay } && replay == oneWayOffer.Actor,
                 "one-way duplicate returns its exact durable receipt without repinning");
@@ -111,7 +122,8 @@ internal static class SqlitePreparedStartChecks
             var refusalReply = await CallAsync("refused-operation", "refuse", 10_000);
             var second = await refused.Task.WaitAsync(token);
             Require(refusalReply.RefusalReason == Contract.RefusalReason.TargetMismatch &&
-                    await foundation.ConfirmPreparedStartAsync(scope, second.Actor, second.Issuance, token) == RootStartProof.PreparationDisarmed,
+                    await foundation.ConfirmPreparedStartAsync(scope, second.Actor, second.Issuance, token) == RootStartProof.PreparationDisarmed &&
+                    !await foundation.HasAcceptedPreparedStartAsync(scope, second.Actor, second.Issuance, token),
                 "a definitive protection refusal disarms the exact preparation without an actor birth");
 
             var competing = CallAsync("competing-operation", "loses", 2_500);
@@ -133,7 +145,8 @@ internal static class SqlitePreparedStartChecks
             Require((await expiredCall).Error == "timeout", "the held deadline expires while material protection is pending");
             expiredProtection.TrySetResult(true);
             while (await foundation.PrunePreparedStartsAsync(scope, token) == 0) await Task.Delay(20, token);
-            Require(await foundation.ConfirmPreparedStartAsync(scope, late.Actor, late.Issuance, token) == RootStartProof.PreparationDisarmed,
+            Require(await foundation.ConfirmPreparedStartAsync(scope, late.Actor, late.Issuance, token) == RootStartProof.PreparationDisarmed &&
+                    !await foundation.HasAcceptedPreparedStartAsync(scope, late.Actor, late.Issuance, token),
                 "pruning durably disarms an expired preparation before reporting absence");
 
             var policy = await ((Contract.IActorRetentionPolicies)foundation).TryApplyRetentionPolicyAsync(
@@ -151,14 +164,27 @@ internal static class SqlitePreparedStartChecks
             Require(oneWayTerminal is { Header.Status: Contract.ActorStatus.Finished, Selection: { } } &&
                     await foundation.ConfirmPreparedStartAsync(scope, oneWayOffer.Actor, oneWayOffer.Issuance, token) == RootStartProof.Unresolved,
                 "the one-way creator finishes on the owner and remains protected until retirement");
+            await using (var proof = Open(path, format))
+                await PreparedBirthProofWitness.ExpireReceiptAsync(proof, scope, oneWayOffer, token);
+            Require(await foundation.HasAcceptedPreparedStartAsync(scope, oneWayOffer.Actor, oneWayOffer.Issuance, token),
+                "the exact birth still proves commitment after its ordinary operation receipt expires and is removed");
             Require((await foundation.AdmitRetentionDeleteAsync(scope, oneWayOffer.Actor, oneWayTerminal!.Selection!, token)).Outcome ==
                     Contract.AdmissionOutcome.Accepted, "ordinary retention admits deletion of the exact one-way root");
             while (await foundation.ConfirmPreparedStartAsync(scope, oneWayOffer.Actor, oneWayOffer.Issuance, token) != RootStartProof.BirthRetired)
                 await Task.Delay(25, token);
-            Console.WriteLine("ok protected one-way root retires with its committed deletion mark");
+            Require(await foundation.HasAcceptedPreparedStartAsync(scope, oneWayOffer.Actor, oneWayOffer.Issuance, token),
+                "the retained birth survives terminal actor retirement and receipt removal");
             await owner.StopAsync(token);
             Require(owner.LastError is null, "the SQLite owner stops cleanly with prepared starts installed");
+            var reopened = OpenFoundation();
+            await reopened.InstallShippedAsync(token);
+            Require(await reopened.HasAcceptedPreparedStartAsync(scope, oneWayOffer.Actor, oneWayOffer.Issuance, token),
+                "a fresh SQLite Foundation can prove the same retired birth after the owner stops");
             return 0;
+
+            SqliteEmbeddedFoundation OpenFoundation() => shipped
+                ? SqliteEmbeddedFoundation.WithRootStartProtection(path, "prepared-start-owner", ActorType, ProtectAsync)
+                : SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, "prepared-start-owner", ActorType, ProtectAsync);
 
             async ValueTask<bool> ProtectAsync(PendingRootStart start, CancellationToken ct)
             {
@@ -200,11 +226,16 @@ internal static class SqlitePreparedStartChecks
         finally { folder.Delete(recursive: true); }
     }
 
-    private static async Task<bool> HasOneWayCreatorAsync(string path, PendingRootStart offer, CancellationToken token)
+    private static KernelDb Open(string path, StoreFormat? format)
     {
         var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
             { DataSource = path, ForeignKeys = true, Pooling = false }.ToString()).Options;
-        await using var db = KernelDb.ForSqliteRootShipped(options, StoreFormat.RootPreparedStartsQualification);
+        return KernelDb.ForSqliteRootShipped(options, format);
+    }
+
+    private static async Task<bool> HasOneWayCreatorAsync(string path, StoreFormat? format, PendingRootStart offer, CancellationToken token)
+    {
+        await using var db = Open(path, format);
         return await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS (SELECT 1 FROM "FoundationRootBirths" b JOIN "Messages" m ON m."Id" = b."Creator"
                 WHERE b."Tenant" = {offer.Tenant} AND b."Reference" = {offer.Actor.Id} AND m."ReplyTo" IS NULL)
