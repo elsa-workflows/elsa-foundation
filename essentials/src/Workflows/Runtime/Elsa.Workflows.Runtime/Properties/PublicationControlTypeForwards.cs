@@ -1,0 +1,18 @@
+using System.Runtime.CompilerServices;
+
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Core.Extensions.WorkflowPublicationTriggerServiceCollectionExtensions))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Extensions.IncidentStrategyServiceCollectionExtensions))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Executables.InMemoryWorkflowActivationAuthority))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationCoordinator))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationRepairPlan))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationSwitchRules))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.ContinueWithIncidentsIncidentStrategy))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.FaultIncidentStrategy))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.IncidentStrategyCatalog))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.IncidentStrategyResolver))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.InMemoryActivationProjectionStates))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.InMemoryRecurringTriggerScheduleStore))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.WorkflowTriggerBindingExtractor))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.WorkflowTriggerIndexer))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.IncidentResolutionActions))]
