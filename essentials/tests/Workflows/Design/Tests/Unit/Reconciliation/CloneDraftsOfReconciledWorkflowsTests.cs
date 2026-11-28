@@ -66,6 +66,17 @@ public sealed class CloneDraftsOfReconciledWorkflowsTests
     }
 
     [Fact]
+    public async Task Never_clones_an_older_version_when_the_newest_claim_deletes_the_definition()
+    {
+        var clone = new SpyClone();
+        var handler = NewHandler(clone, versions: [Version("wf-a", "1.0.0", "ver-1"), Version("wf-a", "2.0.0", "ver-2")]);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0"), Claim("wf-a", "2.0.0", deleted: true)), CancellationToken.None);
+
+        Assert.Empty(clone.Calls);
+    }
+
+    [Fact]
     public async Task Warns_and_skips_when_the_claimed_version_row_is_missing()
     {
         var clone = new SpyClone();

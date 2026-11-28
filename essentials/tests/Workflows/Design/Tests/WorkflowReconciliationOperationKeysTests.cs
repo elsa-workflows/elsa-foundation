@@ -38,7 +38,7 @@ public sealed class WorkflowReconciliationOperationKeysTests
     }
 
     [Fact]
-    public void A_draft_clone_key_for_the_longest_definition_id_fits_the_operation_key_limit()
+    public void A_draft_clone_key_for_the_longest_definition_id_and_a_release_version_fits_the_operation_key_limit()
     {
         var key = WorkflowReconciliationOperationKeys.DraftClone(
             new string('x', WorkflowDefinitionLimits.IdentityMaximumLength),

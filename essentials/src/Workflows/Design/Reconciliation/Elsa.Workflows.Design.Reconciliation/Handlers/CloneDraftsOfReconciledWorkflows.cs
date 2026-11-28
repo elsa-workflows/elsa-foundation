@@ -28,11 +28,12 @@ public sealed class CloneDraftsOfReconciledWorkflows(
 {
     public async Task Handle(WorkflowVersionsReconciled domainEvent, CancellationToken cancellationToken)
     {
-        // Newest reconciled claim per definition. SemVer sort keys compare ordinally, as in the reconciler.
+        // Newest reconciled claim per definition. SemVer sort keys compare ordinally, as in the reconciler. A deleted
+        // newest claim deletes the definition (latest wins), so it gets no draft from an older version either.
         var newestClaims = domainEvent.Claims
-            .Where(claim => !claim.Deleted)
             .GroupBy(claim => claim.DefinitionId, StringComparer.Ordinal)
-            .Select(group => group.OrderByDescending(claim => claim.SemVerSortKey, StringComparer.Ordinal).First());
+            .Select(group => group.OrderByDescending(claim => claim.SemVerSortKey, StringComparer.Ordinal).First())
+            .Where(claim => !claim.Deleted);
 
         foreach (var claim in newestClaims)
         {
