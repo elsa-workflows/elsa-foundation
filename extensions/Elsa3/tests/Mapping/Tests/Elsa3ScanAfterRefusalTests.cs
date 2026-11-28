@@ -54,6 +54,22 @@ public sealed class Elsa3ScanAfterRefusalTests
     }
 
     [Fact]
+    public async Task An_output_the_unmapped_activity_captures_is_refused_once_for_that_activity()
+    {
+        var root = Sequence("root",
+            Activity("unmapped", "Acme.Unknown", ("result", Captured("order"))),
+            Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "someFunction()"))));
+        var variables = new[] { new Elsa3Variable { Id = "order", Name = "Order", TypeName = "Object" } };
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: variables));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            [Elsa3ActivityDiagnosticCodes.UnmappedType, Elsa3ImportDiagnosticCodes.HostFunctionMissing],
+            result.Diagnostics.Where(diagnostic => diagnostic.IsError).Select(diagnostic => diagnostic.Code).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task A_switch_case_holding_an_unmapped_activity_is_refused_once_for_that_activity()
     {
         var @switch = Activity("switch", "Elsa.Switch", ("mode", Literal("MatchAny")));

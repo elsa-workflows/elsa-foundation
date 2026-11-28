@@ -218,8 +218,25 @@ internal sealed class Elsa3DefinitionConverter(
             return;
         }
 
-        plan.Diagnostics.AddRange(lowered);
+        plan.Diagnostics.AddRange(refused ? WithoutContractlessShapes(plan, lowered) : lowered);
         WarnBulkDispatchOuterWrites(plan);
+    }
+
+    /// <summary>
+    /// A node the converter did not resolve (an unmapped activity, or a node inside one) has no contract, so lowering
+    /// reads each memory reference it carries, such as a captured output, as an unsupported shape. Its refusal already
+    /// says the node needs an Elsa 4 activity; that guidance would point elsewhere, so it is left out.
+    /// </summary>
+    private static IEnumerable<Elsa3MigrationDiagnostic> WithoutContractlessShapes(Elsa3ConversionPlan plan, IEnumerable<Elsa3MigrationDiagnostic> lowered)
+    {
+        var resolved = plan.Nodes.Values
+            .Where(node => node.Resolved is not null)
+            .Select(node => Elsa3ConversionDiagnostics.NodeId(node.Node))
+            .ToHashSet(StringComparer.Ordinal);
+        return lowered.Where(diagnostic =>
+            diagnostic.Code != Elsa3ImportDiagnosticCodes.UnsupportedShape ||
+            !diagnostic.Metadata.TryGetValue("ActivityNodeId", out var nodeId) ||
+            resolved.Contains(nodeId));
     }
 
     /// <summary>
