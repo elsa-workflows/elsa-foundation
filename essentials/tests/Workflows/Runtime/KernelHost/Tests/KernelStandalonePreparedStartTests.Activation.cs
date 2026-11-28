@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Elsa.Activities.Primitives;
 using Elsa.Activities.Scheduling.StandaloneTriggers;
 using Elsa.Events;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -12,12 +13,10 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
-using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Scheduling;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -116,7 +115,7 @@ public sealed partial class KernelStandalonePreparedStartTests
 
                 var published = await PublishAsync(services, replacement, publication.Revision, now, token);
                 Assert.NotEqual(publication.ActiveActivationId, published.ActiveActivationId);
-                var legacy = services.GetRequiredService<IWorkflowExecutionStateStore>();
+                var runtimeDb = services.GetRequiredService<RuntimeDbContext>();
                 actorBySource = new(StringComparer.Ordinal);
                 for (var index = 0; index < 2; index++)
                 {
@@ -129,7 +128,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                         .FindDeliveryAsync(DeliveryScope, id, token));
                     Assert.Null(Progress(pending).Receipt);
                     Assert.Equal(RuntimeRecipientPhase.DispatchCommitted, Progress(pending).Phase);
-                    Assert.Null(await legacy.FindAsync(Assert.Single(pending.SubscriptionDelivery!.Recipients).StartIdentity.WorkflowExecutionId, token));
+                    var planned = Assert.Single(pending.SubscriptionDelivery!.Recipients).StartIdentity.WorkflowExecutionId;
+                    Assert.False(await runtimeDb.WorkflowExecutionStates.AnyAsync(row => row.WorkflowExecutionId == planned, token));
                 }
                 Assert.Equal(2, recoverableProof.Births.Distinct().Count());
                 var reads = await shell.ReadAsync(token);
@@ -203,20 +203,27 @@ public sealed partial class KernelStandalonePreparedStartTests
             services.AddAuthorization();
             services.AddSingleton<TimeProvider>(clock);
             new EventsFeature().ConfigureServices(services);
-            services.AddWorkflowRuntime();
-            services.AddRuntimeEntityFrameworkCore(new()
+            new ActivitiesPrimitivesFeature().ConfigureServices(services);
+            services.AddWorkflowActivationDefaults();
+            new RuntimeArtifactsEntityFrameworkCoreFeature
             {
-                Provider = provider, ConnectionString = runtime,
-                RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
-            });
-            new WorkflowsRuntimeRecurringTriggersFeature().ConfigureServices(services);
-            new StandaloneScheduleTriggersFeature().ConfigureServices(services);
+                Provider = provider, ConnectionString = runtime, RecoveryContinuationSigningKey = new string('r', 32)
+            }.ConfigureServices(services);
+            new RuntimePublicationEntityFrameworkCoreFeature().ConfigureServices(services);
+            new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
+            new WorkflowsRuntimePreparedStandaloneRecurringTriggersFeature().ConfigureServices(services);
+            new PreparedStandaloneScheduleTriggersFeature().ConfigureServices(services);
             services.AddStandaloneTriggerIngress<FixtureEvent>(new("event", 1, EventFamily, EventSchema));
             services.AddScoped<IStandaloneTriggerSourceContext<FixtureEvent>, EventContext>();
-            new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = true }
-                .ConfigureServices(services);
-            services.AddPersistenceModes();
-            new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
+            var hosting = new WorkflowsRuntimeKernelHostingFeature
+            {
+                Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = true
+            };
+            hosting.ConfigureServices(services);
+            hosting.PostConfigureServices(services);
+            var kernel = new WorkflowsRuntimeKernelFeature();
+            kernel.ConfigureServices(services);
+            kernel.PostConfigureServices(services);
             new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(services);
             var api = new StandaloneTriggersApiFeature();
             api.ConfigureServices(services);

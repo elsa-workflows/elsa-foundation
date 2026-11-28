@@ -72,6 +72,7 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         ConfigureSharedServices(services, BasePath, SyncRequestTimeout);
         services.AddApiCapabilitySource<HttpWorkflowEndpointsCapabilitySource>();
         services.AddScoped<HttpEndpointMiddleware>();
+        services.AddScoped<HttpResponseInstructionDelivery>();
         services.AddScoped<HttpTestRunIngressMiddleware>();
         AddStandaloneHttpIngress(services);
     }
@@ -124,11 +125,8 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunTriggerDriver, HttpTestRunDriver>());
 
 
-        // Request-owned synchronous response services. The activity returns a typed instruction inside its
-        // isolated attempt scope; delivery reads the committed completion only after the inline drain returns.
-        // The sink remains the scoped marker for a custom response that already started during dispatch.
+        // Both runtimes can mark a custom response that already started during dispatch.
         services.AddScoped<SyncHttpResponseSink>();
-        services.AddScoped<HttpResponseInstructionDelivery>();
     }
 
     internal static void AddStandaloneHttpIngress(IServiceCollection services)
