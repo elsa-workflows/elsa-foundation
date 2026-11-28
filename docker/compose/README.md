@@ -37,17 +37,11 @@ Run the whole stack straight from these images.
 For a pinned, isolated check that Studio can create and run a workflow against Workbench, see
 [Verify the published Studio–Workbench pair](../../docs/contributing/published-image-pair.md).
 
-> **Persistence is ephemeral here.** The server image's baked-in default composition is **SQLite**
-> (written under `/app`), which is discarded when the `elsa-workbench` container is removed. For
-> durable, Postgres-backed persistence, use the build-from-source reference stack in sections 2–3
-> below. The one exception is the Data Protection key ring, which protects the sign-in cookie and the
-> antiforgery tokens: both examples below keep it in a SQLite file on the `elsa-data` volume
-> (`Elsa__DataProtection__EntityFrameworkCore__*`, mounted at `/app/data`), so the keys survive a
-> restart and a recreate of `elsa-workbench` for as long as that volume exists. A recreate still signs
-> everyone out here: the identity store is SQLite inside the container too, so a recreated container
-> seeds its users again and an earlier session no longer matches a user. Only a stack whose identity
-> store is on a persistent database, such as the Postgres reference stack below, keeps everyone signed
-> in across a recreate. See [Data Protection keys](../../docs/docker.md#data-protection-keys).
+> The image stack keeps the Actor database, the shared Elsa platform database, and the Data
+> Protection key ring on the `elsa-data` volume. Keep the volume across container recreations
+> so Actor state and its publication material survive together. Separately configured SQLite
+> files, such as diagnostics and Studio dashboards, stay in the container.
+> See [Data Protection keys](../../docs/docker.md#data-protection-keys).
 >
 > The `elsa-data` volume needs an image built after #2191, which creates `/app/data` owned by the
 > image's `$APP_UID` (1654). With an older image the volume starts out owned by root and the container
@@ -91,7 +85,7 @@ and `14000` are unused. Start the server, then Studio pointed at it:
 
 ```bash
 # Elsa.Workbench uses SQLite. elsa-workbench-packages holds the Nuplane feed.
-# elsa-data holds the Actor database and Data Protection key ring.
+# elsa-data holds the Actor and platform databases and the Data Protection key ring.
 # DEMO ONLY: Migrate__Policy=AutoMigrate applies the migrations as the container starts, as the compose file does.
 # Real production keeps the image's default Validate policy and applies them first (see below the example).
 # The demo supplies the retained Runtime recovery signing key, Secrets key, admin password,
@@ -106,6 +100,7 @@ docker run -d --name elsa-workbench \
   -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
   -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
   -e CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__SqlitePath=/app/data/elsa-workbench-actors.db \
+  -e "ConnectionStrings__Elsa=Data Source=/app/data/elsa.db" \
   -e CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
   -e CShells__Shells__default__Features__Secrets__EncryptionKey=elsa-docker-demo-secrets-encryption-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \

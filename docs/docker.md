@@ -96,6 +96,9 @@ docker run --rm -p 13000:8080 \
   -v elsa-workbench-data:/app/data \
   -e Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate \
   -e CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__SqlitePath=/app/data/elsa-workbench-actors.db \
+  -e "ConnectionStrings__Elsa=Data Source=/app/data/elsa.db" \
+  -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
+  -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
   -e CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
   -e CShells__Shells__default__Features__Secrets__EncryptionKey=elsa-docker-demo-secrets-encryption-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
@@ -104,8 +107,8 @@ docker run --rm -p 13000:8080 \
 ```
 
 With no `ASPNETCORE_ENVIRONMENT` the container runs as `Production`. The example supplies the retained
-Runtime recovery signing key and the two identity secrets. It puts the Actor SQLite file on a named volume
-and enables demo migrations on startup. See [Environment variables](#environment-variables).
+Runtime recovery signing key and the two identity secrets. It puts the Actor and platform SQLite databases
+and Data Protection key ring on a named volume and enables demo migrations on startup. See [Environment variables](#environment-variables).
 
 
 ### Building with release package versions
@@ -172,7 +175,7 @@ recovery signing key. Standard .NET double-underscore (`__`) environment keys ov
 | `CShells__Shells__default__Features__Secrets__EncryptionKey` | Key the Secrets module encrypts stored secret values with. `shells.Production.json` blanks the development value committed in `shells.json`, so a Production container must supply it. Without it the shell still activates, but an encrypted secret cannot be stored. Use the same value on every node, and read [Secrets master-key rotation](secrets-key-rotation.md) before changing it. | `elsa-docker-demo-secrets-encryption-key` |
 | `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | Password for the `admin` account that `shells.Production.json` seeds. The overlay blanks it, and a seed username without a password fails default shell activation (`/health/ready` returns `503 shell_activation_failed`). | `Password123!` |
 | `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` | Base64 PKCS#8 RSA private key that signs access tokens; whitespace in the value is ignored. The overlay turns off OpenIddict development mode, so without a usable key the default shell fails activation (`/health/ready` returns `503 shell_activation_failed`). See [identity configuration](reference/identity-configuration.md#foundationidentityopeniddict). | a demo key committed in the compose files |
-| `ConnectionStrings__Elsa` | The relational connection every EF module falls back to **except** OpenTelemetry and the Elsa 3 import lane, which look for `ConnectionStrings__ElsaOpenTelemetry` and `ConnectionStrings__ElsaElsa3Import` unless the feature names a connection — see [Demo persistence composition](#demo-persistence-composition). Supplies the shared fallback without editing `appsettings.json` or the mounted `shells.json`; a feature that names its own `ConnectionString` still wins over it. | `Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa` |
+| `ConnectionStrings__Elsa` | The relational connection every EF module falls back to **except** OpenTelemetry and the Elsa 3 import lane, which look for `ConnectionStrings__ElsaOpenTelemetry` and `ConnectionStrings__ElsaElsa3Import` unless the feature names a connection — see [Demo persistence composition](#demo-persistence-composition). A feature that names its own `ConnectionString` takes precedence. | `Data Source=/app/data/elsa.db` in the image stack, `Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa` in the source stack |
 | `Elsa__Persistence__EntityFramework__Schema` | Optional database schema for every EF module's tables and history tables, for a deployment that shares a database with an application owning the default schema. Applied on SQL Server and PostgreSQL, ignored on SQLite, **refused on MySQL** — see below. | *(unset: the provider's own default)* |
 | `Elsa__DataProtection__EntityFrameworkCore__Enabled`, `…__Provider` | Keep the Data Protection key ring — what the sign-in cookie and the antiforgery tokens are protected with — in the platform database, so it survives the container and is shared by every container on that database. Connects through `ConnectionStrings__Elsa` unless `…__ConnectionString` or `…__ConnectionName` names another. See [Data Protection keys](#data-protection-keys). | `true`, `PostgreSql` |
 | `Elsa__DataProtection__Certificate__Path`, `…__Password` | A PKCS#12 certificate, the same on every container, that encrypts the keys at rest. Mount the file as a secret; the password is a secret too. | *(unset: the keys are stored unencrypted, which the container warns about as it starts)* |
@@ -188,7 +191,7 @@ server outside Docker; the compose file adds the Studio container origin.
 | `/app/shells.json` (ro) | Shell composition. The compose stack mounts `elsa-workbench.shells.json`. |
 | `/app/packages` | Nuplane directory feed — drop `.nupkg` activity/extension packages here to load them at runtime (watched). Backed by a named volume in compose. |
 | `/app/workflow-definitions` (ro) | Workflow definition JSON files deployed at startup by the `JsonWorkflowReconciliation` feature (`FolderPath` + optional `PublishOnReconcile`). Path is conventional — it is whatever the feature's `FolderPath` points at. See [Deploying workflow definitions from files](docker-hub-quickstart.md#deploying-workflow-definitions-from-files). |
-| `/app/data` | SQLite files meant to outlive the container; the image creates it writable by its runtime user. The published-images stack keeps its Data Protection key ring there, on the `elsa-data` volume. See [Data Protection keys](#data-protection-keys). |
+| `/app/data` | SQLite files meant to outlive the container; the image creates it writable by its runtime user. The published-images stack puts the Actor database, shared platform database, and Data Protection key ring on the `elsa-data` volume there. See [Data Protection keys](#data-protection-keys). |
 
 ### Data Protection keys
 
@@ -233,25 +236,25 @@ Elsa__DataProtection__Certificate__Password: "…"                     # a secre
   root, so the cookies and antiforgery tokens they issued are refused by the upgraded container: users sign in again.
   Changing the application name later does the same.
 
-The published-images stack (`docker-compose.images.yml`, and the `docker run` examples of the
-[Docker Hub quickstart](docker-hub-quickstart.md) and `docker/compose/README.md`) keeps its data in SQLite files inside
-the container, which a recreate discards. Its key ring is the exception: the key store has a connection of its own to a
-SQLite file on the `elsa-data` volume, mounted at `/app/data`, which the image creates writable by its runtime user:
+The published-images stack (`docker-compose.images.yml` and the `docker run` examples) keeps
+the Actor database, shared platform database, and key ring as three SQLite files on the
+`elsa-data` volume. The shared database holds the executable material, pins, and scopes the Actor
+database relies on after restart. It also keeps the identity store. Files with their own connection
+strings outside `/app/data`, such as diagnostics and Studio dashboards, are container-local.
 
 ```yaml
+CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__SqlitePath: /app/data/elsa-workbench-actors.db
+ConnectionStrings__Elsa: "Data Source=/app/data/elsa.db"
 Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
 Elsa__DataProtection__EntityFrameworkCore__ConnectionString: "Data Source=/app/data/data-protection.db"
 volumes:
   - elsa-data:/app/data
 ```
 
-The keys survive a restart and a recreate of the container for as long as the volume exists; `docker compose down -v`,
-or `docker volume rm elsa-data`, discards them.
+All three files survive container recreation while the named volume exists. For deployments
+using a container-local `/app/elsa.db`, preserve that database before replacing the existing
+container if you still need its data.
 
-- **A recreate still signs everyone out in this stack.** Its identity store is SQLite inside the container too, so a
-  recreated container seeds its users again, and a session issued before no longer matches a user. Only a stack whose
-  identity store is on a persistent database, such as the PostgreSQL reference stack, keeps everyone signed in across a
-  recreate.
 - **The volume needs an image built after #2191,** which creates `/app/data` owned by the image's `$APP_UID` (1654).
   With an older image, Docker creates the volume's root owned by root, and the container cannot write its key store.
   Pull the newer image (`docker pull elsaworkflows/elsa-workbench:latest`), or give the volume to `$APP_UID` once before
