@@ -2,7 +2,7 @@
 
 The JTest corpus from the JTest-Nexxbiz repository at commit `b1cde13`, used as the final acceptance run of the Elsa 3
 to Elsa 4 conversion (spec 1235, initiative #3052). The suites run unchanged against an Elsa 3.6.3 baseline server and
-against the Elsa 4 Workbench, each with its own template set. Run results and decisions live in [`ledger/`](ledger/).
+against Elsa 4 through the migration CLI and the migration host (spec Q16), each engine with its own template set. Run results and decisions live in [`ledger/`](ledger/).
 
 This README holds the run procedures; task T044 completes it.
 
@@ -19,6 +19,11 @@ This README holds the run procedures; task T044 completes it.
 
 The corpus was copied byte for byte (`git archive` with `core.autocrlf=false`; `.gitattributes` marks this folder
 `-text`). It holds no secrets: credentials and base URLs are `${VARIABLE}` references (T002).
+
+**The run set** (spec Q17, coordinator 2026-11-28). Both engines run the acceptance definitions with each approved
+adjusted copy (`adjusted/`) in place of its original, plus the approved additions. The approved changes are the source
+of truth; the originals stay as history (what the converter refuses, and the hand-over to the original repository),
+not as a baseline.
 
 **Excluded from acceptance, to re-evaluate on Elsa 4**: `tests/branching/implicit-tests.json` and
 `tests/branching/join-wait-all-active-tests.json`, with `branching-implicit.json` and `branching-wait-all-active.json`
@@ -55,7 +60,8 @@ The server's development admin is elsa-core's default user from `src/apps/Elsa.S
 
 ### Run
 
-From this folder, on a fresh container for every run:
+Every run, on either engine, uses the run set (spec Q17). From this folder, on a fresh container for every run. The
+setup suite imports the run set: each approved adjusted copy takes the place of its original.
 
 ```powershell
 docker run -d --rm --name elsa3-jtest -e ASPNETCORE_ENVIRONMENT=Development -e HTTP_PORTS=8080 -e HTTP__BASEURL=http://localhost:13000 -p 13000:8080 elsa-server:3.6.3-jtest
@@ -64,67 +70,70 @@ $env:ELSA_API_BASE_URL = 'http://localhost:13000'; $env:ELSA_EXECUTOR_BASE_URL =
 $env:ADMIN_USERNAME = 'admin'; $env:ADMIN_PASSWORD = 'password'
 $env:CORRELATION_ID = [guid]::NewGuid().ToString('N'); $env:DATE_NOW_ISO_STRING = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 $env:JTEST_CONFIG_FILE = "$PWD/global-configuration.elsa3.json"
-jtest run import-and-publish-workflows.json --env-file environments/elsa3.json
+$setup = [regex]::Replace((Get-Content import-and-publish-workflows.json -Raw), '"workflow-definitions/([^"]+)"', { param($m) $copy = "adjusted/$($m.Groups[1].Value)"; if (Test-Path $copy) { '"' + $copy + '"' } else { $m.Value } })
+Set-Content import-run-set.tmp.json $setup
+jtest run import-run-set.tmp.json --env-file environments/elsa3.json
+Remove-Item import-run-set.tmp.json
 jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" "!tests/branching/implicit-tests.json" "!tests/branching/join-wait-all-active-tests.json" --env-file environments/elsa3.json
 docker stop elsa3-jtest
 ```
 
-An adjusted copy (`adjusted/`, task T036) is checked on 3.6.3 the same way, with a setup suite whose `filePath` points
-at the copy instead of the original; then run the suites that use that definition. The baseline itself always runs the
-originals.
+To see what Elsa 3 does with an original definition, run the setup suite unchanged
+(`jtest run import-and-publish-workflows.json …`). That is history, not the baseline.
+
+## Elsa 4: the migration CLI and the migration host
+
+The Elsa 4 side takes the path an Elsa 3 user takes (spec Q16): the
+[migration CLI](../../src/Migration/Tooling/README.md) (spec 1237) converts the run set into a `migrated/` folder, and
+the [migration host](../../../../apps/Elsa.Migration.Host/README.md) (spec 1236) loads that folder on an empty store
+and runs it. Ledger runs 15 to 43 used the Workbench with the Elsa 3 startup reconciliation; that procedure is in this
+file's history.
+
+### 1. Export the run set and convert it
+
+From this folder. The export folder holds the run set: the definitions the Elsa 3 setup suite imports, without the two
+excluded by spec Q15, each approved adjusted copy in place of its original.
 
 ```powershell
-$setup = [regex]::Replace((Get-Content import-and-publish-workflows.json -Raw), '"workflow-definitions/([^"]+)"', { param($m) $copy = "adjusted/$($m.Groups[1].Value)"; if (Test-Path $copy) { '"' + $copy + '"' } else { $m.Value } })
-Set-Content import-adjusted.tmp.json $setup
-jtest run import-adjusted.tmp.json --env-file environments/elsa3.json
-Remove-Item import-adjusted.tmp.json
-```
-
-## Elsa 4 Workbench
-
-The Workbench has the `Elsa3JsonReconciliation` feature in its catalog but leaves it off in `shells.json`. A run turns it
-on with environment variables (they override `shells.json`, see `apps/Elsa.Workbench.Host/Program.cs`), so the committed
-shell stays unchanged. See *Elsa 4 run configuration* below (task T007).
-
-### Elsa 4 run configuration (T007)
-
-From this folder, in a PowerShell session of its own. The block deletes the Workbench's SQLite stores, then sets the run's
-configuration as process environment variables, which override `shells.json`: `Elsa3JsonReconciliation` with
-`SourceId` `jtest` and a `Files` list of the 32 acceptance definitions (the files the Elsa 3 setup suite imports, in
-its order, without the two excluded by spec Q15; an adjusted copy replaces its original here, task T036), `Elsa3ImportActivitiesEntityFrameworkCore` on the
-shared `Elsa` connection (the import commits in one transaction with the Activities Design store, so it must use the same
-database), and `WorkflowsRuntimeCheckpointPersistence` in `Durable` mode.
-
-```powershell
-$wb = (Resolve-Path ../../../../apps/Elsa.Workbench.Host).Path
-Remove-Item "$wb/*.db", "$wb/*.db-shm", "$wb/*.db-wal" -ErrorAction SilentlyContinue
-$feature = 'CShells__Shells__default__Features__'
-function Set-RunVariable([string] $name, [string] $value) { [Environment]::SetEnvironmentVariable($name, $value, 'Process') }
-Set-RunVariable 'ASPNETCORE_ENVIRONMENT' 'Development'
-Set-RunVariable 'ASPNETCORE_URLS' 'http://localhost:5095'
-Set-RunVariable "${feature}Elsa3JsonReconciliation__Options__SourceId" 'jtest'
-Set-RunVariable "${feature}Elsa3ImportActivitiesEntityFrameworkCore__ConnectionName" 'Elsa'
-Set-RunVariable "${feature}WorkflowsRuntimeCheckpointPersistence__Mode" 'Durable'
-# The acceptance set (spec Q13, Q15): the definitions the Elsa 3 setup suite imports, in its order, without the two excluded.
+$run = "$env:TEMP/elsa3-jtest-run"
+Remove-Item -Recurse -Force $run -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force "$run/export" | Out-Null
 $excluded = 'workflow-definitions/branching-implicit.json', 'workflow-definitions/branching-wait-all-active.json'
 $files = @([regex]::Matches((Get-Content import-and-publish-workflows.json -Raw), '"filePath":\s*"(workflow-definitions/[^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notin $excluded })
-# An approved adjusted copy (adjusted/, task T036) takes the place of its original.
-$files = @($files | ForEach-Object { $copy = $_ -replace '^workflow-definitions/', 'adjusted/'; if (Test-Path $copy) { $copy } else { $_ } })
-for ($i = 0; $i -lt $files.Count; $i++) {
-    Set-RunVariable "${feature}Elsa3JsonReconciliation__Options__Files__${i}__Order" "$i"
-    Set-RunVariable "${feature}Elsa3JsonReconciliation__Options__Files__${i}__FilePath" (Join-Path $PWD $files[$i])
+foreach ($f in $files) {
+    $copy = $f -replace '^workflow-definitions/', 'adjusted/'
+    Copy-Item $(if (Test-Path $copy) { $copy } else { $f }) "$run/export/$(Split-Path $f -Leaf)"
 }
-dotnet run --project $wb --no-launch-profile
+Push-Location ../../../..
+dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows inventory "$run/export" --out "$run/out"
+Pop-Location
 ```
 
-Ready when the log shows the summary line `Elsa 3 import 'jtest' in persistence scope 'default': …`. After every
-start, set capture (it lives in memory): snapshot level for activity inputs and outputs, and the `variableWrites`
-override. The Workbench's seeded development admin comes from `apps/Elsa.Workbench.Host/shells.json`. The identity cookie
-is larger than curl's 8 KB cookie limit, so this uses a PowerShell web session:
+The CLI exits with 1 when its report has Must fix or Reconsider findings; for this corpus that is expected (the refused
+definitions). Keep `report.json` with the run: it lists what published and what was refused, with guidance.
+
+### 2. Start the migration host
+
+A fresh store for every run (delete `data/`), with the host's two settings pointed at the CLI's output. Durable
+checkpoints are already part of the host's composition.
 
 ```powershell
-$base = 'http://localhost:5095'
-$seed = (Get-Content ../../../../apps/Elsa.Workbench.Host/shells.json -Raw | ConvertFrom-Json).CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore
+$hostDir = (Resolve-Path ../../../../apps/Elsa.Migration.Host).Path
+Remove-Item -Recurse -Force "$hostDir/data" -ErrorAction SilentlyContinue
+$feature = 'CShells__Shells__default__Features__'
+[Environment]::SetEnvironmentVariable("${feature}JsonWorkflowReconciliation__Options__FolderPath", "$run/out/migrated/workflows", 'Process')
+[Environment]::SetEnvironmentVariable("${feature}JsonActivityReconciliation__Options__FilePath", "$run/out/migrated/activities/activities.json", 'Process')
+dotnet run --project $hostDir
+```
+
+Ready when `GET http://localhost:5096/health/ready` returns 200. After every start, set capture (it lives in memory):
+snapshot level for activity inputs and outputs, and the `variableWrites` override. The seeded development admin comes
+from `apps/Elsa.Migration.Host/shells.json`. The identity cookie is larger than curl's 8 KB cookie limit, so this uses a
+PowerShell web session:
+
+```powershell
+$base = 'http://localhost:5096'
+$seed = (Get-Content ../../../../apps/Elsa.Migration.Host/shells.json -Raw | ConvertFrom-Json).CShells.Shells.default.Features.FoundationIdentityAspNetCoreIdentityEntityFrameworkCore
 $login = @{ username = $seed.SeedAdminUserName; password = $seed.SeedAdminPassword } | ConvertTo-Json
 Invoke-RestMethod -Method Post "$base/_elsa/identity/login" -ContentType 'application/json' -Body $login -SessionVariable session | Out-Null
 $token = (Invoke-RestMethod "$base/_elsa/identity/token" -WebSession $session).accessToken
@@ -144,3 +153,17 @@ Invoke-RestMethod -Method Put "$base/runtime/workflows/diagnostics/settings" -He
 
 The response's `effective` block shows the levels in force; host policy caps every value at bounded snapshots
 (`snapshotLimits`).
+
+### 3. Run the suites
+
+```powershell
+$env:ELSA_API_BASE_URL = 'http://localhost:5096'; $env:ELSA_EXECUTOR_BASE_URL = 'http://localhost:5096/workflows/http'
+$env:ADMIN_USERNAME = $seed.SeedAdminUserName; $env:ADMIN_PASSWORD = $seed.SeedAdminPassword
+$env:CORRELATION_ID = [guid]::NewGuid().ToString('N'); $env:DATE_NOW_ISO_STRING = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+$env:JTEST_CONFIG_FILE = "$PWD/global-configuration.elsa4.json"
+jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" "!tests/branching/implicit-tests.json" "!tests/branching/join-wait-all-active-tests.json" --env-file environments/elsa4.json
+```
+
+A synchronous HTTP workflow answers within the host's `ActivitiesHttp:SyncRequestTimeout` (30 s by default); a run
+that takes longer under load answers 408 or `workflow-response-not-produced` although it completes. Record such a
+result as load, with the instance timings.
