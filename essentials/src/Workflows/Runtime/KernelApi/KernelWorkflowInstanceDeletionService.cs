@@ -8,7 +8,6 @@ using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
 
@@ -20,11 +19,11 @@ internal sealed class KernelWorkflowInstanceDeletionService(
     KernelRunReader runs,
     KernelRuns foundation,
     KernelOperatorIngress operators,
-    IServiceProvider services,
     IHttpContextAccessor httpContext,
     NormalizedPrincipalValidator principals,
     IPermissionAuthorizationService authorization,
-    TimeProvider clock) : IWorkflowInstanceDeletionService
+    TimeProvider clock,
+    KernelPreviewRunReads? preview = null) : IWorkflowInstanceDeletionService
 {
     private static readonly TimeSpan DeletionBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ReadDelay = TimeSpan.FromMilliseconds(100);
@@ -59,7 +58,7 @@ internal sealed class KernelWorkflowInstanceDeletionService(
             if (run.IsolatedReads is not null) throw new RuntimeResourceMissingSignal();
             if (run.View is not { } view)
             {
-                var legacy = services.GetService<WorkflowInstanceDeletionService>() ?? throw new RuntimeResourceMissingSignal();
+                var legacy = preview?.Deletion ?? throw new RuntimeResourceMissingSignal();
                 return await legacy.DeleteAsync(workflowExecutionId, cancellationToken);
             }
 

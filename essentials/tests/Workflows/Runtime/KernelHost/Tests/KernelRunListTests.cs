@@ -33,6 +33,7 @@ using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Values;
 using Kernel.Foundation.Contracts;
 using Microsoft.AspNetCore.Authentication;
@@ -179,10 +180,12 @@ public sealed class KernelRunListTests
     private static readonly PersistenceAccessContext HostTenant = PersistenceAccessContext.Scoped(new PersistenceScope(Tenant));
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task Retained_http_reads_activate_and_serve_without_legacy_execution_services(bool publishingPermissions, bool lateExecute)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task Retained_http_reads_use_only_actor_execution(
+        bool publishingPermissions, bool lateExecute, bool separateLegacyReaders)
     {
         const string scheme = "KernelExecuteFixture";
         var reads = new Reads(Views[0]);
@@ -196,9 +199,18 @@ public sealed class KernelRunListTests
         if (publishingPermissions)
             builder.Services.AddPermissionContributor<WorkflowPublishingPermissionContributor>();
         builder.Services.AddPersistenceCore();
+        builder.Services.AddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
         builder.Services.AddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         builder.Services.AddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         builder.Services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(reads)));
+        if (separateLegacyReaders)
+        {
+            var historicalRuns = new InMemoryWorkflowExecutionStateStore();
+            await historicalRuns.SaveAsync(Legacy("legacy-test", Tenant, WorkflowRunKind.TestRun));
+            builder.Services.AddSingleton<IWorkflowExecutionStateStore>(historicalRuns);
+            builder.Services.AddScoped<RuntimeHistoryInspectionService>(_ =>
+                throw new InvalidOperationException("The retained API resolved a legacy history reader."));
+        }
         var feature = new WorkflowsRuntimeKernelRetainedApiFeature();
         feature.ConfigureServices(builder.Services);
         feature.PostConfigureServices(builder.Services);
@@ -213,8 +225,12 @@ public sealed class KernelRunListTests
         await using var scope = app.Services.CreateAsyncScope();
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowSchedulerDrainer>());
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionActorProvider>());
-        Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
-        Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
+        Assert.Null(scope.ServiceProvider.GetService<ActivityExecutionBrowseSource>());
+        if (!separateLegacyReaders)
+        {
+            Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
+            Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
+        }
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowRunInspection>());
         var permissions = scope.ServiceProvider.GetRequiredService<IPermissionCatalog>();
         Assert.NotNull(permissions.Find(WorkflowRuntimePermissions.WorkflowRuntimeRead));
@@ -238,7 +254,11 @@ public sealed class KernelRunListTests
         Assert.Equal(Views[0].Header.Ref.Id, Assert.Single(list!.Items).WorkflowExecutionId);
         using var detail = await client.GetAsync("/runtime/workflows/instances/" + Views[0].Header.Ref.Id);
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
-        using var history = await client.GetAsync("/runtime/workflows/instances/missing/history/occurrences");
+        using var legacyTest = await client.GetAsync("/runtime/workflows/instances/legacy-test");
+        Assert.Equal(HttpStatusCode.NotFound, legacyTest.StatusCode);
+        using var legacyBrowse = await client.GetAsync("/runtime/workflows/instances/legacy-test/activity-executions");
+        Assert.Equal(HttpStatusCode.NotFound, legacyBrowse.StatusCode);
+        using var history = await client.GetAsync("/runtime/workflows/instances/legacy-test/history/occurrences");
         Assert.Equal(HttpStatusCode.NotFound, history.StatusCode);
         using var legacy = await client.GetAsync("/runtime/workflows/diagnostics/settings");
         Assert.Equal(HttpStatusCode.NotFound, legacy.StatusCode);
