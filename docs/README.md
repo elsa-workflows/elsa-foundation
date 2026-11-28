@@ -26,7 +26,7 @@ Looking ahead: the [kernel walkthrough](https://vowful-mustard-pd8t.here.now/) i
 ## Build human work into a workflow
 
 - [Named blocks](named-blocks.md): group steps into named Sequence, Flowchart and BPMN blocks, extract and ungroup them, and promote a block to a reusable activity.
-- [User Tasks](user-tasks.md): author action paths and reusable forms, work from assigned/group inboxes, and integrate custom task/form clients.
+- [User Tasks](user-tasks.md): browse the task inbox and author reusable forms. Includes the classic workflow-task integration guide.
 
 ## Rules to follow
 

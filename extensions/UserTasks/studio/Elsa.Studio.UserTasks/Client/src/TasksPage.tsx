@@ -4,7 +4,7 @@ import { Inbox } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { studioRowInteraction, SkeletonRows, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, PeerViewSwitch } from "@elsa-workflows/studio-ui";
 import { FormsPage } from "./FormsPage";
-import { actor, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
+import { actor, hasTaskOperation, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
 import { taskAssignment } from "./taskPeople";
 import { readTaskBrowseLocation, replaceTaskBrowseLocation, taskDetailPath } from "./taskNavigation";
@@ -41,10 +41,11 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
   if (identity && !identity.canRead && !identity.canManage && (identity.canReadForms || identity.canManageForms)) return <FormsPage api={api} />;
   const denied = identity && !identity.canRead && !identity.canManage;
   const filtered = Boolean(search.trim());
+  const hasActions = ["claim", "release", "reassign", "complete"].some(operation => hasTaskOperation(api, operation));
   // The empty state offers its own Clear search; the toolbar repeats it only beside results.
   const clearInToolbar = filtered && !(page && page.items.length === 0);
   return <StudioPage className="user-tasks" aria-label="User tasks management">
-    <StudioPageHeader title="User tasks" description="Your assigned work and available group tasks."
+    <StudioPageHeader title="User tasks" description={hasActions ? "Your assigned work and available group tasks." : "Browse assigned, group and historical task records. Task records are read-only on this backend."}
       refresh={{ id: "user-task-inbox", label: "Refresh tasks", onRefresh: refresh, refreshing: loading, autoRefresh: true }}
       actions={<>
         {identity?.canReadForms || identity?.canManageForms ? <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks/forms")}>Reusable forms</a> : null}</>} />
