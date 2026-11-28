@@ -19,7 +19,7 @@ using Microsoft.AspNetCore.Http;
 namespace Elsa.Workflows.Dashboard.Queries;
 
 internal sealed class WorkflowDashboardQuerySource(
-    IWorkflowExecutionStateStore executions,
+    IWorkflowRetainedRunSource executions,
     IActivityInspectionContextAsync inspection,
     IDashboardActorContext actors,
     IHttpContextAccessor http,
@@ -174,7 +174,7 @@ internal sealed class WorkflowDashboardQuerySource(
             Time = new(["startedAt"], ["absolute", "calendarWeekToDate", "last7Days", "last30Days"], ["hour", "day"], ["absolute", "previousCalendarWeekSameElapsed"]),
             Relationships = definitions is not null && library is not null ? [new("workflow.current-organization", "Current individually readable Design organization; no historical folder attribution.", "many-to-one")] : [],
             SupportsDrill = true, SupportsExport = false,
-            CoverageDescription = "Unknown collection/retention coverage. Deleted runs and history not captured by this runtime are not reconstructed."
+            CoverageDescription = "The selected runtime contributes the runs it currently retains. Deleted runs and runs stored in another runtime do not enter totals. Historical collection and retention coverage are unknown."
         };
     }
 
@@ -182,51 +182,41 @@ internal sealed class WorkflowDashboardQuerySource(
     {
         var result = new List<SourceRow>();
         var ids = new HashSet<string>(StringComparer.Ordinal);
-        var cursors = new HashSet<string>(StringComparer.Ordinal);
         var organization = new Dictionary<string, WorkflowOrganization?>(StringComparer.Ordinal);
         var needOrganization = NeedsOrganization(query.Request.Query);
         var examined = 0;
-        string? cursor = null;
-        do
+        await foreach (var state in executions.ReadAsync(query.Scope.TenantId, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // History From/To means effective update time, so it MUST NOT stand in for started-cohort selection.
-            var page = await executions.QueryPageAsync(new(100, TenantId: query.Scope.TenantId, Cursor: cursor), cancellationToken);
-            if (page.Items.Count > 100 || page.HasNext != (page.NextCursor is not null)) throw InvalidSource();
-            foreach (var state in page.Items)
+            if (++examined > limits.MaximumSourceRows) throw Limit();
+            if (state is null) continue;
+            if (!ids.Add(state.WorkflowExecutionId)) throw InvalidSource();
+            if (state.TenantId != query.Scope.TenantId || !await inspection.CanInspectStructureAsync(state, cancellationToken)) continue;
+            if (!Enum.IsDefined(state.Status) || !Enum.IsDefined(state.RunKind)) throw InvalidSource();
+            if (query.Periods.Count != 0 && !query.Periods.Any(period => state.StartedAt >= period.From && state.StartedAt < period.To)) continue;
+            WorkflowOrganization? currentOrganization = null;
+            var definitionId = state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId;
+            if (needOrganization)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (++examined > limits.MaximumSourceRows) throw Limit();
-                if (!ids.Add(state.WorkflowExecutionId)) throw InvalidSource();
-                if (state.TenantId != query.Scope.TenantId || !await inspection.CanInspectStructureAsync(state, cancellationToken)) continue;
-                if (!Enum.IsDefined(state.Status) || !Enum.IsDefined(state.RunKind)) throw InvalidSource();
-                if (query.Periods.Count != 0 && !query.Periods.Any(period => state.StartedAt >= period.From && state.StartedAt < period.To)) continue;
-                WorkflowOrganization? currentOrganization = null;
-                var definitionId = state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId;
-                if (needOrganization)
+                if (definitions is null || library is null)
+                    throw new DashboardQueryException("DATASET_UNAVAILABLE", "Current workflow organization is unavailable.");
+                if (!organization.TryGetValue(definitionId, out currentOrganization))
                 {
-                    if (definitions is null || library is null)
-                        throw new DashboardQueryException("DATASET_UNAVAILABLE", "Current workflow organization is unavailable.");
-                    if (!organization.TryGetValue(definitionId, out currentOrganization))
+                    if (++examined > limits.MaximumSourceRows) throw Limit();
+                    currentOrganization = await definitions.CanReadAsync(definitionId, cancellationToken)
+                        ? await library.GetOrganizationAsync(definitionId, cancellationToken) : null;
+                    if (currentOrganization is not null)
                     {
-                        if (++examined > limits.MaximumSourceRows) throw Limit();
-                        currentOrganization = await definitions.CanReadAsync(definitionId, cancellationToken)
-                            ? await library.GetOrganizationAsync(definitionId, cancellationToken) : null;
-                        if (currentOrganization is not null)
-                        {
-                            examined = checked(examined + currentOrganization.FolderBreadcrumb.Count + currentOrganization.Tags.Count);
-                            if (examined > limits.MaximumSourceRows) throw Limit();
-                        }
-                        organization.Add(definitionId, currentOrganization);
+                        examined = checked(examined + currentOrganization.FolderBreadcrumb.Count + currentOrganization.Tags.Count);
+                        if (examined > limits.MaximumSourceRows) throw Limit();
                     }
-                    if (currentOrganization is null) continue;
+                    organization.Add(definitionId, currentOrganization);
                 }
-                var row = new SourceRow(state, Values(state, definitionId, currentOrganization));
-                if (WorkflowQueryValues.Matches(query.Request.Query.Filters, field => row.Values[field], query)) result.Add(row);
+                if (currentOrganization is null) continue;
             }
-            cursor = page.NextCursor;
-            if (cursor is not null && !cursors.Add(cursor)) throw InvalidSource();
-        } while (cursor is not null);
+            var row = new SourceRow(state, Values(state, definitionId, currentOrganization));
+            if (WorkflowQueryValues.Matches(query.Request.Query.Filters, field => row.Values[field], query)) result.Add(row);
+        }
         return result;
     }
 
@@ -511,7 +501,7 @@ internal sealed class WorkflowDashboardQuerySource(
     }
 
     private static DashboardQueryException Limit() => new("QUERY_LIMIT", "The workflow question exceeds its bounded traversal or grouping cost. Narrow its filters or ask the module owner for a supported projection.");
-    private static DashboardQueryException InvalidSource() => new("WORKFLOW_QUERY_SOURCE_INVALID", "Retained workflow data could not be read consistently. Retry or contact the runtime owner.");
+    internal static DashboardQueryException InvalidSource() => new("WORKFLOW_QUERY_SOURCE_INVALID", "Retained workflow data could not be read consistently. Retry or contact the runtime owner.");
     private static DashboardQueryException InvalidDrill() => new("INVALID_DRILL", "This group changed or its drill proof is unavailable. Refresh the question and select the group again.");
     private sealed record SourceRow(WorkflowExecutionState State, IReadOnlyDictionary<string, DashboardValue> Values);
     private sealed record Group(IReadOnlyDictionary<string, DashboardValue> Values)

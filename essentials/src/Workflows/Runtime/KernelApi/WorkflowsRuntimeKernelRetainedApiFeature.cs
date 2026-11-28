@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelHost;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +39,7 @@ public sealed class WorkflowsRuntimeKernelRetainedApiFeature : IWebShellFeature,
             throw new InvalidOperationException($"The shell must select either {FeatureName} or WorkflowsRuntimeApi, which share Workflow Runtime routes.");
 
         WorkflowsRuntimeKernelApiFeature.ConfigureKernelServices(services, FeatureName);
+        services.AddScoped<IWorkflowRetainedRunSource>(serviceProvider => serviceProvider.GetRequiredService<KernelRunReader>());
         var links = RuntimeApiCapabilities.StaticDeclaration.Links.Where(link => link.Rel is
             "workflow-executables" or "workflow-executable" or "workflow-executable-provenance" or
             "workflow-activation-slots" or "workflow-activation-slot" or "workflow-instances" or "workflow-instances-page" or

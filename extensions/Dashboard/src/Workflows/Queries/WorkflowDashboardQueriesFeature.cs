@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Dashboard.Core.Contracts;
+using Elsa.Workflows.Runtime.Inspection.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -22,6 +23,12 @@ public class WorkflowDashboardQueriesFeature : IShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        services.TryAddScoped<IWorkflowRetainedRunSource, LegacyWorkflowDashboardRuns>();
+        AddWorkflowQueries(services);
+    }
+
+    internal static void AddWorkflowQueries(IServiceCollection services)
+    {
         services.AddHttpContextAccessor();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, WorkflowDashboardQueryPermissionExtension>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IDashboardDatasetExtension, WorkflowDashboardQuerySource>());
@@ -29,6 +36,18 @@ public class WorkflowDashboardQueriesFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IDashboardQueryExecutionExtension, WorkflowDashboardQuerySource>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IDashboardQueryDrillExtension, WorkflowDashboardQuerySource>());
     }
+}
+
+/// <summary>Contributes saved workflow questions backed by the retained Actor Foundation runs.</summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Workflows")]
+[ManifestFeatureCategory("Dashboard")]
+[ShellFeature(name: "KernelWorkflowDashboardQueries", DisplayName = "Kernel Workflow Dashboard Queries",
+    Description = "Contributes authorized retained Actor Foundation workflow data to native saved questions.",
+    DependsOn = ["StudioDashboardApi", "WorkflowsRuntimeKernelRetainedApi"])]
+public sealed class KernelWorkflowDashboardQueriesFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services) => WorkflowDashboardQueriesFeature.AddWorkflowQueries(services);
 }
 
 internal sealed class WorkflowDashboardQueryPermissionExtension : IPermissionContributor
