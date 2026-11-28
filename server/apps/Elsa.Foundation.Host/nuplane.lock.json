@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.0",
-  "generatedAt": "2026-11-28T06:06:53.859988+00:00",
+  "generatedAt": "2026-11-28T11:22:43.401703+00:00",
   "packages": [
     {
       "id": "Acornima",
@@ -39,10 +39,10 @@
     },
     {
       "id": "Elsa.Activities.Design.Api",
-      "version": "4.0.46-preview",
+      "version": "4.0.47-preview",
       "feed": "elsa-4",
-      "hash": "sha512:i0NKSkGZJglzU7aR8jaVfaFd5\u002BsckG0YYXIwh5KGr2iGcj2Fna7uDKi1\u002BZtWWsmgWfrA\u002BTD4Nl0rnnXQYG9M9Q==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:Dta\u002BFGudYH6m6Sc0oe5s7NktkvyPbj\u002BWc9xTJD6RGjzQR3n/RLf8OvsJKmlXc4D\u002Bvf5qnWZ/vd\u002BEqp6lYkRjGA==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Activities.Design.Core",
@@ -74,10 +74,10 @@
     },
     {
       "id": "Elsa.Activities.Design.Reconciliation.Clr",
-      "version": "4.0.30-preview",
+      "version": "4.0.31-preview",
       "feed": "elsa-4",
-      "hash": "sha512:Vmv0hL7SaXJU0NmSrOPDdX31DuLjCrlFqYDORXcjY/GtshQoowEZnrnJN1ElXQux9vGH4ezWqvpOpgIKGiZ\u002BXw==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:eUz3UpV0gVdyk0YUgBPlPc2Md3D6D62NmAkgs\u002BDJ7V76S8AeuhMvqemZ60D6euVWU9bC6b49Qg0z9VEzw1EJew==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Activities.DispatchWorkflow.Design",
@@ -88,10 +88,10 @@
     },
     {
       "id": "Elsa.Activities.DispatchWorkflow.Runtime",
-      "version": "4.0.26-preview",
+      "version": "4.0.27-preview",
       "feed": "elsa-4",
-      "hash": "sha512:MUDAMPXyIMIx/vDYvqWbg8XI9l7tPD98MuvviTg32YjDXNDln8DtW5SiCZCzYwzoG\u002BxCBuNwQQNFU5zLW7fuNA==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:WZEDUBt4kaR6Q166m9MTROeSmmPu4tEBKMmcWqES\u002BFKQ46cr14fY5bYKbOnNKbxzi3sGxrbA5kSJpN11l185RQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Activities.Flowchart",
@@ -109,24 +109,24 @@
     },
     {
       "id": "Elsa.Activities.Graph.Runtime",
-      "version": "4.0.27-preview",
+      "version": "4.0.28-preview",
       "feed": "elsa-4",
-      "hash": "sha512:KOVWUZtiBPSq478\u002BTWXHLVO5KU/YNncmSDjBVXPUGpzJT9\u002Bmg0ICEMjaLGMnH6DTwCu73/CtR60hgv7rbtzqoA==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:sQ\u002BU9Rky5G6ZcKmhtFHZA4sEYgKn281Y8taIwhHSf\u002BEqlbHNAZDVGGpy31G7fe7Vr5wcznaj1bJy7HIirDKkzw==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Activities.Http",
-      "version": "4.0.45-preview",
+      "version": "4.0.46-preview",
       "feed": "elsa-4",
-      "hash": "sha512:hQIZPVl2xusMhnrvhNV2FDUWp2WgkoY6k781QMV2HVMY5YmhLCnz9CGqhXtH/2WwEg5/TGPGYj4V73t0gDY2sw==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:cQ9tIvdlz8sCgxamZY7MzFm1Ime4FIRoF8i\u002BneC2vi47gLi1aDQtCNSyg4gepodqI4SRVMWLutwWxcllQCAkIw==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Activities.Primitives",
-      "version": "4.0.37-preview",
+      "version": "4.0.38-preview",
       "feed": "elsa-4",
-      "hash": "sha512:HAqELiVJcXZxHzbFL5b3oc/nGQXs436QY28f3zqpIvvR8YbM2eG1mS0FU7ZUjii1LBnSUFZhtSh\u002BuJ/1qnoXcg==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:3s0sj2ikWuVjgnFnslHLloEI0rnUCWpYlTcJ2bqNCWiwPe86ZXy8QUyEhEbhN8srfX4vRlzgqw6ECX5nqz5o6Q==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Activities.Runtime.Core",
@@ -137,17 +137,17 @@
     },
     {
       "id": "Elsa.Activities.Runtime.Hosting",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:88OeI1K0uQ4djipag8pUb9MifE7nROKZ7wXOjkPvhuQaRlxsf7fs\u002BI\u002BUfa7Kk558v7nEtmPwN4pRa7KnzM5kYA==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:ONxxo9ZBHA5\u002BKnOvEdQnhBsM7sS59\u002BkGf5IeOG3J2wHoQE\u002BCLiP0V0OMb0e6pWomXVEQohlFLlS0TlELicQX6A==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Activities.Scheduling",
-      "version": "4.0.28-preview",
+      "version": "4.0.29-preview",
       "feed": "elsa-4",
-      "hash": "sha512:7mpHCD10\u002BnylQFNkj5nr1XV9qOrKRRQgzJQgp4QIKrPS4gBGFWLbeMbEbkj7MJzCn8iXfWn/qu8dm47uNuRMog==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:6xOWpqliWxydlL55z7u9nnLN2UnAb5Z/pH0txQWXu5yyj1xSXukOkB3Gv/1zwyiPjtMsaOzPyAjsBBPUiYohQA==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Activities.Sequence",
@@ -158,10 +158,10 @@
     },
     {
       "id": "Elsa.ActorFoundation.BuiltIn.Durable",
-      "version": "4.0.42-preview",
+      "version": "4.0.43-preview",
       "feed": "elsa-4",
-      "hash": "sha512:Ta/5DLo0u39YhBla6UNI80zQ5mHIKGq/LLtNdinLC/yBiS2AaWETaaGpGlYLrT/nmCJ5HxrCMNAf8Db/OxwUnA==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:liGQN7BByHvo64f9cAhvR4It3oHQPUgSqVWoQfkvzOZjGMHJuNc3mJw88sKvYCY7NmGwaMvrEIGqlvy2xnxZlg==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
@@ -172,10 +172,10 @@
     },
     {
       "id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
-      "version": "4.0.27-preview",
+      "version": "4.0.28-preview",
       "feed": "elsa-4",
-      "hash": "sha512:3qsyZjsZLDcE/sUGD7oe8Zl9iAeDq1jwJxfjZ2Q/VLKj3Vu\u002BlLQsqK1zRhIHj46XZM8LjrRYMhMiQJAuq6vQIw==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:FTu6PIYvAcUrsISJnE5KpBENDhbCAYuFS9fm9HnOlPIxu9NYfQihs/dIa8bsMXEVCOE7MwcsNYYQpvAgmBjdew==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.ActorFoundation.BuiltIn.Runtime",
@@ -186,24 +186,24 @@
     },
     {
       "id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
-      "version": "4.0.21-preview",
+      "version": "4.0.22-preview",
       "feed": "elsa-4",
-      "hash": "sha512:jvKpfZVITLc48WAwu/89seRHUnVSRJ5iYyV5Uj4aqQEARbM9iXHdL5FDVAeYpMIu7uI38U4W8dCvqAVZSLpLbQ==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:X1ilj\u002BKhkVJRIHG0I1MZLVh0O2LKzDCTqwrXvMx2WGRxRx7JMO0XJichJfDT1BQxSdEvPnAUagxSzd9xI1iBgQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
-      "version": "4.0.64-preview",
+      "version": "4.0.65-preview",
       "feed": "elsa-4",
-      "hash": "sha512:CL7aLWokxY1YiD/ldHhNszvekYDfvtKA2qH78maGn6o05zgEGEXJnQrL\u002BsePe6dGtXkrow1xpuOq5yTMmTCH9g==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:Mo7XTgSq3XCemJbiwX/KRpPYMmbdhY/3XS8WzcP22UPs8ZTsRgcw9NktKMqWDPpYVbN6kq\u002BqHinAxyb0kAS4xQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.ActorFoundation.Contracts",
-      "version": "4.0.8-preview",
+      "version": "4.0.9-preview",
       "feed": "elsa-4",
-      "hash": "sha512:8Oest7j6SHo5AzYdU1/6w808Z30WsQLLSmIFXI1b3EtwRSocc59Z7\u002B3G9Jc2Y3v5BSzqmrzFfM99otMi3Rm7Jw==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:oM\u002BxvTYJOXJnQk4yWRmJUzGSs41zd/T8ZnQyGyF\u002BBgsG/ahlf1scOTnZZ0xBA3FgIcIlYQjzbpdcCeVoC5U1nQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.ActorFoundation.Hosting",
@@ -214,10 +214,10 @@
     },
     {
       "id": "Elsa.ActorFoundation.Model.Contracts",
-      "version": "4.0.7-preview",
+      "version": "4.0.8-preview",
       "feed": "elsa-4",
-      "hash": "sha512:z6c3EECqmmIlPZEIKUL1pNG60IWmc3zCktE7J3VqqhnTESoi/R8n9/Uwk9dPfsU9fPr0jgnknGi7OjWGM\u002B5PKg==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:EYrz9Ftn8ohfSCgN9xhflpF6aTEfa\u002BIoYpbE69VP9MQL3qrLVqv3pva\u002B0d\u002BqpwE8NqlCnvQWfjLhSb8WRC6/XQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Api.AspNetCore",
@@ -487,10 +487,10 @@
     },
     {
       "id": "Elsa.Persistence.EntityFramework",
-      "version": "4.0.51-preview",
+      "version": "4.0.52-preview",
       "feed": "elsa-4",
-      "hash": "sha512:rFnGAGixomWTiMIp0g0WH9xQBc5xVpnU/iMWc5LpNaiFYcHVjHbf0lZNSeASdB/fdy47eCsY3/J6C0KAINqzdw==",
-      "timestamp": "2026-11-28T06:10:25.687401+00:00"
+      "hash": "sha512:yELX\u002BInV5Ry0cXvZvIJlKuqpEkRxPoIoKvXp80Gc/GwztaRzybu12kLb3ZiOvOrnSacX7ud61iFVdn8x4I\u002Bm/Q==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Persistence.Schema",
@@ -620,24 +620,24 @@
     },
     {
       "id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
-      "version": "4.0.31-preview",
+      "version": "4.0.32-preview",
       "feed": "elsa-4",
-      "hash": "sha512:/PTz1xAXg7ZKoRLYXBJunhKT4YmDRjT0Klnyp3FGHIWRNAObG3VK8f28oAYkyrGY7R\u002BlxTzAMg2BMa9m3i1AgQ==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:KoB8xYsSTbO6w57Hu4rhvZioo8bkBoQ1csgxkuJVkQvgfkYAqqjWCQf\u002BRBeRygjEeoElC2uYCzUrshayiDYNYg==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Dashboard.Queries",
-      "version": "4.0.8-preview",
+      "version": "4.0.9-preview",
       "feed": "elsa-4",
-      "hash": "sha512:/8SAmhoJvZtikPb3J0EHNFK5lSvOdBmzH6k2p49btQg5cVN3eaBnGAht010gt6cmmVV73Hzi54TABJI0KRMbJw==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:gmyvVnP2/MBbUHR7AgVl2QqyJeiu7UZI1s94hmSjnQwIr\u002BIdugQ2s0ySmL0r8SfYgCYdUtd/29DKy849lHorNw==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Dashboard.Retained",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:gJ0NjKNuFP/ZJ2vHm0i8eW4dxfLZquJWs5xoWEYMnwlmpiV4zhdtpBx2aos7QJ3K\u002B0xZIFJnAfeDz3S7lERaWA==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:24RSffdzgXLdZ7Sq0VPn\u002BD4YjiIQKBy/ERO7GEqmHXRhkni/VsGbuHXIP2qmPfuEX27Jfiu\u002B8o1dTHSxLapE9Q==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Design.Api",
@@ -704,10 +704,10 @@
     },
     {
       "id": "Elsa.Workflows.Publishing.Core",
-      "version": "4.0.37-preview",
+      "version": "4.0.38-preview",
       "feed": "elsa-4",
-      "hash": "sha512:\u002BMFm9E0/3YMiPphFfcvT/JvYNr8ix2hzgb87YkuXY8lggFkK4nojjx4FAEblX9JR\u002BR93Q5u0egXsP6eU7ywFqg==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:\u002Bs8ppm2kmChsztYcEU9Fo7p4XbEPiK4birk96mwgHpNNHgGJDhLZWKioOaqEmuGY/4ZF3UZ92fU4fVnqiTldOQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
@@ -739,31 +739,31 @@
     },
     {
       "id": "Elsa.Workflows.Runtime.Api.Http",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:zoxR4ssmBvK11SaId0lHnkh4lM3lFcAvtXG5hCzWddP2PeLRcKGTRjnODHWrzyAW5tv1A/uxX3W5o\u002Bnlok5Vsw==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:jI5L3khdXoWfuOJaqDSVyy1rzZWKy2s/bpyrBH53xf5vXbkXzdXkJYnyYpTXM7AjHT6zjuwjblByUGnSPAWSRg==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Api.StandaloneTriggers",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:A\u002Bo\u002B589FSKf6A19IVCZsx8PpArNEy4bWKeHIJTYYFcLXvLoec4wu0pIhkzrbncBLPiYrvEgWerZZzpsECT7z7Q==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:x6\u002BZoIVicxsWicI7eyq\u002BUn5\u002BNyuEUdAo3XaRWoWIsb8xtoAHBMTlFaT\u002BFnyxs9eT/d\u002BtcTcqrwOpjKpxfONAZw==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Attention",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:cdBboiBiU6yNkUSD\u002BrHh5eBYzGOacVdDz0M6h3Ej3b6V/GTlMgyvfTFVltTVxPhL7zfheEipC8akwO3\u002BTx9X9Q==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:/bd0IUvPFDewAr/Xq2rlHZor8zABz8xa2McM0Ij1Zi1V549OpAwsMlILSShx5bS29WW9bMSkrNcm40aL0za3ww==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.110-preview",
+      "version": "4.0.111-preview",
       "feed": "elsa-4",
-      "hash": "sha512:CH7PL17ev62M14hBobFuV\u002Bj7fWwSWyC/iP0Vrws\u002BuQ33LspA9UTIxYjba/1kdM94krw8LIGWDn32KGRPJn1DRA==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:RCY5\u002BUxbhbBcXfpBjuxan7hQjKhNA\u002BRM\u002B8O5WzVAkNP1\u002BbddC5zT1H8iqyXrk7Ph7zsrKh7twk/L6gff2hnwoA==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Graph",
@@ -774,10 +774,10 @@
     },
     {
       "id": "Elsa.Workflows.Runtime.Http",
-      "version": "4.0.25-preview",
+      "version": "4.0.26-preview",
       "feed": "elsa-4",
-      "hash": "sha512:l1LW4krjOW\u002BiWNaNIIyhsbb6mJ5d9C774Uchq2KiLhUDEKXZzXSVxTmIWE\u002BgUiQ\u002BqSBKiLm4Vo9wSlpNmGpV6w==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:2lGoa19NosknP4Gpy4DWoajd3F6bqHv5gFeiEuwfM72VBIM4/3b9G95Us9rg\u002BvpwRWAhJB1QH6\u002BdkNylRWmjTQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Inspection.Core",
@@ -795,66 +795,66 @@
     },
     {
       "id": "Elsa.Workflows.Runtime.KernelApi",
-      "version": "4.0.15-preview",
+      "version": "4.0.16-preview",
       "feed": "elsa-4",
-      "hash": "sha512:xB2SjqUl108dWq63m23JEItBVxGbnaRF\u002BhP8nskseqPzF1FtHCfTSfpa3W7iSUhbOyAR86eFnZU2KgdVLUTBrg==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:ToWDrj/cI\u002BshuD91El89mK3DNeBabCIw1nsgIuUn6ttyDFfxUJFdz/pGEfukKgE89PViEW6yTvJjbQ7aSPJv\u002BA==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.KernelHost",
-      "version": "4.0.19-preview",
+      "version": "4.0.20-preview",
       "feed": "elsa-4",
-      "hash": "sha512:eiiUS8l1FIouJOYsJq6Ixbokt9TmkD/XLuRv\u002B9WSuYviH1VZEUcF3rjPW/tTCZlPttuLyjlZ1mzlQOg8a9c9DA==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:SIgeO2fGcFNwFI72LLWYHGBPbxjZJ3SNKt\u002BHyLeZc\u002B8xdzNG4UPRbMjbuTnGsa4k4sHJIrlwJgUkfCbOAgeibg==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.KernelHosting",
-      "version": "4.0.11-preview",
+      "version": "4.0.12-preview",
       "feed": "elsa-4",
-      "hash": "sha512:/xrIAsxM/h93VmQDI\u002BE33bmRxVeFPZv1cyx/x2lD0k\u002BOoOa\u002BzNcoFJGrFBK7ZhADKAXhvHDQBewJwtG6OjG1rQ==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:\u002BE8bUaXf44UUk7NuOeinY1jIMNNIbEU/V6/k1JrQb6bbBO9aPxE6bd6kdPxA1URg9KLDAmQLutnVQgQIDs9uIw==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Native.Activities",
-      "version": "4.0.10-preview",
+      "version": "4.0.11-preview",
       "feed": "elsa-4",
-      "hash": "sha512:VpReNgTmqzKGAs/b1qpOinoGGrs8zqmKVRUnsaaRoxDSVS88sAsL1OlfDidLd3FWvyhz1qRh6kswmMp2WCte\u002BQ==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:QxhvFkuNgzgzGfkg/EngoW4kZzKiVIb71KxAWKJd2QbuE\u002BddYNrIvum8NmS3mvSS8i9u2y1kKr\u002Byi6D3xM5q1A==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Native.Model",
-      "version": "4.0.24-preview",
+      "version": "4.0.25-preview",
       "feed": "elsa-4",
-      "hash": "sha512:wiXgmRCu6z20yUD3ssIxVsZoHkenDAPRx\u002Bo8BIvwlcYDX0NRxEROODCs/T347bUYzvSHCyUxuzaKPw/44Tgrkw==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:ik1IaL0B7j\u002BdIIE/agaXGRPnQ5OG2t8Ly7cqhlaI6zBSGaJRKajr49b1jMVAZwKSIi1j6Py5rPXFnxooVRABKw==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Persistence",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:dc2bSiHepKUHRTLZ76CMLKX2ZKR1\u002B8eQc0RZtE3BceyWz37c8YBku/O9Bqs2pEUinANzDTKrN5G4za4bAom/gg==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:hBY02z36vMM9e7o0lMp4poPZ5f6zvodEKK7AQkNc1diIyhk7NQyLQ2lucuxnze1ux9tv8iA6ZUAY4RrisztKHQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:kr7MsGdpY\u002BErSMOdjK0EJ1GlTs5AiLSt9EDvNSi9xne7bxSV9OE0wRPPGUC24pa\u002BA3923n7goSt\u002B1gj3v3Kixw==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:H\u002Bz2814nep0lLVV7q0XnrW2waWhnGx83AppFdF787iO\u002BPL6h9YneEsRP/5sN3jBdPOojpl0M9QCJtGktFNH4zw==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:mLg0//Bb77WIS4WB1G3Rb1/lrVYCk/OWzLLUqdjaWxlCsQJnFX64m7rw9KTdUPEnJMZYVviBrws0kQTKwMaoqQ==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:nQwkRN94Enp/swVm1xwP55N9SAa8i\u002BHMhA4zIPOi7FrGiJu\u002B5T74deiwmo/\u002BYbRxutAZJRQaY7NPpx9o483OuQ==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore",
-      "version": "4.0.0-preview",
+      "version": "4.0.1-preview",
       "feed": "elsa-4",
-      "hash": "sha512:vTRFXRummuf45\u002BXXsHnKspmkwTQg0RI0vN1Fc9pP1sG\u002B51uQulQdsdoUcnG/ifFuRnZJWKFHiDA6Qm\u002BkMa9T3A==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:nLC0ygM35FCE4XIRO1ljJMtr4bKGi4\u002BFksfaElXQ0l/zrnF3E8YX1N6yYuuw9aTB4puMteZ/bvb1yrCVoHnv8g==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.PreparedSchedules",
@@ -865,17 +865,17 @@
     },
     {
       "id": "Elsa.Workflows.Runtime.Publications",
-      "version": "4.0.1-preview",
+      "version": "4.0.2-preview",
       "feed": "elsa-4",
-      "hash": "sha512:DP3PzgrQeUw8vTGgnjZE8Gi0a8TG4ZXkE3ImrzgkIp1mxQ2JpHHw6oIkvsMLS70FNGgYAO7d\u002BRjQDevLjtzV7w==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:QnqboPWfRCkhZRo4k\u002BZuzC9HGJET8wjn1Egvl3TesFyULsUiAqh7gsSOu58M7dOkC7ArFoIde/qGnHZ8R\u002B3t0A==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Elsa.Workflows.Runtime.WorkflowActor",
-      "version": "4.0.18-preview",
+      "version": "4.0.19-preview",
       "feed": "elsa-4",
-      "hash": "sha512:FQ41mhi3eIMVxu8GVuHRhwVKyMqaEIRQx\u002B4\u002BUDrIfNSifPGtDiF2aVDhc9m9\u002BAGo8r1czNWsJ\u002BGhVOGATERPYg==",
-      "timestamp": "2026-11-28T06:06:53.859988+00:00"
+      "hash": "sha512:hBj4ScP0ww1aQHqw7se54mYtUqxv7tViefqb1r5vihoiDjsg35kwcOqXBde/jK5NyaR\u002Bm\u002BRSY2qsZwXZwdbv4g==",
+      "timestamp": "2026-11-28T11:22:43.401703+00:00"
     },
     {
       "id": "Jint",
