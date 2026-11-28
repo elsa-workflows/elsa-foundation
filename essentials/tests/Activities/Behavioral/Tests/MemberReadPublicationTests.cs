@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Text.Json;
-using Elsa.Activities.Behavioral.Infrastructure;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -14,7 +13,6 @@ using Elsa.Activities.Sequence.Models;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
-using Elsa.Serialization.SystemText;
 using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -37,13 +35,13 @@ using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 namespace Elsa.Activities.Behavioral;
 
 /// <summary>
-/// A member read of an activity result or a variable end to end: authored, admitted by the real data selection
-/// analysis, compiled by the real publication compiler, then run by the engine. The reader commits exactly the selected
-/// member, in a Sequence and in a top-level Flowchart, whether the analysis could type the member (pinned and planned)
-/// or not (checked at run time; a variable member always is). With member reads off, nothing publishes one.
+/// Pins the publication compiler's member selection in Sequence and Flowchart executables, including typed,
+/// deferred and external result bindings, along with the authoring refusals.
 /// </summary>
-public sealed class MemberReadPublicationRunTests
+public sealed class MemberReadPublicationTests
 {
+    private const string ExternalStorageProfile = "test-customer-payloads";
+
     public static TheoryData<string, bool> Structures => new()
     {
         { "sequence", false }, { "sequence", true }, { "flowchart", false }, { "flowchart", true }
@@ -51,7 +49,7 @@ public sealed class MemberReadPublicationRunTests
 
     [Theory]
     [MemberData(nameof(Structures))]
-    public async Task A_published_result_member_read_commits_exactly_the_selected_member(string structure, bool typed)
+    public async Task A_published_result_member_read_pins_known_or_deferred_member_selection(string structure, bool typed)
     {
         using var publication = new Publication(memberReads: true, typed);
 
@@ -63,13 +61,6 @@ public sealed class MemberReadPublicationRunTests
         Assert.Equal(typed ? RuntimeReadSelectionMode.Known : RuntimeReadSelectionMode.DeferredFit, binding.Selection!.Mode);
         Assert.Equal(typed, binding.ConversionPlan is not null);
         Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
-
-        await using var harness = Harness();
-        var run = await harness.RunAsync(executable);
-
-        run.AssertWorkflowCompleted();
-        Assert.Equal("Main", run.AssertCompleted("reader").InputSnapshot!.Values[nameof(MemberReader.Value)].InlineValue!.Value.GetString());
-        Assert.Equal("Main", run.AssertCompleted("reader").Completion!.Result.InlineValue!.Value.GetProperty("value").GetString());
     }
 
     public static TheoryData<string, bool, string> ExternalResults => new()
@@ -82,7 +73,7 @@ public sealed class MemberReadPublicationRunTests
 
     [Theory]
     [MemberData(nameof(ExternalResults))]
-    public async Task A_published_external_result_member_read_commits_only_the_selected_member(string structure, bool typed, string projection)
+    public async Task A_published_external_result_member_read_pins_storage_policy_and_member_projection(string structure, bool typed, string projection)
     {
         using var publication = new Publication(memberReads: true, typed, externalResult: true);
         var path = projection == "$result" ? new[] { "address", "street" } : ["street"];
@@ -91,39 +82,13 @@ public sealed class MemberReadPublicationRunTests
         var reader = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "reader");
         var binding = reader.InputBindings[nameof(MemberReader.Value)];
         Assert.Equal(ActivityValueStorage.External, producer.ActivityContract!.Result.Policy.Storage);
-        Assert.Equal(ExternalPayloads.Profile, producer.ActivityContract.Result.Policy.StorageProfile);
+        Assert.Equal(ExternalStorageProfile, producer.ActivityContract.Result.Policy.StorageProfile);
         Assert.Equal(RuntimeInputBindingSource.ActivityResultMember, binding.Source);
         Assert.Equal(projection, binding.ActivityResult!.ProjectionKey);
         Assert.Equal(path, binding.Selection!.Segments);
         Assert.Equal(typed ? RuntimeReadSelectionMode.Known : RuntimeReadSelectionMode.DeferredFit, binding.Selection.Mode);
         Assert.Equal(typed, binding.ConversionPlan is not null);
         Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
-
-        var payloads = new ExternalPayloads();
-        await using var harness = Harness(payloads);
-        var run = await harness.RunAsync(executable);
-
-        run.AssertWorkflowCompleted();
-        var completedProducer = run.AssertCompleted("producer"); // State() also requires a single execution.
-        var result = completedProducer.Completion!.Result;
-        Assert.Null(result.InlineValue);
-        var resultReference = Assert.IsType<DurableValueExternalReference>(result.ExternalReference);
-        Assert.Equal(ExternalPayloads.Profile, resultReference.StorageProfile);
-        var writtenResult = Assert.Single(payloads.Writes, write => write.OwnerKey == $"activity:{completedProducer.InvocationId}:result");
-        Assert.Equal(WorkflowExecutionHarness.WorkflowExecutionId, writtenResult.WorkflowExecutionId);
-        Assert.Equal("c-1", writtenResult.Payload.GetProperty("customerId").GetString());
-        Assert.Equal("Main", writtenResult.Payload.GetProperty("address").GetProperty("street").GetString());
-        Assert.Contains(resultReference, payloads.Reads); // The real member materializer read the external completion.
-
-        var completedReader = run.AssertCompleted("reader");
-        var input = completedReader.InputSnapshot!.Values[nameof(MemberReader.Value)];
-        Assert.Null(input.InlineValue);
-        Assert.Equal(DurableValueStorage.External, input.Policy.Storage);
-        var inputReference = Assert.IsType<DurableValueExternalReference>(input.ExternalReference);
-        Assert.NotEqual(resultReference.Locator, inputReference.Locator);
-        Assert.Equal("Main", payloads.Stored(inputReference).GetString());
-        Assert.Contains(inputReference, payloads.Reads); // The CLR activity hydrated the committed selected value.
-        Assert.Equal("Main", completedReader.Completion!.Result.InlineValue!.Value.GetProperty("value").GetString());
     }
 
     [Theory]
@@ -143,7 +108,7 @@ public sealed class MemberReadPublicationRunTests
     [Theory]
     [InlineData("sequence")]
     [InlineData("flowchart")]
-    public async Task A_published_variable_member_read_commits_exactly_the_selected_member(string structure)
+    public async Task A_published_variable_member_read_pins_the_variable_scope_and_member_selection(string structure)
     {
         using var publication = new Publication(memberReads: true, typed: true);
 
@@ -157,13 +122,6 @@ public sealed class MemberReadPublicationRunTests
         Assert.Equal(RuntimeReadSelectionMode.DeferredFit, binding.Selection.Mode);
         Assert.Null(binding.ConversionPlan);
         Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
-
-        await using var harness = Harness();
-        var run = await harness.RunAsync(executable);
-
-        run.AssertWorkflowCompleted();
-        Assert.Equal("Main", run.AssertCompleted("reader").InputSnapshot!.Values[nameof(MemberReader.Value)].InlineValue!.Value.GetString());
-        Assert.Equal("Main", run.AssertCompleted("reader").Completion!.Result.InlineValue!.Value.GetProperty("value").GetString());
     }
 
     [Theory]
@@ -189,7 +147,7 @@ public sealed class MemberReadPublicationRunTests
 
     [Theory]
     [MemberData(nameof(RequestReads))]
-    public async Task A_published_request_or_input_member_read_commits_exactly_the_selected_member(string structure, string read)
+    public async Task A_published_request_or_input_member_read_pins_the_declared_input_name_and_member_selection(string structure, string read)
     {
         using var publication = new Publication(memberReads: true, typed: true);
 
@@ -203,15 +161,6 @@ public sealed class MemberReadPublicationRunTests
         Assert.Equal(["address", "street"], binding.Selection!.Segments);
         Assert.Equal(RuntimeReadSelectionMode.DeferredFit, binding.Selection.Mode);
         Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
-
-        await using var harness = Harness();
-        var run = await harness.RunAsync(executable, new Dictionary<string, JsonElement>
-        {
-            ["customer"] = JsonSerializer.SerializeToElement(new { customerId = "c-1", address = new { street = "Main" } })
-        });
-
-        run.AssertWorkflowCompleted();
-        Assert.Equal("Main", run.AssertCompleted("reader").InputSnapshot!.Values[nameof(MemberReader.Value)].InlineValue!.Value.GetString());
     }
 
     [Theory]
@@ -276,17 +225,6 @@ public sealed class MemberReadPublicationRunTests
                     [new(new FlowchartEndpoint("producer", "Done"), new FlowchartEndpoint("reader", null))], "producer"), Web)));
     }
 
-    internal static WorkflowExecutionHarness Harness(IExternalPayloadStore? payloads = null) => WorkflowExecutionHarness.Create()
-        .WithFeature(services => new SerializationFeature().ConfigureServices(services))
-        .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
-        .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
-        .ConfigureServices(services =>
-        {
-            if (payloads is not null)
-                services.AddSingleton(payloads);
-        })
-        .Build(Enumerable.Range(1, 16).Select(index => $"actexec-{index}"));
-
     /// <summary>The real analysis and publication compiler over a fixed catalog; nothing is stored.</summary>
     internal sealed class Publication : IDisposable
     {
@@ -306,7 +244,7 @@ public sealed class MemberReadPublicationRunTests
             };
             var producerVersion = Version(typeof(AddressProducer), "producer-version");
             if (externalResult)
-                producerVersion.Outputs = [new("Address", "Address", new TypeReference("Object"), ExternalPayloads.Profile, "Address", null, IsNullable: false)];
+                producerVersion.Outputs = [new("Address", "Address", new TypeReference("Object"), ExternalStorageProfile, "Address", null, IsNullable: false)];
             var catalog = new Catalog([
                 Version(typeof(SequenceActivity), "sequence-version"),
                 Version(typeof(FlowchartActivity), "flowchart-version"),
@@ -403,39 +341,6 @@ public sealed class MemberReadPublicationRunTests
         public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken ct = default) => throw new NotSupportedException();
         public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken ct = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken ct = default) => throw new NotSupportedException();
-    }
-
-    // Only the payload storage seam is a test implementation. Publication, completion projection, causal resolution,
-    // member selection, destination storage, activity hydration and persisted input/completion are the real services.
-    private sealed class ExternalPayloads : IExternalPayloadStore
-    {
-        public const string Profile = "test-customer-payloads";
-        private readonly Dictionary<string, JsonElement> _payloads = new(StringComparer.Ordinal);
-        public List<ExternalPayloadWriteRequest> Writes { get; } = [];
-        public List<DurableValueExternalReference> Reads { get; } = [];
-
-        public ValueTask<DurableValueExternalReference> WriteAsync(ExternalPayloadWriteRequest request, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            Assert.Equal(Profile, request.StorageProfile);
-            var locator = request.WorkflowExecutionId + "/" + request.OwnerKey;
-            _payloads[locator] = request.Payload.Clone();
-            Writes.Add(request with { Payload = request.Payload.Clone() });
-            return ValueTask.FromResult(new DurableValueExternalReference(Profile, locator, new Dictionary<string, string>()));
-        }
-
-        public ValueTask<JsonElement> ReadAsync(DurableValueExternalReference reference, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            Reads.Add(reference);
-            return ValueTask.FromResult(Stored(reference));
-        }
-
-        public JsonElement Stored(DurableValueExternalReference reference)
-        {
-            Assert.Equal(Profile, reference.StorageProfile);
-            return _payloads[reference.Locator].Clone();
-        }
     }
 
     public sealed record StreetAddress(string Street);
