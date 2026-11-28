@@ -568,9 +568,15 @@ async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane
   // A bookmark into the absent plane explains the composition instead of failing.
   await page.goto(absent.path);
   // Open-screen tabs keep hidden panels mounted; only the visible screen is the presentation.
-  const unavailable = page.locator(".content .empty-state[role=status]").filter({ visible: true });
-  await expect(unavailable).toHaveText(`This backend does not support ${absent.capability}.`);
-  const viewPresentation = (await unavailable.textContent()) ?? "";
+  const unavailable = page.getByRole("main").getByRole("status").filter({
+    has: page.getByRole("heading", { name: "Page unavailable", exact: true }),
+    visible: true
+  });
+  const notice = unavailable.getByText("This page is unavailable on the selected backend.", { exact: true });
+  await expect(notice).toBeVisible();
+  const viewPresentation = (await notice.textContent()) ?? "";
+  await unavailable.getByRole("button", { name: "Technical details", exact: true }).click();
+  await expect(unavailable.getByText(`This backend does not support ${absent.capability}.`, { exact: true })).toBeVisible();
   await capture(page, info, `${plane}-${design ? "runtime" : "design"}-view-unavailable`);
   await page.goto(absent.settings);
   const sections = page.getByRole("navigation", { name: "Settings sections", exact: true });
