@@ -316,9 +316,11 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,
+            typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(StandaloneTriggersApiFeature).Assembly,
+            typeof(Elsa.Workflows.Runtime.Scheduling.WorkflowsRuntimeScheduleCalculationFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeDbContext).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,

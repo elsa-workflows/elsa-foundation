@@ -31,7 +31,6 @@
           "DiagnosticsStructuredLogsEntityFrameworkCore": {
             "ConnectionString": "Data Source=elsa-diagnostics.db"
           },
-          "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
           "Events": {},
           "Expressions": {},
