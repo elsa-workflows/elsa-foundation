@@ -162,18 +162,43 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   const executable = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${promoted.id}/publish`, "POST", {});
   const started = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${executable.artifactId}/execute`, "POST", { sourceReferenceId: executable.sourceReferenceId });
   const runtimeRoute = `/runtime/workflows/instances/${started.workflowExecutionId}`;
-  let completed: { instance: { status: string; blockingIncidentCount?: number }; outputs: Record<string, { value: { value: unknown } }>; incidents?: unknown[] } | undefined;
+  type CallerRun = {
+    instance: {
+      status: string;
+      blockingIncidentCount?: number;
+      workflowExecutionId: string;
+      artifactId: string;
+      definitionId: string;
+      definitionVersionId: string;
+      sourceReferenceId: string;
+    };
+    outputs: Record<string, { value: unknown }>;
+    incidents?: unknown[];
+  };
+  let completed: CallerRun | undefined;
   const deadline = Date.now() + 30_000;
   try {
     for (;;) {
-      completed = await api<typeof completed>(runtimeRoute);
-      expect(completed?.instance.blockingIncidentCount ?? 0, JSON.stringify(completed?.incidents)).toBe(0);
-      if (completed?.instance.status === "Completed") break;
+      const response = await page.request.get(backend + runtimeRoute);
+      // An accepted Actor start may still be waiting for its first durable commit.
+      if (response.status() !== 404) {
+        expect(response.status(), `GET ${runtimeRoute}`).toBe(200);
+        completed = await response.json() as CallerRun;
+        expect(completed.instance.blockingIncidentCount ?? 0, JSON.stringify(completed.incidents)).toBe(0);
+        if (completed.instance.status === "Completed") break;
+      }
       expect(Date.now(), `Caller did not complete: ${JSON.stringify(completed)}`).toBeLessThan(deadline);
       await page.waitForTimeout(250);
     }
+    expect(completed.instance).toMatchObject({
+      workflowExecutionId: started.workflowExecutionId,
+      artifactId: executable.artifactId,
+      definitionId: caller.definition.id,
+      definitionVersionId: promoted.id,
+      sourceReferenceId: executable.sourceReferenceId,
+    });
     expect(Object.keys(completed.outputs)).toEqual(["CallerSum"]);
-    expect(completed.outputs.CallerSum.value.value).toBe(42.5);
+    expect(completed.outputs.CallerSum.value).toBe(42.5);
   } finally {
     Object.assign(proof, { saved, publication, executable, workflowExecutionId: started.workflowExecutionId, completed });
     const path = info.outputPath("set-output-proof.json"); writeFileSync(path, JSON.stringify(proof, null, 2));
