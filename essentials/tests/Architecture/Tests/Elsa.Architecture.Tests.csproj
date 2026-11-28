@@ -269,12 +269,13 @@
     <ProjectReference Include="../../../../extensions/Identity/src/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- The assembly metadata guards inspect every active source project. -->
-    <ProjectReference Include="../../../src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" ReferenceOutputAssembly="false" />
+    <!-- Guards scan and compose the compatibility assemblies while they are still packable.
+         Use an alias to keep the witnesses available to the runtime scanner and out of normal source lookup. -->
+    <ProjectReference Include="../../../src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" Aliases="ArchitectureWitness" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" Aliases="ArchitectureWitness" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" Aliases="ArchitectureWitness" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" Aliases="ArchitectureWitness" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" Aliases="ArchitectureWitness" />
   </ItemGroup>
 
 </Project>
