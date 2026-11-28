@@ -601,6 +601,51 @@
                         ]
                     }
                 ]
+            },
+            {
+                "name": "elsa-activity-assert-change-warnings",
+                "description": "Elsa 4 warns (VF-WRITE-001) when a script changes a variable it read without assigning it. Elsa 3 has no such warning, so this Elsa 3 form asserts nothing about warnings; the suite's environment file sets the expected count to 0 for Elsa 3.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "expectedCount": {
+                        "type": "number",
+                        "required": true,
+                        "description": "The number of VF-WRITE-001 warnings the activity's first execution must carry"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "assert",
+                        "name": "No change warnings exist on Elsa 3",
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{ $.expectedCount }}",
+                                "expectedValue": 0
+                            }
+                        ]
+                    }
+                ],
+                "output": {
+                    "changeWarnings": []
+                }
             }
         ]
     }

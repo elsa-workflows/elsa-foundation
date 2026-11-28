@@ -529,6 +529,161 @@
                     "startedAt": "{{ $.startedAt }}",
                     "completedAt": "{{ $.completedAt }}"
                 }
+            },
+            {
+                "name": "elsa-activity-assert-change-warnings",
+                "description": "Asserts how many VF-WRITE-001 warnings (a script changed a variable it read without assigning it, spec 1228) the first execution of an activity carries. Elsa 4: reads the execution's inspection, whose warnings list is absent when there were none.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "expectedCount": {
+                        "type": "number",
+                        "required": true,
+                        "description": "The number of VF-WRITE-001 warnings the activity's first execution must carry"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity executions (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions?limit=500",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executions": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Take the activity id",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.activityId }}"
+                            }
+                        ],
+                        "save": {
+                            "$.nodeId": "{{ $.activityId }}",
+                            "$.found": [],
+                            "$.changeWarnings": []
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Executions of the activity",
+                        "items": "{{ $.executions[?((@.execution.executableNodeId == '{{ $.nodeId }}' || match(@.execution.executableNodeId, '.*:{{ $.nodeId }}')))] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Collect",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.item.execution.activityExecutionId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "$.found[]": "{{ $.item.execution }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "An execution of the activity is expected",
+                        "assert": [
+                            {
+                                "op": "notempty",
+                                "actualValue": "{{ $.found }}"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity execution inspection (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions/{{ $.found[0].activityExecutionId }}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "$.inspection": "{{ $.this.body }}"
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Change warnings of the execution",
+                        "items": "{{ $.inspection..warnings[?(@.code == 'VF-WRITE-001')] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Collect",
+                                "assert": [
+                                    {
+                                        "op": "equals",
+                                        "actualValue": "{{ $.item.code }}",
+                                        "expectedValue": "VF-WRITE-001"
+                                    }
+                                ],
+                                "save": {
+                                    "$.changeWarnings[]": "{{ $.item }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "The expected number of change warnings",
+                        "assert": [
+                            {
+                                "op": "length",
+                                "actualValue": "{{ $.changeWarnings }}",
+                                "expectedValue": "{{ $.expectedCount }}"
+                            }
+                        ]
+                    }
+                ],
+                "output": {
+                    "changeWarnings": "{{ $.changeWarnings }}"
+                }
             }
         ]
     }

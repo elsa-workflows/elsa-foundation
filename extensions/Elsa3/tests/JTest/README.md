@@ -10,8 +10,8 @@ This README holds the run procedures; task T044 completes it.
 
 | Path | Content |
 |---|---|
-| `workflow-definitions/` | The 36 Elsa 3 definitions (32 in the acceptance set, spec Q13 and Q15) |
-| `tests/` | 42 suite files (39 in the acceptance set) |
+| `workflow-definitions/` | The 36 Elsa 3 corpus definitions (32 in the acceptance set, spec Q13 and Q15), plus `javascript-variable-changes.json`, an S-15 addition (ledger `suite-changes.md`, W3) |
+| `tests/` | 42 corpus suite files (39 in the acceptance set), plus `javascript/variable-changes-tests.json` (W3), which runs on both engines |
 | `import-and-publish-workflows.json` | Elsa 3 setup suite: imports and publishes the definitions |
 | `templates-elsa3/`, `environments/elsa3.json`, `global-configuration.elsa3.json` | Elsa 3 template set and configuration |
 | `test-files/` | Files the suites upload |

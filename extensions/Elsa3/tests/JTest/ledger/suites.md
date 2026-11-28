@@ -32,11 +32,12 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | `http/query-parameter-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
 | `http/request-body-tests.json` | http-endpoints.json | pass | pass (XML case per engine, suite-changes W2) | 11, 31 |
 | `http/route-parameter-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
-| `javascript/array-methods-tests.json` | javascript-array-methods.json | pass | blocked: #5894 (publishes since #5686 was fixed; the response script changes a variable through the reference it read, which Elsa 4 input expressions may not do, so the run faults with VF-BIND-001) | 11, 36 |
+| `javascript/array-methods-tests.json` | javascript-array-methods.json | pass | blocked: #6221 (made-compatible copy, run 40: every case passes except `slice`, where `slice` on the variable's array returns `[null]`) | 11, 40 |
 | `javascript/date-methods-tests.json` | javascript-date-methods.json | pass | pass (made-compatible copy, runs 34 and 37) | 11, 37 |
 | `javascript/elsa-functions-tests.json` | javascript-elsa-functions.json | pass | pass (made-compatible copy, run 37) | 11, 37 |
 | `javascript/json-methods-tests.json` | javascript-json-methods.json | pass | pass | 11, 29 |
-| `javascript/object-methods-tests.json` | javascript-object-methods.json | pass | blocked: #5894 (publishes since #5686 was fixed; the response script changes a variable through the reference it read, which Elsa 4 input expressions may not do, so the run faults with VF-BIND-001) | 11, 36 |
+| `javascript/object-methods-tests.json` | javascript-object-methods.json | pass | pass (made-compatible copy, run 40) | 11, 40 |
+| `javascript/variable-changes-tests.json` | javascript-variable-changes.json (S-15 addition, W3) | pass (v7, v8) | pass (run 40): the alias change leaves the array unchanged on Elsa 3 and changes it on Elsa 4, with two `VF-WRITE-001` warnings | 40 |
 | `javascript/script-handler-functions-tests.json` | javascript-script-handler-functions.json | pass (base64 cases; `getConfiguration` cases removed, B14) | pass (made-compatible copy, runs 34 and 36) | 11, 36 |
 | `javascript/specialized-methods-tests.json` | javascript-specialized-methods-workflow.json | pass | blocked: #5687 (a Promise result evaluates to `{}`); since #5818 was fixed the busy-wait runs and every other case passes | 11, 37 |
 | `logging/logging-tests.json` | logging-workflow.json | pass | blocked: #5894 (publishes since #5686 was fixed; the response script changes a variable through the reference it read, which Elsa 4 input expressions may not do, so the run faults with VF-BIND-001) | 11, 36 |

@@ -14,5 +14,7 @@
         }
     },
     "dispatchWaitTimeMilliseconds": 60000,
-    "xmlRequestBodyStatusCode": 500
+    "xmlRequestBodyStatusCode": 500,
+    "aliasChangedArrayLength": 3,
+    "aliasChangeWarningCount": 0
 }

@@ -135,6 +135,12 @@
                     }
                 },
                 {
+                    "name": "javascript/variable-changes",
+                    "case": {
+                        "filePath": "workflow-definitions/javascript-variable-changes.json"
+                    }
+                },
+                {
                     "name": "javascript/specialized-methods",
                     "case": {
                         "filePath": "workflow-definitions/javascript-specialized-methods-workflow.json"
