@@ -360,8 +360,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   A definition refused only because a dependency was refused is also marked *blocked by dependency*, which names the
   root refused definitions: those refused for a finding of their own, through any chain of dependencies. It stays out
   of the import, but its own conversion findings are reported too, each once (#6242). A reference to a refused reusable
-  is read against what that reusable's Elsa 3 definition declares, so only a connection routed on an outcome the
-  declaration lacks, which the refused reusable's converted contract alone could settle, is not reported.
+  is read against that reusable's converted contract when it still converts (refused at analysis, say), otherwise
+  against what its Elsa 3 definition declares; then only a connection routed on an outcome the declaration lacks, which
+  the converted contract alone could settle, is not reported.
 - **FR-018**: The report MUST have these sections:
   1. Summary counts per category and bucket.
   2. The custom-component inventory, with usage counts.

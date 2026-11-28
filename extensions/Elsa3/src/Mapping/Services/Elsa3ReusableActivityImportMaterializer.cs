@@ -358,12 +358,29 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
 
             replacements.TryAdd(rewrite.NodeId, new(
                 rewrite.TargetActivityDefinitionVersionId,
-                targetSource.Inputs.Select(argumentMapper.MapInput).ToArray(),
-                targetSource.Outputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                (targetSource.Inputs ?? []).Select(DeclaredInput).ToArray(),
+                (targetSource.Outputs ?? []).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase),
                 outcomes));
         }
 
         return (replacements, declaredOnly);
+    }
+
+    /// <summary>
+    /// A declared input of a reusable the analysis reads: as the import maps it, or typed <c>Any</c> when its type does
+    /// not map, which may be why that reusable was refused; the analysis must not fail on it.
+    /// </summary>
+    private InputDefinition DeclaredInput(Elsa3WorkflowArgumentDefinition input)
+    {
+        try
+        {
+            return argumentMapper.MapInput(input);
+        }
+        catch (ArgumentException)
+        {
+            return new(input.Name, input.Name, new Elsa.Primitives.Models.TypeReference(Elsa.Primitives.Models.TypeAliasConvention.AnyAlias),
+                StorageDriverType: null, $"{input.DisplayName}", input.Category, IsNullable: true, Description: input.Description, UiHint: input.UiHint);
+        }
     }
 
     /// <summary>

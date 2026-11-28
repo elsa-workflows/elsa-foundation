@@ -99,6 +99,22 @@ public sealed class BlockedDependentFindingsTests
         Assert.DoesNotContain(findings, finding => finding.Code == OutcomeUnmapped);
     }
 
+    [Fact]
+    public async Task A_refused_reusable_with_an_untyped_input_does_not_stop_the_analysis()
+    {
+        using var host = new TestHostFolder();
+        var export = Export(host,
+            ("refused.json", RefusedReusable("acme-refused", inputs: """[{ "name": "Rate", "displayName": "Rate", "type": "" }]""")),
+            ("consumer.json", Definition("acme-consumer", reusable: false,
+                [ReusableNode("UseRefused", "acme-refused"), ScriptNode("Script", "return someFunction();")])));
+
+        using var report = await InventoryAsync(host, export);
+
+        var consumer = Definitions(report.RootElement)["acme-consumer"];
+        Assert.Equal(["acme-refused-v1"], BlockedBy(consumer));
+        Assert.Contains((FunctionMissing, "someFunction"), Findings(consumer));
+    }
+
     private static void AssertEachFindingOnce(JsonElement root, params (string Component, string DefinitionId)[] expected)
     {
         var components = root.GetProperty("components").EnumerateArray()
@@ -149,7 +165,7 @@ public sealed class BlockedDependentFindingsTests
     private static bool NotRoutine((string Code, string? ComponentName) finding) => finding.Code != "ELS3-NULL-POLICIES";
 
     // Sets a variable, which a reusable workflow cannot yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED).
-    private static string RefusedReusable(string definitionId) => Definition(definitionId, reusable: true,
+    private static string RefusedReusable(string definitionId, string inputs = "[]") => Definition(definitionId, reusable: true,
         [
             """
             {
@@ -159,9 +175,10 @@ public sealed class BlockedDependentFindingsTests
             }
             """
         ],
-        variables: """[{ "id": "RateVar", "name": "Rate", "typeName": "String", "isArray": false, "value": null, "storageDriverTypeName": null }]""");
+        variables: """[{ "id": "RateVar", "name": "Rate", "typeName": "String", "isArray": false, "value": null, "storageDriverTypeName": null }]""",
+        inputs: inputs);
 
-    private static string Definition(string definitionId, bool reusable, string[] activities, string[]? connections = null, string variables = "[]") => $$"""
+    private static string Definition(string definitionId, bool reusable, string[] activities, string[]? connections = null, string variables = "[]", string inputs = "[]") => $$"""
         {
           "id": "{{definitionId}}-v1",
           "definitionId": "{{definitionId}}",
@@ -169,7 +186,7 @@ public sealed class BlockedDependentFindingsTests
           "version": 1,
           "toolVersion": "3.6.3.0",
           "variables": {{variables}},
-          "inputs": [],
+          "inputs": {{inputs}},
           "outputs": [],
           "outcomes": [],
           "customProperties": {},
