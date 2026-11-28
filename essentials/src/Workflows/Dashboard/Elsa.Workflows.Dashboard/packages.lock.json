@@ -27,12 +27,6 @@
         "resolved": "0.0.1-preview.8",
         "contentHash": "2oIY7sSleqZv2y1wfBPZxa4GcaR3+PVsxuo3Pd2bXMRpsUAWzAMYf83eAKrzp3FIX6OE5e89lawTaiALKT8/hQ=="
       },
-      "ValenceWorks.MinimalEndpoints": {
-        "type": "Direct",
-        "requested": "[1.0.0, )",
-        "resolved": "1.0.0",
-        "contentHash": "Nxn9P89DUkiXNrEjvYtJ5iu9EteQOrfNA/lyfsrsCcZeWu1hUwQDkGpVXFep7KuSA87vdMKfvng5obFDxHqZyQ=="
-      },
       "JetBrains.Annotations": {
         "type": "Transitive",
         "resolved": "2025.2.4",
@@ -131,6 +125,22 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.dashboard.retained": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+        }
+      },
       "elsa.workflows.design.core": {
         "type": "Project",
         "dependencies": {
@@ -212,6 +222,12 @@
         "requested": "[0.13.0, )",
         "resolved": "0.13.0",
         "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
+      },
+      "ValenceWorks.MinimalEndpoints": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "Nxn9P89DUkiXNrEjvYtJ5iu9EteQOrfNA/lyfsrsCcZeWu1hUwQDkGpVXFep7KuSA87vdMKfvng5obFDxHqZyQ=="
       }
     }
   }
