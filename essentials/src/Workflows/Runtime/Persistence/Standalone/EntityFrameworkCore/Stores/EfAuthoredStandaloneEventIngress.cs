@@ -46,7 +46,7 @@ internal sealed class EfAuthoredStandaloneEventIngress(IRuntimeIngressDeliverySt
             source.Scope.Persistence.Value, source.Occurrence);
 
         ValueTask<IReadOnlyList<TriggerAggregate>> ReadMatchingAsync(CancellationToken token) =>
-            WorkflowStimulusSubscriptionSelector.ReadMatchingAsync(resources, source.Scope, match, token);
+            WorkflowSubscriptionSourceReader.ReadMatchingAsync(resources, source.Scope, match, token);
 
         ValueTask<RuntimeIngressAdmissionRequest> PrepareAsync(TriggerAggregate aggregate, CancellationToken token) =>
             admission.PrepareAuthoredEventAsync(descriptor, invocation,

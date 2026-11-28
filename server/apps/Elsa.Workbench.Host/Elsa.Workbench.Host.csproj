@@ -142,6 +142,7 @@
 		<ProjectReference Include="../../../essentials/src/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
+		<ProjectReference Include="../../../essentials/src/Activities/Runtime/Hosting/Elsa.Activities.Runtime.Hosting.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
 		<ProjectReference Include="../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
