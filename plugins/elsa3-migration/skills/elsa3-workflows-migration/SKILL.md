@@ -150,7 +150,8 @@ the shape). Then read the result:
    a definition that uses an activity Elsa 4 does not know yet is not converted further, so a JavaScript function it
    calls appears only in a later report, once that activity is ported. Every report adds rows (stage 3).
 3. Show the user the components with their counts.
-4. Mark the Elsa 3 built-ins: a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as `Elsa.SetVariable`), and a
+4. Mark the Elsa 3 built-ins: a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as
+   `Elsa.SetVariable`), the storage driver named only `MemoryStorageDriver` (Elsa 3's Memory driver), and a
    JavaScript function that case 14 of the porting catalog lists as one Elsa 3 defined itself. Record their source as
    `Elsa 3 built-in` and do not search for them.
 5. Ask for the folders or repositories of the Elsa 3 source (asking once per folder before searching it) and record
