@@ -101,10 +101,10 @@ reports zero shells reloaded. The one exception is a shell that enables the `Mod
 shell's module API also refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying
 feature configuration, not a response to reconciliation.
 
-After an in-place upgrade, the previous release of a package-loaded activity stays loaded, and a reloaded shell registers
-the class of the release it composes under the activity's alias; see
-[Activity versions after an in-place upgrade](../../essentials/src/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)
-for what that means for a workflow pinned to an earlier version.
+After an in-place upgrade, the previous release of a package-loaded activity stays loaded. A reloaded shell registers
+[the aliases from its selected packages](../../essentials/src/Activities/Runtime/Hosting/Tasks/RegisterActivityTypesStartupTask.cs).
+The [classic activity versioning guide](https://github.com/elsa-workflows/elsa-foundation/blob/aea76c0b38f18e8037050ea53cef20995ec69a03/essentials/src/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade) describes how its activator handles workflows pinned
+to an earlier activity version.
 ## Reconciling on demand
 
 `POST /_module-management/reconcile` (with `Elsa:ModuleManagement:Enabled` and the `X-Elsa-Module-Management-Key`

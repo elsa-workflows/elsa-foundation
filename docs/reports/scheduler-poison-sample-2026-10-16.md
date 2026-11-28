@@ -79,7 +79,7 @@ the full work-item payload. [Crash recording](https://github.com/elsa-workflows/
 replaces the latest fault for a repeated work item while retaining the first timestamp and incrementing
 the failure count. It is not a per-attempt fault history.
 
-The [current fault-behavior guide](../runtime-fault-behavior.md#how-it-becomes-visible) and
+The [current fault-behavior guide](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/docs/runtime-fault-behavior.md#how-it-becomes-visible) and
 [default retry policy](https://github.com/elsa-workflows/elsa-foundation/blob/6b3ad8c3dbee6c4b62f9dcc295c6cf3d5450708b/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/NoopRuntimeDomainRetryPolicy.cs)
 describe explicit `DoNotRetry` and a process-local default poison store; durable retention depends on
 host composition. The [EF poison store](https://github.com/elsa-workflows/elsa-foundation/blob/6b3ad8c3dbee6c4b62f9dcc295c6cf3d5450708b/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowSchedulerPoisonStore.cs)

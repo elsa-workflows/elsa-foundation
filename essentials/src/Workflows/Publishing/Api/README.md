@@ -90,7 +90,7 @@ Trigger conflicts retain their stable `key` and optionally include a readable `d
 safe display text; routing metadata such as authorization policy is not exposed. Declaring two channels does not
 isolate their HTTP routes: simultaneous exclusive claims still need distinct route surfaces.
 
-When [activation channel configuration](../../Runtime/Elsa.Workflows.Runtime/README.md#activation-channels)
+When [activation channel configuration](../../Runtime/Publications/ActivationChannels/WorkflowsActivationChannelsFeature.cs)
 disables ad-hoc channels, both workflow preflight routes and publication reject an undeclared channel with
 `400` and `errorCode: channel_not_declared` before publication writes. Read declarations and creation policy from
 the Runtime activation-slot list response; a previously existing undeclared slot remains visible.
