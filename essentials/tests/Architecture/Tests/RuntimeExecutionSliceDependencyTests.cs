@@ -59,6 +59,14 @@ public sealed class RuntimeExecutionSliceDependencyTests
             reference => reference.Name == "Elsa.Workflows.Runtime.Api");
     }
 
+    [Fact]
+    public void ActorKernelModules_DoNotReferenceTheClassicRunner()
+    {
+        foreach (var module in new[] { typeof(WorkflowsRuntimeKernelRetainedApiFeature), typeof(WorkflowsRuntimeKernelHostingFeature) })
+            Assert.DoesNotContain(module.Assembly.GetReferencedAssemblies(),
+                reference => reference.Name == "Elsa.Workflows.Runtime");
+    }
+
     private static void AssertNoReferences(System.Reflection.Assembly assembly, params string[] forbiddenPrefixes)
     {
         var forbidden = assembly

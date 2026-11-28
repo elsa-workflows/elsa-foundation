@@ -14,6 +14,14 @@ internal static class RuntimeIngressAdmissionValidation
         access.Current.RequireScope(); access.Current.EnsureScope(scope.Persistence);
     }
 
+    internal static RuntimePostCommitOutboxItem AttachWaits(RuntimePostCommitOutboxItem candidate, RuntimeIngressWaitDelivery waits)
+    {
+        var selected = candidate.SubscriptionDelivery!;
+        var complete = new RuntimeSubscriptionDelivery(selected.Version, selected.SourceOutboxItemId, selected.SourceFingerprint, selected.Scope,
+            selected.Recipients, selected.Refusals, selected.Progress, resourceCaptures: selected.ResourceCaptures, waitDelivery: waits);
+        return RuntimePostCommitOutboxItem.CreateStandaloneIngress(candidate.StandaloneIngress!, complete, candidate.RetryPolicy);
+    }
+
     internal static RuntimeIngressAdmissionReceipt Replay(RuntimePostCommitOutboxItem item, TriggerScope scope, string id, string fingerprint)
     {
         CheckSource(item, scope);

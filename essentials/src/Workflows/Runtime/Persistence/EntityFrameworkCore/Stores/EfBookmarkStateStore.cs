@@ -216,14 +216,6 @@ public sealed class EfBookmarkStateStore(
             cancellationToken);
     }
 
-    internal static Task<bool> HasPhysicalStimulusAsync(RuntimeDbContext context, string scope, string type, string stimulus,
-        CancellationToken token)
-    {
-        var scopeKey = Hash(scope);
-        var lookup = StimulusLookupKey(type, stimulus);
-        return context.Bookmarks.AsNoTracking().AnyAsync(row => row.ScopeKeyHash == scopeKey && row.StimulusLookupKey == lookup, token);
-    }
-
     public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(BookmarkStimulusTypePageQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -475,7 +467,8 @@ public sealed class EfBookmarkStateStore(
     internal static string CreateId(string scope, string workflowExecutionId, string bookmarkId) =>
         Hash($"{scope.Length}:{scope}{workflowExecutionId.Length}:{workflowExecutionId}{bookmarkId.Length}:{bookmarkId}");
 
-    private static string StimulusLookupKey(string stimulusType, string stimulusHash) => Hash($"{stimulusType.Length}:{stimulusType}{stimulusHash}");
+    private static string StimulusLookupKey(string stimulusType, string stimulusHash) =>
+        EfBookmarkStimulusEvidence.LookupKey(stimulusType, stimulusHash);
     private static string StimulusBinding(string stimulusType, string stimulusHash) =>
         $"{stimulusType.Length}:{stimulusType}{stimulusHash.Length}:{stimulusHash}";
     private static string StimulusTypeLookupKey(string stimulusType) => Hash(stimulusType);

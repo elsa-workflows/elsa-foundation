@@ -20,6 +20,14 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class StimulusDeliveryStoreTests
 {
+    [Fact]
+    public async Task Classic_ingress_rejects_evidence_from_another_access_boundary()
+    {
+        await using var harness = await Harness.Create(true);
+        Assert.True(harness.Ingress().Port.SupportsAdmission);
+        Assert.False(harness.Ingress(foreignLegacyAccess: true).Port.SupportsAdmission);
+    }
+
     [Theory]
     [InlineData(false)] [InlineData(true)]
     public async Task Checked_ingress_admits_actual_roots_and_replays_before_pause_unpublication_or_changed_candidate_checks(bool ef)
@@ -306,7 +314,7 @@ public sealed partial class StimulusDeliveryStoreTests
         public IActivityExecutionStateStore WaitActivities => Context is null ? ingressActivities : new EfActivityExecutionStateStore(Context, new Accessor(), new Codec());
 
         public (IRuntimeIngressDeliveryStore Port, IStandaloneTriggerStore Resources, IWorkflowActivationAuthority Slots, IWorkflowSchedulerWorkQueue Queue) Ingress(
-            IEnumerable<IStimulusDeliveryIntentAdapter>? adapters = null)
+            IEnumerable<IStimulusDeliveryIntentAdapter>? adapters = null, bool foreignLegacyAccess = false)
         {
             IStandaloneTriggerStore resources = Context is null ? new InMemoryStandaloneTriggerStore(memory, new Accessor(), Clock) :
                 new EfStandaloneTriggerStore(Context, new Accessor(), Clock);
@@ -316,11 +324,13 @@ public sealed partial class StimulusDeliveryStoreTests
             var proof = new NativeIngressTargetEvidence(queue, executions, Clock, executables: artifacts);
             var waitProof = new NativeIngressWaitTargetEvidence(queue, executions, WaitActivities, WaitBookmarks, Clock);
             var leaseManager = Observe(new WorkflowExecutableRootWriteLeaseManager(artifacts, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock));
+            var access = new Accessor();
             IRuntimeIngressDeliveryStore port = Context is null
-                ? new InMemoryRuntimeIngressDeliveryStore(resources, Outbox, authority, artifacts, References, executions, leaseManager, new Accessor(), Clock, proof,
+                ? new InMemoryRuntimeIngressDeliveryStore(resources, Outbox, authority, artifacts, References, executions, leaseManager, access, Clock, proof,
                     stimulusAdapters: adapters, waitEvidence: waitProof, resumeResolver: new BookmarkResumeResolver(), checkpoints: Checkpoints)
-                : new EfRuntimeIngressDeliveryStore(Context, resources, Outbox, authority, artifacts, References, executions, leaseManager, new Accessor(), Clock, proof,
-                    stimulusAdapters: adapters, waitEvidence: waitProof, resumeResolver: new BookmarkResumeResolver(), checkpoints: Checkpoints);
+                : new EfRuntimeIngressDeliveryStore(Context, resources, Outbox, authority, artifacts, References, leaseManager, access, Clock,
+                    new EfLegacyRuntimeIngress(Context, resources, Outbox, artifacts, executions, foreignLegacyAccess ? new Accessor() : access, Clock, proof,
+                        stimulusAdapters: adapters, waitEvidence: waitProof, resumeResolver: new BookmarkResumeResolver(), checkpoints: Checkpoints));
             return (port, resources, authority, queue);
         }
 
@@ -341,8 +351,9 @@ public sealed partial class StimulusDeliveryStoreTests
             var resources = new EfStandaloneTriggerStore(context, access, Clock);
             var queue = new EfSchedulerWorkQueueStore(context, access, new Codec());
             var evidence = new NativeIngressTargetEvidence(queue, executions, Clock, executables: artifacts);
+            var legacy = new EfLegacyRuntimeIngress(context, resources, source, artifacts, executions, access, Clock, evidence);
             return (new EfRuntimeIngressDeliveryStore(context, resources, source, new EfWorkflowActivationAuthority(context, access),
-                artifacts, references, executions, roots, access, Clock, evidence, preparedStarts: preparedStarts), resources);
+                artifacts, references, roots, access, Clock, legacy, preparedStarts: preparedStarts), resources);
         }
     }
     private static async Task AssertInvalidAuthorityAsync(Func<Task> operation)
