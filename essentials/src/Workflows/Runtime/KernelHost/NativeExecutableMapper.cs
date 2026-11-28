@@ -497,7 +497,20 @@ public static class NativeExecutableMapper
                     node.Inputs["Value"] = Input(WorkflowIntrinsicInputKeys.Value);
                     break;
                 case WorkflowIntrinsicKind.SetOutput:
-                    node.Inputs["Name"] = LiteralText(WorkflowIntrinsicInputKeys.Name);
+                    var outputName = LiteralText(WorkflowIntrinsicInputKeys.Name);
+                    if (source.Descriptor.SchemaVersion == WorkflowIntrinsicDescriptorSchemas.ActivityOutput)
+                    {
+                        if (scope.Graph is null)
+                            throw NativeMappingRefusedException.Activity(id, "This Set Output requires an enclosing reusable activity.");
+                        // Published Graph outputs are addressed by the pinned reference key. The authored name is display text.
+                        if (source.DescriptorPayload.ValueKind != JsonValueKind.Object ||
+                            !source.DescriptorPayload.TryGetProperty("referenceKey", out var key) ||
+                            key.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(key.GetString()))
+                            throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Name,
+                                "This Set Output has no pinned output reference. Publish the reusable activity and workflow again.");
+                        outputName = Native.Binding.Literal(key.GetString());
+                    }
+                    node.Inputs["Name"] = outputName;
                     node.Inputs["Value"] = Input(WorkflowIntrinsicInputKeys.Value);
                     break;
                 case WorkflowIntrinsicKind.SetCorrelationId or WorkflowIntrinsicKind.SetInstanceName:

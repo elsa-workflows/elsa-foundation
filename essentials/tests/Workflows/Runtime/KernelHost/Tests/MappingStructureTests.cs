@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
@@ -181,11 +183,32 @@ public sealed class MappingStructureTests
         Assert.Equal(new Native.VariableBinding("amount"), workflow.Nodes["body-set"].Inputs["Value"]);
         Assert.Equal("total", Assert.IsType<Native.LiteralBinding>(workflow.Nodes["body-set"].Inputs["Name"]).Value!.GetValue<string>());
         Assert.Equal(new Native.VariableBinding("total"), workflow.Nodes["body-output"].Inputs["Value"]);
+        Assert.Equal("result", Assert.IsType<Native.LiteralBinding>(workflow.Nodes["body-output"].Inputs["Name"]).Value!.GetValue<string>());
         Assert.Equal("result", node.Captures["out"]);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("other-boundary-output")]
+    [InlineData("echo")]
+    public void A_scoped_set_output_requires_a_pinned_unmapped_output_on_its_boundary(string? referenceKey)
+    {
+        var executable = Executable(Sequence("root", Graph("approve", out _, referenceKey)), Variable("v-out", "out"));
+        var refusal = Assert.Throws<NativeMappingRefusedException>(() => NativeExecutableMapper.Map(executable));
+        Assert.Equal("body-output", refusal.Node);
+    }
+
+    [Fact]
+    public void A_scoped_set_output_requires_an_enclosing_reusable_activity()
+    {
+        var executable = Executable(ScopedSetOutput("result", Literal(WorkflowIntrinsicInputKeys.Value, 7, "Int32")));
+        var refusal = Assert.Throws<NativeMappingRefusedException>(() => NativeExecutableMapper.Map(executable));
+        Assert.Equal("body-output", refusal.Node);
+        Assert.Contains("enclosing reusable activity", refusal.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>A placed reusable activity: its boundary declares an input, a variable, two outputs and an outcome mapping.</summary>
-    internal static ExecutableNode Graph(string id, out string body)
+    internal static ExecutableNode Graph(string id, out string body, string? assignedOutputReference = "result")
     {
         body = "body";
         var descriptor = new
@@ -202,10 +225,20 @@ public sealed class MappingStructureTests
         };
         var bodyNode = Sequence("body",
             Set("body-set", "v-total", Request("value", "amount")),
-            SetOutput("body-output", "result", VariableRead("value", "v-total")));
+            ScopedSetOutput(assignedOutputReference, VariableRead("value", "v-total")));
         return Node(id, "Acme.Approve", [Literal("amount", 7, "Int32")], slots: [Slot("activity-graph", bodyNode)],
             captures: [Capture("result", "out")], descriptorType: "elsa.graph-activity", descriptor: descriptor);
     }
+
+    private static ExecutableNode ScopedSetOutput(string? referenceKey, RuntimeInputBinding value) =>
+        new("body-output", "body-output", "elsa.intrinsic.setoutput", "1.0.0", WellKnownRuntimeActivityConsumers.Intrinsic,
+            JsonSerializer.SerializeToElement(new { kind = "SetOutput", referenceKey }),
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Name] = Literal(WorkflowIntrinsicInputKeys.Name, "Published Result", "String"),
+                [WorkflowIntrinsicInputKeys.Value] = value
+            }, new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.SetOutput,
+            descriptorSchemaVersion: WorkflowIntrinsicDescriptorSchemas.ActivityOutput);
 
     [Fact]
     public void Intrinsics_map_by_their_kind()
