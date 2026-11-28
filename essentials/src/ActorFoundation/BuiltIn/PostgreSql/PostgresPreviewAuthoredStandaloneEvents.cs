@@ -42,6 +42,21 @@ public static partial class PostgresPreviewHosting
         InstallPreviewFormatAsync(() => CreateRetainedStandaloneSourcesQualificationContext(options, actorType, publisherScope),
             cancellationToken);
 
+    internal static KernelDb CreateOptionalAuthoredStandaloneEventsQualificationContext(DbContextOptions<KernelDb> options,
+        string actorType, Contract.BoundScope? publisherScope)
+    {
+        if (publisherScope is { IsHostIsolated: true })
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
+        RootPublicEventHost.RequireConfiguredActorType(actorType);
+        return KernelDb.ForPostgresOptionalAuthoredStandaloneEventsQualification(options,
+            new(actorType, false) { AuthoredStandaloneTenant = publisherScope?.Tenant });
+    }
+
+    internal static Task InstallOptionalAuthoredStandaloneEventsQualificationAsync(DbContextOptions<KernelDb> options, string actorType,
+        Contract.BoundScope? publisherScope, CancellationToken cancellationToken) =>
+        InstallPreviewFormatAsync(() => CreateOptionalAuthoredStandaloneEventsQualificationContext(options, actorType, publisherScope),
+            cancellationToken);
+
     /// <summary>Binds a reader and acknowledgement edge to the installed ordinary publisher scope.</summary>
     public static IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Func<KernelDb> open, Contract.BoundScope scope)
     {

@@ -12,7 +12,7 @@ public static partial class SqliteEmbeddedHosting
     // A successor can recover durable work through a different edge. An earlier wait may then time out.
     internal static SqliteDirectRequests CreateRequests(string databasePath, string node, string actorType,
         TimeSpan? deduplicationWindow = null, RootAdmissionPressure? pressure = null, StoreFormat? qualificationFormat = null,
-        ProtectRootStartAsync? protectRootStart = null)
+        ProtectRootStartAsync? protectRootStart = null, string? authoredStandaloneTenant = null)
     {
         RequireFoundationActorType(actorType);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -23,7 +23,9 @@ public static partial class SqliteEmbeddedHosting
         using var file = AcquireFile(databasePath);
         using var db = KernelDb.ForSqliteRootShipped(file.Options, qualificationFormat);
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
-        var publicEventHost = db.UsesRootPublicEventHost ? new RootPublicEventHost(actorType, protectRootStart is not null) : null;
+        var publicEventHost = db.UsesRootPublicEventHost
+            ? new RootPublicEventHost(actorType, protectRootStart is not null) { AuthoredStandaloneTenant = authoredStandaloneTenant }
+            : null;
         return new(file.Path, node, actorType, window, db.UsesRootPublicEventStarts, db.UsesRootKeyedStarts, publicEventHost,
             pressure, qualificationFormat, protectRootStart);
     }

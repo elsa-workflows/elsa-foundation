@@ -22,6 +22,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     private Task<int> VerifyAsync(bool bindOwner, string? auxiliaryActor, CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
         if (db.UsesRootPublicEventHost) await RootPublicEventHost.ReadAsync(db, bind: null, ct);
+        if (db.AllowsDisabledAuthoredStandaloneEvents) await RootAuthoredStandaloneEvents.ReadTenantAsync(db, bind: null, ct);
         var issuer = await ReadIssuerAsync(db, ct);
         if (!await db.Database.SqlQuery<bool>($"""
             SELECT (count(*) = {issuer.Partitions} AND min("Id") = 0 AND max("Id") = {issuer.Partitions - 1}) AS "Value"
