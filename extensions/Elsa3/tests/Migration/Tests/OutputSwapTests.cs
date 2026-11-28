@@ -121,6 +121,18 @@ public sealed class OutputSwapTests : IDisposable
     }
 
     [Fact]
+    public void A_run_that_does_not_commit_removes_the_parent_folders_it_created()
+    {
+        var nested = Path.Combine(_out, "results", "run1");
+
+        using (OutputSwap.Begin(nested))
+        {
+        }
+
+        Assert.False(Directory.Exists(_out));
+    }
+
+    [Fact]
     public void Commit_twice_is_refused()
     {
         using var swap = OutputSwap.Begin(_out);

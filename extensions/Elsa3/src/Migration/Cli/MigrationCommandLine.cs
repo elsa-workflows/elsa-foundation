@@ -65,6 +65,12 @@ internal static class MigrationCommandLine
             error.WriteLine("elsa3-migration: cancelled; --out was left as it was.");
             return CancelledExitCode;
         }
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
+        {
+            // A cancellation another exception wraps is still a cancellation.
+            error.WriteLine("elsa3-migration: cancelled; --out was left as it was.");
+            return CancelledExitCode;
+        }
         catch (Exception exception)
         {
             // Never the message or the stack: either can quote a setting value or definition content (FR-019).

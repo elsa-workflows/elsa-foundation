@@ -19,15 +19,16 @@ internal sealed class OutputSwap : IDisposable
     private static readonly TimeSpan StaleAfter = TimeSpan.FromHours(1);
 
     private readonly string _outputFolder;
-    private readonly bool _createdOutputFolder;
+    /// <summary>The first folder of <c>--out</c>'s path that did not exist before the run, or null.</summary>
+    private readonly string? _firstCreatedFolder;
     private bool _committed;
     private bool _keepStaging;
 
-    private OutputSwap(string outputFolder, string stagingFolder, bool createdOutputFolder)
+    private OutputSwap(string outputFolder, string stagingFolder, string? firstCreatedFolder)
     {
         _outputFolder = outputFolder;
         StagingFolder = stagingFolder;
-        _createdOutputFolder = createdOutputFolder;
+        _firstCreatedFolder = firstCreatedFolder;
     }
 
     /// <summary>The staging folder the run writes into.</summary>
@@ -39,7 +40,7 @@ internal sealed class OutputSwap : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(outputFolder);
 
         var output = Path.GetFullPath(outputFolder);
-        var created = !Directory.Exists(output);
+        var firstCreated = FirstMissingFolder(output);
         Directory.CreateDirectory(output);
         try
         {
@@ -48,12 +49,11 @@ internal sealed class OutputSwap : IDisposable
             var info = Directory.CreateDirectory(staging);
             if (OperatingSystem.IsWindows())
                 info.Attributes |= FileAttributes.Hidden;
-            return new OutputSwap(output, staging, created);
+            return new OutputSwap(output, staging, firstCreated);
         }
         catch
         {
-            if (created)
-                TryDeleteIfEmpty(output);
+            RemoveCreatedFolders(output, firstCreated);
             throw;
         }
     }
@@ -136,20 +136,40 @@ internal sealed class OutputSwap : IDisposable
     {
         if (_committed ? !Directory.Exists(Path.Combine(StagingFolder, PreviousName)) : !_keepStaging && !HoldsPreviousOutput(StagingFolder))
             TryDelete(StagingFolder);
-        // A run that did not commit leaves a missing --out missing (contracts/cli.md, exit 2).
-        if (!_committed && _createdOutputFolder)
-            TryDeleteIfEmpty(_outputFolder);
+        // A run that did not commit leaves a missing --out missing, its new parent folders too (contracts/cli.md).
+        if (!_committed)
+            RemoveCreatedFolders(_outputFolder, _firstCreatedFolder);
     }
 
-    private static void TryDeleteIfEmpty(string folder)
+    /// <summary>The outermost folder of <paramref name="folder"/>'s path that does not exist yet, or null when it exists.</summary>
+    private static string? FirstMissingFolder(string folder)
     {
-        try
+        string? missing = null;
+        for (var current = folder; !string.IsNullOrEmpty(current) && !Directory.Exists(current); current = Path.GetDirectoryName(current))
+            missing = current;
+        return missing;
+    }
+
+    /// <summary>Deletes <paramref name="folder"/> and its parents up to <paramref name="firstCreated"/>, each only while empty.</summary>
+    private static void RemoveCreatedFolders(string folder, string? firstCreated)
+    {
+        if (firstCreated is null)
+            return;
+        for (var current = folder; !string.IsNullOrEmpty(current); current = Path.GetDirectoryName(current))
         {
-            if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
-                Directory.Delete(folder);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
+            try
+            {
+                if (!Directory.Exists(current) || Directory.EnumerateFileSystemEntries(current).Any())
+                    return;
+                Directory.Delete(current);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return;
+            }
+
+            if (string.Equals(current, firstCreated, StringComparison.Ordinal))
+                return;
         }
     }
 
@@ -237,13 +257,30 @@ internal sealed class OutputSwap : IDisposable
 
     private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 
+    /// <summary>
+    /// Moves a file or folder. On Windows a file just written can be held briefly by a scanner or the indexer, which fails
+    /// a folder move; the move is tried again a few times before the failure stands.
+    /// </summary>
     private static void Move(string source, string destination)
     {
-        if (Directory.Exists(source))
-            Directory.Move(source, destination);
-        else
-            File.Move(source, destination);
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(source))
+                    Directory.Move(source, destination);
+                else
+                    File.Move(source, destination);
+                return;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException && attempt < MoveAttempts)
+            {
+                Thread.Sleep(TimeSpan.FromMilliseconds(100 * attempt));
+            }
+        }
     }
+
+    private const int MoveAttempts = 5;
 
     private static void TryDelete(string path)
     {

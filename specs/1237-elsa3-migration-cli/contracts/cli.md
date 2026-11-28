@@ -41,7 +41,7 @@ and a sentence. The report is written only on exit 0 or 1.
 | `arguments` | An unknown command or option, or an invalid combination of options. |
 | `input-missing` | `<export>` does not exist, or is neither a folder nor a zip. |
 | `input-empty` | No file holds an Elsa 3 definition. |
-| `input-unreadable` | The zip cannot be opened. |
+| `input-unreadable` | The zip cannot be opened, or a folder or file of a folder export cannot be read. |
 | `composition-failed` | A listed feature that the CLI's build does not provide, or a feature that throws while the shell is composed. The reason names the feature or the setting key, never a value. |
 
 ## Output layout
