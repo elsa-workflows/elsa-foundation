@@ -96,7 +96,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         {
             PreparedStandaloneAdmission.RequireSource(request.Candidate);
             if (request.WaitCandidate is not null && !PreparedStandaloneHttp.HasEmptyWaitObservation(source, request.WaitCandidate) ||
-                request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => !preparedTarget!.Selects(source, recipient)))
+                request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => !preparedTarget!.CanAdmit(source, recipient)))
                 throw new NotSupportedException("This Runtime owner admits only prepared Actor Foundation starts.");
         }
         if (await PrepareWaitsAsync(request, cancellationToken) is { } capturedWaits)

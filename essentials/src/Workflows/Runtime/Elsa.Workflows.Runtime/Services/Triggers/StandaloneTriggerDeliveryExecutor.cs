@@ -15,7 +15,13 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
         var item = await store.ReadSourceAsync(source, cancellationToken);
         var selection = item.SubscriptionDelivery ?? throw new InvalidDataException("A standalone source has no accepted cohort.");
         var requiresPrepared = item.StandaloneIngress is { } standalone && PreparedStandaloneAdmission.IsMarked(standalone);
-        if (requiresPrepared) PreparedStandaloneAdmission.RequireSource(item);
+        if (requiresPrepared)
+        {
+            PreparedStandaloneAdmission.RequireSource(item);
+            if (prepared is null) throw new NotSupportedException("The accepted source's Foundation handoff is unavailable.");
+            // Waits remain owed once the source is accepted, including when a later root policy or cancellation prevents every start.
+            await prepared.PrepareSourceAsync(source, cancellationToken);
+        }
         var blocksOrdinaryWaits = selection.WaitDelivery is not null && !PreparedStandaloneHttp.HasVerifiedEmptyWaits(item) &&
             selection.Recipients.Any(recipient =>
             UsesPrepared(item, recipient, selection.Progress.Single(progress => progress.RecipientId == recipient.RecipientId)));

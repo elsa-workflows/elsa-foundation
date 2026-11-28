@@ -110,7 +110,7 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
                 inputs!.NormalizedInputs, authority!, context.Scope.TenantId, context.Partition, identity,
                 target.Material?.Model?.Protocol, target.Material?.Model?.Profile,
                 target.Material?.Model is null ? null : target.Material.IncarnationId);
-            if (preparedAdmission is not null && prepared?.Selects(source, recipient) != true)
+            if (preparedAdmission is not null && prepared?.CanAdmit(source, recipient) != true)
             {
                 refused.Add(new(subscription.Id, subscription.Revision, "Admission", "target-runtime-unavailable"));
                 continue;

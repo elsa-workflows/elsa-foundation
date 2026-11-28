@@ -5,9 +5,11 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace Elsa.Activities.Http.StandaloneTriggers;
 
@@ -53,7 +55,8 @@ internal sealed class HttpTriggerSourceContext(IHttpContextAccessor http, IPersi
         current = new(reservation.Scope, new WorkflowExecutionPartition(reservation.Scope.Persistence.Value),
             new WorkflowExecutionAuthoritySnapshot("standalone-trigger", rootActor)) { Reservation = reservation };
     }
-    internal void CaptureRequest(HttpRequestModel model, string stimulusHash, IReadOnlyList<RuntimeIngressWaitObservation>? observedWaits = null)
+    internal void CaptureRequest(HttpRequestModel model, string stimulusHash, IReadOnlyList<RuntimeIngressWaitObservation>? observedWaits = null,
+        string? exactRelativePath = null)
     {
         if (current is null || current.WaitCandidate is not null || request is null || !ReferenceEquals(request, http.HttpContext))
             throw new TriggerOperationException("unavailable", "HTTP request intent cannot be rebound or detached from its source.");
@@ -62,8 +65,12 @@ internal sealed class HttpTriggerSourceContext(IHttpContextAccessor http, IPersi
             path = request.Request.Path.Value, query = model.Query,
             headers = model.Headers.ToDictionary(pair => pair.Key.ToLowerInvariant(), pair => pair.Value, StringComparer.Ordinal),
             body = model.Body, contentType = request.Request.ContentType });
+        var metadata = new Dictionary<string, string>();
+        if (exactRelativePath is not null && request.Features.Get<IHttpRequestFeature>()?.RawTarget is { Length: > 0 } rawTarget &&
+            !rawTarget.Split('?', 2)[0].Contains('%'))
+            metadata[RuntimeMetadataKeys.StandaloneHttpExactPath] = exactRelativePath;
         var candidate = new RuntimeIngressWaitCandidate(HttpEndpointStimulus.StimulusType, stimulusHash,
-            JsonSerializer.SerializeToElement(model), new Dictionary<string, string>(),
+            JsonSerializer.SerializeToElement(model), metadata,
             new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(HttpRequestModel)), schemaVersion: 1), HttpEndpoint.ActivityType, observedWaits);
         current = current with { SubmittedIntent = intent, WaitCandidate = candidate };
     }
