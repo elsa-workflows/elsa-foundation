@@ -251,14 +251,13 @@ key, silently starts every redelivered occurrence a second time. Change one by a
 
 ### Published executables are saved durably
 
-A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Runtime
-EF Core module as every other runtime state, written by
-[`EfWorkflowExecutableStore`](../essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
+A published workflow compiles to a `WorkflowExecutable` artifact. The Runtime artifact EF provider stores it through
+[`EfWorkflowExecutableStore`](../essentials/src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
 over the `IWorkflowExecutableStore` seam. Its payload carries the compiled workflow-scope variable
 declarations (`workflowVariables`, #972), the pinned activity contract, and the explicit input-nullability
 data required by typed value flow. The
 `InMemory` executable store registered by `WorkflowsPublishingFeature` is a `TryAdd` default that the
-Runtime EF Core persistence feature overrides; when durable persistence is composed, publishing is durable
+Runtime artifact EF persistence feature overrides. When durable persistence is composed, publishing is durable
 by construction. The `PublishWorkflowRequestHandler` saves the compiled artifact and then builds its trigger
 index in the same publish flow, so a published artifact **and** its start-triggers survive a host restart.
 `RuntimeEntityFrameworkCoreEndToEndTests` proves this against a file-backed SQLite database reopened with a

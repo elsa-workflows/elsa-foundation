@@ -106,10 +106,10 @@ registers no mutating run tool.
 
 ## Owning contracts
 
-[`IWorkflowExecutableInspection` and `IWorkflowRunInspection`](../../../../../essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/EXTENSION_POINTS.md)
-(Workflows Runtime Core, D4) are the only Runtime reads. The Executable default reads through the same inspector as
-`GET runtime/workflows/executables/{artifactId}` and returns a subset of that response; the Run default reads through the
-run endpoints' own services (instance, activity execution, state view and value payload). See their catalog entries.
+[`IWorkflowExecutableInspection`](../../../../../essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableInspection.cs) and [`IWorkflowRunInspection`](../../../../../essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowRunInspection.cs)
+are the only Runtime reads. The [retained Runtime API registration](../../../../../essentials/src/Workflows/Runtime/KernelApi/WorkflowsRuntimeKernelRetainedApiFeature.cs)
+uses the same executable inspector as `GET runtime/workflows/executables/{artifactId}` and uses the Actor-backed run and
+activity readers for Run inspection.
 
 ## Deployment shapes (SC-009)
 
@@ -120,7 +120,7 @@ run endpoints' own services (instance, activity execution, state view and value 
 - **Design-only:** without this package an Executable or Run reference is `weaver.context.kind_unsupported` and
   neither `workflow_read_executable` nor `workflow_read_run` is offered (`Elsa.Weaver.Tests`, `WorkflowDeploymentShapeTests`).
 - **Combined:** both packages compose side by side (`Elsa.Workbench` and the Docker compose shells select both features). A host that composes the Workflows Runtime API with Weaver must select `WeaverWorkflowsRuntime`: Studio's Executable Inspector and run page always send their context, and without this package every turn on those pages is refused as `weaver.context.kind_unsupported` (see the README's upgrade requirement).
-- **Started hosts:** `WorkflowRuntimeOnlyHostTests` activates a real Runtime-only shell (Workflows Runtime API and this feature only) and reads a seeded Executable through the real `WorkflowExecutableInspection`; `WorkflowDesignOnlyHostTests` activates a real Design-only shell.
+- **Started hosts:** `WorkflowRuntimeOnlyHostTests` activates a real shell and calls the retained API's registration hooks with the Actor read port available. It reads a seeded Executable through `WorkflowExecutableInspection` and probes the Run reader's authorization. `WorkflowDesignOnlyHostTests` activates a Design-only shell.
 
 ## SemVer
 

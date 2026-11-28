@@ -1,5 +1,9 @@
 # Engine telemetry vs. the OpenTelemetry ingestion domain
 
+This page records the classic workflow engine's tracing feature. Replay it with
+the [matching classic runtime](../contributing/workbench-compatibility-tests.md).
+The OpenTelemetry ingestion domain is available independently.
+
 Elsa has two telemetry surfaces that are easy to confuse because both mention "OpenTelemetry".
 They point in opposite directions. This page draws the line and documents the engine's own
 tracing conventions.
@@ -92,6 +96,5 @@ Instrumentation is behaviour-preserving by construction:
 
 - Glossary: *Engine telemetry* and *OpenTelemetry ingestion domain* in
   [`docs/glossary/elsa.md`](../glossary/elsa.md).
-- Extension point: `IWorkflowEngineTracer` in
-  [`essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
+- Classic tracing registration: [Runtime extension points](https://github.com/elsa-workflows/elsa-foundation/blob/aea76c0b38f18e8037050ea53cef20995ec69a03/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 - Ingestion domain bucket: [`docs/program-goals/diagnostics-observability-readiness.md`](../program-goals/diagnostics-observability-readiness.md).
