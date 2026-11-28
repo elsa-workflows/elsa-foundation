@@ -35,3 +35,18 @@ dotnet test essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.R
 The current projects exercise standalone trigger management, prepared recurring
 schedules and shared cursor behavior. Current Native and Flowchart execution,
 history and restart tests use the Actor Foundation and kernel-host projects.
+
+## Classic activity execution
+
+The activity fixture at `b5e76081ff405049f335d6b222de18ed96ae8966` owns the
+classic checkpoint, invocation, resumption, activity worker and scope tests.
+From that exact checkout, run:
+
+```sh
+dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj \n  -c Release -p:RestoreLockedMode=true
+```
+
+Current source keeps the typed activity and state contracts, schedule metadata,
+Event wire and source-registration checks, and scope-name behavior. Actor
+Foundation qualifies the supported activity execution paths against its own
+engine, stores and host.
