@@ -25,10 +25,17 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
 
     /// <summary>Binds the shipped Embedded composition with trusted protection for held root starts.</summary>
     public static SqliteEmbeddedFoundation WithRootStartProtection(string databasePath, string node, string actorType,
-        ProtectRootStartAsync protectRootStart)
+        ProtectRootStartAsync protectRootStart) =>
+        WithRootStartProtection(databasePath, node, actorType, protectRootStart, publisherScope: null);
+
+    /// <summary>Binds protected root starts and optionally enables the shipped standalone Event publisher.</summary>
+    public static SqliteEmbeddedFoundation WithRootStartProtection(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart, Contract.BoundScope? publisherScope)
     {
         ArgumentNullException.ThrowIfNull(protectRootStart);
-        return new(databasePath, node, actorType, qualificationFormat: null, protectRootStart);
+        if (publisherScope is { IsHostIsolated: true })
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
+        return new(databasePath, node, actorType, qualificationFormat: null, protectRootStart, publisherScope);
     }
 
     /// <summary>Composes the dedicated preview format for qualifying retained terminal output.</summary>
@@ -49,7 +56,9 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
-        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification ||
+        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification || qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
+        qualificationFormat is { SupportsAuthoredStandaloneEventQualification: true } ||
+        qualificationFormat == StoreFormat.RootPreparedWaitQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat is { SupportsIsolatedInlineQualification: true } ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
@@ -122,6 +131,22 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootHeldEphemeralHttpQualification, protectRootStart);
     }
 
+    /// <summary>Binds a SQLite owner that can retain the first response of a qualified prepared root.</summary>
+    public static SqliteEmbeddedFoundation ForRetainedResponseQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootRetainedResponseQualification, protectRootStart);
+    }
+
+    /// <summary>Binds the private SQLite owner for source-owned ordinary wait delivery.</summary>
+    public static SqliteEmbeddedFoundation ForPreparedWaitQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootPreparedWaitQualification, protectRootStart);
+    }
+
     /// <summary>Binds the private SQLite inline start qualification profile with its executable protection.</summary>
     public static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
         ProtectRootStartAsync protectRootStart)
@@ -133,17 +158,51 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal static SqliteEmbeddedFoundation ForPagedPublicEventsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootPagedPublicEventsQualification);
 
+    /// <summary>Selects the private authored standalone Event store for one ordinary publisher scope.</summary>
+    public static SqliteEmbeddedFoundation ForAuthoredStandaloneEventQualification(string databasePath, string node, string actorType,
+        Contract.BoundScope publisherScope, ProtectRootStartAsync? protectRootStart = null)
+        => ForStandaloneQualification(databasePath, node, actorType, publisherScope, StoreFormat.RootAuthoredStandaloneEventQualification,
+            protectRootStart);
+
+    internal static SqliteEmbeddedFoundation ForOptionalAuthoredStandaloneEventsQualification(string databasePath, string node,
+        string actorType, Contract.BoundScope? publisherScope) => publisherScope is null
+        ? new(databasePath, node, actorType, StoreFormat.RootOptionalAuthoredStandaloneEventsQualification)
+        : ForStandaloneQualification(databasePath, node, actorType, publisherScope,
+            StoreFormat.RootOptionalAuthoredStandaloneEventsQualification, protectRootStart: null);
+
+    private static SqliteEmbeddedFoundation ForStandaloneQualification(string databasePath, string node, string actorType,
+        Contract.BoundScope publisherScope, StoreFormat format, ProtectRootStartAsync? protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(publisherScope);
+        if (publisherScope.IsHostIsolated)
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
+        return new(databasePath, node, actorType, format, protectRootStart, publisherScope);
+    }
+
+    /// <summary>Binds a reader and acknowledgement edge to the installed ordinary publisher scope.</summary>
+    public IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (qualificationFormat is { SupportsAuthoredStandaloneEventQualification: false })
+            throw new NotSupportedException("This SQLite profile cannot transfer authored standalone Events.");
+        return requests.Value.BindAuthoredStandaloneEvents(scope);
+    }
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat,
-        ProtectRootStartAsync? protectRootStart = null)
+        ProtectRootStartAsync? protectRootStart = null, Contract.BoundScope? publisherScope = null)
     {
         path = Path.GetFullPath(databasePath);
         this.node = node;
         this.actorType = actorType;
         this.qualificationFormat = qualificationFormat;
-        if (qualificationFormat is null || qualificationFormat == StoreFormat.RootPublicEventHostQualification)
-            publicEventHost = new(actorType, protectRootStart is not null);
+        if (qualificationFormat is null || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
+            qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
+            qualificationFormat == StoreFormat.RootPreparedWaitQualification ||
+            qualificationFormat is { SupportsAuthoredStandaloneEventQualification: true })
+            publicEventHost = new(actorType, protectRootStart is not null) { AuthoredStandaloneTenant = publisherScope?.Tenant };
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
-            qualificationFormat: qualificationFormat, protectRootStart: protectRootStart), LazyThreadSafetyMode.PublicationOnly);
+            qualificationFormat: qualificationFormat, protectRootStart: protectRootStart, authoredStandaloneTenant: publisherScope?.Tenant),
+            LazyThreadSafetyMode.PublicationOnly);
     }
 
     /// <summary>Whether this profile supports managed schedule delivery and irreversible cohort retirement.</summary>
@@ -154,7 +213,9 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
-        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification ||
+        qualificationFormat == StoreFormat.RootPagedPublicEventsQualification || qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
+        qualificationFormat is { SupportsAuthoredStandaloneEventQualification: true } ||
+        qualificationFormat == StoreFormat.RootPreparedWaitQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
@@ -238,10 +299,26 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     /// <summary>Binds one-way protected starts to this installed SQLite file and the host's selected tenant.</summary>
     public IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope) => requests.Value.BindProtectedRootStarts(scope);
 
+    /// <summary>Binds the private source-owned handoff to the installed file and selected tenant.</summary>
+    public IPreparedRootStartHandoff BindPreparedRootStartQualification(Contract.BoundScope scope)
+    {
+        _ = BindProtectedRootStarts(scope);
+        return new BoundPreparedRootStartHandoff(protect => requests.Value.BindProtectedRootStarts(scope, protect),
+            (actor, issuance, token) => HasAcceptedPreparedStartAsync(scope, actor, issuance, token),
+            (actor, issuance, token) => ConfirmPreparedStartAsync(scope, actor, issuance, token),
+            (actor, issuance, key, token) => requests.Value.ReadRetainedRootResponseAsync(scope, actor, issuance, key, token),
+            (operation, sourceDigest, deliveries, allowNew, token) => requests.Value.DeliverPreparedWaitsAsync(scope, operation, sourceDigest, deliveries, allowNew, token));
+    }
+
     /// <summary>Confirms an exact protected held start under the installed root source.</summary>
     public Task<RootStartProof> ConfirmPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
         CancellationToken cancellationToken = default) =>
         requests.Value.ConfirmHeldStartAsync(scope, actor, issuance, cancellationToken);
+
+    // Separately proves admission without changing the lifetime proof used for releasing executable pins.
+    internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
+        CancellationToken cancellationToken = default) =>
+        requests.Value.HasAcceptedPreparedStartAsync(scope, actor, issuance, cancellationToken);
 
     /// <summary>Removes one bounded page of expired held-root preparations for this scope.</summary>
     public Task<int> PrunePreparedStartsAsync(Contract.BoundScope scope, CancellationToken cancellationToken = default) =>

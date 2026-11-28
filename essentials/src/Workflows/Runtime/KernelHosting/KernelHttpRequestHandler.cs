@@ -200,11 +200,11 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
 
     private static readonly Encoding StrictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    private static bool IsJson(string mediaType) =>
+    internal static bool IsJson(string mediaType) =>
         mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase) || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
 
     // The strict decoder of a charset this runtime ships, strict UTF-8 without one, or null for one it does not know.
-    private static Encoding? EncodingOf(string? charset)
+    internal static Encoding? EncodingOf(string? charset)
     {
         if (string.IsNullOrEmpty(charset)) return StrictUtf8;
         try { return Encoding.GetEncoding(charset, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback); }
@@ -225,7 +225,7 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         return string.Join('/', kept);
     }
 
-    private static List<KeyValuePair<string, string>> QueryPairs(string? queryString)
+    internal static List<KeyValuePair<string, string>> QueryPairs(string? queryString)
     {
         var pairs = new List<KeyValuePair<string, string>>();
         foreach (var pair in new Microsoft.AspNetCore.WebUtilities.QueryStringEnumerable(queryString))

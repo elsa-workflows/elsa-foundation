@@ -195,8 +195,16 @@ if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-
     return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
 if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunHeldRepliesAsync(sqliteReplyFence == "in-batch");
+if (args is ["root-authored-standalone-events", var bridgeProvider and ("postgres" or "sqlite"), var bridgeFence and ("checked" or "in-batch")])
+    return await AuthoredStandaloneEventOutboxChecks.RunAsync(bridgeProvider == "postgres", bridgeFence == "in-batch");
+if (args is ["root-authored-standalone-events", var optionalBridgeProvider and ("postgres" or "sqlite"),
+        var optionalBridgeFence and ("checked" or "in-batch"), var optionalRelay and ("enabled" or "disabled")])
+    return await AuthoredStandaloneEventOutboxChecks.RunAsync(optionalBridgeProvider == "postgres",
+        optionalBridgeFence == "in-batch", relayEnabled: optionalRelay == "enabled");
 if (args is ["sqlite-prepared-starts", var preparedFence and ("checked" or "in-batch")])
     return await SqlitePreparedStartChecks.RunAsync(preparedFence == "in-batch");
+if (args is ["sqlite-prepared-starts", var shippedPreparedFence and ("checked" or "in-batch"), "shipped"])
+    return await SqlitePreparedStartChecks.RunAsync(shippedPreparedFence == "in-batch", shipped: true);
 if (args is ["sqlite-held-reply-peer", var sqliteReplyPath, var sqlitePeerFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunHeldReplyPeerAsync(sqliteReplyPath, sqlitePeerFence == "in-batch");
 if (args is ["sqlite-root-terminate", var sqliteTerminateFence and ("checked" or "in-batch")])
@@ -231,8 +239,13 @@ if (args is ["pg-http-event-owner-loss", var eventOwnerFence and ("checked" or "
     return await PostgresHttpOwnerLoss.RunAsync(eventOwnerFence, "before", heldEvent: true);
 if (args is ["pg-http-event-owner-process", var eventWorkerFence and ("checked" or "in-batch"), var eventPause and ("before" or "resume"), var eventOwnerRef])
     return await PostgresHttpOwnerLoss.RunOwnerAsync(eventWorkerFence, eventPause, new(eventOwnerRef), heldEvent: true);
+if (args is ["root-prepared-waits", var waitProvider and ("postgres" or "sqlite"), var waitFence and ("checked" or "in-batch")])
+    return await PreparedWaitChecks.RunAsync(waitProvider == "postgres", waitFence == "in-batch");
+if (args is ["root-retained-response", var responseProvider and ("postgres" or "sqlite"), var responseFence and ("checked" or "in-batch")])
+    return await RetainedRootResponseChecks.RunAsync(responseProvider == "postgres", responseFence == "in-batch");
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
 if (args is ["pg-protected-held-start"]) return await PostgresHeldStartChecks.RunAsync(protectedStarts: true);
+if (args is ["pg-protected-held-start", "shipped"]) return await PostgresHeldStartChecks.RunAsync(protectedStarts: true, shipped: true);
 if (args is ["pg-child-workflows"]) return await PostgresChildWorkflowChecks.RunAsync();
 if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch")])
     return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");

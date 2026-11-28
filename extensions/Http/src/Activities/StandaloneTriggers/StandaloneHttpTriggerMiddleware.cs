@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
 using Elsa.Http.Core;
@@ -61,7 +62,10 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
             { await ProblemAsync(context, 401, "SourceUnauthorized", "Sign in to invoke this HTTP trigger."); return; }
             owner = standalone[0];
             sourceContext.Bind(owner);
-            var waits = await ObserveWaitsAsync(owner.Scope, hash, context.RequestAborted);
+            var prepared = deliveryStore?.RequiresEmptyHttpWaitCohort == true;
+            var waits = prepared
+                ? Array.Empty<BookmarkStateObservation>()
+                : await ObserveWaitsAsync(owner.Scope, hash, context.RequestAborted);
             var waitOptions = HttpEndpointStimulusOptions.MergeForResume(waits.Select(item => (IReadOnlyDictionary<string, string>?)item.State.Metadata));
             if (waitOptions.Authorize && (authorization is null ||
                 !await HttpEndpointRequestAuthorization.AuthorizeAsync(authorization, context, waitOptions.Policies)))
@@ -74,9 +78,11 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
                 throw new TriggerOperationException("conflict", "The HTTP route generation changed; retry against the current endpoint.");
             if (ingress is null || observations?.SupportsObservations != true || bodyParser is null || deliveryStore is null)
                 throw new TriggerOperationException("unavailable", "The protected HTTP admission and transport boundary is not installed.");
+            var utf8Body = true;
             var request = await HttpEndpointRequestModelReader.ReadAsync(context, relativePath, match.RouteValues,
                 waitOptions.RequestSizeLimit is { } waitLimit ? Math.Min(options.Value.MaxRequestBodyBytes, waitLimit) : options.Value.MaxRequestBodyBytes,
-                ["Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Api-Key"]);
+                ["Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Api-Key"],
+                prepared ? valid => utf8Body = valid : null);
             if (request is null) { await ProblemAsync(context, 413, "BodyTooLarge", "The HTTP request exceeds the configured body limit."); return; }
             var payload = request.Body is null ? JsonSerializer.SerializeToElement<object?>(null) : bodyParser.Parse(context.Request.ContentType, request.Body);
             if (payload is null) { await ProblemAsync(context, 400, "InvalidBody", "Use a supported content type and valid request body."); return; }
@@ -85,7 +91,8 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
             if (key.Length > 128 || key.Any(char.IsControl)) { await ProblemAsync(context, 400, "InvalidIdempotencyKey", "The idempotency key is invalid."); return; }
             var metadata = JsonSerializer.SerializeToElement(new { method = request.Method, path = request.Path, query = request.Query,
                 routeValues = request.RouteData, contentType = context.Request.ContentType }, Json);
-            sourceContext.CaptureRequest(request, hash, waits.Select(RuntimeIngressWaitObservation.From).ToArray());
+            sourceContext.CaptureRequest(request, hash, waits.Select(RuntimeIngressWaitObservation.From).ToArray(),
+                prepared ? relativePath : null, utf8Body);
             acceptedSourceId = RuntimeStandaloneIngressSource.BuildOutboxItemId(owner.Scope.Persistence, owner.Scope.TenantId, owner.OwnerId,
                 StandaloneHttpTriggerSource.Descriptor.SourceFamily, key);
             accepted = await ingress.AdmitAsync(new(owner.OwnerId, key, StandaloneHttpTriggerSource.Descriptor.PayloadSchema, payload.Value, metadata), context.RequestAborted);
@@ -143,9 +150,12 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
         }
         catch (TriggerOperationException exception)
         {
+            var status = exception.Code switch { "unauthorized" => 401, "forbidden" => 403, "conflict" => 409, "validation" => 400, _ => 503 };
             if (accepted is not null && owner is not null) await TryRecordFailureAsync(owner.Scope, acceptedSourceId!, exchangeId,
-                writeCompleted ? RuntimeIngressTransportState.ReceiptUnknown : RuntimeIngressTransportState.WriteFailed, writeCompleted ? context.Response.StatusCode : 503);
-            if (!writeCompleted && !context.Response.HasStarted) await ProblemAsync(context, exception.Code switch { "unauthorized" => 401, "forbidden" => 403, "conflict" => 409, "validation" => 400, _ => 503 }, exception.Code, exception.Message, accepted is null ? null : acceptedSourceId);
+                writeCompleted ? RuntimeIngressTransportState.ReceiptUnknown : RuntimeIngressTransportState.WriteFailed,
+                writeCompleted ? context.Response.StatusCode : status);
+            if (!writeCompleted && !context.Response.HasStarted)
+                await ProblemAsync(context, status, exception.Code, exception.Message, accepted is null ? null : acceptedSourceId);
         }
         catch (Exception exception)
         {
@@ -202,6 +212,21 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
                     // Prompt the ordinary bounded processor; recovery and peer workers retain ownership afterwards.
                     await processor.ProcessAsync(new(1, intentKind: RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind), deadline.Token);
                 }
+                var retained = operation.ServiceProvider.GetService<IRuntimeStandaloneHttpResponseReader>();
+                if (retained is not null)
+                {
+                    var response = await retained.ReadAsync(scope, source.OutboxItemId, deadline.Token);
+                    if (response.State != RuntimeStandaloneHttpResponseState.Legacy)
+                    {
+                        if (response.State == RuntimeStandaloneHttpResponseState.Pending)
+                        {
+                            await Task.Delay(TimeSpan.FromMilliseconds(100), time, deadline.Token);
+                            continue;
+                        }
+                        await WriteRetainedAsync(context, source.OutboxItemId, response, operation.ServiceProvider, deadline.Token);
+                        return;
+                    }
+                }
                 var delivery = operation.ServiceProvider.GetRequiredService<HttpResponseInstructionDelivery>();
                 if (await delivery.TryDeliverAsync(context.Response, [executionId], deadline.Token)) return;
                 var state = await operation.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId, deadline.Token);
@@ -216,6 +241,27 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
         }
         catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested && deadline.IsCancellationRequested)
         { throw new HttpResponseDeadlineException(); }
+    }
+
+    private static async Task WriteRetainedAsync(HttpContext context, string sourceId, RuntimeStandaloneHttpResponse response,
+        IServiceProvider services, CancellationToken token)
+    {
+        if (response.State == RuntimeStandaloneHttpResponseState.Missing)
+        {
+            await ProblemAsync(context, 502, "ResponseMissing", "The workflow ended without a committed HTTP response instruction.", sourceId);
+            return;
+        }
+        if (response.State == RuntimeStandaloneHttpResponseState.TooLarge)
+        {
+            await ProblemAsync(context, 502, "ResponseTooLarge", "The committed workflow response exceeds the delivery limit.", sourceId);
+            return;
+        }
+        if (response is not { State: RuntimeStandaloneHttpResponseState.Ready, ActorReference: { } actor, Headers: { } headers })
+            throw new InvalidDataException("The committed HTTP response instruction is unavailable.");
+        var instruction = new HttpResponseInstruction(response.StatusCode,
+            headers.ToDictionary(pair => pair.Key, pair => new[] { pair.Value }, StringComparer.OrdinalIgnoreCase),
+            response.Body, response.ContentType);
+        await HttpResponseInstructionDelivery.WriteAsync(context.Response, instruction, actor, services.GetServices<IHttpContentFactory>(), token);
     }
 
     private ValueTask RecordAsync(TriggerScope scope, string sourceId, string exchangeId, RuntimeIngressTransportState state, int? status, CancellationToken ct) =>

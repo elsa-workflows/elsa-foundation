@@ -12,6 +12,9 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
@@ -37,8 +40,8 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
     name: FeatureName,
     DisplayName = "Workflows Runtime Kernel Hosting",
     Description = "Runs published Native and Flowchart workflows on the built-in Actor Foundation. Enable on the default shell at host startup.",
-    DependsOn = new object[] { WorkflowsRuntimeKernelApiFeature.FeatureName, "ActivitiesHttp", "JavaScriptJintEngine", "Tasks" })]
-public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
+    DependsOn = new object[] { WorkflowsRuntimeKernelRetainedApiFeature.FeatureName, "KernelActivitiesHttp", "JavaScriptJintEngine", "Tasks" })]
+public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfigureShellServices
 {
     public const string FeatureName = "WorkflowsRuntimeKernelHosting";
 
@@ -54,6 +57,17 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Tenant", Description = "The tenant bound to this shell's kernel ingress and reads.", Category = "Runtime", DefaultValue = "default")]
     public string Tenant { get; set; } = "default";
 
+    [ManifestSetting(DisplayName = "Standalone trigger handoff",
+        Description = "Bind standalone Event, HTTP, Timer and Cron sources to this shell with prepared Runtime persistence.",
+        Category = "Runtime")]
+    public bool PreparedStandaloneStarts { get; set; }
+
+    /// <summary>Private opt-in for qualifying standalone asynchronous HTTP fan-out.</summary>
+    internal bool PreparedStandaloneHttpFanOut { get; set; }
+
+    /// <summary>Private opt-in for qualifying responses to standalone HTTP sources.</summary>
+    internal bool PreparedStandaloneHttpResponses { get; set; }
+
     [ManifestSetting(DisplayName = "Finished retention (seconds)", Description = "Minimum age for automatic deletion of finished runs. Leave empty to keep them.", Category = "Retention")]
     public int? FinishedRetentionSeconds { get; set; }
 
@@ -68,12 +82,29 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
+        var publisherScope = PreparedStandaloneStarts ? EmbeddedTenant.Bind(Tenant) : null;
+        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString, publisherScope);
+        PreparedStandaloneHttpFanOut = storage.TakesRetainedHttpResponse;
+        PreparedStandaloneHttpResponses = storage.TakesRetainedHttpResponse;
         ConfigureServices(services, storage, protectChildExecutables: storage.TakesPreparedStarts);
+        services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
+        services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
+        services.TryAddSingleton<IRuntimeExecutionIdGenerator, RuntimeExecutionIdGenerator>();
+        services.AddWorkflowTestRunTransport();
+        services.TryAddScoped<IWorkflowStartDispatcher>(provider => provider.GetRequiredService<IWorkflowDirectTestRunDispatcher>());
     }
+
+    public void PostConfigureServices(IServiceCollection services) =>
+        services.TryAddSingleton<IWorkflowExecutableStartPolicy, AllowWorkflowExecutableStartPolicy>();
 
     internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
+        if ((PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses) && !PreparedStandaloneStarts)
+            throw new InvalidOperationException("Protected standalone HTTP requires the source-owned standalone handoff.");
+        if ((PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses) && !storage.TakesRetainedHttpResponse)
+            throw new InvalidOperationException("Protected standalone HTTP requires committed root responses.");
+        if (PreparedStandaloneStarts && !storage.TakesPreparedStarts)
+            throw new InvalidOperationException("Prepared standalone starts require Foundation's protected root admission capability.");
         var tenant = EmbeddedTenant.Bind(Tenant);
         var testTenant = storage.TakesDirectTestRuns ? EmbeddedTenant.Isolate(tenant, "workflow-test-run") : null;
         var persistenceScope = new PersistenceScope(tenant.Tenant);
@@ -109,7 +140,24 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
             persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables, testTenant,
-            sp.GetService<KernelEventPublicationRelay>()));
+            sp.GetService<KernelEventPublicationRelay>(), PreparedStandaloneStarts));
+        if (storage.TakesAuthoredStandaloneEvents)
+            services.AddSingleton<IRuntimeAuthoredStandaloneEventAvailability, KernelStandaloneEventAvailability>();
+        if (PreparedStandaloneStarts)
+        {
+            services.AddScoped<IRuntimePreparedStartAttemptProof>(sp => new KernelStandalonePreparedStartProof(persistenceScope, tenant,
+                sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts));
+            services.AddScoped<IRuntimePreparedStandaloneRecipient>(sp => new KernelStandalonePreparedStartHandoff(
+                sp.GetRequiredService<IServiceScopeFactory>(), persistenceScope, tenant,
+                sp.GetRequiredService<KernelServing>().Capabilities, sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts,
+                PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses ? sp.GetRequiredService<KernelServing>() : null,
+                PreparedStandaloneHttpFanOut, PreparedStandaloneHttpResponses,
+                storage.TakesPreparedHttpWaits ? new KernelStandaloneHttpWaits(sp.GetRequiredService<KernelServing>()) : null));
+            if (PreparedStandaloneHttpResponses)
+                services.AddScoped<IRuntimeStandaloneHttpResponseReader>(sp => new KernelStandaloneHttpResponseReader(persistenceScope, tenant,
+                    sp.GetRequiredService<IRuntimeIngressDeliveryStore>(), sp.GetRequiredService<IRuntimePreparedStandaloneRecipient>(),
+                    sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts));
+        }
         if (storage.TakesPreparedStarts)
             services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionStartService>(sp =>
             {

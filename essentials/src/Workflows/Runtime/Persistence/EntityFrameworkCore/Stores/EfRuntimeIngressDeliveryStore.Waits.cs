@@ -25,7 +25,15 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
 
     private async ValueTask<RuntimeIngressWaitDelivery?> PrepareWaitsAsync(RuntimeIngressAdmissionRequest request, CancellationToken token)
     {
-        if (request.WaitCandidate is null) return null;
+        if (request.WaitCandidate is not { } candidate) return null;
+        var source = request.Candidate.StandaloneIngress!;
+        if (PreparedStandaloneOnly)
+        {
+            if (!PreparedStandaloneHttp.HasEmptyWaitObservation(source, candidate))
+                throw new NotSupportedException("The selected HTTP source requires an empty ordinary wait cohort.");
+            return new(RuntimeIngressWaitDelivery.CurrentVersion, source.OutboxItemId, source.Fingerprint, source.Scope,
+                time.GetUtcNow(), candidate, [], []);
+        }
         RequireWaitBoundary();
         return await RuntimeIngressWaitCapture.ReadAsync(request.Candidate.StandaloneIngress!, request.WaitCandidate,
             (IBookmarkStimulusIndex)waitEvidence!.PhysicalBookmarks, waitEvidence.PhysicalBookmarks.ObserveAsync,
@@ -49,6 +57,16 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
     private async ValueTask FenceWaitsAsync(RuntimeIngressAdmissionRequest request, CancellationToken token)
     {
         if (request.Candidate.SubscriptionDelivery!.WaitDelivery is not { } expected) return;
+        if (PreparedStandaloneOnly)
+        {
+            // Refuse any matching physical row. This is the same indexed range as the legacy bookmark reader,
+            // sampled in the source's serializable resource/recipient commit before any actor can start.
+            if (!PreparedStandaloneHttp.HasVerifiedEmptyWaits(request.Candidate) ||
+                await EfBookmarkStateStore.HasPhysicalStimulusAsync(context, request.Scope.Persistence.Value,
+                    expected.Candidate.StimulusType, expected.Candidate.StimulusHash, token))
+                throw new TriggerOperationException("unavailable", "The standalone HTTP route has an ordinary wait registration that this owner cannot resume.");
+            return;
+        }
         RequireWaitBoundary();
         // The indexed stimulus range read is part of this SERIALIZABLE transaction, including an empty range.
         var current = await RuntimeIngressWaitCapture.ReadAsync(request.Candidate.StandaloneIngress!, expected.Candidate,

@@ -324,7 +324,8 @@ public sealed partial class StimulusDeliveryStoreTests
             return (port, resources, authority, queue);
         }
 
-        public (IRuntimeIngressDeliveryStore Port, IStandaloneTriggerStore Resources) IngressInSeparateScope()
+        public (IRuntimeIngressDeliveryStore Port, IStandaloneTriggerStore Resources) IngressInSeparateScope(
+            IRuntimePreparedStartAttemptProof? preparedStarts = null)
         {
             if (Context is null)
             {
@@ -341,7 +342,7 @@ public sealed partial class StimulusDeliveryStoreTests
             var queue = new EfSchedulerWorkQueueStore(context, access, new Codec());
             var evidence = new NativeIngressTargetEvidence(queue, executions, Clock, executables: artifacts);
             return (new EfRuntimeIngressDeliveryStore(context, resources, source, new EfWorkflowActivationAuthority(context, access),
-                artifacts, references, executions, roots, access, Clock, evidence), resources);
+                artifacts, references, executions, roots, access, Clock, evidence, preparedStarts: preparedStarts), resources);
         }
     }
     private static async Task AssertInvalidAuthorityAsync(Func<Task> operation)

@@ -84,6 +84,12 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootPublicEventHostQualification => new(3, 135, 1);
     internal static StoreFormat RootAttachedTestRunQualification => new(3, 136, 1);
     internal static StoreFormat RootHeldEphemeralHttpQualification => new(3, 138, 1);
+    internal static StoreFormat RootRetainedResponseQualification => new(3, 139, 1);
+    internal static StoreFormat RootAuthoredStandaloneEventQualification => new(3, 140, 1);
+    internal static StoreFormat RootPreparedWaitQualification => new(3, 141, 1);
+    internal static StoreFormat RootOptionalAuthoredStandaloneEventsQualification => new(3, 144, 1);
+    internal bool SupportsAuthoredStandaloneEventQualification =>
+        this == RootAuthoredStandaloneEventQualification || this == RootOptionalAuthoredStandaloneEventsQualification;
     internal bool SupportsIsolatedInlineQualification =>
         this == RootEphemeralTestRunQualification || SupportsAttachedTestRunQualification;
     internal bool SupportsAttachedTestRunQualification =>
@@ -96,7 +102,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 37 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 38 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -153,7 +159,10 @@ internal enum RootCapabilities : long
     KeyedStarts = 1L << 43,
     PublicEventHost = 1L << 44,
     PagedPublicEvents = 1L << 45,
-    HeldEphemeralHttpTestRuns = 1L << 46
+    HeldEphemeralHttpTestRuns = 1L << 46,
+    RetainedRootResponse = 1L << 47,
+    AuthoredStandaloneEvents = 1L << 48,
+    PreparedWaitDelivery = 1L << 49
 }
 
 internal static class RootProfiles
@@ -188,8 +197,15 @@ internal static class RootProfiles
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
     private const RootCapabilities Shipped33 = Shipped31 | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy;
     private const RootCapabilities Shipped34 = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
-    internal const RootCapabilities Shipped = KeyedStartsQualification | PublicEventHostQualification | PagedPublicEventsQualification |
+    private const RootCapabilities Shipped37 = KeyedStartsQualification | PublicEventHostQualification | PagedPublicEventsQualification |
         RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns;
+    internal const RootCapabilities Shipped = Shipped38;
+    internal const RootCapabilities RetainedResponseQualification = Shipped37 | RootCapabilities.RetainedRootResponse;
+    internal const RootCapabilities AuthoredStandaloneEventQualification = Shipped37 | RootCapabilities.AuthoredStandaloneEvents;
+    private const RootCapabilities Shipped38 =
+        AuthoredStandaloneEventQualification | RootCapabilities.RetainedRootResponse | RootCapabilities.PreparedWaitDelivery;
+    internal const RootCapabilities OptionalAuthoredStandaloneEventsQualification = Shipped38;
+    internal const RootCapabilities PreparedWaitQualification = RetainedResponseQualification | RootCapabilities.PreparedWaitDelivery;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
         RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
@@ -286,6 +302,9 @@ internal static class RootProfiles
         [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
         [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
         [RootCapabilities.PagedPublicEvents] = RootCapabilities.PublicEventStarts,
+        [RootCapabilities.PreparedWaitDelivery] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
+        [RootCapabilities.RetainedRootResponse] = RootCapabilities.PreparedStarts | RootCapabilities.StableBody,
+        [RootCapabilities.AuthoredStandaloneEvents] = RootCapabilities.PagedPublicEvents | RootCapabilities.PublicEventHost,
         [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
         [RootCapabilities.HeldEphemeralHttpTestRuns] = RootCapabilities.DirectTestRuns | RootCapabilities.InlinePromotion |
             RootCapabilities.ReplyProtocol | RootCapabilities.Children,
@@ -490,8 +509,14 @@ internal static class StoreDefinitionsRevision
     private const int SqliteLiveEventRevision = 14;
     private const int PostgreSqlSharedActivationRevision = 26;
     private const int SqliteSharedActivationRevision = 29;
-    private const int PostgreSqlShippedRevision = 31;
-    private const int SqliteShippedRevision = 34;
+    private const int PostgreSqlRetainedResponseRevision = 32;
+    private const int PostgreSqlPreparedWaitRevision = 34;
+    private const int SqlitePreparedWaitRevision = 37;
+    private const int SqliteRetainedResponseRevision = 35;
+    private const int PostgreSqlAuthoredStandaloneEventRevision = 33;
+    private const int SqliteAuthoredStandaloneEventRevision = 36;
+    private const int PostgreSqlOptionalAuthoredStandaloneEventsRevision = 37;
+    private const int SqliteOptionalAuthoredStandaloneEventsRevision = 40;
     private const int PostgreSqlDirectTestRunRevision = 20;
     private const int SqliteDirectTestRunRevision = 23;
     private const int PostgreSqlPlaybackRevision = 12;
@@ -567,7 +592,15 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootSharedActivationQualification ||
                     db.RequiredFormat.SupportsIsolatedInlineQualification =>
                     sqlite ? SqliteSharedActivationRevision : PostgreSqlSharedActivationRevision,
-                _ when db.RequiredFormat == StoreFormat.RootShipped => sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
+                _ when db.RequiredFormat == StoreFormat.RootRetainedResponseQualification =>
+                    sqlite ? SqliteRetainedResponseRevision : PostgreSqlRetainedResponseRevision,
+                _ when db.RequiredFormat == StoreFormat.RootAuthoredStandaloneEventQualification =>
+                    sqlite ? SqliteAuthoredStandaloneEventRevision : PostgreSqlAuthoredStandaloneEventRevision,
+                _ when db.RequiredFormat == StoreFormat.RootShipped ||
+                    db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification =>
+                    sqlite ? SqliteOptionalAuthoredStandaloneEventsRevision : PostgreSqlOptionalAuthoredStandaloneEventsRevision,
+                _ when db.RequiredFormat == StoreFormat.RootPreparedWaitQualification =>
+                    sqlite ? SqlitePreparedWaitRevision : PostgreSqlPreparedWaitRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPublicEventStartsQualification => sqlite ? 30 : 27,
                 // The private Test Run selector keeps the pre-activation provider definitions.
                 _ when db.RequiredFormat == StoreFormat.RootDirectTestRunQualification =>

@@ -4,6 +4,7 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Testing;
+using Elsa.Api.AspNetCore;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Options;
 using Elsa.Activities.Http.Options;
@@ -112,6 +113,32 @@ public sealed class ActivitiesHttpFeatureTests
 
         Assert.False(sentinelReached);
         Assert.Equal(Microsoft.AspNetCore.Http.StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public void Kernel_feature_retains_shared_options_and_excludes_legacy_middleware()
+    {
+        var services = new ServiceCollection();
+        var feature = new KernelActivitiesHttpFeature { BasePath = "/custom", SyncRequestTimeout = TimeSpan.FromSeconds(12) };
+
+        feature.ConfigureServices(services);
+        feature.PostConfigureServices(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(HttpTestRunIngressMiddleware));
+        services.AddSingleton<ITestRunTargetStore, UnusedTestRunTargetStore>();
+        services.AddSingleton<IWorkflowTestScopeStore, UnusedTestScopeStore>();
+        services.AddSingleton<ITestRunTargetDispatcher, UnusedTestRunTargetDispatcher>();
+        services.AddSingleton<IWorkflowExecutionPartitionAccessor, TestPartitionAccessor>();
+        feature.PostConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var settings = provider.GetRequiredService<WorkflowHttpEndpointSettings>();
+        Assert.Equal("/custom", settings.BasePath);
+        Assert.Equal(TimeSpan.FromSeconds(12), settings.SyncRequestTimeout);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(HttpEndpointMiddleware));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(HttpTestRunIngressMiddleware));
+
+        new ActivitiesHttpFeature().ConfigureServices(services);
+        Assert.Throws<InvalidOperationException>(() => feature.PostConfigureServices(services));
     }
 
     [Fact]

@@ -3649,6 +3649,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationRootChildSends = unit.FoundationRootChildSends,
             FoundationRootPublications = unit.FoundationRootPublications,
             FoundationTerminalOutput = unit.FoundationTerminalOutput,
+            FoundationRetainedResponse = unit.FoundationRetainedResponse,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,
             OpensPark = unit.OpensPark,

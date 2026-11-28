@@ -173,6 +173,8 @@ public class KernelDb : DbContext
     internal bool UsesRootPrivateParkInputs => UsesRootSelfProtocol && UsesRootParkArrivals && UsesRootComposedParkRecovery;
     internal bool UsesRootTimerRearm => UsesRootPrivateParkInputs && Has(RootCapabilities.TimerRearm);
     internal bool UsesRootTerminalOutput => Has(RootCapabilities.TerminalOutput);
+    internal bool UsesRetainedRootResponse => Has(RootCapabilities.RetainedRootResponse);
+    internal bool UsesPreparedWaitDelivery => Has(RootCapabilities.PreparedWaitDelivery);
     internal bool UsesRootSequencedJournal => Has(RootCapabilities.SequencedJournal);
     internal bool UsesRootLiveEventWaits => Has(RootCapabilities.LiveEventWaits);
     internal bool UsesRootAuthoredEvents => Has(RootCapabilities.AuthoredEvents);
@@ -183,6 +185,10 @@ public class KernelDb : DbContext
     internal bool UsesRootPublicEventHost => Has(RootCapabilities.PublicEventHost);
     internal RootPublicEventHost? PublicEventHost { get; }
     internal bool UsesRootPagedPublicEvents => Has(RootCapabilities.PagedPublicEvents);
+    internal bool UsesAuthoredStandaloneEvents => Has(RootCapabilities.AuthoredStandaloneEvents);
+    // The original standalone Event qualification retains its mandatory publisher and physical schema.
+    internal bool AllowsDisabledAuthoredStandaloneEvents => UsesAuthoredStandaloneEvents &&
+        RequiredFormat != StoreFormat.RootAuthoredStandaloneEventQualification;
     internal bool UsesRootKeyedStarts => Has(RootCapabilities.KeyedStarts);
     internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
@@ -214,6 +220,14 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootChildrenQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification, RootProfiles.ChildQualification);
+    internal static KernelDb ForPostgresAuthoredStandaloneEventQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootAuthoredStandaloneEventQualification, RootProfiles.AuthoredStandaloneEventQualification,
+            publicEventHost: host);
+
+    internal static KernelDb ForPostgresOptionalAuthoredStandaloneEventsQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootOptionalAuthoredStandaloneEventsQualification, RootProfiles.OptionalAuthoredStandaloneEventsQualification,
+            publicEventHost: host);
+
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options, RootPublicEventHost? publicEventHost = null) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, publicEventHost: publicEventHost);
     internal static KernelDb ForPostgresRootSequencedJournalQualification(DbContextOptions<KernelDb> options) =>
@@ -261,6 +275,10 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootAttachedTestRunQualification, RootProfiles.EphemeralTestRunQualification);
     internal static KernelDb ForPostgresRootHeldEphemeralHttpQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootHeldEphemeralHttpQualification, RootProfiles.EphemeralTestRunQualification);
+    internal static KernelDb ForPostgresRetainedRootResponseQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootRetainedResponseQualification, RootProfiles.RetainedResponseQualification, publicEventHost: host);
+    internal static KernelDb ForPostgresPreparedWaitQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootPreparedWaitQualification, RootProfiles.PreparedWaitQualification, publicEventHost: host);
     internal static KernelDb ForPostgresRootInlinePromotionQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootInlinePromotionQualification, RootProfiles.InlinePromotionQualification);
     internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>
@@ -311,9 +329,21 @@ public class KernelDb : DbContext
         if (qualificationFormat == StoreFormat.RootSharedActivationQualification)
             return new(options, qualificationFormat.Value, RootProfiles.SharedActivationQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootAuthoredStandaloneEventQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.AuthoredStandaloneEventQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.OptionalAuthoredStandaloneEventsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
         if (qualificationFormat == StoreFormat.RootPagedPublicEventsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PagedPublicEventsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPreparedWaitQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PreparedWaitQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootRetainedResponseQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.RetainedResponseQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
         if (qualificationFormat == StoreFormat.RootPublicEventStartsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PublicEventStartsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);

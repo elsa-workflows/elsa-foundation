@@ -92,9 +92,6 @@
           "ActivitiesSequence": {},
           "ActivitiesFlowchart": {},
           "ActivitiesControlFlow": {},
-          "ActivitiesHttp": {},
-          "ActivitiesScheduling": {},
-          "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesRuntime": {},
           "ActivitiesGraphRuntime": {},
@@ -113,41 +110,17 @@
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingEntityFrameworkCore": {},
-          "WorkflowsRuntimeEntityFrameworkCore": {
-            "CacheWorkflowExecutables": true,
-            "WorkflowExecutableCacheCapacity": 256,
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
-            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
-          },
           "WorkflowsRuntimeKernelHosting": {
             "Provider": "SQLite",
             "SqlitePath": "/app/data/elsa-kernel.db",
-            "Tenant": "default"
+            "Tenant": "default",
+            "PreparedStandaloneStarts": true
           },
-          "WorkflowsRuntimeApi": {
-            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
-            "WorkflowAlterationPayloadProtectionKeys": {
-              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-            }
-          },
-          "WorkflowsRuntimeResumption": {},
-          "WorkflowsRuntimeScheduling": {},
-          "WorkflowsRuntimeRecurringTriggers": {},
-          "WorkflowsRuntimeHttp": {},
-          "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Balanced",
-            "MaxActivitiesPerCommit": 50
-          },
-          "WorkflowsRuntimeHistory": {},
-          "WorkflowsRuntimeTriggers": {},
-          "WorkflowsRuntimeAttention": {},
           "StandaloneTriggersApi": {},
           "StandaloneHttpTriggerAuthoring": {},
           "StandaloneEventTriggerAuthoring": {},
           "StandaloneScheduleTriggerAuthoring": {},
-          "StandaloneScheduleTriggers": {},
-          "WorkflowsDashboard": {},
-          "WorkflowsDashboardEntityFrameworkCore": {},
+          "PreparedStandaloneScheduleTriggers": {},
           "Secrets": {
             "EncryptionKey": "development-demo-only-secrets-encryption-key"
           },
@@ -182,7 +155,18 @@
           },
           "StudioPreferences": {},
           "StudioPreferencesApi": {},
-          "StudioPreferencesEntityFrameworkCore": {}
+          "StudioPreferencesEntityFrameworkCore": {},
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256
+          },
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {},
+          "KernelActivitiesScheduling": {},
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsDashboardRetained": {},
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {},
+          "WorkflowsRuntimeRetainedAttention": {}
         },
         "Configuration": {
           "WebRouting": {

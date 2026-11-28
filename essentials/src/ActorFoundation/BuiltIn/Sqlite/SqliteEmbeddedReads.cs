@@ -22,7 +22,8 @@ public static partial class SqliteEmbeddedHosting
         ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
         using var file = AcquireFile(databasePath);
         using var db = KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
-        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat, db.UsesRootParkRecovery);
+        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat, db.UsesRootParkRecovery,
+            db.UsesRootSequencedJournal, db.UsesRootPlayback, db.UsesRootPlaybackDescendants);
     }
 
     internal static async ValueTask<T> RunRetentionPolicyAsync<T>(string path, StoreFormat? qualificationFormat,
@@ -42,7 +43,8 @@ public static partial class SqliteEmbeddedHosting
         }
     }
 
-    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat, bool supportsParkInbox)
+    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat, bool supportsParkInbox,
+        bool supportsSequencedJournal, bool supportsPlayback, bool supportsDescendantPlayback)
         : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads,
           Contract.IActorRetentionReads, Contract.IActorParkInboxReads, ICommittedRootStateReads
     {
@@ -53,27 +55,11 @@ public static partial class SqliteEmbeddedHosting
             ReadAsync(reads => reads.ReadParkInboxAsync(scope, actor, selection, from, cancellationToken),
                 cancellationToken, normalizeLockTimeout: true);
 
-        public bool SupportsSequencedJournal => qualificationFormat is null
-            ? TakesSequencedJournal
-            : qualificationFormat is { } format &&
-                (format == StoreFormat.RootSequencedJournalQualification || format == StoreFormat.RootLiveEventQualification || SupportsPlayback);
+        public bool SupportsSequencedJournal => supportsSequencedJournal;
 
-        public bool SupportsPlayback => qualificationFormat is null
-            ? RootProfiles.Shipped.HasFlag(RootCapabilities.Playback)
-            : qualificationFormat == StoreFormat.RootPlaybackQualification || SupportsDescendantPlayback;
+        public bool SupportsPlayback => supportsPlayback;
 
-        public bool SupportsDescendantPlayback => qualificationFormat is null
-            ? RootProfiles.Shipped.HasFlag(RootCapabilities.PlaybackDescendants)
-            : qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification ||
-              qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
-              qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
-              qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
-              qualificationFormat == StoreFormat.RootAuthoredEventsQualification || qualificationFormat == StoreFormat.RootEventStartsQualification ||
-              qualificationFormat == StoreFormat.RootEventStartReceiptsQualification || qualificationFormat == StoreFormat.RootEventStartScanQualification ||
-              qualificationFormat == StoreFormat.RootDirectTestRunQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
-              qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
-              qualificationFormat == StoreFormat.RootPagedPublicEventsQualification ||
-              qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat is { SupportsIsolatedInlineQualification: true };
+        public bool SupportsDescendantPlayback => supportsDescendantPlayback;
 
         public ValueTask<Contract.ActorPlaybackPage?> ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.ActorPlaybackQuery query, CancellationToken cancellationToken = default) =>

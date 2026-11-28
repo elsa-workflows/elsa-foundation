@@ -13,6 +13,12 @@ If you mount a volume at `/app/data`, set `ConnectionStrings__Elsa` and
 `CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString` to database paths on that
 volume. Use the same connection settings for the migration CLI and the running containers.
 
+For Production, supply the existing recovery continuation signing key under
+`CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey`.
+Move the value from `WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` when updating an
+existing Curated deployment. Use at least 32 UTF-8 bytes and the same value on every node. The other Docker profiles
+have their own [feature settings](../README.md#configure-a-deployment).
+
 ## Workflow execution
 
 The default shell runs Native and Flowchart workflows on the built-in Actor Foundation. Its dedicated
@@ -29,8 +35,20 @@ To use a dedicated PostgreSQL database for workflow execution, set these feature
 | `SqlitePath` | Empty |
 | `PostgresConnectionString` | Connection string supplied through your deployment configuration |
 
-For the pre-release switch, use a fresh local development database. To rehearse rollback, restore the
-previous profile and use a separate fresh local database. Keep persistent deployment volumes intact.
+The default shell delivers standalone Event, HTTP, Timer and Cron through the prepared Runtime store and
+the same Actor Foundation execution host. Its installed publisher authority pins the configured tenant and
+handoff mode. Install a fresh dedicated Actor Foundation database when moving
+to the new store format during the preview. An older Actor Foundation database is refused before its data
+or schema changes. Keep the original volume or PostgreSQL database with the earlier matching image for a
+rollback. Workflow definitions, publication and identity keep their existing module connections.
+
+Pause standalone sources and settle any pending deliveries with the previous Runtime owner before
+switching a reused workflow-control database. Use its [delivery inspection and recovery controls](../../../docs/standalone-triggers.md)
+to drain accepted work or cancel eligible pending recipients. Use the earlier Runtime owner for history
+and replay of its standalone receipts. If the old queue still has work, keep it with the earlier owner.
+To run the new preview separately, use a fresh workflow-control database, then publish the workflows and
+bind their standalone resources in that deployment. Keep the matching Runtime database or rollback
+snapshot with each Actor Foundation database.
 
 ## Build
 

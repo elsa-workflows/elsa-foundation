@@ -59,6 +59,7 @@ public sealed partial class EfStore
 
             RequireSqliteDefinitions(installed, expected);
             if (db.UsesRootPublicEventHost) await RootPublicEventHost.InstallAsync(db, db.PublicEventHost, create, token);
+            if (db.UsesAuthoredStandaloneEvents) await RootAuthoredStandaloneEvents.InstallAsync(db, create, token);
             if (!await db.Database.SqlQuery<bool>($"""
                 SELECT
                     (SELECT count(*) FROM "Partitions") = {partitions}
@@ -467,12 +468,22 @@ public sealed partial class EfStore
         yield return new("trigger", "kernel_job_generation", "Instances", "CREATE TRIGGER " + SqliteGenerationClause);
         foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
         foreach (var projector in SqliteRootProjectors()) yield return projector;
+        if (db.UsesAuthoredStandaloneEvents)
+        {
+            yield return Table(RootAuthoredStandaloneEvents.Host,
+                RootAuthoredStandaloneEvents.HostColumns(sqlite: true, db.AllowsDisabledAuthoredStandaloneEvents));
+            yield return Table(RootAuthoredStandaloneEvents.Transfers, RootAuthoredStandaloneEvents.TransferColumns(sqlite: true));
+            yield return Index(RootAuthoredStandaloneEvents.PageIndex, RootAuthoredStandaloneEvents.Transfers, RootAuthoredStandaloneEvents.PageColumns);
+        }
         foreach (var history in SqliteRootWorkflowHistoryDefinitions(db)) yield return history;
         if (db.UsesRootSequencedJournal)
             foreach (var segment in SqliteSequencedJournalDefinitions()) yield return segment;
         if (db.UsesRootPlayback)
             foreach (var playback in SqlitePlaybackDefinitions(db.UsesRootPlaybackDescendants)) yield return playback;
         if (db.UsesRootTerminalOutput) yield return SqliteRootTerminalOutputDefinition();
+        if (db.UsesRetainedRootResponse) yield return SqliteRetainedRootResponseDefinition();
+        if (db.UsesPreparedWaitDelivery)
+            yield return Table(RootEventAdmission.PreparedWaitReceiptTable, RootEventAdmission.PreparedWaitReceiptColumns(sqlite: true));
         foreach (var outcome in SqliteRootOutcomes(db)) yield return outcome;
     }
 

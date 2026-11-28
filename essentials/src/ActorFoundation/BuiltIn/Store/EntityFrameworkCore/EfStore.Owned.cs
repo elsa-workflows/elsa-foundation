@@ -236,6 +236,9 @@ public sealed partial class EfStore
         {
             if (db.UsesRootPagedPublicEvents)
             {
+                var bridgeTenant = db.UsesAuthoredStandaloneEvents
+                    ? await RootAuthoredStandaloneEvents.ReadTenantAsync(db, bindEventSource, cancellationToken)
+                    : null;
                 var authorities = FoundationMetadataLimits.MaxTurnSends;
                 long authorityBytes = FoundationMetadataLimits.MessageContentBytes;
                 foreach (var publication in publications)
@@ -245,6 +248,8 @@ public sealed partial class EfStore
                     authorities -= staged.Count;
                     authorityBytes -= staged.Bytes;
                     await ticket.EnqueueAsync(db, bindEventSource, cancellationToken);
+                    if (bridgeTenant is not null)
+                        await RootAuthoredStandaloneEvents.CaptureAsync(db, publication.Root, ticket, bridgeTenant, bindEventSource, cancellationToken);
                 }
             }
             else

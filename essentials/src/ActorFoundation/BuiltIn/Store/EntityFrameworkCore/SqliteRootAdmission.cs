@@ -22,6 +22,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     private Task<int> VerifyAsync(bool bindOwner, string? auxiliaryActor, CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
         if (db.UsesRootPublicEventHost) await RootPublicEventHost.ReadAsync(db, bind: null, ct);
+        if (db.AllowsDisabledAuthoredStandaloneEvents) await RootAuthoredStandaloneEvents.ReadTenantAsync(db, bind: null, ct);
         var issuer = await ReadIssuerAsync(db, ct);
         if (!await db.Database.SqlQuery<bool>($"""
             SELECT (count(*) = {issuer.Partitions} AND min("Id") = 0 AND max("Id") = {issuer.Partitions - 1}) AS "Value"
@@ -205,6 +206,23 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
 
     internal Task<int> PruneHeldStartsAsync(Contract.BoundScope scope, CancellationToken token) =>
         WriteAsync((db, now, ct) => RootPreparedStarts.PruneAsync(db, scope.Tenant, now, ct), token);
+
+    internal Task<PreparedRootResponse?> ReadRetainedRootResponseAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        string issuance, string key, CancellationToken token) =>
+        InAdmissionTransactionAsync(async (db, ct) =>
+        {
+            if (!db.UsesRetainedRootResponse) return null;
+            var birth = RootPreparedStarts.Verify(await ReadRootIssuerKeyAsync(db, ct), scope, actor, issuance);
+            return birth is null ? null : await EfStore.ReadRetainedRootResponseAsync(db, birth, key, ct);
+        }, token, readOnly: true);
+
+    internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
+        CancellationToken token) =>
+        InAdmissionTransactionAsync(async (db, ct) =>
+        {
+            var stage = RootPreparedStarts.Verify(await ReadRootIssuerKeyAsync(db, ct), scope, actor, issuance);
+            return stage is not null && await RootPreparedStarts.HasAcceptedBirthAsync(db, stage, ct);
+        }, token, readOnly: true);
 
     internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
         CancellationToken token) =>

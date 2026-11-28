@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Unicode;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
 using Microsoft.AspNetCore.Http;
@@ -14,7 +15,8 @@ internal static class HttpEndpointRequestModelReader
         string endpointPath,
         IReadOnlyDictionary<string, string> routeValues,
         long maxBodyBytes,
-        IReadOnlyCollection<string>? excludedHeaders = null)
+        IReadOnlyCollection<string>? excludedHeaders = null,
+        Action<bool>? observeUtf8Body = null)
     {
         if (maxBodyBytes < 0 || context.Request.ContentLength is { } declaredLength && declaredLength > maxBodyBytes)
             return null;
@@ -22,7 +24,7 @@ internal static class HttpEndpointRequestModelReader
         string? body = null;
         if (context.Request.Body.CanRead)
         {
-            body = await ReadBodyBoundedAsync(context.Request.Body, maxBodyBytes, context.RequestAborted);
+            body = await ReadBodyBoundedAsync(context.Request.Body, maxBodyBytes, observeUtf8Body, context.RequestAborted);
             if (body is null)
                 return null; // Content-Length may be absent or inaccurate.
             if (body.Length == 0)
@@ -45,7 +47,8 @@ internal static class HttpEndpointRequestModelReader
             RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase));
     }
 
-    private static async ValueTask<string?> ReadBodyBoundedAsync(Stream body, long maxBodyBytes, CancellationToken cancellationToken)
+    private static async ValueTask<string?> ReadBodyBoundedAsync(Stream body, long maxBodyBytes, Action<bool>? observeUtf8Body,
+        CancellationToken cancellationToken)
     {
         using var buffer = new MemoryStream();
         var chunk = new byte[8192];
@@ -57,6 +60,8 @@ internal static class HttpEndpointRequestModelReader
             buffer.Write(chunk, 0, read);
         }
 
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        var bytes = buffer.GetBuffer().AsSpan(0, (int)buffer.Length);
+        observeUtf8Body?.Invoke(Utf8.IsValid(bytes));
+        return Encoding.UTF8.GetString(bytes);
     }
 }

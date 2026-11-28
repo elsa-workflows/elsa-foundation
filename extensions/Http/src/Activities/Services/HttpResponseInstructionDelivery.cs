@@ -55,7 +55,7 @@ public sealed class HttpResponseInstructionDelivery(
                 var instruction = payload.Deserialize<HttpResponseInstruction>(SerializerOptions)
                     ?? throw new InvalidOperationException(
                         $"Committed HTTP response instruction '{state.InvocationId}' resolved to null.");
-                await WriteAsync(response, instruction, workflowExecutionId, cancellationToken);
+                await WriteAsync(response, instruction, workflowExecutionId, contentFactories, cancellationToken);
                 return true;
             }
         }
@@ -82,10 +82,11 @@ public sealed class HttpResponseInstructionDelivery(
         state.Completion is { Result.Presence: ValuePresence.Present, Result.InlineValue: not null } completion &&
         StringComparer.Ordinal.Equals(completion.Result.Type.Alias, ResultTypeAlias);
 
-    private async ValueTask WriteAsync(
+    internal static async ValueTask WriteAsync(
         HttpResponse response,
         HttpResponseInstruction instruction,
         string workflowExecutionId,
+        IEnumerable<IHttpContentFactory> contentFactories,
         CancellationToken cancellationToken)
     {
         response.StatusCode = instruction.StatusCode;
@@ -107,7 +108,7 @@ public sealed class HttpResponseInstructionDelivery(
             return;
         }
 
-        var factory = MatchContentFactory(contentType);
+        var factory = MatchContentFactory(contentFactories, contentType);
         if (factory is not null)
         {
             using var content = factory.CreateHttpContent(body, contentType);
@@ -144,7 +145,7 @@ public sealed class HttpResponseInstructionDelivery(
     private static string InferContentType(JsonElement? body) =>
         body is { ValueKind: JsonValueKind.String } ? "text/plain" : "application/json";
 
-    private IHttpContentFactory? MatchContentFactory(string? contentType)
+    private static IHttpContentFactory? MatchContentFactory(IEnumerable<IHttpContentFactory> contentFactories, string? contentType)
     {
         if (string.IsNullOrWhiteSpace(contentType))
             return null;

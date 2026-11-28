@@ -285,12 +285,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<InMemoryWorkflowTestScopeStore>();
         services.TryAddSingleton<IWorkflowTestScopeStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
-        services.TryAddSingleton<MemoryTestRunTargetStore>();
-        services.TryAddSingleton<ITestRunTargetStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<MemoryTestRunTargetStore>());
-        services.TryAddSingleton<TestRunHeldDispatches>();
-        services.TryAddScoped<ITestRunTargetDispatcher, TestRunTargetDispatcher>();
-        services.TryAddScoped<ITestRunTargetCleaner, TestRunTargetCleaner>();
+        services.AddWorkflowTestRunTransport();
         services.TryAddScoped<ITestRunRootCanceller, TestRunRootCanceller>();
         services.TryAddSingleton<IWorkflowTestScopeAdmissionStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());

@@ -113,7 +113,10 @@ internal sealed partial class PostgresRootAdmission
         var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
             throw new StoreFormatException("The public Event host requires the pinned PostgreSQL store.");
         await LockPublicEventStartTablesAsync(db, token);
-        await RootPublicEventHost.RequireAsync(db, host, sql => BindPublicEventStarts(db, sql, pin), token);
+        FormattableString Bind(FormattableString sql) => BindPublicEventStarts(db, sql, pin);
+        await RootPublicEventHost.RequireAsync(db, host, Bind, token);
+        if (db.AllowsDisabledAuthoredStandaloneEvents)
+            await RootAuthoredStandaloneEvents.ReadTenantAsync(db, Bind, token);
         await transaction.CommitAsync(token);
     }
 
@@ -126,7 +129,9 @@ internal sealed partial class PostgresRootAdmission
             """;
         var host = db.UsesRootPublicEventHost ? """, ONLY "FoundationPublicEventHost" """ : "";
         var dispatch = db.UsesRootPagedPublicEvents ? """, ONLY "FoundationPublicEventDispatch", ONLY "FoundationPagedEventStarts" """ : "";
-        return db.Database.ExecuteSqlRawAsync(tables + host + dispatch + " IN ACCESS SHARE MODE", token);
+        var bridge = db.UsesAuthoredStandaloneEvents
+            ? """, ONLY "FoundationAuthoredStandaloneEventHost", ONLY "FoundationAuthoredStandaloneEventTransfers" """ : "";
+        return db.Database.ExecuteSqlRawAsync(tables + host + dispatch + bridge + " IN ACCESS SHARE MODE", token);
     }
 
     private static FormattableString BindPublicEventStarts(KernelDb db, FormattableString sql, PinnedRootSource pin)
@@ -138,8 +143,10 @@ internal sealed partial class PostgresRootAdmission
             """;
         var host = db.UsesRootPublicEventHost ? """ , ('"FoundationPublicEventHost"') """ : "";
         var dispatch = db.UsesRootPagedPublicEvents ? """ , ('"FoundationPublicEventDispatch"'), ('"FoundationPagedEventStarts"') """ : "";
+        var bridge = db.UsesAuthoredStandaloneEvents
+            ? """ , ('"FoundationAuthoredStandaloneEventHost"'), ('"FoundationAuthoredStandaloneEventTransfers"') """ : "";
         return WithAdmissionSource(sql, pin, RootPublicEventStarts.Source,
-            11 + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 2 : 0),
-            tables + host + dispatch, requirePermanentDirectRelations: true);
+            11 + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 2 : 0) + (db.UsesAuthoredStandaloneEvents ? 2 : 0),
+            tables + host + dispatch + bridge, requirePermanentDirectRelations: true);
     }
 }
