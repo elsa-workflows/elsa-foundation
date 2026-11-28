@@ -10,7 +10,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// <remarks>
 /// <para>
 /// <see cref="AllowMultiple"/> because a feature can depend on more than one module:
-/// <c>WorkflowsDashboardEntityFrameworkCoreFeature</c> reads both <c>RuntimeDbContext</c> and
+/// <c>WorkflowsDashboardPortfolioEntityFrameworkCoreFeature</c> reads both <c>RuntimeDbContext</c> and
 /// <c>WorkflowsDesignDbContext</c> while registering migrations for neither. The attribute is carried on the
 /// feature class wherever that class lives — <c>AspNetCoreIdentityEntityFrameworkCoreFeature</c> sits in a
 /// different project from <c>Identity.Iam</c>'s own feature and still registers that module's migrations —

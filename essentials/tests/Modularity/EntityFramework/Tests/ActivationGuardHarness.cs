@@ -62,13 +62,13 @@ internal sealed class ActivationGuardHarness : IDisposable
 {
     public const string SecretsFeature = "SecretsEntityFrameworkCore";
     public const string RuntimeFeature = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
-    public const string DashboardFeature = "WorkflowsDashboardEntityFrameworkCore";
+    public const string DashboardFeature = "WorkflowsDashboardPortfolioEntityFrameworkCore";
 
     /// <summary>What a host running the guard would have loaded: the modules, and the features that map to them.</summary>
     public static readonly Assembly[] Assemblies =
     [
         typeof(SecretsEntityFrameworkCoreFeature).Assembly,
-        typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly,
+        typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimeDbContext).Assembly,
         typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly

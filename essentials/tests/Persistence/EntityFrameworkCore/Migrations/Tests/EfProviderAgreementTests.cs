@@ -30,7 +30,7 @@ public sealed class EfProviderAgreementTests
 {
     private const string Runtime = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
     private const string TestScope = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
-    private const string Dashboard = "WorkflowsDashboardEntityFrameworkCore";
+    private const string Dashboard = "WorkflowsDashboardPortfolioEntityFrameworkCore";
     private const string Secrets = "SecretsEntityFrameworkCore";
 
     private static readonly Assembly[] Closure =
@@ -39,7 +39,7 @@ public sealed class EfProviderAgreementTests
         typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
-        typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly
+        typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly
     ];
 
     private static readonly JsonSerializerOptions RequestJson = new()

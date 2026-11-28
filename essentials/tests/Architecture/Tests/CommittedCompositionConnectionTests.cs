@@ -90,7 +90,6 @@ public sealed class CommittedCompositionConnectionTests
     /// </summary>
     private static readonly HashSet<string> ContextSharingFeatures = new(StringComparer.Ordinal)
     {
-        "WorkflowsDashboardEntityFrameworkCore",
         "WorkflowsDashboardPortfolioEntityFrameworkCore",
         "WorkflowsRuntimePublicationEntityFrameworkCorePersistence"
     };

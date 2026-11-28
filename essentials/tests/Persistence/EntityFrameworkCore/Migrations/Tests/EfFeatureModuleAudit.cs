@@ -24,7 +24,7 @@ internal sealed record EfFeatureModuleViolation(Type Feature, string Module, str
 /// <c>ConfigureServices</c> body for it, because <c>SecretsEntityFrameworkCoreFeature</c> reaches that call
 /// through its registration class instead — so the search follows calls transitively, within the feature's
 /// own assembly. The second is a reference to a module's <see cref="Microsoft.EntityFrameworkCore.DbContext"/>
-/// type anywhere in that same reachable code, which is how <c>WorkflowsDashboardEntityFrameworkCoreFeature</c>
+/// type anywhere in that same reachable code, which is how <c>WorkflowsDashboardPortfolioEntityFrameworkCoreFeature</c>
 /// depends on two modules while registering migrations for neither.
 /// </para>
 /// <para>

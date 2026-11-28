@@ -26,7 +26,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
         typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
-        typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly
+        typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly
     ];
 
     private static readonly (string Feature, string Module, string Context)[] Expected =

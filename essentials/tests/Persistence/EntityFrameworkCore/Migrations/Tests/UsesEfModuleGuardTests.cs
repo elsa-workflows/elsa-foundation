@@ -14,7 +14,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// <summary>
 /// The feature inventory must not be able to grow a feature that depends on an EF
 /// module without saying so. Every feature that registers a module's migrations, or that reads a module's
-/// context the way <see cref="WorkflowsDashboardEntityFrameworkCoreFeature"/> does, carries a matching
+/// context the way <see cref="WorkflowsDashboardPortfolioEntityFrameworkCoreFeature"/> does, carries a matching
 /// <see cref="UsesEfModuleAttribute"/> — and the guard is proved to fire by fixtures that break the rule in
 /// each of those two shapes rather than assumed to.
 /// </summary>
@@ -30,7 +30,7 @@ public sealed class UsesEfModuleGuardTests
         typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
-        typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly
+        typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly
     ];
 
     /// <summary>
@@ -54,7 +54,6 @@ public sealed class UsesEfModuleGuardTests
         ("SecretsEntityFrameworkCore", ["Secrets"], true),
         ("StudioPreferencesEntityFrameworkCore", ["Studio.Preferences"], true),
         ("WeaverEntityFrameworkCore", ["Weaver"], true),
-        ("WorkflowsDashboardEntityFrameworkCore", ["Workflows.Design", "Workflows.Runtime"], false),
         ("WorkflowsDashboardPortfolioEntityFrameworkCore", ["Workflows.Design", "Workflows.Runtime"], false),
         ("WorkflowsDesignEntityFrameworkCore", ["Workflows.Design"], true),
         ("WorkflowsPublishingEntityFrameworkCore", ["Workflows.Publishing"], true),
