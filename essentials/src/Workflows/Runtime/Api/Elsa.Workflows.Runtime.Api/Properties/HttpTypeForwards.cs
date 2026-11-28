@@ -36,6 +36,7 @@ using System.Runtime.CompilerServices;
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Handlers.IWorkflowExecutionStartService))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Handlers.IWorkflowInstanceDetailsService))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Handlers.IWorkflowInstanceListService))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Handlers.WorkflowExecutionStartService))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Handlers.WorkflowActivationSlotInspectionService))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Models.ActivationChannelView))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Models.ActivityExecutionAttemptView))]
