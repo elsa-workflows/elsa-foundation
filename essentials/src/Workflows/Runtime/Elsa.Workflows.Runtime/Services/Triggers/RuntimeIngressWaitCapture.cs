@@ -102,11 +102,6 @@ internal static class RuntimeIngressWaitCapture
             throw new TriggerOperationException("conflict", "The complete ordinary wait cohort changed before source acceptance.");
     }
 
-    internal static RuntimePostCommitOutboxItem Attach(RuntimePostCommitOutboxItem candidate, RuntimeIngressWaitDelivery waits)
-    {
-        var selected = candidate.SubscriptionDelivery!;
-        var complete = new RuntimeSubscriptionDelivery(selected.Version, selected.SourceOutboxItemId, selected.SourceFingerprint, selected.Scope,
-            selected.Recipients, selected.Refusals, selected.Progress, resourceCaptures: selected.ResourceCaptures, waitDelivery: waits);
-        return RuntimePostCommitOutboxItem.CreateStandaloneIngress(candidate.StandaloneIngress!, complete, candidate.RetryPolicy);
-    }
+    internal static RuntimePostCommitOutboxItem Attach(RuntimePostCommitOutboxItem candidate, RuntimeIngressWaitDelivery waits) =>
+        RuntimeIngressAdmissionValidation.AttachWaits(candidate, waits);
 }

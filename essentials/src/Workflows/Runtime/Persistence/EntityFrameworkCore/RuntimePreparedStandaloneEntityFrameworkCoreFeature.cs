@@ -19,5 +19,5 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 public sealed class RuntimePreparedStandaloneEntityFrameworkCoreFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services) =>
-        RuntimeStandaloneTriggerRegistration.UsePreparedEntityFramework(services);
+        RuntimeStandaloneSourceEntityFrameworkRegistration.UsePreparedEntityFramework(services);
 }

@@ -13,12 +13,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext context, IStandaloneTriggerStore resources,
     IRuntimePostCommitOutboxStore outbox, IWorkflowActivationAuthority slots, IWorkflowExecutableStore executables,
-    IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore? legacyExecutions,
+    IWorkflowExecutableSourceReferenceStore references,
     IWorkflowExecutableRootWriteLeaseManager leases, IPersistenceAccessContextAccessor access, TimeProvider time,
-    NativeIngressTargetEvidence? evidence = null, IRuntimeModelExecutionReader? modelInputs = null,
-    IRecurringTriggerScheduleStore? schedules = null, IEnumerable<IStimulusDeliveryIntentAdapter>? stimulusAdapters = null,
-    NativeIngressWaitTargetEvidence? waitEvidence = null, IBookmarkResumeResolver? resumeResolver = null,
-    IRuntimeCheckpointCommitStore? checkpoints = null, IRuntimePreparedStartAttemptProof? preparedStarts = null,
+    IEfLegacyRuntimeIngress? legacy = null, IRecurringTriggerScheduleStore? schedules = null,
+    IRuntimePreparedStartAttemptProof? preparedStarts = null,
     IRuntimePreparedStandaloneRecipient? preparedTarget = null) : IRuntimeIngressDeliveryStore
 {
     public ValueTask<RuntimeIngressAdmissionReceipt?> FindAcceptedAsync(TriggerScope scope, string sourceOutboxItemId,
@@ -62,15 +60,14 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                     context.Database.ProviderName is not ("Microsoft.EntityFrameworkCore.Sqlite" or "Npgsql.EntityFrameworkCore.PostgreSQL"))
                     return false;
             }
-            else if (evidence?.PhysicalQueue is not EfSchedulerWorkQueueStore proofQueue || !ReferenceEquals(proofQueue.Context, context) ||
-                evidence.PhysicalExecutions is not EfWorkflowExecutionStateStore proofExecutions || !ReferenceEquals(proofExecutions.Context, context))
+            else if (legacy?.OwnsStartEvidence(context, resources, outbox, executables, access, time) != true)
                 return false;
             var scope = access.Current.RequireScope();
             if (!sourceStore.Uses(context, scope) || authority.AccessContext.RequireScope() != scope) return false;
             return sourceStore.PreparedStandaloneOnly
                 ? sourceStore.CanRetainPreparedExecutables(executables, references)
-                : legacyExecutions is not null &&
-                    ((IStimulusDeliveryStore)sourceStore).CanRetainExecutables(outbox, executables, references, legacyExecutions);
+                : legacy is not null &&
+                    ((IStimulusDeliveryStore)sourceStore).CanRetainExecutables(outbox, executables, references, legacy.Executions);
         }
     }
 
@@ -103,9 +100,9 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                 throw new NotSupportedException("This Runtime owner admits only prepared Actor Foundation starts.");
         }
         if (await PrepareWaitsAsync(request, cancellationToken) is { } capturedWaits)
-            request = request with { Candidate = RuntimeIngressWaitCapture.Attach(request.Candidate, capturedWaits) };
+            request = request with { Candidate = RuntimeIngressAdmissionValidation.AttachWaits(request.Candidate, capturedWaits) };
         if (request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => recipient.ModelProtocol is not null) &&
-            (modelInputs is not EfRuntimeModelExecutionReader reader || !reader.Uses(context, access)))
+            legacy?.OwnsModelInputReader != true)
             throw new NotSupportedException("Model ingress requires the actual selected EF model input receipt reader.");
         var material = (EfWorkflowExecutableStore)executables.GetMaterialStore();
         RuntimeIngressAdmissionReceipt? accepted = null;
@@ -266,17 +263,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
             var committed = new RuntimeCommittedRecipient(item, recipient, seal);
             if (seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion)
                 ValidatePreparedStartSeal(committed, native);
-            else if (recipient.ModelProtocol is null)
-            {
-                NativeIngressTargetEvidence.ValidateEnvelope(committed, NativeIngressTargetEvidence.ReadEnvelope(seal));
-                NativeIngressTargetEvidence.ValidateExecutable(committed, native ?? throw new InvalidDataException("Accepted target material is missing."));
-            }
             else
-            {
-                if (modelInputs is not EfRuntimeModelExecutionReader reader || !reader.Uses(context, access))
-                    throw new NotSupportedException("Model ingress requires the actual selected EF model input receipt reader.");
-                _ = RuntimeIngressModelTargetEvidence.ReadCommand(committed);
-            }
+                RequireLegacy().ValidateDispatch(committed, native);
             return item.WithSubscriptionDelivery(delivery.WithProgress(progress.CommitDispatch(seal)));
         }, cancellationToken);
     }
@@ -295,15 +283,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
             if (target.Seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion)
                 throw new NotSupportedException("Prepared actor receipts require the checked attempt reconciliation path.");
             if (current.SubscriptionDelivery!.Progress.Single(progress => progress.RecipientId == receipt.RecipientId).Receipt is not null) return current;
-            RuntimeTargetAcceptanceReceipt? observed;
-            if (target.Recipient.ModelProtocol is null)
-                observed = await evidence!.ReconcileAsync(current, target.Recipient, target.Seal, token);
-            else
-            {
-                if (modelInputs is not EfRuntimeModelExecutionReader reader || !reader.Uses(context, access))
-                    throw new NotSupportedException("Model ingress requires the actual selected EF model input receipt reader.");
-                observed = await RuntimeIngressModelTargetEvidence.ReconcileAsync(target, evidence!.PhysicalQueue, modelInputs, time, token);
-            }
+            var observed = await RequireLegacy().ObserveDispatchAsync(target, token);
             if (observed is null) throw new TriggerOperationException("unavailable", "The deterministic target has no observed physical acceptance; dispatch remains owed.");
             return RuntimeIngressAdmissionValidation.AcceptObserved(current, observed);
         }, cancellationToken, source);
@@ -414,8 +394,11 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
 
     private bool PreparedStandaloneOnly => outbox is EfRuntimePostCommitOutboxStore { PreparedStandaloneOnly: true };
 
-    private IWorkflowExecutionStateStore LegacyExecutions => legacyExecutions ??
-        throw new NotSupportedException("This Runtime owner does not provide legacy workflow execution access.");
+    private IEfLegacyRuntimeIngress RequireLegacy() => !PreparedStandaloneOnly && legacy is not null
+        ? legacy
+        : throw new NotSupportedException("This Runtime owner does not provide legacy workflow execution access.");
+
+    private IWorkflowExecutionStateStore LegacyExecutions => RequireLegacy().Executions;
 
     private RuntimePostCommitOutboxItem Read(RuntimePostCommitOutboxEntity row, PersistenceScope scope, string id)
     {
