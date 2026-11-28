@@ -139,11 +139,16 @@ public sealed class Elsa3NullMemberTests
     [Fact]
     public async Task A_null_ExecuteWorkflow_wait_keeps_spec_236s_mapping()
     {
-        // Elsa 3 ran a null WaitForCompletion as false (run the child inline until it completes or goes idle); spec 236
-        // maps ExecuteWorkflow to a Dispatch that waits, with its own behaviour warning, and a null keeps that mapping.
-        var node = await ConvertAsync("Elsa.ExecuteWorkflow", "waitForCompletion", Null, "workflowDefinitionId=child");
+        // Elsa 3 ran a null WaitForCompletion as false (run the child inline until it completes or goes idle); spec 1245
+        // FR-008 converts ExecuteWorkflow to a Dispatch that always waits, and its behaviour warning says Elsa 4 also waits
+        // for a child that suspends.
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Root("Elsa.ExecuteWorkflow", "waitForCompletion", Null, "workflowDefinitionId=child")));
 
-        Assert.Equal("true", Text(Input(node, "WaitForCompletion")));
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("true", Text(Input(Node(result.Value!.State, "subject"), "WaitForCompletion")));
+        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.ExecuteWorkflowDurable);
+        Assert.Contains("Elsa 4 waits for a child that suspends", warning.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -4,7 +4,7 @@
       "elsa3": "DispatchWorkflow",
       "elsa4": "DispatchWorkflow",
       "verdict": "gap",
-      "detail": "inputs missing: StartNewTrace, ChannelName; renamed: Input->Inputs; new in Elsa 4: CancelChildOnParentCancellation, ChildWorkflowExecutionId",
+      "detail": "inputs missing: StartNewTrace, ChannelName; renamed: Input->Inputs; new in Elsa 4: CancelChildOnParentCancellation, ChildWorkflowExecutionId, Status, Output",
       "divergences": []
     },
     {
@@ -195,7 +195,7 @@
       "elsa3": "ExecuteWorkflow",
       "elsa4": "DispatchWorkflow",
       "verdict": "present",
-      "detail": "renamed: Input->Inputs; new in Elsa 4: CancelChildOnParentCancellation, ChildWorkflowExecutionId",
+      "detail": "renamed: Input->Inputs; new in Elsa 4: CancelChildOnParentCancellation, ChildWorkflowExecutionId, Status, Output",
       "divergences": []
     },
     {

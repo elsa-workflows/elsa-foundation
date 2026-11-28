@@ -15,10 +15,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
     [Fact]
     public async Task CompletedWait_AppendsOneSafeDeterministicResumeIntent()
     {
-        var outputSource = new StubOutputSource([
-            new RuntimeWorkflowOutput("disclosed", JsonSerializer.SerializeToElement(42), false, null, new("clr", "System.Int32", null), Now),
-            new RuntimeWorkflowOutput("secret", null, true, "sensitive", new("clr", "System.String", null), Now)
-        ]);
+        var outputSource = new StubOutputSource("""{"disclosed":42}""", ["secret"]);
         var enricher = NewEnricher(outputSource, new NullLookupStore());
 
         var enriched = await enricher.EnrichAsync(NewCompletedCommit());
@@ -31,19 +28,80 @@ public sealed class WorkflowDispatchCompletionEnricherTests
         var payload = intent.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(JsonOptions())!;
         Assert.Equal(identity.WaitBookmarkId, payload.BookmarkId);
         Assert.Equal(identity.WaitStimulusHash, payload.StimulusHash);
-        var outputs = payload.Result.Outputs.OrderBy(x => x.Name).ToArray();
-        Assert.Equal(2, outputs.Length);
-        Assert.Equal(42, outputs[0].Value!.Value.GetInt32());
-        Assert.True(outputs[1].IsRedacted);
-        Assert.Null(outputs[1].Value);
+        // Spec 1245 FR-003: the committed values themselves, not the diagnostics view.
+        Assert.Equal("""{"disclosed":42}""", payload.Output!.Value.GetRawText());
+        Assert.Equal(["secret"], payload.WithheldOutputs);
+        Assert.Equal(1, outputSource.ReadCount);
         Assert.DoesNotContain("sensitive", intent.Payload.Value.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"outputs\"", intent.Payload.Value.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CompletedWait_without_child_outputs_carries_an_empty_object()
+    {
+        var enriched = await NewEnricher(new StubOutputSource("{}", []), new NullLookupStore()).EnrichAsync(NewCompletedCommit());
+
+        var payload = Assert.Single(enriched.PostCommitIntents).Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(JsonOptions())!;
+        Assert.Equal("{}", payload.Output!.Value.GetRawText());
+        Assert.Empty(payload.WithheldOutputs!);
+    }
+
+    [Fact]
+    public async Task Reenrichment_is_replay_stable_when_withheld_names_arrive_in_another_order()
+    {
+        var canonical = Assert.Single((await NewEnricher(new StubOutputSource("""{"a":1}""", ["zeta", "Beta", "alpha"]), new NullLookupStore())
+            .EnrichAsync(NewCompletedCommit())).PostCommitIntents);
+        var commit = NewCompletedCommit() with { PostCommitIntents = [canonical] };
+
+        var enriched = await NewEnricher(new StubOutputSource("""{"a":1}""", ["alpha", "zeta", "Beta"]), new NullLookupStore())
+            .EnrichAsync(commit);
+
+        Assert.Same(canonical, Assert.Single(enriched.PostCommitIntents));
+        var payload = canonical.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(JsonOptions())!;
+        Assert.Equal(["Beta", "alpha", "zeta"], payload.WithheldOutputs);
+    }
+
+    [Fact]
+    public async Task Conflicting_child_output_reenrichment_fails_closed()
+    {
+        var canonical = Assert.Single((await NewEnricher(new StubOutputSource("""{"value":"first"}""", []), new NullLookupStore())
+            .EnrichAsync(NewCompletedCommit())).PostCommitIntents);
+        var commit = NewCompletedCommit() with { PostCommitIntents = [canonical] };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewEnricher(new StubOutputSource("""{"value":"second"}""", []), new NullLookupStore()).EnrichAsync(commit).AsTask());
+
+        Assert.Contains("replay-stable terminal result", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Committed_faulted_intent_carrying_child_output_is_rejected()
+    {
+        var canonical = Assert.Single((await NewEnricher(new ThrowingOutputSource(), new NullLookupStore())
+            .EnrichAsync(NewTerminalCommit(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted))).PostCommitIntents);
+        var forged = System.Text.Json.Nodes.JsonNode.Parse(canonical.Payload!.Value.GetRawText())!.AsObject();
+        forged["output"] = System.Text.Json.Nodes.JsonNode.Parse("""{"partial":"value"}""");
+        var committedItem = new RuntimePostCommitOutboxItem(
+            Identity().ParentResumeOutboxItemId(NewCompletedCommit().CommitId),
+            CopyIntent(canonical, payload: JsonSerializer.SerializeToElement(forged)),
+            RuntimePostCommitOutboxStatus.Delivered,
+            canonical.RecordedAt,
+            availableAt: null,
+            deliveredAt: canonical.RecordedAt);
+
+        var exception = await Record.ExceptionAsync(() =>
+            NewEnricher(new ThrowingOutputSource(), new FixedLookupStore(committedItem))
+                .EnrichAsync(NewTerminalCommit(WorkflowExecutionStatus.Faulted, WorkflowDispatchStatus.Faulted)).AsTask());
+
+        Assert.NotNull(exception);
+        Assert.Contains("Only a completed child", exception.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Replay_ReusesExactCommittedIntentWithoutRecapturingOutputs()
     {
         var first = await NewEnricher(
-            new StubOutputSource([new RuntimeWorkflowOutput("value", JsonSerializer.SerializeToElement("first"), false, null, new("json", "string", null), Now)]),
+            new StubOutputSource("""{"value":"first"}""", []),
             new NullLookupStore()).EnrichAsync(NewCompletedCommit());
         var committedIntent = Assert.Single(first.PostCommitIntents);
         var committedItem = new RuntimePostCommitOutboxItem(
@@ -81,7 +139,8 @@ public sealed class WorkflowDispatchCompletionEnricherTests
         var intent = Assert.Single(enriched.PostCommitIntents);
         var payload = intent.Payload!.Value.Deserialize<WorkflowDispatchParentResumePayload>(JsonOptions())!;
         Assert.Equal(dispatchStatus, payload.Result.Status);
-        Assert.Empty(payload.Result.Outputs);
+        Assert.Null(payload.Output);
+        Assert.Null(payload.WithheldOutputs);
         Assert.Equal(0, outputSource.ReadCount);
         Assert.Equal(dispatchStatus == WorkflowDispatchStatus.Faulted ? 1 : 0, incidents.ListBlockingCount);
         Assert.Equal(DispatchWorkflowDiagnostics.Category, payload.Result.DiagnosticMetadata[DispatchWorkflowDiagnostics.CategoryKey]);
@@ -168,8 +227,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
         var identity = Identity();
         var unsafeResult = new DispatchWorkflowResult(
             identity.ChildWorkflowExecutionId,
-            WorkflowDispatchStatus.Completed,
-            [new DispatchWorkflowOutput("secret", JsonSerializer.SerializeToElement("raw-secret"), "System.String", false)]);
+            WorkflowDispatchStatus.Completed);
         var unsafePayload = new WorkflowDispatchParentResumePayload(
             identity.DispatchId,
             "parent-resume",
@@ -178,7 +236,9 @@ public sealed class WorkflowDispatchCompletionEnricherTests
             identity.WaitBookmarkId,
             DispatchWorkflowConstants.WaitStimulusType,
             identity.WaitStimulusHash,
-            unsafeResult);
+            unsafeResult,
+            JsonDocument.Parse("""{"secret":"raw-secret"}""").RootElement,
+            []);
         var foreignIntent = new RuntimePostCommitIntent(
             identity.ParentResumeIntentId,
             "parent-resume",
@@ -193,15 +253,13 @@ public sealed class WorkflowDispatchCompletionEnricherTests
                 ["runtime.childWorkflowExecutionId"] = identity.ChildWorkflowExecutionId
             });
         var commit = NewCompletedCommit() with { PostCommitIntents = [foreignIntent] };
-        var safeSource = new StubOutputSource([
-            new RuntimeWorkflowOutput("secret", null, true, "sensitive", new("clr", "System.String", null), Now)
-        ]);
+        var safeSource = new StubOutputSource("{}", ["secret"]);
         var enricher = NewEnricher(safeSource, new NullLookupStore());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => enricher.EnrichAsync(commit).AsTask());
 
-        Assert.Contains("policy-safe terminal result", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("replay-stable terminal result", exception.Message, StringComparison.Ordinal);
         Assert.Contains("raw-secret", foreignIntent.Payload!.Value.GetRawText(), StringComparison.Ordinal);
     }
 
@@ -240,7 +298,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
     [Fact]
     public async Task CompletionEnrichment_DeclaresASeparatePostLifecyclePhase()
     {
-        var completion = NewEnricher(new StubOutputSource([]), new NullLookupStore());
+        var completion = NewEnricher(new StubOutputSource("{}", []), new NullLookupStore());
 
         Assert.True(completion.Order > ((IRuntimeCheckpointCommitEnricher)new BasePhaseEnricher()).Order);
     }
@@ -248,7 +306,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
     [Fact]
     public async Task EquivalentUncommittedIntent_WithReorderedMetadata_IsAccepted()
     {
-        var outputs = new StubOutputSource([]);
+        var outputs = new StubOutputSource("{}", []);
         var canonical = Assert.Single((await NewEnricher(outputs, new NullLookupStore())
             .EnrichAsync(NewCompletedCommit())).PostCommitIntents);
         var reordered = CopyIntent(canonical, metadata: new Dictionary<string, string>
@@ -266,7 +324,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
     [Fact]
     public async Task ConflictingCommittedAndUncommittedIntents_AreRejected()
     {
-        var outputs = new StubOutputSource([]);
+        var outputs = new StubOutputSource("{}", []);
         var canonical = Assert.Single((await NewEnricher(outputs, new NullLookupStore())
             .EnrichAsync(NewCompletedCommit())).PostCommitIntents);
         var conflicting = CopyIntent(canonical, recordedAt: canonical.RecordedAt.AddSeconds(1));
@@ -287,7 +345,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
     [Fact]
     public async Task InvalidCommittedIntent_IsRejectedByStableFieldValidation()
     {
-        var canonical = Assert.Single((await NewEnricher(new StubOutputSource([]), new NullLookupStore())
+        var canonical = Assert.Single((await NewEnricher(new StubOutputSource("{}", []), new NullLookupStore())
             .EnrichAsync(NewCompletedCommit())).PostCommitIntents);
         var invalid = CopyIntent(canonical, recordedAt: canonical.RecordedAt.AddSeconds(1));
         var committedItem = new RuntimePostCommitOutboxItem(
@@ -308,7 +366,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
     [Fact]
     public async Task CommittedIntentWithMismatchedTerminalStatus_IsRejected()
     {
-        var canonical = Assert.Single((await NewEnricher(new StubOutputSource([]), new NullLookupStore())
+        var canonical = Assert.Single((await NewEnricher(new StubOutputSource("{}", []), new NullLookupStore())
             .EnrichAsync(NewCompletedCommit())).PostCommitIntents);
         var identity = Identity();
         var faultedResult = new DispatchWorkflowResult(
@@ -330,7 +388,9 @@ public sealed class WorkflowDispatchCompletionEnricherTests
             identity.WaitBookmarkId,
             DispatchWorkflowConstants.WaitStimulusType,
             identity.WaitStimulusHash,
-            faultedResult);
+            faultedResult,
+            null,
+            null);
         var mismatched = CopyIntent(
             canonical,
             payload: JsonSerializer.SerializeToElement(mismatchedPayload, JsonOptions()));
@@ -445,17 +505,18 @@ public sealed class WorkflowDispatchCompletionEnricherTests
             source.DependsOnWaitRegistrationId,
             source.WaitFailurePolicy);
 
-    private sealed class StubOutputSource(IReadOnlyCollection<RuntimeWorkflowOutput> outputs) : IWorkflowOutputSource
+    private sealed class StubOutputSource(string values, IReadOnlyList<string> withheld) : IWorkflowOutputSource
     {
         public int ReadCount { get; private set; }
 
+        // The dispatch never reads the diagnostics view (spec 1245 FR-003).
         public ValueTask<IReadOnlyCollection<RuntimeWorkflowOutput>> ReadAsync(string workflowExecutionId, IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(Read());
+            throw new InvalidOperationException("must not read the diagnostics view");
 
-        private IReadOnlyCollection<RuntimeWorkflowOutput> Read()
+        public ValueTask<WorkflowOutputValues> ReadValuesAsync(string workflowExecutionId, IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null, CancellationToken cancellationToken = default)
         {
             ReadCount++;
-            return outputs;
+            return ValueTask.FromResult(new WorkflowOutputValues(JsonDocument.Parse(values).RootElement, withheld));
         }
     }
 
@@ -463,6 +524,12 @@ public sealed class WorkflowDispatchCompletionEnricherTests
     {
         public int ReadCount { get; private set; }
         public ValueTask<IReadOnlyCollection<RuntimeWorkflowOutput>> ReadAsync(string workflowExecutionId, IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null, CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            throw new InvalidOperationException("must not recapture");
+        }
+
+        public ValueTask<WorkflowOutputValues> ReadValuesAsync(string workflowExecutionId, IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null, CancellationToken cancellationToken = default)
         {
             ReadCount++;
             throw new InvalidOperationException("must not recapture");

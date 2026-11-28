@@ -6,6 +6,11 @@
 
 **Status**: Approved
 
+> **Partly superseded by [spec 1245](../1245-execute-workflow-awaited-dispatch/spec.md) (2026-11-27).** Dispatch
+> Workflow no longer declares a `Result` output: its outputs are `ChildWorkflowExecutionId`, `Status` and `Output`.
+> Superseded here: FR-003 and `contracts/dispatch-workflow.md` where they reserve the `Result` output. The rest of this
+> specification is unchanged.
+
 **Input**: GitHub issue #676, “Dispatch a published workflow fire-and-forget”, under parent #674
 
 ## User Scenarios & Testing *(mandatory)*

@@ -70,7 +70,7 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
             return commit;
 
         var intents = commit.PostCommitIntents.ToList();
-        IReadOnlyCollection<RuntimeWorkflowOutput>? safeOutputs = null;
+        WorkflowOutputValues? childOutputs = null;
         IReadOnlyCollection<string>? incidentIds = null;
         foreach (var dispatch in dispatches)
         {
@@ -98,7 +98,8 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                 {
                     if (terminalStatus == WorkflowDispatchStatus.Completed)
                     {
-                        safeOutputs ??= await _workflowOutputSource.ReadAsync(
+                        // The committed values themselves, not the diagnostics view (spec 1245 FR-003).
+                        childOutputs ??= await _workflowOutputSource.ReadValuesAsync(
                             child.WorkflowExecutionId,
                             commit.StateChanges.DurableValues,
                             cancellationToken);
@@ -114,12 +115,12 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                     var canonical = CreateIntent(
                         dispatch,
                         identity,
-                        safeOutputs ?? [],
+                        childOutputs,
                         incidentIds ?? [],
                         commit.Checkpoint.OccurredAt,
                         control);
                     if (existing is not null && !canonical.IsEquivalentTo(existing))
-                        throw TerminalConflict(controlEnabled, $"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the policy-safe terminal result.");
+                        throw TerminalConflict(controlEnabled, $"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the replay-stable terminal result.");
 
                     intent = existing ?? canonical;
                     if (existing is null)
@@ -147,21 +148,14 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
     private static RuntimePostCommitIntent CreateIntent(
         WorkflowDispatchRecord dispatch,
         WorkflowDispatchIdentity identity,
-        IReadOnlyCollection<RuntimeWorkflowOutput> outputs,
+        WorkflowOutputValues? outputs,
         IReadOnlyCollection<string> incidentIds,
         DateTimeOffset recordedAt,
         RuntimeChildControlTransport? control)
     {
-        var resultOutputs = dispatch.Status == WorkflowDispatchStatus.Completed
-            ? outputs
-                .OrderBy(output => output.Name, StringComparer.Ordinal)
-                .Select(output => new DispatchWorkflowOutput(
-                    output.Name,
-                    output.Value,
-                    output.Type.Id ?? output.Type.Kind,
-                    output.IsRedacted))
-                .ToArray()
-            : [];
+        var completed = dispatch.Status == WorkflowDispatchStatus.Completed;
+        if (completed && outputs is null)
+            throw new InvalidOperationException("A completed DispatchWorkflow child requires its committed output values.");
         var diagnostics = dispatch.Status switch
         {
             WorkflowDispatchStatus.Faulted => DispatchWorkflowDiagnostics.Faulted(incidentIds),
@@ -171,7 +165,6 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
         var result = new DispatchWorkflowResult(
             dispatch.ChildWorkflowExecutionId,
             dispatch.Status,
-            resultOutputs,
             diagnostics,
             control);
         var payload = new WorkflowDispatchParentResumePayload(
@@ -182,7 +175,9 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
             identity.WaitBookmarkId,
             DispatchWorkflowConstants.WaitStimulusType,
             identity.WaitStimulusHash,
-            result);
+            result,
+            completed ? outputs!.Values : null,
+            completed ? outputs!.WithheldNames : null);
 
         return new RuntimePostCommitIntent(
             intentId: identity.ParentResumeIntentId,

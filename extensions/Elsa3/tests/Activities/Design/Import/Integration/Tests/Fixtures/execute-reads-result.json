@@ -1,0 +1,346 @@
+{
+  "id": "execute-reads-result-v1",
+  "definitionId": "execute-reads-result",
+  "name": "execute-reads-result",
+  "description": "Test-owned workflow: executes output-target and reads its Elsa 3 result shape.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    {
+      "id": "credit",
+      "name": "credit",
+      "typeName": "Object"
+    },
+    {
+      "id": "decision",
+      "name": "decision",
+      "typeName": "Object"
+    },
+    {
+      "id": "status",
+      "name": "status",
+      "typeName": "Object"
+    },
+    {
+      "id": "subStatus",
+      "name": "subStatus",
+      "typeName": "Object"
+    },
+    {
+      "id": "instanceId",
+      "name": "instanceId",
+      "typeName": "Object"
+    },
+    {
+      "id": "whole",
+      "name": "whole",
+      "typeName": "Object"
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "execute-reads-result-root",
+    "nodeId": "execute-reads-result-root",
+    "name": "execute-reads-result-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "run-child",
+        "nodeId": "run-child",
+        "name": "run-child",
+        "type": "Elsa.ExecuteWorkflow",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "workflowDefinitionId": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "output-target"
+          }
+        },
+        "result": {
+          "typeName": "Object",
+          "memoryReference": {
+            "id": "credit"
+          }
+        }
+      },
+      {
+        "id": "read-decision",
+        "nodeId": "read-decision",
+        "name": "read-decision",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "decision",
+          "name": "decision",
+          "typeName": "Object"
+        },
+        "value": {
+          "typeName": "Object",
+          "expression": {
+            "type": "JavaScript",
+            "value": "return getCredit().Output.Decision;"
+          }
+        }
+      },
+      {
+        "id": "read-status",
+        "nodeId": "read-status",
+        "name": "read-status",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "status",
+          "name": "status",
+          "typeName": "Object"
+        },
+        "value": {
+          "typeName": "Object",
+          "expression": {
+            "type": "JavaScript",
+            "value": "return getCredit().Status;"
+          }
+        }
+      },
+      {
+        "id": "read-sub-status",
+        "nodeId": "read-sub-status",
+        "name": "read-sub-status",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "subStatus",
+          "name": "subStatus",
+          "typeName": "Object"
+        },
+        "value": {
+          "typeName": "Object",
+          "expression": {
+            "type": "JavaScript",
+            "value": "return getCredit().SubStatus;"
+          }
+        }
+      },
+      {
+        "id": "read-instance",
+        "nodeId": "read-instance",
+        "name": "read-instance",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "instanceId",
+          "name": "instanceId",
+          "typeName": "Object"
+        },
+        "value": {
+          "typeName": "Object",
+          "expression": {
+            "type": "JavaScript",
+            "value": "return getCredit().WorkflowInstanceId;"
+          }
+        }
+      },
+      {
+        "id": "read-whole",
+        "nodeId": "read-whole",
+        "name": "read-whole",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "whole",
+          "name": "whole",
+          "typeName": "Object"
+        },
+        "value": {
+          "typeName": "Object",
+          "expression": {
+            "type": "JavaScript",
+            "value": "return JSON.stringify(getCredit());"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "run-child",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "read-decision",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "read-decision",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "read-status",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "read-status",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "read-sub-status",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "read-sub-status",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "read-instance",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "read-instance",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "read-whole",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

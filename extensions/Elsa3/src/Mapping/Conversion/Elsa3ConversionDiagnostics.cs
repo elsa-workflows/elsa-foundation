@@ -15,8 +15,9 @@ internal static class Elsa3ConversionDiagnostics
         string message,
         string guidance,
         string? property = null,
-        string? withinProperty = null) =>
-        Create(Elsa3MigrationDiagnosticSeverity.Error, plan, node, code, message, guidance, property, withinProperty);
+        string? withinProperty = null,
+        IReadOnlyDictionary<string, string>? extra = null) =>
+        Create(Elsa3MigrationDiagnosticSeverity.Error, plan, node, code, message, guidance, property, withinProperty, extra);
 
     public static Elsa3MigrationDiagnostic Warning(
         Elsa3ConversionPlan plan,
@@ -36,8 +37,9 @@ internal static class Elsa3ConversionDiagnostics
         string message,
         string guidance,
         string? property = null,
-        string? withinProperty = null) =>
-        Create(Elsa3MigrationDiagnosticSeverity.Info, plan, node, code, message, guidance, property, withinProperty);
+        string? withinProperty = null,
+        IReadOnlyDictionary<string, string>? extra = null) =>
+        Create(Elsa3MigrationDiagnosticSeverity.Info, plan, node, code, message, guidance, property, withinProperty, extra);
 
     /// <summary>A definition-level diagnostic (no node), for reusable-workflow outcomes and the like.</summary>
     public static Elsa3MigrationDiagnostic ForDefinition(

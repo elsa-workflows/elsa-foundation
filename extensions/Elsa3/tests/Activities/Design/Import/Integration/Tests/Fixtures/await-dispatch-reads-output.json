@@ -1,0 +1,259 @@
+{
+  "id": "await-dispatch-reads-output-v1",
+  "definitionId": "await-dispatch-reads-output",
+  "name": "await-dispatch-reads-output",
+  "description": "Test-owned workflow: awaits output-target and reads its output by name.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    {
+      "id": "address",
+      "name": "address",
+      "typeName": "Object"
+    },
+    {
+      "id": "addressMap",
+      "name": "addressMap",
+      "typeName": "ObjectDictionary"
+    },
+    {
+      "id": "decision",
+      "name": "decision",
+      "typeName": "Object"
+    },
+    {
+      "id": "decisionFromMap",
+      "name": "decisionFromMap",
+      "typeName": "Object"
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "await-dispatch-reads-output-root",
+    "nodeId": "await-dispatch-reads-output-root",
+    "name": "await-dispatch-reads-output-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "to-object",
+        "nodeId": "to-object",
+        "name": "to-object",
+        "type": "Elsa.DispatchWorkflow",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "workflowDefinitionId": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "output-target"
+          }
+        },
+        "waitForCompletion": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "Literal",
+            "value": "true"
+          }
+        },
+        "result": {
+          "typeName": "Object",
+          "memoryReference": {
+            "id": "address"
+          }
+        }
+      },
+      {
+        "id": "to-map",
+        "nodeId": "to-map",
+        "name": "to-map",
+        "type": "Elsa.DispatchWorkflow",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "workflowDefinitionId": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "output-target"
+          }
+        },
+        "waitForCompletion": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "Literal",
+            "value": "true"
+          }
+        },
+        "result": {
+          "typeName": "ObjectDictionary",
+          "memoryReference": {
+            "id": "addressMap"
+          }
+        }
+      },
+      {
+        "id": "read-object",
+        "nodeId": "read-object",
+        "name": "read-object",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "decision",
+          "name": "decision",
+          "typeName": "Object"
+        },
+        "value": {
+          "typeName": "Object",
+          "expression": {
+            "type": "JavaScript",
+            "value": "return getAddress().Decision;"
+          }
+        }
+      },
+      {
+        "id": "read-map",
+        "nodeId": "read-map",
+        "name": "read-map",
+        "type": "Elsa.SetVariable",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "variable": {
+          "id": "decisionFromMap",
+          "name": "decisionFromMap",
+          "typeName": "Object"
+        },
+        "value": {
+          "typeName": "Object",
+          "expression": {
+            "type": "JavaScript",
+            "value": "return getAddressMap().Decision;"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "to-object",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "to-map",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "to-map",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "read-object",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "read-object",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "read-map",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

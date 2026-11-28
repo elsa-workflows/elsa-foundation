@@ -73,7 +73,8 @@ public sealed class WorkflowDispatchDeliveryFailureProjectorTests
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(payload);
         Assert.Equal(WorkflowDispatchStatus.DispatchFailed, payload.Result.Status);
-        Assert.Empty(payload.Result.Outputs);
+        Assert.Null(payload.Output);
+        Assert.Null(payload.WithheldOutputs);
         Assert.Equal(identity.DeliveryIncidentId(0), payload.Result.DiagnosticMetadata[DispatchWorkflowDiagnostics.DeliveryIncidentIdKey]);
         Assert.DoesNotContain(followUp.Intent.Payload.Value.GetRawText(), "secret", StringComparison.OrdinalIgnoreCase);
         _ = new RuntimePostCommitOutboxClaimCompletion(claim, failure, projected, followUp);

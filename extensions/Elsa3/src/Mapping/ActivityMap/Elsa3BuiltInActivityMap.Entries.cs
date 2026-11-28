@@ -285,12 +285,14 @@ internal sealed partial class Elsa3BuiltInActivityMap
                 Carry("IsLocalEvent", "IsLocalEvent") with { OnNull = NullUnbound },
                 Narrow("Payload", "Payload", Elsa3ValueContract.JsonOnly) with { OnNull = NullAsNull }
             ]),
+        // Spec 1245 FR-007, FR-009: Elsa 3 continued on Done after a child that finished, and a faulted child counts as
+        // finished. A cancelled child never resumed an awaited Elsa 3 parent, so Cancelled stays unmapped (FR-011).
         Catalog("DispatchWorkflow", DispatchWorkflow, DispatchMembers(executeWorkflow: false),
-            [Outcome("Done", "Dispatched", "Completed")]),
+            [Outcome("Done", "Dispatched", "Completed", "Faulted")]),
+        // The rewrite always waits and raises ExecuteWorkflowDurable itself (FR-008).
         Catalog("ExecuteWorkflow", DispatchWorkflow, DispatchMembers(executeWorkflow: true),
-            [Outcome("Done", "Completed")],
-            Elsa3NodeRewriteKind.ExecuteWorkflowAsDispatch,
-            ExecuteWorkflowDurable),
+            [Outcome("Done", "Completed", "Faulted")],
+            Elsa3NodeRewriteKind.ExecuteWorkflowAsDispatch),
         NoCounterpart("BulkDispatchWorkflows", "Elsa 4 has no bulk dispatch."),
         NoCounterpart("RunTask", "Elsa 4 has no run-task activity."),
     ];
@@ -302,12 +304,15 @@ internal sealed partial class Elsa3BuiltInActivityMap
             Narrow("WorkflowDefinitionId", "WorkflowDefinitionId", Elsa3ValueContract.LiteralOnly) with { OnNull = NullRequired },
             Carry("CorrelationId", "CorrelationId") with { OnNull = NullAsNull },
             Narrow("Input", "Inputs", Elsa3ValueContract.DispatchInputs) with { OnNull = NullAsNull },
-            Lost("Result"),
+            // Spec 1245 FR-006: an awaited Dispatch Result is the child's output dictionary, Elsa 4's Output. Execute
+            // Workflow's Result wrapped it (FR-010): its reads are rewritten by value-flow lowering.
+            executeWorkflow ? CarryOutput("Result", "Output") with { WrapsResult = true } : CarryOutput("Result", "Output"),
             Synthetic("CancelChildOnParentCancellation", "false")
         };
         if (executeWorkflow)
         {
-            members.Add(DefaultFlip("WaitForCompletion", "WaitForCompletion", "true"));
+            // FR-008: always literal true, emitted by the ExecuteWorkflowAsDispatch rewrite.
+            members.Add(Structure("WaitForCompletion", Elsa3MemberKind.Input));
         }
         else
         {

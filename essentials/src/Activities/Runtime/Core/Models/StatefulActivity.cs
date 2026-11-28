@@ -324,6 +324,7 @@ public sealed class ActivityResumeContext<TState, TTrigger>
         LogicalInvocationId = attempt.LogicalInvocationId;
         _variables = attempt.VariablesOrNull;
         _workflowState = attempt.WorkflowStateOrNull;
+        Warnings = attempt.Warnings;
         State = alreadyMaterialized ? state : PersistableActivityValue.SnapshotAndMaterialize(state, "private state", attempt.Warnings);
         Trigger = alreadyMaterialized ? trigger : PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger", attempt.Warnings);
         RegistrationId = registrationId;
@@ -356,6 +357,12 @@ public sealed class ActivityResumeContext<TState, TTrigger>
     /// <inheritdoc cref="ActivityExecutionContext.WorkflowState"/>
     public IStepWorkflowState WorkflowState => _workflowState ?? throw ActivityExecutionContext.NoWorkflowStateSession();
     private readonly IStepWorkflowState? _workflowState;
+
+    /// <summary>
+    /// The attempt's run-time warning channel, which records a warning on the activity execution; null when the host
+    /// supplies none (<see cref="ActivityExecutionContext.Warnings"/>).
+    /// </summary>
+    public Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings { get; }
 
     public TState State { get; }
     public TTrigger Trigger { get; }

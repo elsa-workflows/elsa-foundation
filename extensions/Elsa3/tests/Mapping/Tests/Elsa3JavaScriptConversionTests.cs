@@ -22,14 +22,12 @@ public sealed class Elsa3JavaScriptConversionTests
     [InlineData("moment().format()")]
     [InlineData("args.value")]
     [InlineData("getVariable('o').name = 'x'")]
-    [InlineData("getOrderId()")]
     [InlineData("DateTime.Now")]
     [InlineData("typeof moment")]
     [InlineData("[DateTime][0]")]
     [InlineData("function f(DateTime) { return DateTime; } DateTime.Now")]
     [InlineData("(() => { let moment = 1; return moment; })() + moment")]
     [InlineData("[1].map(Guid => Guid).concat([Guid])[0]")]
-    [InlineData("(() => { function getOrderId() { return 1; } return getOrderId(); })() + getOrderId()")]
     [InlineData("(() => { try { return 1; } catch (DateTime) { return 2; } })() + DateTime.Now")]
     public async Task Constructs_elsa4_cannot_run_are_refused(string expression)
     {
@@ -37,6 +35,19 @@ public sealed class Elsa3JavaScriptConversionTests
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+    }
+
+    /// <summary>A call of an undeclared Elsa 3 custom global, outside a local of that name, is a missing host function (spec 1237 FR-016a).</summary>
+    [Theory]
+    [InlineData("getOrderId()")]
+    [InlineData("(() => { function getOrderId() { return 1; } return getOrderId(); })() + getOrderId()")]
+    public async Task A_call_of_an_undeclared_custom_global_is_a_missing_host_function(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("getOrderId", diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
     }
 
     [Theory]
@@ -159,7 +170,7 @@ public sealed class Elsa3JavaScriptConversionTests
     {
         var result = await ConvertAsync(Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(body)))));
 
-        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
     }
 
     [Fact]

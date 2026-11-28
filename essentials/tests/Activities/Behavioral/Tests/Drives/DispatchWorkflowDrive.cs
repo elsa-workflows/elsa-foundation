@@ -54,7 +54,7 @@ public sealed class DispatchWorkflowDrive : IActivityDrive
     public async Task DriveAsync(ActivityDriveRecorder recorder)
     {
         // Fire-and-forget completes inline: the child execution id is known before the child exists, and there is
-        // no result to carry, which is why this case populates only one of the two declared outputs.
+        // no child output to carry, which is why this case populates ChildWorkflowExecutionId and Status but not Output.
         await DriveOutcomeAsync(recorder, "dispatched", ChildBehaviour.Completes, waitForCompletion: false);
 
         await DriveOutcomeAsync(recorder, "completed", ChildBehaviour.Completes, waitForCompletion: true);
