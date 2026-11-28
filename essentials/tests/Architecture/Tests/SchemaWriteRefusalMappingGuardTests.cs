@@ -51,13 +51,10 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     /// <summary>Every first-party feature that registers failure services for its owner.</summary>
     private static readonly Type[] OwnersWithTheirOwnFailureServices =
     [
-        typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature),
-        typeof(ActivitiesBpmnDirectPublishingFeature),
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
         typeof(Elsa.Agent.Api.AgentApiFeature),
         typeof(Elsa.Agent.Inspection.Api.AgentInspectionApiFeature),
-        typeof(Elsa.Agent.Review.Api.AgentReviewApiFeature),
         typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
         typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature),
         typeof(ModularityApiFeature),

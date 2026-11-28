@@ -204,20 +204,6 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "elsa.activities.bpmn": {
-        "type": "Project",
-        "dependencies": {
-          "Bpmn.Model": "[0.5.0, )",
-          "Bpmn.Semantics": "[0.5.0, )",
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Bpmn.Composite": "[4.0.0-dev, )",
-          "Elsa.Activities.Bpmn.Core": "[4.0.0-dev, )",
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
-      },
       "elsa.activities.bpmn.composite": {
         "type": "Project",
         "dependencies": {

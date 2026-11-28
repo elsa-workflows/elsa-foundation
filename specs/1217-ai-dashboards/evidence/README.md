@@ -62,12 +62,8 @@ An optional `--studio-root /absolute/reviewed/studio-checkout` builds that exact
 
 The isolated pointer/long-name/drill fixtures use `Studio/tests/browser/playwright.dashboard-native.config.ts`, which owns its Vite server and never reuses another checkout. They are supporting browser regressions, not composed product acceptance. Current machine reports/screenshots still require independent inspection and downloadable CI evidence before UI acceptance. Native browser message-submit counters do not measure physical SDK/HTTP calls.
 
-The opt-in actual provider runner is `tools/studio/Dashboard.Conformance.Probe/live_qualify.py`.
-Preparation/build do not inspect credentials or call a model. Live mode requires a pinned model,
-explicit restored-access acknowledgement and the approved credential environment-variable name.
-Its dedicated host declares the current normal Workbench dependencies plus Acme unconditionally;
-it forwards the real SDK factory and observes turns/tools without recording source results.
-Browser traces are owned by Playwright, including the independent reader context.
-A successful SDK discovery alone does not qualify authoring. Both actual lifecycle journeys,
-native zero-send phases, current IAM denials, numerical oracles and independent screen inspection
-remain required. Reports/traces are private; publish only an inspected allowlisted receipt.
+The original actual-provider witness used the classic workflow start handler to
+seed its retained cohort. Replay it from the
+[pinned Dashboard source](../../../tools/studio/Dashboard.Conformance.Probe/README.md#classic-live-provider-replay).
+The package-only witness and current native browser journeys above use the
+current product composition.

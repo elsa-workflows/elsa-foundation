@@ -6,6 +6,8 @@ The module contributes navigation and routes for `/etl/definitions` and `/etl/ru
 feature-area API. It uses Studio's authenticated HTTP transport and the backend capability document; it does
 not require a server runtime assembly in the browser host.
 
+The `RunEtl` editor and occurrence link are compatibility contributions for the [pinned classic workflow adapter](../../../../docs/contributing/workbench-compatibility-tests.md#classic-reviews-decisions-etl-and-rules-in-workflows).
+
 The property editor registered for `etl-published-selection` handles `RunEtl.Pipeline`. It loads bounded pages
 of published definitions and versions and stores the exact canonical `EtlPublishedSelection`, including its
 full content hash. It preserves an existing selection outside the currently loaded page. General Workflows

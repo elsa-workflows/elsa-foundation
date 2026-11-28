@@ -10,7 +10,6 @@ using Elsa.Etl.Runtime.Execution;
 using Elsa.Etl.Runtime.Output;
 using Elsa.Etl.Runtime.Preparation;
 using Elsa.Etl.Tests.Support;
-using Elsa.Etl.Workflows.Runtime.Activities;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -51,9 +50,9 @@ public sealed class EtlV1CompatibilityFixtureTests
         Assert.Equal(fixture.Manifest.WorkflowDefinitionVersionId, identity.GetProperty("definitionVersionId").GetString());
 
         var runEtlNode = Assert.Single(root.GetProperty("nodes").EnumerateArray(), node =>
-            node.GetProperty("activityType").GetString() == RunEtl.ActivityType);
+            node.GetProperty("activityType").GetString() == "Elsa.Etl.Workflows.Runtime.Activities.RunEtl");
         var selection = EtlPublishedSelection.Parse(runEtlNode.GetProperty("inputBindings")
-            .GetProperty(nameof(RunEtl.Pipeline)).GetProperty("literalValue").GetString()!);
+            .GetProperty("Pipeline").GetProperty("literalValue").GetString()!);
         Assert.Equal(fixture.Manifest.DefinitionId, selection.DefinitionId);
         Assert.Equal(fixture.Manifest.DefinitionVersion, selection.DefinitionVersion);
         Assert.Equal(fixture.Manifest.EtlContentHash, selection.ContentHash);

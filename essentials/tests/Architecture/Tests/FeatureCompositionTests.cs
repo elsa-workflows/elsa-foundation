@@ -92,14 +92,10 @@ public sealed class FeatureCompositionTests
     private static readonly string[] RequiresLegacyRuntime =
     [
         "ActivitiesBpmn",
-        "ActivitiesBpmnHosting",
         "ActivitiesDispatchWorkflowRuntime",
         "ActivitiesPrimitives",
         "ActivitiesRuntime",
-        "AgentReview",
         "AgentRuntime",
-        "EtlWorkflowsRuntime",
-        "RulesWorkflowsRuntime",
         "WorkflowsExecutionEvidence",
         "WorkflowsRuntimeHistory",
         "WorkflowsRuntimeRecurringTriggers",

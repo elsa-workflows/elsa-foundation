@@ -1,6 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Activities.Bpmn" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange.Tests" />
     <PackageReference Include="Bpmn.Model" />
