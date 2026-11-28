@@ -19,6 +19,20 @@ credential-protected package management API, including the registry, uploads, pr
 `Elsa:Persistence:EntityFramework:Migrate:GuardFeatureActivation` enables the migration guard for features
 activated through module management.
 
+### Foundation source host workflow runtime
+
+The default source shell serves Native and Flowchart on Actor Foundation. Its SQLite database path
+defaults to `elsa-kernel.db` and resolves against the process working directory. The
+`CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__` settings select the provider,
+database and tenant. To use PostgreSQL, set `Provider` to `PostgreSQL`, clear `SqlitePath`, and
+provide `PostgresConnectionString`. The shell's EF control-plane connection remains separately configured.
+
+The Studio dashboard and saved-question APIs stay available. The `elsa.workflows.runs` dataset
+counts authorized runs retained by Actor Foundation, including eligible isolated Test Runs. Earlier
+execution rows from a legacy runtime are outside that dataset's totals. The retained Runtime History
+endpoint provides committed activity evidence. The legacy execution evidence buffer and phase trace
+contributions belong to shells that select the legacy engine.
+
 ## Pages
 
 | Page | Read it when you want to… |

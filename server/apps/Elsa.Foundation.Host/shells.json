@@ -8,6 +8,7 @@
           "Expressions": {},
           "ExpressionsApi": {},
           "Events": {},
+          "Tasks": {},
           "Mediator": {},
           "MemoryCache": {},
           "Serialization": {},
@@ -24,46 +25,33 @@
           "ActivitiesSequence": {},
           "ActivitiesControlFlow": {},
           "ActivitiesFlowchart": {},
-          "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesDispatchWorkflowDesign": {},
+          "ActivitiesDesignReconciliation": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
             }
           },
-          "WorkflowsRuntimeEntityFrameworkCore": {
+          "WorkflowsRuntimeKernelHosting": {
+            "Provider": "SQLite",
+            "SqlitePath": "elsa-kernel.db",
+            "Tenant": "default",
+            "PreparedStandaloneStarts": true
+          },
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256,
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
-            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
           },
-          "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
-          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
-          "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Balanced",
-            "MaxActivitiesPerCommit": 50
-          },
-          "WorkflowsRuntimeHistory": {},
-          "WorkflowsRuntimeTriggers": {},
-          "WorkflowsRuntimeResumption": {},
-          "WorkflowsRuntimeRecurringTriggers": {},
-          "WorkflowsRuntimeHttp": {},
-          "WorkflowsRuntimeAttention": {},
-          "WorkflowsRuntimeApi": {
-            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
-            "WorkflowAlterationPayloadProtectionKeys": {
-              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-            }
-          },
-          "WorkflowsRuntimeTracing": {},
-          "WorkflowsExecutionEvidence": {},
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeRetainedAttention": {},
           "WorkflowsDesignApi": {},
           "WorkflowsDesignEntityFrameworkCore": {},
           "WorkflowDesignValidations": {},
-          "WorkflowsDashboard": {},
-          "WorkflowsDashboardEntityFrameworkCore": {},
-          "WorkflowDashboardQueries": {},
+          "WorkflowsDashboardRetained": {},
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {},
+          "KernelWorkflowDashboardQueries": {},
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingEntityFrameworkCore": {},
@@ -74,6 +62,9 @@
           "StandaloneTriggersApi": {},
           "StandaloneHttpTriggerAuthoring": {},
           "StandaloneEventTriggerAuthoring": {},
+          "StandaloneScheduleTriggerAuthoring": {},
+          "PreparedStandaloneScheduleTriggers": {},
+          "KernelActivitiesScheduling": {},
           "JavaScriptExpressions": {
             "TypeDescriptors": [
               {
