@@ -29,7 +29,7 @@ internal sealed class ActorDecisionRunner(
         if (executable is null || executable.Identity.ArtifactId != invocation.Artifact ||
             JsonSerializer.Serialize(executable.Identity) != invocation.ExecutableSelection ||
             !executable.NodesById.TryGetValue(invocation.NodeId, out var node) || node.ActivityType != EvaluateDecision.ActivityType ||
-            !node.Metadata.TryGetValue(EvaluateDecision.MetadataKey, out var serialized) ||
+            ExecutableDecisionPinMetadata.Read(node.Metadata) is not { } serialized ||
             node.InputBindings.GetValueOrDefault(nameof(EvaluateDecision.Decision)) is not
                 { Source: RuntimeInputBindingSource.Literal, LiteralValue: { ValueKind: JsonValueKind.String } selection } ||
             selection.GetString() != invocation.Selection)

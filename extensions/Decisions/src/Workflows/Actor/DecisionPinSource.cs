@@ -48,7 +48,7 @@ internal sealed class DecisionPinSource(IDecisionReader decisions, IDecisionComp
                 artifact.SemanticsId != version.Artifact.SemanticsId ||
                 !artifact.ExecutableBytes.SequenceEqual(version.Artifact.ExecutableBytes)) throw Invalid();
             var pin = new DecisionWorkflowPin(selection, tenant, assetId, versionId, artifact);
-            claims.Add(new(node.ExecutableNodeId, DecisionWorkflowPin.MetadataKey, pin.Serialize()));
+            claims.Add(new(node.ExecutableNodeId, ExecutableDecisionPinMetadata.BehavioralKey, pin.Serialize()));
         }
         return new(nodeMetadata: claims);
     }

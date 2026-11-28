@@ -49,8 +49,11 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         // V1 artifacts retain their original identities. Only verification may use the historical
         // rendering; every new publication uses V2 so it cannot deduplicate onto a stale V1 body.
         // Check V1 first so its verification does not depend on serializing fields it never covered.
-        // No V1 artifact can hold a member read, and V1 never rendered a selection, so one is never matched as V1.
-        if (ReadsAnyMember(executable))
+        // Member selections and behavioral Decision pins require current verification.
+        var decisionPins = executable.Nodes.Where(node => node.Metadata.ContainsKey(ExecutableDecisionPinMetadata.BehavioralKey));
+        if (decisionPins.Any(node => ExecutableDecisionPinMetadata.Read(node.Metadata) is null))
+            return false;
+        if (ReadsAnyMember(executable) || decisionPins.Any())
             return StringComparer.Ordinal.Equals(ComputeHash(executable.RootActivity, contract, executable.Dependencies,
                 executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy), executable.Identity.ArtifactHash);
 
@@ -266,10 +269,14 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             : $":executionPlacement={node.ExecutionPlacement}";
         var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}{executionPlacement}";
         var nodeShape = intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}";
-        return node.ActivityContract is null
+        var shape = node.ActivityContract is null
             ? nodeShape
             : $"{nodeShape}:contract:{node.ActivityContract.SchemaFingerprint}";
+        return DecisionPinFingerprint(node) is { } decision ? $"{shape}:decisionPinV2:{decision}" : shape;
     }
+
+    private static string? DecisionPinFingerprint(ExecutableNode node) =>
+        node.Metadata.GetValueOrDefault(ExecutableDecisionPinMetadata.BehavioralKey) is { } pin ? Hash(pin) : null;
 
     private static void WriteBehavioralPayload(
         Utf8JsonWriter writer,
@@ -370,6 +377,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         writer.WriteString("nodeId", node.ExecutableNodeId);
         writer.WriteString("activityType", node.ActivityType);
         writer.WriteString("activityTypeVersion", node.ActivityTypeVersion);
+        if (DecisionPinFingerprint(node) is { } decision)
+            writer.WriteString("decisionPinV2", decision);
         if (node.ExecutionPlacement != ActivityExecutionPlacement.Inline)
             writer.WriteString("executionPlacement", node.ExecutionPlacement.ToString());
         if (node.ActivityContract is { } activityContract)

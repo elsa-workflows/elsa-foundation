@@ -7,7 +7,6 @@ namespace Elsa.Decisions.Workflows.Runtime;
 /// <summary>Exact publication content embedded in the native executable, with no Design-store dependency.</summary>
 internal sealed record DecisionWorkflowPin(string Selection, string TenantId, string AssetId, string VersionId, DecisionArtifact Artifact)
 {
-    public const string MetadataKey = Kernel.Native.EvaluateDecision.MetadataKey;
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,

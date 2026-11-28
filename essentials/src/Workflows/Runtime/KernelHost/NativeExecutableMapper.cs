@@ -268,7 +268,7 @@ public static class NativeExecutableMapper
         {
             var id = source.ExecutableNodeId;
             if (source.ActivityType != Native.EvaluateDecision.ActivityType ||
-                !source.Metadata.TryGetValue(Native.EvaluateDecision.MetadataKey, out var pin) || pin.Length is 0 or > 2 * 1024 * 1024 ||
+                ExecutableDecisionPinMetadata.Read(source.Metadata) is null ||
                 source.InputBindings.GetValueOrDefault(nameof(Native.EvaluateDecision.Decision)) is not
                     { Source: RuntimeInputBindingSource.Literal, LiteralValue.ValueKind: JsonValueKind.String })
                 throw NativeMappingRefusedException.Activity(id, "Evaluate Decision needs an exact published decision selection.");

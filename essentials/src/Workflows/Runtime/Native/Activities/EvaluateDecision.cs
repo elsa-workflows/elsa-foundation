@@ -19,7 +19,6 @@ public sealed record NativeDecisionResult(string Outcome, JsonNode? Value, Activ
 public sealed class EvaluateDecision : Activity<JsonNode?>
 {
     public const string ActivityType = "Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision";
-    public const string MetadataKey = "decisions.artifact.v1";
 
     [Input] public string Decision { get; set; } = "";
     [Input] public JsonNode? Inputs { get; set; }

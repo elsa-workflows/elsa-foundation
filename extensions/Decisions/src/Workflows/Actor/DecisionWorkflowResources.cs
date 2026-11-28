@@ -73,10 +73,12 @@ internal sealed class DecisionWorkflowResources(IServiceProvider services)
     {
         foreach (var node in executable.Nodes)
         {
-            var hasPin = node.Metadata.TryGetValue(DecisionWorkflowPin.MetadataKey, out var serialized);
+            var hasPin = node.Metadata.ContainsKey(ExecutableDecisionPinMetadata.BehavioralKey) ||
+                         node.Metadata.ContainsKey(ExecutableDecisionPinMetadata.HistoricalKey);
             if (node.ActivityType != EvaluateDecision.ActivityType && !hasPin) continue;
-            if (!hasPin || node.ActivityType != EvaluateDecision.ActivityType) throw Missing();
-            var pin = DecisionWorkflowPin.Parse(serialized!);
+            if (node.ActivityType != EvaluateDecision.ActivityType || ExecutableDecisionPinMetadata.Read(node.Metadata) is not { } serialized)
+                throw Missing();
+            var pin = DecisionWorkflowPin.Parse(serialized);
             var protectedValues = node.InputBindings.Values.Any(input => input.EffectivePolicy.HidesValue()) ||
                 node.ActivityContract?.Result.Policy.HidesValue() == true ||
                 node.ActivityContract?.Result.Projections.Values.Any(output => output.Policy.HidesValue()) == true;
