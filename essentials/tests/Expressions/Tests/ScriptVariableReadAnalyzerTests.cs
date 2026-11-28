@@ -154,6 +154,30 @@ public sealed class ScriptVariableReadAnalyzerTests
     }
 
     [Theory]
+    [InlineData("const copy = structuredClone(variables.order); copy.items.push(3); copy.customer.name = 'Bob'; return copy;", true)]
+    [InlineData("(() => { const copy = structuredClone(variables.order); copy.items.push(3); return copy; })()", false)]
+    public void A_value_passed_to_structuredClone_does_not_escape(string source, bool scriptBody)
+    {
+        // Issue #6215: the built-in gets a JSON copy, so changing what it returns cannot change the variable.
+        var analysis = _javaScript.Analyze(source, scriptBody)!;
+
+        Assert.Equal(["order"], analysis.LiteralNames);
+        Assert.False(analysis.HasComputedRead);
+        Assert.Empty(analysis.Writes);
+        Assert.Empty(analysis.Escapes);
+        Assert.False(analysis.HasComputedWrite);
+    }
+
+    [Fact]
+    public void A_value_passed_to_a_script_function_named_like_a_built_in_escapes()
+    {
+        // The script's own function of that name hides the built-in and can change its argument.
+        var analysis = _javaScript.Analyze("function structuredClone(o) { o.items.push(3); return o; } structuredClone(variables.order); return 1;", scriptBody: true)!;
+
+        Assert.Equal(["order"], analysis.Escapes);
+    }
+
+    [Theory]
     [InlineData("{{ variables.order.total }}", "order", false)]
     [InlineData("{{ variables['order'] }}", "order", false)]
     [InlineData("{% if variables.order %}x{% endif %}", "order", false)]

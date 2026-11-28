@@ -313,6 +313,32 @@ public sealed class ExpressionCapabilityTests
         Assert.Equal(binding.GetString(), script.GetString());
     }
 
+    // ---- issue #6215: structuredClone, a JSON-shaped deep copy ----
+
+    [Fact]
+    public async Task StructuredClone_returns_a_deep_copy_that_shares_nothing_with_its_source_on_both_surfaces()
+    {
+        var (binding, script) = await BothAsync(
+            "(() => { const source = { items: [1, { n: 2 }], customer: { name: 'Ada' } }; const copy = structuredClone(source); " +
+            "copy.items.push(3); copy.items[1].n = 5; copy.customer.name = 'Bob'; return { source, copy }; })()");
+
+        Assert.Equal("""{"source":{"items":[1,{"n":2}],"customer":{"name":"Ada"}},"copy":{"items":[1,{"n":5},3],"customer":{"name":"Bob"}}}""", binding.GetRawText());
+        Assert.Equal(binding.GetRawText(), script.GetRawText());
+    }
+
+    [Fact]
+    public async Task StructuredClone_copies_JSON_values_only()
+    {
+        // A Date crosses as its ISO text and undefined as null, as every host function argument does (FR-011); a value
+        // with no JSON form is a TypeError; no argument returns undefined, as the web-standard function does.
+        var (binding, script) = await BothAsync(
+            "[typeof structuredClone(), structuredClone(new Date(0)), structuredClone(undefined), structuredClone({ a: undefined, b: 1 }), " +
+            "(() => { try { structuredClone(() => 1); return 'copied'; } catch (e) { return e.name; } })()]");
+
+        Assert.Equal("""["undefined","1970-01-01T00:00:00.000Z",null,{"b":1},"TypeError"]""", binding.GetRawText());
+        Assert.Equal(binding.GetRawText(), script.GetRawText());
+    }
+
     private static async Task<(JsonElement Binding, JsonElement Script)> BothAsync(string expression, Action<IServiceCollection>? configure = null)
     {
         await using var provider = Build(configure);

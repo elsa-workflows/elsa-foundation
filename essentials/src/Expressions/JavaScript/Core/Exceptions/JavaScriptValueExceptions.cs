@@ -83,7 +83,7 @@ public sealed class InputExpressionWriteException : InvalidOperationException, E
             $"{JavaScriptValueDiagnostics.InputExpressionWrite}: the input expression changes " +
             (declared ? $"variable '{variable}'" : "a variable it names by a computed value") +
             "; the path is withheld because a value it read is protected. " +
-            "Input expressions only read; use a script activity (Run JavaScript) to change a variable, or change a local copy.";
+            "Input expressions only read; use a script activity (Run JavaScript) to change a variable, or change a copy made with structuredClone(…).";
     }
 
     public string Code => JavaScriptValueDiagnostics.InputExpressionWrite;
@@ -96,5 +96,5 @@ public sealed class InputExpressionWriteException : InvalidOperationException, E
     /// <summary>The diagnostic text, shared with the publish-time refusal.</summary>
     public static string Describe(string variable, string path) =>
         $"{JavaScriptValueDiagnostics.InputExpressionWrite}: the input expression changes variable '{variable}' at '{path}'. " +
-        "Input expressions only read; use a script activity (Run JavaScript) to change a variable, or change a local copy.";
+        "Input expressions only read; use a script activity (Run JavaScript) to change a variable, or change a copy made with structuredClone(…).";
 }

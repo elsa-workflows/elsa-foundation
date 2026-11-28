@@ -61,10 +61,38 @@ throws where the script does it (spec 1231 FR-006). An input expression never wr
 | A lossy element of an array written whole | Refused by the precision policy | `VF-PREC-001` | The array path, "written as a whole", each lossy element with both values; remedy: hold it as a string or do not change the array |
 | A lossy number read but not written | One warning per evaluation, recorded on the activity execution and shown in its inspection (`Warnings`) | `VF-PREC-002` | The lossy paths and why; never a value. When the evaluation or step read a protected value, and in the log, only the roots (`variables.order`, `args`): a member below can be a key of that value |
 | A lossy number passed to a host function | One warning per function and set of paths in an evaluation, recorded on the activity execution and logged; the call runs with the nearest value JavaScript holds (spec 1223 FR-028) | `VF-PREC-002` | The function and the argument path (`argument 0.order.id`); the protected form and the log name the argument only |
-| An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity |
+| An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity, or change a copy made with [`structuredClone`](#copying-a-value-structuredclone) |
 | An input expression changes a read value in a way publication cannot see | Evaluation fails, nothing written | `VF-BIND-001` | Same; when a value it read is protected, the declared variable only, no path, and no name it computed |
-| A script activity changes a value it read without assigning the variable (`variables.order.total = 1`) | Written (a partial update); one warning recorded on the activity execution | `VF-WRITE-001` | The variable and the changed paths; when a value it read is protected, the variable only. Assign the variable to make the write explicit, or copy it (`{...variables.order}`) to change a local copy |
+| A script activity changes a value it read without assigning the variable (`variables.order.total = 1`) | Written (a partial update); one warning recorded on the activity execution | `VF-WRITE-001` | The variable and the changed paths; when a value it read is protected, the variable only. Assign the variable to make the write explicit, or change a copy (`structuredClone(variables.order)`, see [below](#copying-a-value-structuredclone)) to leave the variable unchanged |
 | A script activity reads a name no visible variable has | Reads `undefined`; one warning | `VF-READ-001` | The name; when a value it read is protected, none |
+
+### Copying a value: `structuredClone`
+
+`structuredClone(value)` returns an independent deep copy of a JSON value (issue #6215). It is a built-in
+(`JavaScriptBuiltInFunctions.StructuredClone`) in both Run JavaScript and input expressions. Changing the copy, nested
+arrays and objects included, never changes the variable, so it raises neither `VF-WRITE-001` nor `VF-BIND-001`:
+
+```js
+const draft = structuredClone(variables.order);
+draft.items.push(item);       // the variable `order` is unchanged
+draft.customer.name = 'Ada';  // so is its nested object
+return draft;
+```
+
+A spread (`{ ...variables.order }`) is a shallow copy: nested objects and arrays are still the variable's, so changing
+them changes the variable.
+
+- **What it copies.** The copy has a JSON shape, like a host function's argument and result (spec 1223 FR-011): a
+  `Date` becomes its ISO text, `undefined` becomes `null` (a member that is `undefined` is left out), and a
+  function or symbol is refused with a `TypeError`. Called with no argument it returns `undefined`.
+- **Publish.** A value passed to `structuredClone` does not escape (spec 1231 FR-019), so
+  `structuredClone(variables.order)` alone does not put `order` among the variables the step may write. A script that
+  declares its own `structuredClone` loses this.
+- **Numbers.** A lossy number stays lossy in the copy: passing it raises `VF-PREC-002` like any host function
+  argument, and writing it is refused (`VF-PREC-001`). Hold such numbers as strings.
+- **Name.** Built-in names are reserved and unprefixed (ADR 0045 §5 D-5): a script or expression that declares one
+  gets the `ShadowedFunction` warning. The web-standard name was chosen over `clone`, which scripts commonly use for
+  their own locals (`const clone = …`), so reserving it would warn on ordinary code.
 
 The precision policy is one replaceable host-wide component (`IJavaScriptPrecisionPolicy`, D-17). Elsa ships only
 `RefusingPrecisionPolicy`, with no options and no per-workflow or per-node override. A host that wants other handling

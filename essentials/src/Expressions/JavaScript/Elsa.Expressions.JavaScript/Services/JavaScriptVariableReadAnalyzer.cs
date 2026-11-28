@@ -58,7 +58,11 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         if (DeclaresRoot(parsed, scriptBody))
             return new ScriptVariableReadAnalysis([], hasComputedRead: true) { HasComputedWrite = true, WorkflowState = AnalyzeState(parsed) };
 
-        var walker = new Walker(_readingFunctions, scriptBody);
+        // A built-in takes its arguments as JSON copies and cannot change them (JavaScriptHostFunctions), so a value
+        // passed to one does not escape, unless the script declares its own function of that name (issue #6215).
+        var copyingBuiltIns = JavaScriptBuiltInFunctions.Names.ToHashSet(StringComparer.Ordinal);
+        copyingBuiltIns.ExceptWith(JavaScriptReservedNames.CollectDeclarations(parsed, copyingBuiltIns.Contains).Select(identifier => identifier.Name));
+        var walker = new Walker(_readingFunctions, copyingBuiltIns, scriptBody);
         walker.Visit(parsed);
         return new ScriptVariableReadAnalysis(walker.LiteralNames, walker.HasComputedRead, walker.LiteralReads)
         {
@@ -259,7 +263,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         _ => false
     };
 
-    private sealed class Walker(IReadOnlySet<string> readingFunctions, bool scriptBody)
+    private sealed class Walker(IReadOnlySet<string> readingFunctions, IReadOnlySet<string> copyingBuiltIns, bool scriptBody)
     {
         // A built-in is called by its own name, a host function as namespace.member (spec 1223 FR-027).
         private static string? CalleeName(Node callee) => callee switch
@@ -453,6 +457,10 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     case ReturnStatement:
                         // The script's own returned value leaves the script; a nested function's goes back into it.
                         return _path.Take(index - 1).Any(node => node is IFunction);
+                    case CallExpression { Callee: Identifier callee } builtInCall when copyingBuiltIns.Contains(callee.Name) &&
+                                                                                      builtInCall.Arguments.Any(argument => ReferenceEquals(argument, current)):
+                        // structuredClone(variables.order) and the other built-ins get a JSON copy of the argument.
+                        return false;
                     default:
                         return true;
                 }
