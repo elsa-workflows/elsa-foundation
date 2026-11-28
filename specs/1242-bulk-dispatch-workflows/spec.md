@@ -357,8 +357,10 @@ and on-completed-callbacks suites pass.
   expression.
   - **The target's declared inputs must be known**, from either of two sources:
     - the same import;
-    - a workflow already published in Elsa 4, imported earlier or authored natively, whose declared inputs the
-      converter reads from the published definition.
+    - a workflow already published in Elsa 4, imported earlier or authored natively, in the tenant the import writes
+      to: the converter reads the declared inputs of the executable a dispatch would pin (the newest live published
+      reference of that definition in that tenant). Another tenant's workflow of the same id is never read. A host
+      without Workflows Runtime's executable stores (Design only) knows same-import targets only.
 
     These target declarations are used only for bulk dispatch. The existing #5808 check for plain
     `DispatchWorkflow`/`ExecuteWorkflow` keeps reading same-import targets only, so its behaviour does not change.
@@ -418,7 +420,7 @@ and on-completed-callbacks suites pass.
 | `WorkflowDefinitionId` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` |
 | `Items` a non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: Elsa 3 read it as text and dispatched no child |
-| `DefaultItemInputKey` not a literal, or a static `Input` that is an expression (JavaScript or another language) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: put the values in the items, or use a literal map |
+| `DefaultItemInputKey` not a literal or a blank literal, or a static `Input` that is an expression (JavaScript or another language) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: put the values in the items, or use a literal map |
 | Target workflow neither in the import nor published in Elsa 4 | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target first, or in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution, also when the parent declares a variable or input of that name (Elsa 3 shadowed it in the branch). Guidance: remove the read; the child's result is not available in the branch yet |

@@ -10,7 +10,7 @@ Publishing owns the named `ExecutableCompilationCollecting` event, its single `C
 
 `BulkDispatchWorkflowsStructureHandler` is a DispatchWorkflow-owned implementation of Workflows Design's `IActivityStructureHandler` contract. It projects, replaces, compiles and remaps the `Dispatch`, `ChildCompleted` and `ChildFaulted` slots and declares `currentItem` and `currentIndex` as iteration variables. Its result and time facts say that the three children run concurrently across item passes, so publish refuses a result binding between two of them and warns about a variable written from them. A `DispatchWorkflow` inside the `Dispatch` slot is pinned by `DispatchPinSource` like any other.
 
-`BulkDispatchSlotValidator` is a DispatchWorkflow-owned implementation of Design Validations' `IDraftValidator` contributor seam. It reports `BulkDispatch/DispatchSlot` when a bulk node's `Dispatch` slot is empty or holds anything other than one `DispatchWorkflow`; like every Draft error it does not block saving, and the promotion gate refuses to publish. `DispatchWorkflowDesignFeature` registers both.
+`BulkDispatchSlotValidator` is a DispatchWorkflow-owned implementation of Design Validations' `IDraftValidator` contributor seam (fan-in event `DraftValidating`, aggregated by `ExecuteValidations`). It reports `BulkDispatch/DispatchSlot` when a bulk node's `Dispatch` slot is empty or holds anything other than one `DispatchWorkflow`; like every Draft error it does not block saving, and the promotion gate refuses to publish. `DispatchWorkflowDesignFeature` registers both.
 
 The design module references the DispatchWorkflow runtime contract assembly. The runtime module does not reference Design.
 

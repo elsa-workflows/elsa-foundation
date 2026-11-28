@@ -207,11 +207,14 @@ the design side), and converter rules.
     same-import scope.
     - `Elsa3ReusableActivityImportMaterializer` fills it before conversion, because the request is synchronous. It
       pre-scans the import's sources for `BulkDispatchWorkflows` nodes with a literal `WorkflowDefinitionId`, and for
-      each target id takes the same-import declarations, or else loads the published Elsa 4 definition's declared
-      inputs.
+      each target id takes the same-import declarations, or else the declared inputs of the published Elsa 4
+      executable a dispatch would pin.
     - The Elsa 4 workflow definition id is the Elsa 3 `DefinitionId` unchanged (`ReusableActivityCollectionAnalyzer`),
       so the id maps one to one.
-    - Research item R-3 is narrowed to which store or lookup service gives the published workflow's declared inputs.
+    - R-3 is settled: the materializer reads the newest live published `WorkflowExecutableSourceReference` of the
+      definition in the import's tenant (the ambient persistence scope's, else the one the importer passes), as
+      `DispatchPinSource` picks it, and that executable's `InputContract`. The Runtime stores are optional (a second
+      constructor), so a Design-only host knows same-import targets only.
     - A target in neither place is refused (`…-TARGET-UNKNOWN`). The single-definition entry point
       `Elsa3WorkflowDefinitionImporter.ImportAsync` passes no targets, so a bulk node converted there is always refused
       as target-unknown. Its callers are the test fixture and the migration boundary, so that is acceptable.

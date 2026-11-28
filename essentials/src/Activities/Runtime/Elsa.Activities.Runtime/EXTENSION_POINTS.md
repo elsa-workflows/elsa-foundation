@@ -165,7 +165,7 @@ These consumers do not yet implement the combined callback.
 - `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned structure and child projection)*
 - `Elsa.Activities.Sequence` — `Sequence` *(schedules child executable nodes in Sequence-owned slot order)*
 - `Elsa.Activities.ControlFlow` — `Parallel` *(fork/join: counts branch completions toward the join threshold)* and the `If`/`Switch`/`For`/`ForEach`/`While`/`Do` control-flow composites
-- `Elsa.Activities.DispatchWorkflow` — `BulkDispatchWorkflows` *(spec 1242: schedules one Dispatch pass per item within a window of 16 and routes each Dispatch outcome to its `ChildCompleted` or `ChildFaulted` slot; no fault callback)*
+- `Elsa.Activities.DispatchWorkflow.Runtime` — `BulkDispatchWorkflows` *(spec 1242: schedules one Dispatch pass per item within a window of 16 and routes each Dispatch outcome to its `ChildCompleted` or `ChildFaulted` slot; no fault callback)*
 - Fault callback implementations: `Parallel` *(faults once its success threshold is unreachable)* and `Flowchart` *(faults when an inbound branch of an all-inbound join faults)*.
 
 ---

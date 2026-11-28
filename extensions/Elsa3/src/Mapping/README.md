@@ -342,7 +342,7 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     from the newest live published executable, when the host registers the runtime's executable and source-reference
     stores; a Design-only host knows same-import targets only); a target in neither is
     `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`. A target declaring two inputs that differ only in letter case is
-    `ELS3-LITERAL-KEY-AMBIGUOUS`. A literal `Items`, an expression `DefaultItemInputKey` and an
+    `ELS3-LITERAL-KEY-AMBIGUOUS`. A literal `Items`, an expression or blank `DefaultItemInputKey` and an
     expression `Input` are `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
   - `Completed` is dropped where `Done` already reaches its target (not a WaitAll join), and with a literal-false wait;
     `Canceled` (never emitted) is dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Any other route, and any

@@ -532,6 +532,18 @@ public sealed class Elsa3BulkDispatchConversionTests
     }
 
     [Fact]
+    public async Task A_branch_script_whose_body_is_an_expression_warns_because_its_writes_cannot_be_read()
+    {
+        // The body is computed, so the converter cannot see what the script writes and warns conservatively (FR-020a).
+        var script = Activity("tally", "Elsa.RunJavaScript", ("script", Expression("JavaScript", "'return 1;'")));
+
+        var result = await ConvertAsync(Bulk(("childCompleted", Port(script))), variables: [Variable("Total")]);
+
+        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.BulkDispatchOuterWrite);
+        Assert.Contains("variables from its script", warning.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_branch_script_that_writes_no_variable_does_not_warn()
     {
         var script = Activity("tally", "Elsa.RunJavaScript", ("script", Literal("return getLines().length;")));
