@@ -635,11 +635,6 @@
       "medianMinutes": 3.85
     },
     {
-      "project": "essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.09
-    },
-    {
       "project": "essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02
@@ -954,7 +949,6 @@
           "extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
           "extensions/Dashboard/tests/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
           "essentials/tests/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj",
-          "essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
           "essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
           "essentials/tests/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj",
           "extensions/Diagnostics.StructuredLogs/tests/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj",
