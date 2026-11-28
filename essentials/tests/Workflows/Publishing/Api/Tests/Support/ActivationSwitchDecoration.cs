@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -20,7 +21,15 @@ internal static class ActivationSwitchDecoration
     }
 
     public static IWorkflowActivationSwitch Create(IWorkflowActivationAuthority authority,
-        IWorkflowExecutableSourceReferenceStore references, TimeProvider clock, IWorkflowTriggerBindingStore? bindings = null) =>
-        new PublicationActivationSwitch(authority, references, clock,
-            reservationState: null, reservationAccess: null, reservationPolicies: [], triggerBindingStore: bindings);
+        IWorkflowExecutableSourceReferenceStore references, TimeProvider clock, IWorkflowTriggerBindingStore? bindings = null)
+    {
+        var services = new ServiceCollection();
+        WorkflowPublicationDefaults.Add(services);
+        var implementation = services.Single(item => item.ServiceType == typeof(IWorkflowActivationSwitch)).ImplementationType
+            ?? throw new InvalidOperationException("Workflow publication defaults must register an activation switch implementation.");
+
+        // These tests construct an isolated switch over their exact stores, without a host reservation scope.
+        return (IWorkflowActivationSwitch)Activator.CreateInstance(implementation,
+            [authority, references, clock, null, null, Array.Empty<IIngressReservationPolicy>(), bindings, null])!;
+    }
 }
