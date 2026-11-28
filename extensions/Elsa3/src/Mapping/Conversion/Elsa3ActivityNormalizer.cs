@@ -1266,7 +1266,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         [ExecuteWorkflowDurable] = ExecuteWorkflowDurableMessage,
         [OutcomeUndeclared] = "The reusable workflow completes with an outcome its definition does not declare; it is declared in the converted contract.",
         [OutcomeUnreached] = "The reusable workflow declares an outcome that nothing completes with; it is left out of the converted contract.",
-        [BulkDispatchCapped] = "Elsa 4 faults a bulk dispatch of more than 1,000 items, and keeps at most 16 children open at once, starting the next as one ends; Elsa 3 dispatched every child at once, with no cap.",
+        [BulkDispatchCapped] = "Elsa 4 faults a bulk dispatch of more than 1,000 items, and keeps at most 16 item passes open at once (a waiting pass ends when its child ends and its branch has run; a fire-and-forget pass ends once its child is dispatched), starting the next as one ends; Elsa 3 dispatched every child at once, with no cap.",
         [HttpResponseJsonVariant] = "Elsa 3 matched this JSON content type only by exact string and sent the object's type name; Elsa 4 sends the object as JSON.",
     };
 }

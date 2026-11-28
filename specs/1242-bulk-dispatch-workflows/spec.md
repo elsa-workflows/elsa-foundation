@@ -357,8 +357,8 @@ and on-completed-callbacks suites pass.
   expression.
   - **The target's declared inputs must be known**, from either of two sources:
     - the same import;
-    - a workflow already published in Elsa 4, imported earlier or authored natively, in the tenant the import writes
-      to: the converter reads the declared inputs of the executable a dispatch would pin (the newest live published
+    - a workflow already published in Elsa 4, imported earlier or authored natively, in the tenant the import publishes
+      under: the converter reads the declared inputs of the executable a dispatch would pin (the newest live published
       reference of that definition in that tenant). Another tenant's workflow of the same id is never read. A host
       without Workflows Runtime's executable stores (Design only) knows same-import targets only.
 

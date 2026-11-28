@@ -41,7 +41,6 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     private readonly IWorkflowExecutableSourceReferenceStore? _sourceReferences;
     private readonly IWorkflowExecutableStore? _executables;
     private readonly TimeProvider? _timeProvider;
-    private readonly Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor? _accessContext;
 
     /// <summary>
     /// With the published executables, a bulk dispatch may also target a workflow already published in Elsa 4: its
@@ -58,20 +57,6 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         _timeProvider = timeProvider;
     }
 
-    /// <summary>
-    /// With the persistence access context too: the published target is read from the tenant the commit writes to,
-    /// which an EF Core import takes from that context even when the request names no tenant.
-    /// </summary>
-    public Elsa3ReusableActivityImportMaterializer(IElsa3DefinitionConverter converter,
-        Elsa3ArgumentDefinitionToInputOutput argumentMapper, IActivityDefinitionLookup activityLookup,
-        IWellKnownTypeRegistry types, IVariableTypeDescriptorCatalog typeDescriptors,
-        IWorkflowExecutableSourceReferenceStore sourceReferences, IWorkflowExecutableStore executables, TimeProvider timeProvider,
-        Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor accessContext)
-        : this(converter, argumentMapper, activityLookup, types, typeDescriptors, sourceReferences, executables, timeProvider)
-    {
-        _accessContext = accessContext;
-    }
-
     private ValueTask<IReadOnlyDictionary<string, IReadOnlyList<string>>> BulkDispatchTargetInputsAsync(
         IEnumerable<Elsa3WorkflowDefinition> sources,
         IReadOnlyDictionary<string, IReadOnlyList<string>> sameImport,
@@ -82,9 +67,6 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             return BulkDispatchTargetInputsAsync(sources, sameImport, published: null, cancellationToken);
 
         IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference>? published = null;
-        // The tenant the commit writes to: the ambient persistence scope's when there is one (an EF Core import always
-        // writes there), else the one the importer passed.
-        tenantId = _accessContext?.Current.Scope?.Value ?? tenantId;
         return BulkDispatchTargetInputsAsync(sources, sameImport, async (target, token) =>
         {
             // The live published reference a dispatch would pin in the import's tenant, newest first, as DispatchPinSource
