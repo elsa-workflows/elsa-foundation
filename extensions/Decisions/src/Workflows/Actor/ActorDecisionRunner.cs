@@ -31,14 +31,13 @@ internal sealed class ActorDecisionRunner(
             !executable.NodesById.TryGetValue(invocation.NodeId, out var node) || node.ActivityType != EvaluateDecision.ActivityType ||
             ExecutableDecisionPinMetadata.Read(node.Metadata) is not { } serialized ||
             node.InputBindings.GetValueOrDefault(nameof(EvaluateDecision.Decision)) is not
-                { Source: RuntimeInputBindingSource.Literal, LiteralValue: { ValueKind: JsonValueKind.String } selection } ||
-            selection.GetString() != invocation.Selection)
+                { Source: RuntimeInputBindingSource.Literal, LiteralValue: { ValueKind: JsonValueKind.String } authoredSelection })
             return InvalidPin();
 
         DecisionWorkflowPin pin;
         try { pin = DecisionWorkflowPin.Parse(serialized); }
         catch (DecisionInvocationException) { return InvalidPin(); }
-        if (pin.TenantId != invocation.Tenant || pin.Selection != invocation.Selection)
+        if (pin.TenantId != invocation.Tenant || pin.Selection != authoredSelection.GetString())
             return InvalidPin();
 
         var grant = await authorization.AuthorizeAsync(new(invocation.Tenant, invocation.SubjectId, DecisionPermissions.Evaluate, pin.AssetId),
@@ -47,6 +46,11 @@ internal sealed class ActorDecisionRunner(
             return Refuse("decisions.authority-unavailable", "Current decision execution authority cannot be verified.");
         if (grant.Status != CurrentSubjectPermissionStatus.Granted)
             return Refuse("decisions.forbidden", "The execution subject cannot evaluate this decision.");
+
+        if (pin.RequiresInputVerification(node))
+            return Refuse("decisions.republish-required", "Republish the workflow to verify the decision input sources.");
+        if (pin.Selection != invocation.Selection)
+            return InvalidPin();
 
         Dictionary<string, DecisionValue>? inputs;
         try { inputs = invocation.Inputs.Deserialize<Dictionary<string, DecisionValue>>(InputJson); }

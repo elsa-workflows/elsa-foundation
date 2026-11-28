@@ -13272,6 +13272,7 @@ const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.StandaloneIngres
 Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata
 const Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata.BehavioralKey = "decisions.artifact.v2" -> string!
 const Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata.HistoricalKey = "decisions.artifact.v1" -> string!
+static Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata.HasVerifiedWorkflowInputs(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata, string! selection) -> bool
 static Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata.Read(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata) -> string?
 Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId
 static Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId.EnsureNotWritten(System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.ExecutionLivenessState!>!>! changes) -> void
