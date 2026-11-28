@@ -44,7 +44,7 @@
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\tests\Activities\Testing\Elsa.Activities.Testing.csproj" />
   </ItemGroup>

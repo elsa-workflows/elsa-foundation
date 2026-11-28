@@ -122,7 +122,7 @@
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
-    <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Caching/Core/Elsa.Caching.Core.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Caching/Memory/Elsa.Caching.Memory.csproj" />
