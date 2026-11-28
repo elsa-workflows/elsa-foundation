@@ -602,6 +602,7 @@
   <Folder Name="/essentials/src/Workflows/Runtime/">
     <Project Path="essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />
+    <Project Path="essentials/src/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />

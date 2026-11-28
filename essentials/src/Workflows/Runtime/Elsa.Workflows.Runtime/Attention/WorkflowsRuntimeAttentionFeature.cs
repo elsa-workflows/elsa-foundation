@@ -35,5 +35,3 @@ public sealed class WorkflowsRuntimeAttentionFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAttentionContributor, WorkflowRuntimeAttentionContributor>());
     }
 }
-
-internal sealed class LegacyWorkflowRuntimeAttentionSelected;

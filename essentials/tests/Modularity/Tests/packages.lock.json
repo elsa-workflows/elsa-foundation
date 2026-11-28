@@ -2677,6 +2677,7 @@
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Api": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Api.StandaloneTriggers": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Attention": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Http": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.JavaScript": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelApi": "[4.0.0-dev, )",
@@ -2981,6 +2982,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Attention": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.PreparedSchedules": "[4.0.0-dev, )",
@@ -3034,6 +3036,14 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+        }
+      },
+      "elsa.workflows.runtime.attention": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.core": {
