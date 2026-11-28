@@ -199,8 +199,6 @@ public sealed partial class KernelStandalonePreparedStartTests
                 if (neutral)
                 {
                     new ActivitiesPrimitivesFeature().ConfigureServices(services);
-                    if (relayScope is not null)
-                        services.AddSingleton<IRuntimeAuthoredStandaloneEventAvailability>(new PublishedEventAvailability(relayScope));
                     services.AddWorkflowActivationDefaults();
                     new RuntimeArtifactsEntityFrameworkCoreFeature
                     {
@@ -233,6 +231,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                 {
                     Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = neutral
                 }.ConfigureServices(services);
+                if (relayScope is not null)
+                    services.AddSingleton<IRuntimeAuthoredStandaloneEventAvailability>(new PublishedEventAvailability(relayScope));
                 var kernel = new WorkflowsRuntimeKernelFeature();
                 kernel.ConfigureServices(services);
                 kernel.PostConfigureServices(services);
