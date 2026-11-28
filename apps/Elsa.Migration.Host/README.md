@@ -107,7 +107,8 @@ the host runs the new version, and it keeps running it after a restart, because 
 `migrated/` that is older than the newest stored one. To change a workflow from your `migrated/` folder instead,
 give it a `version` newer than any version published from Studio (a stored version never changes) and restart the
 host. The designer then shows the new version, unless you saved the draft in Studio: a saved draft is kept, so a
-restart never throws away your edits.
+restart never throws away your edits. A draft discarded through the API is cloned again only when a newer version
+arrives in `migrated/`; until then the designer says the definition has no current draft.
 
 ## What your own host needs
 

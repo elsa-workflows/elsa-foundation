@@ -48,7 +48,7 @@ public sealed class CloneDraftsOfReconciledWorkflowsTests
     public async Task Keeps_the_draft_a_definition_already_has()
     {
         var clone = new SpyClone();
-        var handler = NewHandler(clone, versions: [Version("wf-a", "1.0.0", "ver-1")], drafts: [Draft("draft-1", "wf-a")]);
+        var handler = NewHandler(clone, versions: [Version("wf-a", "1.0.0", "ver-1")], drafts: [Draft("draft-1", "wf-a", sourceVersionId: "ver-1", revision: 1)]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
 
@@ -232,9 +232,6 @@ public sealed class CloneDraftsOfReconciledWorkflowsTests
 
     private static WorkflowDefinitionVersion Version(string definitionId, string version, string versionId) =>
         new(definitionId, version) { Id = versionId };
-
-    private static WorkflowDefinitionDraft Draft(string id, string definitionId) =>
-        new() { Id = id, WorkflowDefinitionId = definitionId };
 
     private static WorkflowDefinitionDraft Draft(string id, string definitionId, string? sourceVersionId, long revision) =>
         new() { Id = id, WorkflowDefinitionId = definitionId, SourceVersionId = sourceVersionId, Source = new SourceWorkingCopy { Revision = revision } };
