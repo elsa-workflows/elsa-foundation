@@ -133,6 +133,18 @@ public sealed class OutputSwapTests : IDisposable
     }
 
     [Fact]
+    public void A_trailing_separator_still_removes_the_parent_folders_the_run_created()
+    {
+        var nested = Path.Combine(_out, "results", "run1") + Path.DirectorySeparatorChar;
+
+        using (OutputSwap.Begin(nested))
+        {
+        }
+
+        Assert.False(Directory.Exists(_out));
+    }
+
+    [Fact]
     public void Commit_twice_is_refused()
     {
         using var swap = OutputSwap.Begin(_out);

@@ -39,7 +39,8 @@ internal sealed class OutputSwap : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputFolder);
 
-        var output = Path.GetFullPath(outputFolder);
+        // Without a trailing separator, so walking up the path reaches each created parent once.
+        var output = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputFolder));
         var firstCreated = FirstMissingFolder(output);
         Directory.CreateDirectory(output);
         try
