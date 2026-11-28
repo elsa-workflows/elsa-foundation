@@ -288,7 +288,11 @@ internal static class KernelHttpWaitChecks
         static async Task<int> EventCountAsync(Func<KernelDb> open, CancellationToken token)
         {
             await using var db = open();
-            return await db.Events.CountAsync(token);
+            return db.UsesRootPublicEventStarts
+                ? await db.Database.SqlQueryRaw<int>("""
+                    SELECT CAST(COUNT(*) AS integer) AS "Value" FROM "FoundationPublicEventPublications"
+                    """).SingleAsync(token)
+                : await db.Events.CountAsync(token);
         }
 
         static bool Authorize(Contract.BoundScope scope, Contract.ActorRef _, string kind) =>
