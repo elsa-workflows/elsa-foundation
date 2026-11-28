@@ -85,3 +85,21 @@ dotnet test essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCor
 Current Publishing tests retain protected source references, executable hash
 compatibility, publication and journal behavior, and real migration and test-run
 transport checks through their current storage and execution providers.
+
+## Classic Runtime provider witnesses
+
+Use `415905150f6060a2b257649fe48c645873a428cc` for the classic provider
+checkpoint, claim, resumption, dispatch, timer, historical projection and
+executable collection cases. The source pins the original provider runners,
+fixtures, historical snapshots and restore locks. Run the provider suite in an
+owned checkout with disposable databases.
+
+```sh
+ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS=1 \
+  dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
+
+Current provider tests keep the shared schema and historical-row preservation,
+artifact and activation transitions, occurrence claims, Actor publication pins
+and Events, and standalone and TestRun stores.

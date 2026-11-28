@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Testing;
@@ -947,9 +950,14 @@ internal sealed record ActivationStores(
         var bindings = new InMemoryWorkflowTriggerBindingStore();
         var schedules = new InMemoryRecurringTriggerScheduleStore();
         var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        var services = new ServiceCollection();
+        WorkflowPublicationDefaults.Add(services);
+        var switchType = services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowActivationSwitch)).ImplementationType!;
+        var activationSwitch = (IWorkflowActivationSwitch)Activator.CreateInstance(switchType,
+            [authority, references, Clock, null, null, Array.Empty<IIngressReservationPolicy>(), bindings, null])!;
         return new(
             authority,
-            new InMemoryWorkflowActivationSwitch(authority, references, Clock, bindings, schedules),
+            activationSwitch,
             bindings,
             schedules,
             references,
