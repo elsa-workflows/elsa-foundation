@@ -81,7 +81,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
     public void ConfigureServices(IServiceCollection services)
     {
         var storage = PreparedStandaloneStarts
-            ? KernelShellStorage.CreateRetainedHttpResponseQualification(Provider, SqlitePath, PostgresConnectionString)
+            ? KernelShellStorage.CreateRetainedStandaloneSourcesQualification(Provider, SqlitePath, PostgresConnectionString,
+                EmbeddedTenant.Bind(Tenant))
             : KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
         PreparedStandaloneHttpFanOut = storage.TakesRetainedHttpResponse;
         PreparedStandaloneHttpResponses = storage.TakesRetainedHttpResponse;

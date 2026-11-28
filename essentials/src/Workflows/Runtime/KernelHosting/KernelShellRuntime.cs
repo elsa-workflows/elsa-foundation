@@ -32,6 +32,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private IProtectedRootStarts? _publishedStarts;
     private IProtectedRootStarts? _testStarts;
     private IPreparedRootStartHandoff? _standaloneStarts;
+    private IAuthoredStandaloneEventOutbox? _authoredStandaloneEvents;
     private sealed record InlineStarts(InlineRootRequests Requests, NativeExecutionModel Model);
     private InlineStarts? _publishedInlineStarts;
     private readonly CancellationTokenSource _maintenanceStop = new();
@@ -44,6 +45,8 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
             if (runtime.ServiceProvider.GetRequiredService<IRuntimeIngressDeliveryStore>() is not IRuntimePreparedStartHandoff)
                 throw new InvalidOperationException("Prepared standalone starts require the selected Runtime EF handoff.");
+            if (storage.TakesAuthoredStandaloneEvents)
+                _ = runtime.ServiceProvider.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
         }
         var protection = protectChildExecutables || storage.TakesPreparedStarts
             ? new KernelExecutableProtection(scopes, persistenceScope, tenant, serving, storage, clock,
@@ -113,6 +116,14 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             maintenance.Add(Task.Run(() => expired.RunAsync(maintenanceToken)));
         }
         if (events is not null) maintenance.Add(Task.Run(() => events.RunAsync(protection!, maintenanceToken)));
+        if (storage.TakesAuthoredStandaloneEvents)
+        {
+            var outbox = storage.BindAuthoredStandaloneEvents(tenant);
+            var relay = new KernelStandaloneEventRelay(outbox, scopes, new(persistenceScope, tenant.Tenant), clock,
+                logs.CreateLogger<KernelStandaloneEventRelay>());
+            Volatile.Write(ref _authoredStandaloneEvents, outbox);
+            maintenance.Add(Task.Run(() => relay.RunAsync(maintenanceToken)));
+        }
         _maintenance = Task.WhenAll(maintenance);
     }
 
@@ -132,11 +143,15 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     internal IPreparedRootStartHandoff StandaloneStarts() => Volatile.Read(ref _standaloneStarts) ??
         throw new InvalidOperationException("The Foundation owner is not accepting prepared standalone starts.");
 
+    internal bool SupportsAuthoredStandaloneEvents(PersistenceScope scope) =>
+        scope == persistenceScope && Volatile.Read(ref _authoredStandaloneEvents) is not null;
+
     private InlineRootRequests? CloseAdmissions()
     {
         Volatile.Write(ref _publishedStarts, null);
         Volatile.Write(ref _testStarts, null);
         Volatile.Write(ref _standaloneStarts, null);
+        Volatile.Write(ref _authoredStandaloneEvents, null);
         // Keep the closed edge so disposal can rejoin its settlements after an interrupted stop.
         var inline = Volatile.Read(ref _publishedInlineStarts)?.Requests;
         inline?.Close();

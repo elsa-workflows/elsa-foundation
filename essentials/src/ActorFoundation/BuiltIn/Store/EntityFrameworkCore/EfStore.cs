@@ -220,6 +220,10 @@ public class KernelDb : DbContext
         new(options, StoreFormat.RootAuthoredStandaloneEventQualification, RootProfiles.AuthoredStandaloneEventQualification,
             publicEventHost: host);
 
+    internal static KernelDb ForPostgresRetainedStandaloneSourcesQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootRetainedStandaloneSourcesQualification, RootProfiles.RetainedStandaloneSourcesQualification,
+            publicEventHost: host);
+
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options, RootPublicEventHost? publicEventHost = null) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, publicEventHost: publicEventHost);
     internal static KernelDb ForPostgresRootSequencedJournalQualification(DbContextOptions<KernelDb> options) =>
@@ -321,6 +325,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootAuthoredStandaloneEventQualification)
             return new(options, qualificationFormat.Value, RootProfiles.AuthoredStandaloneEventQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootRetainedStandaloneSourcesQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.RetainedStandaloneSourcesQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
         if (qualificationFormat == StoreFormat.RootPagedPublicEventsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PagedPublicEventsQualification,
