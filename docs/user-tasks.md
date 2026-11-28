@@ -1,14 +1,23 @@
 # User Tasks
 
-Studio's **Operate → User tasks** opens the authorized inbox. The built-in Actor Workbench
-provides read-only access to existing task records. **Task forms** supports drafting,
-publishing and reopening immutable reusable forms. These records and forms use the
-shared Workbench database with SQLite or PostgreSQL.
+Studio's **Operate → User tasks** opens the authorized inbox in the built-in Actor Workbench.
+**Task forms** supports drafting, publishing and reopening immutable reusable forms. The inbox
+and forms use the shared Workbench database with SQLite or PostgreSQL.
 
-A stock Actor workflow cannot create or complete user tasks yet. Task responses need a
-workflow host that provides the task actions and can resume their owning execution.
-The [classic Workbench compatibility guide](contributing/workbench-compatibility-tests.md#classic-composed-studio-and-decision-runtime)
-covers replaying the earlier task execution journey on its matching host.
+## Actor workflow tasks
+
+Add **Create User Task** to a Native or Flowchart workflow. Enter a title, one assignee or
+group, and a fixed list of action names. Optionally select a published form version and supply
+a prefill object. The Actor activity uses plain literal fields. Connect the Flowchart outcomes
+by action name and use the `TaskId`, `Action` and `Data` outputs to carry the result forward.
+
+Publish and execute the workflow. The assigned person can respond from the inbox. Eligible
+group members can claim or release a group task. An accepted response may show **Response
+pending** while the workflow resumes. The inbox shows **Completed** after the Actor records
+consumption of that response. Recovery can resume a parked workflow with its existing task.
+Historical classic task records remain readable in the Actor inbox. The earlier execution and
+reassignment journey is available on the host documented in the
+[classic Workbench compatibility guide](contributing/workbench-compatibility-tests.md#classic-composed-studio-and-decision-runtime).
 
 ## Classic workflow tasks
 
