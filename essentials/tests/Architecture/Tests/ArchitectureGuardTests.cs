@@ -333,13 +333,29 @@ public sealed partial class ArchitectureGuardTests
     public void Activity_construction_runtime_path_has_no_design_reference() =>
         AssertNoForbiddenProjectReferences(
             [
-                "Elsa.Activities.Runtime",
                 "Elsa.Activities.Runtime.Core",
                 "Elsa.Activities.Primitives",
                 "Elsa.Activities.Graph.Runtime",
                 "Elsa.Activities.DispatchWorkflow.Runtime",
             ],
             IsDesignReference);
+
+    [Fact]
+    public void Classic_runtime_projects_are_absent()
+    {
+        string[] retired =
+        [
+            "Elsa.Activities.Runtime",
+            "Elsa.Activities.Testing",
+            "Elsa.Workflows.Runtime",
+            "Elsa.Workflows.Runtime.Api",
+            "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+            "Elsa.Workflows.Runtime.Resumption",
+            "Elsa.Workflows.Runtime.Scheduling",
+        ];
+        var active = ProjectFiles().Select(project => project.Name);
+        Assert.Empty(retired.Intersect(active, StringComparer.Ordinal));
+    }
 
     [Fact]
     public void Dispatch_workflow_modules_preserve_runtime_design_and_transport_boundaries()
