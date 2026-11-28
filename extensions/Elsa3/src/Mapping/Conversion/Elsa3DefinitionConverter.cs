@@ -206,10 +206,11 @@ internal sealed class Elsa3DefinitionConverter(
         // one migration run reports every script and component finding (#6231). A plan refused for its shape (duplicate
         // node ids) may not lower at all; its own refusal then stands for what lowering would have found.
         var refused = plan.HasErrors;
+        Elsa3MemoryReferenceInventory inventory;
         IReadOnlyList<Elsa3MigrationDiagnostic> lowered;
         try
         {
-            var inventory = await memoryReferenceGraph.CollectAsync(
+            inventory = await memoryReferenceGraph.CollectAsync(
                 plan.Definition.Root, node => ContractOf(plan, node), plan.JsonPaths, cancellationToken, plan.SourceName);
             lowered = valueFlowLowerer.Lower(plan, inventory, node => AncestorScopeNames(plan, node));
         }
@@ -218,25 +219,42 @@ internal sealed class Elsa3DefinitionConverter(
             return;
         }
 
-        plan.Diagnostics.AddRange(refused ? WithoutContractlessShapes(plan, lowered) : lowered);
+        plan.Diagnostics.AddRange(refused ? WithoutContractlessNoise(plan, inventory, lowered) : lowered);
         WarnBulkDispatchOuterWrites(plan);
     }
 
     /// <summary>
     /// A node the converter did not resolve (an unmapped activity, or a node inside one) has no contract, so lowering
-    /// reads each memory reference it carries, such as a captured output, as an unsupported shape. Its refusal already
-    /// says the node needs an Elsa 4 activity; that guidance would point elsewhere, so it is left out.
+    /// cannot tell its inputs from its outputs. It would read a memory reference the node carries, such as a captured
+    /// output, as an unsupported shape, and a read of that output elsewhere as dangling. The node's refusal already says
+    /// it needs an Elsa 4 activity, and that guidance would point elsewhere, so those findings are left out. A
+    /// dangling reference no unresolved node could produce is still reported.
     /// </summary>
-    private static IEnumerable<Elsa3MigrationDiagnostic> WithoutContractlessShapes(Elsa3ConversionPlan plan, IEnumerable<Elsa3MigrationDiagnostic> lowered)
+    private static IEnumerable<Elsa3MigrationDiagnostic> WithoutContractlessNoise(
+        Elsa3ConversionPlan plan,
+        Elsa3MemoryReferenceInventory inventory,
+        IEnumerable<Elsa3MigrationDiagnostic> lowered)
     {
         var resolved = plan.Nodes.Values
             .Where(node => node.Resolved is not null)
             .Select(node => Elsa3ConversionDiagnostics.NodeId(node.Node))
             .ToHashSet(StringComparer.Ordinal);
-        return lowered.Where(diagnostic =>
-            diagnostic.Code != Elsa3ImportDiagnosticCodes.UnsupportedShape ||
-            !diagnostic.Metadata.TryGetValue("ActivityNodeId", out var nodeId) ||
-            resolved.Contains(nodeId));
+        var unresolved = inventory.Nodes.Select(node => node.ActivityNodeId).Where(nodeId => !resolved.Contains(nodeId)).ToHashSet(StringComparer.Ordinal);
+        if (unresolved.Count == 0)
+            return lowered;
+        var contractlessMemory = inventory.Occurrences
+            .Where(occurrence => occurrence.Direction == Elsa3PropertyDirection.Unknown && unresolved.Contains(occurrence.ActivityNodeId))
+            .Select(occurrence => occurrence.MemoryReferenceId)
+            .ToHashSet(StringComparer.Ordinal);
+        return lowered.Where(diagnostic => diagnostic.Code switch
+        {
+            Elsa3ImportDiagnosticCodes.UnsupportedShape =>
+                !diagnostic.Metadata.TryGetValue("ActivityNodeId", out var nodeId) || !unresolved.Contains(nodeId),
+            Elsa3ImportDiagnosticCodes.DanglingReference =>
+                !(diagnostic.Metadata.TryGetValue("MemoryReferenceId", out var memoryId) && contractlessMemory.Contains(memoryId)) &&
+                !(diagnostic.Metadata.TryGetValue(Elsa3ValueFlowLowerer.AmbientKindKey, out var kind) && kind == nameof(Elsa3AmbientReferenceKind.ActivityResult)),
+            _ => true
+        });
     }
 
     /// <summary>

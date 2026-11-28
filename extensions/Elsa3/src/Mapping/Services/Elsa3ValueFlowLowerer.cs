@@ -1723,7 +1723,11 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
             Elsa3ImportDiagnosticCodes.DanglingReference,
             $"Ambient {ambient.Kind} reference '{ambient.Name}' has no declaration or producer.",
-            "Restore the missing declaration/producer or replace the read with an explicit portable parameter."));
+            "Restore the missing declaration/producer or replace the read with an explicit portable parameter.",
+            new Dictionary<string, string>(StringComparer.Ordinal) { [AmbientKindKey] = ambient.Kind.ToString() }));
+
+    /// <summary>The metadata key naming the kind of ambient read a dangling-reference diagnostic is about.</summary>
+    internal const string AmbientKindKey = "AmbientKind";
 
     private static Elsa3ExpressionParameterResolution AmbiguousAmbient(Elsa3AmbientReference ambient) =>
         Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(

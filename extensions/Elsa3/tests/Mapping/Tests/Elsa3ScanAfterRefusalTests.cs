@@ -69,6 +69,59 @@ public sealed class Elsa3ScanAfterRefusalTests
             result.Diagnostics.Where(diagnostic => diagnostic.IsError).Select(diagnostic => diagnostic.Code).Order(StringComparer.Ordinal));
     }
 
+    [Theory]
+    [InlineData("memory-reference")]
+    [InlineData("liquid")]
+    public async Task A_read_of_the_unmapped_activitys_output_is_not_reported_as_dangling(string form)
+    {
+        var text = form == "liquid" ? Expression("Liquid", "{{ Output.Result }}") : Captured("result-memory", "String");
+        var root = Sequence("root",
+            Activity("unmapped", "Acme.Unknown", ("result", Captured("result-memory"))),
+            Activity("node", "Elsa.WriteLine", ("text", text)));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.False(result.Succeeded);
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, error.Code);
+    }
+
+    [Fact]
+    public async Task A_reference_no_unresolved_node_could_produce_is_still_dangling()
+    {
+        var root = Sequence("root",
+            Activity("unmapped", "Acme.Unknown"),
+            Activity("node", "Elsa.WriteLine", ("text", Captured("nowhere", "String"))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DanglingReference);
+    }
+
+    [Fact]
+    public async Task The_children_of_an_unmapped_container_are_scanned_in_its_list_and_its_ports()
+    {
+        var container = Activity("container", "Acme.Container",
+            ("body", Port(Activity("in-port", "Elsa.WriteLine", ("text", Expression("JavaScript", "portFunction()"))))));
+        container.Activities = [Activity("listed", "Acme.Nested", ("text", Expression("JavaScript", "listedFunction()")))];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", container)));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            [
+                (Elsa3ActivityDiagnosticCodes.UnmappedType, "Acme.Container"),
+                (Elsa3ActivityDiagnosticCodes.UnmappedType, "Acme.Nested"),
+                (Elsa3ImportDiagnosticCodes.HostFunctionMissing, "listedFunction"),
+                (Elsa3ImportDiagnosticCodes.HostFunctionMissing, "portFunction")
+            ],
+            result.Diagnostics
+                .Where(diagnostic => diagnostic.IsError)
+                .Select(diagnostic => (diagnostic.Code, diagnostic.Metadata.GetValueOrDefault(Elsa3MigrationDiagnosticMetadataKeys.ComponentName)))
+                .Order());
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Path == "$.root.activities[0].body.text.expression.value");
+    }
+
     [Fact]
     public async Task A_switch_case_holding_an_unmapped_activity_is_refused_once_for_that_activity()
     {
