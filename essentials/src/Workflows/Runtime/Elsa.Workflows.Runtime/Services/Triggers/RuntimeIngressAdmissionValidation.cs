@@ -49,7 +49,7 @@ internal static class RuntimeIngressAdmissionValidation
         CheckSource(item, new(scope, publisher.TenantId));
     }
 
-    internal static void CheckCandidate(RuntimeIngressAdmissionRequest request)
+    internal static void CheckCandidate(RuntimeIngressAdmissionRequest request, bool allowEmpty = false)
     {
         ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(request.Candidate);
         ArgumentNullException.ThrowIfNull(request.Targets);
@@ -69,7 +69,7 @@ internal static class RuntimeIngressAdmissionValidation
         if (request.ExpectedTriggerRevision <= 0 || candidate.StandaloneIngress!.TriggerRevision != request.ExpectedTriggerRevision ||
             candidate.Status != RuntimePostCommitOutboxStatus.Pending || candidate.DeliveryFencingToken != 0 ||
             candidate.DeliveryAttemptCount != 0 || candidate.DeliveringOwnerId is not null || candidate.DeliveredAt is not null ||
-            candidate.SubscriptionDelivery!.Recipients.Count == 0 || candidate.SubscriptionDelivery.Progress.Any(progress =>
+            (!allowEmpty && candidate.SubscriptionDelivery!.Recipients.Count == 0) || candidate.SubscriptionDelivery!.Progress.Any(progress =>
                 progress.Phase != RuntimeRecipientPhase.Pending || progress.AttemptCount != 0 || progress.RecoveryState != RuntimeRecipientRecoveryState.None) ||
             candidate.SubscriptionDelivery.ControlFacts is not null ||
             request.Targets.Any(target => target is null) || request.Targets.Select(target => target.SubscriptionId).Distinct(StringComparer.Ordinal).Count() != request.Targets.Count)

@@ -90,7 +90,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.True(ingress.SupportsAdmission);
                 var resource = services.GetRequiredService<ITriggerSourceResourceCommitStore>();
                 Assert.True(resource.SupportsActivatedType("event"));
-                await WriteTriggerAsync(resource, activation, EventId, "event", new { name = EventId });
+                await WriteTriggerAsync(resource, activation, EventId, "event", new { eventName = EventId });
                 var accepted = await Source(services).AdmitAsync(signal, token);
                 sourceId = accepted.AdmissionId;
                 Assert.False(accepted.Replayed);
@@ -142,6 +142,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                     Assert.Equal(finished.Header.Ref, Assert.Single((await reads.ListAsync(owner, new(), cancellationToken: token)).Items).Header.Ref);
                     var recurrence = Assert.Single(tasks.OfType<RecurringTriggerPumpTask>());
                     await AssertResourceRecurrenceAsync(services, reads, owner, recurrence, pump);
+                    await AssertAuthoredEventCohortAsync(host, services, pump);
                 }
                 finally { await StopAsync(shell); }
             }
@@ -187,6 +188,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                 new EventsFeature().ConfigureServices(services);
                 if (neutral)
                 {
+                    services.AddScoped(_ => new StandaloneTriggerSourceCapability(
+                        new("event", 1, "Elsa.Event.Broadcast", new("Elsa.EventPayload", schemaVersion: 1)), true)
+                    { WorkflowIntentKind = "publish-stimulus" });
                     services.AddWorkflowActivationDefaults();
                     new RuntimeArtifactsEntityFrameworkCoreFeature
                     {
@@ -220,6 +224,88 @@ public sealed partial class KernelStandalonePreparedStartTests
                 kernel.ConfigureServices(services);
                 kernel.PostConfigureServices(services);
                 return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            }
+
+            async Task AssertAuthoredEventCohortAsync(ServiceProvider host, IServiceProvider services, IRecurringTask pump)
+            {
+                const string eventName = "actor-origin";
+                const string family = "Elsa.Event.Broadcast";
+                const string first = "authored-event-a";
+                const string second = "authored-event-b";
+                const string later = "authored-event-c";
+                var firstEvent = new RuntimeAuthoredStandaloneEvent(DeliveryScope, new(Persistence.Value), new string('A', 64),
+                    new string('B', 64), eventName, JsonSerializer.SerializeToElement(new { order = "A-42" }), clock.GetUtcNow(),
+                    new("workflow:publisher", "subject:owner", new Dictionary<string, string>()));
+                var empty = firstEvent with { Occurrence = new string('C', 64) };
+                var port = services.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
+                var sourceStore = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
+                var context = services.GetRequiredService<RuntimeDbContext>();
+                var slot = Assert.IsType<WorkflowActivationSlot>(await services.GetRequiredService<IWorkflowActivationAuthority>()
+                    .FindAsync(Definition, KernelServing.DefaultSlotName, token));
+                var resources = services.GetRequiredService<ITriggerSourceResourceCommitStore>();
+                await port.AdmitAsync(empty, token);
+                await WriteTriggerAsync(resources, slot, first, "event", new { eventName });
+                await WriteTriggerAsync(resources, slot, second, "event", new { eventName });
+                await port.AdmitAsync(empty, token);
+                Assert.Null(await FindAsync(sourceStore, empty, first));
+
+                if (!postgres)
+                {
+                    await context.Database.OpenConnectionAsync(token);
+                    // A second physical outbox insert in this cohort fails, regardless of which resource EF stages first.
+                    await context.Database.ExecuteSqlRawAsync("""
+                        CREATE TEMP TRIGGER fail_second_authored_event BEFORE INSERT ON elsa_runtime_post_commit_outbox
+                        WHEN EXISTS (
+                            SELECT 1 FROM elsa_runtime_post_commit_outbox WHERE "SourceKeyHash" = NEW."SourceKeyHash")
+                        BEGIN SELECT RAISE(ABORT, 'fail second authored event resource'); END;
+                        """, token);
+                    try { await Assert.ThrowsAsync<TriggerOperationException>(() => port.AdmitAsync(firstEvent, token).AsTask()); }
+                    finally { await context.Database.ExecuteSqlRawAsync("DROP TRIGGER fail_second_authored_event", token); }
+                    Assert.Null(await FindAsync(sourceStore, firstEvent, first));
+                    Assert.Null(await FindAsync(sourceStore, firstEvent, second));
+                    await context.Database.CloseConnectionAsync();
+                }
+
+                await port.AdmitAsync(firstEvent, token);
+                await AssertPinnedAsync(sourceStore, first);
+                await AssertPinnedAsync(sourceStore, second);
+
+                var thirdModel = ExecutableOf("standalone-neutral-third", Definition,
+                    SetOutput("set-result", "result", Literal("value", "third")));
+                var third = new WorkflowExecutable(thirdModel.Identity with { ArtifactVersion = "3", DefinitionVersionId = "version-3" },
+                    thirdModel.RootActivity, thirdModel.ResumeTargets, thirdModel.CreatedAt, thirdModel.CompatibilityMetadata,
+                    current.InputContract!, thirdModel.Dependencies, thirdModel.IncidentStrategy);
+                var republished = await PublishAsync(services, third, slot.Revision, clock.GetUtcNow(), token);
+                await WriteTriggerAsync(resources, republished, later, "event", new { eventName });
+                await using (var fresh = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence))
+                {
+                    var reopened = fresh.ServiceProvider.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
+                    var reopenedStore = fresh.ServiceProvider.GetRequiredService<IRuntimeIngressDeliveryStore>();
+                    await reopened.AdmitAsync(firstEvent, token);
+                    await AssertPinnedAsync(reopenedStore, first);
+                    await AssertPinnedAsync(reopenedStore, second);
+                    Assert.Null(await FindAsync(reopenedStore, firstEvent, later));
+                    await Assert.ThrowsAsync<TriggerOperationException>(() => reopened.AdmitAsync(firstEvent with { EventName = "other" }, token).AsTask());
+                }
+
+                await RunScheduledSweepAsync(pump, token);
+                foreach (var trigger in new[] { first, second })
+                {
+                    var delivered = Assert.IsType<RuntimePostCommitOutboxItem>(await FindAsync(sourceStore, firstEvent, trigger));
+                    Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
+                    Assert.Equal(current.Identity, Progress(delivered).Receipt?.Material);
+                }
+
+                async Task AssertPinnedAsync(IRuntimeIngressDeliveryStore store, string trigger)
+                {
+                    var item = Assert.IsType<RuntimePostCommitOutboxItem>(await FindAsync(store, firstEvent, trigger));
+                    Assert.Equal(current.Identity, Assert.Single(item.SubscriptionDelivery!.Recipients).Material);
+                    Assert.Equal(firstEvent.Authority.RootInitiator, item.StandaloneIngress?.SourceActorAttribution.RootInitiator);
+                }
+
+                ValueTask<RuntimePostCommitOutboxItem?> FindAsync(IRuntimeIngressDeliveryStore store, RuntimeAuthoredStandaloneEvent authored, string trigger) =>
+                    store.FindDeliveryAsync(DeliveryScope,
+                        RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, trigger, family, authored.Occurrence), token);
             }
 
             async Task AssertResourceRecurrenceAsync(IServiceProvider services, Contract.IActorReads reads, Contract.BoundScope owner,

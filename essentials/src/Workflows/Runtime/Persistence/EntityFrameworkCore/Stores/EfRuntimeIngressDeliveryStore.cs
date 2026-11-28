@@ -105,7 +105,6 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
             (modelInputs is not EfRuntimeModelExecutionReader reader || !reader.Uses(context, access)))
             throw new NotSupportedException("Model ingress requires the actual selected EF model input receipt reader.");
         var material = (EfWorkflowExecutableStore)executables.GetMaterialStore();
-        var sourceReferences = (EfWorkflowExecutableSourceReferenceStore)references;
         RuntimeIngressAdmissionReceipt? accepted = null;
         try
         {
@@ -133,34 +132,9 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                         RuntimeIngressAdmissionValidation.CheckAggregate(request, aggregate);
                         await FenceWaitsAsync(request, token);
                         foreach (var target in request.Targets.OrderBy(target => target.DefinitionId, StringComparer.Ordinal).ThenBy(target => target.SlotName, StringComparer.Ordinal))
-                        {
-                            if (!await EfAdmissionTargetFence.LockSlotAsync(context, request.Scope.Persistence.Value, target.DefinitionId, target.SlotName, target.Slot, token))
-                                throw new TriggerOperationException("conflict", "A target slot changed before admission.");
-                            WorkflowExecutableSourceReference? actualReference = null;
-                            if (target.Slot?.ActiveActivationId is { } activation)
-                            {
-                                // This SERIALIZABLE physical read fences a known absent reference too.
-                                actualReference = (await sourceReferences.ReadPhysicalMaintenanceSourceAsync(request.Scope.Persistence.Value,
-                                    WorkflowActivationReferenceIdentity.Create(activation), token))?.Value;
-                                if (actualReference is not null && !await EfAdmissionTargetFence.LockSourceAsync(sourceReferences,
-                                        request.Scope.Persistence.Value, actualReference, token))
-                                    throw new TriggerOperationException("conflict", "A target source changed before admission.");
-                            }
-                            RuntimeIngressAdmissionValidation.CheckTarget(request, target, target.Slot, actualReference, time.GetUtcNow());
-                        }
+                            await FenceTargetAsync(request, target, token);
                         foreach (var recipient in request.Candidate.SubscriptionDelivery.Recipients)
-                        {
-                            var actual = await executables.FindMaterialAsync(recipient.Material.ArtifactId, token) ??
-                                throw new InvalidDataException("The accepted target material was removed.");
-                            RuntimeIngressAdmissionValidation.CheckMaterial(recipient, actual);
-                            await ((EfRuntimePostCommitOutboxStore)outbox).FenceExecutionDependencyAsync(request.Scope.Persistence.Value,
-                                recipient.StartIdentity.WorkflowExecutionId, token);
-                            if (await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, token) is not null)
-                                throw new InvalidDataException("The deterministic target identity was already used before admission.");
-                            var modelId = EfRuntimeOperationalStoreSupport.CompositeId(request.Scope.Persistence.Value, recipient.StartIdentity.WorkflowExecutionId);
-                            if (await context.Set<RuntimeModelExecutionEntity>().AnyAsync(row => row.Id == modelId, token))
-                                throw new InvalidDataException("The deterministic target identity already belongs to a model execution.");
-                        }
+                            await FenceRecipientAsync(request.Scope.Persistence, recipient, token);
                         EnsureLive();
                         if (request.ScheduleClaim is { } occurrence)
                         {
@@ -176,10 +150,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                             if (reservationFence is null) throw new NotSupportedException("The selected ingress reservation cannot be fenced atomically.");
                             await reservationFence(token);
                         }
-                        var row = EfRuntimePostCommitOutboxStore.ToEntity(request.Candidate, request.Scope.Persistence.Value,
-                            EfRuntimePostCommitOutboxStore.RowId(request.Scope.Persistence.Value, source.OutboxItemId), 1,
-                            RuntimePostCommitOutboxWriteVersion.For(context, request.Candidate));
-                        context.RuntimePostCommitOutbox.Add(row);
+                        StageSource(request);
                         await context.SaveChangesAsync(token);
                         EnsureLive();
                         await transaction.CommitAsync(token);
@@ -219,6 +190,46 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
             throw;
         }
         return accepted ?? throw new InvalidOperationException("Ingress admission produced no physical acceptance.");
+    }
+
+    private async ValueTask FenceTargetAsync(RuntimeIngressAdmissionRequest request, RuntimeIngressTargetObservation target, CancellationToken token)
+    {
+        var scope = request.Scope.Persistence.Value;
+        if (!await EfAdmissionTargetFence.LockSlotAsync(context, scope, target.DefinitionId, target.SlotName, target.Slot, token))
+            throw new TriggerOperationException("conflict", "A target slot changed before admission.");
+        WorkflowExecutableSourceReference? actualReference = null;
+        if (target.Slot?.ActiveActivationId is { } activation)
+        {
+            // This SERIALIZABLE physical read fences a known absent reference too.
+            var sourceReferences = (EfWorkflowExecutableSourceReferenceStore)references;
+            actualReference = (await sourceReferences.ReadPhysicalMaintenanceSourceAsync(scope,
+                WorkflowActivationReferenceIdentity.Create(activation), token))?.Value;
+            if (actualReference is not null && !await EfAdmissionTargetFence.LockSourceAsync(sourceReferences, scope, actualReference, token))
+                throw new TriggerOperationException("conflict", "A target source changed before admission.");
+        }
+        RuntimeIngressAdmissionValidation.CheckTarget(request, target, target.Slot, actualReference, time.GetUtcNow());
+    }
+
+    private async ValueTask FenceRecipientAsync(PersistenceScope scope, RuntimeSubscriptionRecipient recipient, CancellationToken token)
+    {
+        var actual = await executables.FindMaterialAsync(recipient.Material.ArtifactId, token) ??
+            throw new InvalidDataException("The accepted target material was removed.");
+        RuntimeIngressAdmissionValidation.CheckMaterial(recipient, actual);
+        await ((EfRuntimePostCommitOutboxStore)outbox).FenceExecutionDependencyAsync(scope.Value, recipient.StartIdentity.WorkflowExecutionId, token);
+        if (await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, token) is not null)
+            throw new InvalidDataException("The deterministic target identity was already used before admission.");
+        var modelId = EfRuntimeOperationalStoreSupport.CompositeId(scope.Value, recipient.StartIdentity.WorkflowExecutionId);
+        if (await context.Set<RuntimeModelExecutionEntity>().AnyAsync(row => row.Id == modelId, token))
+            throw new InvalidDataException("The deterministic target identity already belongs to a model execution.");
+    }
+
+    private void StageSource(RuntimeIngressAdmissionRequest request)
+    {
+        var scope = request.Scope.Persistence.Value;
+        var row = EfRuntimePostCommitOutboxStore.ToEntity(request.Candidate, scope,
+            EfRuntimePostCommitOutboxStore.RowId(scope, request.Candidate.OutboxItemId), 1,
+            RuntimePostCommitOutboxWriteVersion.For(context, request.Candidate));
+        context.RuntimePostCommitOutbox.Add(row);
     }
 
     public ValueTask<RuntimePostCommitOutboxItem> ReadSourceAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default) =>

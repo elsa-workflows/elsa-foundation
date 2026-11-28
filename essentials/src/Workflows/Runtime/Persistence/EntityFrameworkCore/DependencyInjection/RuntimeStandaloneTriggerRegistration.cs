@@ -14,7 +14,7 @@ internal static class RuntimeStandaloneTriggerRegistration
     private static readonly Type[] PreparedOwnedPorts =
     [
         typeof(EfRuntimePostCommitOutboxStore), typeof(IRuntimePostCommitOutboxStore), typeof(IPostCommitOutboxLookupStore),
-        typeof(IRuntimePostCommitOutboxProcessor), typeof(IRuntimePostCommitIntentDispatcher)
+        typeof(IRuntimePostCommitOutboxProcessor), typeof(IRuntimePostCommitIntentDispatcher), typeof(IRuntimeAuthoredStandaloneEventIngress)
     ];
 
     internal static void UsePreparedEntityFramework(IServiceCollection services)
@@ -42,6 +42,7 @@ internal static class RuntimeStandaloneTriggerRegistration
                 provider.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>()) { PreparedStandaloneOnly = true });
             services.AddScoped<IRuntimePostCommitOutboxStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>());
             services.AddScoped<IPostCommitOutboxLookupStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>());
+            services.AddScoped<IRuntimeAuthoredStandaloneEventIngress, EfAuthoredStandaloneEventIngress>();
             var resource = ServiceDescriptor.Scoped<IStandaloneTriggerStore, EfStandaloneTriggerStore>();
             var ingress = ServiceDescriptor.Scoped<IRuntimeIngressDeliveryStore>(provider =>
             {

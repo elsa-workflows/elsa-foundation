@@ -15,19 +15,42 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
     internal async ValueTask<RuntimeIngressAdmissionReceipt> AdmitAsync(StandaloneTriggerSourceDescriptor producer,
         StandaloneTriggerInvocationContext context, StandaloneTriggerSignal signal, CancellationToken ct, TriggerAggregate? authorizedResource = null)
     {
+        var submission = Describe(producer, context, signal);
+        // Saved acceptance wins before today's enabled state, targets, mappings, policy and publication are consulted.
+        if (await delivery.FindAcceptedAsync(context.Scope, submission.Id, submission.Fingerprint, ct) is { } prior) return prior;
+        var candidate = await PrepareAsync(producer, context, signal, submission, authorizedResource, null, ct);
+        return await delivery.AdmitAsync(candidate, ct);
+    }
+
+    internal ValueTask<RuntimeIngressAdmissionRequest> PrepareAuthoredEventAsync(StandaloneTriggerSourceDescriptor producer,
+        StandaloneTriggerInvocationContext context, StandaloneTriggerSignal signal, TriggerAggregate resource, DateTimeOffset committedAt,
+        CancellationToken ct)
+    {
+        if (preparedAdmission is null || producer.TypeKey != "event" || context.WaitCandidate is not null || context.Reservation is not null || context.ScheduleClaim is not null)
+            throw new NotSupportedException("An authored Event requires the prepared standalone Event profile.");
+        return PrepareAsync(producer, context, signal, Describe(producer, context, signal), resource, committedAt, ct);
+    }
+
+    private Submission Describe(StandaloneTriggerSourceDescriptor producer, StandaloneTriggerInvocationContext context, StandaloneTriggerSignal signal)
+    {
         ArgumentNullException.ThrowIfNull(context); ArgumentNullException.ThrowIfNull(signal);
         targets.RequireScope(context.Scope);
         if (!delivery.SupportsAdmission) throw new NotSupportedException("The selected Runtime provider cannot accept standalone trigger work.");
         if (!SchemasMatch(producer.PayloadSchema, signal.PayloadSchema))
             throw new TriggerOperationException("source-schema-mismatch", "The submitted payload schema does not belong to this source.");
-        var sourceId = RuntimeStandaloneIngressSource.BuildOutboxItemId(context.Scope.Persistence, context.Scope.TenantId,
+        var id = RuntimeStandaloneIngressSource.BuildOutboxItemId(context.Scope.Persistence, context.Scope.TenantId,
             signal.TriggerId, producer.SourceFamily, signal.SourceKey);
-        var submittedIntent = context.SubmittedIntent?.Clone() ?? RuntimeIngressAdmission.ComputeSubmittedIntent(signal.Payload, signal.Metadata);
-        var requestFingerprint = RuntimeStandaloneIngressSource.ComputeRequestFingerprint(context.Scope.Persistence,
-            context.Scope.TenantId, signal.TriggerId, producer.SourceFamily, signal.SourceKey, signal.PayloadSchema,
-            submittedIntent, context.Actor);
-        // Saved acceptance wins before today's enabled state, targets, mappings, policy and publication are consulted.
-        if (await delivery.FindAcceptedAsync(context.Scope, sourceId, requestFingerprint, ct) is { } prior) return prior;
+        var intent = context.SubmittedIntent?.Clone() ?? RuntimeIngressAdmission.ComputeSubmittedIntent(signal.Payload, signal.Metadata);
+        var fingerprint = RuntimeStandaloneIngressSource.ComputeRequestFingerprint(context.Scope.Persistence,
+            context.Scope.TenantId, signal.TriggerId, producer.SourceFamily, signal.SourceKey, signal.PayloadSchema, intent, context.Actor);
+        return new(id, fingerprint, intent);
+    }
+
+    private async ValueTask<RuntimeIngressAdmissionRequest> PrepareAsync(StandaloneTriggerSourceDescriptor producer,
+        StandaloneTriggerInvocationContext context, StandaloneTriggerSignal signal, Submission submission,
+        TriggerAggregate? authorizedResource, DateTimeOffset? authoredAt, CancellationToken ct)
+    {
+        var (sourceId, requestFingerprint, submittedIntent) = submission;
         if (preparedAdmission is not null && prepared is null)
             throw new NotSupportedException("Prepared standalone admission requires the selected Foundation handoff.");
         if (!TriggerSourcePipeline.Supports(processor, dispatcher, RuntimeDeliverySourceKind.StandaloneIngress,
@@ -49,7 +72,7 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
         var responseMode = IsWorkflowResponse(trigger);
         if (responseMode && subscriptions.Length != 1)
             throw new StandaloneTriggerAdmissionRefusedException("http-response-owner-required", []);
-        var now = clock.GetUtcNow();
+        var now = authoredAt ?? clock.GetUtcNow();
         var envelope = JsonSerializer.SerializeToElement(new
         {
             payload = signal.Payload,
@@ -117,16 +140,18 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             }
             accepted.Add(recipient);
         }
-        if (accepted.Count == 0 || policy == RuntimeIngressAdmissionPolicy.RequireAll && refused.Count != 0)
+        if (accepted.Count == 0 && authoredAt is null || policy == RuntimeIngressAdmissionPolicy.RequireAll && refused.Count != 0)
             throw new StandaloneTriggerAdmissionRefusedException(accepted.Count == 0 ? "no-eligible-subscribers" : "all-subscribers-required", refused,
                 accepted.Select(recipient => recipient.SubscriptionId).ToArray());
         var selection = new RuntimeSubscriptionDelivery(1, sourceId, source.Fingerprint, context.Scope.Persistence,
             accepted, refused, accepted.Select(x => new RuntimeRecipientProgress(x.RecipientId, RuntimeRecipientPhase.Pending)).ToArray());
         var candidate = RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, selection,
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5)));
-        return await delivery.AdmitAsync(new(context.Scope, trigger.Revision, candidate, observations)
-            { Reservation = context.Reservation, ScheduleClaim = context.ScheduleClaim, WaitCandidate = context.WaitCandidate }, ct);
+        return new(context.Scope, trigger.Revision, candidate, observations)
+            { Reservation = context.Reservation, ScheduleClaim = context.ScheduleClaim, WaitCandidate = context.WaitCandidate };
     }
+
+    private sealed record Submission(string Id, string Fingerprint, JsonElement Intent);
 
     internal static bool SchemasMatch(Elsa.Primitives.Models.ValueTypeDescriptor left, Elsa.Primitives.Models.ValueTypeDescriptor right) =>
         left.Alias == right.Alias && left.CollectionKind == right.CollectionKind && left.SchemaVersion == right.SchemaVersion &&
