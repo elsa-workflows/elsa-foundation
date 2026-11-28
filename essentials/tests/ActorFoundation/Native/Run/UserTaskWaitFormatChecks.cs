@@ -182,18 +182,13 @@ internal static class UserTaskWaitFormatChecks
                     await selected.UpgradeShippedRootFormatAsync(token);
                 });
                 await VerifyMarkersAsync(current, other, token);
-                // The canonical installer treats caller-key receipts as authoritative. The migration must refuse before
-                // advancing any marker when that relation is absent.
-                await current.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationKeyReceipts" RENAME TO "WithheldTaskUpgradeKeyReceipts" """, token);
-                try
-                {
-                    await RefusesOtherFormatAsync(async () => await UpgradeAsync());
-                    await VerifyMarkersAsync(current, other, token);
-                }
-                finally
-                {
-                    await current.Database.ExecuteSqlRawAsync("""ALTER TABLE "WithheldTaskUpgradeKeyReceipts" RENAME TO "FoundationKeyReceipts" """, token);
-                }
+                // Refuse both marker-pinned authorities and other stateful tables the installer could create.
+                await RefuseMissingLedgerAsync(
+                    """ALTER TABLE "FoundationKeyReceipts" RENAME TO "WithheldTaskUpgradeKeyReceipts" """,
+                    """ALTER TABLE "WithheldTaskUpgradeKeyReceipts" RENAME TO "FoundationKeyReceipts" """);
+                await RefuseMissingLedgerAsync(
+                    """ALTER TABLE "FoundationPreparedRootStarts" RENAME TO "WithheldTaskUpgradePreparedRootStarts" """,
+                    """ALTER TABLE "WithheldTaskUpgradePreparedRootStarts" RENAME TO "FoundationPreparedRootStarts" """);
                 Require(await UpgradeAsync(), "A stopped prior PostgreSQL store must advance and reopen exactly once.");
                 var repeated = await Task.WhenAll(UpgradeAsync(), UpgradeAsync());
                 Require(repeated.All(changed => !changed), "Concurrent PostgreSQL upgrade retries must verify current authority without changing the format.");
@@ -202,6 +197,20 @@ internal static class UserTaskWaitFormatChecks
                 await VerifyMarkersAsync(other, current, token);
                 await RefusesOtherFormatAsync(() => EfStore.RequireStoreVersionsAsync(current, token));
                 await EfStore.RequireStoreVersionsAsync(other, token);
+
+                async Task RefuseMissingLedgerAsync(string hideSql, string restoreSql)
+                {
+                    await current.Database.ExecuteSqlRawAsync(hideSql, token);
+                    try
+                    {
+                        await RefusesOtherFormatAsync(async () => await UpgradeAsync());
+                        await VerifyMarkersAsync(current, other, token);
+                    }
+                    finally
+                    {
+                        await current.Database.ExecuteSqlRawAsync(restoreSql, token);
+                    }
+                }
             }
         }
     }

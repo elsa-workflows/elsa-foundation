@@ -370,9 +370,20 @@ internal sealed partial class PostgresRootAdmission
             SELECT pg_catalog.set_config('search_path', pg_catalog.quote_ident(nspname) || ',pg_catalog,pg_temp', true)
             FROM pg_catalog.pg_namespace WHERE oid::bigint = {(long)pin.Namespace}
             """, token);
+        var tables = await ReadPersistentTablesAsync();
         await InstallUnderFormatFenceAsync(db, token, existingAuthoritiesOnly: true);
         await EfStore.InstallRootWorkflowHistoryUnderFormatFenceAsync(db, token);
+        if (!tables.SequenceEqual(await ReadPersistentTablesAsync()))
+            throw new StoreFormatException("The selected PostgreSQL store is missing established root tables.");
         await transaction.RollbackToSavepointAsync(verification, token);
+
+        Task<long[]> ReadPersistentTablesAsync() => db.Database.SqlQuery<long>($"""
+            SELECT relation.oid::bigint AS "Value"
+            FROM pg_catalog.pg_class relation
+            WHERE relation.relnamespace::bigint = {(long)pin.Namespace}
+                AND relation.relkind IN ('r', 'p') AND relation.relpersistence <> 't'
+            ORDER BY relation.oid
+            """).ToArrayAsync(token);
     }
 
     internal static Task<uint> PinRetentionPolicySourceAsync(KernelDb db, CancellationToken token)
