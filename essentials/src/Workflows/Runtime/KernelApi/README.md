@@ -2,8 +2,10 @@
 
 Serves the workflow runtime API's Runs list, run summaries and activity timelines on a kernel shell.
 
-- `WorkflowsRuntimeKernelApiFeature` (`WorkflowsRuntimeKernelApi`) depends on `WorkflowsRuntimeKernel` and
-  `WorkflowsRuntimeApi`. After every other feature has registered, it replaces the runtime API's
+- `WorkflowsRuntimeKernelRetainedApi` serves the Actor routes with the shared Runtime HTTP package.
+- The optional hybrid `WorkflowsRuntimeKernelApi` feature depends on `WorkflowsRuntimeKernel` and
+  `WorkflowsRuntimeApi`. A host selecting the hybrid includes the matching `Elsa.Workflows.Runtime.Api` package
+  from the same release and selects the base Runtime API feature. After every other feature has registered, the hybrid replaces the runtime API's
   list, details, activity browse and activity inspection services with the kernel's, and refuses a shell that registers any other implementation. It
   requires the host's `KernelRuns` (`Elsa.Workflows.Runtime.KernelHost`), registered by instance on the root container.
 - The kernel's list shows the kernel's runs in the host's bound tenant (`KernelRuns.Tenant`), and no other runs: a
@@ -14,11 +16,10 @@ Serves the workflow runtime API's Runs list, run summaries and activity timeline
   the store does not hold shows no version or hash. Its status
   maps Finished to Completed and a suspended run to Suspended. Its start is the time of the turn that created its state,
   which the workflow actor keeps in its header (a run started before the actor kept it shows the epoch: start unknown),
-  and its end is the actor's end. Activity and incident counts are 0, from empty stores in memory: the old core's stores
-  hold nothing for a kernel run, and asking them would cost two database round trips a row.
-- Filters, paging cursors and per-run authorization are the runtime API's own: the list service runs over an in-memory
-  store holding the kernel's runs. A definition filter is applied in the foundation's read; status, dates, run kind and
-  the rest in memory.
+  and its end is the actor's end. The summary carries zero activity and incident counts. Clients can load the activity
+  timeline separately.
+- The classic and Actor lists share the runtime API's filters, paging cursors and per-run authorization. A definition
+  filter is applied in the foundation's read. Status, dates, run kind and other filters apply to the in-memory snapshot.
 - The run details endpoint loads the exact committed actor header in the host's bound tenant and applies the runtime
   API's structure and sensitive-value authorization. It reports Balanced persistence and boundary-level inspection
   because one kernel turn can execute several activities before it commits. Studio authoring test runs continue to use
@@ -27,13 +28,6 @@ Serves the workflow runtime API's Runs list, run summaries and activity timeline
 - Run details mark the activity timeline for separate loading in Studio. Browse and point inspection use the Native model's committed Full journal,
   including Flowchart runs. The timeline uses turn times and shows activity order and nesting. For runs already in
   progress when this evidence was introduced, the timeline begins with the first recorded frame start.
-
-## Coupling to the old core's read model
-
-The kernel's list reuses the old core's `WorkflowExecutionState`, `InMemoryWorkflowExecutionStateStore` and
-`WorkflowInstanceListService`. At K14 (the old core's removal), either keep `WorkflowExecutionState` as the runtime API's
-read model, or replace this with a kernel list query that maps to `WorkflowInstanceSummaryView` directly, which comes
-with paging in the store.
 
 ## Preview limit
 

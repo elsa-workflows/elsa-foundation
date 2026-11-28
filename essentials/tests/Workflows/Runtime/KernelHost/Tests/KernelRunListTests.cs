@@ -168,6 +168,9 @@ public sealed class KernelRunListTests
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<RuntimeHistoryInspectionService>();
         services.AddScoped<IWorkflowInstanceDetailsService, WorkflowInstanceDetailsService>();
+        services.AddFoundationIdentityAbstractions();
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         var feature = new WorkflowsRuntimeKernelApiFeature();
         feature.ConfigureServices(services);
         feature.PostConfigureServices(services);
@@ -1085,6 +1088,30 @@ public sealed class KernelRunListTests
         custom.RemoveAll<IWorkflowInstanceListService>();
         custom.AddScoped<IWorkflowInstanceDetailsService, CustomDetails>();
         refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(custom));
+        Assert.Contains(nameof(IWorkflowInstanceDetailsService), refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hybrid_keeps_keyed_readers_and_refuses_a_foreign_factory_even_for_the_known_concrete_reader()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(new KernelRuns(Scope, _ => throw new NotSupportedException()));
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddKeyedScoped<IWorkflowInstanceDetailsService, CustomDetails>("other");
+        var hybrid = new WorkflowsRuntimeKernelApiFeature();
+        hybrid.PostConfigureServices(services);
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowInstanceDetailsService) &&
+            descriptor.ServiceKey is "other" && descriptor.KeyedImplementationType == typeof(CustomDetails));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowInstanceDetailsService) &&
+            !descriptor.IsKeyedService);
+
+        var foreign = new ServiceCollection();
+        foreign.AddSingleton(new KernelRuns(Scope, _ => throw new NotSupportedException()));
+        new WorkflowsRuntimeApiFeature().ConfigureServices(foreign);
+        foreign.AddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
+
+        var refused = Assert.Throws<InvalidOperationException>(() => hybrid.PostConfigureServices(foreign));
         Assert.Contains(nameof(IWorkflowInstanceDetailsService), refused.Message, StringComparison.Ordinal);
     }
 

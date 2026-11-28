@@ -17,7 +17,7 @@ public sealed class WorkflowInstanceDetailsService(
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
     IActivityInspectionContextAsync authorization,
     RuntimePersistenceModeInspector persistenceModeInspector,
-    IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
+    IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService, ILegacyRunDetailsReader
 {
     public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {

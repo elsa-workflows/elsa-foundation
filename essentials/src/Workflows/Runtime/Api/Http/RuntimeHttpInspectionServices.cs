@@ -11,18 +11,33 @@ namespace Elsa.Workflows.Runtime.Api;
 /// <summary>Registers the exact executable and run inspection used by the Runtime HTTP API and its consumers.</summary>
 internal static class RuntimeHttpInspectionServices
 {
-    // The hybrid API recognizes only the known reader type or its owning assembly's default registration.
+    private static readonly LegacyRuntimeApiReaderRegistration ExecutableRetention = new(
+        typeof(LegacyWorkflowExecutableRetentionReader),
+        ServiceDescriptor.Scoped<IWorkflowExecutableRetentionReader>(static sp =>
+            sp.GetRequiredService<LegacyWorkflowExecutableRetentionReader>()));
+
+    private static readonly LegacyRuntimeApiReaderRegistration ActivityInspection = new(
+        typeof(ActivityExecutionInspectionService),
+        ServiceDescriptor.Scoped<IActivityExecutionInspectionService>(static sp =>
+            sp.GetRequiredService<ActivityExecutionInspectionService>()));
+
+    private static readonly LegacyRuntimeApiReaderRegistration ActivityBrowse = new(
+        typeof(ActivityExecutionBrowseSource), ServiceDescriptor.Scoped<IActivityExecutionBrowseSource, ActivityExecutionBrowseSource>());
+
+    internal static bool OwnsStoredReader(ServiceDescriptor descriptor) =>
+        ExecutableRetention.Owns(descriptor) || ActivityInspection.Owns(descriptor) || ActivityBrowse.Owns(descriptor);
+
     internal static void AddLegacyExecutableRetentionReader(IServiceCollection services)
     {
         services.TryAddScoped<LegacyWorkflowExecutableRetentionReader>();
-        services.TryAddScoped<IWorkflowExecutableRetentionReader>(sp => sp.GetRequiredService<LegacyWorkflowExecutableRetentionReader>());
+        services.TryAdd(ExecutableRetention.Default);
     }
 
     internal static void AddStoredActivityInspection(IServiceCollection services)
     {
         services.TryAddScoped<ActivityExecutionInspectionService>();
-        services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
-        services.TryAddScoped<IActivityExecutionBrowseSource, ActivityExecutionBrowseSource>();
+        services.TryAdd(ActivityInspection.Default);
+        services.TryAdd(ActivityBrowse.Default);
     }
 
     internal static void AddExecutableInspectionServices(IServiceCollection services)

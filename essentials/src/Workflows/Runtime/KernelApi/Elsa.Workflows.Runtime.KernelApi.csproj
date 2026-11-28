@@ -11,7 +11,7 @@
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="../Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="../KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
   </ItemGroup>
   <ItemGroup>
