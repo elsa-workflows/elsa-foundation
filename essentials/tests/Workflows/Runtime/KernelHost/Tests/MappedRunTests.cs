@@ -1,6 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.KernelHosting;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
 using Contract = Kernel.Foundation.Contracts;
@@ -24,13 +27,42 @@ public sealed class MappedRunTests
             Intrinsic("finish", WorkflowIntrinsicKind.Finish, null, Literal(WorkflowIntrinsicInputKeys.Outcome, "Approved", "String")));
         var workflow = NativeExecutableMapper.Map(Executable(root, Variable("v-x", "x"), Variable("v-out", "out")));
 
-        var turn = await NativeTurn.StartAsync(workflow, input: new JsonObject { ["Order"] = new JsonObject { ["id"] = "order-42", ["amount"] = 12 } });
+        var turn = await NativeTurn.StartAsync(workflow, GraphOutputOptions(), input: new JsonObject { ["Order"] = new JsonObject { ["id"] = "order-42", ["amount"] = 12 } });
 
         Assert.Equal(Contract.ActorStatus.Finished, turn.Status);
         Assert.Equal(12, turn.Output!["total"]!.GetValue<int>());
         // The GraphActivity's body set its variable from its input and assigned its output, which the capture read.
         Assert.Equal(7, turn.Output["approved"]!.GetValue<int>());
         Assert.Equal("order-42", turn.Labels[Native.NativeLabels.CorrelationId]);
+    }
+
+    [Theory]
+    [InlineData(false, "null", "activity.graph.output-null")]
+    [InlineData(false, "42.5", null)]
+    [InlineData(true, "null", null)]
+    [InlineData(false, "\"not a number\"", "activity.graph.output-invalid")]
+    public async Task A_scoped_set_output_checks_the_evaluated_value(bool isNullable, string amountJson, string? faultCode)
+    {
+        var graph = MappingStructureTests.Graph("approve", out _, isNullable: isNullable, amount: Request("amount", "amount"), outputType: "Double");
+        var root = Sequence("root", graph, SetOutput("approved", "approved", VariableRead("value", "v-out")),
+            SetOutput("legacy", "legacy", Literal("value", null)));
+        var workflow = NativeExecutableMapper.Map(Executable(root, Variable("v-out", "out")));
+
+        var turn = await NativeTurn.StartAsync(workflow, GraphOutputOptions(), input: new JsonObject { ["amount"] = JsonNode.Parse(amountJson) });
+
+        if (faultCode is not null)
+        {
+            Assert.Equal(Contract.ActorStatus.Faulted, turn.Status);
+            Assert.Equal(faultCode, turn.Output?["Code"]?.GetValue<string>());
+            return;
+        }
+
+        Assert.Equal(Contract.ActorStatus.Finished, turn.Status);
+        var output = Assert.IsType<JsonObject>(turn.Output);
+        Assert.True(output.TryGetPropertyValue("approved", out var assigned));
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(amountJson), assigned));
+        Assert.True(output.TryGetPropertyValue("legacy", out var legacy));
+        Assert.Null(legacy);
     }
 
     [Fact]
@@ -73,6 +105,29 @@ public sealed class MappedRunTests
     }
 
     private static ExecutableNode StructureTestsGraph() => MappingStructureTests.Graph("approve", out _);
+
+    private static Native.NativeExecutionOptions GraphOutputOptions()
+    {
+        var validator = new WorkflowExecutableInputValidator(new NumberTypes());
+        return new() { ValidateGraphOutput = (output, value) => KernelShellRuntime.IsValidGraphOutput(validator, output, value) };
+    }
+
+    private sealed class NumberTypes : IWellKnownTypeRegistry
+    {
+        private static readonly IReadOnlyDictionary<string, Type> Types = new Dictionary<string, Type>(StringComparer.Ordinal)
+        {
+            ["Int32"] = typeof(int),
+            ["Double"] = typeof(double)
+        };
+
+        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
+        public bool TryGetAlias(Type type, out string alias) => throw new NotSupportedException();
+        public bool TryGetType(string alias, out Type type) => Types.TryGetValue(alias, out type!);
+        public IEnumerable<Type> ListTypes() => Types.Values;
+        public string GetAliasOrDefault(Type type) => throw new NotSupportedException();
+        public Type GetTypeOrDefault(string alias) => Types.GetValueOrDefault(alias, typeof(object));
+        public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
+    }
 
     [Fact]
     public async Task A_selected_turn_reloads_its_exact_plan_and_keeps_it_when_the_registry_changes_again()

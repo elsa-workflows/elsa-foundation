@@ -107,6 +107,9 @@ public class NativeExecutionOptions
     /// <summary>The host's evaluator for host expressions (JavaScript, Liquid); without it such a binding faults its activation.</summary>
     public INativeExpressions? Expressions { get; init; }
 
+    /// <summary>Validates a present value against an authored reusable activity output's pinned type.</summary>
+    public Func<GraphOutputAssignment, JsonNode, bool>? ValidateGraphOutput { get; init; }
+
     /// <summary>
     /// What a publishing host serves for the id a Dispatch Workflow names. A designer's Dispatch names a definition, and a
     /// publishing host serves each definition as one artifact at a time, so it answers with the workflow id it serves now,

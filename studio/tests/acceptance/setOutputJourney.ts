@@ -54,7 +54,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await page.getByRole("button", { name: "Add output", exact: true }).click();
   await outputName.fill("Sum"); await outputName.press("Enter");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("Double");
-  await page.getByRole("checkbox", { name: /^Required/ }).check();
+  await page.getByRole("checkbox", { name: "Sum required", exact: true }).check();
   await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
   await capture(page, info, "set-output-declaration");
   await views.getByRole("tab", { name: "Designer", exact: true }).click();
@@ -64,14 +64,16 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await expect(target()).toBeFocused();
   await target().press("s"); await target().press("Enter");
   await expect(target()).toHaveValue("Sum");
-  const value = page.getByLabel("Value property", { exact: true });
-  await expect(value.locator(".wf-property-row-header-meta")).toContainText("Double");
+  const value = page.getByRole("group", { name: "Value property", exact: true });
+  const conversion = value.getByRole("button", { name: /^Value conversion:.*→ Double\)$/ });
+  await expect(conversion).toBeVisible();
   await value.getByRole("button", { name: /^Value expression syntax:/ }).click();
   await page.getByRole("listbox", { name: "Value expression syntax" }).getByRole("option", { name: "JavaScript", exact: true }).click();
   await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
   const expression = page.getByRole("textbox", { name: "JavaScript expression", exact: true });
-  await expression.fill("args.A + args.B"); await value.locator(".wf-property-row-header").click();
-  const inputBindings = value.getByRole("combobox", { name: "Activity input bindings", exact: true });
+  await expression.fill("args.A + args.B");
+  await value.getByRole("button", { name: "Activity input bindings", exact: true }).click();
+  const inputBindings = value.getByRole("combobox", { name: "Bind as JavaScript argument", exact: true });
   await inputBindings.selectOption("A"); await inputBindings.selectOption("B");
   await expect(value.getByRole("list", { name: "Bound activity inputs", exact: true })).toContainText("args.A");
   await expect(value.getByRole("list", { name: "Bound activity inputs", exact: true })).toContainText("args.B");
@@ -81,7 +83,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await expect(target()).toHaveValue("Sum");
   await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
   await expect(expression).toHaveText("args.A + args.B");
-  await expect(value.locator(".wf-property-row-header-meta")).toContainText("Double");
+  await expect(conversion).toBeVisible();
   await views.getByRole("tab", { name: /^Outputs/ }).click();
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("RenamedSum");
   await page.getByRole("textbox", { name: "Name", exact: true }).press("Tab");
@@ -99,8 +101,15 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   if (viewport.width < 600) await page.getByRole("button", { name: "Expand inspector panel", exact: true }).press("Enter");
   await target().scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-reopened");
+  const valueSource = page.getByRole("region", { name: "Value source for Sum", exact: true });
+  const revealOutputSource = async () => {
+    if (!await valueSource.isVisible())
+      await page.getByRole("button", { name: "Show output details for Sum", exact: true }).click();
+    await expect(valueSource).toBeVisible();
+  };
   await views.getByRole("tab", { name: /^Outputs/ }).click();
-  await page.locator(".ad-output-value-source").scrollIntoViewIfNeeded();
+  await revealOutputSource();
+  await valueSource.scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-connections");
   await expect(page.getByText("Assigned by Set Output in the designer.", { exact: true })).toBeVisible();
   const unchanged = await api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);
@@ -114,6 +123,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
     layout: unchanged.layout, activityPresentation: unchanged.activityPresentation ?? []
   });
   await page.reload(); await views.getByRole("tab", { name: /^Outputs/ }).click();
+  await revealOutputSource();
   await expect(page.getByText("This output also has a Set Output assignment. Remove this connection or the assignment before publishing.", { exact: true })).toBeVisible();
   await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
   const rejectedReview = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/publication-preflight"));
@@ -128,10 +138,11 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await expect(review).toContainText(/Remove|remove/);
   await capture(page, info, "set-output-conflict-review");
   await review.getByRole("button", { name: "Return to editor", exact: true }).click();
-  await page.getByRole("button", { name: "Remove connection", exact: true }).click();
+  await revealOutputSource();
+  await valueSource.getByRole("button", { name: "Remove connection", exact: true }).click();
   await expect(page.getByText("Assigned by Set Output in the designer.", { exact: true })).toBeVisible();
   await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
-  await page.locator(".ad-output-value-source").scrollIntoViewIfNeeded();
+  await valueSource.scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-conflict-repaired");
   const saved = await api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);
   expect(saved.contract.outputs).toHaveLength(1);
@@ -162,18 +173,43 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   const executable = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${promoted.id}/publish`, "POST", {});
   const started = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${executable.artifactId}/execute`, "POST", { sourceReferenceId: executable.sourceReferenceId });
   const runtimeRoute = `/runtime/workflows/instances/${started.workflowExecutionId}`;
-  let completed: { instance: { status: string; blockingIncidentCount?: number }; outputs: Record<string, { value: { value: unknown } }>; incidents?: unknown[] } | undefined;
+  type CallerRun = {
+    instance: {
+      status: string;
+      blockingIncidentCount?: number;
+      workflowExecutionId: string;
+      artifactId: string;
+      definitionId: string;
+      definitionVersionId: string;
+      sourceReferenceId: string;
+    };
+    outputs: Record<string, { value: unknown }>;
+    incidents?: unknown[];
+  };
+  let completed: CallerRun | undefined;
   const deadline = Date.now() + 30_000;
   try {
     for (;;) {
-      completed = await api<typeof completed>(runtimeRoute);
-      expect(completed?.instance.blockingIncidentCount ?? 0, JSON.stringify(completed?.incidents)).toBe(0);
-      if (completed?.instance.status === "Completed") break;
+      const response = await page.request.get(backend + runtimeRoute);
+      // An accepted Actor start may still be waiting for its first durable commit.
+      if (response.status() !== 404) {
+        expect(response.status(), `GET ${runtimeRoute}`).toBe(200);
+        completed = await response.json() as CallerRun;
+        expect(completed.instance.blockingIncidentCount ?? 0, JSON.stringify(completed.incidents)).toBe(0);
+        if (completed.instance.status === "Completed") break;
+      }
       expect(Date.now(), `Caller did not complete: ${JSON.stringify(completed)}`).toBeLessThan(deadline);
       await page.waitForTimeout(250);
     }
+    expect(completed.instance).toMatchObject({
+      workflowExecutionId: started.workflowExecutionId,
+      artifactId: executable.artifactId,
+      definitionId: caller.definition.id,
+      definitionVersionId: promoted.id,
+      sourceReferenceId: executable.sourceReferenceId,
+    });
     expect(Object.keys(completed.outputs)).toEqual(["CallerSum"]);
-    expect(completed.outputs.CallerSum.value.value).toBe(42.5);
+    expect(completed.outputs.CallerSum.value).toBe(42.5);
   } finally {
     Object.assign(proof, { saved, publication, executable, workflowExecutionId: started.workflowExecutionId, completed });
     const path = info.outputPath("set-output-proof.json"); writeFileSync(path, JSON.stringify(proof, null, 2));

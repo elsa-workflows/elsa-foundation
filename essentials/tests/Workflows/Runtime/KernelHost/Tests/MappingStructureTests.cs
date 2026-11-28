@@ -1,4 +1,7 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
@@ -181,11 +184,51 @@ public sealed class MappingStructureTests
         Assert.Equal(new Native.VariableBinding("amount"), workflow.Nodes["body-set"].Inputs["Value"]);
         Assert.Equal("total", Assert.IsType<Native.LiteralBinding>(workflow.Nodes["body-set"].Inputs["Name"]).Value!.GetValue<string>());
         Assert.Equal(new Native.VariableBinding("total"), workflow.Nodes["body-output"].Inputs["Value"]);
+        Assert.Equal("result", Assert.IsType<Native.LiteralBinding>(workflow.Nodes["body-output"].Inputs["Name"]).Value!.GetValue<string>());
         Assert.Equal("result", node.Captures["out"]);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("other-boundary-output")]
+    [InlineData("echo")]
+    public void A_scoped_set_output_requires_a_pinned_unmapped_output_on_its_boundary(string? referenceKey)
+    {
+        var executable = Executable(Sequence("root", Graph("approve", out _, referenceKey)), Variable("v-out", "out"));
+        var refusal = Assert.Throws<NativeMappingRefusedException>(() => NativeExecutableMapper.Map(executable));
+        Assert.Equal("body-output", refusal.Node);
+    }
+
+    [Fact]
+    public void A_scoped_set_output_requires_an_enclosing_reusable_activity()
+    {
+        var executable = Executable(ScopedSetOutput("result", Literal(WorkflowIntrinsicInputKeys.Value, 7, "Int32")));
+        var refusal = Assert.Throws<NativeMappingRefusedException>(() => NativeExecutableMapper.Map(executable));
+        Assert.Equal("body-output", refusal.Node);
+        Assert.Contains("enclosing reusable activity", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("elsa.other", false, null, null, "storage driver")]
+    [InlineData(WellKnownRuntimeDurableValueStorageDrivers.Json, true, null, null, "protection policy")]
+    [InlineData(WellKnownRuntimeDurableValueStorageDrivers.Json, false, "hidden", null, "protection policy")]
+    [InlineData(WellKnownRuntimeDurableValueStorageDrivers.Json, false, null, "retained", "protection policy")]
+    public void A_scoped_set_output_refuses_unsupported_storage_or_protection(string driver, bool sensitive, string? redaction, string? retention, string reason)
+    {
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
+            isSensitive: sensitive, redactionMode: redaction, retentionPolicy: retention);
+        var executable = Executable(Sequence("root", Graph("approve", out _, outputDriver: driver, outputPolicy: policy)), Variable("v-out", "out"));
+
+        var refusal = Assert.Throws<NativeMappingRefusedException>(() => NativeExecutableMapper.Map(executable));
+
+        Assert.Equal("body-output", refusal.Node);
+        Assert.Contains(reason, refusal.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>A placed reusable activity: its boundary declares an input, a variable, two outputs and an outcome mapping.</summary>
-    internal static ExecutableNode Graph(string id, out string body)
+    internal static ExecutableNode Graph(string id, out string body, string? assignedOutputReference = "result", bool isNullable = false,
+        RuntimeInputBinding? amount = null, string outputDriver = WellKnownRuntimeDurableValueStorageDrivers.Json, ValueProtectionPolicy? outputPolicy = null,
+        string outputType = "Int32")
     {
         body = "body";
         var descriptor = new
@@ -193,7 +236,7 @@ public sealed class MappingStructureTests
             definitionId = "approve-def", definitionVersionId = "approve-v1", version = "1", templateHash = "sha256:approve", entryNodeId = "body",
             inputs = new[] { new { referenceKey = "amount", type = new { alias = "Int32" }, storageDriverKey = "json", @default = new { syntax = "Literal", value = (object)5 } } },
             variables = new[] { new { referenceKey = "v-total", name = "total", type = new { alias = "Int32" }, storageDriverKey = "json", initialValue = new { syntax = "Input", value = (object)new { referenceKey = "amount" } } } },
-            outputs = new[] { new { referenceKey = "result", type = new { alias = "Int32" }, storageDriverKey = "json" }, new { referenceKey = "echo", type = new { alias = "Int32" }, storageDriverKey = "json" } },
+            outputs = new[] { new { referenceKey = "result", type = new { alias = outputType }, storageDriverKey = outputDriver }, new { referenceKey = "echo", type = new { alias = "Int32" }, storageDriverKey = "json" } },
             outputMappings = new[] { new { outputReferenceKey = "echo", source = new { syntax = "Variable", value = (object)new { referenceKey = "v-total" } } } },
             requiredInputReferenceKeys = new[] { "amount" },
             requiredOutputReferenceKeys = new[] { "result" },
@@ -202,10 +245,22 @@ public sealed class MappingStructureTests
         };
         var bodyNode = Sequence("body",
             Set("body-set", "v-total", Request("value", "amount")),
-            SetOutput("body-output", "result", VariableRead("value", "v-total")));
-        return Node(id, "Acme.Approve", [Literal("amount", 7, "Int32")], slots: [Slot("activity-graph", bodyNode)],
+            ScopedSetOutput(assignedOutputReference, VariableRead("value", "v-total", policy: outputPolicy), isNullable, outputDriver, outputType));
+        return Node(id, "Acme.Approve", [amount ?? Literal("amount", 7, "Int32")], slots: [Slot("activity-graph", bodyNode)],
             captures: [Capture("result", "out")], descriptorType: "elsa.graph-activity", descriptor: descriptor);
     }
+
+    private static ExecutableNode ScopedSetOutput(string? referenceKey, RuntimeInputBinding value, bool isNullable = false,
+        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json, string typeAlias = "Int32") =>
+        new("body-output", "body-output", "elsa.intrinsic.setoutput", "1.0.0", WellKnownRuntimeActivityConsumers.Intrinsic,
+            JsonSerializer.SerializeToElement(new { kind = "SetOutput", referenceKey, storageDriverKey, isNullable, type = new TypeReference(typeAlias) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Name] = Literal(WorkflowIntrinsicInputKeys.Name, "Published Result", "String"),
+                [WorkflowIntrinsicInputKeys.Value] = value
+            }, new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.SetOutput,
+            descriptorSchemaVersion: WorkflowIntrinsicDescriptorSchemas.ActivityOutput);
 
     [Fact]
     public void Intrinsics_map_by_their_kind()

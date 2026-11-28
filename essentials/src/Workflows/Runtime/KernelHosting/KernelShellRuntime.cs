@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -122,6 +123,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ConsoleOutput = Console.Out,
             Http = new NativeHttpOptions { Client = _client, ApplyConnection = ApplyHttpConnectionAsync },
             Expressions = expressions,
+            ValidateGraphOutput = ValidateGraphOutput,
             SelfSends = serving.Capabilities.SelfSends,
             UseStructuralJournal = Foundation.Reads is IActorSequencedJournalReads { SupportsSequencedJournal: true },
             AuthoredEventStarts = storage.TakesDirectTestRuns || storage.TakesEventStarts,
@@ -407,6 +409,27 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         // routes still use their strict mapping and separate serving authority.
         return executable is null ? null : NativeExecutableMapper.Map(executable, KernelHostCapabilities.All, definition: null,
             scopedHttpTransport: testTenant is not null);
+    }
+
+    private bool ValidateGraphOutput(GraphOutputAssignment output, JsonNode value)
+    {
+        using var scope = scopes.CreateScope();
+        return IsValidGraphOutput(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableInputValidator>(), output, value);
+    }
+
+    internal static bool IsValidGraphOutput(IWorkflowExecutableInputValidator validator, GraphOutputAssignment output, JsonNode value)
+    {
+        if (!Enum.TryParse<CollectionKind>(output.CollectionKind, out var collectionKind) || !Enum.IsDefined(collectionKind))
+            return false;
+        var isAny = output.TypeAlias == "Elsa.Any";
+        if (isAny && collectionKind == CollectionKind.Single)
+            return true;
+
+        const string name = "value";
+        var type = new TypeReference(isAny ? "Object" : output.TypeAlias, collectionKind);
+        var contract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
+            [new WorkflowDeclaredInput(name, type, isRequired: true)]);
+        return validator.Validate(contract, [KeyValuePair.Create(name, JsonSerializer.SerializeToElement(value))]).IsValid;
     }
 
     private async ValueTask<(JsonObject? Inputs, ActivityFault? Refusal)> ValidateTestRunChildInputsAsync(
