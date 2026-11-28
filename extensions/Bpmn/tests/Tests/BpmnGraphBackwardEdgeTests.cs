@@ -146,7 +146,7 @@ public sealed class BpmnGraphBackwardEdgeTests
             [
                 Start(),
                 Task("host", childNodeId: "node-host"),
-                BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
+                BpmnTestNodes.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
                 Task("after"),
                 End()
             ],
@@ -170,8 +170,8 @@ public sealed class BpmnGraphBackwardEdgeTests
             [
                 Start(),
                 new BpmnElement("gw", BpmnElementTypes.EventBasedGateway),
-                BpmnRuntimeFixture.IntermediateCatchEvent("catch-a", BpmnEventDefinitionTypes.Message, childNodeId: "node-a"),
-                BpmnRuntimeFixture.IntermediateCatchEvent("catch-b", BpmnEventDefinitionTypes.Signal, childNodeId: "node-b"),
+                BpmnTestNodes.IntermediateCatchEvent("catch-a", BpmnEventDefinitionTypes.Message, childNodeId: "node-a"),
+                BpmnTestNodes.IntermediateCatchEvent("catch-b", BpmnEventDefinitionTypes.Signal, childNodeId: "node-b"),
                 End()
             ],
             flows:
@@ -187,18 +187,18 @@ public sealed class BpmnGraphBackwardEdgeTests
         Assert.True(exception.Message.Contains("exactly one inbound flow", StringComparison.Ordinal), exception.ToString());
     }
 
-    private static BpmnElement Start(string elementId = "start") => BpmnRuntimeFixture.StartEvent(elementId);
-    private static BpmnElement End(string elementId = "end") => BpmnRuntimeFixture.EndEvent(elementId);
-    private static BpmnElement Task(string elementId, string? childNodeId = null) => BpmnRuntimeFixture.Task(elementId, childNodeId: childNodeId);
-    private static BpmnElement Gateway(string elementId, string? childNodeId = null) => BpmnRuntimeFixture.ExclusiveGateway(elementId, childNodeId: childNodeId);
-    private static BpmnSequenceFlow Flow(string flowId, string source, string target) => BpmnRuntimeFixture.Flow(flowId, source, target);
+    private static BpmnElement Start(string elementId = "start") => BpmnTestNodes.StartEvent(elementId);
+    private static BpmnElement End(string elementId = "end") => BpmnTestNodes.EndEvent(elementId);
+    private static BpmnElement Task(string elementId, string? childNodeId = null) => BpmnTestNodes.Task(elementId, childNodeId: childNodeId);
+    private static BpmnElement Gateway(string elementId, string? childNodeId = null) => BpmnTestNodes.ExclusiveGateway(elementId, childNodeId: childNodeId);
+    private static BpmnSequenceFlow Flow(string flowId, string source, string target) => BpmnTestNodes.Flow(flowId, source, target);
 
     private static BpmnGraph Graph(
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> flows,
         IReadOnlyCollection<string>? children = null)
     {
-        var childNodes = (children ?? []).Select(id => Elsa.Activities.Testing.WorkflowExecutionHarness.NewProbeNode(id)).ToArray();
+        var childNodes = (children ?? []).Select(id => BpmnTestNodes.Probe(id)).ToArray();
         var node = new ExecutableNode(
             executableNodeId: "node-bpmn",
             authoredActivityId: "authored-bpmn",

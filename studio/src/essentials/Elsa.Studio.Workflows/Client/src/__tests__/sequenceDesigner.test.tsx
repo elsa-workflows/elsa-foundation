@@ -259,7 +259,7 @@ describe("SequenceDesigner", () => {
     });
     const { callbacks } = mount([node, historyNode], { readOnly: true, selectedNodeId: "runtime-step" });
 
-    expect(container.querySelector(".wf-sequence-runtime-strip")?.textContent).toContain("Running · Retrying");
+    expect(stepButton("runtime-step").querySelector(".wf-sequence-status")?.textContent).toBe("Running · Retrying");
     expect(container.querySelector(".wf-node-runtime-count")?.textContent).toBe("2 faults");
     expect(container.querySelector(".wf-node-runtime-count")?.getAttribute("data-health")).toBe("blocking");
     expect(container.querySelector(".wf-sequence-item")?.classList.contains("faulted")).toBe(true);
@@ -288,6 +288,8 @@ describe("SequenceDesigner", () => {
 
     expect(stepButton("runtime-step").getAttribute("aria-pressed")).toBe("true");
     expect(stepButton("runtime-step").draggable).toBe(false);
+    expect(stepButton("runtime-step").querySelector(".wf-sequence-status")?.textContent).toBe("Completed");
+    expect(container.querySelector(".wf-sequence-runtime-strip")).toBeNull();
     expect(container.querySelectorAll(".wf-sequence-insert")).toHaveLength(0);
     expect(container.querySelectorAll(".wf-sequence-actions")).toHaveLength(0);
 

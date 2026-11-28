@@ -21,7 +21,6 @@ using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Models;
 using Elsa.Connections.Design.Features;
 using Elsa.Connections.Features;
-using Elsa.Connections.Workflows.Features;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Api.Capabilities;
@@ -110,7 +109,7 @@ public sealed record CanaryPublication(string DefinitionId, string VersionId, st
 /// reads its eight surfaces from. Workflow design, its validations and its EF persistence and the activity catalog
 /// with CLR reconciliation, on SQLite files under <see cref="DesignDirectory"/>; publishing; the runtime, its EF
 /// persistence on a SQLite file under <see cref="RuntimeDirectory"/>, its engine tracing, its triggers and its API with
-/// the run inspector and the executable inspector; Secrets with its encrypted store and the <c>SecretsWorkflows</c>
+/// the run inspector and the executable inspector; Secrets with its encrypted store and the <c>ActorSecretsWorkflows</c>
 /// bridge; execution evidence; git export in the Writer role, into a clone of a temporary repository; and the
 /// canary's test-only injection seams (<see cref="SecretsCanaryInjectionFeature"/>). Every log line of every category
 /// is captured (<see cref="Logs"/>), and every span of the runtime's activity source is recorded (<see cref="Spans"/>).
@@ -205,6 +204,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
                     typeof(ApiCapabilitiesFeature).Assembly,
                     typeof(TasksFeature).Assembly,
                     typeof(ActivitiesRuntimeFeature).Assembly,
+                    typeof(ActivitiesRuntimeHostingFeature).Assembly,
                     typeof(ActivitiesPrimitivesFeature).Assembly,
                     typeof(ActivitiesDesignApiFeature).Assembly,
                     typeof(ActivitiesDesignEntityFrameworkCoreFeature).Assembly,
@@ -223,7 +223,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
                     typeof(WorkflowsRuntimeRecurringTriggersFeature).Assembly,
                     typeof(WorkflowsRuntimeTracingFeature).Assembly,
                     typeof(SecretsFeature).Assembly,
-                    typeof(SecretsWorkflowsFeature).Assembly,
+                    typeof(ActorSecretsWorkflowsFeature).Assembly,
                     typeof(WorkflowsExecutionEvidenceFeature).Assembly,
                     typeof(SecretsCanaryInjectionFeature).Assembly,
                     // The feature assemblies a host that composes the HTTP activities adds; a host that does not enable the
@@ -232,7 +232,6 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
                     typeof(WorkflowsRuntimeHttpFeature).Assembly,
                     typeof(ActivitiesHttpFeature).Assembly,
                     typeof(ConnectionsFeature).Assembly,
-                    typeof(ConnectionsWorkflowsFeature).Assembly,
                     typeof(ConnectionsDesignFeature).Assembly)
                 .WithConfigurationProvider(configuration));
 
@@ -313,7 +312,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         "WorkflowsRuntimeRecurringTriggers",
         "WorkflowsRuntimeTracing",
         "Secrets",
-        "SecretsWorkflows",
+        "ActorSecretsWorkflows",
         "WorkflowsExecutionEvidence",
         SecretsCanaryInjectionFeature.Name
     ];
@@ -324,7 +323,6 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         "ActivitiesHttp",
         SecretsCanaryHttpTransportFeature.Name,
         "Connections",
-        "ConnectionsWorkflows",
         "ConnectionsDesign"
     ];
 
@@ -874,7 +872,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     }
 
     /// <summary>A lock provider for one process, which is all one canary host needs.</summary>
-    private sealed class ProcessLockProvider : IDistributedLockProvider
+    internal sealed class ProcessLockProvider : IDistributedLockProvider
     {
         public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
         public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());

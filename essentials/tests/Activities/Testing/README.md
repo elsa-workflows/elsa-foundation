@@ -21,3 +21,56 @@ Current suites keep Sequence authoring, start-entry and child-result contracts,
 the typed Delay contract, authored Timer and Cron metadata and Test Run drivers,
 and prepared standalone schedule registration. Actor Foundation's Native and
 Kernel Host suites exercise supported workflow execution and restart behavior.
+
+## Control-flow execution and JavaScript input hydration
+
+From the same pinned checkout, run the control-flow module suite for the earlier
+activity scheduler and the focused RunJavaScript test for classic input hydration.
+
+```sh
+dotnet test essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+dotnet test essentials/tests/Activities/Scripting/Tests/Elsa.Activities.Scripting.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true --filter FullyQualifiedName~RunJavaScriptPreparationTests
+```
+
+Current source keeps the control-flow authoring and executable structure contracts,
+including the compiled and remapped loop bytes. It also keeps the typed RunJavaScript
+activity and real script evaluator assertions using the shared Activity execution context.
+
+## Classic Flowchart execution
+
+The same pinned checkout retains the classic Flowchart scheduler, checkpoint
+and join-policy fixtures, including both historical join policy inputs.
+
+```sh
+dotnet test essentials/tests/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
+
+Current Flowchart tests keep the authoring, routing, start-entry, policy and
+serialized state contracts. The Behavioral suite keeps the reusable Graph
+boundary outcome case. The Actor Foundation Workbench checks exercise retained
+authored Flowcharts on SQLite and PostgreSQL.
+
+## Classic full-library activity drives
+
+The pinned Behavioral suite drives the previous engine and records its declared
+outcomes, outputs and missing-input failures. It includes the complete classic
+DispatchWorkflow outcome matrix, including cancellation and terminal delivery failure.
+The classic BPMN gateway-loop and mixed HTTP/Cron Flowchart trigger cases use this archive.
+
+```sh
+dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true \
+  --filter 'FullyQualifiedName~ActivityOutcomeReachabilityTests|FullyQualifiedName~ActivityOutputPopulationTests|FullyQualifiedName~RequiredInputEnforcementTests|FullyQualifiedName~ActivityDriveHealthTests'
+dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true \
+  --filter 'FullyQualifiedName~A_reader_beside_its_producer_in_a_sequence_on_a_bpmn_gateway_loop|FullyQualifiedName~FlowchartTriggerStartBehaviorTests'
+```
+
+Current Behavioral tests keep the separate Graph execution, member-read and
+activity contract checks. Supported Actor workflow execution is exercised by the
+Native and Kernel Host suites. They exercise entry selection from a triggered
+Flowchart, multiple authored HTTP entry registrations and exact scheduled trigger
+identity.
