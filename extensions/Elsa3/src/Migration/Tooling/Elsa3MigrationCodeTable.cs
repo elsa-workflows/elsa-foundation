@@ -126,6 +126,8 @@ internal static class Elsa3MigrationCodeTable
         [Elsa3ImportDiagnosticCodes.CustomStorageDriverReplaced] = new(BuildComponent, StorageDriver),
         // A host function already provides the name, so nothing is left to build (spec Q11).
         [Elsa3ImportDiagnosticCodes.ReplacedFunctionReference] = Patch,
+        // The input changes a value it read: the change moves into a Run JavaScript step, or onto a local copy (#5894).
+        [Elsa3ImportDiagnosticCodes.InputChangesVariable] = Patch,
         // A call or value read a registered prefixed host function may take over (FR-016a).
         [Elsa3ImportDiagnosticCodes.HostFunctionMissing] = new(BuildComponent, JavaScriptFunction),
 
