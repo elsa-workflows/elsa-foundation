@@ -23,11 +23,8 @@ internal static class WorkbenchRuntimeProfile
             if (preview || !actors && features.GetChildren().Any(feature =>
                     feature.Key is "WorkflowsRuntimeApi" or "WorkflowsRuntimeEntityFrameworkCore"))
                 configuration.AddJsonFile("shells.CorePreview.Production.json", optional: false, reloadOnChange: true);
-            else if (actors)
-                configuration.AddInMemoryCollection(
-                [
-                    new($"{features.Path}:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey", "")
-                ]);
+            else if (actors && shell == "default")
+                configuration.AddJsonFile("shells.Actor.Production.json", optional: false, reloadOnChange: true);
         }
 
         // Host-supplied credentials and explicit arguments take precedence over the selected profile.
