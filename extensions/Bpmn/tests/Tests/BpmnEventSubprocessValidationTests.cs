@@ -19,9 +19,9 @@ public sealed class BpmnEventSubprocessValidationTests
 {
     /// <summary>A nested event-subprocess body node: one event-start (escalation/error) → probe → end.</summary>
     private static ExecutableNode Body(string nodeId, BpmnElement start) =>
-        BpmnRuntimeFixture.NestedProcessNode(nodeId,
-            elements: [start, BpmnRuntimeFixture.Task("es-task", childNodeId: $"{nodeId}-probe"), BpmnRuntimeFixture.EndEvent("es-end")],
-            flows: [BpmnRuntimeFixture.Flow("es-f1", start.ElementId, "es-task"), BpmnRuntimeFixture.Flow("es-f2", "es-task", "es-end")],
+        BpmnTestNodes.NestedProcessNode(nodeId,
+            elements: [start, BpmnTestNodes.Task("es-task", childNodeId: $"{nodeId}-probe"), BpmnTestNodes.EndEvent("es-end")],
+            flows: [BpmnTestNodes.Flow("es-f1", start.ElementId, "es-task"), BpmnTestNodes.Flow("es-f2", "es-task", "es-end")],
             innerChildren: [WorkflowChild($"{nodeId}-probe")]);
 
     [Fact]
@@ -29,13 +29,13 @@ public sealed class BpmnEventSubprocessValidationTests
     {
         var graph = BpmnGraphAdapter.Build(Node(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocess("es", "node-body")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocess("es", "node-body")
             ],
-            [BpmnRuntimeFixture.Flow("f1", "start", "work"), BpmnRuntimeFixture.Flow("f2", "work", "end")],
-            children: [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessEscalationStart("es-start", "E1", interrupting: false))]));
+            [BpmnTestNodes.Flow("f1", "start", "work"), BpmnTestNodes.Flow("f2", "work", "end")],
+            children: [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.EventSubprocessEscalationStart("es-start", "E1", interrupting: false))]));
 
         var catcher = Assert.Single(graph.EventSubprocesses);
         Assert.Equal("es", catcher.ElementId);
@@ -54,7 +54,7 @@ public sealed class BpmnEventSubprocessValidationTests
         var graph = BpmnGraphAdapter.Build(Node(
             DefaultElements(),
             DefaultFlows(),
-            children: [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessErrorStart("es-start"))]));
+            children: [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.EventSubprocessErrorStart("es-start"))]));
 
         var catcher = Assert.Single(graph.EventSubprocesses);
         Assert.Equal("es", catcher.ElementId);
@@ -69,28 +69,28 @@ public sealed class BpmnEventSubprocessValidationTests
     public void EventSubprocess_WithSequenceFlow_IsRejected() =>
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocess("es", "node-body")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocess("es", "node-body")
             ],
-            [BpmnRuntimeFixture.Flow("f1", "start", "work"), BpmnRuntimeFixture.Flow("f2", "work", "end"), BpmnRuntimeFixture.Flow("f3", "work", "es")],
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessEscalationStart("es-start", "E1"))],
+            [BpmnTestNodes.Flow("f1", "start", "work"), BpmnTestNodes.Flow("f2", "work", "end"), BpmnTestNodes.Flow("f3", "work", "es")],
+            [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.EventSubprocessEscalationStart("es-start", "E1"))],
             "cannot participate in sequence flows");
 
     [Fact]
     public void EventSubprocess_HostingBoundary_IsRejected() =>
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocess("es", "node-body"),
-                BpmnRuntimeFixture.BoundaryEvent("b", "es", BpmnEventDefinitionTypes.Error),
-                BpmnRuntimeFixture.EndEvent("b-end")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocess("es", "node-body"),
+                BpmnTestNodes.BoundaryEvent("b", "es", BpmnEventDefinitionTypes.Error),
+                BpmnTestNodes.EndEvent("b-end")
             ],
-            [BpmnRuntimeFixture.Flow("f1", "start", "work"), BpmnRuntimeFixture.Flow("f2", "work", "end"), BpmnRuntimeFixture.Flow("f3", "b", "b-end")],
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessEscalationStart("es-start", "E1"))],
+            [BpmnTestNodes.Flow("f1", "start", "work"), BpmnTestNodes.Flow("f2", "work", "end"), BpmnTestNodes.Flow("f3", "b", "b-end")],
+            [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.EventSubprocessEscalationStart("es-start", "E1"))],
             "cannot host attached boundary events");
 
     [Fact]
@@ -98,21 +98,21 @@ public sealed class BpmnEventSubprocessValidationTests
         AssertRejects(
             DefaultElements(),
             DefaultFlows(),
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.StartEvent("es-start"))],
+            [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.StartEvent("es-start"))],
             "must declare exactly one event definition of a supported trigger");
 
     [Fact]
     public void EventSubprocess_BodyWithTwoStarts_IsRejected()
     {
-        var body = BpmnRuntimeFixture.NestedProcessNode("node-body",
+        var body = BpmnTestNodes.NestedProcessNode("node-body",
             elements:
             [
-                BpmnRuntimeFixture.EventSubprocessEscalationStart("es-start-1", "E1"),
-                BpmnRuntimeFixture.EventSubprocessEscalationStart("es-start-2", "E2"),
-                BpmnRuntimeFixture.Task("es-task", childNodeId: "node-body-probe"),
-                BpmnRuntimeFixture.EndEvent("es-end")
+                BpmnTestNodes.EventSubprocessEscalationStart("es-start-1", "E1"),
+                BpmnTestNodes.EventSubprocessEscalationStart("es-start-2", "E2"),
+                BpmnTestNodes.Task("es-task", childNodeId: "node-body-probe"),
+                BpmnTestNodes.EndEvent("es-end")
             ],
-            flows: [BpmnRuntimeFixture.Flow("es-f1", "es-start-1", "es-task"), BpmnRuntimeFixture.Flow("es-f2", "es-start-2", "es-task"), BpmnRuntimeFixture.Flow("es-f3", "es-task", "es-end")],
+            flows: [BpmnTestNodes.Flow("es-f1", "es-start-1", "es-task"), BpmnTestNodes.Flow("es-f2", "es-start-2", "es-task"), BpmnTestNodes.Flow("es-f3", "es-task", "es-end")],
             innerChildren: [WorkflowChild("node-body-probe")]);
 
         AssertRejects(DefaultElements(), DefaultFlows(), [WorkflowChild("node-work"), body], "must declare exactly one start event");
@@ -125,7 +125,7 @@ public sealed class BpmnEventSubprocessValidationTests
         AssertRejects(
             DefaultElements(),
             DefaultFlows(),
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventStart("es-start", BpmnEventDefinitionTypes.Compensation))],
+            [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.EventStart("es-start", BpmnEventDefinitionTypes.Compensation))],
             "unsupported trigger definition");
 
     [Fact]
@@ -134,22 +134,22 @@ public sealed class BpmnEventSubprocessValidationTests
         AssertRejects(
             DefaultElements(),
             DefaultFlows(),
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessErrorStart("es-start", interrupting: false))],
+            [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.EventSubprocessErrorStart("es-start", interrupting: false))],
             "must be interrupting");
 
     [Fact]
     public void EventSubprocess_NestedInsideBody_IsRejected()
     {
-        var inner = Body("node-inner", BpmnRuntimeFixture.EventSubprocessEscalationStart("inner-start", "E-inner"));
-        var body = BpmnRuntimeFixture.NestedProcessNode("node-body",
+        var inner = Body("node-inner", BpmnTestNodes.EventSubprocessEscalationStart("inner-start", "E-inner"));
+        var body = BpmnTestNodes.NestedProcessNode("node-body",
             elements:
             [
-                BpmnRuntimeFixture.EventSubprocessEscalationStart("es-start", "E1"),
-                BpmnRuntimeFixture.Task("es-task", childNodeId: "node-body-probe"),
-                BpmnRuntimeFixture.EndEvent("es-end"),
-                BpmnRuntimeFixture.EventSubprocess("nested-es", "node-inner")
+                BpmnTestNodes.EventSubprocessEscalationStart("es-start", "E1"),
+                BpmnTestNodes.Task("es-task", childNodeId: "node-body-probe"),
+                BpmnTestNodes.EndEvent("es-end"),
+                BpmnTestNodes.EventSubprocess("nested-es", "node-inner")
             ],
-            flows: [BpmnRuntimeFixture.Flow("es-f1", "es-start", "es-task"), BpmnRuntimeFixture.Flow("es-f2", "es-task", "es-end")],
+            flows: [BpmnTestNodes.Flow("es-f1", "es-start", "es-task"), BpmnTestNodes.Flow("es-f2", "es-task", "es-end")],
             innerChildren: [WorkflowChild("node-body-probe"), inner]);
 
         AssertRejects(DefaultElements(), DefaultFlows(), [WorkflowChild("node-work"), body], "nested event subprocess");
@@ -159,17 +159,17 @@ public sealed class BpmnEventSubprocessValidationTests
     public void TwoEscalationEventSubprocesses_SameCode_IsRejected() =>
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocess("es-1", "node-body-1"),
-                BpmnRuntimeFixture.EventSubprocess("es-2", "node-body-2")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocess("es-1", "node-body-1"),
+                BpmnTestNodes.EventSubprocess("es-2", "node-body-2")
             ],
             DefaultFlows(),
             [
                 WorkflowChild("node-work"),
-                Body("node-body-1", BpmnRuntimeFixture.EventSubprocessEscalationStart("es1-start", "E1")),
-                Body("node-body-2", BpmnRuntimeFixture.EventSubprocessEscalationStart("es2-start", "E1"))
+                Body("node-body-1", BpmnTestNodes.EventSubprocessEscalationStart("es1-start", "E1")),
+                Body("node-body-2", BpmnTestNodes.EventSubprocessEscalationStart("es2-start", "E1"))
             ],
             "codes in one scope must be distinct");
 
@@ -180,18 +180,18 @@ public sealed class BpmnEventSubprocessValidationTests
         // catchers are indexed.
         var graph = BpmnGraphAdapter.Build(Node(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocess("es-1", "node-body-1"),
-                BpmnRuntimeFixture.EventSubprocess("es-2", "node-body-2")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocess("es-1", "node-body-1"),
+                BpmnTestNodes.EventSubprocess("es-2", "node-body-2")
             ],
             DefaultFlows(),
             children:
             [
                 WorkflowChild("node-work"),
-                Body("node-body-1", BpmnRuntimeFixture.EventSubprocessEscalationStart("es1-start", "E1")),
-                Body("node-body-2", BpmnRuntimeFixture.EventSubprocessErrorStart("es2-start"))
+                Body("node-body-1", BpmnTestNodes.EventSubprocessEscalationStart("es1-start", "E1")),
+                Body("node-body-2", BpmnTestNodes.EventSubprocessErrorStart("es2-start"))
             ]));
 
         Assert.Equal(2, graph.EventSubprocesses.Count);
@@ -204,17 +204,17 @@ public sealed class BpmnEventSubprocessValidationTests
         // A scope may carry at most one error event subprocess (catch-all, no error-code disambiguation).
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocess("es-1", "node-body-1"),
-                BpmnRuntimeFixture.EventSubprocess("es-2", "node-body-2")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocess("es-1", "node-body-1"),
+                BpmnTestNodes.EventSubprocess("es-2", "node-body-2")
             ],
             DefaultFlows(),
             [
                 WorkflowChild("node-work"),
-                Body("node-body-1", BpmnRuntimeFixture.EventSubprocessErrorStart("es1-start")),
-                Body("node-body-2", BpmnRuntimeFixture.EventSubprocessErrorStart("es2-start"))
+                Body("node-body-1", BpmnTestNodes.EventSubprocessErrorStart("es1-start")),
+                Body("node-body-2", BpmnTestNodes.EventSubprocessErrorStart("es2-start"))
             ],
             "at most one");
 
@@ -228,10 +228,10 @@ public sealed class BpmnEventSubprocessValidationTests
     {
         var graph = BpmnGraphAdapter.Build(Node(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-es-listener")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocessWithListener("es", "node-body", "node-es-listener")
             ],
             DefaultFlows(),
             [WorkflowChild("node-work"), WorkflowChild("node-es-listener"), Body("node-body", ExternalStart("es-start", definitionType, interrupting: false))]));
@@ -249,20 +249,20 @@ public sealed class BpmnEventSubprocessValidationTests
         AssertRejects(
             DefaultElements(), // the "es" element binds no ListenerNodeId
             DefaultFlows(),
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessMessageStart("es-start", "msg"))],
+            [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.EventSubprocessMessageStart("es-start", "msg"))],
             "requires scope-listener work");
 
     [Fact]
     public void EscalationEventSubprocess_WithListenerNode_IsRejected() =>
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-es-listener")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocessWithListener("es", "node-body", "node-es-listener")
             ],
             DefaultFlows(),
-            [WorkflowChild("node-work"), WorkflowChild("node-es-listener"), Body("node-body", BpmnRuntimeFixture.EventSubprocessEscalationStart("es-start", "E1"))],
+            [WorkflowChild("node-work"), WorkflowChild("node-es-listener"), Body("node-body", BpmnTestNodes.EventSubprocessEscalationStart("es-start", "E1"))],
             "dormant");
 
     [Fact]
@@ -270,36 +270,36 @@ public sealed class BpmnEventSubprocessValidationTests
         // The same node is bound as a scope listener AND as another element's child — the exactly-one-binding rule.
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-shared"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-shared")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-shared"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocessWithListener("es", "node-body", "node-shared")
             ],
             DefaultFlows(),
-            [WorkflowChild("node-shared"), Body("node-body", BpmnRuntimeFixture.EventSubprocessMessageStart("es-start", "msg"))],
+            [WorkflowChild("node-shared"), Body("node-body", BpmnTestNodes.EventSubprocessMessageStart("es-start", "msg"))],
             "bound by more than one element");
 
     [Fact]
     public void OrphanListenerNode_IsRejected() =>
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-missing")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocessWithListener("es", "node-body", "node-missing")
             ],
             DefaultFlows(),
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessMessageStart("es-start", "msg"))],
+            [WorkflowChild("node-work"), Body("node-body", BpmnTestNodes.EventSubprocessMessageStart("es-start", "msg"))],
             "scope-listener work 'node-missing', which the host did not supply");
 
     [Fact]
     public void TimerEventSubprocess_CronWithoutCycle_IsRejected() =>
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-es-listener")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("work", childNodeId: "node-work"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EventSubprocessWithListener("es", "node-body", "node-es-listener")
             ],
             DefaultFlows(),
             [
@@ -321,8 +321,8 @@ public sealed class BpmnEventSubprocessValidationTests
                 [BpmnEventDefinitionProperties.Cron] = "0 0 * * *"
             })]);
         var graph = BpmnGraphAdapter.Build(Node(
-            [BpmnRuntimeFixture.StartEvent(), BpmnRuntimeFixture.Task("work", "node-work"), BpmnRuntimeFixture.EndEvent(),
-                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-es-listener")],
+            [BpmnTestNodes.StartEvent(), BpmnTestNodes.Task("work", "node-work"), BpmnTestNodes.EndEvent(),
+                BpmnTestNodes.EventSubprocessWithListener("es", "node-body", "node-es-listener")],
             DefaultFlows(), [WorkflowChild("node-work"), WorkflowChild("node-es-listener"), Body("node-body", timer)]));
         var catcher = Assert.Single(graph.EventSubprocesses);
         Assert.Equal(BpmnEventSubprocessTriggerKind.Timer, catcher.TriggerKind);
@@ -333,23 +333,23 @@ public sealed class BpmnEventSubprocessValidationTests
     /// <summary>A message/signal/timer event-subprocess body start with the stimulus facts populated (a name / a one-shot interval).</summary>
     private static BpmnElement ExternalStart(string elementId, string definitionType, bool interrupting) =>
         definitionType == BpmnEventDefinitionTypes.Timer
-            ? BpmnRuntimeFixture.EventSubprocessTimerStart(elementId, "PT5M", interrupting)
+            ? BpmnTestNodes.EventSubprocessTimerStart(elementId, "PT5M", interrupting)
             : definitionType == BpmnEventDefinitionTypes.Signal
-                ? BpmnRuntimeFixture.EventSubprocessSignalStart(elementId, "sig", interrupting)
-                : BpmnRuntimeFixture.EventSubprocessMessageStart(elementId, "msg", interrupting);
+                ? BpmnTestNodes.EventSubprocessSignalStart(elementId, "sig", interrupting)
+                : BpmnTestNodes.EventSubprocessMessageStart(elementId, "msg", interrupting);
 
     private static BpmnElement[] DefaultElements() =>
     [
-        BpmnRuntimeFixture.StartEvent(),
-        BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
-        BpmnRuntimeFixture.EndEvent("end"),
-        BpmnRuntimeFixture.EventSubprocess("es", "node-body")
+        BpmnTestNodes.StartEvent(),
+        BpmnTestNodes.Task("work", childNodeId: "node-work"),
+        BpmnTestNodes.EndEvent("end"),
+        BpmnTestNodes.EventSubprocess("es", "node-body")
     ];
 
     private static BpmnSequenceFlow[] DefaultFlows() =>
     [
-        BpmnRuntimeFixture.Flow("f1", "start", "work"),
-        BpmnRuntimeFixture.Flow("f2", "work", "end")
+        BpmnTestNodes.Flow("f1", "start", "work"),
+        BpmnTestNodes.Flow("f2", "work", "end")
     ];
 
     private static void AssertRejects(
@@ -364,7 +364,7 @@ public sealed class BpmnEventSubprocessValidationTests
 
     private static ExecutableNode Node(IReadOnlyCollection<BpmnElement> elements, IReadOnlyCollection<BpmnSequenceFlow> flows, IReadOnlyCollection<ExecutableNode> children) =>
         new(
-            executableNodeId: BpmnRuntimeFixture.ProcessNodeId,
+            executableNodeId: BpmnTestNodes.ProcessNodeId,
             authoredActivityId: "authored-bpmn",
             activityType: typeof(BpmnProcessActivity).FullName!,
             activityTypeVersion: "1.0.0",
@@ -379,5 +379,5 @@ public sealed class BpmnEventSubprocessValidationTests
                 JsonSerializer.SerializeToElement(new BpmnStructure(elements, flows))));
 
     private static ExecutableNode WorkflowChild(string nodeId) =>
-        Elsa.Activities.Testing.WorkflowExecutionHarness.NewProbeNode(nodeId);
+        BpmnTestNodes.Probe(nodeId);
 }

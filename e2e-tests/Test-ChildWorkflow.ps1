@@ -12,8 +12,8 @@
 
     Uses WaitForCompletion=$false (fire-and-forget): the parent completes immediately with the child's
     dispatch acknowledged (outcome 'Dispatched') and the child runs independently. The waited path
-    (WaitForCompletion=$true, formerly broken as issue #1006, fixed by #982) is covered end-to-end by
-    bpmn/Test-BpmnCallActivity.ps1.
+    (WaitForCompletion=$true) has a classic BPMN call-activity witness in
+    docs/contributing/workbench-compatibility-tests.md under Classic BPMN direct execution.
 .EXAMPLE
     pwsh ./e2e-tests/Test-ChildWorkflow.ps1
 #>

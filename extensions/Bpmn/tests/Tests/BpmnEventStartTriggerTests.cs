@@ -46,7 +46,7 @@ public sealed class BpmnEventStartTriggerTests
         var bindings = new WorkflowTriggerBindingExtractor([_stimulusProvider]).Extract(executable);
 
         Assert.Equal(3, bindings.Count);
-        Assert.All(bindings, binding => Assert.Equal(BpmnRuntimeFixture.ProcessNodeId, binding.ExecutableNodeId));
+        Assert.All(bindings, binding => Assert.Equal(BpmnTestNodes.ProcessNodeId, binding.ExecutableNodeId));
 
         var byElement = bindings.ToDictionary(binding => binding.Metadata[BpmnStartTrigger.StartElementIdMetadataKey]);
         Assert.Equal(new[] { "msg-start", "sig-start", "timer-start" }, byElement.Keys.OrderBy(x => x));
@@ -112,7 +112,7 @@ public sealed class BpmnEventStartTriggerTests
 
         SecretBindingTestSupport.AssertReaderRefusesSecretRead(
             () => _stimulusProvider.Describe(node),
-            BpmnRuntimeFixture.ProcessNodeId,
+            BpmnTestNodes.ProcessNodeId,
             nameof(BpmnProcessActivity.CanStartWorkflow));
     }
 
@@ -257,7 +257,7 @@ public sealed class BpmnEventStartTriggerTests
             bindings[secretRead.InputName] = secretRead;
 
         return new ExecutableNode(
-            executableNodeId: BpmnRuntimeFixture.ProcessNodeId,
+            executableNodeId: BpmnTestNodes.ProcessNodeId,
             authoredActivityId: "authored-bpmn",
             activityType: typeof(BpmnProcessActivity).FullName!,
             activityTypeVersion: "1.0.0",
