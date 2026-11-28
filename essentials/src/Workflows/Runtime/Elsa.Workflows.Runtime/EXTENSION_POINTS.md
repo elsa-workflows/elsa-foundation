@@ -450,13 +450,11 @@ wait. These tests prove the public SDK hook reaches both Test Drive surfaces.
 - **Kind:** Contributor (any number; each supplies recovery candidates for the current persistence scope).
 - **Signature:** `ListAsync(int limit, CancellationToken)`, `SettleAsync(IReadOnlyCollection<string> workflowExecutionIds, CancellationToken)`.
 - **Usage:** the recovery sweep re-drives the listed executions at once, before any execution lease or heartbeat times out, and settles each it re-drove into a mailbox or the durable transport, or found terminal; a candidate whose re-drive faulted or was rejected is listed again. A candidate is an accelerator over the durable execution lease, never the record of what is owed, so a source may keep its candidates in memory.
-- **Known implementations:** `ReclaimedRecoveryCandidateSource` (`Elsa.Workflows.Runtime.Distributed`): the executions whose execution lease or heartbeat a reclaim found held under a departed host id, or under this process's predecessor (spec 184, FR-024 and FR-027).
 
 ### `IWorkflowRuntimePlacementAttention` *(Runtime — `Elsa.Workflows.Runtime.Attention`)*
 - **Kind:** Contributor (any number; each reports the current persistence scope's unplaceable work).
 - **Signature:** `ListUnplaceableWorkAsync(CancellationToken)`, returning `UnplaceableWorkReport(Requirement, WaitingExecutions, FirstObservedAt, LastObservedAt)`.
 - **Usage:** `WorkflowRuntimeAttentionContributor` turns each report into a warning beside the runtime's faulted runs and incidents, naming what the waiting executions need and how many wait, never a host (spec 184, FR-017). Refusing such work is placement's decision, not a runtime fault, so it is never an incident.
-- **Known implementations:** `UnplaceableWorkAttention` (`Elsa.Workflows.Runtime.Distributed`), over the work the placement pump found waiting because no active member satisfies its placement requirement or the requirement could not be resolved.
 
 ### `IRuntimeDomainRetryPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides workflow/activity domain retry behavior for a runtime composition).
@@ -661,7 +659,6 @@ Receipt acknowledgement precedes handoff. A later disposition acknowledgement fa
 - **Signature:** `Capabilities`, `GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)`, `PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default)`.
 - **Usage:** provider implementations enforce one active mailbox/agent per `(WorkflowExecutionPartition, WorkflowExecutionId)`. Commands are delivered through `WorkflowExecutionCommandEnvelope`, which carries the typed provider-neutral partition alongside command identity, workflow execution ID, idempotency key, optional sequence, delivery mode, and metadata. Equal execution IDs and idempotency keys in different partitions remain independent. Actor frameworks are provider choices; checkpoint state remains the source of truth.
 - **Default implementation:** `InProcessWorkflowExecutionActorProvider` *(single-node actor-like mailbox; no distributed placement or actor framework dependency)*. Its `PassivateAsync` waits for the mailbox and makes a running drain yield at its next step, as a waiting Cancel does (#3678), so passivation finishes behind a drain that keeps making progress. A replacement that wraps it keeps that; an independent provider must end its own running drain.
-- **Alternative implementation:** `DistributedWorkflowExecutionActorProvider` *(opt-in leaf `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)* — clustered placement/routing over the in-process provider: claims per-execution placement, returns the local in-process actor when this node owns the execution, or a `ForwardingWorkflowExecutionActor` (durable-transport routing stub, `Deferred` result) when another node owns it. Placement is best-effort routing; W5 fencing at checkpoint commit is the authoritative double-execution guard. Enable with the `WorkflowsRuntimeDistributed` shell feature. See the Distributed placement and transport section below.
 
 ### `IWorkflowExecutionPartitionAccessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement bridge from the host's provider-neutral operation context to runtime command construction.
@@ -669,30 +666,10 @@ Receipt acknowledgement precedes handoff. A later disposition acknowledgement fa
 - **Usage:** start and bookmark/resumption dispatchers snapshot the current partition into every envelope and activation/passivation request. The default engine implementation maps `PersistenceScope` without exposing a persistence-provider type from Runtime.Core. A host replacement must return one immutable nonblank partition for the current operation.
 - **Default implementation:** `PersistenceWorkflowExecutionPartitionAccessor` *(engine — scoped)*.
 
-### Distributed placement and transport *(leaf — `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)*
+### Earlier clustered workflow runner
 
-Leaf-owned contracts for clustered workflow-execution placement and cross-node command routing. Per §2.7 these live entirely in the provider leaf; `Elsa.Workflows.Runtime.Core` gains zero references to them. The leaf consumes the W5 single-writer fencing seam (`IRuntimeExecutionOwnershipService`) unchanged — placement decides *which* node drains (routing), fencing decides *whether* a write commits (safety).
-
-- ### `IExecutionPlacementStore` *(leaf)*
-  - **Kind:** Replacement (one store owns per-execution placement lease records for a distributed composition).
-  - **Signature:** `TryClaimAsync`, `FindAsync`, `ReleaseAsync`, `ListAsync` (compare-and-swap on placement token; claim doubles as renew).
-  - **Usage:** the CAS claim/renew primitive under placement ownership. Claiming an unowned or expired placement issues a strictly greater placement token; a claim against a live foreign lease fails without mutation.
-  - **Default implementation:** `InMemoryExecutionPlacementStore` *(single-process/two-node-harness default; a scoped adapter over shared state keyed by partition + execution ID)*. `EfExecutionPlacementStore` *(EF Core placement authority (`ExecutionPlacementDbContext`); explicit revision is the compare-and-swap token — opt-in leaf `Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore`, swapped in by the `WorkflowsRuntimeDistributedEntityFrameworkCorePersistence` feature; provider-neutral EF Core model for SQLite, SQL Server, PostgreSQL, and MySQL; replaces placement only and leaves command transport ownership unchanged)*.
-- ### `IExecutionPlacementService` *(leaf)*
-  - **Kind:** Replacement (one service owns this node's placement acquisition/renewal/release policy).
-  - **Signature:** `NodeId`, `TryClaimAsync`, `FindOwnerAsync`, `ListOwnedAsync`, `ReleaseAsync`.
-  - **Usage:** wraps the store with this node's identity, lease duration, and `TimeProvider` so all lease timing is deterministic and options-driven.
-  - **Default implementation:** `ExecutionPlacementService`.
-- ### `IExecutionCommandTransport` *(leaf)*
-  - **Kind:** Replacement (one transport owns the durable cross-node command inbox for a distributed composition).
-  - **Signature:** `SendAsync`, `LeaseAsync`, `AckAsync`, `ListPendingExecutionIdsAsync`, `CountPendingAsync` (ack-based lease/visibility, at-least-once).
-  - **Usage:** commands for an execution owned by another node are durably enqueued, then leased/acked by the owning node's pump. A lease hides an item from other nodes until acked or expired; only the live lease holder may ack, so a superseded node's ack is refused and the item is re-driven on failover. Wire shape is frozen by the committed v1 golden fixture (§E6 kind `executionCommandTransport`).
-  - **Default implementation:** `InMemoryExecutionCommandTransport` *(single-process/two-node-harness default; a scoped adapter over shared partitioned inbox state and rejects envelope/operation partition mismatch)*. `EfExecutionCommandTransport` *(EF Core stream head and command transport (`ExecutionCommandTransportDbContext`) in one relational transaction — same leaf/feature as the placement store; store-enforced unique per-execution sequences, version-guarded lease/ack CAS)*.
-
-### `ExecutionPlacementPumpTask` *(leaf — `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)*
-- **Kind:** Registered recurring task (`IRecurringTask`; one per node, DependsOn Tasks).
-- **Usage:** each tick obtains the finite partition snapshot through `IPersistenceScopeRunner` and opens one fresh ordinary scope per partition. Within each bounded partition sweep it renews placements this node holds, discovers visible transport backlog, claims any it can own, leases commands, verifies each stored envelope still matches the current partition, dispatches it with that partition, and acks on a delivered outcome. Deferred/Rejected dispatches stay leased so lease expiry re-drives them (the failover loop). A dispatch is awaited only up to `InlineDispatchWait` within one per-sweep wait budget of a third of the placement lease, which also bounds passivation and hand-off. Passivation makes a running drain yield at its next step (#3678), so a hand-off waits only for the step in progress and releases placement while the member still holds it. A dispatch still running then is acked under the item's latest lease when it finishes, through its own operation scope. A busy execution's Cancel is dispatched without waiting for its drain, and its other commands wait for the drain (#2831). The runner visits the remaining partitions before surfacing failures; the task's aggregate consecutive-failure count controls its node-wide backoff interval. All cadence/bounds come from `ExecutionPlacementPumpOptions` evaluated against `TimeProvider`.
-
+The [previous clustered runner source and extension points](https://github.com/elsa-workflows/elsa-foundation/tree/18a16dee878106ac525aa9a861d851a200e43c55/essentials/src/Workflows/Runtime/Distributed)
+remain available for operators draining or inspecting earlier workflow stores.
 
 ### `IRuntimeExecutionIdGenerator` *(Core — `Elsa.Workflows.Runtime.Core`)*
 
