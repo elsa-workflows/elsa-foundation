@@ -120,7 +120,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="shells.json">
+    <Content Update="shells.json;shells.Production.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

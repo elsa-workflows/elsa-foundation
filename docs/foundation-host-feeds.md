@@ -27,6 +27,16 @@ defaults to `elsa-kernel.db` and resolves against the process working directory.
 database and tenant. To use PostgreSQL, set `Provider` to `PostgreSQL`, clear `SqlitePath`, and
 provide `PostgresConnectionString`. The shell's EF control-plane connection remains separately configured.
 
+In Production, provide the recovery continuation signing key through
+`CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey`.
+Use at least 32 UTF-8 bytes and share the key with nodes that consume the same durable runtime pages.
+
+For fresh authoring, point
+`CShells__Shells__default__Features__ClrActivityReconciliation__Options__FolderPath`
+to a directory of CLR activity assemblies. For a public-feed deployment, use the managed `net10.0`
+runtime DLLs selected by the [locked package restore](host-feeds/pinning-and-closures.md#generating-the-closure),
+with one copy of each assembly name. The CLR source scans that directory. The Docker profiles already stage it.
+
 The Studio dashboard and saved-question APIs stay available. The `elsa.workflows.runs` dataset
 counts authorized runs retained by Actor Foundation, including eligible isolated Test Runs. Earlier
 execution rows from a legacy runtime are outside that dataset's totals. The retained Runtime History
