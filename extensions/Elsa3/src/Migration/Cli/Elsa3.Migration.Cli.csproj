@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>The Elsa 3 workflows migration CLI (spec 1237): a test migration of an Elsa 3 export on the migration host's composition. Run from a clone with dotnet run; never packed.</Description>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Elsa3.Migration.Cli</AssemblyName>
+    <RootNamespace>Elsa3.Migration.Cli</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa3.Migration.Tests" />
+  </ItemGroup>
+
+  <!--
+    The host's project folder and this project's folder, written at build time (research R-5): configuration and the
+    addition list are read from the project folders, never from the build output.
+  -->
+  <ItemGroup>
+    <AssemblyMetadata Include="Elsa3Migration.HostProjectFolder" Value="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../apps/Elsa.Migration.Host'))" />
+    <AssemblyMetadata Include="Elsa3Migration.CliProjectFolder" Value="$(MSBuildProjectDirectory)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tooling\Elsa3.Migration.Tooling.csproj" />
+    <!-- The host's composition: its feature projects come into deps.json for WithHostAssemblies() (spec 1237 R-5). -->
+    <ProjectReference Include="..\..\..\..\..\apps\Elsa.Migration.Host\Elsa.Migration.Host.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Read from the project folder only, never copied to the output (T013). -->
+    <None Update="elsa3-migration.features.json" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+</Project>

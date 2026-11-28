@@ -17,10 +17,13 @@ internal static class Elsa3ReconciliationDiagnosticCodes
 
 /// <summary>An input item left out of the import, and why.</summary>
 /// <param name="BlockedBy">For a dependent: the source version id of the item it depends on.</param>
+/// <param name="SourceVersionId">The skipped item's own source version id (blank when the input has none), which a
+/// dependent's <paramref name="BlockedBy"/> names.</param>
 internal sealed record Elsa3SkippedItem(
     string Code,
     string FilePath,
     string DefinitionId,
     int Version,
     string Cause,
-    string? BlockedBy = null);
+    string? BlockedBy = null,
+    string? SourceVersionId = null);

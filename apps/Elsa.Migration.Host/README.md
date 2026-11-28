@@ -4,7 +4,8 @@
 [#5800](https://github.com/elsa-workflows/elsa-foundation/issues/5800), once a Docker app profile covers the Elsa 3
 import story. Spec: [1236](../../specs/1236-elsa3-migration-host/spec.md).
 
-The host runs the Elsa 4 workflows the migration CLI (spec 1237) writes to a `migrated/` folder. It composes only the
+The host runs the Elsa 4 workflows the migration CLI (spec 1237,
+[Elsa 3 workflows migration tooling](../../extensions/Elsa3/src/Migration/Tooling/README.md)) writes to a `migrated/` folder. It composes only the
 features those workflows, the JTest acceptance set and the Studio designer need, plus JSON workflow and activity
 reconciliation. It is a plain CShells host: it finds its features in the projects it references, loads no packages
 at runtime, and has no admin or module-management endpoints. It carries no Elsa 3 code.

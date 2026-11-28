@@ -13,6 +13,13 @@ public interface ITaskManager
     Task StartExecutingRegisteredTasks(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Runs the shell's startup tasks in their dependency order and starts no background or recurring task. The shell's
+    /// initializer calls it instead of <see cref="StartExecutingRegisteredTasks"/> when the <c>Tasks</c> feature's
+    /// <c>StartupTasksOnly</c> setting is set, for a process that needs the startup work but no shell-lifetime tasks.
+    /// </summary>
+    Task RunStartupTasksOnly(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stops the tasks owned by the current shell generation. The shell's terminator calls it before the shell provider is
     /// disposed.
     /// </summary>

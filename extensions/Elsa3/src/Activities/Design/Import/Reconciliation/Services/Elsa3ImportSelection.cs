@@ -38,7 +38,8 @@ internal sealed class Elsa3ImportSelection
             if (cause is null)
                 kept.Add(item);
             else
-                skipped.Add(new(Elsa3ReconciliationDiagnosticCodes.DuplicateInput, item.FilePath, item.Definition.DefinitionId, item.Definition.Version, cause));
+                skipped.Add(new(Elsa3ReconciliationDiagnosticCodes.DuplicateInput, item.FilePath, item.Definition.DefinitionId, item.Definition.Version, cause,
+                    SourceVersionId: item.Definition.Id));
         }
 
         return (kept, skipped);
@@ -109,7 +110,7 @@ internal sealed class Elsa3ImportSelection
         string cause,
         string? blockedBy = null) =>
         new(code, inputs.TryGetValue(item.SourceVersionId, out var input) ? input.FilePath : "(unknown)",
-            item.SourceDefinitionId, item.SourceVersion, cause, blockedBy);
+            item.SourceDefinitionId, item.SourceVersion, cause, blockedBy, item.SourceVersionId);
 
     internal static string Cause(string message, string? guidance) =>
         string.IsNullOrWhiteSpace(guidance) ? message : $"{message} {guidance}";
