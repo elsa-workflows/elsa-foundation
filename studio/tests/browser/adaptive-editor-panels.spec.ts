@@ -153,9 +153,9 @@ test("compact editor switches panels with the keyboard without overwriting saved
   await expectInsideViewport(expandInspector, page);
   await expandInspector.press("Enter");
   await expect(page.getByRole("button", { name: "Collapse inspector panel" })).toBeVisible();
-  const resize = page.getByRole("separator", { name: "Resize inspector panel" });
-  await expect(resize).toHaveAttribute("aria-valuemin", "260");
-  expect(Number(await resize.getAttribute("aria-valuenow"))).toBeGreaterThanOrEqual(Number(await resize.getAttribute("aria-valuemin")));
+  // A phone-width inspector is a sheet over the whole workbench, so it offers no resize handle.
+  await expect(page.getByRole("separator", { name: "Resize inspector panel" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Back to canvas", exact: true })).toBeVisible();
   await expectInsideViewport(page.locator(".wf-inspector"), page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByRole("button", { name: "Collapse activities panel" })).toBeVisible();
@@ -187,4 +187,80 @@ test("Test Run opens its inspector panel while the compact palette is selected",
   await expect(page.getByRole("button", { name: "Collapse inspector panel" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Test Run", exact: true })).toHaveAttribute("aria-selected", "true");
   await expectInsideViewport(page.locator(".wf-inspector"), page);
+});
+
+// #4695: at phone widths an open inspector left the canvas a 30-50px sliver, and a floating palette
+// rail covered nodes and the node toolbar. The inspector is now a full-width sheet with a way back,
+// and the rails dock beside the canvas in every layout.
+for (const width of [360, 390]) for (const layout of ["classic", "floating"]) for (const [host, composition] of [["workflow", "flowchart"], ["workflow", "sequence"], ["activity", "sequence"]] as const) {
+  test(`${host} ${composition} ${layout} ${width}px inspector is a sheet and the canvas stays clear of the rails`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=${composition}&theme=light`);
+    await page.evaluate(value => document.documentElement.setAttribute("data-theme-layout", value), layout);
+    const canvas = page.locator(".wf-canvas-shell");
+    const inspector = page.locator(".wf-inspector");
+    const nodes = page.locator(".wf-canvas .react-flow__node, .wf-canvas-shell .wf-sequence-step");
+    await expect(nodes.first()).toBeVisible();
+
+    const clearOfRails = async () => page.evaluate(() => {
+      const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+      const canvasBox = box(".wf-canvas-shell");
+      const paletteBox = box(".wf-palette");
+      const inspectorBox = box(".wf-inspector");
+      const nodeHits = [...document.querySelectorAll<HTMLElement>(".wf-canvas .react-flow__node, .wf-canvas-shell .wf-sequence-step")].map(node => {
+        const rect = node.getBoundingClientRect();
+        const x = Math.max(rect.left + 4, canvasBox.left + 4);
+        const y = rect.top + rect.height / 2;
+        return x > canvasBox.right ? true : node.contains(document.elementFromPoint(x, y));
+      });
+      return {
+        canvasWidth: Math.round(canvasBox.width),
+        paletteClear: paletteBox.right <= canvasBox.left + 1,
+        inspectorClear: inspectorBox.left >= canvasBox.right - 1,
+        nodesReachable: nodeHits.every(Boolean)
+      };
+    });
+
+    const docked = await clearOfRails();
+    expect(docked).toMatchObject({ paletteClear: true, inspectorClear: true, nodesReachable: true });
+    expect(docked.canvasWidth).toBeGreaterThanOrEqual(width - 2 * 42 - 2 * 10);
+    await page.screenshot({ path: testInfo.outputPath("canvas.png") });
+
+    await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+    const back = page.getByRole("button", { name: "Back to canvas", exact: true });
+    await expect(back).toBeVisible();
+    await expect(canvas).toBeHidden();
+    await expect(page.locator(".wf-palette")).toBeHidden();
+    await expect.poll(async () => Math.round((await inspector.boundingBox())!.width)).toBeGreaterThanOrEqual(width - 1);
+    await expectInsideViewport(inspector, page);
+    await page.screenshot({ path: testInfo.outputPath("inspector-sheet.png") });
+
+    await back.click();
+    await expect(canvas).toBeVisible();
+    await expect(page.getByRole("button", { name: "Expand inspector panel", exact: true })).toBeVisible();
+    await expect.poll(clearOfRails).toMatchObject({ paletteClear: true, inspectorClear: true, nodesReachable: true });
+    await nodes.first().click();
+    await expect(nodes.first()).toHaveAttribute(composition === "flowchart" ? "class" : "aria-pressed", composition === "flowchart" ? /selected/ : "true");
+  });
+}
+
+// #4695 QA 2026-11-20: at 768px with the inspector open, today's Studio left a 260×122 canvas
+// between the palette and inspector. The sheet threshold covers that tablet workbench too.
+test("768px tablet inspector is a sheet instead of a 260px canvas sliver", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.goto("/?mode=activity-duplicate-editor&host=workflow&composition=flowchart&theme=light");
+  const canvas = page.locator(".wf-canvas-shell");
+  const inspector = page.locator(".wf-inspector");
+  await expect(page.locator(".wf-canvas .react-flow__node").first()).toBeVisible();
+  await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+  const back = page.getByRole("button", { name: "Back to canvas", exact: true });
+  await expect(back).toBeVisible();
+  await expect(canvas).toBeHidden();
+  await expect(page.locator(".wf-palette")).toBeHidden();
+  await expect.poll(async () => Math.round((await inspector.boundingBox())!.width)).toBeGreaterThanOrEqual(767);
+  await expectInsideViewport(inspector, page);
+  await page.screenshot({ path: testInfo.outputPath("tablet-inspector-sheet.png") });
+  await back.click();
+  await expect(canvas).toBeVisible();
+  await expect.poll(async () => Math.round((await canvas.boundingBox())!.width)).toBeGreaterThan(260);
 });

@@ -11,24 +11,13 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await expect(expandInspector).toBeVisible();
     await expandInspector.click();
     await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
+    const canvas = page.locator(".wf-canvas-shell");
     const commands = page.getByRole("group", { name: "Named block commands", exact: true });
-    await expect(commands).toBeAttached();
-    // IntersectionObserver accounts for ancestor clipping: a command's painted area must
-    // never escape its canvas into the active inspector, even when its own box is wider.
-    await expect.poll(() => commands.evaluate(async element => {
-      const boundary = element.closest(".wf-canvas-shell, .wf-editor-toolbar")!.getBoundingClientRect();
-      const buttons = [...element.querySelectorAll(".wf-block-menu-trigger, button:not(.wf-block-menu-trigger)")];
-      const entries = await new Promise<IntersectionObserverEntry[]>(resolve => {
-        const observer = new IntersectionObserver(observed => {
-          observer.disconnect();
-          resolve(observed);
-        });
-        buttons.forEach(button => observer.observe(button));
-      });
-      return entries.length === buttons.length && entries.every(entry => !entry.isIntersecting
-        || entry.intersectionRect.left >= boundary.left - 1 && entry.intersectionRect.right <= boundary.right + 1);
-    })).toBe(true);
-    await page.screenshot({ path: info.outputPath("inspector-contained.png"), fullPage: true });
+    // A phone-width inspector is a sheet (#4695): the canvas waits behind it rather than being
+    // squeezed beside it. Named block commands may live on the editor toolbar (outside the canvas).
+    await expect(canvas).toBeHidden();
+    await expect(page.getByRole("button", { name: "Back to canvas", exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath("inspector-sheet.png"), fullPage: true });
 
     await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
     const palette = page.getByRole("button", { name: "Collapse activities panel", exact: true });

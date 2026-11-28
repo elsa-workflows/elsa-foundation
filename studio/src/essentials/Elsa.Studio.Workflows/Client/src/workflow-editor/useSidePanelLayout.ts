@@ -1,5 +1,11 @@
 import React from "react";
-import { resolveStudioAdaptiveSidePanelLayout, useStudioSidePanelLayout, type StudioAdaptiveSidePanelLayout, type StudioSidePanelLayoutStorageKeys } from "@elsa-workflows/studio-ui";
+import {
+  resolveStudioAdaptiveSidePanelLayout,
+  studioPhoneWorkbenchMaximumWidth,
+  useStudioSidePanelLayout,
+  type StudioAdaptiveSidePanelLayout,
+  type StudioSidePanelLayoutStorageKeys
+} from "@elsa-workflows/studio-ui";
 import {
   workflowInspectorCollapsedStorageKey,
   workflowInspectorWidthStorageKey,
@@ -10,6 +16,9 @@ import {
 import type { WorkflowSidePanel } from "./editorTypes";
 
 const workflowPanelSelectors = { palette: ".wf-palette", inspector: ".wf-inspector" };
+
+/** The widest measured workbench that sheets an open inspector (phone and 768px tablet, #4695). */
+export const phoneWorkbenchMaximumWidth = studioPhoneWorkbenchMaximumWidth;
 
 export type SidePanelLayoutStorageKeys = StudioSidePanelLayoutStorageKeys;
 
@@ -23,6 +32,32 @@ export type SidePanelEditorBodyStyle = React.CSSProperties & {
   "--wf-palette-width": string;
   "--wf-inspector-width": string;
 };
+
+export interface PhonePanelPresentation {
+  /** The workbench is phone- or 768px-tablet-width: panels dock beside the canvas rather than float over it. */
+  phoneWidth: boolean;
+  /**
+   * The open inspector takes the whole workbench as a sheet and the canvas is hidden until the
+   * user goes back to it. Side by side, both would be left too narrow to read or select (#4695).
+   */
+  inspectorSheet: boolean;
+}
+
+export function resolvePhonePanelPresentation({
+  containerWidth,
+  inspectorExpanded,
+  maximizedSidePanel
+}: {
+  containerWidth: number;
+  inspectorExpanded: boolean;
+  maximizedSidePanel: WorkflowSidePanel | null;
+}): PhonePanelPresentation {
+  const phoneWidth = Number.isFinite(containerWidth) && containerWidth > 0 && containerWidth <= phoneWorkbenchMaximumWidth;
+  return {
+    phoneWidth,
+    inspectorSheet: phoneWidth && inspectorExpanded && !maximizedSidePanel
+  };
+}
 
 /**
  * Resolves rendered panel sizes from the available workbench width without changing the saved
@@ -68,7 +103,9 @@ export function useSidePanelLayout(
     layout.paletteCollapsed ? "palette-collapsed" : "",
     layout.inspectorCollapsed ? "inspector-collapsed" : "",
     layout.maximizedSidePanel === "palette" ? "palette-maximized" : "",
-    layout.maximizedSidePanel === "inspector" ? "inspector-maximized" : ""
+    layout.maximizedSidePanel === "inspector" ? "inspector-maximized" : "",
+    layout.phoneWidth ? "phone-layout" : "",
+    layout.inspectorSheet ? "inspector-sheet" : ""
   ].filter(Boolean).join(" ");
   const editorBodyStyle: SidePanelEditorBodyStyle = {
     "--wf-palette-width": `${layout.paletteWidth}px`,

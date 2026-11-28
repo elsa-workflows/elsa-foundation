@@ -1,3 +1,5 @@
+import { ArrowLeft } from "lucide-react";
+import { useEffect, useRef } from "react";
 import type React from "react";
 import type { StudioGraphAuthoringResourceKind } from "@elsa-workflows/studio-sdk";
 import { StudioSidePanelActions, StudioSidePanelResizeHandle } from "@elsa-workflows/studio-ui";
@@ -43,6 +45,21 @@ export function GraphAuthoringWorkbench({
 }) {
   const activePalette = palette ? palette.tabs.find(tab => tab.id === palette.activeTabId) ?? palette.tabs[0] : undefined;
   const activeInspector = inspector.tabs.find(tab => tab.id === inspector.activeTabId) ?? inspector.tabs[0];
+  const inspectorRef = useRef<HTMLElement>(null);
+  const sheetWasOpen = useRef(layout.inspectorSheet);
+
+  // Opening the sheet from the canvas (a node, its toolbar, a run selection) hides the control that had
+  // focus. Keyboard users continue in the sheet, at its way back, rather than at the top of the page.
+  useEffect(() => {
+    const opened = layout.inspectorSheet && !sheetWasOpen.current;
+    sheetWasOpen.current = layout.inspectorSheet;
+    const sheet = inspectorRef.current;
+    if (!opened || !sheet) return;
+    const active = document.activeElement;
+    const workbench = sheet.closest(".wf-editor-body");
+    if (active && active !== document.body && !(workbench?.contains(active) && !sheet.contains(active))) return;
+    sheet.querySelector<HTMLElement>(".wf-panel-back-button")?.focus();
+  }, [layout.inspectorSheet]);
 
   return (
     <GraphAuthoringWorkspace
@@ -69,7 +86,7 @@ export function GraphAuthoringWorkbench({
       paletteResizeHandle={palette ? (
         <StudioSidePanelResizeHandle
           side="palette"
-          visible={layout.paletteExpanded && !layout.maximizedSidePanel}
+          visible={layout.paletteExpanded && !layout.maximizedSidePanel && !layout.inspectorSheet}
           value={layout.paletteWidth}
           min={layout.paletteMinimumWidth}
           max={maxPaletteWidth}
@@ -84,7 +101,7 @@ export function GraphAuthoringWorkbench({
       inspectorResizeHandle={(
         <StudioSidePanelResizeHandle
           side="inspector"
-          visible={layout.inspectorExpanded && !layout.maximizedSidePanel}
+          visible={layout.inspectorExpanded && !layout.maximizedSidePanel && !layout.inspectorSheet}
           value={layout.inspectorWidth}
           min={layout.inspectorMinimumWidth}
           max={maxInspectorWidth}
@@ -96,7 +113,7 @@ export function GraphAuthoringWorkbench({
         />
       )}
       inspector={(
-        <aside className={["wf-inspector", inspector.className].filter(Boolean).join(" ")} aria-label={inspector.ariaLabel}>
+        <aside ref={inspectorRef} className={["wf-inspector", inspector.className].filter(Boolean).join(" ")} aria-label={inspector.ariaLabel}>
           <WorkbenchPanelHeader
             side="inspector"
             tabLabel={inspector.tabLabel}
@@ -104,6 +121,10 @@ export function GraphAuthoringWorkbench({
             activeTabId={activeInspector.id}
             collapsed={layout.inspectorCollapsed}
             maximized={layout.maximizedSidePanel === "inspector"}
+            onBackToCanvas={layout.phoneWidth && layout.inspectorExpanded ? workbench => {
+              layout.showCanvas();
+              requestAnimationFrame(() => focusCanvasSelection(workbench));
+            } : undefined}
             onSelect={inspector.onSelect}
             onToggleCollapsed={() => layout.toggleSidePanelCollapsed("inspector")}
             onToggleMaximized={() => layout.toggleSidePanelMaximized("inspector")}
@@ -127,6 +148,7 @@ function WorkbenchPanelHeader({
   activeTabId,
   collapsed,
   maximized,
+  onBackToCanvas,
   onSelect,
   onToggleCollapsed,
   onToggleMaximized
@@ -137,6 +159,8 @@ function WorkbenchPanelHeader({
   activeTabId: string;
   collapsed: boolean;
   maximized: boolean;
+  /** Offered while a phone-width panel covers the canvas: returns to the canvas. */
+  onBackToCanvas?(workbench: HTMLElement | null): void;
   onSelect(tabId: string): void;
   onToggleCollapsed(): void;
   onToggleMaximized(): void;
@@ -145,6 +169,13 @@ function WorkbenchPanelHeader({
 
   return (
     <div className="wf-panel-title">
+      {onBackToCanvas ? (
+        <button type="button" className="wf-panel-back-button" aria-label="Back to canvas"
+          onClick={event => onBackToCanvas(event.currentTarget.closest<HTMLElement>(".wf-editor-body"))}>
+          <ArrowLeft size={14} aria-hidden="true" />
+          <span>Canvas</span>
+        </button>
+      ) : null}
       <PanelTabList label={tabLabel} tabs={tabs} activeTabId={activeTabId} onSelect={onSelect} />
       <StudioSidePanelActions
         side={side}
@@ -158,4 +189,17 @@ function WorkbenchPanelHeader({
       />
     </div>
   );
+}
+
+/**
+ * Returns keyboard focus to the canvas after a phone-width inspector sheet closes: the selected
+ * activity when there is one, otherwise the control that reopens the inspector. The sheet's own
+ * button is gone by then, and focus must not fall back to the page.
+ */
+function focusCanvasSelection(workbench: HTMLElement | null) {
+  if (!workbench) return;
+  const selected = workbench.querySelector<HTMLElement>(
+    ".wf-canvas-shell :is(.react-flow__node.selected, .wf-sequence-step[aria-pressed='true'])"
+  );
+  (selected ?? workbench.querySelector<HTMLElement>(".wf-inspector .wf-panel-actions button"))?.focus();
 }

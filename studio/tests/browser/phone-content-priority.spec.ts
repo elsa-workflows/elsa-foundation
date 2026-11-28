@@ -35,8 +35,19 @@ for (const host of ["workflow", "activity"]) for (const theme of ["light", "dark
     await page.screenshot({ path: info.outputPath("phone-canvas.png") });
     for (const width of [768, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
-      await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThanOrEqual(260);
+      if (width === 768) {
+        // Tablet workbenches start on the canvas (#4695): the inspector is a sheet only when opened.
+        await expect(page.getByRole("button", { name: "Expand inspector panel", exact: true })).toBeVisible();
+        await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThanOrEqual(260);
+        await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+        await expect(page.getByRole("button", { name: "Back to canvas", exact: true })).toBeVisible();
+        await expect(canvas).toBeHidden();
+        await page.getByRole("button", { name: "Back to canvas", exact: true }).click();
+        await expect(canvas).toBeVisible();
+      } else {
+        await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
+        await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThanOrEqual(260);
+      }
     }
     await page.locator('.wf-sequence-step[data-id="write-one"]').press("Enter");
     await page.locator(".wf-inspector [data-studio-code-editor]").first().click();

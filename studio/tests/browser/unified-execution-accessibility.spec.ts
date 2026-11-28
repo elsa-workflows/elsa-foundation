@@ -11,43 +11,58 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
       await page.getByRole("button", { name: "Test Run", exact: true }).press("Enter");
       await page.getByRole("button", { name: "Start Test Run", exact: true }).press("Enter");
     }
+    // A phone-width editor inspector is a sheet over the canvas (#4695), like the run page's narrow
+    // details: the canvas and the Runtime panel are visited in turn rather than side by side.
+    const editorSheet = host === "editor" && width <= 600;
+    const showCanvas = async () => { if (editorSheet) await page.getByRole("button", { name: "Back to canvas", exact: true }).press("Enter"); };
+    const showInspector = async () => { if (editorSheet) await page.getByRole("button", { name: "Expand inspector panel", exact: true }).press("Enter"); };
+    await showCanvas();
     const canvas = host === "instance"
       ? page.getByRole("region", { name: "Workflow run canvas", exact: true })
       : page.getByLabel("Workflow canvas", { exact: true });
     if (host === "instance") await expect(page.getByRole("button", { name: "Diagram", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(canvas).toBeVisible();
     const source = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
+    const narrow = width === 390;
     const narrowInstance = host === "instance" && width === 390;
     await expect(source).toHaveAccessibleName(/Run state: Completed/);
     await source.press("Enter");
+    if (editorSheet) {
+      // Opening the sheet from the node moves focus into it rather than losing it with the hidden canvas.
+      await expect(page.getByRole("button", { name: "Back to canvas", exact: true })).toBeFocused();
+    }
     await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
-    if (narrowInstance) {
-      await page.getByRole("button", { name: "Back to workflow run canvas", exact: true }).press("Enter");
+    if (narrow) {
+      await page.getByRole("button", { name: host === "instance" ? "Back to workflow run canvas" : "Back to canvas", exact: true }).press("Enter");
       await expect(source).toBeFocused();
     }
     await expect(source).toHaveAccessibleName(/Selected/);
 
     // Only the attached Test Run keeps pause/resume; #4903 removed it from the run instance workbench.
     if (host === "editor") {
+      await showInspector();
       await page.getByRole("tab", { name: "Runtime", exact: true }).press("Enter");
       await page.getByRole("button", { name: "Pause live updates", exact: true }).press("Enter");
       const follow = page.getByRole("button", { name: "Resume live updates", exact: true });
       await expect(follow).toBeFocused();
       await expect(page.getByText(/^Live updates paused/)).toBeVisible();
+      await showCanvas();
       await expect(source).toHaveAccessibleName(/Selected/);
+      await showInspector();
       await follow.press("Enter");
       await expect(page.getByRole("button", { name: "Pause live updates", exact: true })).toBeFocused();
     }
 
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).press("Enter");
+    await showCanvas();
     await expect(canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ })).toHaveAccessibleName(/Run state: Completed/);
     await expect(source).toHaveAccessibleName(/Selected/);
     await source.press(" ");
     // The narrow run details panel reopens on its Overview tab.
     if (narrowInstance) await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
-    if (!narrowInstance) await expect(source).toBeFocused();
+    if (!narrow) await expect(source).toBeFocused();
     await openExecutionOutputs(page);
     await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);

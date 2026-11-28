@@ -14,7 +14,11 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     const actions = host === "instance" ? page.getByRole("group", { name: "Run workspace actions", exact: true })
       : page.getByRole("group", { name: "Execution controls", exact: true });
     const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true }) : page.getByLabel("Workflow canvas", { exact: true });
+    // A phone-width inspector is a sheet over the canvas (#4695): visit the canvas, then reopen the Runtime sheet.
+    const phoneSheet = host === "editor" && width <= 600;
+    if (phoneSheet) await page.getByRole("button", { name: "Back to canvas", exact: true }).click();
     await expect(canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ })).toHaveAccessibleName(/Run state: Completed/);
+    if (phoneSheet) await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
     const refresh = actions.getByRole("button", { name: "Refresh execution", exact: true });
     if (host === "editor") {
       const toggle = actions.getByRole("button", { name: "Pause live updates", exact: true });

@@ -8,6 +8,8 @@ export const studioMaxInspectorWidth = 560;
 export const studioDefaultInspectorWidth = 320;
 export const studioCollapsedSidePanelWidth = 42;
 export const studioSidePanelResizeStep = 16;
+/** Widest measured workbench that sheets an open inspector (phone and 768px tablet, #4695). */
+export const studioPhoneWorkbenchMaximumWidth = 768;
 
 export interface StudioSidePanelLayoutStorageKeys {
   paletteWidth: string;
@@ -70,12 +72,16 @@ export function resolveStudioAdaptiveSidePanelLayout({
   const wantsInspector = !inspectorCollapsed && effectiveMaximizedSidePanel !== "palette";
   const canFitBothPanels = !palettePresent || !measured || initialPanelSpace >= studioMinPaletteWidth + studioMinInspectorWidth;
   const autoCollapsePalette = measured && wantsPalette && wantsInspector && !canFitBothPanels;
-  const phoneLayout = measured && containerWidth <= 600 && !effectiveMaximizedSidePanel
-    && (autoCollapsePalette || (!palettePresent && wantsInspector && !paletteCollapsed));
+  // A phone or 768px-tablet workbench starts on the canvas: its inspector opens only when explicitly
+  // requested for this session, whatever the saved preferences say, and then covers the canvas as a
+  // sheet (#4695). At 768px both expanded panels otherwise leave a 260px canvas sliver.
+  const inspectorOnRequest = measured && containerWidth <= studioPhoneWorkbenchMaximumWidth && !effectiveMaximizedSidePanel;
+  const phoneLayout = inspectorOnRequest && (autoCollapsePalette || (!palettePresent && wantsInspector));
   const forcePaletteOpen = autoCollapsePalette && responsiveExpandedSide === "palette";
   const effectivePaletteCollapsed = !wantsPalette || (autoCollapsePalette && !forcePaletteOpen);
-  const effectiveInspectorCollapsed = !wantsInspector || (autoCollapsePalette && forcePaletteOpen)
-    || (phoneLayout && responsiveExpandedSide !== "inspector");
+  const effectiveInspectorCollapsed = inspectorOnRequest
+    ? responsiveExpandedSide !== "inspector"
+    : !wantsInspector || (autoCollapsePalette && forcePaletteOpen);
 
   if (!measured || effectiveMaximizedSidePanel) {
     return {
@@ -187,7 +193,7 @@ export function useStudioSidePanelLayout(storageKeys: StudioSidePanelLayoutStora
       const width = Number.isFinite(measuredWidth) ? Math.round(measuredWidth) : 0;
       if (width === lastMeasuredWidth.current) return;
       lastMeasuredWidth.current = width;
-      if (width > 0 && width <= 600) {
+      if (width > 0 && width <= studioPhoneWorkbenchMaximumWidth) {
         const focused = document.activeElement;
         if (focused && !containerElement.classList.contains("inspector-collapsed") && containerElement.querySelector(panelSelectors.inspector)?.contains(focused)) setResponsiveExpandedSide("inspector");
         else if (focused && !containerElement.classList.contains("palette-collapsed") && containerElement.querySelector(panelSelectors.palette)?.contains(focused)) setResponsiveExpandedSide("palette");
@@ -209,8 +215,8 @@ export function useStudioSidePanelLayout(storageKeys: StudioSidePanelLayoutStora
   }, [containerElement, panelSelectors.inspector, panelSelectors.palette]);
 
   useEffect(() => {
-    if (containerWidth > 0 && !adaptiveLayout.autoCollapsePalette && !adaptiveLayout.phoneLayout && !maximizedSidePanel && responsiveExpandedSide) setResponsiveExpandedSide(null);
-  }, [containerWidth, adaptiveLayout.autoCollapsePalette, adaptiveLayout.phoneLayout, maximizedSidePanel, responsiveExpandedSide]);
+    if (containerWidth > studioPhoneWorkbenchMaximumWidth && !adaptiveLayout.autoCollapsePalette && !maximizedSidePanel && responsiveExpandedSide) setResponsiveExpandedSide(null);
+  }, [containerWidth, adaptiveLayout.autoCollapsePalette, maximizedSidePanel, responsiveExpandedSide]);
   useEffect(() => writeStoredValue(storageKeys.paletteWidth, String(paletteWidth)), [paletteWidth, storageKeys.paletteWidth]);
   useEffect(() => writeStoredValue(storageKeys.inspectorWidth, String(inspectorWidth)), [inspectorWidth, storageKeys.inspectorWidth]);
   useEffect(() => writeStoredValue(storageKeys.paletteCollapsed, String(paletteCollapsed)), [paletteCollapsed, storageKeys.paletteCollapsed]);
@@ -224,15 +230,17 @@ export function useStudioSidePanelLayout(storageKeys: StudioSidePanelLayoutStora
   }, [maximizedSidePanel]);
 
   const toggleSidePanelCollapsed = useCallback((side: StudioSidePanel) => {
-    if (!palettePresent && adaptiveLayout.phoneLayout && !inspectorCollapsed) {
+    const phoneWidth = containerWidth > 0 && containerWidth <= studioPhoneWorkbenchMaximumWidth;
+    const effectiveMaximized = !palettePresent && maximizedSidePanel === "palette" ? null : maximizedSidePanel;
+    if (side === "inspector" && phoneWidth && !effectiveMaximized) {
+      // Phone sessions open and close the inspector without touching the saved desktop preference.
       setResponsiveExpandedSide(adaptiveLayout.inspectorCollapsed ? "inspector" : null);
-      setMaximizedSidePanel(null);
       return;
     }
     if (adaptiveLayout.autoCollapsePalette && !paletteCollapsed && !inspectorCollapsed) {
       const sideIsAutoCollapsed = side === "palette" ? adaptiveLayout.paletteCollapsed : adaptiveLayout.inspectorCollapsed;
       if (sideIsAutoCollapsed) setResponsiveExpandedSide(side);
-      else if (side === "palette" || containerWidth <= 600) setResponsiveExpandedSide(null);
+      else if (side === "palette" || containerWidth <= studioPhoneWorkbenchMaximumWidth) setResponsiveExpandedSide(null);
       else {
         setResponsiveExpandedSide(null);
         setInspectorCollapsed(true);
@@ -240,11 +248,11 @@ export function useStudioSidePanelLayout(storageKeys: StudioSidePanelLayoutStora
       setMaximizedSidePanel(null);
       return;
     }
-    setResponsiveExpandedSide(containerWidth > 0 && containerWidth <= 600 ? side : null);
+    setResponsiveExpandedSide(phoneWidth ? side : null);
     setMaximizedSidePanel(current => current === side ? null : current);
     if (side === "palette") setPaletteCollapsed(current => !current);
     else setInspectorCollapsed(current => !current);
-  }, [adaptiveLayout.autoCollapsePalette, adaptiveLayout.inspectorCollapsed, adaptiveLayout.paletteCollapsed, adaptiveLayout.phoneLayout, palettePresent, containerWidth, inspectorCollapsed, paletteCollapsed]);
+  }, [adaptiveLayout.autoCollapsePalette, adaptiveLayout.inspectorCollapsed, adaptiveLayout.paletteCollapsed, palettePresent, containerWidth, inspectorCollapsed, maximizedSidePanel, paletteCollapsed]);
 
   const toggleSidePanelMaximized = useCallback((side: StudioSidePanel) => {
     setResponsiveExpandedSide(side);
@@ -318,9 +326,19 @@ export function useStudioSidePanelLayout(storageKeys: StudioSidePanelLayoutStora
     setInspectorCollapsed(collapsed);
     if (!collapsed) setMaximizedSidePanel(current => current === "palette" ? null : current);
   }, []);
+  /**
+   * Leaves a phone-width inspector sheet (or a maximized phone inspector) for the canvas. Only the
+   * session's phone state changes: the saved collapse preference stays as the desktop left it.
+   */
+  const showCanvas = useCallback(() => {
+    setMaximizedSidePanel(current => current === "inspector" ? null : current);
+    setResponsiveExpandedSide(null);
+  }, []);
   const effectiveMaximizedSidePanel = !palettePresent && maximizedSidePanel === "palette" ? null : maximizedSidePanel;
   const paletteExpanded = palettePresent && !adaptiveLayout.paletteCollapsed && effectiveMaximizedSidePanel !== "inspector";
   const inspectorExpanded = !adaptiveLayout.inspectorCollapsed && effectiveMaximizedSidePanel !== "palette";
+  const phoneWidth = Number.isFinite(containerWidth) && containerWidth > 0 && containerWidth <= studioPhoneWorkbenchMaximumWidth;
+  const inspectorSheet = phoneWidth && inspectorExpanded && !effectiveMaximizedSidePanel;
 
   return {
     containerRef,
@@ -334,6 +352,9 @@ export function useStudioSidePanelLayout(storageKeys: StudioSidePanelLayoutStora
     setInspectorCollapsed: setInspectorPanelCollapsed,
     paletteExpanded,
     inspectorExpanded,
+    phoneWidth,
+    inspectorSheet,
+    showCanvas,
     toggleSidePanelCollapsed,
     toggleSidePanelMaximized,
     startSidePanelResize,
