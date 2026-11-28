@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Reflection;
 using System.Text;
@@ -36,6 +37,8 @@ public sealed class EfProviderAgreementTests
     private static readonly Assembly[] Closure =
     [
         .. ModuleContextCatalog.Modules,
+        typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
+        typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly
     ];
