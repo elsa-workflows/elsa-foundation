@@ -16,6 +16,13 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Tenant:** the importer passes the tenant the import writes to (the access scope's, else the request's). Whatever an implementation reads from what is already published, it reads from that tenant only.
 - **Mapped bodies:** each `ImportedReusableActivity` carries its mapped workflow state as `Body`, so the importer can admit it before the commit. The importer judges `Body`, not the version's `GraphManifest` (the graph manifest format belongs to the graph activity module, which the import does not reference), so an implementation must build the manifest from that `Body` and put no activity input into it that the body does not hold; a manifest built otherwise is published unjudged. The default implementation builds the payload's `rootActivity` from the body's root in the same call (`ReusableActivityCollectionCredentialLiteralTests` pins it).
 
+### `IReusableActivityImportBlockedItemAnalyzer`
+
+- **Kind:** Design mapping strategy, beside `IReusableActivityImportMaterializer`.
+- **Purpose:** converts the plan items an apply left out because a reusable workflow they use was refused, for their own conversion diagnostics only, so one migration `inventory` lists every finding (#6242). The import run calls it when its request sets `AnalyzeBlockedItems` (the migration CLI does; startup reconciliation does not).
+- **Default implementation:** `Elsa3ReusableActivityImportMaterializer` from `Elsa3.Mapping`.
+- **Invariant:** writes nothing, and the items stay left out. Each diagnostic names its item by `SourceVersionId` metadata. A reference to a reusable that converts reads its converted contract; one that does not reads what its Elsa 3 definition declares, and the routing findings only the converted contract could settle are left out.
+
 ### `IReusableActivityTriggerClassifier`
 
 - **Kind:** optional classification port.

@@ -97,7 +97,7 @@ internal static class Elsa3MigrationRun
         await using var scope = composition.Shell.BeginScope();
         var services = scope.ServiceProvider;
         var inputs = selection.Selected.Select(item => new Elsa3InputItem(item.File, item.Definition)).ToArray();
-        var results = await services.GetRequiredService<Elsa3ImportRun>().RunAsync(new Elsa3ImportRunRequest(SourceId, inputs), cancellationToken);
+        var results = await services.GetRequiredService<Elsa3ImportRun>().RunAsync(new Elsa3ImportRunRequest(SourceId, inputs) { AnalyzeBlockedItems = true }, cancellationToken);
 
         var collected = Collect(selection, results);
         var exported = await MigratedExporter.ExportAsync(services, collected.Candidates, Path.Combine(stagingFolder, OutputSwap.MigratedName), cancellationToken);
@@ -154,8 +154,9 @@ internal static class Elsa3MigrationRun
         var workflows = results.SelectMany(result => result.WorkflowPublications)
             .GroupBy(publication => publication.Workflow.SourceVersionId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
-        // Warnings of applied items, and the conversion diagnostics of items the apply refused (their plan items carry none).
-        var versionDiagnostics = results.SelectMany(result => result.Warnings.Concat(result.ApplyDiagnostics)).ToArray();
+        // Warnings of applied items, and the conversion diagnostics of items the apply refused or left out for a refused
+        // dependency (their plan items carry none).
+        var versionDiagnostics = results.SelectMany(result => result.Warnings.Concat(result.ApplyDiagnostics).Concat(result.BlockedDiagnostics)).ToArray();
         var refusals = results.Select(result => result.Refusal).OfType<Elsa3ImportRunRefusal>().ToArray();
         var refusedIds = refusals.SelectMany(refusal => refusal.UnappliedSourceVersionIds).ToHashSet(StringComparer.Ordinal);
         var noPublished = selection.NoPublishedVersion.ToHashSet(StringComparer.Ordinal);

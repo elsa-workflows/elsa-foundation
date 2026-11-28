@@ -52,7 +52,7 @@ otherwise. Every converted workflow also carries the routine `ELS3-NULL-POLICIES
 | `nightly-audit` | `workflows/audit/nightly-audit.json` | Workflow that runs `audit-entry` inside a Sequence | none |
 | `order-closing` | `workflows/orders/order-closing.json` | Workflow that uses `close-order` | none |
 | `legacy-tax-lookup` | `activities/legacy-tax-lookup.json` | Reusable the converter refuses: it sets a variable | `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` |
-| `invoice-tax` | `workflows/invoices/invoice-tax.json` | Workflow whose reusable dependency is refused | skipped as a dependent of `legacy-tax-lookup` (import stage) |
+| `invoice-tax` | `workflows/invoices/invoice-tax.json` | Workflow whose reusable dependency is refused, and which calls the undeclared function `lookupCustomer(…)`: it stays blocked, but its own findings are still listed (#6242) | skipped as a dependent of `legacy-tax-lookup` (import stage), and `ELS3-JS-HOST-FUNCTION-MISSING` (`lookupCustomer`); with the feature: still skipped |
 | `csharp-greeting` | `workflows/legacy/csharp-greeting.json` | C# expression | `VF-IMP-007` |
 | `dotnet-member` | `workflows/legacy/dotnet-member.json` | .NET-style member call on a sentinel literal: `'…'.ToUpper()` | `VF-IMP-012` |
 | `partner-sync` | `workflows/partners/partner-sync.json` | Dispatch target `partner-onboarding` absent from the export | none from the converter; listed as a missing target, Take into account (T020); Elsa 4 refuses to publish it because the target does not resolve (`ELS3-RECONCILE-PUBLISH-FAILED`, publish stage) |

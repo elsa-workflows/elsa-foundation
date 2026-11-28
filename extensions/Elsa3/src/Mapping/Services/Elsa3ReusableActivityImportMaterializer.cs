@@ -25,7 +25,7 @@ namespace Elsa3.Mapping.Services;
 public sealed class Elsa3ReusableActivityImportMaterializer(
     IElsa3DefinitionConverter converter,
     Elsa3ArgumentDefinitionToInputOutput argumentMapper,
-    IActivityDefinitionLookup activityLookup) : IReusableActivityImportMaterializer
+    IActivityDefinitionLookup activityLookup) : IReusableActivityImportMaterializer, IReusableActivityImportBlockedItemAnalyzer
 {
     private readonly IWellKnownTypeRegistry? _types;
     private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
@@ -260,6 +260,137 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             workflows.OrderBy(x => x.Version.Id, StringComparer.Ordinal).ToArray(),
             Warnings: warnings);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The blocked items and every reusable they use, directly or through others, convert in publish order, so each
+    /// reference reads the contract of its target's own conversion where it has one. Only the blocked items' diagnostics
+    /// are returned: the others report their own through the apply. Dispatch inputs are read as for an import of every
+    /// plan item, the selection the run started from.
+    /// </remarks>
+    public async ValueTask<IReadOnlyList<Elsa3MigrationDiagnostic>> AnalyzeBlockedAsync(
+        ReusableActivityImportCollection collection,
+        ReusableActivityImportPlan plan,
+        IReadOnlyCollection<string> blockedSourceVersionIds,
+        string? tenantId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var itemsById = plan.Items.ToDictionary(x => x.SourceVersionId, StringComparer.Ordinal);
+        var sourceById = collection.Definitions
+            .Where(x => itemsById.ContainsKey(x.Id))
+            .GroupBy(x => x.Id, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
+        var blocked = blockedSourceVersionIds.Where(sourceById.ContainsKey).ToHashSet(StringComparer.Ordinal);
+        if (blocked.Count == 0)
+            return [];
+
+        // The blocked items and the reusables they reach.
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<string>(blocked);
+        while (pending.TryPop(out var id))
+        {
+            if (!sourceById.ContainsKey(id) || !reached.Add(id))
+                continue;
+            foreach (var rewrite in itemsById[id].Rewrites)
+                pending.Push(rewrite.TargetSourceVersionId);
+        }
+
+        var involved = reached.Select(id => itemsById[id]).ToArray();
+        var reusable = Elsa3ReusableImportOrder.Order(involved.Where(x => x.IsReusable).ToArray(), out var unordered);
+        var unorderedIds = unordered.ToHashSet(StringComparer.Ordinal);
+        var order = reusable
+            .Concat(involved.Where(x => unorderedIds.Contains(x.SourceVersionId)).OrderBy(x => x.SourceVersionId, StringComparer.Ordinal))
+            .Concat(involved.Where(x => !x.IsReusable).OrderBy(x => x.SourceVersionId, StringComparer.Ordinal));
+
+        var dispatchTargetInputs = sourceById.Values
+            .GroupBy(x => x.DefinitionId, StringComparer.Ordinal)
+            .ToDictionary(
+                x => x.Key,
+                x => (IReadOnlyList<string>)(x.OrderByDescending(y => y.Version).ThenByDescending(y => y.Id, StringComparer.Ordinal).First()
+                    .Inputs ?? []).Select(input => input.Name).ToArray(),
+                StringComparer.Ordinal);
+        var bulkDispatchTargetInputs = await BulkDispatchTargetInputsAsync(
+            involved.Select(x => sourceById[x.SourceVersionId]), dispatchTargetInputs, tenantId, cancellationToken);
+
+        var convertedById = new Dictionary<string, Elsa3ConvertedDefinition>(StringComparer.Ordinal);
+        var diagnostics = new List<Elsa3MigrationDiagnostic>();
+        foreach (var item in order)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var (replacements, declaredOnly) = AnalysisReplacements(item, sourceById, convertedById);
+            var conversion = await converter.ConvertAsync(
+                new Elsa3ConversionRequest(sourceById[item.SourceVersionId], item.IsReusable, replacements, DiagnosticMetadata(item), dispatchTargetInputs, bulkDispatchTargetInputs),
+                cancellationToken);
+            if (conversion.Succeeded && item.IsReusable)
+                convertedById[item.SourceVersionId] = conversion.Value!;
+            if (blocked.Contains(item.SourceVersionId))
+                diagnostics.AddRange(conversion.Diagnostics.Where(diagnostic => !RoutesOnDeclaredOnly(diagnostic, declaredOnly)));
+        }
+
+        return diagnostics;
+    }
+
+    /// <summary>
+    /// A blocked item's replacements: each target's converted contract where it converted, else what its Elsa 3
+    /// definition declares, with <c>Done</c> and its declared outcomes; also returns the node ids of the latter.
+    /// </summary>
+    private (IReadOnlyDictionary<string, Elsa3ActivityExactReplacement> Replacements, IReadOnlySet<string> DeclaredOnly) AnalysisReplacements(
+        ReusableActivityImportItem owner,
+        IReadOnlyDictionary<string, Elsa3WorkflowDefinition> sourceById,
+        IReadOnlyDictionary<string, Elsa3ConvertedDefinition> convertedById)
+    {
+        var replacements = new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal);
+        var declaredOnly = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var rewrite in owner.Rewrites)
+        {
+            if (!sourceById.TryGetValue(rewrite.TargetSourceVersionId, out var targetSource))
+                continue;
+            IReadOnlySet<string> outcomes;
+            if (convertedById.TryGetValue(rewrite.TargetSourceVersionId, out var converted))
+            {
+                outcomes = CompletionOutcomes(converted);
+            }
+            else
+            {
+                outcomes = (targetSource.Outcomes ?? []).Append("Done").ToHashSet(StringComparer.Ordinal);
+                declaredOnly.Add(rewrite.NodeId);
+            }
+
+            replacements.TryAdd(rewrite.NodeId, new(
+                rewrite.TargetActivityDefinitionVersionId,
+                (targetSource.Inputs ?? []).Select(DeclaredInput).ToArray(),
+                (targetSource.Outputs ?? []).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                outcomes));
+        }
+
+        return (replacements, declaredOnly);
+    }
+
+    /// <summary>
+    /// A declared input of a reusable the analysis reads: as the import maps it, or typed <c>Any</c> when its type does
+    /// not map, which may be why that reusable was refused; the analysis must not fail on it.
+    /// </summary>
+    private InputDefinition DeclaredInput(Elsa3WorkflowArgumentDefinition input)
+    {
+        try
+        {
+            return argumentMapper.MapInput(input);
+        }
+        catch (ArgumentException)
+        {
+            return new(input.Name, input.Name, new Elsa.Primitives.Models.TypeReference(Elsa.Primitives.Models.TypeAliasConvention.AnyAlias),
+                StorageDriverType: null, $"{input.DisplayName}", input.Category, IsNullable: true, Description: input.Description, UiHint: input.UiHint);
+        }
+    }
+
+    /// <summary>
+    /// A connection that leaves a reference read against its target's declarations, on an outcome they lack: only the
+    /// target's converted contract can tell, since a reusable completes with every outcome its Complete nodes name.
+    /// </summary>
+    private static bool RoutesOnDeclaredOnly(Elsa3MigrationDiagnostic diagnostic, IReadOnlySet<string> declaredOnly) =>
+        StringComparer.Ordinal.Equals(diagnostic.Code, Elsa3ActivityDiagnosticCodes.GraphOutcomeUnmapped)
+        && diagnostic.Metadata.GetValueOrDefault("ActivityNodeId") is { } nodeId
+        && declaredOnly.Contains(nodeId);
 
     private static IReadOnlyDictionary<string, string> DiagnosticMetadata(ReusableActivityImportItem item) =>
         new Dictionary<string, string>(StringComparer.Ordinal)
