@@ -346,7 +346,7 @@ recovery and hierarchy signing keys. `shells.CorePreview.Production.json` clears
 values in Production.
 
 For the historical apphost witnesses, build both Workbench and the Native runner from the same
-checkout. The source pin is `e758c2cc86ccdb4294be0aa63bdfe933060db75e`. The
+checkout. The source pin is `9e10496bb837b4ce66b0e9d7b1aca6340a0d06b3`. The
 `check-workbench-core-preview.sh` and `check-workbench-core-preview-reads.sh` scripts in
 `tools/ci/actor-foundation` accept that checkout as their second argument after the configuration.
 Use both executables from that checkout when calling a historical Native runner mode directly.

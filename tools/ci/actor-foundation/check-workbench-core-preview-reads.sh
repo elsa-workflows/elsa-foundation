@@ -5,6 +5,7 @@ case "$configuration" in
   Debug|Release) ;;
   *) echo "Choose Debug or Release." >&2; exit 2 ;;
 esac
+tools_dir=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "${2:-.}" && git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
 export MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_USE_MSBUILD_SERVER=0
@@ -30,5 +31,5 @@ port=$(docker port "$container" 5432/tcp)
 port=${port##*:}
 [[ -n "$port" && "$port" != 5095 ]]
 export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=workbench_preview_reads;SSL Mode=Disable;GSS Encryption Mode=Disable"
-python3 tools/ci/actor-foundation/workbench_core_preview_reads.py \
+python3 "$tools_dir/workbench_core_preview_reads.py" \
   "$root/$app/bin/$configuration/net10.0/Elsa.Workbench.Host" "$root/$runner/bin/$configuration/net10.0/Kernel.Native.Run"

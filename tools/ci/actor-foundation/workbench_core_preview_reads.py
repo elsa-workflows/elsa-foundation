@@ -51,11 +51,11 @@ def request(client, base, path, payload=None):
 @contextmanager
 def host(workspace, principals, resource_handler=False, replacement=False, enabled=True, reads=True):
     workspace.mkdir()
-    for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
+    for name in ("appsettings.json", "appsettings.Development.json", "shells.json", "shells.CorePreview.json"):
         shutil.copy(WORKBENCH.parent / name, workspace / name)
     (workspace / "packages").mkdir()
     if not resource_handler:
-        shells_file = workspace / "shells.json"
+        shells_file = workspace / "shells.CorePreview.json"
         shells = json.loads(shells_file.read_text())
         features = shells["CShells"]["Shells"]["default"]["Features"]
         del features["DecisionsWorkflowsApi"]

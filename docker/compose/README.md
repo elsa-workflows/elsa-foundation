@@ -186,8 +186,9 @@ creates the dedicated `elsa_actors` database through `actor-database`, and then 
 
 The stock local and Compose shells enable Actor HTTP Connections. Published workflow jobs can
 use a tenant-owned HTTP connection with Basic, Bearer, or API key authentication. Isolated Test Runs
-and connections that refresh credentials are unsupported on this path. The explicit Core Preview
-selects the existing `ConnectionsWorkflows` adapter for its mixed workflow shell.
+and connections that refresh credentials are unsupported on this path. See the
+[Workbench compatibility notes](../../docs/docker.md#workbench-mixed-preview-compatibility)
+if you are replacing an earlier mixed-preview container.
 
 Once the server reports healthy, hit its root endpoint:
 
