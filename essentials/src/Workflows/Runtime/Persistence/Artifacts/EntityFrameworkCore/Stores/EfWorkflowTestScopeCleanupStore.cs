@@ -138,10 +138,10 @@ public sealed class EfWorkflowTestScopeCleanupStore(
                     var outboxRow = await LoadOutboxAsync(accessScope, outboxItem.OutboxItemId, tracking: true, cancellationToken);
                     if (outboxRow is null)
                     {
-                        outboxRow = EfRuntimePostCommitOutboxStore.ToEntity(
+                        outboxRow = RuntimePostCommitOutboxRow.ToEntity(
                             outboxItem,
                             accessScope,
-                            EfRuntimePostCommitOutboxStore.RowId(accessScope, outboxItem.OutboxItemId),
+                            RuntimePostCommitOutboxRow.RowId(accessScope, outboxItem.OutboxItemId),
                             revision: 1, RuntimePostCommitOutboxWriteVersion.For(_context, outboxItem));
                         _context.RuntimePostCommitOutbox.Add(outboxRow);
                         touched.Add(outboxRow);
@@ -151,7 +151,7 @@ public sealed class EfWorkflowTestScopeCleanupStore(
                         // A concurrent cleaner may have committed this responsibility after this cleaner selected the
                         // dispatch, and delivery may already have claimed or completed the item. Converge on it and leave
                         // the row untouched: writing it back as pending would regress it.
-                        var existing = EfRuntimePostCommitOutboxStore.ReadChecked(
+                        var existing = RuntimePostCommitOutboxRow.ReadChecked(
                             outboxRow,
                             accessScope,
                             outboxItem.OutboxItemId);
@@ -363,7 +363,7 @@ public sealed class EfWorkflowTestScopeCleanupStore(
         CancellationToken cancellationToken)
     {
         var query = _context.RuntimePostCommitOutbox.Where(row =>
-            row.Id == EfRuntimePostCommitOutboxStore.RowId(accessScope, outboxItemId));
+            row.Id == RuntimePostCommitOutboxRow.RowId(accessScope, outboxItemId));
         return tracking
             ? new(query.SingleOrDefaultAsync(cancellationToken))
             : new(query.AsNoTracking().SingleOrDefaultAsync(cancellationToken));

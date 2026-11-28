@@ -7,7 +7,7 @@ using static Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationSwitc
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>Commits activation slots, projections and reservations under their selected in-memory locks.</summary>
-internal sealed partial class PublicationActivationSwitch : IWorkflowActivationSwitch
+internal sealed partial class PublicationActivationSwitch : IDefaultWorkflowActivationSwitch
 {
     private readonly InMemoryWorkflowActivationAuthority _authority;
     private readonly IWorkflowExecutableSourceReferenceStore _references;

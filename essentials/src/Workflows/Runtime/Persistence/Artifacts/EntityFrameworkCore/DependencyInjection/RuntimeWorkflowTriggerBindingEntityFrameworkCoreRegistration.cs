@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
 /// <summary>Registers the opt-in EF Core workflow trigger-binding index.</summary>
-/// <remarks>Serving through it takes the switch <see cref="RuntimeEntityFrameworkCoreRegistration.AddRuntimeEntityFrameworkCore"/> composes.</remarks>
+/// <remarks>Serving through it takes the switch <c>AddRuntimeEntityFrameworkCore</c> composes.</remarks>
 public static class RuntimeWorkflowTriggerBindingEntityFrameworkCoreRegistration
 {
     public static IServiceCollection AddRuntimeWorkflowTriggerBindingEntityFrameworkCore(this IServiceCollection services)
