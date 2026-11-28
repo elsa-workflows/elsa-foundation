@@ -14,13 +14,13 @@ with the locked `Elsa.Workflows.Runtime.KernelHost.Tests.csproj`.
 
 ## Implemented replacement contracts
 
-### `IWorkflowInstanceListService` *(API contract — `Elsa.Workflows.Runtime.Api`; kernel implementation here)*
+### `IWorkflowInstanceListService` *(API contract — `Elsa.Workflows.Runtime.Api.Http`; kernel implementation here)*
 - **Kind:** Replacement (one list serves a shell's runtime API).
-- **Implementation:** `KernelWorkflowInstanceListService`, scoped. It reads the kernel's runs of the host's bound tenant
-  through `KernelRuns`, maps each to a `WorkflowExecutionState`, and lists them through the runtime API's
-  `WorkflowInstanceListService` over an in-memory store.
+- **Implementation:** `KernelWorkflowInstanceListService`, scoped. It reads the host's bound tenant through
+  `KernelRuns`, maps each run to a `WorkflowExecutionState`, and uses the shared `WorkflowInstanceListProjection`
+  for filtering, paging and per-run authorization.
 
-### `IWorkflowInstanceDetailsService` *(API contract — `Elsa.Workflows.Runtime.Api`; kernel implementation here)*
+### `IWorkflowInstanceDetailsService` *(API contract — `Elsa.Workflows.Runtime.Api.Http`; kernel implementation here)*
 - **Kind:** Replacement (one details service serves a shell's runtime API).
 - **Implementation:** `KernelWorkflowInstanceDetailsService`, scoped. It reads the exact run through `KernelRuns`
   and uses the runtime API's authorization and summary view.

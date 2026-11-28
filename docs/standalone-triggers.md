@@ -1,6 +1,6 @@
 # Standalone triggers
 
-Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime extension catalog](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
+Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime source contracts](../essentials/src/Workflows/Runtime/Core/StandaloneTriggers).
 
 **Implementation status:** Implemented for the explicitly selected host features and supported profiles described below. See the [source-bound delivery receipt](../specs/1217-standalone-triggers/evidence/delivery-2026-11-22.md) for local qualification, self-review, owner-waived CI/independent review and operational limits. The [qualification guide](../specs/1217-standalone-triggers/quickstart.md) describes repeatable verification.
 
