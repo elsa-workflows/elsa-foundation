@@ -4,6 +4,7 @@ import { kernelHttpJourney } from "./kernelHttpJourney";
 import { corePreviewSmokeJourney, type CorePreviewStack } from "./corePreviewSmokeJourney";
 import { corePreviewActivityTimelineJourney } from "./corePreviewActivityTimelineJourney";
 import { corePreviewParkRecoveryJourney } from "./corePreviewParkRecoveryJourney";
+import { corePreviewTestRunInspectorJourney } from "./corePreviewTestRunInspectorJourney";
 
 // The Core Preview journeys (tools/ux-acceptance/core_preview.py): a Workbench whose default shell serves its
 // publications on the kernel, on an owned provider store, with Studio and a local HTTP stub.
@@ -51,4 +52,7 @@ test("Studio opens the committed kernel activity timeline", async ({ page }, inf
 test("kernel HTTP response opens the committed run", async ({ page, request }, info) => kernelHttpJourney(page, request, info, stack, capture, receipt));
 if (process.env.UX_CORE_PREVIEW_PARK_RECOVERY === "1") {
   test("Studio recovers the selected parked workflow", async ({ page }, info) => corePreviewParkRecoveryJourney(page, info, stack, capture, receipt));
+}
+if (process.env.UX_CORE_PREVIEW_TEST_RUN_INSPECTOR === "1") {
+  test("Studio follows an isolated Test Run in the editor", async ({ page }, info) => corePreviewTestRunInspectorJourney(page, info, stack, capture, receipt));
 }

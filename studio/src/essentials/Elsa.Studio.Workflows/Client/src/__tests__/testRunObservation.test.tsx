@@ -66,6 +66,37 @@ it("shares confirmed runtime state and waits, polling serially while the run is 
   expect(current.revision).toBeGreaterThan(firstRevision); expect(api.run).toHaveBeenCalledTimes(2);
 });
 
+it("keeps a newly admitted Test Run connected until its first execution commit is visible", async () => {
+  api.instance.mockRejectedValueOnce(Object.assign(new Error("Request failed with 404"), { status: 404 }));
+  api.instance.mockResolvedValue(details("Completed"));
+  render(); await settle();
+  expect(current.status).toBe("connected");
+  expect(current.details).toBeNull();
+  expect(current.error).toBe("");
+  expect(notified).toHaveBeenCalledWith(view);
+  await vi.advanceTimersByTimeAsync(2000); await settle();
+  expect(current.details?.instance.status).toBe("Completed");
+  expect(api.instance).toHaveBeenCalledTimes(2);
+});
+
+it("clears previously confirmed execution evidence when the Runtime read later returns 404", async () => {
+  render(); await settle();
+  expect(current.details?.instance.status).toBe("Running");
+  api.instance.mockRejectedValue(Object.assign(new Error("Request failed with 404"), { status: 404 }));
+  await vi.advanceTimersByTimeAsync(2000); await settle();
+  expect(current.status).toBe("disconnected");
+  expect(current.details).toBeNull();
+});
+
+it("reports a missing execution after the initial visibility window", async () => {
+  api.instance.mockRejectedValue(Object.assign(new Error("Request failed with 404"), { status: 404 }));
+  render(); await settle();
+  expect(current.status).toBe("connected");
+  await vi.advanceTimersByTimeAsync(10_000); await settle();
+  expect(current.status).toBe("disconnected");
+  expect(current.details).toBeNull();
+});
+
 it("stops automatic observation at a confirmed terminal state and refreshes without dispatch", async () => {
   api.instance.mockResolvedValue(details("Completed")); render(); await settle();
   await vi.advanceTimersByTimeAsync(10000); expect(api.instance).toHaveBeenCalledTimes(1);

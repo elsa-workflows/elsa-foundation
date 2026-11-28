@@ -9,6 +9,8 @@ export { isTerminalExecution } from "./useExecutionObservation";
 export type { ExecutionObservationStatus as TestRunObservationStatus } from "./useExecutionObservation";
 
 interface TestRunEvidence { details: WorkflowInstanceDetails | null; waits: WorkflowTestRunWait[]; waitsError: string; waitsLoading: boolean }
+const initialExecutionVisibilityMs = 10_000;
+
 function matchesAttachment(view: WorkflowTestRunView, refreshed: WorkflowTestRunView) {
   return refreshed.testRunId === view.testRunId && refreshed.definitionId === view.definitionId
     && refreshed.definitionVersionId === view.definitionVersionId
@@ -28,6 +30,7 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
   const manualWaits = useRef<AbortController | null>(null);
   const pollingWaits = useRef<AbortController | null>(null);
   const waitsRevision = useRef(0);
+  const initialExecutionRead = useRef<{ identity: string; deadline: number; confirmed: boolean } | null>(null);
   const observation = useExecutionObservation<TestRunEvidence>({ context,
     identity: JSON.stringify(["test-run", view?.testRunId, view?.artifactId, view?.workflowExecutionId]),
     enabled: enabled && !!view && !isRejectedTestRun(view) && (!testRun?.endpointContext || testRun.endpointContext === context),
@@ -51,7 +54,23 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
         result => ({ waits: result.waits ?? [], waitsError: "" }),
         error => ({ waits: [], waitsError: error instanceof Error ? error.message : "Waiting triggers could not be loaded." }));
       try {
-        const details = refreshed.workflowExecutionId ? await readObservedExecution(context, refreshed.workflowExecutionId, refreshed.artifactId, scope.signal) : null;
+        let details: WorkflowInstanceDetails | null = null;
+        if (refreshed.workflowExecutionId) {
+          const identity = JSON.stringify([scope.identity, refreshed.workflowExecutionId]);
+          if (initialExecutionRead.current?.identity !== identity)
+            initialExecutionRead.current = { identity, deadline: Date.now() + initialExecutionVisibilityMs, confirmed: false };
+          const executionRead = initialExecutionRead.current;
+          try {
+            details = await readObservedExecution(context, refreshed.workflowExecutionId, refreshed.artifactId, scope.signal);
+            if (scope.isCurrent()) executionRead.confirmed = true;
+          } catch (error) {
+            // The scoped receipt can confirm admission before the first Actor commit is visible to Runtime reads.
+            const notFound = typeof error === "object" && error !== null && "status" in error && error.status === 404;
+            if (!notFound || executionRead.confirmed || Date.now() >= executionRead.deadline ||
+                (refreshed.status !== "DispatchAccepted" && refreshed.status !== "DispatchDuplicate"))
+              throw error;
+          }
+        }
         // Runtime confirmation is useful even when waiting-trigger details are still loading.
         const terminal = details ? isTerminalExecution(details.instance.status) : ["Stopped", "Rejected", "DispatchRejected"].includes(refreshed.status);
         scope.publish(previous => ({ details, waits: terminal ? [] : previous?.waits ?? [], waitsError: previous?.waitsError ?? "", waitsLoading: !terminal && (!previous || previous.waitsLoading) }));
