@@ -21,7 +21,7 @@ public sealed class AgentScopeTests
     public async Task Real_registries_preserve_each_explicit_publication_scope_for_metadata_validation()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
         new ActivitiesDesignApiFeature().ConfigureServices(services);
         new WorkflowsPublishingFeature().ConfigureServices(services);
 
