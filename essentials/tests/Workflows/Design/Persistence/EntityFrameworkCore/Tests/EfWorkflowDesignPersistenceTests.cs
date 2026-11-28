@@ -2472,6 +2472,45 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Ef_permanent_delete_retires_the_reconcilers_draft_clone_and_discard_markers()
+    {
+        // #6070: reconciliation clones a draft, and discards an unsaved one of an older version, under keys per
+        // definition and version. A surviving marker would replay on re-import and leave the re-imported definition
+        // without a draft.
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var serializer = new TestSerializer();
+        var writer = new EfDesignAtomicWriter(db, access);
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition", DeletedAt = DateTimeOffset.UnixEpoch });
+        db.Versions.Add(new WorkflowDefinitionVersion("definition", "1.0.0")
+        {
+            Id = "source-version",
+            TenantId = "tenant-a",
+            State = State(),
+            StateSource = serializer.Serialize(State())
+        });
+        await db.SaveChangesAsync();
+        var sortKey = Elsa.Primitives.Versioning.SemVer.ToSortKey("1.0.0");
+        var draftId = await new EfCloneDraftFromVersionCommand(db, access, writer, new TestIdentity("cloned"), serializer, new TestLockProvider())
+            .Execute(WorkflowReconciliationOperationKeys.DraftClone("definition", sortKey), "source-version");
+        await new EfDiscardDraftCommand(db, access, writer, new TestLockProvider())
+            .Execute(WorkflowReconciliationOperationKeys.DraftDiscard("definition", sortKey), draftId);
+        var before = await db.Operations.AsNoTracking().ToListAsync();
+        Assert.Contains(before, marker => marker.OperationKind == EfCloneDraftFromVersionCommand.OperationKind);
+        Assert.Contains(before, marker => marker.OperationKind == EfDiscardDraftCommand.OperationKind);
+
+        await new EfDeleteWorkflowDefinitionPermanentlyCommand(db, access, writer, [new PermittingPublicationGuard()])
+            .Execute(new DesignOperationKey("delete-cloned"), "definition");
+
+        var after = await db.Operations.AsNoTracking().ToListAsync();
+        Assert.DoesNotContain(after, marker => marker.OperationKind == EfCloneDraftFromVersionCommand.OperationKind);
+        Assert.DoesNotContain(after, marker => marker.OperationKind == EfDiscardDraftCommand.OperationKind);
+    }
+
+    [Fact]
     public async Task Ef_permanent_delete_refuses_a_composition_without_publication_guard()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

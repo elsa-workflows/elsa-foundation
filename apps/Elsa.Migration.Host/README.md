@@ -101,9 +101,14 @@ This host doesn't advertise `elsa.api.standalone-triggers`, `elsa.api.workflow-d
 `elsa.api.secrets`, so Studio hides the standalone triggers screens, the portfolio, run-health and needs-attention widgets,
 the Attention widget and Secrets.
 
-The definitions list shows the imported definitions, but Studio opens a definition through its current draft, and an
-imported definition has none: the designer says "This workflow definition has no current draft". Change the workflow in
-your `migrated/` folder instead, give it a new `version` (a stored version never changes) and restart the host.
+The definitions list shows the imported definitions. At startup the host gives each imported definition that has no
+draft one, cloned from its newest imported version, so Studio opens it in the designer. Edit it there and publish:
+the host runs the new version, and it keeps running it after a restart, because reconciliation skips a version from
+`migrated/` that is older than the newest stored one. To change a workflow from your `migrated/` folder instead,
+give it a `version` newer than any version published from Studio (a stored version never changes) and restart the
+host. The designer then shows the new version, unless you saved the draft in Studio: a saved draft is kept, so a
+restart never throws away your edits. A draft discarded through the API is cloned again only when a newer version
+arrives in `migrated/`; until then the designer says the definition has no current draft.
 
 ## What your own host needs
 
