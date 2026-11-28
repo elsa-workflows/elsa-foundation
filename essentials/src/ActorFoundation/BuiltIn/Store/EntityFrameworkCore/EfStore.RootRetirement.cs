@@ -290,7 +290,8 @@ public sealed partial class EfStore
             !turn.Unsubscribe || turn.Journal != """["delete"]""" || turn.Done is not [var key] || key != command.InboxKey ||
             turn.Consumed.Count != 0 || turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 ||
             turn.Held is { Count: > 0 } || turn != new TurnCommit(turn.Instance, marker, turn.Expected, turn.Consumed, turn.Done,
-                turn.Sent, turn.Subscribed, turn.Unsubscribed, turn.Journal, true, turn.Held, true) { FoundationRootOperator = command })
+                turn.Sent, turn.Subscribed, turn.Unsubscribed, turn.Journal, true, turn.Held, true)
+                { FoundationRootOperator = command, FoundationRetainedResponse = termination ? turn.FoundationRetainedResponse : null })
             throw RootShape();
 
         await using var db = create();

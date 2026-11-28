@@ -76,7 +76,8 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.AuthoredEvents | RootCapabilities.EventStarts | RootCapabilities.EventStartReceipts |
                 RootCapabilities.EventStartScan | RootCapabilities.InlinePromotion | RootCapabilities.KeyedStarts |
                 RootCapabilities.PublicEventStarts | RootCapabilities.PublicEventHost | RootCapabilities.PagedPublicEvents |
-                RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns)
+                RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns |
+                RootCapabilities.RetainedRootResponse | RootCapabilities.AuthoredStandaloneEvents | RootCapabilities.PreparedWaitDelivery)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -103,7 +104,9 @@ internal static class ProfileCapabilityChecks
             ["root-park-inspection"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-arrivals"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
-            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootAttachedTestRuns", "UsesRootAuthoredEvents", "UsesRootChildren", "UsesRootComposedParkRecovery",
+            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory",
+                "UsesAuthoredStandaloneEvents", "UsesPreparedWaitDelivery", "UsesRetainedRootResponse",
+                "UsesRootAttachedTestRuns", "UsesRootAuthoredEvents", "UsesRootChildren", "UsesRootComposedParkRecovery",
                 "UsesRootDirectTestRuns", "UsesRootDueBacklog", "UsesRootEphemeralTestRuns", "UsesRootEventStartReceipts", "UsesRootEventStartScan", "UsesRootEventStarts",
                 "UsesRootHeldEphemeralHttpTestRuns", "UsesRootInlinePromotion", "UsesRootJobProtocol", "UsesRootKeyedStarts", "UsesRootLiveEventWaits",
                 "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootPagedPublicEvents", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening",
@@ -237,14 +240,16 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.AuthoredEvents | RootCapabilities.EventStarts | RootCapabilities.EventStartReceipts |
                 RootCapabilities.EventStartScan | RootCapabilities.InlinePromotion | RootCapabilities.KeyedStarts |
                 RootCapabilities.PublicEventStarts | RootCapabilities.PublicEventHost | RootCapabilities.PagedPublicEvents |
-                RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns) &&
+                RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns |
+                RootCapabilities.RetainedRootResponse | RootCapabilities.AuthoredStandaloneEvents | RootCapabilities.PreparedWaitDelivery) &&
             sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
             sharedPostgres.UsesRootEphemeralTestRuns && sharedSqlite.UsesRootEphemeralTestRuns &&
             sharedPostgres.UsesRootAttachedTestRuns && sharedSqlite.UsesRootAttachedTestRuns &&
             sharedPostgres.UsesRootHeldEphemeralHttpTestRuns && sharedSqlite.UsesRootHeldEphemeralHttpTestRuns &&
-            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 31, JournalCodec: 0 } &&
-            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 34, JournalCodec: 0 },
-            "the shared shipped format carries caller keys, paged public Events and isolated Test Runs with distinct provider definitions");
+            sharedPostgres.AllowsDisabledAuthoredStandaloneEvents && sharedSqlite.AllowsDisabledAuthoredStandaloneEvents &&
+            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 37, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 40, JournalCodec: 0 },
+            "the shared shipped format carries protected standalone sources with optional publisher authority and distinct provider definitions");
         using var sequencedPostgres = KernelDb.ForPostgresRootSequencedJournalQualification(options);
         using var sequencedSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
             StoreFormat.RootSequencedJournalQualification);
@@ -549,6 +554,9 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
             [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
             [RootCapabilities.PagedPublicEvents] = RootCapabilities.PublicEventStarts,
+            [RootCapabilities.RetainedRootResponse] = RootCapabilities.PreparedStarts | RootCapabilities.StableBody,
+            [RootCapabilities.AuthoredStandaloneEvents] = RootCapabilities.PagedPublicEvents | RootCapabilities.PublicEventHost,
+            [RootCapabilities.PreparedWaitDelivery] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.HeldEphemeralHttpTestRuns] = RootCapabilities.DirectTestRuns | RootCapabilities.InlinePromotion |
                 RootCapabilities.ReplyProtocol | RootCapabilities.Children,

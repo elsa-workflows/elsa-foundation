@@ -65,8 +65,8 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// </para>
 /// </remarks>
 public sealed class HttpEndpointRoutesResolver(
-    IWorkflowTriggerBindingStore bindingStore,
-    IGlobalBookmarkStimulusLookup bookmarkStimulusLookup,
+    IWorkflowTriggerBindingStore? bindingStore,
+    IGlobalBookmarkStimulusLookup? bookmarkStimulusLookup,
     ILogger<HttpEndpointRoutesResolver> logger, IRuntimeIngressReservationReader? reservations = null,
     IPersistenceAccessContextAccessor? access = null) : IHttpEndpointRoutesResolver
 {
@@ -88,7 +88,9 @@ public sealed class HttpEndpointRoutesResolver(
         // to one definition (republish remnants / a duplicate node); a cross-definition collision is warned about
         // (never thrown — see the class remarks). This uniqueness check applies to trigger bindings only.
         var claimantsByHash = new Dictionary<string, string>(StringComparer.Ordinal);
-        var bindings = await bindingStore.ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType, cancellationToken);
+        var bindings = bindingStore is null
+            ? []
+            : await bindingStore.ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType, cancellationToken);
         foreach (var binding in bindings)
         {
             if (claimantsByHash.TryGetValue(binding.StimulusHash, out var owner))
@@ -109,10 +111,12 @@ public sealed class HttpEndpointRoutesResolver(
         // (2) Union in the templates of every waiting, non-expired HttpEndpoint bookmark (mid-flow suspensions).
         // The lookup returns full BookmarkState snapshots incl. Metadata, from which the durable template is read.
         // Bookmarks are instance-scoped and are NOT run through the cross-definition uniqueness check.
-        var waiting = await bookmarkStimulusLookup.FindWaitingByTypeAsync(
-            new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
-            cancellationToken);
-        foreach (var bookmark in waiting.Matches)
+        var waiting = bookmarkStimulusLookup is null
+            ? []
+            : (await bookmarkStimulusLookup.FindWaitingByTypeAsync(
+                new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
+                cancellationToken)).Matches;
+        foreach (var bookmark in waiting)
             AddTemplate(bookmark.Metadata, candidates);
 
         var standalone = await StandaloneReservationsAsync(cancellationToken);
@@ -120,16 +124,20 @@ public sealed class HttpEndpointRoutesResolver(
 
         return new HttpEndpointRouteSet(
             candidates.Values.Select(candidate => candidate.ToRouteData()).ToArray(),
-            Fingerprint(bindings.Select(binding => binding.StimulusHash).Concat(waiting.Matches.Select(bookmark => bookmark.StimulusHash))
+            Fingerprint(bindings.Select(binding => binding.StimulusHash).Concat(waiting.Select(bookmark => bookmark.StimulusHash))
                 .Concat(standalone.Select(ReservationIdentity))));
     }
 
     public async ValueTask<string> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default)
     {
-        var bindingHashes = await bindingStore.ListActiveStimulusHashesAsync(HttpEndpointRouting.StimulusType, cancellationToken);
-        var bookmarkHashes = await bookmarkStimulusLookup.FindWaitingStimulusHashesByTypeAsync(
-            new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
-            cancellationToken);
+        var bindingHashes = bindingStore is null
+            ? []
+            : await bindingStore.ListActiveStimulusHashesAsync(HttpEndpointRouting.StimulusType, cancellationToken);
+        var bookmarkHashes = bookmarkStimulusLookup is null
+            ? []
+            : await bookmarkStimulusLookup.FindWaitingStimulusHashesByTypeAsync(
+                new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
+                cancellationToken);
         return Fingerprint(bindingHashes.Concat(bookmarkHashes).Concat((await StandaloneReservationsAsync(cancellationToken)).Select(ReservationIdentity)));
     }
 

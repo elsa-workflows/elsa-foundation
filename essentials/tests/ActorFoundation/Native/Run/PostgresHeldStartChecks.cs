@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
+using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Hosting;
@@ -19,14 +20,16 @@ internal static class PostgresHeldStartChecks
     private const string Node = "held-start-node";
     private const long RequestTimeout = 10_000;
 
-    internal static async Task<int> RunAsync(bool protectedStarts = false)
+    internal static async Task<int> RunAsync(bool protectedStarts = false, bool shipped = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(120));
         var stop = deadline.Token;
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a fresh PostgreSQL preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => protectedStarts ? KernelDb.ForPostgresRootPreparedStartsQualification(options) : KernelDb.ForPostgresRootReplies(options);
+        KernelDb Open() => shipped
+            ? PostgresPreviewHosting.CreateShippedContext(options, WorkflowActor.WorkflowActor.ActorType, protectsStarts: true)
+            : protectedStarts ? KernelDb.ForPostgresRootPreparedStartsQualification(options) : KernelDb.ForPostgresRootReplies(options);
         await using (var db = Open())
             Require(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the held-start check uses an empty PostgreSQL database");
         var store = new EfStore(Open, postgres: true);
@@ -56,6 +59,7 @@ internal static class PostgresHeldStartChecks
         var blocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var unblock = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var behavior = 0;
+        var scope = EmbeddedTenant.Bind("held-start");
         var edge = protectedStarts
             ? PostgresPreviewHosting.CreateRequestsWithRootStartProtection(Open, Node, actor.Type, ProtectAsync)
             : PostgresPreviewHosting.CreateRequests(Open, Node, actor.Type);
@@ -73,7 +77,6 @@ internal static class PostgresHeldStartChecks
                 message => escalated.TrySetResult(message), loop, requests: requests)
             : new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message), loop, requests: requests)
                 { ObserveReplies = _ => witness! };
-        var scope = EmbeddedTenant.Bind("held-start");
         PendingRootStart? oneWayOffer = null;
         if (protectedStarts)
         {
@@ -87,15 +90,25 @@ internal static class PostgresHeldStartChecks
             var creator = await clock.ReadPendingCreatorAsync(scope.Tenant, oneWayOffer.Actor.Id, stop);
             Require(ordinary.Outcome == Contract.AdmissionOutcome.Accepted && ordinary.Actor != oneWayOffer.Actor &&
                     admitted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } oneWayActor } && oneWayActor == oneWayOffer.Actor &&
-                    creator is { ReplyTo: null } && await PreparedCountAsync() == 0,
+                    creator is { ReplyTo: null } && await PreparedCountAsync() == 0 &&
+                    await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, oneWayOffer.Actor, oneWayOffer.Issuance, stop),
                 "one-way start returns the protected durable birth before an owner runs and after consuming its preparation");
+            await using (var proof = Open())
+            {
+                var wrongDigest = await PreparedBirthProofWitness.DifferentDigestAsync(proof, scope, oneWayOffer, stop);
+                Require(!await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, oneWayOffer.Actor, wrongDigest, stop) &&
+                        !await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, ContractScopes.Bind("other"), oneWayOffer.Actor, oneWayOffer.Issuance, stop) &&
+                        !await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, ordinary.Actor!.Value, oneWayOffer.Issuance, stop),
+                    "positive birth proof requires the signed fingerprint, actor and tenant of the accepted birth");
+            }
             Require(await starts.StartAsync(operation, spec, stop) is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } replay } &&
                     replay == oneWayOffer.Actor && offers.Count == 1, "one-way duplicate returns its exact durable receipt without repinning");
             behavior = 1;
             Require(await starts.StartAsync("one-way-denied", spec, stop) is
                     { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null } &&
                     await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, offers.Last().Actor,
-                        offers.Last().Issuance, stop) == RootStartProof.PreparationDisarmed,
+                        offers.Last().Issuance, stop) == RootStartProof.PreparationDisarmed &&
+                    !await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, offers.Last().Actor, offers.Last().Issuance, stop),
                 "one-way refusal disarms its exact preparation without admitting an actor");
             behavior = 0;
             await using (var blocker = Open())
@@ -194,7 +207,8 @@ internal static class PostgresHeldStartChecks
                 while (await PostgresPreviewHosting.PrunePreparedStartsAsync(Open, scope, stop) == 0)
                     await Task.Delay(20, stop);
                 Require(await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, expiredOffer.Actor,
-                        expiredOffer.Issuance, stop) == RootStartProof.PreparationDisarmed,
+                        expiredOffer.Issuance, stop) == RootStartProof.PreparationDisarmed &&
+                        !await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, expiredOffer.Actor, expiredOffer.Issuance, stop),
                     "the pruned preparation cannot admit its exact held root");
                 var finishedOffer = offers.First();
                 Require(await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, finishedOffer.Actor,
@@ -218,13 +232,18 @@ internal static class PostgresHeldStartChecks
                             RootStartProof.Unresolved,
                     "the one-way birth finishes on the owner and remains protected until retirement");
                 var oneWayTerminal = await foundation.GetAsync(scope, oneWayOffer!.Actor, stop);
+                await using (var proof = Open())
+                    await PreparedBirthProofWitness.ExpireReceiptAsync(proof, scope, oneWayOffer, stop);
+                Require(await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, oneWayOffer.Actor, oneWayOffer.Issuance, stop),
+                    "the exact birth still proves commitment after its ordinary operation receipt expires and is removed");
                 Require(oneWayTerminal?.Selection is not null &&
                         (await foundation.AdmitRetentionDeleteAsync(scope, oneWayOffer.Actor, oneWayTerminal.Selection, stop)).Outcome ==
                             Contract.AdmissionOutcome.Accepted, "normal retention accepts the exact protected one-way root");
                 while (await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, oneWayOffer.Actor,
                            oneWayOffer.Issuance, stop) != RootStartProof.BirthRetired)
                     await Task.Delay(25, stop);
-                Console.WriteLine("ok protected one-way root retires with its committed deletion mark");
+                Require(await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, oneWayOffer.Actor, oneWayOffer.Issuance, stop),
+                    "the retained birth survives terminal actor retirement and receipt removal");
             }
 
             async Task<Contract.Reply> RequestOnlyAsync(string id, long timeout)
@@ -241,6 +260,9 @@ internal static class PostgresHeldStartChecks
             unblock.TrySetResult(false);
             await service.StopAsync(CancellationToken.None);
         }
+        if (oneWayOffer is not null)
+            Require(await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, oneWayOffer.Actor, oneWayOffer.Issuance, stop),
+                "a fresh PostgreSQL connection can prove the same retired birth after the owner stops");
         return 0;
 
         async Task<int> PreparedCountAsync()
@@ -263,6 +285,9 @@ internal static class PostgresHeldStartChecks
                 SELECT EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Reference" = {offer.Actor.Id}) AS "Value"
                 """).SingleAsync(token), "protection runs before birth admission");
             await transaction.RollbackAsync(token);
+            if (offers.Count == 1)
+                Require(!await PostgresPreviewHosting.HasAcceptedPreparedStartAsync(Open, scope, offer.Actor, offer.Issuance, token),
+                    "a committed preparation alone provides no positive birth proof");
             if (behavior != 2) return behavior == 0;
             blocked.TrySetResult();
             return await unblock.Task;

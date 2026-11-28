@@ -49,7 +49,7 @@ internal static class RuntimeIngressAdmissionValidation
         CheckSource(item, new(scope, publisher.TenantId));
     }
 
-    internal static void CheckCandidate(RuntimeIngressAdmissionRequest request)
+    internal static void CheckCandidate(RuntimeIngressAdmissionRequest request, bool allowEmpty = false)
     {
         ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(request.Candidate);
         ArgumentNullException.ThrowIfNull(request.Targets);
@@ -69,7 +69,7 @@ internal static class RuntimeIngressAdmissionValidation
         if (request.ExpectedTriggerRevision <= 0 || candidate.StandaloneIngress!.TriggerRevision != request.ExpectedTriggerRevision ||
             candidate.Status != RuntimePostCommitOutboxStatus.Pending || candidate.DeliveryFencingToken != 0 ||
             candidate.DeliveryAttemptCount != 0 || candidate.DeliveringOwnerId is not null || candidate.DeliveredAt is not null ||
-            candidate.SubscriptionDelivery!.Recipients.Count == 0 || candidate.SubscriptionDelivery.Progress.Any(progress =>
+            (!allowEmpty && candidate.SubscriptionDelivery!.Recipients.Count == 0) || candidate.SubscriptionDelivery!.Progress.Any(progress =>
                 progress.Phase != RuntimeRecipientPhase.Pending || progress.AttemptCount != 0 || progress.RecoveryState != RuntimeRecipientRecoveryState.None) ||
             candidate.SubscriptionDelivery.ControlFacts is not null ||
             request.Targets.Any(target => target is null) || request.Targets.Select(target => target.SubscriptionId).Distinct(StringComparer.Ordinal).Count() != request.Targets.Count)
@@ -235,7 +235,7 @@ internal static class RuntimeIngressAdmissionValidation
         var current = delivery.Progress.SingleOrDefault(progress => progress.RecipientId == id) ?? throw new InvalidDataException("The recipient was not accepted.");
         if (current.Phase is RuntimeRecipientPhase.TargetAccepted or RuntimeRecipientPhase.CancelledBeforeDispatch) return item;
         return item.WithSubscriptionDelivery(delivery.WithProgress(new RuntimeRecipientProgress(id, current.Phase, current.Seal, current.Receipt,
-            checked(current.AttemptCount + 1), retryAt, code, recoveryState)));
+            checked(current.AttemptCount + 1), retryAt, code, recoveryState) { PreparedStartAttempt = current.PreparedStartAttempt }));
     }
 
     internal static RuntimeCommittedIngressWait ProposedWait(RuntimePostCommitOutboxItem item, RuntimeIngressWaitDispatchSeal seal)

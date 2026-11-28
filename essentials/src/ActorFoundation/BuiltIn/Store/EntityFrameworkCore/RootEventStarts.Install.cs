@@ -13,13 +13,16 @@ internal static partial class RootEventStarts
     internal static async Task<bool> MayCreatePostgresPublicAuthorityAsync(KernelDb db, CancellationToken token)
     {
         var format = db.RequiredFormat;
-        var expectedRelations = PublicAuthorityTables + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 2 : 0);
+        var bridge = db.UsesAuthoredStandaloneEvents;
+        var expectedRelations = PublicAuthorityTables + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 2 : 0) + (bridge ? 2 : 0);
         var state = await db.Database.SqlQuery<PublicInstallState>($"""
             SELECT (SELECT count(*)::int FROM (VALUES ('"FoundationPublicEventStarts"'), ('"FoundationPublicEventTargets"'),
                     ('"FoundationPublicEventPublications"'), ('"FoundationPublicEventLiveWaits"'), ('"FoundationPublicEventLiveReceipts"'),
                     ('"FoundationPublicEventHorizons"'), (CASE WHEN {db.UsesRootPublicEventHost} THEN '"FoundationPublicEventHost"' END),
                     (CASE WHEN {db.UsesRootPagedPublicEvents} THEN '"FoundationPublicEventDispatch"' END),
-                    (CASE WHEN {db.UsesRootPagedPublicEvents} THEN '"FoundationPagedEventStarts"' END))
+                    (CASE WHEN {db.UsesRootPagedPublicEvents} THEN '"FoundationPagedEventStarts"' END),
+                    (CASE WHEN {bridge} THEN '"FoundationAuthoredStandaloneEventHost"' END),
+                    (CASE WHEN {bridge} THEN '"FoundationAuthoredStandaloneEventTransfers"' END))
                     AS authority(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL) AS "Relations",
                 (pg_catalog.to_regclass('"FoundationRootIssuer"') IS NOT NULL OR
                     pg_catalog.to_regclass('"FoundationRootBirths"') IS NOT NULL OR
@@ -43,6 +46,7 @@ internal static partial class RootEventStarts
         var publicStarts = db.UsesRootPublicEventStarts;
         var hostAuthority = db.UsesRootPublicEventHost;
         var dispatch = db.UsesRootPagedPublicEvents;
+        var bridge = db.UsesAuthoredStandaloneEvents;
         var receiptIndex = receipts ? $"""CREATE INDEX IF NOT EXISTS "{ReceiptIndex}" ON "{Targets}" {ReceiptColumns};""" : "";
         var scanIndex = scan ? $"""CREATE INDEX IF NOT EXISTS "{ScanIndex}" ON "{Targets}" {ScanColumns};""" : "";
         await db.Database.ExecuteSqlRawAsync($"""
@@ -99,6 +103,16 @@ internal static partial class RootEventStarts
                     LOCK TABLE ONLY "FoundationPublicEventDispatch", ONLY "FoundationPagedEventStarts" IN ACCESS SHARE MODE
                     """, token);
         }
+        if (bridge)
+        {
+            if (createPublicAuthority)
+                await db.Database.ExecuteSqlRawAsync(BridgeTables(RootAuthoredStandaloneEvents.Host, RootAuthoredStandaloneEvents.Transfers,
+                    RootAuthoredStandaloneEvents.PageIndex, db.AllowsDisabledAuthoredStandaloneEvents), token);
+            else
+                await db.Database.ExecuteSqlRawAsync("""
+                    LOCK TABLE ONLY "FoundationAuthoredStandaloneEventHost", ONLY "FoundationAuthoredStandaloneEventTransfers" IN ACCESS SHARE MODE
+                    """, token);
+        }
         var transaction = db.Database.CurrentTransaction ?? throw new InvalidOperationException("Installing event starts requires the install transaction.");
         const string savepoint = "kernel_event_start_definitions";
         var suffix = Guid.NewGuid().ToString("N");
@@ -114,6 +128,8 @@ internal static partial class RootEventStarts
         var publicHost = "kernel_public_event_host_" + suffix;
         var publicDispatch = "kernel_public_event_dispatch_" + suffix;
         var staged = "kernel_paged_event_starts_" + suffix;
+        var bridgeHost = "kernel_event_bridge_host_" + suffix;
+        var bridgeTransfers = "kernel_event_bridge_rows_" + suffix;
         var compareReceipts = receipts ? $"""CREATE INDEX "{targets}_r" ON "{targets}" {ReceiptColumns};""" : "";
         var compareScan = scan ? $"""CREATE INDEX "{targets}_o" ON "{targets}" {ScanColumns};""" : "";
         await transaction.CreateSavepointAsync(savepoint, token);
@@ -155,6 +171,9 @@ internal static partial class RootEventStarts
                 CREATE INDEX "{publicTargets}_p" ON "{publicTargets}" {RootPublicEventStarts.PendingTargetColumns};
                 """, token);
 
+        if (bridge) await db.Database.ExecuteSqlRawAsync(BridgeTables(bridgeHost, bridgeTransfers, bridgeTransfers + "_p",
+            db.AllowsDisabledAuthoredStandaloneEvents), token);
+
         var same = await db.Database.SqlQuery<bool>($"""
             WITH pairs(expected, installed) AS (
                 VALUES (pg_catalog.to_regclass({slots}), pg_catalog.to_regclass('"FoundationEventStartSlots"')),
@@ -168,7 +187,9 @@ internal static partial class RootEventStarts
                        (pg_catalog.to_regclass({publicHorizons}), pg_catalog.to_regclass('"FoundationPublicEventHorizons"')),
                        (pg_catalog.to_regclass({publicHost}), pg_catalog.to_regclass('"FoundationPublicEventHost"')),
                        (pg_catalog.to_regclass({publicDispatch}), pg_catalog.to_regclass('"FoundationPublicEventDispatch"')),
-                       (pg_catalog.to_regclass({staged}), pg_catalog.to_regclass('"FoundationPagedEventStarts"'))
+                       (pg_catalog.to_regclass({staged}), pg_catalog.to_regclass('"FoundationPagedEventStarts"')),
+                       (pg_catalog.to_regclass({bridgeHost}), pg_catalog.to_regclass('"FoundationAuthoredStandaloneEventHost"')),
+                       (pg_catalog.to_regclass({bridgeTransfers}), pg_catalog.to_regclass('"FoundationAuthoredStandaloneEventTransfers"'))
             ), shapes AS (
                 SELECT c.oid,
                     array(SELECT ROW(a.attname, a.atttypid, a.attnotnull, a.attcollation, a.atttypmod, a.atthasdef, a.attidentity)::text
@@ -185,13 +206,14 @@ internal static partial class RootEventStarts
                     AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits i WHERE c.oid IN (i.inhparent, i.inhrelid))
                     AND c.oid IN (SELECT expected FROM pairs UNION SELECT installed FROM pairs)
             )
-            SELECT count(*) = {3 + (publicStarts ? PublicAuthorityTables : 0) + (hostAuthority ? 1 : 0) + (dispatch ? 2 : 0)} AND bool_and(expected.columns = installed.columns AND expected.constraints = installed.constraints
+            SELECT count(*) = {3 + (publicStarts ? PublicAuthorityTables : 0) + (hostAuthority ? 1 : 0) + (dispatch ? 2 : 0) + (bridge ? 2 : 0)} AND bool_and(expected.columns = installed.columns AND expected.constraints = installed.constraints
                 AND expected.indexes = installed.indexes) AS "Value"
             FROM pairs JOIN shapes expected ON expected.oid = pairs.expected JOIN shapes installed ON installed.oid = pairs.installed
             """).SingleAsync(token);
         await transaction.RollbackToSavepointAsync(savepoint, token);
         if (!same) throw new StoreFormatException("The installed event start definitions differ from the selected profile.");
         if (hostAuthority) await RootPublicEventHost.InstallAsync(db, db.PublicEventHost, createPublicAuthority, token);
+        if (bridge) await RootAuthoredStandaloneEvents.InstallAsync(db, createPublicAuthority, token);
         if (publicStarts)
         {
             var format = db.RequiredFormat;
@@ -202,4 +224,10 @@ internal static partial class RootEventStarts
                 """, token);
         }
     }
+
+    private static string BridgeTables(string host, string transfers, string pageIndex, bool optionalPublisher) => $"""
+        CREATE TABLE "{host}" ({RootAuthoredStandaloneEvents.HostColumns(sqlite: false, optionalPublisher)});
+        CREATE TABLE "{transfers}" ({RootAuthoredStandaloneEvents.TransferColumns(sqlite: false)});
+        CREATE INDEX "{pageIndex}" ON "{transfers}" {RootAuthoredStandaloneEvents.PageColumns};
+        """;
 }

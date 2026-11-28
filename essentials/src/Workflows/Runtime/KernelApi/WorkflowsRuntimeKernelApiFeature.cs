@@ -72,6 +72,7 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
             throw new InvalidOperationException(
                 $"The {featureName} feature needs the host's {nameof(KernelRuns)} registration.");
         services.AddScoped<KernelRunReader>();
+        services.TryAddScoped<IRuntimePreparedStandaloneRunReader, KernelPreparedStandaloneRunReader>();
         services.AddScoped<KernelActivityTimeline>();
         services.AddScoped<KernelHistoryCursor>();
         services.AddScoped<KernelPlaybackCursor>();

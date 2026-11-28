@@ -53,11 +53,22 @@ public sealed class PostgresDirectRequests : IReplyTransport
     public IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope)
     {
         ArgumentNullException.ThrowIfNull(scope);
-        if (_protectRootStart is not { } protect || _startType is not { } actorType)
+        if (_protectRootStart is not { } protect)
+            throw new InvalidOperationException("Configure PostgreSQL root start protection before binding one-way starts.");
+        return BindProtectedRootStarts(scope, protect);
+    }
+
+    internal IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope, ProtectRootStartAsync protect)
+    {
+        if (_startType is not { } actorType)
             throw new InvalidOperationException("Configure PostgreSQL root start protection before binding one-way starts.");
         return new BoundProtectedRootStarts(actorType,
             (operation, spec, token, caller) => admission.AdmitProtectedRootStartAsync(scope.Tenant, operation, spec, protect, token, caller));
     }
+
+    internal Task<PreparedWaitReceipt> DeliverPreparedWaitsAsync(Contract.BoundScope scope, string operation, string sourceDigest,
+        IReadOnlyList<PreparedWaitDelivery> deliveries, bool allowNew, CancellationToken token) =>
+        admission.DeliverPreparedWaitsAsync(scope, operation, sourceDigest, deliveries, allowNew, token);
 
     internal Requests Pending => edge.Pending;
     internal HeldRootRequests HeldEdge => edge;

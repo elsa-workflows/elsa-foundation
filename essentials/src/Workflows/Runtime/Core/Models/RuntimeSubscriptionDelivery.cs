@@ -5,18 +5,22 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public enum RuntimeRecipientPhase { Pending, DispatchCommitted, TargetAccepted, CancelledBeforeDispatch }
 public enum RuntimeRecipientRecoveryState { None, RetryWaiting, BlockedPolicy, BlockedCapability, FailedFinal, TargetPoisoned }
-public enum RuntimeTargetAcceptanceKind { SchedulerCommand, InitialCheckpoint, ModelInput }
+public enum RuntimeTargetAcceptanceKind { SchedulerCommand, InitialCheckpoint, ModelInput, PreparedActorBirth }
 
 /// <summary>Immutable responsibility to enqueue one exact command, independent of the source handler's lease.</summary>
 public sealed class RuntimeDispatchSeal
 {
     public const int CurrentVersion = 1;
+    internal const int PreparedStartQualificationVersion = 2;
+    internal const string PreparedStartQualificationProtocol = "elsa.runtime.foundation-prepared-start";
     [JsonConstructor]
     public RuntimeDispatchSeal(int version, string sourceOutboxItemId, string sourceFingerprint, string selectionFingerprint,
         string recipientId, RuntimeSubscriptionStartIdentity startIdentity, DateTimeOffset committedAt,
         string commandProtocol, int commandProtocolVersion, JsonElement command)
     {
-        if (version != CurrentVersion) throw new NotSupportedException($"Dispatch seal version '{version}' is unsupported.");
+        var prepared = version == PreparedStartQualificationVersion && commandProtocol == PreparedStartQualificationProtocol && commandProtocolVersion == 1;
+        if (!prepared && (version != CurrentVersion || commandProtocol == PreparedStartQualificationProtocol))
+            throw new NotSupportedException($"Dispatch seal version '{version}' is unsupported for its command protocol.");
         RuntimeDeliveryFingerprint.Text(sourceOutboxItemId, nameof(sourceOutboxItemId));
         RuntimeDeliveryFingerprint.Hash(sourceFingerprint, nameof(sourceFingerprint));
         RuntimeDeliveryFingerprint.Hash(selectionFingerprint, nameof(selectionFingerprint));
@@ -101,6 +105,8 @@ public sealed class RuntimeRecipientProgress
     public DateTimeOffset? RetryAt { get; }
     public string? LastFailureCode { get; }
     public RuntimeRecipientRecoveryState RecoveryState { get; }
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal RuntimePreparedStartAttempt? PreparedStartAttempt { get; init; }
 
     public RuntimeRecipientProgress CommitDispatch(RuntimeDispatchSeal seal)
     {
@@ -123,8 +129,12 @@ public sealed class RuntimeRecipientProgress
             if (!Receipt.IsEquivalentTo(receipt)) throw new InvalidOperationException("A physical target receipt cannot be replaced.");
             return this;
         }
-        return new(RecipientId, RuntimeRecipientPhase.TargetAccepted, Seal, receipt, AttemptCount);
+        return new(RecipientId, RuntimeRecipientPhase.TargetAccepted, Seal, receipt, AttemptCount) { PreparedStartAttempt = PreparedStartAttempt };
     }
+
+    internal RuntimeRecipientProgress WithPreparedStartAttempt(RuntimePreparedStartAttempt attempt) =>
+        new(RecipientId, Phase, Seal, Receipt, AttemptCount, RetryAt, LastFailureCode, RecoveryState)
+        { PreparedStartAttempt = attempt };
 
     public RuntimeRecipientProgress CancelPending() => Phase == RuntimeRecipientPhase.Pending
         ? new(RecipientId, RuntimeRecipientPhase.CancelledBeforeDispatch, attemptCount: AttemptCount)
@@ -187,8 +197,16 @@ public sealed class RuntimeSubscriptionDelivery
             if (state.Seal is { } seal && (seal.SourceOutboxItemId != sourceOutboxItemId || seal.SourceFingerprint != sourceFingerprint ||
                 seal.SelectionFingerprint != SelectionFingerprint || !seal.StartIdentity.IsEquivalentTo(recipient.StartIdentity)))
                 throw new ArgumentException("A dispatch seal must belong to this exact accepted selection.", nameof(progress));
-            if (state.Receipt is { } receipt && receipt.Material != recipient.Material)
+            var prepared = state.Seal?.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion;
+            if (state.PreparedStartAttempt is { } attempt &&
+                (!prepared || attempt.Identity.Tenant != (recipient.TenantId ?? PersistenceScope.DefaultValue)))
+                throw new ArgumentException("A prepared start attempt differs from the accepted recipient.", nameof(progress));
+            if (state.Receipt is not { } receipt) continue;
+            if (receipt.Material != recipient.Material)
                 throw new ArgumentException("A target receipt must preserve the exact accepted material.", nameof(progress));
+            if (prepared != (receipt.Kind == RuntimeTargetAcceptanceKind.PreparedActorBirth) ||
+                prepared && (state.PreparedStartAttempt is not { Disarmed: false } birth || receipt.EvidenceId != birth.Identity.ActorReference))
+                throw new ArgumentException("A prepared start receipt must name its exact accepted attempt.", nameof(progress));
         }
     }
     public int Version { get; }
@@ -227,6 +245,9 @@ public sealed class RuntimeSubscriptionDelivery
             current.Seal is { } seal && (replacement.Seal is null || !seal.IsEquivalentTo(replacement.Seal)) ||
             current.Receipt is { } receipt && (replacement.Receipt is null || !receipt.IsEquivalentTo(replacement.Receipt)))
             throw new InvalidOperationException("Recipient progress cannot erase cancellation, committed dispatch or target acceptance.");
+        if (replacement.PreparedStartAttempt != current.PreparedStartAttempt &&
+            (current.Receipt is not null || replacement.PreparedStartAttempt is not { } next || !next.Follows(current.PreparedStartAttempt)))
+            throw new InvalidOperationException("Prepared start progress must advance from its exact prior attempt.");
         return new(Version, SourceOutboxItemId, SourceFingerprint, Scope, Recipients, Refusals,
             Progress.Select(item => item.RecipientId == replacement.RecipientId ? replacement : item).ToArray(), SelectionFingerprint, ResourceCaptures, WaitDelivery)
             { ControlFacts = ControlFacts };

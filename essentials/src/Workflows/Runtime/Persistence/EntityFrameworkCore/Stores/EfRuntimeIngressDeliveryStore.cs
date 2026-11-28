@@ -18,7 +18,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
     NativeIngressTargetEvidence? evidence = null, IRuntimeModelExecutionReader? modelInputs = null,
     IRecurringTriggerScheduleStore? schedules = null, IEnumerable<IStimulusDeliveryIntentAdapter>? stimulusAdapters = null,
     NativeIngressWaitTargetEvidence? waitEvidence = null, IBookmarkResumeResolver? resumeResolver = null,
-    IRuntimeCheckpointCommitStore? checkpoints = null) : IRuntimeIngressDeliveryStore
+    IRuntimeCheckpointCommitStore? checkpoints = null, IRuntimePreparedStartAttemptProof? preparedStarts = null,
+    IRuntimePreparedStandaloneRecipient? preparedTarget = null) : IRuntimeIngressDeliveryStore
 {
     public ValueTask<RuntimeIngressAdmissionReceipt?> FindAcceptedAsync(TriggerScope scope, string sourceOutboxItemId,
         string requestFingerprint, CancellationToken cancellationToken = default) =>
@@ -43,6 +44,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         CancellationToken cancellationToken = default) =>
         EfTriggerBoundary.RunAsync(() => CancelPendingAsyncCore(request, cancellationToken), request?.Scope?.Persistence.Value, request?.SourceOutboxItemId);
 
+    public bool RequiresEmptyHttpWaitCohort => PreparedStandaloneOnly;
+
     public bool SupportsAdmission
     {
         get
@@ -52,9 +55,16 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                 !ReferenceEquals(authority.Context, context) || executables.GetMaterialStore() is not EfWorkflowExecutableStore material ||
                 !ReferenceEquals(material.Context, context) || references is not EfWorkflowExecutableSourceReferenceStore sourceReferences ||
                 !ReferenceEquals(sourceReferences.Context, context) || !context.Database.IsRelational() ||
-                evidence is null || evidence.PhysicalQueue is not EfSchedulerWorkQueueStore proofQueue || !ReferenceEquals(proofQueue.Context, context) ||
-                evidence.PhysicalExecutions is not EfWorkflowExecutionStateStore proofExecutions || !ReferenceEquals(proofExecutions.Context, context) ||
                 !RuntimeSchemaWriteVersion.SupportsIngress(context)) return false;
+            if (sourceStore.PreparedStandaloneOnly)
+            {
+                if (preparedStarts is null || preparedTarget is null ||
+                    context.Database.ProviderName is not ("Microsoft.EntityFrameworkCore.Sqlite" or "Npgsql.EntityFrameworkCore.PostgreSQL"))
+                    return false;
+            }
+            else if (evidence?.PhysicalQueue is not EfSchedulerWorkQueueStore proofQueue || !ReferenceEquals(proofQueue.Context, context) ||
+                evidence.PhysicalExecutions is not EfWorkflowExecutionStateStore proofExecutions || !ReferenceEquals(proofExecutions.Context, context))
+                return false;
             var scope = access.Current.RequireScope();
             return sourceStore.Uses(context, scope) && authority.AccessContext.RequireScope() == scope &&
                 ((IStimulusDeliveryStore)sourceStore).CanRetainExecutables(outbox, executables, references, executions);
@@ -82,13 +92,19 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         ArgumentNullException.ThrowIfNull(request.Targets);
         request = request with { Targets = Array.AsReadOnly(request.Targets.ToArray()) };
         RuntimeIngressAdmissionValidation.CheckCandidate(request);
+        if (PreparedStandaloneOnly)
+        {
+            PreparedStandaloneAdmission.RequireSource(request.Candidate);
+            if (request.WaitCandidate is not null && !PreparedStandaloneHttp.HasEmptyWaitObservation(source, request.WaitCandidate) ||
+                request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => !preparedTarget!.CanAdmit(source, recipient)))
+                throw new NotSupportedException("This Runtime owner admits only prepared Actor Foundation starts.");
+        }
         if (await PrepareWaitsAsync(request, cancellationToken) is { } capturedWaits)
             request = request with { Candidate = RuntimeIngressWaitCapture.Attach(request.Candidate, capturedWaits) };
         if (request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => recipient.ModelProtocol is not null) &&
             (modelInputs is not EfRuntimeModelExecutionReader reader || !reader.Uses(context, access)))
             throw new NotSupportedException("Model ingress requires the actual selected EF model input receipt reader.");
         var material = (EfWorkflowExecutableStore)executables.GetMaterialStore();
-        var sourceReferences = (EfWorkflowExecutableSourceReferenceStore)references;
         RuntimeIngressAdmissionReceipt? accepted = null;
         try
         {
@@ -116,34 +132,9 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                         RuntimeIngressAdmissionValidation.CheckAggregate(request, aggregate);
                         await FenceWaitsAsync(request, token);
                         foreach (var target in request.Targets.OrderBy(target => target.DefinitionId, StringComparer.Ordinal).ThenBy(target => target.SlotName, StringComparer.Ordinal))
-                        {
-                            if (!await EfAdmissionTargetFence.LockSlotAsync(context, request.Scope.Persistence.Value, target.DefinitionId, target.SlotName, target.Slot, token))
-                                throw new TriggerOperationException("conflict", "A target slot changed before admission.");
-                            WorkflowExecutableSourceReference? actualReference = null;
-                            if (target.Slot?.ActiveActivationId is { } activation)
-                            {
-                                // This SERIALIZABLE physical read fences a known absent reference too.
-                                actualReference = (await sourceReferences.ReadPhysicalMaintenanceSourceAsync(request.Scope.Persistence.Value,
-                                    WorkflowActivationReferenceIdentity.Create(activation), token))?.Value;
-                                if (actualReference is not null && !await EfAdmissionTargetFence.LockSourceAsync(sourceReferences,
-                                        request.Scope.Persistence.Value, actualReference, token))
-                                    throw new TriggerOperationException("conflict", "A target source changed before admission.");
-                            }
-                            RuntimeIngressAdmissionValidation.CheckTarget(request, target, target.Slot, actualReference, time.GetUtcNow());
-                        }
+                            await FenceTargetAsync(request, target, token);
                         foreach (var recipient in request.Candidate.SubscriptionDelivery.Recipients)
-                        {
-                            var actual = await executables.FindMaterialAsync(recipient.Material.ArtifactId, token) ??
-                                throw new InvalidDataException("The accepted target material was removed.");
-                            RuntimeIngressAdmissionValidation.CheckMaterial(recipient, actual);
-                            await ((EfRuntimePostCommitOutboxStore)outbox).FenceExecutionDependencyAsync(request.Scope.Persistence.Value,
-                                recipient.StartIdentity.WorkflowExecutionId, token);
-                            if (await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, token) is not null)
-                                throw new InvalidDataException("The deterministic target identity was already used before admission.");
-                            var modelId = EfRuntimeOperationalStoreSupport.CompositeId(request.Scope.Persistence.Value, recipient.StartIdentity.WorkflowExecutionId);
-                            if (await context.Set<RuntimeModelExecutionEntity>().AnyAsync(row => row.Id == modelId, token))
-                                throw new InvalidDataException("The deterministic target identity already belongs to a model execution.");
-                        }
+                            await FenceRecipientAsync(request.Scope.Persistence, recipient, token);
                         EnsureLive();
                         if (request.ScheduleClaim is { } occurrence)
                         {
@@ -159,10 +150,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                             if (reservationFence is null) throw new NotSupportedException("The selected ingress reservation cannot be fenced atomically.");
                             await reservationFence(token);
                         }
-                        var row = EfRuntimePostCommitOutboxStore.ToEntity(request.Candidate, request.Scope.Persistence.Value,
-                            EfRuntimePostCommitOutboxStore.RowId(request.Scope.Persistence.Value, source.OutboxItemId), 1,
-                            RuntimePostCommitOutboxWriteVersion.For(context, request.Candidate));
-                        context.RuntimePostCommitOutbox.Add(row);
+                        StageSource(request);
                         await context.SaveChangesAsync(token);
                         EnsureLive();
                         await transaction.CommitAsync(token);
@@ -204,6 +192,46 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         return accepted ?? throw new InvalidOperationException("Ingress admission produced no physical acceptance.");
     }
 
+    private async ValueTask FenceTargetAsync(RuntimeIngressAdmissionRequest request, RuntimeIngressTargetObservation target, CancellationToken token)
+    {
+        var scope = request.Scope.Persistence.Value;
+        if (!await EfAdmissionTargetFence.LockSlotAsync(context, scope, target.DefinitionId, target.SlotName, target.Slot, token))
+            throw new TriggerOperationException("conflict", "A target slot changed before admission.");
+        WorkflowExecutableSourceReference? actualReference = null;
+        if (target.Slot?.ActiveActivationId is { } activation)
+        {
+            // This SERIALIZABLE physical read fences a known absent reference too.
+            var sourceReferences = (EfWorkflowExecutableSourceReferenceStore)references;
+            actualReference = (await sourceReferences.ReadPhysicalMaintenanceSourceAsync(scope,
+                WorkflowActivationReferenceIdentity.Create(activation), token))?.Value;
+            if (actualReference is not null && !await EfAdmissionTargetFence.LockSourceAsync(sourceReferences, scope, actualReference, token))
+                throw new TriggerOperationException("conflict", "A target source changed before admission.");
+        }
+        RuntimeIngressAdmissionValidation.CheckTarget(request, target, target.Slot, actualReference, time.GetUtcNow());
+    }
+
+    private async ValueTask FenceRecipientAsync(PersistenceScope scope, RuntimeSubscriptionRecipient recipient, CancellationToken token)
+    {
+        var actual = await executables.FindMaterialAsync(recipient.Material.ArtifactId, token) ??
+            throw new InvalidDataException("The accepted target material was removed.");
+        RuntimeIngressAdmissionValidation.CheckMaterial(recipient, actual);
+        await ((EfRuntimePostCommitOutboxStore)outbox).FenceExecutionDependencyAsync(scope.Value, recipient.StartIdentity.WorkflowExecutionId, token);
+        if (await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, token) is not null)
+            throw new InvalidDataException("The deterministic target identity was already used before admission.");
+        var modelId = EfRuntimeOperationalStoreSupport.CompositeId(scope.Value, recipient.StartIdentity.WorkflowExecutionId);
+        if (await context.Set<RuntimeModelExecutionEntity>().AnyAsync(row => row.Id == modelId, token))
+            throw new InvalidDataException("The deterministic target identity already belongs to a model execution.");
+    }
+
+    private void StageSource(RuntimeIngressAdmissionRequest request)
+    {
+        var scope = request.Scope.Persistence.Value;
+        var row = EfRuntimePostCommitOutboxStore.ToEntity(request.Candidate, scope,
+            EfRuntimePostCommitOutboxStore.RowId(scope, request.Candidate.OutboxItemId), 1,
+            RuntimePostCommitOutboxWriteVersion.For(context, request.Candidate));
+        context.RuntimePostCommitOutbox.Add(row);
+    }
+
     public ValueTask<RuntimePostCommitOutboxItem> ReadSourceAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default) =>
         MutateAsync(source, item => item, cancellationToken);
 
@@ -211,6 +239,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(seal);
+        if (PreparedStandaloneOnly && seal.Version != RuntimeDispatchSeal.PreparedStartQualificationVersion)
+            throw new NotSupportedException("This Runtime owner commits only prepared Actor Foundation dispatch.");
         var initial = await ReadSourceAsync(source, cancellationToken);
         var target = initial.SubscriptionDelivery!.Recipients.SingleOrDefault(recipient => recipient.RecipientId == seal.RecipientId) ??
             throw new InvalidDataException("The dispatch recipient was not accepted.");
@@ -222,9 +252,14 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
             var delivery = item.SubscriptionDelivery!;
             var progress = delivery.Progress.SingleOrDefault(progress => progress.RecipientId == seal.RecipientId) ??
                 throw new InvalidDataException("The dispatch recipient was not accepted.");
+            if (seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion &&
+                progress.Phase == RuntimeRecipientPhase.CancelledBeforeDispatch)
+                return item;
             var recipient = delivery.Recipients.Single(recipient => recipient.RecipientId == seal.RecipientId);
             var committed = new RuntimeCommittedRecipient(item, recipient, seal);
-            if (recipient.ModelProtocol is null)
+            if (seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion)
+                ValidatePreparedStartSeal(committed, native);
+            else if (recipient.ModelProtocol is null)
             {
                 NativeIngressTargetEvidence.ValidateEnvelope(committed, NativeIngressTargetEvidence.ReadEnvelope(seal));
                 NativeIngressTargetEvidence.ValidateExecutable(committed, native ?? throw new InvalidDataException("Accepted target material is missing."));
@@ -244,10 +279,14 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
     {
         ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(receipt);
         RequireScope(source.Scope, cancellationToken); RequireOwnedBoundary();
+        if (PreparedStandaloneOnly)
+            throw new NotSupportedException("Prepared Actor Foundation receipts require checked attempt reconciliation.");
         return ChangeObservedAsync(source.Scope, source.SourceOutboxItemId, async (current, token) =>
         {
             RuntimeIngressAdmissionValidation.CheckClaim(current, source, time.GetUtcNow());
             var target = RuntimeIngressAdmissionValidation.ReceiptTarget(current, receipt);
+            if (target.Seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion)
+                throw new NotSupportedException("Prepared actor receipts require the checked attempt reconciliation path.");
             if (current.SubscriptionDelivery!.Progress.Single(progress => progress.RecipientId == receipt.RecipientId).Receipt is not null) return current;
             RuntimeTargetAcceptanceReceipt? observed;
             if (target.Recipient.ModelProtocol is null)
@@ -366,8 +405,14 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         return tracking ? query.SingleOrDefaultAsync(token) : query.AsNoTracking().SingleOrDefaultAsync(token);
     }
 
-    private static RuntimePostCommitOutboxItem Read(RuntimePostCommitOutboxEntity row, PersistenceScope scope, string id) =>
-        EfRuntimePostCommitOutboxStore.ReadChecked(row, scope.Value, id);
+    private bool PreparedStandaloneOnly => outbox is EfRuntimePostCommitOutboxStore { PreparedStandaloneOnly: true };
+
+    private RuntimePostCommitOutboxItem Read(RuntimePostCommitOutboxEntity row, PersistenceScope scope, string id)
+    {
+        var item = EfRuntimePostCommitOutboxStore.ReadChecked(row, scope.Value, id);
+        if (PreparedStandaloneOnly) PreparedStandaloneAdmission.RequireSource(item);
+        return item;
+    }
 
     private void RequireOwnedBoundary()
     {

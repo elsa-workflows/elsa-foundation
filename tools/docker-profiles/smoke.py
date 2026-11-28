@@ -374,12 +374,17 @@ def verify_profile(args):
         settings = {
             "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword": args.password,
             "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__IsDevelopmentOrDemo": "true",
-            "WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey": secrets.token_hex(32),
-            "WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey": secrets.token_hex(32),
-            "WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionActiveKeyId": "local-smoke",
-            "WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionKeys__local-smoke":
-                base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
         }
+        if args.variant == CURATED:
+            settings["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey"] = secrets.token_hex(32)
+        else:
+            settings.update({
+                "WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey": secrets.token_hex(32),
+                "WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey": secrets.token_hex(32),
+                "WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionActiveKeyId": "local-smoke",
+                "WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionKeys__local-smoke":
+                    base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
+            })
         if args.variant in ("full", CURATED):
             settings["Secrets__EncryptionKey"] = secrets.token_hex(32)
         lines = [f"{feature}{name}={value}\n" for name, value in settings.items()]

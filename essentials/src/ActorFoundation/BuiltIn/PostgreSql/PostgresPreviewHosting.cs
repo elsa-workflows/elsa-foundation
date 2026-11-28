@@ -26,10 +26,18 @@ public static partial class PostgresPreviewHosting
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
 
     /// <summary>Selects the shipped PostgreSQL store with the configured primary actor and root start protection.</summary>
-    public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts)
+    public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts) =>
+        CreateShippedContext(options, actorType, protectsStarts, publisherScope: null);
+
+    /// <summary>Selects the shipped store and optionally binds its standalone Event publisher to one ordinary scope.</summary>
+    public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts,
+        Contract.BoundScope? publisherScope)
     {
+        if (publisherScope is { IsHostIsolated: true })
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
         RootPublicEventHost.RequireConfiguredActorType(actorType);
-        return KernelDb.ForPostgresRootShipped(options, new(actorType, protectsStarts));
+        return KernelDb.ForPostgresRootShipped(options,
+            new(actorType, protectsStarts) { AuthoredStandaloneTenant = publisherScope?.Tenant });
     }
 
     /// <summary>Selects the dedicated preview format for qualifying indexed playback.</summary>
@@ -127,14 +135,22 @@ public static partial class PostgresPreviewHosting
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return InstallPreviewFormatAsync(() => CreateShippedContext(options, actorType, protectsStarts), cancellationToken);
+        return InstallShippedAsync(options, actorType, protectsStarts, publisherScope: null, cancellationToken);
+    }
+
+    /// <summary>Installs or verifies the shipped PostgreSQL format with the configured standalone Event publisher mode.</summary>
+    public static Task InstallShippedAsync(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts,
+        Contract.BoundScope? publisherScope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreateShippedContext(options, actorType, protectsStarts, publisherScope), cancellationToken);
     }
 
     private static async Task InstallPreviewFormatAsync(Func<KernelDb> open, CancellationToken cancellationToken)
     {
         await using var guard = open();
         if (!guard.Database.IsNpgsql())
-            throw new NotSupportedException("The shipped Core Preview format installs on PostgreSQL.");
+            throw new NotSupportedException("This Actor Foundation store format requires PostgreSQL.");
         // One install at a time: a session lock held on its own connection around the whole check and install. Its key is
         // apart from the transaction lock the install steps take themselves.
         await guard.Database.OpenConnectionAsync(cancellationToken);
@@ -145,21 +161,20 @@ public static partial class PostgresPreviewHosting
             {
                 if (await db.Database.SqlQueryRaw<bool>("""SELECT pg_catalog.current_schema() IS NULL AS "Value" """).SingleAsync(cancellationToken))
                     throw new InvalidOperationException(
-                        "The Core Preview database has no schema on its search path to install the shipped format into. " +
-                        "Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one.");
+                        "The Actor Foundation PostgreSQL search path has no schema. Configure a dedicated database with an empty schema.");
                 var found = await ObjectsAsync(db, cancellationToken);
                 if (found.Count > 0)
                 {
                     if (!await db.Database.SqlQueryRaw<bool>("""SELECT to_regclass('"KernelStoreVersions"') IS NOT NULL AS "Value" """).SingleAsync(cancellationToken))
                         throw new InvalidOperationException(
-                            $"The Core Preview database is not empty: it holds {string.Join(", ", found.Take(5))}{(found.Count > 5 ? " and more" : "")}, " +
-                            "and no kernel store. Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one: the Workbench installs the shipped format there.");
+                            $"The PostgreSQL database holds {string.Join(", ", found.Take(5))}{(found.Count > 5 ? " and more" : "")} without an Actor Foundation store. " +
+                            "Configure a dedicated empty database for Actor Foundation.");
                     try { await EfStore.RequireStoreVersionsAsync(db, cancellationToken); }
                     catch (StoreFormatException refused)
                     {
                         throw new InvalidOperationException(
-                            $"The Core Preview database holds another kernel store format ({refused.Message}). " +
-                            "Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one: the Workbench installs the shipped format there.",
+                            $"The Actor Foundation database holds another store format ({refused.Message}). " +
+                            "Use an empty dedicated database for this version, or open the existing database with its matching version.",
                             refused);
                     }
                 }
@@ -361,7 +376,7 @@ public static partial class PostgresPreviewHosting
         using var db = create();
         if (protectRootStart is not null && (!db.UsesRootReplyProtocol || !db.UsesRootPreparedStarts))
             throw new NotSupportedException("Held root protection requires an installed PostgreSQL prepared-start profile.");
-        if (db.PublicEventHost is { } host && host != new RootPublicEventHost(actorType, protectRootStart is not null))
+        if (db.PublicEventHost is { } host && !host.MatchesEventAuthority(new(actorType, protectRootStart is not null)))
             throw new ArgumentException("Held requests must match the public Event host actor type and root start protection.");
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
         return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),

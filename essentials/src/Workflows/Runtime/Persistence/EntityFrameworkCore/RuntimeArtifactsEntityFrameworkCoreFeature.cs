@@ -56,6 +56,13 @@ public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
         Description = "Reuse DbContext instances from a pool instead of constructing one per scope. Safe for every first-party module context, which carries nothing but its options.",
         Category = "Persistence")]
     public bool Pooling { get; set; }
+
+    [ManifestSetting(DisplayName = "Cache workflow executables", Description = "Cache immutable workflow executables in this shell.", Category = "Performance")]
+    public bool? CacheWorkflowExecutables { get; set; }
+
+    [ManifestSetting(DisplayName = "Workflow executable cache capacity", Description = "Maximum number of cached workflow executables.", Category = "Performance")]
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
+
     [ManifestSetting(
         DisplayName = "Recovery continuation signing key",
         Description = "At least 32 UTF-8 bytes shared by nodes that consume durable runtime pages. Required for durable EF runtime paging.",
@@ -76,7 +83,10 @@ public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
         {
             Provider = Provider ?? "Sqlite",
             ConnectionString = ConnectionString,
-            ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling
+            ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling,
+            WorkflowExecutableCache = CacheWorkflowExecutables is { } enabled
+                ? new WorkflowExecutableCacheOptions { Enabled = enabled, Capacity = WorkflowExecutableCacheCapacity }
+                : null
         });
         if (!string.IsNullOrWhiteSpace(signingKey))
             services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<RuntimeRecoveryContinuationOptions>>(

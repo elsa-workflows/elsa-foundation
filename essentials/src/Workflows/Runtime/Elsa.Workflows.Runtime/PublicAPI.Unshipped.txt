@@ -88,6 +88,11 @@ Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.WorkflowRuntim
 Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeAttentionFeature
 Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeAttentionFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeAttentionFeature.WorkflowsRuntimeAttentionFeature() -> void
+Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature
+Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature.WorkflowsRuntimeRetainedAttentionFeature() -> void
+const Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature.FeatureName = "WorkflowsRuntimeRetainedAttention" -> string!
 Elsa.Workflows.Runtime.Builders.ActivityRuntimePipelineBuilder
 Elsa.Workflows.Runtime.Builders.ActivityRuntimePipelineBuilder.ActivityRuntimePipelineBuilder() -> void
 Elsa.Workflows.Runtime.Builders.ActivityRuntimePipelineBuilder.Remove<TMiddleware>() -> Elsa.Workflows.Runtime.Builders.ActivityRuntimePipelineBuilder!

@@ -396,6 +396,8 @@ public static class RuntimeMetadataKeys
     public const string SchedulerPoisonFailureCount = "runtime.poison.failureCount";
     public const string StartReason = "runtime.startReason";
     public const string StartSchedulerWorkItemId = "runtime.startSchedulerWorkItemId";
+    /// <summary>The exact relative path of a detached standalone HTTP request when the transport can verify its encoding.</summary>
+    public const string StandaloneHttpExactPath = "runtime.standaloneHttpExactPath";
     public const string StimulusHash = "runtime.stimulusHash";
     public const string StimulusType = "runtime.stimulusType";
     public const string SuspendReason = "runtime.suspendReason";

@@ -204,6 +204,21 @@ internal static class RootPreparedStarts
                 AND (SELECT "SourceReady" FROM source)
             """, bindSource), token);
 
+    // A birth and its creator commit together. The birth provenance remains after creator consumption,
+    // actor retirement and expiry of the ordinary operation receipt.
+    internal static Task<bool> HasAcceptedBirthAsync(KernelDb db, PreparedRootStart stage, CancellationToken token,
+        Func<FormattableString, FormattableString>? bindSource = null) =>
+        db.Database.SqlQuery<bool>(Bind(db, WithFirstRevision(db, stage, $"""
+            WITH source AS MATERIALIZED (/*prepared-start-source*/)
+            SELECT source."SourceReady" AND EXISTS (
+                SELECT 1 FROM /*prepared-only*/"FoundationRootBirths" b
+                WHERE b."Tenant" = {stage.Tenant} AND b."Reference" = {stage.Reference} AND b."Actor" = {stage.Actor}
+                    AND b."Partition" = {stage.Partition} AND b."Creation" = 1 AND b."Creator" = {"root:" + stage.Actor}
+                    /*first-birth-match*/
+                    AND b."Fingerprint" = {stage.Fingerprint}) AS "Value"
+            FROM source
+            """), bindSource)).SingleAsync(token);
+
     internal static async Task<RootStartProof> ReadProofAsync(KernelDb db, PreparedRootStart stage, CancellationToken token,
         Func<FormattableString, FormattableString>? bindSource = null)
     {

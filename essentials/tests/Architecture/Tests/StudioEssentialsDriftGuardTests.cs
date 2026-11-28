@@ -13,11 +13,9 @@ namespace Elsa.Architecture.Tests;
 /// <para>
 /// Both sides are read statically. <b>The server's capabilities</b> are the <c>elsa.api.*</c> ids declared, in a source file that
 /// uses one of the declaration forms in <see cref="DeclarationTokens"/>, by a project in the server's host or package
-/// closure that declares at least one feature its <c>shells.json</c> enables. That is a project-level approximation: a project carries one
-/// domain's API, and its capability sources (the user-task source in the runtime API, for one) are registered by its enabled
-/// feature rather than declared beside it, so a finer per-feature split would miss them. It can overstate what the server
-/// advertises only when an enabled feature shares a project with a disabled one that declares a capability;
-/// <see cref="Capability_declaring_server_projects_enable_every_feature_they_hold"/> keeps that from happening silently.
+/// closure. Most API projects only have one enabled feature set. Where features contribute independent capabilities,
+/// <see cref="ServerCapabilitySelectors"/> maps each declaration to its owning selectors. The guard requires any other
+/// project declaring capabilities to enable all its features or none of them.
 /// </para>
 /// <para>
 /// <b>A module's requirement</b> is every <c>elsa.api.*</c> id its <c>Client/src</c> names, tests excluded, less the ids
@@ -34,6 +32,23 @@ public sealed class StudioEssentialsDriftGuardTests
     private const string ServerShells = ServerProfile + "/shells.json";
     private const string StudioProject = "studio/src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj";
     private const string StudioProfile = "studio/docker/profiles/essentials";
+    private const string RuntimeApiProject = "Elsa.Workflows.Runtime.Api.csproj";
+
+    /// <summary>Capability declarations whose projects have independent or interchangeable shell selectors.</summary>
+    private static readonly Dictionary<string, IReadOnlyDictionary<string, string[]>> ServerCapabilitySelectors = new(StringComparer.Ordinal)
+    {
+        [RuntimeApiProject] = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            // Kernel Hosting requires the retained Runtime API, which reuses the Runtime API capability id.
+            ["elsa.api.runtime"] = ["WorkflowsRuntimeApi", "WorkflowsRuntimeKernelRetainedApi", "WorkflowsRuntimeKernelHosting"],
+            ["elsa.api.standalone-triggers"] = ["StandaloneTriggersApi"],
+            ["elsa.api.user-tasks"] = ["WorkflowsRuntimeApi"]
+        },
+        ["Elsa.Workflows.Dashboard.csproj"] = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["elsa.api.workflow-dashboard"] = ["WorkflowsDashboard", "WorkflowsDashboardRetained"]
+        }
+    };
 
     /// <summary>Ids a module names for screens another add-on serves. They do not count toward the module's requirement.</summary>
     internal static readonly IReadOnlyDictionary<string, (Func<string, bool> Owned, string Reason)> AddOnOwnedIds =
@@ -179,8 +194,8 @@ public sealed class StudioEssentialsDriftGuardTests
 
     /// <summary>
     /// The server scan counts a project's capabilities as served when any of its features is enabled. That holds only while a
-    /// project that declares a capability has every feature it holds enabled; otherwise a disabled feature's capability would
-    /// count as served and the guard would demand a Studio module the server does not advertise.
+    /// project that declares a capability has every feature it holds enabled, or has an explicitly mapped shared capability.
+    /// Otherwise a disabled feature's capability would count as served.
     /// </summary>
     [Fact]
     public void Capability_declaring_server_projects_enable_every_feature_they_hold()
@@ -188,11 +203,34 @@ public sealed class StudioEssentialsDriftGuardTests
         var enabled = EnabledServerFeatures();
         var mixed = ServerProjects()
             .Where(project => project.Capabilities.Length > 0 && project.Features.Any(enabled.Contains) && !project.Features.All(enabled.Contains))
+            .Where(project => !ServerCapabilitySelectors.ContainsKey(Path.GetFileName(project.Path)))
             .Select(project => $"{Path.GetRelativePath(RepoRoot, project.Path)} (disabled: {string.Join(", ", project.Features.Where(feature => !enabled.Contains(feature)))})")
             .ToArray();
 
         Assert.True(mixed.Length == 0, $"These server projects declare a capability and mix enabled and disabled features, so the project-level scan may overstate what Essentials serves. Map capabilities to features for them: {string.Join("; ", mixed)}");
     }
+
+    [Fact]
+    public void Explicit_capability_selectors_cover_every_declaration_and_name_real_server_features()
+    {
+        var projects = ServerProjects().ToDictionary(project => Path.GetFileName(project.Path), StringComparer.Ordinal);
+        var declaredFeatures = projects.Values.SelectMany(project => project.Features).ToHashSet(StringComparer.Ordinal);
+        foreach (var (project, selectors) in ServerCapabilitySelectors)
+        {
+            Assert.True(projects.TryGetValue(project, out var declared), $"{project} is outside the Essentials server closure.");
+            Assert.Equal(declared.Capabilities.Order(StringComparer.Ordinal), selectors.Keys.Order(StringComparer.Ordinal));
+            Assert.All(selectors.Values.SelectMany(features => features), feature => Assert.Contains(feature, declaredFeatures));
+        }
+    }
+
+    [Theory]
+    [InlineData("WorkflowsRuntimeApi", "elsa.api.runtime", "elsa.api.user-tasks")]
+    [InlineData("WorkflowsRuntimeKernelRetainedApi", "elsa.api.runtime")]
+    [InlineData("WorkflowsRuntimeKernelHosting", "elsa.api.runtime")]
+    [InlineData("StandaloneTriggersApi", "elsa.api.standalone-triggers")]
+    public void Runtime_API_capabilities_are_selected_independently(string feature, params string[] capabilities) =>
+        Assert.Equal(capabilities.Order(StringComparer.Ordinal), SelectedMappedCapabilities(
+            ServerCapabilitySelectors[RuntimeApiProject], new HashSet<string>([feature], StringComparer.Ordinal)).Order(StringComparer.Ordinal));
 
     /// <summary>An add-on-owned id stays unserved by the Essentials server; once it is served, the add-on is part of Essentials and the exclusion would hide a real requirement.</summary>
     [Fact]
@@ -216,15 +254,21 @@ public sealed class StudioEssentialsDriftGuardTests
         Assert.Empty(undeclared);
 
         var served = ServerCapabilities();
-        Assert.Superset(new HashSet<string>(["elsa.api.workflow-design", "elsa.api.runtime", "elsa.api.secrets", "elsa.api.user-tasks"]), served);
+        Assert.Superset(new HashSet<string>(["elsa.api.workflow-design", "elsa.api.runtime", "elsa.api.standalone-triggers", "elsa.api.secrets", "elsa.api.workflow-dashboard"]), served);
         Assert.DoesNotContain("elsa.api.agent", served);
         Assert.DoesNotContain("elsa.api.studio-dashboard", served);
         Assert.DoesNotContain("elsa.api.identity.external-authentication", served);
+        Assert.DoesNotContain("elsa.api.user-tasks", served);
 
         var modules = StudioModules();
         Assert.True(modules.Count >= 20, $"Only {modules.Count} Studio modules found.");
         Assert.Contains("elsa.api.etl-design", modules["Elsa.Studio.Etl"].Capabilities);
-        Assert.Contains("Elsa.Studio.Workflows", ConfiguredStudioModules(modules));
+        Assert.Contains("elsa.api.user-tasks", modules["Elsa.Studio.UserTasks"].Capabilities);
+        var configured = ConfiguredStudioModules(modules);
+        Assert.Contains("Elsa.Studio.Workflows", configured);
+        Assert.Contains("Elsa.Studio.Workflows.Dashboard", configured);
+        Assert.DoesNotContain("Elsa.Studio.UserTasks", configured);
+        Assert.DoesNotContain("UserTasksStudio", EnabledFeatures(StudioProfile + "/settings/shells.json"));
     }
 
     private static bool IsServed(string module, IReadOnlySet<string> ids, IReadOnlySet<string> served) =>
@@ -247,15 +291,19 @@ public sealed class StudioEssentialsDriftGuardTests
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    /// <summary>The capability ids the projects with an enabled feature declare.</summary>
+    /// <summary>The capability ids contributed by the selected server features.</summary>
     private static HashSet<string> ServerCapabilities()
     {
         var enabled = EnabledServerFeatures();
         return ServerProjects()
-            .Where(project => project.Features.Any(enabled.Contains))
-            .SelectMany(project => project.Capabilities)
+            .SelectMany(project => ServerCapabilitySelectors.TryGetValue(Path.GetFileName(project.Path), out var selectors)
+                ? SelectedMappedCapabilities(selectors, enabled)
+                : project.Features.Any(enabled.Contains) ? project.Capabilities : [])
             .ToHashSet(StringComparer.Ordinal);
     }
+
+    private static IEnumerable<string> SelectedMappedCapabilities(IReadOnlyDictionary<string, string[]> selectors, IReadOnlySet<string> enabled) =>
+        selectors.Where(entry => entry.Value.Any(enabled.Contains)).Select(entry => entry.Key);
 
     private static IEnumerable<(string Path, string[] Features, string[] Capabilities)> ServerProjects()
     {
