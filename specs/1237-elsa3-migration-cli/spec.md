@@ -82,7 +82,8 @@ Check the exit code, the report sections, every finding's code, path, category a
    its Elsa 3 name, the definitions that use it and its usage count. A component no definition uses does not appear.
 3. **Given** a definition refused only because a reusable definition it uses was refused, **When** the report is
    written, **Then** that definition is marked *blocked by dependency* and names the root refused definitions, so the
-   root cause is fixed first.
+   root cause is fixed first. Its own findings are listed in the same report, so fixing the root reveals nothing new
+   about it (#6242).
 4. **Given** the same export, the same commit and the same composition, **When** `inventory` runs twice, **Then**
    `report.json` and every file in `migrated/` are byte-identical between the runs.
 
@@ -294,7 +295,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   rather than duplicating it:
   1. input selection;
   2. collection analysis;
-  3. apply, excluding refused items and their dependents;
+  3. apply, excluding refused items and their dependents; the tool also converts each excluded dependent for its own
+     findings only, which startup reconciliation does not need (#6242);
   4. `PublishWorkflow` per imported workflow.
 
   It collects every diagnostic and skip into the report instead of the log. As in startup reconciliation, the import
@@ -356,7 +358,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   - `convert-with-adjustments`: everything else.
 
   A definition refused only because a dependency was refused is also marked *blocked by dependency*, which names the
-  root refused definitions: those refused for a finding of their own, through any chain of dependencies.
+  root refused definitions: those refused for a finding of their own, through any chain of dependencies. It stays out
+  of the import, but its own conversion findings are reported too, each once (#6242). A reference to a refused reusable
+  is read against what that reusable's Elsa 3 definition declares, so only a connection routed on an outcome the
+  declaration lacks, which the refused reusable's converted contract alone could settle, is not reported.
 - **FR-018**: The report MUST have these sections:
   1. Summary counts per category and bucket.
   2. The custom-component inventory, with usage counts.

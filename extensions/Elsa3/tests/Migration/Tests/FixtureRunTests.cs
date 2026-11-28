@@ -52,6 +52,12 @@ public sealed class FixtureRunTests
         Assert.Contains("welcome-customer", root.GetProperty("components").EnumerateArray()
             .Single(component => component.GetProperty("name").GetString() == "lookupCustomer")
             .GetProperty("definitions").EnumerateArray().Select(item => item.GetString()));
+        // invoice-tax stays blocked by the refused legacy-tax-lookup, but its own findings are still listed (#6242).
+        Assert.Contains("ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY", Codes(definitions[("invoice-tax", 1)]));
+        Assert.Contains("ELS3-JS-HOST-FUNCTION-MISSING", Codes(definitions[("invoice-tax", 1)]));
+        Assert.Contains("invoice-tax", root.GetProperty("components").EnumerateArray()
+            .Single(component => component.GetProperty("name").GetString() == "lookupCustomer")
+            .GetProperty("definitions").EnumerateArray().Select(item => item.GetString()));
 
         var missing = Assert.Single(root.GetProperty("missingTargets").EnumerateArray());
         Assert.Equal("partner-onboarding", missing.GetProperty("definitionId").GetString());

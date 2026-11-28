@@ -2,7 +2,7 @@
   "id": "invoice-tax-v1",
   "definitionId": "invoice-tax",
   "name": "Invoice tax",
-  "description": "Uses the refused LegacyTaxLookup. SENTINEL-1237",
+  "description": "Uses the refused LegacyTaxLookup, and calls an undeclared function. SENTINEL-1237",
   "createdAt": "2025-03-14T09:26:53.589+00:00",
   "version": 1,
   "toolVersion": "3.6.3.0",
@@ -69,6 +69,37 @@
         "workflowDefinitionVersionId": "legacy-tax-lookup-v1",
         "latestAvailablePublishedVersion": 1,
         "latestAvailablePublishedVersionId": "legacy-tax-lookup-v1"
+      },
+      {
+        "id": "Rate",
+        "nodeId": "Workflow1:Rate",
+        "name": "Rate",
+        "type": "Elsa.RunJavaScript",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 60,
+              "y": 200
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "script": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "const customer = lookupCustomer('SENTINEL-1237-C077');\nreturn customer;"
+          }
+        },
+        "possibleOutcomes": null
       },
       {
         "id": "Taxed",

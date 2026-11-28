@@ -25,6 +25,12 @@ internal sealed record Elsa3ImportRunRequest(string SourceId, IReadOnlyList<Elsa
 
     /// <summary>Called inside the persistence scope with its result, before the next scope runs.</summary>
     public Action<Elsa3ImportRunResult>? OnScopeCompleted { get; init; }
+
+    /// <summary>
+    /// Also converts each item the apply left out because a reusable it uses was refused, for its own diagnostics only
+    /// (<see cref="Elsa3ImportRunResult.BlockedDiagnostics"/>), so one migration inventory lists every finding (#6242).
+    /// </summary>
+    public bool AnalyzeBlockedItems { get; init; }
 }
 
 /// <summary>Where a run-level refusal happened.</summary>
@@ -81,6 +87,10 @@ internal sealed record Elsa3WorkflowPublication(
 /// The diagnostics of the apply refusals the run located on selected items and left those items out for: the
 /// conversion's own diagnostics of each refused item, which its plan item does not carry (spec 1237 T018).
 /// </param>
+/// <param name="BlockedDiagnostics">
+/// With <see cref="Elsa3ImportRunRequest.AnalyzeBlockedItems"/>: the conversion diagnostics of the items left out
+/// before the apply converted them, because a reusable they use was refused (#6242); they stay left out.
+/// </param>
 internal sealed record Elsa3ImportRunResult(
     PersistenceScope Scope,
     IReadOnlyList<ReusableActivityImportItem> PlanItems,
@@ -89,7 +99,8 @@ internal sealed record Elsa3ImportRunResult(
     IReadOnlyList<Elsa3WorkflowPublication> WorkflowPublications,
     IReadOnlyList<Elsa3MigrationDiagnostic> Warnings,
     Elsa3ImportRunRefusal? Refusal,
-    IReadOnlyList<Elsa3MigrationDiagnostic> ApplyDiagnostics)
+    IReadOnlyList<Elsa3MigrationDiagnostic> ApplyDiagnostics,
+    IReadOnlyList<Elsa3MigrationDiagnostic> BlockedDiagnostics)
 {
     /// <summary>Imported reusable activity versions that have been published, by this run or earlier.</summary>
     public int ReusablesInPlace => ReusablePublications.Count(state =>
@@ -170,10 +181,14 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
         request.OnSkips?.Invoke(scope, skipped);
 
         var (result, refusal) = await ApplyAsync(request, importer, plan, collection, selected, inputsById, skipped, applyDiagnostics, scope, startId, cancellationToken);
+        // Every item left out so far for a dependency was left out before the apply converted it.
+        var blockedDiagnostics = request.AnalyzeBlockedItems
+            ? await AnalyzeBlockedAsync(services, collection, plan, skipped, scope, cancellationToken)
+            : [];
         if (refusal is not null)
-            return Result(scope, plan.Items, skipped, applyDiagnostics, refusal: refusal);
+            return Result(scope, plan.Items, skipped, applyDiagnostics, refusal: refusal, blocked: blockedDiagnostics);
         if (result is null)
-            return Result(scope, plan.Items, skipped, applyDiagnostics);
+            return Result(scope, plan.Items, skipped, applyDiagnostics, blocked: blockedDiagnostics);
 
         // A reusable the publisher did not publish blocks every workflow that uses it, its wrapper included.
         var refused = (result.Publications ?? [])
@@ -198,7 +213,28 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
                 SourceVersionId: sourceVersionId));
         }
 
-        return Result(scope, plan.Items, skipped, applyDiagnostics, result.Publications ?? [], Publications(workflows, outcomes), result.Warnings ?? []);
+        return Result(scope, plan.Items, skipped, applyDiagnostics, result.Publications ?? [], Publications(workflows, outcomes), result.Warnings ?? [],
+            blocked: blockedDiagnostics);
+    }
+
+    /// <summary>The conversion diagnostics of the items <paramref name="skipped"/> leaves out for a dependency (#6242).</summary>
+    private static async ValueTask<IReadOnlyList<Elsa3MigrationDiagnostic>> AnalyzeBlockedAsync(
+        IServiceProvider services,
+        ReusableActivityImportCollection collection,
+        ReusableActivityImportPlan plan,
+        IReadOnlyList<Elsa3SkippedItem> skipped,
+        PersistenceScope scope,
+        CancellationToken cancellationToken)
+    {
+        var blocked = skipped
+            .Where(skip => skip.Code == Elsa3ReconciliationDiagnosticCodes.BlockedByDependency && skip.SourceVersionId is not null)
+            .Select(skip => skip.SourceVersionId!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return blocked.Length == 0
+            ? []
+            : await services.GetRequiredService<IReusableActivityImportBlockedItemAnalyzer>()
+                .AnalyzeBlockedAsync(collection, plan, blocked, scope.Value, cancellationToken);
     }
 
     /// <summary>
@@ -330,6 +366,7 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
         IReadOnlyList<ReusableActivityPublicationState>? reusables = null,
         IReadOnlyList<Elsa3WorkflowPublication>? workflows = null,
         IReadOnlyList<Elsa3MigrationDiagnostic>? warnings = null,
-        Elsa3ImportRunRefusal? refusal = null) =>
-        new(scope, planItems, skipped.ToArray(), reusables ?? [], workflows ?? [], warnings ?? [], refusal, applyDiagnostics.ToArray());
+        Elsa3ImportRunRefusal? refusal = null,
+        IReadOnlyList<Elsa3MigrationDiagnostic>? blocked = null) =>
+        new(scope, planItems, skipped.ToArray(), reusables ?? [], workflows ?? [], warnings ?? [], refusal, applyDiagnostics.ToArray(), blocked ?? []);
 }

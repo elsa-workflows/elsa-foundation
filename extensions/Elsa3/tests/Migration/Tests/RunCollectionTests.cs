@@ -84,12 +84,32 @@ public sealed class RunCollectionTests
         var items = new[] { Workflow("w") };
         var planItems = items.Select(item => new ReusableActivityImportItem(item.Definition.DefinitionId, item.Definition.Id, 1, "fingerprint", false,
             "wf-w", "wfv-w", null, null, null, [], [], [], [])).ToArray();
-        Elsa3ImportRunResult Scope(string name) => new(new PersistenceScope(name), planItems, [skip], [], [], [], refusal, []);
+        Elsa3ImportRunResult Scope(string name) => new(new PersistenceScope(name), planItems, [skip], [], [], [], refusal, [], []);
 
         var run = Elsa3MigrationRun.Collect(new VersionSelectionResult(items, [], []), [Scope("tenant-a"), Scope("tenant-b")]);
 
         Assert.Single(run.Definitions.Single().Findings, finding => finding.Code == Elsa3ReconciliationDiagnosticCodes.BlockedByDependency);
         Assert.Single(run.RunFindings);
+    }
+
+    [Fact]
+    public void A_blocked_versions_own_diagnostics_are_findings_once_next_to_its_blocked_skip()
+    {
+        // #6242: the run converted the blocked version for its diagnostics in each persistence scope.
+        var skip = new Elsa3SkippedItem(Elsa3ReconciliationDiagnosticCodes.BlockedByDependency, "w.json", "w", 1, "cause", BlockedBy: "a-v1", SourceVersionId: "w-v1");
+        var own = new Elsa3MigrationDiagnostic(Elsa3MigrationDiagnosticSeverity.Error, "ELS3-JS-HOST-FUNCTION-MISSING", "converter message", "$.root.activities[0]",
+            metadata: new Dictionary<string, string> { ["SourceVersionId"] = "w-v1", ["ComponentName"] = "someFunction" });
+        var other = new Elsa3MigrationDiagnostic(Elsa3MigrationDiagnosticSeverity.Error, "ELS3-ACTIVITY-UNMAPPED-TYPE", "another version's", "$.root",
+            metadata: new Dictionary<string, string> { ["SourceVersionId"] = "x-v1" });
+        var items = new[] { Workflow("w") };
+        var planItems = items.Select(item => new ReusableActivityImportItem(item.Definition.DefinitionId, item.Definition.Id, 1, "fingerprint", false,
+            "wf-w", "wfv-w", null, null, null, [], [], [], [])).ToArray();
+        Elsa3ImportRunResult Scope(string name) => new(new PersistenceScope(name), planItems, [skip], [], [], [], null, [], [own, other]);
+
+        var definition = Elsa3MigrationRun.Collect(new VersionSelectionResult(items, [], []), [Scope("tenant-a"), Scope("tenant-b")]).Definitions.Single();
+
+        Assert.Equal(["ELS3-JS-HOST-FUNCTION-MISSING", Elsa3ReconciliationDiagnosticCodes.BlockedByDependency], definition.Findings.Select(finding => finding.Code));
+        Assert.Equal(["a-v1"], definition.BlockedBy);
     }
 
     [Fact]
@@ -125,7 +145,7 @@ public sealed class RunCollectionTests
                 item.Definition.DefinitionId, item.Definition.Id, 1, "fingerprint", item.Definition.Options?.UsableAsActivity == true,
                 $"wf-{item.Definition.DefinitionId}", $"wfv-{item.Definition.DefinitionId}", null, null, null, [], [], [], [])).ToArray()
             : [];
-        var result = new Elsa3ImportRunResult(new PersistenceScope(PersistenceScope.DefaultValue), planItems, skips ?? [], reusables ?? [], [], [], refusal, []);
+        var result = new Elsa3ImportRunResult(new PersistenceScope(PersistenceScope.DefaultValue), planItems, skips ?? [], reusables ?? [], [], [], refusal, [], []);
         return Elsa3MigrationRun.Collect(new VersionSelectionResult(items, [], []), [result]);
     }
 }

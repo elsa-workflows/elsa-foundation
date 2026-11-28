@@ -62,8 +62,10 @@ dependencies; empty when not blocked), `published` (boolean), `exportedTo` (a pa
 reusable, the path of its wrapper workflow file; `null` otherwise, always written like `exportedTo`), and `findings`.
 
 **Bucket rule** (FR-017): `incompatible` if any finding has remedy `none`. Otherwise `convert-as-is` if there is no
-`mustFix` and no `reconsider` finding. Otherwise `convert-with-adjustments`. A blocked definition has no own error
-other than the blocked-by finding, so its bucket is `convert-with-adjustments`, and `blockedBy` names the root.
+`mustFix` and no `reconsider` finding. Otherwise `convert-with-adjustments`. A blocked definition still carries its own
+conversion findings next to the blocked-by finding (#6242), and its bucket follows from all of them: with no finding of
+its own it is `convert-with-adjustments`, and `blockedBy` names the root. A blocked definition with an error of its own
+is itself a root for the definitions behind it.
 
 **Goes smoothly**: a definition with no finding other than routine ones (`routine: true`).
 
