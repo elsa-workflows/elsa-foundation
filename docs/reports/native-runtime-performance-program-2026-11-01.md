@@ -673,7 +673,7 @@ re-drives `RetryScheduled` scheduler poison records (the drainer records `nextRe
 pre-existing defect is already tracked as [#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275) and is
 outside this delivery (point-in-time; #3656, merged as `180da1476`, closed #3275: a `RetryAfter` is now either released
 until it is due, for the resumption sweep to re-drive, or recorded `Poisoned` with an incident; the conditions are in
-[What happens when something fails at runtime](../runtime-fault-behavior.md#what-it-does). It was not re-run on this
+[What happens when something fails at runtime](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/docs/runtime-fault-behavior.md#what-it-does). It was not re-run on this
 fixture).
 
 ### A lease heartbeat failed fenced checkpoints (found and fixed)
