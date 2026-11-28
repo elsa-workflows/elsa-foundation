@@ -104,9 +104,12 @@ After every run, record the command, its exit code and the date as `Last report`
 - **Exit 2**: the tool refused to run, for example because the export is missing or empty, or a listed feature cannot
   be composed. It wrote no report. Show the reason from the last line of standard error, record it in the plan, and stop
   until the input is fixed.
+- **Exit 3**: the tool stopped on an unexpected error; standard error names the error's type. **Exit 130**: the run
+  was cancelled. Neither wrote a report: record it in the plan and stop.
 - **Anything else** is a build or tool failure, most often a half-ported feature project that does not compile. Show
-  the errors, record them on the component being ported, and stop. Do not read the `report.json` in the output folder:
-  it is from an earlier run.
+  the errors, record them on the component being ported, and stop.
+- In every case but exit 0 or 1 with the output path as the last line, do not read the `report.json` in the output
+  folder: it is from an earlier run.
 
 ### Reading the report
 
