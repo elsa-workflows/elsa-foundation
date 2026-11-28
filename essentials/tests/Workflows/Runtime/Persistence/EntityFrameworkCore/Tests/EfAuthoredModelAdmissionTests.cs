@@ -150,7 +150,7 @@ public sealed class EfAuthoredModelAdmissionTests
             this.database = database; this.context = context;
             Materials = new(context, Access); Sources = new(context, Access, new AdmissionCodec());
             Slots = new(context, Access); Queue = new(context, Access, new AdmissionCodec());
-            var reader = typeof(EfWorkflowExecutableStore).Assembly.GetType("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeModelExecutionReader", true)!;
+            var reader = typeof(EfRuntimeCheckpointCommitStore).Assembly.GetType("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeModelExecutionReader", true)!;
             Models = (IRuntimeModelExecutionReader)Activator.CreateInstance(reader, [context, Access, new AdmissionCodec()])!;
             leases = new WorkflowExecutableRootWriteLeaseManager(Materials, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), TimeProvider.System);
             var bindings = new EfWorkflowTriggerBindingStore(context, Access);
