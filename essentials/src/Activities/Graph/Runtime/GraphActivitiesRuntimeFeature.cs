@@ -21,7 +21,9 @@ namespace Elsa.Activities.Graph.Runtime;
     DependsOn = new object[] { "ActivitiesRuntime" })]
 public sealed class GraphActivitiesRuntimeFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services) => ConfigureGraphServices(services);
+
+    internal static void ConfigureGraphServices(IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, GraphActivityActivationStrategy>());
         // Distinct type per capability -- see ClrActivityConsumerCapability's remarks.
