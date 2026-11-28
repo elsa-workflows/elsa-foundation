@@ -129,3 +129,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
     Entities = [typeof(RuntimeKernelEventPublicationEntity)])]
 [assembly: EfSchemaContent(RuntimeKernelEventPublicationEfModule.SchemaFamily, typeof(RuntimeKernelEventPublicationEntity),
     nameof(RuntimeKernelEventPublicationEntity.ContentJson))]
+
+[assembly: EfSchemaFamily(RuntimeAuthoredEventCohortEfModule.SchemaFamily, "Workflows.Runtime", RuntimeAuthoredEventCohortEfModule.SchemaVersion,
+    Entities = [typeof(RuntimeAuthoredEventCohortEntity)])]
+[assembly: EfSchemaContent(RuntimeAuthoredEventCohortEfModule.SchemaFamily, typeof(RuntimeAuthoredEventCohortEntity),
+    nameof(RuntimeAuthoredEventCohortEntity.ContentJson))]

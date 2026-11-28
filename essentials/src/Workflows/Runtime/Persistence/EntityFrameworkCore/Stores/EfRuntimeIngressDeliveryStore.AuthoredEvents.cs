@@ -87,6 +87,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
                 context.AuthoredEventCohorts.Add(new()
                 {
                     Id = id, SourceFingerprint = fingerprint,
+                    SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeAuthoredEventCohortEfModule.SchemaFamily,
+                        RuntimeAuthoredEventCohortEfModule.SchemaVersion),
                     ContentJson = JsonSerializer.Serialize(new AuthoredEventReceipt(1, source.Occurrence, source.PublisherActor,
                         candidates.Select(request => new AuthoredEventResource(request.Candidate.StandaloneIngress!.TriggerId,
                             request.ExpectedTriggerRevision, request.Candidate.StandaloneIngress.AssociationGeneration,
@@ -127,6 +129,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
         {
             var found = await context.AuthoredEventCohorts.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, ct);
             if (found is null) return false;
+            EfSchemaVersion.EnsureReadable(RuntimeAuthoredEventCohortEfModule.Chain, found.SchemaVersion);
             if (found.SourceFingerprint != fingerprint)
                 throw new TriggerOperationException("conflict", "The authored Event identity already names different committed content.");
             var receipt = JsonSerializer.Deserialize<AuthoredEventReceipt>(found.ContentJson);

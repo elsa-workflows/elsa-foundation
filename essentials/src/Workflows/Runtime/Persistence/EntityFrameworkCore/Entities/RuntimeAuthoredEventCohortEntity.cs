@@ -9,6 +9,7 @@ internal sealed class RuntimeAuthoredEventCohortEntity
     public string Id { get; set; } = null!;
     public string SourceFingerprint { get; set; } = null!;
     public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
 }
 
 internal sealed class RuntimeAuthoredEventCohortConfiguration : IEntityTypeConfiguration<RuntimeAuthoredEventCohortEntity>
@@ -20,5 +21,8 @@ internal sealed class RuntimeAuthoredEventCohortConfiguration : IEntityTypeConfi
         builder.Property(row => row.Id).HasMaxLength(64).IsRequired();
         builder.Property(row => row.SourceFingerprint).HasMaxLength(64).IsRequired();
         builder.Property(row => row.ContentJson).IsRequired();
+        // The original writer omitted this column. Its JSON is the first version of the stamped family.
+        builder.Property(row => row.SchemaVersion).HasMaxLength(16).IsRequired()
+            .HasDefaultValue(RuntimeAuthoredEventCohortEfModule.InitialSchemaVersion);
     }
 }

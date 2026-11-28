@@ -3,6 +3,7 @@ using Elsa.ActorFoundation.Hosting;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Scheduling.StandaloneTriggers;
 using Elsa.Events;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Serialization.Core;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -20,6 +21,8 @@ using Elsa.Workflows.Runtime.Scheduling.Options;
 using Kernel.Foundation.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -291,6 +294,11 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var slot = Assert.IsType<WorkflowActivationSlot>(await services.GetRequiredService<IWorkflowActivationAuthority>()
                     .FindAsync(Definition, KernelServing.DefaultSlotName, token));
                 await port.AdmitAsync(empty, token);
+                var unstamped = context.Database.GetMigrations().Single(id => id.EndsWith("_AuthoredEventCohorts", StringComparison.Ordinal));
+                // Keep the real empty-cohort receipt across the old physical shape. A replay below must
+                // still see it after matching triggers exist and therefore avoid selecting them.
+                await context.GetService<IMigrator>().MigrateAsync(unstamped, token);
+                await context.Database.MigrateAsync(token);
                 var firstWrite = TriggerWrite(slot, first, "event", new { eventName }) with { ObservedTargets = null };
                 foreach (var wrongScope in new PersistenceScope?[] { null, new("another-tenant") })
                 {
@@ -345,6 +353,14 @@ public sealed partial class KernelStandalonePreparedStartTests
                 {
                     var reopened = fresh.ServiceProvider.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
                     var reopenedStore = fresh.ServiceProvider.GetRequiredService<IRuntimeIngressDeliveryStore>();
+                    var cohortId = EfRelationalIdentity.HashLengthFramed("authored-event-cohort/1",
+                        DeliveryScope.Persistence.Value, DeliveryScope.TenantId!, firstEvent.Occurrence);
+                    Assert.Equal(1, await SetStampAsync("9.99.0", cohortId));
+                    var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() =>
+                        reopened.AdmitAsync(firstEvent with { EventName = "other" }, token).AsTask());
+                    Assert.Equal("RuntimeAuthoredEventCohort", skew.Family);
+                    Assert.Equal("9.99.0", skew.Found);
+                    Assert.Equal(1, await SetStampAsync("1.0.0", cohortId));
                     await reopened.AdmitAsync(firstEvent, token);
                     await AssertPinnedAsync(reopenedStore, first);
                     await AssertPinnedAsync(reopenedStore, second);
@@ -359,6 +375,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                     Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
                     Assert.Equal(current.Identity, Progress(delivered).Receipt?.Material);
                 }
+
+                Task<int> SetStampAsync(string version, string id) => context.Database.ExecuteSqlInterpolatedAsync(
+                    $"""UPDATE elsa_runtime_authored_event_cohort SET "SchemaVersion" = {version} WHERE "Id" = {id}""", token);
 
                 async Task CommitAuthoredTriggerAsync(TriggerStoreWrite write)
                 {
