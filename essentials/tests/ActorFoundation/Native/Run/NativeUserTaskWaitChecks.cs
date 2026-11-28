@@ -23,7 +23,7 @@ internal static class NativeUserTaskWaitChecks
             var connection = new SqliteConnectionStringBuilder { DataSource = database, ForeignKeys = true, Pooling = false };
             var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection.ToString()).Options;
             var definitions = new SqliteAdmissionDefinitions();
-            KernelDb Open() => KernelDb.ForSqliteRootRuntime(options, definitions, StoreFormat.RootUserTaskWaitsQualification);
+            KernelDb Open() => KernelDb.ForSqliteRootRuntime(options, definitions);
             var store = new EfStore(Open, postgres: false);
             var jobs = new OpenJobWitness(store);
             var workflows = new WorkflowRegistry().Add(Wf.Workflow("review", Wf.Node<CreateUserTask>("approval",
@@ -34,7 +34,7 @@ internal static class NativeUserTaskWaitChecks
             Require(qualified.UpgradeState(JsonSerializer.Serialize(new NativeState()), ordinary.StateVersion) is NativeState,
                 "A valid earlier checkpoint remains readable on the qualified model.");
             var actor = new WorkflowActor.WorkflowActor([qualified]);
-            var foundation = SqliteEmbeddedFoundation.ForUserTaskWaitsQualification(database, "task-open-owner", actor.Type);
+            var foundation = new SqliteEmbeddedFoundation(database, "task-open-owner", actor.Type);
             await foundation.InstallShippedAsync(token);
             await using var owner = foundation.CreateHostedService(park ? new ParksOnInput(actor) : actor,
                 error => throw new InvalidOperationException(error));

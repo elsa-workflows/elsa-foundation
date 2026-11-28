@@ -77,7 +77,8 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.EventStartScan | RootCapabilities.InlinePromotion | RootCapabilities.KeyedStarts |
                 RootCapabilities.PublicEventStarts | RootCapabilities.PublicEventHost | RootCapabilities.PagedPublicEvents |
                 RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns |
-                RootCapabilities.RetainedRootResponse | RootCapabilities.AuthoredStandaloneEvents | RootCapabilities.PreparedWaitDelivery)
+                RootCapabilities.RetainedRootResponse | RootCapabilities.AuthoredStandaloneEvents | RootCapabilities.PreparedWaitDelivery |
+                RootCapabilities.UserTaskWaits)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -241,7 +242,8 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.EventStartScan | RootCapabilities.InlinePromotion | RootCapabilities.KeyedStarts |
                 RootCapabilities.PublicEventStarts | RootCapabilities.PublicEventHost | RootCapabilities.PagedPublicEvents |
                 RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns |
-                RootCapabilities.RetainedRootResponse | RootCapabilities.AuthoredStandaloneEvents | RootCapabilities.PreparedWaitDelivery) &&
+                RootCapabilities.RetainedRootResponse | RootCapabilities.AuthoredStandaloneEvents | RootCapabilities.PreparedWaitDelivery |
+                RootCapabilities.UserTaskWaits) &&
             sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
             sharedPostgres.UsesRootEphemeralTestRuns && sharedSqlite.UsesRootEphemeralTestRuns &&
             sharedPostgres.UsesRootAttachedTestRuns && sharedSqlite.UsesRootAttachedTestRuns &&
@@ -514,13 +516,12 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(pagedSqlite) is { StoreSchema: 2, MessageProtocol: 33, JournalCodec: 0 },
             "private paged Events carry an independent protocol and exact physical dispatch definitions");
         mapped |= pagedPostgres.Capabilities;
-        using var userTaskPostgres = KernelDb.ForPostgresUserTaskWaitsQualification(options);
-        Check(userTaskPostgres.RequiredFormat == StoreFormat.RootUserTaskWaitsQualification &&
-            !RootProfiles.Formats.ContainsKey(userTaskPostgres.RequiredFormat) &&
-            userTaskPostgres.Capabilities == (RootProfiles.Shipped | RootCapabilities.UserTaskWaits) &&
-            RootProfiles.MissingPrerequisites(userTaskPostgres.Capabilities) == RootCapabilities.None,
-            "Actor User Task waits add a separately qualified protocol to the shipped capability closure");
-        mapped |= userTaskPostgres.Capabilities;
+        using var previousShipped = KernelDb.ForPostgresRootShippedBeforeUserTasks(options);
+        Check(previousShipped.RequiredFormat == StoreFormat.RootShippedBeforeUserTasks &&
+            !RootProfiles.Formats.ContainsKey(previousShipped.RequiredFormat) &&
+            sharedPostgres.Capabilities == (previousShipped.Capabilities | RootCapabilities.UserTaskWaits) &&
+            RootProfiles.MissingPrerequisites(sharedPostgres.Capabilities) == RootCapabilities.None,
+            "Actor user task waits extend the one shared shipped protocol and retain the earlier format only for upgrade");
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped

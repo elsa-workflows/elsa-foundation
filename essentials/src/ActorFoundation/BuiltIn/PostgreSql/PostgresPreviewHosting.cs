@@ -40,29 +40,17 @@ public static partial class PostgresPreviewHosting
             new(actorType, protectsStarts) { AuthoredStandaloneTenant = publisherScope?.Tenant });
     }
 
-    /// <summary>Selects the private Actor user task qualification with the complete ordinary workflow serving profile.</summary>
-    public static KernelDb CreateUserTaskWaitsQualificationContext(DbContextOptions<KernelDb> options, string actorType,
-        Contract.BoundScope? publisherScope)
+    /// <summary>Advances a stopped PostgreSQL store to the current shipped format.</summary>
+    public static async Task<bool> UpgradeShippedFormatAsync(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts,
+        Contract.BoundScope? publisherScope, CancellationToken cancellationToken)
     {
         if (publisherScope is { IsHostIsolated: true })
             throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
         RootPublicEventHost.RequireConfiguredActorType(actorType);
-        return KernelDb.ForPostgresUserTaskWaitsQualification(options,
-            new(actorType, true) { AuthoredStandaloneTenant = publisherScope?.Tenant });
-    }
-
-    /// <summary>Installs or verifies the private Actor user task qualification store.</summary>
-    public static Task InstallUserTaskWaitsQualificationAsync(DbContextOptions<KernelDb> options, string actorType,
-        Contract.BoundScope? publisherScope, CancellationToken cancellationToken) =>
-        InstallPreviewFormatAsync(() => CreateUserTaskWaitsQualificationContext(options, actorType, publisherScope), cancellationToken);
-
-    /// <summary>Advances a stopped shipped PostgreSQL store to the exact Actor user task format.</summary>
-    public static async Task<bool> UpgradeUserTaskWaitFormatAsync(DbContextOptions<KernelDb> options, string actorType,
-        Contract.BoundScope? publisherScope, CancellationToken cancellationToken)
-    {
-        var previous = new EfStore(() => CreateShippedContext(options, actorType, protectsStarts: true, publisherScope), postgres: true);
-        var changed = await previous.UpgradeUserTaskWaitFormatAsync(cancellationToken);
-        await InstallUserTaskWaitsQualificationAsync(options, actorType, publisherScope, cancellationToken);
+        var host = new RootPublicEventHost(actorType, protectsStarts) { AuthoredStandaloneTenant = publisherScope?.Tenant };
+        var previous = new EfStore(() => KernelDb.ForPostgresRootShippedBeforeUserTasks(options, host), postgres: true);
+        var changed = await previous.UpgradeShippedRootFormatAsync(cancellationToken);
+        await InstallShippedAsync(options, actorType, protectsStarts, publisherScope, cancellationToken);
         return changed;
     }
 
@@ -72,7 +60,7 @@ public static partial class PostgresPreviewHosting
     {
         if (scope.IsHostIsolated) return null;
         await using var db = open();
-        if (db.RequiredFormat != StoreFormat.RootUserTaskWaitsQualification)
+        if (db.RequiredFormat != StoreFormat.RootShipped)
             throw new InvalidOperationException("This store does not support Actor user task waits.");
         var store = new EfStore(open, postgres: true);
         return await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken) is { } checkpoint

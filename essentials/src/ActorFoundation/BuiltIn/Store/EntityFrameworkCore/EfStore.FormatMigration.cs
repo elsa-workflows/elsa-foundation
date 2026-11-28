@@ -51,13 +51,13 @@ public sealed partial class EfStore
 
     // Only the exact previous shipped profile can advance. Existing checkpoints, jobs, and physical definitions retain
     // their encoding. The next build can read those checkpoints before publishing the first task-specific message.
-    internal Task<bool> UpgradeUserTaskWaitFormatAsync(CancellationToken cancellationToken) =>
-        AdvanceStoreFormatAsync(StoreFormat.RootShipped, StoreFormat.RootUserTaskWaitsQualification, VerifySourceAsync,
+    internal Task<bool> UpgradeShippedRootFormatAsync(CancellationToken cancellationToken) =>
+        AdvanceStoreFormatAsync(StoreFormat.RootShippedBeforeUserTasks, StoreFormat.RootShipped, VerifySourceAsync,
             migrateData: null, cancellationToken);
 
     private static async Task VerifySourceAsync(KernelDb db, CancellationToken token)
     {
-        if (db.RequiredFormat != StoreFormat.RootShipped)
+        if (db.RequiredFormat != StoreFormat.RootShippedBeforeUserTasks)
             throw new InvalidOperationException("The coordinated task upgrade requires the previous shipped context.");
 
         if (db.UsesSqliteRootRuntime)

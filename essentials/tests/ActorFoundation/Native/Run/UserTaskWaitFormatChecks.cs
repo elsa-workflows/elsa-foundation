@@ -12,16 +12,16 @@ namespace Kernel.Native.Run;
 internal static class UserTaskWaitFormatChecks
 {
     private static readonly RootPublicEventHost EventHost = new("workflow", false);
-    private static readonly StoreFormat Candidate = StoreFormat.RootUserTaskWaitsQualification;
+    private static readonly StoreFormat Current = StoreFormat.RootShipped;
+    private static readonly StoreFormat Previous = StoreFormat.RootShippedBeforeUserTasks;
 
     internal static async Task<int> RunAsync(string provider)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         var token = timeout.Token;
-        var shipped = StoreFormat.RootShipped;
-        Require(Candidate == (shipped with { MessageProtocol = shipped.MessageProtocol + 1 }), "The task wait profile needs the next message protocol.");
-        var capabilities = RootProfiles.UserTaskWaitsQualification;
-        Require(capabilities == (RootProfiles.CapabilitiesOf(shipped) | RootCapabilities.UserTaskWaits)
+        Require(Current == (Previous with { MessageProtocol = Previous.MessageProtocol + 1 }), "The shipped task wait profile needs the next message protocol.");
+        var capabilities = RootProfiles.CapabilitiesOf(Current);
+        Require(capabilities == (RootProfiles.ShippedBeforeUserTasks | RootCapabilities.UserTaskWaits)
             && RootProfiles.MissingPrerequisites(capabilities) == RootCapabilities.None, "The task wait profile must preserve the shipped capability closure.");
 
         if (provider == "sqlite")
@@ -38,17 +38,17 @@ internal static class UserTaskWaitFormatChecks
         var folder = Directory.CreateTempSubdirectory("actor-user-task-format");
         try
         {
-            foreach (var selected in new StoreFormat?[] { null, Candidate })
+            foreach (var selected in new StoreFormat?[] { Previous, null })
             {
                 var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
                 {
-                    DataSource = Path.Combine(folder.FullName, selected is null ? "shipped.db" : "tasks.db"),
+                    DataSource = Path.Combine(folder.FullName, selected is null ? "shipped.db" : "previous.db"),
                     ForeignKeys = true,
                     Pooling = false
                 }.ToString()).Options;
                 var definitions = new SqliteAdmissionDefinitions();
                 await using var current = KernelDb.ForSqliteRootShipped(options, selected, EventHost);
-                await using var other = KernelDb.ForSqliteRootShipped(options, selected is null ? Candidate : null, EventHost);
+                await using var other = KernelDb.ForSqliteRootShipped(options, selected is null ? Previous : null, EventHost);
 
                 await EfStore.InstallSqliteShippedAsync(current, 1, token);
                 await VerifyMarkersAsync(current, other, token);
@@ -56,7 +56,7 @@ internal static class UserTaskWaitFormatChecks
                 await RefusesOtherFormatAsync(() => EfStore.RequireSqliteRootAdmissionAsync(other, definitions, token));
                 await EfStore.RequireSqliteRootAdmissionAsync(current, definitions, token);
                 await VerifyMarkersAsync(current, other, token);
-                if (selected is null)
+                if (selected == Previous)
                     await UpgradeSqliteAsync(options, definitions, token);
             }
         }
@@ -69,14 +69,14 @@ internal static class UserTaskWaitFormatChecks
     private static async Task UpgradeSqliteAsync(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions,
         CancellationToken token)
     {
-        KernelDb Open(bool candidate) => KernelDb.ForSqliteRootRuntime(options, definitions, candidate ? Candidate : null, EventHost);
+        KernelDb Open(bool candidate) => KernelDb.ForSqliteRootRuntime(options, definitions, candidate ? null : Previous, EventHost);
         var previous = new EfStore(() => Open(candidate: false), postgres: false);
         var next = new EfStore(() => Open(candidate: true), postgres: false);
         await using var initial = Open(candidate: false);
         var path = new SqliteConnectionStringBuilder(initial.Database.GetConnectionString()!).DataSource;
         var actorType = WorkflowActor.WorkflowActor.ActorType;
-        var prior = new SqliteEmbeddedFoundation(path, "previous-task-format", actorType);
-        var candidate = SqliteEmbeddedFoundation.ForUserTaskWaitsQualification(path, "next-task-format", actorType);
+        var prior = SqliteEmbeddedFoundation.ForShippedBeforeUserTasks(path, "previous-task-format", actorType);
+        var candidate = new SqliteEmbeddedFoundation(path, "next-task-format", actorType);
         await prior.InstallShippedAsync(token);
         var registry = new WorkflowRegistry().Add(Wf.Workflow("old-event", Wf.Event("await-event", "upgrade-unblocks")));
         var model = new NativeExecutionModel(registry);
@@ -100,7 +100,7 @@ internal static class UserTaskWaitFormatChecks
             before.State.Contains("upgrade-unblocks", StringComparison.Ordinal), "The old owner must commit the ordinary Native wait.");
         try
         {
-            await candidate.UpgradeUserTaskWaitFormatAsync(token);
+            await candidate.UpgradeShippedFormatAsync(token);
             throw new InvalidOperationException("The in-use store was allowed to advance.");
         }
         catch (StoreFormatException error) when (error.Message.Contains("Live node", StringComparison.Ordinal)) { }
@@ -116,13 +116,13 @@ internal static class UserTaskWaitFormatChecks
         }
         await RejectWrongAuthorityAsync(async wrong =>
         {
-            var selected = new EfStore(() => KernelDb.ForSqliteRootRuntime(options, definitions, publicEventHost: wrong), postgres: false);
-            await selected.UpgradeUserTaskWaitFormatAsync(token);
+            var selected = new EfStore(() => KernelDb.ForSqliteRootRuntime(options, definitions, Previous, wrong), postgres: false);
+            await selected.UpgradeShippedRootFormatAsync(token);
         });
         await using (var wrongMarker = Open(candidate: true))
             await RefusesOtherFormatAsync(() => EfStore.RequireSqliteRootAdmissionAsync(wrongMarker, definitions, token));
-        Require(await candidate.UpgradeUserTaskWaitFormatAsync(token), "A stopped shipped SQLite file must advance exactly once.");
-        Require(!await candidate.UpgradeUserTaskWaitFormatAsync(token), "A resumed SQLite upgrade must be idempotent.");
+        Require(await candidate.UpgradeShippedFormatAsync(token), "A stopped shipped SQLite file must advance exactly once.");
+        Require(!await candidate.UpgradeShippedFormatAsync(token), "A resumed SQLite upgrade must be idempotent.");
         await using var current = Open(candidate: true);
         await using var old = Open(candidate: false);
         await VerifyMarkersAsync(current, old, token);
@@ -146,8 +146,8 @@ internal static class UserTaskWaitFormatChecks
                 Pooling = false
             }.ConnectionString).Options;
             KernelDb Open(bool candidate) => candidate
-                ? KernelDb.ForPostgresUserTaskWaitsQualification(staged, EventHost)
-                : KernelDb.ForPostgresRootShipped(staged, EventHost);
+                ? KernelDb.ForPostgresRootShipped(staged, EventHost)
+                : KernelDb.ForPostgresRootShippedBeforeUserTasks(staged, EventHost);
             await using var initial = Open(useCandidate);
             Require(await PostgresFixtureDatabase.IsEmptyAsync(initial, token), "Each PostgreSQL qualification database must be empty.");
             var store = new EfStore(() => Open(useCandidate), postgres: true);
@@ -165,7 +165,7 @@ internal static class UserTaskWaitFormatChecks
                 await store.NodeHeartbeatAsync("previous-task-format", TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), token);
                 try
                 {
-                    await store.UpgradeUserTaskWaitFormatAsync(token);
+                    await store.UpgradeShippedRootFormatAsync(token);
                     throw new InvalidOperationException("The live prior PostgreSQL owner was allowed to advance.");
                 }
                 catch (StoreFormatException error) when (error.Message.Contains("Live node", StringComparison.Ordinal)) { }
@@ -175,12 +175,12 @@ internal static class UserTaskWaitFormatChecks
                 Require(released == 1, "The fixture must release only the selected prior owner.");
                 await RejectWrongAuthorityAsync(async wrong =>
                 {
-                    var selected = new EfStore(() => KernelDb.ForPostgresRootShipped(staged, wrong), postgres: true);
-                    await selected.UpgradeUserTaskWaitFormatAsync(token);
+                    var selected = new EfStore(() => KernelDb.ForPostgresRootShippedBeforeUserTasks(staged, wrong), postgres: true);
+                    await selected.UpgradeShippedRootFormatAsync(token);
                 });
                 await VerifyMarkersAsync(current, other, token);
-                Require(await store.UpgradeUserTaskWaitFormatAsync(token), "A stopped shipped PostgreSQL store must advance exactly once.");
-                Require(!await store.UpgradeUserTaskWaitFormatAsync(token), "A resumed PostgreSQL upgrade must be idempotent.");
+                Require(await store.UpgradeShippedRootFormatAsync(token), "A stopped shipped PostgreSQL store must advance exactly once.");
+                Require(!await store.UpgradeShippedRootFormatAsync(token), "A resumed PostgreSQL upgrade must be idempotent.");
                 await VerifyMarkersAsync(other, current, token);
                 await RefusesOtherFormatAsync(() => EfStore.RequireStoreVersionsAsync(current, token));
                 await EfStore.RequireStoreVersionsAsync(other, token);
@@ -201,7 +201,7 @@ internal static class UserTaskWaitFormatChecks
             .ToDictionaryAsync(marker => marker.Id, token);
         Require(markers[StoreVersionEntity.MarkerId].Format == current.RequiredFormat,
             "The installed marker must retain its selected message protocol.");
-        var expected = current.RequiredFormat == Candidate ? RootProfiles.UserTaskWaitsQualification : RootProfiles.Shipped;
+        var expected = current.RequiredFormat == Current ? RootProfiles.Shipped : RootProfiles.ShippedBeforeUserTasks;
         Require(current.Capabilities == expected, "The physical profile must select its expected capability set.");
         var definitions = StoreDefinitionsRevision.Seed(current) ?? throw new InvalidOperationException("The physical definitions marker is required.");
         var otherDefinitions = StoreDefinitionsRevision.Seed(other) ?? throw new InvalidOperationException("Both profiles require physical definitions markers.");

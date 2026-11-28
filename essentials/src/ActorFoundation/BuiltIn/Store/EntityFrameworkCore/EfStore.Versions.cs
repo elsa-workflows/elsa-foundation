@@ -89,8 +89,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootPreparedWaitQualification => new(3, 141, 1);
     internal static StoreFormat RootOptionalAuthoredStandaloneEventsQualification => new(3, 144, 1);
     internal bool SupportsAuthoredStandaloneEventQualification =>
-        this == RootAuthoredStandaloneEventQualification || this == RootOptionalAuthoredStandaloneEventsQualification ||
-        this == RootUserTaskWaitsQualification;
+        this == RootAuthoredStandaloneEventQualification || this == RootOptionalAuthoredStandaloneEventsQualification;
     internal bool SupportsIsolatedInlineQualification =>
         this == RootEphemeralTestRunQualification || SupportsAttachedTestRunQualification;
     internal bool SupportsAttachedTestRunQualification =>
@@ -103,11 +102,10 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 38 };
+    public static StoreFormat RootShipped => Current with { MessageProtocol = 39 };
 
-    // The Actor wait and receipt wire change together. Stock hosts keep the shipped marker
-    // until both provider qualifications and the task-ingress contract are complete.
-    internal static StoreFormat RootUserTaskWaitsQualification => RootShipped with { MessageProtocol = 39 };
+    // The previous composed format is used only by the coordinated upgrade and compatibility checks.
+    internal static StoreFormat RootShippedBeforeUserTasks => Current with { MessageProtocol = 38 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -197,7 +195,7 @@ internal static class RootProfiles
     /// The shared shipped format includes owned children, durable self-sends and timers, one-page Park Resume,
     /// fenced due pressure, sequenced workflow history, live event waits, tenant retention policy and ranked workflow Playback.
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
-    /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
+    /// is refused by an ordinary open. A supported upgrade advances the exact prior marker with an ownership fence.
     /// </summary>
     private const RootCapabilities Shipped29 = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
@@ -205,13 +203,12 @@ internal static class RootProfiles
     private const RootCapabilities Shipped34 = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
     private const RootCapabilities Shipped37 = KeyedStartsQualification | PublicEventHostQualification | PagedPublicEventsQualification |
         RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns;
-    internal const RootCapabilities Shipped = Shipped38;
+    internal const RootCapabilities Shipped = ShippedBeforeUserTasks | RootCapabilities.UserTaskWaits;
     internal const RootCapabilities RetainedResponseQualification = Shipped37 | RootCapabilities.RetainedRootResponse;
     internal const RootCapabilities AuthoredStandaloneEventQualification = Shipped37 | RootCapabilities.AuthoredStandaloneEvents;
-    private const RootCapabilities Shipped38 =
+    internal const RootCapabilities ShippedBeforeUserTasks =
         AuthoredStandaloneEventQualification | RootCapabilities.RetainedRootResponse | RootCapabilities.PreparedWaitDelivery;
-    internal const RootCapabilities OptionalAuthoredStandaloneEventsQualification = Shipped38;
-    internal const RootCapabilities UserTaskWaitsQualification = Shipped38 | RootCapabilities.UserTaskWaits;
+    internal const RootCapabilities OptionalAuthoredStandaloneEventsQualification = ShippedBeforeUserTasks;
     internal const RootCapabilities PreparedWaitQualification = RetainedResponseQualification | RootCapabilities.PreparedWaitDelivery;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
@@ -310,7 +307,8 @@ internal static class RootProfiles
         [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
         [RootCapabilities.PagedPublicEvents] = RootCapabilities.PublicEventStarts,
         [RootCapabilities.PreparedWaitDelivery] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
-        [RootCapabilities.UserTaskWaits] = RootCapabilities.JobProtocol | RootCapabilities.ReplyProtocol | RootCapabilities.StableBody,
+        [RootCapabilities.UserTaskWaits] = RootCapabilities.TimedJobPreview | RootCapabilities.StableBody |
+            RootCapabilities.Timers | RootCapabilities.ParkRecovery,
         [RootCapabilities.RetainedRootResponse] = RootCapabilities.PreparedStarts | RootCapabilities.StableBody,
         [RootCapabilities.AuthoredStandaloneEvents] = RootCapabilities.PagedPublicEvents | RootCapabilities.PublicEventHost,
         [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
@@ -605,7 +603,7 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootAuthoredStandaloneEventQualification =>
                     sqlite ? SqliteAuthoredStandaloneEventRevision : PostgreSqlAuthoredStandaloneEventRevision,
                 _ when db.RequiredFormat == StoreFormat.RootShipped ||
-                    db.RequiredFormat == StoreFormat.RootUserTaskWaitsQualification ||
+                    db.RequiredFormat == StoreFormat.RootShippedBeforeUserTasks ||
                     db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification =>
                     sqlite ? SqliteOptionalAuthoredStandaloneEventsRevision : PostgreSqlOptionalAuthoredStandaloneEventsRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPreparedWaitQualification =>

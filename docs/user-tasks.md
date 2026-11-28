@@ -21,13 +21,18 @@ reassignment journey is available on the host documented in the
 
 ### Upgrading a Workbench Actor store
 
-Source Workbench and its PostgreSQL Compose shell select the Actor task protocol. Fresh
-stores use it on first install. To keep workflows in an existing Actor store, stop its
-owners and let their leases expire. For the next Workbench startup, set
-`CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__UpgradeActorUserTaskWaitStore=true`.
-When the host is ready, remove that setting and keep `ActorUserTaskWaits` enabled. An upgrade
-checks the exact installed roles, publisher scope and store definitions before advancing the
-protocol. Existing workflow checkpoints and reusable forms are retained.
+Actor hosts use the same shipped store format on SQLite and PostgreSQL. Source Workbench
+and its PostgreSQL Compose shell also enable `ActorUserTaskWaits`, which requires the
+durable task journal and User Tasks API. Use the same task-capable configuration for every
+owner of a task-bearing store. Owners without task support leave newer Native checkpoints
+for a matching owner.
+
+To keep workflows in an existing Actor store, stop its owners and let their leases expire.
+For the next startup, set
+`CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__UpgradeActorStoreFormat=true`.
+Use the selected kernel hosting feature name for that shell. Remove the setting once the host
+is ready. The upgrade checks the installed roles, publisher scope and store definitions before
+advancing the protocol. Existing workflow checkpoints and reusable forms are retained.
 
 The Actor profile accepts up to 64 outstanding tasks per workflow run. Each task's prefill
 and response data can use up to 64 KiB of JSON. Test Run remains available for workflows
