@@ -11,7 +11,8 @@ public sealed record Elsa3ConversionRequest
         bool isReusable = false,
         IReadOnlyDictionary<string, Elsa3ActivityExactReplacement>? replacements = null,
         IReadOnlyDictionary<string, string>? diagnosticMetadata = null,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? dispatchTargetInputs = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? dispatchTargetInputs = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? bulkDispatchTargetInputs = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         Definition = definition;
@@ -19,6 +20,7 @@ public sealed record Elsa3ConversionRequest
         Replacements = replacements ?? new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal);
         DiagnosticMetadata = diagnosticMetadata ?? new Dictionary<string, string>(StringComparer.Ordinal);
         DispatchTargetInputs = dispatchTargetInputs ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        BulkDispatchTargetInputs = bulkDispatchTargetInputs ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
     }
 
     /// <summary>The Elsa 3 definition. The converter clones it and never mutates it.</summary>
@@ -38,4 +40,11 @@ public sealed record Elsa3ConversionRequest
     /// version, which a dispatch to it pins once published (#5808). A dispatch target missing here is not checked here.
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> DispatchTargetInputs { get; }
+
+    /// <summary>
+    /// The input names each BulkDispatchWorkflows target declares, keyed by definition id: a workflow of this import, or one
+    /// already published in Elsa 4 (spec 1242 FR-016). Used only for bulk dispatch, so the plain dispatch check of #5808
+    /// keeps its same-import scope. A bulk target missing here is refused.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> BulkDispatchTargetInputs { get; }
 }

@@ -21,7 +21,7 @@ describe("workflow start shortcut", () => {
     expect(getWorkflowStartEnabled(activity, catalog)).toBe(enabled);
     const wire = canonicalizeStateForWire({ rootActivity: updated }).rootActivity!;
     expect(wire.inputs).toEqual([{ referenceKey: "CanStartWorkflow", autoEvaluate: false,
-      value: { expressionType: "Literal", value: String(!enabled) } }]);
+      value: { expressionType: "Literal", value: !enabled } }]);
   });
 
   it("uses the catalog default, including start-first Event and BPMN activities", () => {

@@ -4,7 +4,8 @@
 [#5800](https://github.com/elsa-workflows/elsa-foundation/issues/5800), once a Docker app profile covers the Elsa 3
 import story. Spec: [1236](../../specs/1236-elsa3-migration-host/spec.md).
 
-The host runs the Elsa 4 workflows the migration CLI (spec 1237) writes to a `migrated/` folder. It composes only the
+The host runs the Elsa 4 workflows the migration CLI (spec 1237,
+[Elsa 3 workflows migration tooling](../../extensions/Elsa3/src/Migration/Tooling/README.md)) writes to a `migrated/` folder. It composes only the
 features those workflows, the JTest acceptance set and the Studio designer need, plus JSON workflow and activity
 reconciliation. It is a plain CShells host: it finds its features in the projects it references, loads no packages
 at runtime, and has no admin or module-management endpoints. It carries no Elsa 3 code.
@@ -100,9 +101,14 @@ This host doesn't advertise `elsa.api.standalone-triggers`, `elsa.api.workflow-d
 `elsa.api.secrets`, so Studio hides the standalone triggers screens, the portfolio, run-health and needs-attention widgets,
 the Attention widget and Secrets.
 
-The definitions list shows the imported definitions, but Studio opens a definition through its current draft, and an
-imported definition has none: the designer says "This workflow definition has no current draft". Change the workflow in
-your `migrated/` folder instead, give it a new `version` (a stored version never changes) and restart the host.
+The definitions list shows the imported definitions. At startup the host gives each imported definition that has no
+draft one, cloned from its newest imported version, so Studio opens it in the designer. Edit it there and publish:
+the host runs the new version, and it keeps running it after a restart, because reconciliation skips a version from
+`migrated/` that is older than the newest stored one. To change a workflow from your `migrated/` folder instead,
+give it a `version` newer than any version published from Studio (a stored version never changes) and restart the
+host. The designer then shows the new version, unless you saved the draft in Studio: a saved draft is kept, so a
+restart never throws away your edits. A draft discarded through the API is cloned again only when a newer version
+arrives in `migrated/`; until then the designer says the definition has no current draft.
 
 ## What your own host needs
 

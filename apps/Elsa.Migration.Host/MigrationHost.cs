@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Reflection;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
@@ -39,24 +40,60 @@ public static class MigrationHost
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // -----------------------------------------------------------------------------------------------
-        // Configuration (research R-3), lowest first: appsettings*.json (from CreateBuilder), shells.json,
-        // shells.{Environment}.json, then the engineer's local, uncommitted sources: shells.Local.json, user
-        // secrets, environment variables and the command line. CreateBuilder already added the last three below
-        // the shells files; they are added again so they win over shells.json.
-        // -----------------------------------------------------------------------------------------------
-        var configuration = builder.Configuration;
-        configuration.AddJsonFile("shells.json", optional: false, reloadOnChange: false);
-        configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false);
-        configuration.AddJsonFile("shells.Local.json", optional: true, reloadOnChange: false);
-        // Under a test the entry assembly is the test host, so the secrets are found through this assembly.
-        configuration.AddUserSecrets(typeof(MigrationHost).Assembly, optional: true);
+        // On top of WebApplication.CreateBuilder's default sources, so the ASPNETCORE_/DOTNET_ host keys (such as
+        // ASPNETCORE_URLS, which reaches Kestrel as 'urls') survive, while the re-added layers keep R-3's order.
+        AddHostConfiguration(builder.Configuration, builder.Environment.ContentRootPath, builder.Environment.EnvironmentName,
+            typeof(MigrationHost).Assembly, args, includeLocalSources: true);
+        AddHostServices(builder);
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds the host's configuration layers (research R-3), lowest first: <c>appsettings.json</c>,
+    /// <c>appsettings.{environment}.json</c>, <c>shells.json</c>, <c>shells.{environment}.json</c>, then, when
+    /// <paramref name="includeLocalSources"/> is set, the engineer's local, uncommitted sources: <c>shells.Local.json</c>,
+    /// the user secrets of <paramref name="hostAssembly"/>, environment variables and <paramref name="args"/>. Every file is
+    /// read from <paramref name="hostFolder"/>. The host and the Elsa 3 migration CLI (spec 1237) both call it.
+    /// </summary>
+    public static void AddHostConfiguration(
+        IConfigurationBuilder configuration,
+        string hostFolder,
+        string environment,
+        Assembly hostAssembly,
+        string[] args,
+        bool includeLocalSources)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostFolder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(environment);
+        ArgumentNullException.ThrowIfNull(hostAssembly);
+        ArgumentNullException.ThrowIfNull(args);
+
+        // appsettings*.json reload on change, as WebApplication.CreateBuilder's own copies do (log levels, for example).
+        configuration.AddJsonFile(Path.Combine(hostFolder, "appsettings.json"), optional: true, reloadOnChange: true);
+        configuration.AddJsonFile(Path.Combine(hostFolder, $"appsettings.{environment}.json"), optional: true, reloadOnChange: true);
+        configuration.AddJsonFile(Path.Combine(hostFolder, "shells.json"), optional: false, reloadOnChange: false);
+        configuration.AddJsonFile(Path.Combine(hostFolder, $"shells.{environment}.json"), optional: true, reloadOnChange: false);
+        if (!includeLocalSources)
+            return;
+
+        configuration.AddJsonFile(Path.Combine(hostFolder, "shells.Local.json"), optional: true, reloadOnChange: false);
+        // Through the host assembly: under a test or the CLI the entry assembly is not the host.
+        configuration.AddUserSecrets(hostAssembly, optional: true);
         configuration.AddEnvironmentVariables();
         configuration.AddCommandLine(args);
+    }
 
-        // -----------------------------------------------------------------------------------------------
-        // Root services, composed once on the host container; CShells copies them into the shell.
-        // -----------------------------------------------------------------------------------------------
+    /// <summary>
+    /// Registers the host's root services, composed once on the host container (CShells copies them into the shell):
+    /// CShells with <c>WithHostAssemblies()</c> included, without the web pipeline. Creates no folder. The host and the
+    /// Elsa 3 migration CLI (spec 1237) both call it, the CLI on a generic host it never starts.
+    /// </summary>
+    public static void AddHostServices(IHostApplicationBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        var configuration = builder.Configuration;
         var services = builder.Services;
 
         // The initiative's JSON baseline (ADR 0091), as the Workbench registers it, so the API serializes as it does there.
@@ -110,8 +147,6 @@ public static class MigrationHost
         // Root authentication and authorization, after CShells so its shell-delegating providers stay in place.
         services.AddAuthentication();
         services.AddAuthorization();
-
-        return builder;
     }
 
     /// <summary>Creates the local folders the settings name, logs the paths in use, then builds the app and maps its pipeline.</summary>

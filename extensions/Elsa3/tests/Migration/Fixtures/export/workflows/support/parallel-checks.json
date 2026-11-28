@@ -1,0 +1,142 @@
+{
+  "id": "parallel-checks-v1",
+  "definitionId": "parallel-checks",
+  "name": "Parallel checks",
+  "description": "A Fork whose join mode is an expression. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -380,
+          "y": 60
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "Checks",
+        "nodeId": "Workflow1:Checks",
+        "name": "Checks",
+        "type": "Elsa.Fork",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 280,
+              "y": 340
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "joinMode": {
+          "typeName": "ForkJoinMode",
+          "expression": {
+            "type": "JavaScript",
+            "value": "'SENTINEL-1237'.length > 3 ? 'WaitAny' : 'WaitAll'"
+          }
+        },
+        "branches": [
+          {
+            "id": "CheckStock",
+            "nodeId": "Workflow1:CheckStock",
+            "name": "CheckStock",
+            "type": "Elsa.WriteLine",
+            "version": 1,
+            "customProperties": {
+              "canStartWorkflow": false,
+              "runAsynchronously": false
+            },
+            "metadata": {
+              "designer": {
+                "position": {
+                  "x": -160,
+                  "y": 60
+                },
+                "size": {
+                  "width": 180,
+                  "height": 50
+                }
+              }
+            },
+            "text": {
+              "typeName": "String",
+              "expression": {
+                "type": "Literal",
+                "value": "SENTINEL-1237: stock"
+              }
+            }
+          },
+          {
+            "id": "CheckCredit",
+            "nodeId": "Workflow1:CheckCredit",
+            "name": "CheckCredit",
+            "type": "Elsa.WriteLine",
+            "version": 1,
+            "customProperties": {
+              "canStartWorkflow": false,
+              "runAsynchronously": false
+            },
+            "metadata": {
+              "designer": {
+                "position": {
+                  "x": 60,
+                  "y": 200
+                },
+                "size": {
+                  "width": 180,
+                  "height": 50
+                }
+              }
+            },
+            "text": {
+              "typeName": "String",
+              "expression": {
+                "type": "Literal",
+                "value": "SENTINEL-1237: credit"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

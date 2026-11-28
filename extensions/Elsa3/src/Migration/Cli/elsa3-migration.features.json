@@ -1,0 +1,15 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Features": {
+          "Elsa3Mapping": {},
+          "Elsa3ImportJsonActivities": {},
+          "Elsa3ImportActivitiesEntityFrameworkCore": {},
+          "Elsa3ImportActivitiesPublishing": {},
+          "Elsa3MigrationImportRun": {}
+        }
+      }
+    }
+  }
+}

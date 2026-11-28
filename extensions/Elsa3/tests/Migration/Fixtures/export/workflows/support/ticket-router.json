@@ -1,0 +1,185 @@
+{
+  "id": "ticket-router-v1",
+  "definitionId": "ticket-router",
+  "name": "Ticket router",
+  "description": "A Switch with a non-boolean literal and an unparsable case condition. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -160,
+          "y": 340
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "Route",
+        "nodeId": "Workflow1:Route",
+        "name": "Route",
+        "type": "Elsa.FlowSwitch",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 60,
+              "y": 340
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "cases": [
+          {
+            "label": "Urgent",
+            "condition": {
+              "typeName": "Boolean",
+              "expression": {
+                "type": "Literal",
+                "value": "SENTINEL-1237-yes"
+              }
+            }
+          },
+          {
+            "label": "Normal",
+            "condition": {
+              "typeName": "Boolean",
+              "expression": {
+                "type": "JavaScript",
+                "value": "'SENTINEL-1237' === ("
+              }
+            }
+          }
+        ],
+        "mode": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "MatchFirst"
+          }
+        }
+      },
+      {
+        "id": "Urgent",
+        "nodeId": "Workflow1:Urgent",
+        "name": "Urgent",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 280,
+              "y": 60
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "SENTINEL-1237: urgent"
+          }
+        }
+      },
+      {
+        "id": "Normal",
+        "nodeId": "Workflow1:Normal",
+        "name": "Normal",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": -380,
+              "y": 200
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "SENTINEL-1237: normal"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "Route",
+          "port": "Urgent"
+        },
+        "target": {
+          "activity": "Urgent",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "Route",
+          "port": "Normal"
+        },
+        "target": {
+          "activity": "Normal",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

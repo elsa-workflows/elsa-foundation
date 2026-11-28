@@ -50,6 +50,43 @@ internal sealed class Elsa3ConversionPlan(Elsa3ConversionRequest request, Elsa3W
     /// <summary>The resolved authored workflow-variable types, retained from validation for reference lowering.</summary>
     public Dictionary<Elsa3Variable, Elsa.Primitives.Models.TypeReference> WorkflowVariableTypes { get; } = new(ReferenceEqualityComparer.Instance);
 
+    /// <summary>
+    /// The converted BulkDispatchWorkflows nodes, keyed by the bulk node (spec 1242 plan §3): the generated
+    /// <c>Dispatch</c> child, the item key its correlation function reads, the wait classification and the branches.
+    /// </summary>
+    public Dictionary<Elsa3Activity, Elsa3BulkDispatchPlan> BulkDispatches { get; } = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Nodes inside a converted BulkDispatchWorkflows branch whose script may write a variable, found before lowering
+    /// rewrites the script (spec 1242 FR-020a).
+    /// </summary>
+    public HashSet<Elsa3Activity> BulkDispatchBranchScriptWrites { get; } = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>The bulk dispatch whose generated <c>Dispatch</c> child <paramref name="node"/> is, if any.</summary>
+    public Elsa3BulkDispatchPlan? BulkDispatchOfChild(Elsa3Activity node) =>
+        BulkDispatches.Values.FirstOrDefault(bulk => ReferenceEquals(bulk.Dispatch, node));
+
+    /// <summary>
+    /// The bulk dispatch whose converted <c>ChildCompleted</c> or <c>ChildFaulted</c> branch holds <paramref name="node"/>
+    /// (the branch root or any node inside it), if any.
+    /// </summary>
+    public Elsa3BulkDispatchPlan? BulkDispatchOfBranchNode(Elsa3Activity node)
+    {
+        if (BulkDispatches.Count == 0)
+            return null;
+        Elsa3Activity? current = node;
+        while (current is not null)
+        {
+            foreach (var bulk in BulkDispatches.Values)
+            {
+                if (bulk.Branches.Any(branch => ReferenceEquals(branch, current)))
+                    return bulk;
+            }
+            current = Find(current)?.Parent;
+        }
+        return null;
+    }
+
     public bool HasErrors => Diagnostics.Any(diagnostic => diagnostic.IsError);
 
     public Elsa3NodePlan? Find(Elsa3Activity node) => Nodes.GetValueOrDefault(node);
@@ -142,3 +179,32 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
 /// <c>MatchAny</c> mode, spec 1208 FR-028).
 /// </summary>
 internal sealed record Elsa3SlotChild(string SlotName, string? Label, Elsa3Activity? Child, string? ItemId = null, string? ConditionProperty = null);
+
+/// <summary>How a converted BulkDispatchWorkflows decided whether its children are awaited (spec 1242 FR-013).</summary>
+internal enum Elsa3BulkDispatchWait
+{
+    /// <summary>The member is missing: Elsa 3's default, true.</summary>
+    Missing,
+
+    /// <summary>A literal true.</summary>
+    LiteralTrue,
+
+    /// <summary>A literal false, null or a valueless literal.</summary>
+    LiteralFalse,
+
+    /// <summary>An expression, evaluated per pass on the <c>Dispatch</c> node.</summary>
+    Expression
+}
+
+/// <summary>What the BulkDispatchWorkflows rewrite decided for one bulk node (spec 1242 plan §3).</summary>
+internal sealed record Elsa3BulkDispatchPlan(
+    Elsa3Activity Bulk,
+    string BulkNodeId,
+    Elsa3Activity Dispatch,
+    string ItemKey,
+    Elsa3BulkDispatchWait Wait,
+    IReadOnlyList<Elsa3Activity> Branches)
+{
+    /// <summary>Whether a literal or default wait proves the children are never awaited.</summary>
+    public bool NeverWaits => Wait == Elsa3BulkDispatchWait.LiteralFalse;
+}

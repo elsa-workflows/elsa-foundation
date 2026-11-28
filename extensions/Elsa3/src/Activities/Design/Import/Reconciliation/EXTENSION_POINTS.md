@@ -9,18 +9,20 @@ of its own.
 
 - `Elsa3FolderImportTask` (internal, `IStartupTask`, `[Order(4)]`): after activity reconciliation (1), workflow
   reconciliation (2) and the Git export (3), before interrupted publications are completed (5). Runs on every node,
-  once per persistence scope (`IPersistenceScopeRunner`), and takes no lock.
+  once per persistence scope (`IPersistenceScopeRunner`), and takes no lock. The sequence is the internal
+  `Elsa3ImportRun`, which the Elsa 3 migration tooling also runs (spec 1237).
 
 ## Decorated contract
 
 ### `IActivityPublishingAuthorizationContext` *(owned by `Elsa.Workflows.Publishing.Api`)*
 
-- **Decorator:** `Elsa3StartupPublishingAuthorization` (internal), registered by `Elsa3JsonReconciliationFeature`
+- **Decorator:** `Elsa3StartupPublishingAuthorization` (internal), registered by `Elsa3ImportRunRegistration.Add`
+  (called by `Elsa3JsonReconciliationFeature` and the migration tooling)
   around the registration it finds (the default is `HttpContextActivityPublishingAuthorizationContext`), with the same
   lifetime.
 - **Behaviour:** while the scoped `Elsa3StartupPublishingGrant` of the same DI scope is set, `TenantId` is the granted
   tenant and `CanAccessTenant` accepts that tenant and no tenant; otherwise every call goes to the decorated context.
-  Only the startup task sets the grant, inside the operation scope the persistence runner created for it.
+  Only `Elsa3ImportRun` sets the grant, inside the operation scope the persistence runner created for it.
 
 ## Consumed contracts
 

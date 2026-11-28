@@ -118,7 +118,7 @@ describe("Variable expression wire round-trip", () => {
     ])
   });
 
-  it("keeps a Variable reference as a structured object while literals serialize to strings", () => {
+  it("keeps a Variable reference as a structured object while a text literal stays a string", () => {
     const writer = activitiesOf(canonicalizeStateForWire(state()))[0];
     const inputs = writer.inputs as Array<{ referenceKey: string; value: { value: unknown; expressionType: string } }>;
 

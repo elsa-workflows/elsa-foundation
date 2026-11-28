@@ -8,6 +8,10 @@
 - Contributes `ChildCancelExecutor` for the stable `Elsa.Activities.DispatchWorkflow.CancelChild` kind with an unbounded, positive-backoff retry policy.
 - Contributes `ParentResumeExecutor` for the stable `Elsa.Activities.DispatchWorkflow.ResumeParent` kind with an unbounded, positive-backoff retry policy. The aggregate dispatcher owns `DispatchAsync`; contributed handlers own `HandleAsync`, and each registration is the sole source of its kind and retry policy.
 
+## `BulkDispatchWorkflows`
+
+The structural activity (spec 1242) exposes no replaceable service. Its activity-owned contracts are the `BulkDispatchWorkflows.Dispatch`, `.ChildCompleted` and `.ChildFaulted` single child slots, the `Done` outcome, and a per-pass iteration frame holding `currentItem` and `currentIndex`, sent as a typed `LoopIterationScopeRequest` with an item-indexed iteration id (`{activityExecutionId}:bulk-dispatch-item:{index}`). It reads `ActivityChildCompletedContext.CompletedChildIterationId` to recover the pass, keeps its pass count, next item, ended passes and the passes already routed to a slot in structural private state (`Elsa.BulkDispatchWorkflows.State`, version 1), and opts into `IRuntimeAcceptsRescheduledFaultedChild` so `RescheduleActivity` of a faulted pass child reaches it. It implements no child-fault handler, so the incident strategy decides. Its design-side structure handler and slot validator are in [the design catalog](../Design/EXTENSION_POINTS.md).
+
 ## Shared runtime contracts
 
 The module stages `WorkflowDispatchCheckpointRequest` through the additive `IWorkflowDispatchStagingContext` capability implemented by the Foundation runtime context. The runtime engine, rather than the activity, owns folding the dispatch record and intent into the activity-completed checkpoint. Providers replace `IWorkflowDispatchStore` alongside their checkpoint persistence implementation; a provider must never ignore non-empty `WorkflowDispatches` state changes.

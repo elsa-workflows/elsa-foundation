@@ -28,11 +28,12 @@ using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using DispatchWorkflowActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
+using BulkDispatchWorkflowsActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
-internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
+internal sealed partial class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
 {
     internal static readonly DateTimeOffset Now = new(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
     internal static readonly WorkflowExecutableIdentity ChildIdentity =
@@ -91,6 +92,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new ActivitiesPrimitivesFeature().ConfigureServices(services);
+        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
         new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
         new DispatchWorkflowRuntimeFeature { MaxNestingDepth = maxNestingDepth }.ConfigureServices(services);
         services.Replace(ServiceDescriptor.Singleton<IWellKnownTypeRegistry>(typeRegistry));
@@ -546,7 +548,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         Type activityType,
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
         IReadOnlyDictionary<string, string>? metadata = null,
-        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null)
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null)
     {
         var contract = ActivityContractFor(activityType);
         return new ExecutableNode(
@@ -564,6 +567,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: metadata ?? new Dictionary<string, string>(),
             childSlots: childSlots,
+            structure: structure,
             activityContract: contract);
     }
 
@@ -726,6 +730,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             typeof(PlainChildProbeActivity),
             typeof(ControlParentActivity),
             typeof(ReplaySafeChildProbeActivity),
+            typeof(BulkDispatchWorkflowsActivity),
+            typeof(BulkSlotProbeActivity),
+            typeof(Elsa.Activities.Sequence.Activities.Sequence),
             typeof(ActivityUnit),
             typeof(JsonElement),
             typeof(IReadOnlyDictionary<string, JsonElement>)
@@ -812,6 +819,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     ["tenant"] = Tenant,
                     ["defaulted"] = Defaulted
                 });
+            // Bulk dispatch tests ask some children to fault, so the parent sees the Faulted outcome.
+            if (Message == FaultingChildMessage)
+                throw new InvalidOperationException("The child probe was asked to fault.");
             return ActivityTransition.Complete(ActivityUnit.Value);
         }
     }
@@ -1044,6 +1054,7 @@ internal sealed record ChildExecutionObservation(
 
 internal sealed class ChildExecutionProbe
 {
+    internal bool SlotFaultRepaired { get; set; }
     /// <summary>The workflow outputs an output-writing child sets; null for the ordinary probe child.</summary>
     internal IReadOnlyDictionary<string, JsonElement>? Outputs { get; init; }
 

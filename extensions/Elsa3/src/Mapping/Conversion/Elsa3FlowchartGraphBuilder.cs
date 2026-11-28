@@ -23,6 +23,8 @@ internal static class Elsa3FlowchartGraphBuilder
     private const string StartNodeIdField = "startNodeId";
     private const string Done = Elsa3ActivityOutcomes.Done;
     private const string Break = "Break";
+    private const string BulkCompleted = "Completed";
+    private const string BulkCanceled = "Canceled";
     private const string SwitchCaseSlot = "Switch.Case";
     private const string MatchPlaceholder = "{match}";
     // Same spelling as Elsa3BuiltInActivityMap.ValueOutcomesPlaceholder: every outcome a node derives from its value input.
@@ -172,6 +174,12 @@ internal static class Elsa3FlowchartGraphBuilder
                     continue;
                 }
 
+                if (IsBulkDispatchRoute(edge))
+                {
+                    DropBulkDispatchRoute(edge, edges);
+                    continue;
+                }
+
                 switch (Construct(edge.Source))
                 {
                     case Elsa3GraphConstructKind.Fork:
@@ -209,6 +217,45 @@ internal static class Elsa3FlowchartGraphBuilder
             return kept;
         }
 
+        private bool IsBulkDispatchRoute(Edge edge) =>
+            StringComparer.Ordinal.Equals(plan.Find(edge.Source)?.Resolved?.ActivityTypeKey, Elsa3BuiltInActivityMap.BulkDispatchWorkflows) &&
+            edge.Port is BulkCompleted or BulkCanceled;
+
+        /// <summary>
+        /// Spec 1242 FR-017. Elsa 4 BulkDispatchWorkflows completes with <c>Done</c> only. Elsa 3 emitted <c>Completed</c>
+        /// together with <c>Done</c> when it waited and had items, and declared <c>Canceled</c> but never emitted it. A
+        /// <c>Completed</c> connection is dropped silently where <c>Done</c> already reaches its target; with a literal-false
+        /// wait, Elsa 3 never followed it. A connection Elsa 3 never followed is dropped with a warning, unless it leads to a
+        /// WaitAll join, which would then run where Elsa 3 never ran it. Anything else has no faithful meaning and is refused.
+        /// </summary>
+        private void DropBulkDispatchRoute(Edge edge, List<Edge> edges)
+        {
+            var waitAll = Construct(edge.Target) == Elsa3GraphConstructKind.Join &&
+                          ReadJoinMode(plan.Find(edge.Target)!) is JoinMode.WaitAll or null;
+            var neverWaits = plan.BulkDispatches.TryGetValue(edge.Source, out var bulk) && bulk.NeverWaits;
+            var neverEmitted = edge.Port == BulkCanceled || neverWaits;
+            if (neverEmitted && !waitAll)
+            {
+                EdgeWarning(DeadConnectionRemoved, edge,
+                    edge.Port == BulkCanceled
+                        ? $"Connection {edge.Index} leaves bulk dispatch '{NodeId(edge.Source)}' on 'Canceled', which Elsa 3 declares but never emits, so Elsa 3 never follows it; it is removed."
+                        : $"Connection {edge.Index} leaves bulk dispatch '{NodeId(edge.Source)}' on 'Completed', which Elsa 3 emits only when it waits for its children, and this one never waits; it is removed.",
+                    "Remove the connection from the Elsa 3 workflow.");
+                return;
+            }
+
+            if (!neverEmitted && !waitAll && edges.Any(other =>
+                    ReferenceEquals(other.Source, edge.Source) && ReferenceEquals(other.Target, edge.Target) &&
+                    StringComparer.Ordinal.Equals(other.Port, Done)))
+                return; // Done already reaches the target, as Completed did.
+
+            EdgeError(BulkDispatchOutcomeRoute, edge,
+                waitAll
+                    ? $"Connection {edge.Index} leaves bulk dispatch '{NodeId(edge.Source)}' on '{edge.Port}' into WaitAll join '{NodeId(edge.Target)}'. The Elsa 4 activity completes with 'Done' only, and dropping the connection would let the join run where Elsa 3 never ran it."
+                    : $"Connection {edge.Index} leaves bulk dispatch '{NodeId(edge.Source)}' on '{edge.Port}'. The Elsa 4 activity completes with 'Done' only, after every child has ended when its children are awaited.",
+                "Connect the follow-up to 'Done' before converting.");
+        }
+
         /// <summary>A fork's literal branches; null (reported) when Elsa 3 computes them at run time.</summary>
         private IReadOnlyList<string>? ForkBranches(Elsa3Activity fork)
         {
@@ -220,7 +267,7 @@ internal static class Elsa3FlowchartGraphBuilder
 
             Error(UnsupportedMode, $"{forkPlan.JsonPath}.branches", fork,
                 names is null && text.Length > 0
-                    ? $"Fork '{NodeId(fork)}' has branches '{text}', which cannot be read as a list of names."
+                    ? $"Fork '{NodeId(fork)}' has branches that cannot be read as a list of names."
                     : $"Fork '{NodeId(fork)}' sets its branches by an expression, which only Elsa 3 can evaluate.",
                 "List the fork's branches literally before converting.");
             return null;

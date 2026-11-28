@@ -178,7 +178,13 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | (Elsa 4) DispatchWorkflow.CancelChildOnParentCancellation | default true | R2: emit `false` | 2 |
 | DispatchWorkflow outcome `Done` | `Dispatched`, `Completed`, `Faulted` (ExecuteWorkflow: `Completed`, `Faulted`); `Cancelled` and `DispatchFailed` unmapped | R8 (spec 1245 FR-007, FR-009; was `Dispatched`, `Completed`, amended 2026-11-27: Elsa 3 continued on `Done` after a faulted child) | 2 |
 | ExecuteWorkflow → DispatchWorkflow | `WaitForCompletion` literal `true`, whatever the Elsa 3 value | R7 rewrite (`ExecuteWorkflowAsDispatch`) + **W** (durable dispatch instead of an in-process call; unless the Elsa 3 value was literal true the warning adds that Elsa 4 waits for a child that suspends, where Elsa 3 continued); members as DispatchWorkflow. `Result` is carried to `Output` and every read of its variable is rewritten (spec 1245 FR-008, FR-010; amended 2026-11-27: was a default flip to `true`, but Elsa 3 ran an unset `WaitForCompletion` as `false`, and a captured `Result` was unconvertible) | 1 (Result captured → converts; target is an expression → unconvertible) |
-| BulkDispatchWorkflows, RunTask | — | R6 | 2 / 0 |
+| BulkDispatchWorkflows → BulkDispatchWorkflows (spec 1242) | structural activity, `Done` only | R1 + **W** `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` (cap 1,000, window 16) and `…-ITEM-INPUTS` | 2 |
+| BulkDispatchWorkflows.Items | `Items` | R1; null → no binding; a non-null literal → R5 refused (Elsa 3 read it as text) | 2 |
+| BulkDispatchWorkflows.WorkflowDefinitionId, CorrelationIdFunction, WaitForCompletion, Input, DefaultItemInputKey | the generated `Dispatch` child (`{id}.dispatch`): `WorkflowDefinitionId` (literal), `CorrelationId` (item read → `currentItem`), `WaitForCompletion` (missing → `true`), per-item `Inputs` (target-declared names) | R7 (rewrite `BulkDispatchChild`) | 2 |
+| BulkDispatchWorkflows.StartNewTrace, ChannelName | — | R3 (false / null), checked by the rewrite | 2 |
+| BulkDispatchWorkflows.ChildCompleted, ChildFaulted | slots `ChildCompleted`, `ChildFaulted`; dropped with a literal-false wait | R7 | 1 |
+| BulkDispatchWorkflows outcomes `Completed`, `Canceled` | dropped where faithful, else `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` | R8 | 1 |
+| RunTask | — | R6 | 0 |
 
 ## JavaScript
 

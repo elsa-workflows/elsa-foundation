@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
@@ -36,6 +37,11 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
         new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services);
         new JavaScriptFeature().ConfigureServices(services);
+        // Only the bulk dispatch structure handler: the rest of the feature (validators, compilation sources) is not under test.
+        var dispatchWorkflow = new ServiceCollection();
+        new Elsa.Activities.DispatchWorkflow.Design.DispatchWorkflowDesignFeature().ConfigureServices(dispatchWorkflow);
+        foreach (var handler in dispatchWorkflow.Where(descriptor => descriptor.ServiceType == typeof(IActivityStructureHandler)))
+            ((ICollection<ServiceDescriptor>)services).Add(handler);
         _provider = services.BuildServiceProvider();
         var scope = _provider.CreateScope();
         _structures = scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
@@ -152,6 +158,30 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
 
         Assert.StartsWith(ScriptVariableReadDiagnostics.ReadOnlyLiteralWrite, error.Message, StringComparison.Ordinal);
         Assert.Contains("loop item or index", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(BulkDispatchWorkflowsConstants.DispatchSlotName)]
+    [InlineData(BulkDispatchWorkflowsConstants.ChildCompletedSlotName)]
+    [InlineData(BulkDispatchWorkflowsConstants.ChildFaultedSlotName)]
+    public async Task A_bulk_dispatch_slot_reading_the_pass_item_and_index_raises_nothing(string slot)
+    {
+        // Spec 1242 FR-004 and FR-010, plan Test scope: each pass's frame declares currentItem and currentIndex for all three slots.
+        var bulk = new ActivityNode("bulk", "av-bulk", [], []) { Structure = new ActivityNodeStructure(
+            BulkDispatchWorkflowsConstants.StructureKind, BulkDispatchWorkflowsConstants.StructureSchemaVersion, JsonSerializer.SerializeToElement(new { })) };
+        var handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), item => item.Kind == BulkDispatchWorkflowsConstants.StructureKind);
+        bulk = handler.ReplaceChildren(bulk, [new ActivityChildProjection(slot,
+            [new ActivityNode("w", "av-write", [Js("variables.currentItem.total + variables.currentIndex + getVariable('currentItem').tax")], [])])]);
+
+        Assert.Empty(await ValidateAsync(bulk));
+    }
+
+    [Fact]
+    public async Task Outside_a_bulk_dispatch_pass_the_item_is_not_declared()
+    {
+        var error = Assert.Single(await ValidateAsync(new ActivityNode("w", "av-write", [Js("variables.currentItem")], [])));
+
+        Assert.Equal(ScriptVariableReadValidator.UnresolvedReadType, error.Type);
     }
 
     [Theory]

@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using CShells.Lifecycle;
 using Elsa.Tasks.Core;
+using Elsa.Tasks.Options;
 using Elsa.Tasks.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,8 +18,16 @@ namespace Elsa.Tasks;
 )]
 public class TasksFeature : IShellFeature
 {
+    /// <summary>
+    /// When set, the shell runs only its startup tasks, in dependency order, when it activates, and starts no background
+    /// or recurring task. For a process that needs the startup work but must not run shell-lifetime tasks.
+    /// </summary>
+    [ManifestSetting(DisplayName = "Startup tasks only", Description = "Run only the startup tasks, in dependency order, when the shell activates, and start no background or recurring task.", Category = "Tasks", DefaultValue = "false")]
+    public bool StartupTasksOnly { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
+        services.Configure<TaskStartOptions>(options => options.StartupTasksOnly = StartupTasksOnly);
         // Shell-singleton lifecycle: the task manager and its executor own the start/stop of
         // shell-lifetime background and recurring tasks (and the singleton IEventChannel drained by
         // BackgroundEventPublisher). They must therefore live for the shell's lifetime — a scoped

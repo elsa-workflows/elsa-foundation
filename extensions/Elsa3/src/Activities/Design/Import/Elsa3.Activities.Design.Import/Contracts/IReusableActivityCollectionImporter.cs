@@ -38,10 +38,15 @@ public interface IReusableActivityCollectionAnalyzer
 /// </remarks>
 public interface IReusableActivityImportMaterializer
 {
+    /// <param name="tenantId">
+    /// The tenant the import writes to. Anything the materializer reads from what is already published there, such as a
+    /// bulk dispatch target's declared inputs (spec 1242), is read from this tenant only.
+    /// </param>
     ValueTask<ReusableActivityImportMutation> MaterializeAsync(
         ReusableActivityImportCollection collection,
         ReusableActivityImportPlan plan,
         IReadOnlyList<ReusableActivityImportItem> selection,
+        string? tenantId = null,
         CancellationToken cancellationToken = default);
 }
 

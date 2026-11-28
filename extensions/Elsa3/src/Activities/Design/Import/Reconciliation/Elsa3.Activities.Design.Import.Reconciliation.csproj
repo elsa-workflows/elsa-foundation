@@ -6,6 +6,9 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa3.Activities.Design.Import.Integration.Tests" />
+    <!-- The migration tooling runs the same import sequence (spec 1237 research R-2). -->
+    <InternalsVisibleTo Include="Elsa3.Migration.Tooling" />
+    <InternalsVisibleTo Include="Elsa3.Migration.Tests" />
   </ItemGroup>
 
   <ItemGroup>

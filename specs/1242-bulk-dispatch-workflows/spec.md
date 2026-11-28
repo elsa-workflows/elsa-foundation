@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-26
 
-**Status**: Approved — coordinator answered Q1–Q5 and approved on 2026-11-27
+**Status**: Implemented — PR #6067 (2026-11-28); approved 2026-11-27 after the coordinator answered Q1–Q5
 
 **Issue**: #5833, part of initiative #3052 (Elsa 3 to Elsa 4 conversion). Parity record: #1152.
 
@@ -218,8 +218,9 @@ and on-completed-callbacks suites pass.
 - **Two waiting activities in one parent instance**: each keeps its own children. Elsa 3's shared per-instance
   bookmark and counter is not reproduced.
 - **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: the workflow's incident strategy decides
-  (FR-008). Under the default Fault strategy the workflow faults. Under ContinueWithIncidents it becomes a retryable
-  incident on that item's pass, the other passes keep running, and the bulk activity completes after a retry.
+  (FR-008). Under the default Fault strategy the workflow faults. Under ContinueWithIncidents it becomes an open
+  incident on that item's pass, the other passes keep running, and the bulk activity completes after the operator
+  reschedules the faulted activity (`RescheduleActivity`).
 - **The `Dispatch` execution itself faults** (an input the child does not declare, the nesting depth, a missing pinned
   target, an error in the `Inputs` or `CorrelationId` expression): the incident strategy decides, as above.
   `ChildFaulted` does not run for it. Elsa 3 faulted the whole activity, which is what the default strategy does.
@@ -285,8 +286,11 @@ and on-completed-callbacks suites pass.
   `ForEach` and `If` do not, so the workflow's incident strategy decides.
   - This covers a fault of the `Dispatch` execution itself, of a slot child, or of an activity deeper inside a slot.
   - Under the default Fault strategy the workflow faults, matching Elsa 3, where the activity faulted.
-  - Under ContinueWithIncidents the fault is a retryable incident on its pass. The other passes go on, and retrying the
-    faulted activity (`RetryFaultedActivity`) lets the pass end and the bulk activity continue.
+  - Under ContinueWithIncidents the fault is an open incident on its pass. The other passes go on. The bulk activity
+    keeps waiting for the faulted child without consuming its fault (`IRuntimeAcceptsRescheduledFaultedChild`, as
+    `Sequence` does), so rescheduling the faulted activity (`RescheduleActivity`) lets the pass end and the bulk
+    activity continue. `RetryFaultedActivity` does not apply there: it needs a blocking incident that waits for
+    intervention, and ContinueWithIncidents opens the incident instead (amended during implementation).
   - `ChildFaulted` is for children that ended badly (FR-006 outcomes), not for faults of the `Dispatch` node. The node
     raises those as plain exceptions, so they cannot be told apart, and absorbing them would hide recoverable errors.
 - **FR-009**: The activity has one outcome, `Done`.
@@ -306,13 +310,14 @@ and on-completed-callbacks suites pass.
   - The activity README (`essentials/src/Activities/DispatchWorkflow/Runtime/README.md`) explains the lost-update risk and the alternative: record per-child results in the child workflow, or
     read them after the bulk activity.
 - **FR-010b**: The same activity README also states:
-  - that only `RetryFaultedActivity` ends a faulted pass. `RescheduleActivity` is refused, because the faulted pass
-    has a blocking incident (`BlockingIncident`);
+  - that under ContinueWithIncidents an operator ends a faulted pass with `RescheduleActivity` of the faulted
+    activity. `RetryFaultedActivity` is refused there (`NoBlockingIncident`), because the strategy leaves the incident
+    open rather than waiting for intervention (amended during implementation);
   - that `DispatchFailed` reaches `ChildFaulted` only when the `Dispatch` node waits. A fire-and-forget child that
     fails to start is not seen by the bulk activity;
   - that a slot holding a `Flowchart` or another composite that handles its own child faults reports the fault as the
-    slot's direct child, so the activity to retry is that direct child;
-  - that under ContinueWithIncidents a faulted pass keeps its place in the window of 16 until it is retried, so 16
+    slot's direct child, so the activity to reschedule is that direct child;
+  - that under ContinueWithIncidents a faulted pass keeps its place in the window of 16 until it is rescheduled, so 16
     open incidents stall the activity.
 
 **Converter**
@@ -352,8 +357,10 @@ and on-completed-callbacks suites pass.
   expression.
   - **The target's declared inputs must be known**, from either of two sources:
     - the same import;
-    - a workflow already published in Elsa 4, imported earlier or authored natively, whose declared inputs the
-      converter reads from the published definition.
+    - a workflow already published in Elsa 4, imported earlier or authored natively, in the tenant the import publishes
+      under: the converter reads the declared inputs of the executable a dispatch would pin (the newest live published
+      reference of that definition in that tenant). Another tenant's workflow of the same id is never read. A host
+      without Workflows Runtime's executable stores (Design only) knows same-import targets only.
 
     These target declarations are used only for bulk dispatch. The existing #5808 check for plain
     `DispatchWorkflow`/`ExecuteWorkflow` keeps reading same-import targets only, so its behaviour does not change.
@@ -367,8 +374,10 @@ and on-completed-callbacks suites pass.
     - for any other item: `{DefaultItemInputKey: item}` when the target declares that name, matched regardless of
       letter case and passed in the declared spelling;
     - on a name clash between the item and the static `Input`, the item wins, for both kinds of item.
-  - **`DefaultItemInputKey`** must be a literal, null or absent (null and absent mean `Item`). Anything else is refused
-    with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+  - **`DefaultItemInputKey`** must be a non-blank literal, null or absent (null and absent mean `Item`). Anything else,
+    a blank literal included, is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+  - **A target that declares two inputs differing only in letter case** is refused with `ELS3-LITERAL-KEY-AMBIGUOUS`:
+    item members match declared names in any letter case, so the conversion cannot tell which input a member fills.
   - **The static `Input`**: a literal or Object map is checked with the #5808 rules and embedded as constant entries.
     An `Input` in any expression language, JavaScript included, is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
     Guidance: put those values in the items, or use a literal map. The converter lowers Elsa 3 scripts only after the
@@ -386,12 +395,15 @@ and on-completed-callbacks suites pass.
 - **FR-017**: Outcomes:
   - `Done` maps to `Done`.
   - `Completed` (Elsa 3 emitted it with `Done` when it waited and had items):
-    - dropped without a diagnostic when `Done` reaches every one of its targets and none is a `WaitAll` join;
-    - dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` when the wait is a literal false;
+    - dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` when the wait is a literal false, unless it leads to a
+      `WaitAll` join. This rule comes first: Elsa 3 never emitted it, even where `Done` reaches the same target;
+    - otherwise dropped without a diagnostic when `Done` reaches every one of its targets and none is a `WaitAll` join;
     - otherwise refused with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`. Guidance: connect the follow-up to `Done`.
-  - `Canceled` (never emitted): dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, or refused with
-    `…-OUTCOME-ROUTE` when it leads to a `WaitAll` join, because dropping that edge would make the join run where Elsa
-    3 never ran it.
+  - `Canceled` (never emitted): dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, unless it leads to a `WaitAll`
+    join.
+  - A connection Elsa 3 never followed (`Canceled`, or `Completed` with a literal-false wait) that leads to a `WaitAll`
+    join is refused with `…-OUTCOME-ROUTE`, because dropping that edge would make the join run where Elsa 3 never ran
+    it (amended during implementation).
 
   For the corpus root (Done, Canceled and Completed into one `WaitAny` join) this leaves one edge, and the join
   collapses.
@@ -406,12 +418,13 @@ and on-completed-callbacks suites pass.
 | Elsa 3 use | Result |
 |---|---|
 | `WorkflowDefinitionId` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
+| `WaitForCompletion` a literal that is not true or false (in any case) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: set it to true or false |
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` |
-| `Items` a non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: Elsa 3 read it as text and dispatched no child |
-| `DefaultItemInputKey` not a literal, or a static `Input` that is an expression (JavaScript or another language) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: put the values in the items, or use a literal map |
+| `Items` a non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`; the message says Elsa 3 read it as text and dispatched no child; guidance: bind `Items` to an expression that returns the collection |
+| `DefaultItemInputKey` not a literal or a blank literal, or a static `Input` that is an expression (JavaScript or another language) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: put the values in the items, or use a literal map |
 | Target workflow neither in the import nor published in Elsa 4 | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target first, or in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
-| A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
+| A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution, also when the parent declares a variable or input of that name (Elsa 3 shadowed it in the branch). Guidance: remove the read; the child's result is not available in the branch yet |
 
 - **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`, as an entry-level behaviour
   warning on the map entry. It says that more than 1,000
@@ -421,6 +434,9 @@ and on-completed-callbacks suites pass.
   variable declared outside the bulk node MUST raise behaviour warning `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`.
   - An Elsa 3 composite inside a branch, for example a `Flowchart` or `Sequence`, can declare its own variables. Writes
     to those are declared inside the bulk node, are not outer writes, and raise no warning.
+  - A branch script (for example a `RunJavaScript` body) that may write a variable raises the warning. A converted
+    script can write only workflow variables: a script write to a container variable is refused
+    (`ELS3-SETTER-UNDECLARED-VARIABLE`), and an input expression that writes is refused (`VF-IMP-005`).
   - Writes in the correlation function or the static `Input` are already refused as input expressions
     (`ForbiddenCapability`). The generated `Dispatch` child has no output capture. Guidance: Elsa 3 ran
   the branches one at a time, and Elsa 4 runs them concurrently, so a shared counter or list can lose updates. Record

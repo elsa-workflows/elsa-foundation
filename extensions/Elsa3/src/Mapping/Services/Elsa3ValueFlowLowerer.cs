@@ -88,6 +88,11 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             PassRead = plan is null ? (_, name) => Elsa3PassRead.None(name) : (node, name) => Elsa3LoopPassVariables.Resolve(plan, node, name),
             PassReachable = plan is null ? _ => [] : node => Elsa3LoopPassVariables.Reachable(plan, node),
             AccessorName = plan is null ? (_, _) => null : (node, matches) => Elsa3LoopPassVariables.AccessorName(plan, node, matches),
+            BulkDispatchItem = plan is null ? _ => null : property =>
+                StringComparer.Ordinal.Equals(property.PropertyName, "CorrelationId") && plan.BulkDispatchOfChild(property.Activity) is { } bulk
+                    ? (bulk.BulkNodeId, bulk.ItemKey)
+                    : null,
+            InBulkDispatchBranch = plan is null ? _ => false : node => plan.BulkDispatchOfBranchNode(node) is not null,
             ObserveScriptOutcomes = plan is null ? null : (node, names, invalidDone, nativeCompletionAccess) =>
             {
                 if (plan.Find(node) is not { } script) return;
@@ -117,6 +122,23 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     !expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
                     expressionRewriter.ScriptMayWriteVariables(expression.Value,
                         ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)));
+
+        // Spec 1242 FR-020a: whether a branch script writes variables is only known before its script is rewritten. A
+        // script body is usually a literal (RunJavaScript). Only a script body can write once converted (an input expression
+        // that writes is refused), and only workflow variables (a container variable write is refused), so any write is outer.
+        if (plan is { BulkDispatches.Count: > 0 })
+        {
+            foreach (var property in properties.Where(property =>
+                         isScriptBody?.Invoke(property.Activity, property.PropertyName) == true &&
+                         accessors.InBulkDispatchBranch(property.Activity)))
+            {
+                if (property.Expression is not { } body ||
+                    !body.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
+                    expressionRewriter.ScriptMayWriteVariables(body.Value,
+                        ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)))
+                    plan.BulkDispatchBranchScriptWrites.Add(property.Activity);
+            }
+        }
 
         foreach (var sourceProperty in properties)
         {
@@ -447,7 +469,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (notes.Any(note => note.Code == Elsa3ActivityDiagnosticCodes.LiteralDateInterpreted) &&
                 diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
                 diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
-                    $"The workflow's date literals were converted with {options.DateInterpretation}" + (options.SourceTimeZone is null ? "." : $" '{options.SourceTimeZone}'."),
+                    options.SourceTimeZone is null
+                        ? $"The workflow's date literals were converted with {options.DateInterpretation}."
+                        : $"The workflow's date literals were converted with {options.DateInterpretation}, in the configured source time zone.",
                     "Keep the same date interpretation when converting this workflow again.", property.JsonPath, null, Elsa3MigrationDiagnosticSeverity.Info));
             var rewritten = Elsa3TypedValues.WithExpression(property.Value, kind, converted, removeMemoryReference: true);
             property.Activity.AdditionalProperties[property.PropertyName] = rewritten;
@@ -718,7 +742,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     issue.Code,
                     issue.Message,
                     issue.Guidance,
-                    $"{property.JsonPath}.expression.value"));
+                    $"{property.JsonPath}.expression.value",
+                    metadata: issue.Metadata));
             }
             return;
         }
@@ -897,7 +922,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         foreach (var warning in rewrite.Warnings)
         {
             diagnostics.Add(CreateDiagnostic(input, property, warning.Code, warning.Message, warning.Guidance,
-                $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Warning));
+                $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Warning, warning.Metadata));
         }
 
         // Every workflow whose JavaScript was converted under an interpretation that assumes something records it once;
@@ -910,7 +935,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
         diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
             interpretation == Elsa3DateInterpretation.SourceTimeZone
-                ? $"The workflow's scripts were converted with the date interpretation SourceTimeZone '{expressionRewriter.SourceTimeZone}': each use of Elsa 3 local time names that zone in the converted code."
+                ? "The workflow's scripts were converted with the date interpretation SourceTimeZone: each use of Elsa 3 local time names the configured source time zone in the converted code."
                 : $"The workflow's scripts were converted with the date interpretation {interpretation}.",
             "Keep the same date interpretation when this workflow is converted again.",
             $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Info));
@@ -981,7 +1006,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (!rewrite.Succeeded)
         {
             foreach (var issue in rewrite.Issues)
-                diagnostics.Add(CreateDiagnostic(input, property, issue.Code, issue.Message, issue.Guidance, $"{property.JsonPath}.expression.value"));
+                diagnostics.Add(CreateDiagnostic(input, property, issue.Code, issue.Message, issue.Guidance, $"{property.JsonPath}.expression.value", metadata: issue.Metadata));
             return;
         }
 
@@ -1151,6 +1176,41 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         AccessorScope accessors,
         Elsa3AmbientReference ambient)
     {
+        // Elsa 3 put these into the branch's own scope, shadowing a parent variable or input of the same name, so a read
+        // that would resolve against the parent is refused too: it would silently read the parent's value.
+        return !accessors.InBulkDispatchBranch(consumer.Activity) || !IsBulkDispatchChildResult(ambient)
+            ? ResolveAmbientCore(definition, consumer, outputs, nodeOrder, accessors, ambient)
+            : Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead,
+                $"A bulk dispatch branch reads '{ambient.Name}', which Elsa 3 passed the branch about the child that ended. An Elsa 4 branch does not get the child's result.",
+                "Remove the read from the branch before converting; the child's result is not available in the branch yet. To act on each child's result, do so in the child workflow."));
+    }
+
+    /// <summary>
+    /// What Elsa 3 passed a bulk dispatch branch about the child (spec 1242 FR-019): the <c>ChildInstanceId</c> variable and
+    /// the inputs <c>WorkflowOutput</c>, <c>WorkflowInstanceId</c>, <c>WorkflowStatus</c> and <c>WorkflowSubStatus</c>.
+    /// </summary>
+    private static bool IsBulkDispatchChildResult(Elsa3AmbientReference ambient) =>
+        ambient.Kind switch
+        {
+            Elsa3AmbientReferenceKind.Variable => ambient.Name.Equals("ChildInstanceId", StringComparison.OrdinalIgnoreCase),
+            Elsa3AmbientReferenceKind.WorkflowRequest => BulkDispatchChildInputs.Contains(ambient.Name),
+            Elsa3AmbientReferenceKind.GeneratedAccessor => ambient.Name.Equals("ChildInstanceId", StringComparison.Ordinal) ||
+                                                           BulkDispatchChildInputs.Contains(ambient.Name),
+            _ => false
+        };
+
+    private static readonly HashSet<string> BulkDispatchChildInputs =
+        new(["WorkflowOutput", "WorkflowInstanceId", "WorkflowStatus", "WorkflowSubStatus"], StringComparer.OrdinalIgnoreCase);
+
+    private static Elsa3ExpressionParameterResolution ResolveAmbientCore(
+        Elsa3WorkflowDefinition definition,
+        ActivityProperty consumer,
+        IReadOnlyList<Elsa3MemoryOccurrence> outputs,
+        IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
+        Elsa3AmbientReference ambient)
+    {
         // A graph body is a closed scope: its request inputs are the reusable's own inputs and its root
         // variables are the reusable's variables, so the same lowering as a workflow's reads the reusable's values.
         switch (ambient.Kind)
@@ -1204,6 +1264,15 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 return ResolveGeneratedAccessor(definition, consumer, outputs, nodeOrder, accessors, ambient.Name);
             case Elsa3AmbientReferenceKind.GeneratedSetter:
                 return ResolveGeneratedSetter(definition, consumer, outputs, nodeOrder, accessors, ambient.Name);
+            case Elsa3AmbientReferenceKind.EvaluatorArgument:
+                // Spec 1242 FR-015: Elsa 3 evaluated a bulk dispatch's correlation function with the item as its argument.
+                if (accessors.BulkDispatchItem(consumer) is { } bulk &&
+                    ambient.Name.Equals(CamelCase(bulk.ItemKey), StringComparison.Ordinal))
+                    return BulkDispatchItemRead(consumer, accessors, bulk.BulkNodeId);
+                return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    "JavaScript reads Elsa 3 evaluator arguments ('args'), which Elsa 4 replaces with the expression's own parameters.",
+                    "Read the value through getVariable or getInput instead before import."));
             default:
                 throw new ArgumentOutOfRangeException(nameof(ambient), ambient.Kind, "Unknown ambient reference kind.");
         }
@@ -1545,13 +1614,41 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (inputVariables.Length == 1)
             return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name);
 
-        return Elsa3ExpressionParameterResolution.NotFound(new Elsa3ExpressionRewriteIssue(
-            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+        // Spec 1242 FR-015: a bulk dispatch's correlation function reads its item through the accessor Elsa 3 generated for
+        // the item key. A workflow input or variable of that name won above, as Elsa 3's EvaluatingJavaScript handler
+        // overwrote the item's accessor with it.
+        if (accessors.BulkDispatchItem(consumer) is { } bulk && name.Equals(bulk.ItemKey, StringComparison.Ordinal))
+            return BulkDispatchItemRead(consumer, accessors, bulk.BulkNodeId);
+
+        return Elsa3ExpressionParameterResolution.NotFound(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+            $"get{name}",
             $"JavaScript calls unknown or unapproved host function 'get{name}'.",
             $"If it reads a variable or workflow input, declare that variable or input before import. {Elsa3ExpressionRewriter.UndeclaredFunctionGuidance($"get{name}")}"));
 
         static bool HasAccessor(string declared, string accessor) => HasGeneratedAccessor(declared, accessor);
     }
+
+    /// <summary>
+    /// A bulk dispatch's item, read by its Dispatch node as the bulk node's <c>currentItem</c> (spec 1242 FR-015). Elsa 4
+    /// resolves the name nearest scope first, so a scope between them that declares <c>currentItem</c> is refused.
+    /// </summary>
+    private static Elsa3ExpressionParameterResolution BulkDispatchItemRead(ActivityProperty consumer, AccessorScope accessors, string bulkNodeId)
+    {
+        const string currentItem = "currentItem";
+        var nearest = accessors.AncestorScopeNames(consumer.Activity)
+            .FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.Name, currentItem));
+        if (nearest.Name is not null && !StringComparer.Ordinal.Equals(nearest.ScopeNodeId, bulkNodeId))
+            return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ResolutionDiffers,
+                $"The correlation function reads the item of bulk dispatch '{bulkNodeId}', which converts to its '{currentItem}', but '{nearest.ScopeNodeId}' also declares '{currentItem}', which Elsa 4 would read instead.",
+                $"Rename the variable '{currentItem}' that '{nearest.ScopeNodeId}' declares in the Elsa 3 workflow before import."));
+
+        return Elsa3ExpressionParameterResolution.SuccessVariable(
+            new VariableExpressionParameterBinding(bulkNodeId, currentItem), currentItem, Elsa3ScriptValueKinds.Classify(null));
+    }
+
+    private static string CamelCase(string name) =>
+        name.Length == 0 ? name : char.ToLowerInvariant(name[0]) + name[1..];
 
     /// <summary>
     /// Resolves <c>set{name}(value)</c> to the variable Elsa 3 generated it for. Elsa 3 generated setters for variables only
@@ -1583,8 +1680,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return ResolveAmbient(definition, consumer, outputs, nodeOrder, accessors,
                 new Elsa3AmbientReference(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name));
 
-        return Elsa3ExpressionParameterResolution.NotFound(new Elsa3ExpressionRewriteIssue(
-            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+        return Elsa3ExpressionParameterResolution.NotFound(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+            $"set{name}",
             $"JavaScript calls unknown or unapproved host function 'set{name}'.",
             Elsa3ExpressionRewriter.UndeclaredFunctionGuidance($"set{name}")));
     }
@@ -2074,7 +2171,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         string guidance,
         string path,
         string? memoryReferenceId = null,
-        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error) =>
+        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error,
+        IReadOnlyDictionary<string, string>? metadata = null) =>
         CreateDiagnostic(
             input,
             property.ActivityNodeId,
@@ -2085,7 +2183,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             guidance,
             path,
             memoryReferenceId,
-            severity);
+            severity,
+            metadata);
 
     private static Elsa3MigrationDiagnostic CreateDiagnostic(
         DiagnosticScope input,
@@ -2116,9 +2215,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         string guidance,
         string path,
         string? memoryReferenceId,
-        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error)
+        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error,
+        IReadOnlyDictionary<string, string>? extra = null)
     {
         var metadata = input.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        // A component issue names its component as data (spec 1237 FR-016a); the location keys below are the lowerer's own.
+        foreach (var (key, value) in extra ?? new Dictionary<string, string>())
+            metadata[key] = value;
         metadata["DefinitionId"] = input.DefinitionId;
         metadata["ActivityNodeId"] = activityNodeId;
         metadata["ActivityPath"] = activityPath;
@@ -2205,6 +2308,15 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
         /// <summary>The ids and names of the capturing ExecuteWorkflow nodes, as a Liquid <c>Output</c> root names them.</summary>
         public IReadOnlySet<string> WrappedNodeNames { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// For the correlation function of a bulk dispatch's generated Dispatch node: the bulk node and the item key Elsa 3
+        /// generated its accessor for (spec 1242 FR-015); null for any other property.
+        /// </summary>
+        public Func<ActivityProperty, (string BulkNodeId, string ItemKey)?> BulkDispatchItem { get; init; } = _ => null;
+
+        /// <summary>Whether a node is inside a converted bulk dispatch branch (spec 1242 FR-019).</summary>
+        public Func<Elsa3Activity, bool> InBulkDispatchBranch { get; init; } = _ => false;
     }
 
 }
