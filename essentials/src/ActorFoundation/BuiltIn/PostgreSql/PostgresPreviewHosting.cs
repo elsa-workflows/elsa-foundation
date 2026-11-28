@@ -26,10 +26,18 @@ public static partial class PostgresPreviewHosting
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
 
     /// <summary>Selects the shipped PostgreSQL store with the configured primary actor and root start protection.</summary>
-    public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts)
+    public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts) =>
+        CreateShippedContext(options, actorType, protectsStarts, publisherScope: null);
+
+    /// <summary>Selects the shipped store and optionally binds its standalone Event publisher to one ordinary scope.</summary>
+    public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts,
+        Contract.BoundScope? publisherScope)
     {
+        if (publisherScope is { IsHostIsolated: true })
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
         RootPublicEventHost.RequireConfiguredActorType(actorType);
-        return KernelDb.ForPostgresRootShipped(options, new(actorType, protectsStarts));
+        return KernelDb.ForPostgresRootShipped(options,
+            new(actorType, protectsStarts) { AuthoredStandaloneTenant = publisherScope?.Tenant });
     }
 
     /// <summary>Selects the dedicated preview format for qualifying indexed playback.</summary>
@@ -127,7 +135,15 @@ public static partial class PostgresPreviewHosting
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return InstallPreviewFormatAsync(() => CreateShippedContext(options, actorType, protectsStarts), cancellationToken);
+        return InstallShippedAsync(options, actorType, protectsStarts, publisherScope: null, cancellationToken);
+    }
+
+    /// <summary>Installs or verifies the shipped PostgreSQL format with the configured standalone Event publisher mode.</summary>
+    public static Task InstallShippedAsync(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts,
+        Contract.BoundScope? publisherScope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreateShippedContext(options, actorType, protectsStarts, publisherScope), cancellationToken);
     }
 
     private static async Task InstallPreviewFormatAsync(Func<KernelDb> open, CancellationToken cancellationToken)

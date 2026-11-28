@@ -104,7 +104,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 37 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 38 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -201,7 +201,7 @@ internal static class RootProfiles
     private const RootCapabilities Shipped34 = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
     private const RootCapabilities Shipped37 = KeyedStartsQualification | PublicEventHostQualification | PagedPublicEventsQualification |
         RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns;
-    internal const RootCapabilities Shipped = Shipped37;
+    internal const RootCapabilities Shipped = RetainedStandaloneSourcesQualification;
     internal const RootCapabilities RetainedResponseQualification = Shipped37 | RootCapabilities.RetainedRootResponse;
     internal const RootCapabilities AuthoredStandaloneEventQualification = Shipped37 | RootCapabilities.AuthoredStandaloneEvents;
     internal const RootCapabilities RetainedStandaloneSourcesQualification =
@@ -509,8 +509,6 @@ internal static class StoreDefinitionsRevision
     private const int SqliteLiveEventRevision = 14;
     private const int PostgreSqlSharedActivationRevision = 26;
     private const int SqliteSharedActivationRevision = 29;
-    private const int PostgreSqlShippedRevision = 31;
-    private const int SqliteShippedRevision = 34;
     private const int PostgreSqlRetainedResponseRevision = 32;
     private const int PostgreSqlPreparedWaitRevision = 34;
     private const int SqlitePreparedWaitRevision = 37;
@@ -596,14 +594,14 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootSharedActivationQualification ||
                     db.RequiredFormat.SupportsIsolatedInlineQualification =>
                     sqlite ? SqliteSharedActivationRevision : PostgreSqlSharedActivationRevision,
-                _ when db.RequiredFormat == StoreFormat.RootShipped => sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
                 _ when db.RequiredFormat == StoreFormat.RootRetainedResponseQualification =>
                     sqlite ? SqliteRetainedResponseRevision : PostgreSqlRetainedResponseRevision,
                 _ when db.RequiredFormat == StoreFormat.RootAuthoredStandaloneEventQualification =>
                     sqlite ? SqliteAuthoredStandaloneEventRevision : PostgreSqlAuthoredStandaloneEventRevision,
                 _ when db.RequiredFormat == StoreFormat.RootRetainedStandaloneSourcesQualification =>
                     sqlite ? SqliteRetainedStandaloneSourcesRevision : PostgreSqlRetainedStandaloneSourcesRevision,
-                _ when db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification =>
+                _ when db.RequiredFormat == StoreFormat.RootShipped ||
+                    db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification =>
                     sqlite ? SqliteOptionalAuthoredStandaloneEventsRevision : PostgreSqlOptionalAuthoredStandaloneEventsRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPreparedWaitQualification =>
                     sqlite ? SqlitePreparedWaitRevision : PostgreSqlPreparedWaitRevision,

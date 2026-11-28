@@ -25,10 +25,17 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
 
     /// <summary>Binds the shipped Embedded composition with trusted protection for held root starts.</summary>
     public static SqliteEmbeddedFoundation WithRootStartProtection(string databasePath, string node, string actorType,
-        ProtectRootStartAsync protectRootStart)
+        ProtectRootStartAsync protectRootStart) =>
+        WithRootStartProtection(databasePath, node, actorType, protectRootStart, publisherScope: null);
+
+    /// <summary>Binds protected root starts and optionally enables the shipped standalone Event publisher.</summary>
+    public static SqliteEmbeddedFoundation WithRootStartProtection(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart, Contract.BoundScope? publisherScope)
     {
         ArgumentNullException.ThrowIfNull(protectRootStart);
-        return new(databasePath, node, actorType, qualificationFormat: null, protectRootStart);
+        if (publisherScope is { IsHostIsolated: true })
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
+        return new(databasePath, node, actorType, qualificationFormat: null, protectRootStart, publisherScope);
     }
 
     /// <summary>Composes the dedicated preview format for qualifying retained terminal output.</summary>
@@ -185,7 +192,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope)
     {
         ArgumentNullException.ThrowIfNull(scope);
-        if (qualificationFormat is not { SupportsAuthoredStandaloneEventQualification: true })
+        if (qualificationFormat is { SupportsAuthoredStandaloneEventQualification: false })
             throw new NotSupportedException("This SQLite profile cannot transfer authored standalone Events.");
         return requests.Value.BindAuthoredStandaloneEvents(scope);
     }

@@ -57,7 +57,9 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
     [ManifestSetting(DisplayName = "Tenant", Description = "The tenant bound to this shell's kernel ingress and reads.", Category = "Runtime", DefaultValue = "default")]
     public string Tenant { get; set; } = "default";
 
-    /// <summary>Private opt-in for qualifying standalone Event and recurring workflow starts.</summary>
+    [ManifestSetting(DisplayName = "Standalone trigger handoff",
+        Description = "Bind standalone Event, HTTP, Timer and Cron sources to this shell with prepared Runtime persistence.",
+        Category = "Runtime")]
     public bool PreparedStandaloneStarts { get; set; }
 
     /// <summary>Private opt-in for qualifying standalone asynchronous HTTP fan-out.</summary>
@@ -80,10 +82,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
 
     public void ConfigureServices(IServiceCollection services)
     {
-        var storage = PreparedStandaloneStarts
-            ? KernelShellStorage.CreateRetainedStandaloneSourcesQualification(Provider, SqlitePath, PostgresConnectionString,
-                EmbeddedTenant.Bind(Tenant))
-            : KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
+        var publisherScope = PreparedStandaloneStarts ? EmbeddedTenant.Bind(Tenant) : null;
+        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString, publisherScope);
         PreparedStandaloneHttpFanOut = storage.TakesRetainedHttpResponse;
         PreparedStandaloneHttpResponses = storage.TakesRetainedHttpResponse;
         ConfigureServices(services, storage, protectChildExecutables: storage.TakesPreparedStarts);
@@ -102,7 +102,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
         if ((PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses) && !PreparedStandaloneStarts)
             throw new InvalidOperationException("Protected standalone HTTP requires the source-owned standalone handoff.");
         if ((PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses) && !storage.TakesRetainedHttpResponse)
-            throw new InvalidOperationException("Protected standalone HTTP qualification requires the private retained response profile.");
+            throw new InvalidOperationException("Protected standalone HTTP requires committed root responses.");
         if (PreparedStandaloneStarts && !storage.TakesPreparedStarts)
             throw new InvalidOperationException("Prepared standalone starts require Foundation's protected root admission capability.");
         var tenant = EmbeddedTenant.Bind(Tenant);
