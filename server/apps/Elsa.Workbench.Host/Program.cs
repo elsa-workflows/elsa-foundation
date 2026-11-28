@@ -79,6 +79,7 @@ using Elsa.Workflows.Design.Reconciliation.Json;
 using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
@@ -322,6 +323,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(StandaloneTriggersApiFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeDbContext).Assembly,
             typeof(Elsa.Activities.Bpmn.ActivitiesBpmnHostingFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature).Assembly,
