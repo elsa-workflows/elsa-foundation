@@ -344,9 +344,9 @@ delivery service, give stock Workbench a new Runtime control database as well. T
 [Curated Essentials workflow execution guidance](../docker/profiles/essentials-curated/README.md#workflow-execution)
 describes the storage boundary and cutover sequence.
 
-Explicitly mounted classic shells in Workbench still use the `WorkflowsRuntimeEntityFrameworkCore`
-recovery and hierarchy signing keys. `shells.CorePreview.Production.json` clears their development
-values in Production.
+Open an explicitly mounted classic shell with its matching immutable Workbench image and configuration.
+Keep its `WorkflowsRuntimeEntityFrameworkCore` recovery and hierarchy signing keys with that deployment.
+Current Workbench refuses the classic Runtime API and persistence selectors before opening a store.
 
 For the historical apphost witnesses, build both Workbench and the Native runner from the same
 checkout. Pass the checkout as the second argument after the configuration to the scripts in
