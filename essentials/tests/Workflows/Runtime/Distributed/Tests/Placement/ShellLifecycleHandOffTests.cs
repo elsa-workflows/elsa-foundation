@@ -1,7 +1,6 @@
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
 using Elsa.Cluster.Core.Options;
-using Elsa.Cluster.Testing.Runtime;
 using Elsa.Locking.Core;
 using Elsa.Tasks;
 using Elsa.Tasks.Core;

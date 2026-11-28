@@ -1,4 +1,3 @@
-using Elsa.Cluster.Testing.Runtime;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Services;

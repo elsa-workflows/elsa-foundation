@@ -19,6 +19,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The membership reference provider and its fixture have no dependency on the workflow runner. -->
+    <Compile Include="..\..\..\..\Cluster\Tests\Reference\SharedMembershipStore.cs"
+             Link="ReferenceMembership\SharedMembershipStore.cs" />
+    <Compile Include="..\..\..\..\Cluster\Tests\Reference\SharedStoreClusterMembership.cs"
+             Link="ReferenceMembership\SharedStoreClusterMembership.cs" />
+    <Compile Include="..\..\..\..\Cluster\Tests\Reference\SharedStoreConformanceFixture.cs"
+             Link="ReferenceMembership\SharedStoreConformanceFixture.cs" />
     <!-- Committed golden fixtures: the frozen v1 wire shape of the cross-node command transport item. -->
     <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
@@ -29,7 +36,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\extensions\Tasks\src\Elsa.Tasks\Elsa.Tasks.csproj" />
-    <!-- The distributed runtime composed on a membership provider, shared with the membership conformance kit (spec 184). -->
+    <!-- Spec 183's legacy runner invariants reuse the independent membership reference provider. -->
     <ProjectReference Include="..\..\..\..\Cluster\Testing\Elsa.Cluster.Testing.csproj" />
     <!-- AddShellStartupValidation, which both shipped hosts compose: a shell runs its ValidateOnStart checks as it activates (#2331). -->
     <ProjectReference Include="..\..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />

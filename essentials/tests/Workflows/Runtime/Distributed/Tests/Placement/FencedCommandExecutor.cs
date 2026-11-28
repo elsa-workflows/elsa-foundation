@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Cluster.Testing.Runtime;
+namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
 /// A command executor that models a drain committing one checkpoint under single-writer fencing:

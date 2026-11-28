@@ -3,7 +3,6 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Readability;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.InProcess;
-using Elsa.Cluster.Testing.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Placement;
