@@ -9,22 +9,20 @@ and R4, and [the resolution contract](../../../../specs/188-workflow-secret-safe
 
 ## What it registers
 
-`SecretsWorkflowsFeature` (`DependsOn` `Secrets` and `ActivitiesRuntime`, no settings) calls `AddSecretsWorkflows`,
-which registers `SecretValueRuntimeResolver` as the container's `IRuntimeSecretResolver`, scoped like the
-`ISecretValueResolver` it reads through. It registers nothing else: no event handler, no task and no other runtime
-contract.
+`ActorSecretsWorkflows` depends on `Secrets` and `ActivitiesRuntimeHosting`. Stock Workbench
+and its Compose reference shell select this bridge. Its `AddSecretsWorkflows` registration adds
+`SecretValueRuntimeResolver` as the scoped `IRuntimeSecretResolver`.
 
-`ActorSecretsWorkflows` makes the resolver contract available in Actor shells and depends on `Secrets` and
-`ActivitiesRuntimeHosting`. Stock Workbench and its Compose reference shell select this feature. General
-secret-bound activity input execution remains a classic runtime capability through `SecretsWorkflows`.
+General secret-bound activity input execution and the classic `SecretsWorkflows` and `ConnectionsWorkflows`
+selectors belong to the [pinned classic Workbench source](../../../../docs/contributing/workbench-compatibility-tests.md).
+Independent HTTP connector hosts can still use the `AddConnectionsWorkflows()` SDK registration.
 
 `IRuntimeSecretResolver` is a replacement contract with at most one implementation per container, and the runtime
 registers none. `AddSecretsWorkflows` refuses to register beside another one, as an early diagnostic: when a different
 `IRuntimeSecretResolver` is already registered it throws an `InvalidOperationException` naming both. Calling it again
 where it already registered the bridge adds nothing. A resolver registered after the bridge is not seen by that
 registration; the activities runtime's startup check refuses it instead: shell activation fails with
-`MultipleRuntimeSecretResolversException`, naming both. A host that supplies its own resolver composes it instead of
-`SecretsWorkflows`, not beside it.
+`MultipleRuntimeSecretResolversException`, naming both. A host supplying its own resolver omits `ActorSecretsWorkflows`.
 
 In a classic shell without a resolver, a secret-bound activity waits with an activation-failure incident
 (`MissingSecretResolver`) until the resolver is composed.

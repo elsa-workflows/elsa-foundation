@@ -13,7 +13,7 @@ Outbound logging (not an extension point): `ActivitiesHttpFeature` calls `Remove
 ### `IHttpConnectionApplicator` *(scoped service — `Elsa.Activities.Http.Connections`)*
 - **Kind:** Replacement. `ActivitiesHttpFeature` registers `UnboundHttpConnectionApplicator` with `TryAdd`.
 - **Usage:** `SendHttpRequest` applies a bound `ConnectionReference` through this seam after `RequestHeaders`. The unbound default is a no-op when the input is empty and refuses a bound name when Connections is not composed.
-- **Replace:** `ConnectionsWorkflows` calls `services.Replace` with `HttpConnectionApplicator`, which resolves the http connection for the execution partition and applies the registered `IHttpRequestAuthenticator`.
+- **Replace:** `AddConnectionsWorkflows()` calls `services.Replace` with `HttpConnectionApplicator`, which resolves the http connection for the execution partition and applies the registered `IHttpRequestAuthenticator`.
 
 ---
 
