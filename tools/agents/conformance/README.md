@@ -46,7 +46,7 @@ not claim M4's ordinary workflow/BPMN publication journey.
 
 ## BPMN package boundary profile
 
-Run `qualify.py --profile bpmn-boundary --source HEAD --version <unique-local-version>
+Run `qualify.py --profile bpmn-boundary --source 18a16dee878106ac525aa9a861d851a200e43c55 --version <unique-local-version>
 --output <new-absolute-directory>` with the same Python and .NET prerequisites.
 This profile builds the committed BPMN Core, Design and runtime packages alongside the agent
 packages. After real agent publication/placement, an independent authoring process activates
@@ -68,7 +68,7 @@ Run the separate profile with the bundled Python runtime:
 
 ```bash
 python3 tools/agents/conformance/qualify.py \
-  --profile durable-recovery --source HEAD --version 4.0.0-agent3523.durable \
+  --profile durable-recovery --source 18a16dee878106ac525aa9a861d851a200e43c55 --version 4.0.0-agent3523.durable \
   --output /private/tmp/elsa-agent-durable-proof
 ```
 

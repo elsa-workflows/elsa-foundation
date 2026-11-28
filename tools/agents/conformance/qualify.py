@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
+CLASSIC_SOURCE = "18a16dee878106ac525aa9a861d851a200e43c55"
 PRODUCT_ROOTS = [
     "Elsa.Agent.Design", "Elsa.Agent", "Elsa.Activities.Runtime",
     "Elsa.Serialization.SystemText", "Elsa.Secrets", "Elsa.Workflows.Publishing.Api",
@@ -42,7 +43,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", required=True)
-    parser.add_argument("--source", default="HEAD")
+    parser.add_argument("--source", default=CLASSIC_SOURCE, help="Classic engine source revision (defaults to the archived witness)")
     parser.add_argument("--profile", choices=["kernel", "durable-recovery", "bpmn-boundary"], default="kernel")
     parser.add_argument("--stream-responses", action="store_true", help="Qualify the optional streaming path in the durable profile")
     args = parser.parse_args()
@@ -53,7 +54,7 @@ def main():
     out = args.output
     out.mkdir(parents=True)
     out = out.resolve()
-    source = subprocess.check_output(["git", "rev-parse", args.source + "^{commit}"], cwd=ROOT, text=True).strip()
+    source = subprocess.check_output(["git", "-c", "core.fsmonitor=false", "rev-parse", args.source + "^{commit}"], cwd=ROOT, text=True).strip()
     producer = out / "producer"
     feed = out / "feed"
     producer.mkdir()
@@ -80,7 +81,7 @@ def main():
     try:
         archive = out / "source.tar"
         with archive.open("wb") as stream:
-            subprocess.run(["git", "archive", source], cwd=ROOT, stdout=stream, check=True)
+            subprocess.run(["git", "-c", "core.fsmonitor=false", "archive", source], cwd=ROOT, stdout=stream, check=True)
         with tarfile.open(archive) as bundle:
             bundle.extractall(producer, filter="data")
         report["sourceArchiveSha256"] = sha(archive)
@@ -108,6 +109,9 @@ def main():
         roots = PRODUCT_ROOTS + (["Elsa.Agent.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Cluster.Readability"] if args.profile == "durable-recovery" else [])
         if args.profile == "bpmn-boundary":
             roots += ["Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Design", "Elsa.Activities.Primitives"]
+        missing_roots = sorted(set(roots) - projects.keys())
+        if missing_roots:
+            raise RuntimeError("Selected source is missing classic package roots: " + ", ".join(missing_roots))
         for name in roots:
             visit(projects[name])
         solution = ET.Element("Solution")
