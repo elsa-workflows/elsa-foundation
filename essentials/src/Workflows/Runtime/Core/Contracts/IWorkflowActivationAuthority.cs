@@ -40,3 +40,20 @@ public interface IWorkflowActivationAuthority
         DateTimeOffset updatedAt,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>Reads the committed active slots in one snapshot of the current persistence scope.</summary>
+public interface IWorkflowActivationSnapshot
+{
+    bool SupportsPeerRefresh { get; }
+    ValueTask<IReadOnlyCollection<WorkflowActivationStamp>> ListActiveAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The identity and committed generation of an active slot.</summary>
+public sealed record WorkflowActivationStamp(string SlotId, string DefinitionId, string SlotName, string ActivationId, long Revision);
+
+/// <summary>Checks a candidate route set inside the authoritative activation transaction.</summary>
+public interface IWorkflowActivationRouteGuard
+{
+    ValueTask ValidateAsync(WorkflowActivationStamp candidate, IReadOnlyCollection<WorkflowActivationStamp> active,
+        CancellationToken cancellationToken);
+}

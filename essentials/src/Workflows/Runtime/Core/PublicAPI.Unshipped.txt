@@ -13300,3 +13300,28 @@ static Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata.Read(Sys
 Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId
 static Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId.EnsureNotWritten(System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.ExecutionLivenessState!>!>! changes) -> void
 static Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId.For(string! workflowExecutionId) -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationSnapshot
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationSnapshot.ListActiveAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationSnapshot.SupportsPeerRefresh.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationRouteGuard
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationRouteGuard.ValidateAsync(Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp! candidate, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp!>! active, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.<Clone>$() -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp!
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.ActivationId.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.ActivationId.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.Deconstruct(out string! SlotId, out string! DefinitionId, out string! SlotName, out string! ActivationId, out long Revision) -> void
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.Equals(Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp? other) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.Revision.get -> long
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.Revision.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.SlotId.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.SlotId.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.SlotName.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.SlotName.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.WorkflowActivationStamp(string! SlotId, string! DefinitionId, string! SlotName, string! ActivationId, long Revision) -> void
+override Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.operator !=(Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp? left, Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp? right) -> bool
+static Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp.operator ==(Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp? left, Elsa.Workflows.Runtime.Core.Contracts.WorkflowActivationStamp? right) -> bool

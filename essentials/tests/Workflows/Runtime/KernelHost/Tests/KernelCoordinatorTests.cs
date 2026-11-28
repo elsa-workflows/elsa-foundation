@@ -204,10 +204,11 @@ public sealed class KernelCoordinatorTests
         }
 
         /// <summary>Another coordinator over these stores and this host's serving state, as a second shell composes one.</summary>
-        public KernelActivationCoordinator NewCoordinator(IWorkflowActivationSwitch activationSwitch, IScheduleActors? schedules = null) =>
+        public KernelActivationCoordinator NewCoordinator(IWorkflowActivationSwitch activationSwitch, IScheduleActors? schedules = null,
+            KernelServing? serving = null) =>
             new(Authority, activationSwitch, References,
                 new WorkflowExecutableRootWriteLeaseManager(Executables, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock),
-                Executables, Bindings, Serving, schedules ?? Schedules, Clock, RecurringSchedules, _channels, [Observer]);
+                Executables, Bindings, serving ?? Serving, schedules ?? Schedules, Clock, RecurringSchedules, _channels, [Observer]);
 
         public async Task<WorkflowActivationResult> ActivateAsync(WorkflowExecutable executable, string activationId, string slot = KernelServing.DefaultSlotName,
             KernelActivationCoordinator? coordinator = null)
@@ -460,6 +461,85 @@ public sealed class KernelCoordinatorTests
         host.Schedules.Calls.Clear();
         Assert.Equal(WorkflowActivationOutcome.AlreadyActive, (await host.Coordinator.EnsureServingAsync("ticks", KernelServing.DefaultSlotName)).Outcome);
         Assert.Empty(host.Schedules.Calls);
+    }
+
+    [Fact]
+    public async Task Peer_refresh_replaces_the_committed_route_and_preserves_older_artifacts_and_local_routes()
+    {
+        using var host = new Host();
+        var serving = new KernelServing { ProtectsHttpStarts = true };
+        var peer = host.NewCoordinator(host.Switch, new RuntimeManagedScheduleActors(), serving);
+        var local = NativeExecutableMapper.Map(ExecutableOf("local@1", "local", HttpWorkflow("local", "local")));
+        await serving.ServeHostWorkflowAsync(local);
+
+        var first = await host.ActivateAsync(Orders("orders@1"), "orders-1");
+        Assert.True(first.Succeeded);
+        Assert.True(await peer.RefreshPeerPublicationsAsync(CancellationToken.None));
+        var initial = serving.MatchHttp("POST", "orders")!.Value.Slot!;
+        Assert.Equal(first.Slot.Revision, initial.Revision);
+        Assert.NotNull(initial.HttpPublication);
+        Assert.False(await peer.RefreshPeerPublicationsAsync(CancellationToken.None));
+
+        var replacement = ExecutableOf("orders@2", "orders", HttpWorkflow("ordered", "second"));
+        var second = await host.ActivateAsync(replacement, "orders-2");
+        Assert.True(second.Succeeded);
+        Assert.True(await peer.RefreshPeerPublicationsAsync(CancellationToken.None));
+        Assert.Null(serving.MatchHttp("POST", "orders"));
+        var updated = serving.MatchHttp("POST", "ordered")!.Value.Slot!;
+        Assert.Equal((second.Slot.ActiveActivationId, second.Slot.Revision), (updated.ActivationId, updated.Revision));
+        Assert.Equal("orders@2", updated.Workflow.Id);
+        Assert.True(serving.Registry.Contains("orders@1"));
+
+        Assert.True((await host.DeactivateAsync(replacement)).Succeeded);
+        Assert.True(await peer.RefreshPeerPublicationsAsync(CancellationToken.None));
+        Assert.Null(serving.MatchHttp("POST", "ordered"));
+        Assert.NotNull(serving.MatchHttp("POST", "local"));
+        Assert.True(serving.Registry.Contains("orders@2"));
+    }
+
+    [Fact]
+    public async Task A_peer_can_publish_a_route_freed_since_its_last_refresh()
+    {
+        using var host = new Host();
+        var serving = new KernelServing();
+        var peer = host.NewCoordinator(host.Switch, new RuntimeManagedScheduleActors(), serving);
+        var original = Orders("orders@1");
+        Assert.True((await host.ActivateAsync(original, "orders-1")).Succeeded);
+        Assert.True(await peer.RefreshPeerPublicationsAsync(CancellationToken.None));
+        Assert.True((await host.DeactivateAsync(original)).Succeeded);
+        Assert.NotNull(serving.MatchHttp("POST", "orders"));
+
+        var replacement = ExecutableOf("reused@1", "reused", HttpWorkflow("orders", "new owner"));
+        var published = await host.ActivateAsync(replacement, "reused-1", coordinator: peer);
+        Assert.True(published.Succeeded);
+        Assert.Equal("reused@1", serving.MatchHttp("POST", "orders")!.Value.Slot!.Workflow.Id);
+    }
+
+    [Fact]
+    public async Task A_peer_refreshes_an_occupied_slot_before_checking_its_replacement()
+    {
+        using var host = new Host();
+        var serving = new KernelServing();
+        var peer = host.NewCoordinator(host.Switch, new RuntimeManagedScheduleActors(), serving);
+        var original = Orders("orders@1");
+        var originalShipment = ExecutableOf("ship@1", "ship", HttpWorkflow("ship", "first"));
+        Assert.True((await host.ActivateAsync(original, "orders-1")).Succeeded);
+        Assert.True((await host.ActivateAsync(originalShipment, "ship-1")).Succeeded);
+        Assert.True(await peer.RefreshPeerPublicationsAsync(CancellationToken.None));
+
+        Assert.True((await host.DeactivateAsync(original)).Succeeded);
+        var moved = ExecutableOf("ship@2", "ship", HttpWorkflow("orders", "moved"));
+        Assert.True((await host.ActivateAsync(moved, "ship-2")).Succeeded);
+        Assert.Equal("orders@1", serving.MatchHttp("POST", "orders")!.Value.Slot!.Workflow.Id);
+
+        // Publishing completes the currently occupied slot before it tries to activate the candidate.
+        Assert.True((await peer.EnsureServingAsync("ship", KernelServing.DefaultSlotName)).Succeeded);
+        Assert.Equal("ship@2", serving.MatchHttp("POST", "orders")!.Value.Slot!.Workflow.Id);
+
+        var later = ExecutableOf("ship@3", "ship", HttpWorkflow("ship", "final"));
+        Assert.True((await host.ActivateAsync(later, "ship-3", coordinator: peer)).Succeeded);
+        Assert.Equal("ship@3", serving.MatchHttp("POST", "ship")!.Value.Slot!.Workflow.Id);
+        Assert.Null(serving.MatchHttp("POST", "orders"));
     }
 
     [Fact]

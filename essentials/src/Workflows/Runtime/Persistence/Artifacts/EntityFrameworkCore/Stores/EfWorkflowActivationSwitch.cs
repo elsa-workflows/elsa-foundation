@@ -62,9 +62,16 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
     public EfWorkflowActivationSwitch(IWorkflowActivationAuthority authority, IWorkflowTriggerBindingStore triggerBindingStore,
         IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IPersistenceAccessContextAccessor accessContextAccessor,
         TimeProvider timeProvider, IEnumerable<IIngressReservationPolicy> reservationPolicies, IRecurringTriggerScheduleStore? recurringScheduleStore,
-        WorkflowScheduleCutoverClock? scheduleCutoverClock)
+        WorkflowScheduleCutoverClock? scheduleCutoverClock) : this(authority, triggerBindingStore, sourceReferenceStore, accessContextAccessor,
+            timeProvider, reservationPolicies, recurringScheduleStore, scheduleCutoverClock, null) { }
+
+    public EfWorkflowActivationSwitch(IWorkflowActivationAuthority authority, IWorkflowTriggerBindingStore triggerBindingStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IPersistenceAccessContextAccessor accessContextAccessor,
+        TimeProvider timeProvider, IEnumerable<IIngressReservationPolicy> reservationPolicies, IRecurringTriggerScheduleStore? recurringScheduleStore,
+        WorkflowScheduleCutoverClock? scheduleCutoverClock, IWorkflowActivationRouteGuard? routeGuard)
     {
         _scheduleCutoverClock = scheduleCutoverClock;
+        _routeGuard = routeGuard;
         _reservationPolicies = RuntimeIngressReservationRules.Policies(reservationPolicies);
         _authority = authority as EfWorkflowActivationAuthority ?? throw Unsupported(authority);
         _context = _authority.Context;
@@ -74,6 +81,9 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
         _accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
+
+    private readonly IWorkflowActivationRouteGuard? _routeGuard;
+    private bool GuardsPeerRoutes => _routeGuard is not null && ((IWorkflowActivationSnapshot)_authority).SupportsPeerRefresh;
 
     public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
     {
@@ -85,6 +95,7 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 var transition = await _authority.StageActivationAsync(request, cancellationToken);
                 if (!transition.Succeeded)
                     return Step.Discard(transition);
+                await ValidateRoutesAsync(transition.Slot, cancellationToken);
                 var replaced = ReplacedActivation(transition);
                 if (await StageSwitchAsync(scope, request.ActivationId, replaced, deleteReplaced: false, cancellationToken))
                     return Step.Moved<WorkflowActivationTransition>();
@@ -94,7 +105,7 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 var afterSave = await StageReservationsAsync(transition.Slot, cancellationToken, slotFenced: true);
                 return Step.Commit(transition, afterSave);
             },
-            cancellationToken);
+            cancellationToken, retryStageConflicts: GuardsPeerRoutes);
     }
 
     public ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default)
@@ -115,6 +126,7 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                         cancellationToken);
                 if (!reverted.Succeeded)
                     return Step.Discard(false);
+                await ValidateRoutesAsync(reverted.Slot, cancellationToken);
                 var moved = replaced is null
                     ? await StageDeletionAsync(scope, candidate, unlessServing: false, cancellationToken) == ProjectionStaging.Moved
                     : await StageSwitchAsync(scope, replaced, candidate, deleteReplaced: true, cancellationToken);
@@ -126,7 +138,19 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 var afterSave = await StageReservationsAsync(reverted.Slot, cancellationToken, slotFenced: true);
                 return Step.Commit(true, afterSave);
             },
-            cancellationToken);
+            cancellationToken, retryStageConflicts: GuardsPeerRoutes);
+    }
+
+    private async ValueTask ValidateRoutesAsync(WorkflowActivationSlot slot, CancellationToken cancellationToken)
+    {
+        IWorkflowActivationSnapshot authority = _authority;
+        if (!GuardsPeerRoutes || slot.ActiveActivationId is not { } activationId) return;
+
+        // This predicate read and the slot write share the switch's Serializable transaction. A
+        // concurrent commit through a different slot forces a retry against the new route set.
+        var active = await authority.ListActiveAsync(cancellationToken);
+        await _routeGuard!.ValidateAsync(new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId, slot.Revision),
+            active, cancellationToken);
     }
 
     public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(

@@ -173,6 +173,8 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
         services.AddSingleton<IScheduleActors>(sp => sp.GetRequiredService<KernelServing>().Capabilities.Schedules
             ? new RuntimeManagedScheduleActors()
             : new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
+        if (storage.CanSharePublicationState)
+            services.AddScoped<IWorkflowActivationRouteGuard, KernelPeerRouteGuard>();
         if (storage.TakesEventStarts)
         {
             services.AddSingleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(),
