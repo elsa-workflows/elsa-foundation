@@ -46,9 +46,9 @@ single-Test-Run paths share the event payload contract but remain distinct from
 `PublishEvent`'s broadcast behavior. See the Runtime [trigger driver](../../../Workflows/Runtime/Core/Contracts/ITestRunTriggerDriver.cs)
 and [wait driver](../../../Workflows/Runtime/Core/Contracts/ITestRunWaitDriver.cs) contracts.
 
-Coverage lives in `essentials/tests/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
-pinned-input, and completion contract fixtures, plus `PublishEventTests` (durable-first staging, the buffer's
-intent shape, and the `StartAndResume` handler pin).
+The [classic PublishEvent tests](https://github.com/elsa-workflows/elsa-foundation/blob/ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a/essentials/tests/Activities/Runtime/Tests/PublishEventTests.cs)
+cover the original staging and deferred delivery. The [Actor Flowchart event tests](../../../../tests/Workflows/Runtime/KernelHost/Tests/NativeEventFlowchartEntryTests.cs)
+cover current event entry through Flowchart.
 
 ## Classic publication history contributions
 
