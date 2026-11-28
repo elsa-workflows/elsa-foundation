@@ -278,18 +278,19 @@ For the rest of the identity settings, see
 
 ## 5. Verify Postgres persistence
 
-The stack composes Elsa.Workbench with the EF Core persistence features on Postgres (via the mounted
-`elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
+The source stack stores design, publishing, identity, and retained Runtime metadata in the `elsa`
+database. The `actor-database` init service creates `elsa_actors` on the same PostgreSQL server
+before Workbench starts. Actor Foundation owns that database and installs its tables on shell
+activation. The image-only stack stores its Actor database under the Workbench data volume.
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
+docker compose exec postgres psql -U elsa -d elsa_actors -c '\dt'
 ```
 
-Each module owns its own tables, so `\dt` lists one per entity across the composed modules: the design
-modules contribute `elsa_workflow_definitions_v2`, `elsa_workflow_definition_drafts`,
-`elsa_workflow_definition_versions` and their siblings, and the runtime module contributes the
-`runtime_*` family (`runtime_workflow_execution_state`, `runtime_checkpoint_commit`, and so on). Each
-module also keeps its own EF migrations history table, named `__EFMigrationsHistory_<module>`.
+The metadata database contains each installed module's tables and its
+`__EFMigrationsHistory_<module>` history table. The Actor database contains the workflow execution
+state, inbox, and journal.
 
 To confirm a workflow you designed actually landed:
 

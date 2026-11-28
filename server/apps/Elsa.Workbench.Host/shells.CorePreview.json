@@ -1,0 +1,66 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Features": {
+          "ActivitiesDispatchWorkflowRuntime": {},
+          "ActivitiesHttp": {},
+          "ActivitiesScheduling": {},
+          "WorkflowsRuntimeEntityFrameworkCore": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
+          },
+          "WorkflowsRuntimeDistributed": {},
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
+          "WorkflowsDashboardEntityFrameworkCore": {},
+          "AgentReview": {},
+          "AgentReviewApi": {},
+          "BackgroundActivities": {},
+          "AgentRuntime": {},
+          "AgentEntityFrameworkCore": {},
+          "AgentInspectionApi": {},
+          "DecisionsWorkflowsRuntime": {},
+          "DecisionsWorkflowsApi": {},
+          "ConnectionsWorkflows": {},
+          "WorkflowsDashboard": {},
+          "WorkflowsRuntimeAttention": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          "WorkflowsRuntimeResumption": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
+          "StandaloneScheduleTriggers": {},
+          "WorkflowsRuntimeHttp": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Balanced",
+            "MaxActivitiesPerCommit": 50
+          },
+          "WorkflowsRuntimeHistory": {},
+          "WorkflowsRuntimeTracing": {},
+          "WorkflowsRuntimeTriggers": {},
+          "WorkflowsExecutionEvidence": {},
+          "WorkflowDashboardQueries": {},
+          "WorkflowsRuntimeKernelHosting": false,
+          "KernelActivitiesHttp": false,
+          "WorkflowsRuntimeKernelRetainedApi": false,
+          "KernelWorkflowDashboardQueries": false,
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": false,
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": false,
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": false,
+          "KernelActivitiesScheduling": false,
+          "WorkflowsDashboardRetained": false,
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": false,
+          "WorkflowsRuntimeRetainedAttention": false,
+          "PreparedStandaloneScheduleTriggers": false
+        }
+      }
+    }
+  }
+}

@@ -9,17 +9,14 @@
           "ActivitiesBpmnInterchange": {},
           "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
-          "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
           "ActivitiesDesignReconciliation": {},
           "ActivitiesFlowchart": {},
-          "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
-          "ActivitiesScheduling": {},
           "ActivitiesSequence": {},
           "ApiCapabilities": {},
           "ClrActivityReconciliation": {
@@ -74,18 +71,8 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "WorkflowsRuntimeEntityFrameworkCore": {
-            "CacheWorkflowExecutables": true,
-            "WorkflowExecutableCacheCapacity": 256,
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
-            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
-          },
           "ActivitiesDesignEntityFrameworkCore": {},
           "WorkflowsDesignEntityFrameworkCore": {},
-          "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
-          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
-          "WorkflowsDashboardEntityFrameworkCore": {},
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
@@ -167,28 +154,19 @@
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},
-          "AgentReview": {},
-          "AgentReviewApi": {},
           "AgentDesign": {},
           "AgentApi": {},
           "AnthropicAgents": {},
           "AzureOpenAIAgents": {},
           "OpenAIAgents": {},
-          "BackgroundActivities": {},
-          "AgentRuntime": {},
-          "AgentEntityFrameworkCore": {},
-          "AgentInspectionApi": {},
           "Connections": {},
           "Decisions": {},
           "DecisionsDesign": {},
           "DecisionsApi": {},
           "DecisionsEntityFrameworkCore": {},
           "DecisionsWorkflowsDesign": {},
-          "DecisionsWorkflowsRuntime": {},
-          "DecisionsWorkflowsApi": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},
-          "ConnectionsWorkflows": {},
           "Serialization": {},
           "AttentionApi": {},
           "ModularityAttention": {},
@@ -198,40 +176,40 @@
           "Tasks": {},
           "WorkflowsDesignApi": {},
           "WorkflowDesignValidations": {},
-          "WorkflowsDashboard": {},
-          "WorkflowsRuntimeAttention": {},
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingEntityFrameworkCore": {},
-          "WorkflowsRuntimeApi": {
-            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
-            "WorkflowAlterationPayloadProtectionKeys": {
-              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-            }
-          },
-          "WorkflowsRuntimeResumption": {},
-          "WorkflowsRuntimeScheduling": {},
-          "WorkflowsRuntimeRecurringTriggers": {},
           "StandaloneTriggersApi": {},
           "StandaloneHttpTriggerAuthoring": {},
           "StandaloneEventTriggerAuthoring": {},
           "StandaloneScheduleTriggerAuthoring": {},
-          "StandaloneScheduleTriggers": {},
-          "WorkflowsRuntimeHttp": {},
-          "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Balanced",
-            "MaxActivitiesPerCommit": 50
-          },
-          "WorkflowsRuntimeHistory": {},
-          "WorkflowsRuntimeTracing": {},
-          "WorkflowsRuntimeTriggers": {},
-          "WorkflowsExecutionEvidence": {},
           "StudioDashboardApi": {},
           "StudioDashboardEntityFrameworkCore": {
             "ConnectionString": "Data Source=elsa-studio-dashboards.db"
           },
-          "WorkflowDashboardQueries": {},
-          "StudioDashboardWeaver": {}
+          "StudioDashboardWeaver": {},
+          "KernelWorkflowDashboardQueries": {},
+          "KernelActivitiesHttp": {},
+          "WorkflowsRuntimeKernelRetainedApi": {},
+          "WorkflowsRuntimeKernelHosting": {
+            "Provider": "SQLite",
+            "PreparedStandaloneStarts": true
+          },
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
+            "Provider": "SQLite",
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+          },
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {
+            "Provider": "SQLite"
+          },
+          "KernelActivitiesScheduling": {},
+          "WorkflowsDashboardRetained": {},
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {},
+          "WorkflowsRuntimeRetainedAttention": {},
+          "PreparedStandaloneScheduleTriggers": {}
         },
         "Configuration": {
           "WebRouting": {

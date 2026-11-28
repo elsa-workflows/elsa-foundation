@@ -128,6 +128,7 @@ builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
 var configuration = builder.Configuration;
+WorkbenchRuntimeProfile.Configure(configuration, builder.Environment, args);
 // With the Core Preview serving publications (Elsa:CorePreview:Publications), the default shell composes the kernel's shell
 // feature, so the one switch composes the host's serving state below and the shell's coordinator.
 var kernelShell = WorkbenchCorePreview.ComposeKernelShell(builder.Configuration);

@@ -22,6 +22,7 @@ internal static class WorkbenchCorePreview
     /// With <c>Elsa:CorePreview:Publications</c> on (and the Core Preview enabled), the default shell's publications run on
     /// the kernel: it serves each published definition on the preview node, so a published workflow starts on the kernel.
     /// </summary>
+    internal const string EnabledKey = "Elsa:CorePreview:Enabled";
     internal const string PublicationsKey = "Elsa:CorePreview:Publications";
     internal const string TerminalOutputQualificationKey = "Elsa:CorePreview:TerminalOutputQualification";
     internal const string PlaybackQualificationKey = "Elsa:CorePreview:PlaybackQualification";
@@ -70,7 +71,7 @@ internal static class WorkbenchCorePreview
         Wf.Respond("answer", "decided")));
 
     internal static bool ServesPublications(IConfiguration configuration) =>
-        configuration.GetValue<bool>("Elsa:CorePreview:Enabled") && configuration.GetValue<bool>(PublicationsKey);
+        configuration.GetValue<bool>(EnabledKey) && configuration.GetValue<bool>(PublicationsKey);
 
     /// <summary>
     /// Enables the kernel's shell feature in the default shell when the Core Preview serves publications, so that one switch
@@ -110,7 +111,7 @@ internal static class WorkbenchCorePreview
 
     internal static void AddWorkbenchCorePreview(this IServiceCollection services, IConfiguration configuration)
     {
-        if (!configuration.GetValue<bool>("Elsa:CorePreview:Enabled"))
+        if (!configuration.GetValue<bool>(EnabledKey))
             return;
 
         var useSqlite = configuration[ProviderKey]?.Trim().ToLowerInvariant() switch

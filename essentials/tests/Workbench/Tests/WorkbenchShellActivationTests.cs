@@ -23,22 +23,20 @@ public sealed class WorkbenchShellActivationTests
         "ActivitiesGraphDesign",
         "ActivitiesGraphRuntime",
         // Publishing and serving HTTP-triggered workflows.
-        "ActivitiesHttp",
-        // The publish transport and the engine it depends on. CShells would auto-enable an unlisted engine, but
-        // GET /modularity/features would then report it disabled while it runs.
+        "KernelActivitiesHttp",
         "WorkflowsPublishingApi",
         "WorkflowsPublishing",
-        // The dashboard's dependencies.
         "WorkflowDesignValidations",
-        "WorkflowsRuntimeResumption",
-        // One relational connection, with every persistence lane enabled by its own feature.
-        "WorkflowsRuntimeEntityFrameworkCore",
+        "WorkflowsRuntimeKernelHosting",
+        "WorkflowsRuntimeKernelRetainedApi",
+        "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
+        "WorkflowsRuntimePublicationEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence",
         "ActivitiesDesignEntityFrameworkCore",
         "WorkflowsDesignEntityFrameworkCore",
-        "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
         "WorkflowsPublishingEntityFrameworkCore",
-        "WorkflowsDashboardEntityFrameworkCore"
+        "WorkflowsDashboardPortfolioEntityFrameworkCore",
+        "KernelWorkflowDashboardQueries"
     ];
 
     /// <summary>Features a stock shell may leave unlisted that must still be in the runtime catalog.</summary>
@@ -114,12 +112,35 @@ public sealed class WorkbenchShellActivationTests
             catalog.TryGetValue(feature, out var entry) && entry.SourceKind == "runtime",
             $"{feature} is not in the runtime catalog."));
 
-        // The stock shells run the burst-coalesced checkpoint policy and the bounded executable cache that the HTTP
-        // workflow performance budget is measured against.
-        AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "Mode", "Balanced");
-        AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "MaxActivitiesPerCommit", "50");
-        AssertSetting(catalog, "WorkflowsRuntimeEntityFrameworkCore", "CacheWorkflowExecutables", "true");
-        AssertSetting(catalog, "WorkflowsRuntimeEntityFrameworkCore", "WorkflowExecutableCacheCapacity", "256");
+        Assert.False(Runs("WorkflowsRuntimeApi"));
+        Assert.False(Runs("WorkflowsRuntimeCheckpointPersistence"));
+        Assert.False(Runs("WorkflowsRuntimeResumption"));
+        Assert.False(Runs("WorkflowsRuntimeDistributed"));
+        AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "CacheWorkflowExecutables", "true");
+        AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowExecutableCacheCapacity", "256");
+        Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
+    }
+
+    [Fact]
+    public async Task Explicit_core_preview_keeps_the_mixed_workflow_shell()
+    {
+        var shell = WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string>
+            {
+                ["Elsa:CorePreview:Enabled"] = "true",
+                ["Elsa:CorePreview:Publications"] = "true",
+                ["Elsa:CorePreview:Provider"] = "SQLite",
+                ["Elsa:CorePreview:SqlitePath"] = "elsa-workbench-preview.db"
+            }
+        };
+
+        await using var workbench = await WorkbenchProcess.StartAsync(shell);
+        using var diagnostics = await workbench.Client.GetAsync("/runtime/workflows/diagnostics/settings");
+        Assert.True(diagnostics.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
+            $"The explicit preview did not map the legacy Runtime API. Host output:{Environment.NewLine}{workbench.Output}");
+        Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-preview.db")));
+        Assert.False(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
     }
 
     /// <summary>
@@ -130,7 +151,7 @@ public sealed class WorkbenchShellActivationTests
     /// </summary>
     [Theory]
     [InlineData("FoundationIdentityOpenIddict:SigningKey", "No signing key is configured for the OpenIddict identity module")]
-    [InlineData("WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey", "Runtime recovery continuation signing key must be configured")]
+    [InlineData("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey", "Runtime recovery continuation signing key must be configured")]
     [InlineData("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword", "SeedAdminUserName is configured but SeedAdminPassword is not")]
     public async Task Production_shell_without_a_required_secret_fails_activation(string featureSetting, string expectedError)
     {
