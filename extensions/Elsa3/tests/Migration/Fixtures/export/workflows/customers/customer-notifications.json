@@ -205,7 +205,7 @@
     "id": "welcome-customer-v1",
     "definitionId": "welcome-customer",
     "name": "Welcome customer",
-    "description": "Welcomes a new customer. SENTINEL-1237",
+    "description": "Welcomes a new customer it looks up. SENTINEL-1237",
     "createdAt": "2025-03-14T09:26:53.589+00:00",
     "version": 1,
     "toolVersion": "3.6.3.0",
@@ -271,8 +271,8 @@
           "text": {
             "typeName": "String",
             "expression": {
-              "type": "Literal",
-              "value": "SENTINEL-1237: new customer"
+              "type": "JavaScript",
+              "value": "'SENTINEL-1237: new customer ' + lookupCustomer('SENTINEL-1237-C077')"
             }
           }
         },
