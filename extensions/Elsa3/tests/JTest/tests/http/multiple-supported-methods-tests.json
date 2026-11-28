@@ -1,0 +1,63 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test an HTTP Endpoint that supports multiple methods",
+        "description": ""
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/http-endpoints/multiple-methods"
+    },
+    "tests": [
+        {
+            "name": "Test by executing the workflow definition with all the supported http methods",
+            "datasets": [
+                {
+                    "name": "post",
+                    "case": {
+                        "method": "POST"
+                    }
+                },
+                {
+                    "name": "get",
+                    "case": {
+                        "method": "GET"
+                    }
+                },
+                {
+                    "name": "put",
+                    "case": {
+                        "method": "PUT"
+                    }
+                },
+                {
+                    "name": "head",
+                    "case": {
+                        "method": "HEAD"
+                    }
+                },
+                {
+                    "name": "delete",
+                    "case": {
+                        "method": "DELETE"
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow and assert response",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "{{ $.case.method }}",
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 202
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

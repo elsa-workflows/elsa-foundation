@@ -1,0 +1,93 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Elsa 4 templates: authentication",
+        "description": "Elsa 4 version of elsa-authenticate (spec 1235 contracts/templates.md): sign in with the session cookie, then exchange it for a bearer token."
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-authenticate",
+                "description": "",
+                "params": {
+                    "username": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Username for authentication"
+                    },
+                    "password": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Password for authentication"
+                    },
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL of the Elsa API"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Send authentication request",
+                        "method": "POST",
+                        "url": "{{$.baseUrl}}/_elsa/identity/login",
+                        "headers": [
+                            {
+                                "name": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "username": "{{$.username}}",
+                            "password": "{{$.password}}"
+                        },
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200,
+                                "description": "Should return HTTP 200 OK"
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.status}}",
+                                "expectedValue": "authenticated",
+                                "description": "Should be authenticated"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "http",
+                        "name": "Exchange the session for a bearer token",
+                        "method": "GET",
+                        "url": "{{$.baseUrl}}/_elsa/identity/token",
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200,
+                                "description": "Should return HTTP 200 OK"
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.body.accessToken}}",
+                                "description": "Access token should exist",
+                                "mask": true
+                            }
+                        ],
+                        "save": {
+                            "accessToken": "{{$.this.body.accessToken}}",
+                            "refreshToken": "{{$.this.body.refreshToken}}"
+                        }
+                    }
+                ],
+                "output": {
+                    "token": "{{$.accessToken}}",
+                    "authHeader": "Bearer {{$.accessToken}}",
+                    "refreshToken": "{{$.refreshToken}}"
+                }
+            }
+        ]
+    }
+}

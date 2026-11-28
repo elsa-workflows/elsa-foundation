@@ -5,8 +5,8 @@
 **Status**: Approved
 
 **Input**: Prove the Elsa 3 to Elsa 4 conversion against the complete JTest corpus: the Elsa 3 workflow definitions are
-imported and converted by startup reconciliation, then the JTest suites written for those definitions run against
-Elsa 4 and pass. The suite lives in the Elsa 3 converter area as a lasting workflow-regression suite. Work that JOIN
+converted by the Elsa 3 migration CLI (spec 1237) and run on the Elsa 3 migration host (spec 1236), then the JTest
+suites written for those definitions run against Elsa 4 and pass (amended 2026-11-28, Q16). The suite lives in the Elsa 3 converter area as a lasting workflow-regression suite. Work that JOIN
 behaviour blocks stays in this specification and is done after the separate JOIN initiative delivers.
 
 ## Rule and boundary
@@ -15,13 +15,19 @@ The JTest suites are the baseline. A suite assertion that passes on the pinned E
 the same assertion passing on Elsa 4, after conversion, is the acceptance evidence. No Elsa 3 host runs next to Elsa 4,
 and no assertion is weakened to make Elsa 4 pass.
 
+**The run set** (Q17). Both engines run one set of definitions: the acceptance definitions, with each approved
+adjusted copy in place of its original, plus approved additions to the corpus. The approved suite and definition
+changes are the source of truth. The original definitions stay in the corpus copy as history: they show what the
+converter refuses or warns about, and they go back to the original repository at the end (FR-022), but they are not
+a baseline.
+
 The work runs in three phases, each gated on the previous one:
 
 1. **Baseline**: the corpus runs green on the pinned Elsa 3.6.3 server, after classified and approved suite fixes.
 2. **Engine-neutral suites**: Elsa 3-specific values move out of the suite files into templates, environment or
    suite parameters, while the suites stay green on Elsa 3.
-3. **Elsa 4**: an Elsa 4 template set with the same template names, parameters and outputs; the definitions load
-   through startup reconciliation; every suite not blocked by JOIN behaviour, value capture or a 3.6.3 defect, and not carrying an approved
+3. **Elsa 4**: an Elsa 4 template set with the same template names, parameters and outputs; the migration CLI
+   converts the run set and the migration host loads its `migrated/` folder; every suite not blocked by JOIN behaviour, value capture or a 3.6.3 defect, and not carrying an approved
    incompatibility, passes on Elsa 4 (SC-004). Suites blocked by JOIN behaviour or value capture follow once
    their initiatives deliver.
 
@@ -128,7 +134,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 ### Functional Requirements
 
 Wherever this specification, its scenarios or its success criteria speak of every or all suites or definitions,
-they mean the acceptance set: the 41 suites and 34 definitions left after the exclusion in Q13.
+they mean the acceptance set: the 39 suites and 32 definitions left after the exclusions in Q13 and Q15.
 
 **Corpus**
 
@@ -152,8 +158,8 @@ they mean the acceptance set: the 41 suites and 34 definitions left after the ex
 - **FR-006**: The Elsa 3 baseline MUST be an Elsa server built from `docker/ElsaServer.Dockerfile` at elsa-core
   release tag `3.6.3` (commit `7eac7de6`), the pinned baseline version. The build
   command and image digest MUST be recorded with each baseline run. The suite assertions are the
-  baseline; no Elsa 3 host runs alongside Elsa 4 during acceptance. During Elsa 4 work an Elsa 3 run only settles a disputed assertion or verifies an approved
-  suite change.
+  baseline; no Elsa 3 host runs alongside Elsa 4 during acceptance. During Elsa 4 work an Elsa 3 run settles a disputed assertion, verifies an approved
+  suite change, or runs the run set (Q17) that a qualifying Elsa 4 run converts, so both engines start from the same input.
 - **FR-007**: Before conversion work starts, the corpus MUST run on the Elsa 3 baseline. Every failing assertion MUST
   be classified as one of: suite defect, behaviour the pinned version corrected, or defect of the pinned version,
   with the evidence and the suite description. The coordinator MUST approve the whole classified list before any fix
@@ -161,7 +167,8 @@ they mean the acceptance set: the 41 suites and 34 definitions left after the ex
 - **FR-008**: A suite defect or a corrected behaviour MUST be fixed in the suite with the reason recorded per change.
   A defect of the pinned version MUST leave the assertion unchanged and mark the suite blocked with that defect named.
 - **FR-009**: The Elsa 3 setup suite that imports and publishes the definitions MUST be used only for the Elsa 3
-  baseline. Elsa 4 MUST load the definitions through the Elsa 3 startup reconciliation only.
+  baseline. Elsa 4 MUST get the definitions only through the migration CLI's `workflows inventory` and the migration
+  host's reconciliation of the `migrated/` folder it writes (Q16).
 
 **Engine-neutral suites and templates**
 
@@ -181,8 +188,8 @@ they mean the acceptance set: the 41 suites and 34 definitions left after the ex
 
 **Elsa 4 run and dispositions**
 
-- **FR-014**: The Elsa 4 run MUST start a fresh host with the Elsa 3 startup reconciliation reading the corpus's
-  definitions, with each approved adjusted copy taking the place of its original, and MUST keep the reconciliation receipt with the run.
+- **FR-014**: The Elsa 4 run MUST convert the run set (Q17) with the migration CLI and start a fresh migration host
+  (an empty store) on the `migrated/` folder it writes, and MUST keep the CLI report with the run (Q16).
 - **FR-015**: Every definition MUST end with exactly one bucket: `convert-as-is` (unchanged source passes its suites, or, for a
   definition no suite exercises or whose only suites are blocked by a 3.6.3 defect, is imported and published unchanged
   with no diagnostic),
@@ -238,29 +245,32 @@ they mean the acceptance set: the 41 suites and 34 definitions left after the ex
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | Which material is the complete corpus? | The JTest-Nexxbiz repository at `b1cde13`. 36 definitions and 42 suites. |
-| Q13 | What about the baseline-dispatch performance case, whose definitions the setup suite never imports? | Excluded from acceptance: `performance-baseline-dispatch.json` and `performance-baseline-dispatch-sub.json` and their only suite, `performance/baseline-dispatch-tests.json`, are copied with the corpus but neither run nor bucketed. The acceptance set is 34 definitions and 41 suites. |
+| Q13 | What about the baseline-dispatch performance case, whose definitions the setup suite never imports? | Excluded from acceptance: `performance-baseline-dispatch.json` and `performance-baseline-dispatch-sub.json` and their only suite, `performance/baseline-dispatch-tests.json`, are copied with the corpus but neither run nor bucketed. The acceptance set is 34 definitions and 41 suites (reduced by Q15). |
 | Q14 | The storage-drivers root definition says version 2, the Elsa 3 import numbers it 1 and its suite expects 1, while Elsa 4 keeps 2. How is that settled? | The definition is patched to version 1 in the corpus copy. Elsa 3 ignores the file's version on import, so its behaviour is unchanged, and Elsa 4 then publishes `1.0.0`, which the suite expects. It is the one approved edit to an original definition; any other edit to an original needs the same coordinator approval and must leave Elsa 3 behaviour unchanged. |
+| Q15 | The Elsa 3.6.3 baseline fails the implicit-merge and `WaitAllActive` join suites (baseline failures B1–B8): 3.6.3 runs the implicit merge once per arriving path, and the `WaitAllActive` join after a fork never starts. Do they stay in acceptance? | No. `branching/implicit-tests.json` and `branching/join-wait-all-active-tests.json`, with `branching-implicit.json` and `branching-wait-all-active.json`, are excluded from acceptance and re-evaluated on Elsa 4 once its join behaviour is decided (JOIN work, #4193); Elsa 4-only workflows and suites may then guard that decision instead. The acceptance set is 39 suites and 32 definitions. Coordinator decision, 2026-11-24 (PR #5662). |
 | Q2 | Where does the suite live? | In the Elsa 3 converter test area, because the flow is reconcile-then-run. A broader Elsa 4-native workflow-regression suite is a later, separate piece of work. |
 | Q3 | Can the corpus be committed? | Yes, unchanged; it carries no secrets. |
 | Q4 | What is the Elsa 3 baseline? | The suite assertions, made green on an Elsa server built from elsa-core tag `3.6.3` (the pinned baseline version). No paired dual-host runs. |
 | Q5 | How are failures on the baseline settled? | Classified into three kinds and approved as one list by the coordinator before any fix (FR-007, FR-008). |
 | Q6 | Which runner? | `jtest run`, latest version; no xunit wrapper; CI and reports later. |
 | Q7 | How are engine differences expressed? | Same-name Elsa 4 templates; Elsa 3-specific values in suite files move behind templates or parameters first. |
-| Q8 | Is the Elsa 3 setup suite needed on Elsa 4? | No. Startup reconciliation replaces it. |
+| Q8 | Is the Elsa 3 setup suite needed on Elsa 4? | No. The migration host's reconciliation of the CLI's `migrated/` folder replaces it (Q16). |
 | Q9 | How is JOIN handled? | Blocked only where the join actually stops a suite; the rest goes first; JOIN work stays here. |
 | Q12 | What if a suite needs a complete value Elsa 4 only captures as a bounded snapshot? | It is blocked on the separate value-capture initiative, handled like JOIN: marked only where a truncated or unavailable value stops it, kept in this specification, finished when that initiative delivers (FR-024, V-001 to V-003). |
 | Q10 | Which suites go first? | The six HTTP suites (one definition, no join), then single-outcome. |
 | Q11 | Where does the corpus live after the copy? | Here; the original repository gets a template update through a hand-over at the end. |
+| Q16 | Which host runs the Elsa 4 side? | The Elsa 3 migration host (spec 1236), fed by the migration CLI's `workflows inventory` output (spec 1237), the path an Elsa 3 user takes. The Workbench runs before 2026-11-28 (ledger runs 15 to 43) stay recorded as development evidence. Coordinator decision, 2026-11-28. |
+| Q17 | What do the engines run: the originals or the adjusted copies? | The run set: the acceptance definitions with each approved adjusted copy in place of its original, plus approved additions. The approved changes are the source of truth; the originals are history (converter audit, hand-over), not a baseline. Coordinator decision, 2026-11-28. |
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001 - Baseline**: Every one of the 41 suites in the acceptance set (Q13) passes on the Elsa 3.6.3 baseline server, or is marked blocked by a named
+- **SC-001 - Baseline**: Every one of the 39 suites in the acceptance set (Q13, Q15) passes on the Elsa 3.6.3 baseline server, or is marked blocked by a named
   defect of that version, with every suite change approved and reasoned.
 - **SC-002 - Engine-neutral**: Every suite file is identical between the Elsa 3 and Elsa 4 runs, and still passes on
   the Elsa 3 baseline.
-- **SC-003 - Dispositions**: All 34 definitions in the acceptance set (Q13) have exactly one bucket with its evidence (definitions whose suites
+- **SC-003 - Dispositions**: All 32 definitions in the acceptance set (Q13, Q15) have exactly one bucket with its evidence (definitions whose suites
   are JOIN-blocked or value-capture-blocked are bucketed when the JOIN and value-capture tasks close).
 - **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour, by value capture (FR-024), by a 3.6.3
   defect (SC-001) or by an
@@ -291,12 +301,14 @@ These tasks are OPEN and carry into the tasks list.
 |---|---|---|
 | V-001 | OPEN | List every `blocked: value capture` suite with the key it reads and the capture limit hit. |
 | V-002 | OPEN | Once the value-capture initiative delivers on the initiative branch, configure the run to capture those values as it provides and adjust the Elsa 4 templates without changing expectations. |
-| V-003 | OPEN | Run those suites on a fresh Workbench from the qualified head and record the results; J-005 reconciles them with the rest. |
+| V-003 | OPEN | Run those suites on a fresh migration host from the qualified head and record the results; J-005 reconciles them with the rest. |
 
 ## Dependencies and boundaries
 
-- [Startup reconciliation, spec 235](../235-elsa3-json-reconciliation/spec.md) loads and converts the definitions. This
-  specification uses it as it is and changes no converter behaviour except through a separate defect or specification.
+- The [migration CLI, spec 1237](../1237-elsa3-migration-cli/spec.md), converts the run set and the
+  [migration host, spec 1236](../1236-elsa3-migration-host/spec.md), runs it. Both use the converter of
+  [startup reconciliation, spec 235](../235-elsa3-json-reconciliation/spec.md) as it is; this specification changes no
+  converter behaviour except through a separate defect or specification.
 - [Mapping rules](../../extensions/Elsa3/src/Mapping/README.md) and
   [migration readiness](../../docs/reference/elsa3-migration-readiness.md) explain expected diagnostics.
 - [JSON data integrity, spec 1207](../1207-json-data-integrity-baseline/spec.md) must be implemented on the initiative head

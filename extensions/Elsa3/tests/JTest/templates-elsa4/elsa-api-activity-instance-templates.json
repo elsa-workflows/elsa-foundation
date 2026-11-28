@@ -1,0 +1,690 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Elsa 4 templates: activity instances",
+        "description": "Elsa 4 versions of the activity-instance templates (spec 1235 T027). Only the templates a suite in the acceptance set that runs on Elsa 4 needs are written."
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-activity-instance-get",
+                "description": "Gets the activity instance. Elsa 4: Elsa 4 exposes activity input and output values only as diagnostic snapshot trees, not as plain JSON; until a plain value read exists (value-capture initiative #5647) activityState and outputs are not supplied.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true,
+                        "description": "The workflow instance the activity ran in; Elsa 3 needs only the activity instance id"
+                    },
+                    "activityInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityStatusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Completed",
+                            "Faulted": "Faulted",
+                            "Cancelled": "Canceled",
+                            "Running": "Running",
+                            "Waiting": "Running",
+                            "Suspended": "Running"
+                        },
+                        "description": "internal"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity execution (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions/{{ $.activityInstanceId }}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.activityStatusMap['{{ $.this.body.status }}'] }}",
+                                "description": "The Elsa 4 activity status has an Elsa 3 translation"
+                            }
+                        ],
+                        "save": {
+                            "status": "{{ $.activityStatusMap['{{ $.this.body.status }}'] }}",
+                            "id": "{{ $.this.body.activityExecutionId }}",
+                            "startedAt": "{{ $.this.body.startedAt }}",
+                            "completedAt": "{{ $.this.body.completedAt }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "status": "{{ $.status }}",
+                    "id": "{{ $.id }}",
+                    "startedAt": "{{ $.startedAt }}",
+                    "completedAt": "{{ $.completedAt }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-find",
+                "description": "Finds and activity instance by id in the specified workflow instance. Elsa 4: the first execution of the node whose id equals the activity id or ends with ':' and it. Elsa 4 exposes activity input and output values only as diagnostic snapshot trees, not as plain JSON; until a plain value read exists (value-capture initiative #5647) activityState and outputs are not supplied.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "ms": 1000
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity executions (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions?limit=500",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executions": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Start an empty result",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.activityId }}"
+                            }
+                        ],
+                        "save": {
+                            "$.ids": []
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Executions of the node",
+                        "items": "{{ $.executions[?(@.execution.executableNodeId == '{{ $.activityId }}' || match(@.execution.executableNodeId, '.*:{{ $.activityId }}'))] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Collect",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.item.execution.activityExecutionId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "$.ids[]": "{{ $.item.execution.activityExecutionId }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "use",
+                        "name": "Get the first execution",
+                        "template": "elsa-activity-instance-get",
+                        "with": {
+                            "baseUrl": "{{ $.baseUrl }}",
+                            "authHeader": "{{ $.authHeader }}",
+                            "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                            "activityInstanceId": "{{ $.ids[0] }}"
+                        },
+                        "save": {
+                            "startedAt": "{{ $.this.startedAt }}",
+                            "completedAt": "{{ $.this.completedAt }}",
+                            "status": "{{ $.this.status }}",
+                            "id": "{{ $.this.id }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "status": "{{ $.status }}",
+                    "id": "{{ $.id }}",
+                    "startedAt": "{{ $.startedAt }}",
+                    "completedAt": "{{ $.completedAt }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-assert-all-completed",
+                "description": "Asserts the specified activity identifiers are all executed and completed. Elsa 4: reads the workflow execution's activity executions; an Elsa 3 'Started' journal event is an execution of the node (one whose id equals the activity id or ends with ':' and it), a 'Completed' event an execution with status Completed.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityIdentifiers": {
+                        "type": "array",
+                        "required": true
+                    },
+                    "activityIdentifiersCount": {
+                        "type": "integer",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity executions (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions?limit=500",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executions": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Start an empty result",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.workflowInstanceId }}"
+                            }
+                        ],
+                        "save": {
+                            "$.matched": []
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Each requested activity",
+                        "items": "{{ $.activityIdentifiers }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Take the activity id",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.workflowInstanceId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "$.nodeId": "{{ $.item }}"
+                                }
+                            },
+                            {
+                                "type": "for",
+                                "name": "Its executions",
+                                "items": "{{ $.executions[?((@.execution.executableNodeId == '{{ $.nodeId }}' || match(@.execution.executableNodeId, '.*:{{ $.nodeId }}')) && @.execution.status == 'Completed')] }}",
+                                "steps": [
+                                    {
+                                        "type": "assert",
+                                        "name": "Collect",
+                                        "assert": [
+                                            {
+                                                "op": "exists",
+                                                "actualValue": "{{ $.item.execution.activityExecutionId }}"
+                                            }
+                                        ],
+                                        "save": {
+                                            "$.matched[]": "{{ $.item.execution.activityExecutionId }}"
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Every activity completed",
+                        "assert": [
+                            {
+                                "op": "length",
+                                "actualValue": "{{ $.matched }}",
+                                "expectedValue": "{{ $.activityIdentifiersCount }}",
+                                "description": "Completed executions of the requested activities"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "elsa-activity-instance-assert-none-executed",
+                "description": "Asserts none of the specified activity identifiers was executed. Elsa 4: reads the workflow execution's activity executions; an Elsa 3 'Started' journal event is an execution of the node (one whose id equals the activity id or ends with ':' and it), a 'Completed' event an execution with status Completed.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityIdentifiers": {
+                        "type": "array",
+                        "required": true
+                    },
+                    "eventNames": {
+                        "type": "array",
+                        "required": false,
+                        "default": [
+                            "Completed",
+                            "Started"
+                        ],
+                        "description": "Elsa 3 journal events; on Elsa 4 any execution of the activity counts as executed"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity executions (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions?limit=500",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executions": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Start an empty result",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.workflowInstanceId }}"
+                            }
+                        ],
+                        "save": {
+                            "$.matched": []
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Each requested activity",
+                        "items": "{{ $.activityIdentifiers }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Take the activity id",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.workflowInstanceId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "$.nodeId": "{{ $.item }}"
+                                }
+                            },
+                            {
+                                "type": "for",
+                                "name": "Its executions",
+                                "items": "{{ $.executions[?((@.execution.executableNodeId == '{{ $.nodeId }}' || match(@.execution.executableNodeId, '.*:{{ $.nodeId }}')))] }}",
+                                "steps": [
+                                    {
+                                        "type": "assert",
+                                        "name": "Collect",
+                                        "assert": [
+                                            {
+                                                "op": "exists",
+                                                "actualValue": "{{ $.item.execution.activityExecutionId }}"
+                                            }
+                                        ],
+                                        "save": {
+                                            "$.matched[]": "{{ $.item.execution.activityExecutionId }}"
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "No activity executed",
+                        "assert": [
+                            {
+                                "op": "empty",
+                                "actualValue": "{{ $.matched }}",
+                                "description": "Executions of activities that must not run"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "elsa-activity-instance-get-journal-item",
+                "description": "Gets the activity instance journal item containing: activityInstanceId, startedAt, and completedAt. Elsa 4: reads the workflow execution's activity executions; an Elsa 3 'Started' journal event is an execution of the node (one whose id equals the activity id or ends with ':' and it), a 'Completed' event an execution with status Completed. The first execution of the activity is returned.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity executions (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions?limit=500",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executions": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Take the activity id",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.activityId }}"
+                            }
+                        ],
+                        "save": {
+                            "$.nodeId": "{{ $.activityId }}",
+                            "$.found": []
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Executions of the activity",
+                        "items": "{{ $.executions[?((@.execution.executableNodeId == '{{ $.nodeId }}' || match(@.execution.executableNodeId, '.*:{{ $.nodeId }}')))] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Collect",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.item.execution.activityExecutionId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "$.found[]": "{{ $.item.execution }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "At least a started execution is expected",
+                        "assert": [
+                            {
+                                "op": "notempty",
+                                "actualValue": "{{ $.found }}"
+                            }
+                        ],
+                        "save": {
+                            "activityInstanceId": "{{ $.found[0].activityExecutionId }}",
+                            "startedAt": "{{ $.found[0].startedAt }}",
+                            "completedAt": "{{ $.found[0].completedAt }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "activityInstanceId": "{{ $.activityInstanceId }}",
+                    "startedAt": "{{ $.startedAt }}",
+                    "completedAt": "{{ $.completedAt }}"
+                }
+            },
+            {
+                "name": "elsa-activity-assert-change-warnings",
+                "description": "Asserts how many VF-WRITE-001 warnings (a script changed a variable it read without assigning it, spec 1228) the first execution of an activity carries. Elsa 4: reads the execution's inspection, whose warnings list is absent when there were none.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "expectedCount": {
+                        "type": "number",
+                        "required": true,
+                        "description": "The number of VF-WRITE-001 warnings the activity's first execution must carry"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity executions (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions?limit=500",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executions": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Take the activity id",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.activityId }}"
+                            }
+                        ],
+                        "save": {
+                            "$.nodeId": "{{ $.activityId }}",
+                            "$.found": [],
+                            "$.changeWarnings": []
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Executions of the activity",
+                        "items": "{{ $.executions[?((@.execution.executableNodeId == '{{ $.nodeId }}' || match(@.execution.executableNodeId, '.*:{{ $.nodeId }}')))] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Collect",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.item.execution.activityExecutionId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "$.found[]": "{{ $.item.execution }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "An execution of the activity is expected",
+                        "assert": [
+                            {
+                                "op": "notempty",
+                                "actualValue": "{{ $.found }}"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity execution inspection (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions/{{ $.found[0].activityExecutionId }}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "$.inspection": "{{ $.this.body }}"
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Change warnings of the execution",
+                        "items": "{{ $.inspection..warnings[?(@.code == 'VF-WRITE-001')] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Collect",
+                                "assert": [
+                                    {
+                                        "op": "equals",
+                                        "actualValue": "{{ $.item.code }}",
+                                        "expectedValue": "VF-WRITE-001"
+                                    }
+                                ],
+                                "save": {
+                                    "$.changeWarnings[]": "{{ $.item }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "The expected number of change warnings",
+                        "assert": [
+                            {
+                                "op": "length",
+                                "actualValue": "{{ $.changeWarnings }}",
+                                "expectedValue": "{{ $.expectedCount }}"
+                            }
+                        ]
+                    }
+                ],
+                "output": {
+                    "changeWarnings": "{{ $.changeWarnings }}"
+                }
+            }
+        ]
+    }
+}

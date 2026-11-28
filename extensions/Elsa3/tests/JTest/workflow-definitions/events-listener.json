@@ -1,0 +1,146 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "f4b05ccf10b23e4",
+    "definitionId": "c6fae2759f0fb6e8",
+    "name": "QA - JTest - Events - Listener",
+    "createdAt": "2026-02-03T16:19:24.1595141\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.6.0.0",
+    "variables": [
+        {
+            "id": "1e534aea0186805a",
+            "name": "EventInput",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        }
+    ],
+    "inputs": [],
+    "outputs": [
+        {
+            "type": "Object",
+            "name": "Result",
+            "displayName": "Result",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outcomes": [],
+    "customProperties": {
+        "VariableTestValues": {}
+    },
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "5058e39fb7f34a1e",
+        "nodeId": "Workflow1:5058e39fb7f34a1e",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "eventName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Event1"
+                    }
+                },
+                "result": {
+                    "typeName": "Object",
+                    "memoryReference": {
+                        "id": "1e534aea0186805a"
+                    }
+                },
+                "id": "af5979009e2021bb",
+                "nodeId": "Workflow1:5058e39fb7f34a1e:af5979009e2021bb",
+                "name": "Event1",
+                "type": "Elsa.Event",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -180,
+                            "y": -120
+                        },
+                        "size": {
+                            "width": 127.03125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "outputName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Result"
+                    }
+                },
+                "outputValue": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "Variable",
+                        "value": {
+                            "id": "1e534aea0186805a",
+                            "name": "EventInput",
+                            "typeName": "Object",
+                            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                        }
+                    }
+                },
+                "id": "13ef51387215ce27",
+                "nodeId": "Workflow1:5058e39fb7f34a1e:13ef51387215ce27",
+                "name": "SetOutput1",
+                "type": "Elsa.SetOutput",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 91,
+                            "y": -120
+                        },
+                        "size": {
+                            "width": 164.328125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "af5979009e2021bb",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "13ef51387215ce27",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

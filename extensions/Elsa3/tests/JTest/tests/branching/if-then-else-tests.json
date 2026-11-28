@@ -1,0 +1,182 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test suite for the case: 'If, Then, Else'"
+    },
+    "globals": {
+        "authHeader": null,
+        "workflowInstanceId": null,
+        "versionId": "8727d1a1714f1a23",
+        "definitionId": "123751d0e5707622",
+        "version": 1,
+        "endpoint": "qa/branching/flows",
+        "expectedStatusCode": 202,
+        "activityIds": {
+            "httpEndpoint": "8a1a086771335e5a",
+            "correlate": "a6e37d9980ab51a3",
+            "switchFlow": "99145dd608bd905",
+            "switchFlow_CaseDefault_WriteHttpResponse": "c3ca68c3a6c1b5cb",
+            "switchFlow_CaseFail_WriteHttpResponse": "1e6df2242dc57b56",
+            "decision_Flow1": "bfadc78040b73a43",
+            "switch": "51016005c228975f",
+            "switch_Case1_WriteLine": "1654437cff29b1b",
+            "switch_Case2_WriteLine": "2e0b6971df4cb048",
+            "switch_CaseDefault_WriteLine": "81558ceaf1167345",
+            "writeLine_Flow2": "d7f8239de7e28db3",
+            "if": "fde6ad27f757688e",
+            "if_Then_WriteLine": "6fa6cdd959b86b8d",
+            "if_Else_WriteLine": "bc138c9644155492",
+            "join": "b30911da0e0c6dfc",
+            "writeHttpResponse_Final": "c7a083e4b01a1c28"
+        }
+    },
+    "tests": [
+        {
+            "name": "Authenticate with Elsa API",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username']}}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Test dataset: if then else activity",
+            "description": "",
+            "datasets": [
+                {
+                    "name": "Then",
+                    "case": {
+                        "ifConditionValue": true,
+                        "expectedCompletedActivitiesCount": 2,
+                        "expectedCompletedActivities": [
+                            "{{ $.globals.activityIds.if }}",
+                            "{{ $.globals.activityIds.if_Then_WriteLine }}"
+                        ],
+                        "expectedActivitiesNeverExecuted": [
+                            "{{ $.globals.activityIds.if_Else_WriteLine }}"
+                        ]
+                    }
+                },
+                {
+                    "name": "Else",
+                    "case": {
+                        "ifConditionValue": false,
+                        "expectedCompletedActivitiesCount": 2,
+                        "expectedCompletedActivities": [
+                            "{{ $.globals.activityIds.if }}",
+                            "{{ $.globals.activityIds.if_Else_WriteLine }}"
+                        ],
+                        "expectedActivitiesNeverExecuted": [
+                            "{{ $.globals.activityIds.if_Then_WriteLine }}"
+                        ]
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "flow": {
+                            "id": 2,
+                            "if": {
+                                "condition": "{{ $.case.ifConditionValue }}"
+                            }
+                        },
+                        "switchFlow": {
+                            "case": "continue"
+                        }
+                    },
+                    "headers": [
+                    ],
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "{{ $.globals.expectedStatusCode }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Get workflow instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.version }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionId }}",
+                            "expectedValue": "{{ $.globals.definitionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionVersionId }}",
+                            "expectedValue": "{{ $.globals.versionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].correlationId }}",
+                            "expectedValue": "{{ $.globals.correlationId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert expected activities are executed with status completed",
+                    "template": "elsa-activity-instance-assert-all-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                        "activityIdentifiers": "{{ $.case.expectedCompletedActivities }}",
+                        "activityIdentifiersCount": "{{ $.case.expectedCompletedActivitiesCount }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert expected activities are never executed",
+                    "template": "elsa-activity-instance-assert-none-executed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                        "activityIdentifiers": "{{ $.case.expectedActivitiesNeverExecuted }}"
+                    }
+                }
+            ]
+        }
+    ]
+}

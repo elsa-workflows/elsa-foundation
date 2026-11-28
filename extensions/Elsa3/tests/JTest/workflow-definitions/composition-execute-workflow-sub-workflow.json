@@ -1,0 +1,146 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "8d76bc27c9d8c1f8",
+    "definitionId": "23004d23f02c0e7f",
+    "name": "QA - JTest - Composition - Execute Workflow - Subworkflow",
+    "createdAt": "2025-11-17T17:56:48.108448\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.5.0.0",
+    "variables": [],
+    "inputs": [
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "CustomInput",
+            "displayName": "CustomInput",
+            "description": "",
+            "category": "Primitives"
+        },
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "MillisecondsToDelaySubworkflowExecutionTime",
+            "displayName": "MillisecondsToDelaySubworkflowExecutionTime",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outputs": [
+        {
+            "type": "Object",
+            "name": "CustomOutput",
+            "displayName": "Custom Output",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "253931b127c850d5",
+        "nodeId": "Workflow1:253931b127c850d5",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "outputName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "CustomOutput"
+                    }
+                },
+                "outputValue": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getCustomInput();"
+                    }
+                },
+                "id": "5f274493e6770251",
+                "nodeId": "Workflow1:253931b127c850d5:5f274493e6770251",
+                "name": "SetOutput1",
+                "type": "Elsa.SetOutput",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -151.390625,
+                            "y": -166.5
+                        },
+                        "size": {
+                            "width": 132.328125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "script": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "function wait(ms){\r\n   var start = new Date().getTime();\r\n   var end = start;\r\n   while(end \u003C start \u002B ms) {\r\n     end = new Date().getTime();\r\n  }\r\n}\r\n\r\nconst millisecondsToDelaySubworkflowExecutionTime = getMillisecondsToDelaySubworkflowExecutionTime();\r\nwait(millisecondsToDelaySubworkflowExecutionTime);"
+                    }
+                },
+                "possibleOutcomes": null,
+                "result": null,
+                "id": "e64c856fc8e4e0ad",
+                "nodeId": "Workflow1:253931b127c850d5:e64c856fc8e4e0ad",
+                "name": "RunJavaScript1",
+                "type": "Elsa.RunJavaScript",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -462.6171875,
+                            "y": -166.5
+                        },
+                        "size": {
+                            "width": 195.0625,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "e64c856fc8e4e0ad",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "5f274493e6770251",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

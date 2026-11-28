@@ -22,7 +22,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `/extensions/Elsa3/tests/JTest/** -text` to the repository `.gitattributes` first (the corpus stores
+- [X] T001 Add `/extensions/Elsa3/tests/JTest/** -text` to the repository `.gitattributes` first (the corpus stores
   `import-and-publish-workflows.json` with CRLF line endings, which `core.autocrlf` would otherwise change), then copy
   the corpus at `b1cde13` unchanged into `JTest/` from the commit, not a working tree (for example
   `git -C <corpus> -c core.autocrlf=false archive b1cde13 <paths> | tar -x -C extensions/Elsa3/tests/JTest`; line-ending
@@ -33,9 +33,9 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   side the same naming as Elsa 4: rename `templates/` to `templates-elsa3/`, `environments/dev.json` to
   `environments/elsa3.json` and `global-configuration.json` to `global-configuration.elsa3.json`, and point its
   template search path at `templates-elsa3/*` (renames plus that one search-path line).
-- [ ] T002 Check `JTest/` for secrets: credentials and base URLs are `${VARIABLE}` references; other literals in the
+- [X] T002 Check `JTest/` for secrets: credentials and base URLs are `${VARIABLE}` references; other literals in the
   environment files (dispatch channels, wait times, engine-specific expected values) are not secrets (FR-004).
-- [ ] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
+- [X] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
   per suite, all `not run` except the excluded one, spec Q13), `JTest/ledger/baseline-failures.md`, `JTest/ledger/refactor-scope.md`,
   `JTest/ledger/suite-changes.md`,
   `JTest/ledger/dispositions.md` (one row per definition, bucket `unclassified`, or `excluded` for the two of spec Q13), `JTest/ledger/runs.md`.
@@ -44,18 +44,18 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 ## Phase 2: Elsa 4 host composition (parallel with US1 and US2)
 
-- [ ] T004 Add a `ProjectReference` to the Elsa 3 reconciliation project
+- [X] T004 Add a `ProjectReference` to the Elsa 3 reconciliation project
   (`extensions/Elsa3/src/Activities/Design/Import/Reconciliation/`) in `apps/Elsa.Workbench/Elsa.Workbench.csproj`.
-- [ ] T005 Add `typeof(Elsa3JsonReconciliationFeature).Assembly` to the Elsa 3 feature assemblies in
+- [X] T005 Add `typeof(Elsa3JsonReconciliationFeature).Assembly` to the Elsa 3 feature assemblies in
   `apps/Elsa.Workbench/Program.cs`, next to the four existing Elsa 3 entries; leave the feature disabled in
   `apps/Elsa.Workbench/shells.json`.
-- [ ] T006 Run `dotnet restore Elsa.Server.slnx` and commit every `packages.lock.json` it changes (at least
+- [X] T006 Run `dotnet restore Elsa.Server.slnx` and commit every `packages.lock.json` it changes (at least
   `apps/Elsa.Workbench/`, `Essentials/tests/Modularity/Tests/` and `Essentials/tests/Modularity/ProviderTests/`; CI
   restores in locked mode); regenerate the solution filters (`dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters`),
   commit the changed `Elsa.Server.Workbench.slnf` and confirm with `-- solution-filters-check`; build the Workbench and run the architecture tests that cover feature
   composition and the Elsa 3 boundary (`Essentials/tests/Architecture/Tests/`).
-- [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`Options:SourceId`, and
-  `Options:Files` with `{Order, FilePath}` entries listing the 34 definitions of the acceptance set, spec Q13) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
+- [X] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`Options:SourceId`, and
+  `Options:Files` with `{Order, FilePath}` entries listing the 32 definitions of the acceptance set, spec Q13 and Q15) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
   committed `shells.json` (environment variables or a run-specific shells file, R-5); after start, set activity input
   and output capture to snapshot level and a `variableWrites` override with `PUT /runtime/workflows/diagnostics/settings`
   (in-memory, so after every start). Record the exact commands in `JTest/README.md`.
@@ -70,33 +70,33 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 **Independent test**: run the corpus against the 3.6.3 container and read `JTest/ledger/suites.md`.
 
-- [ ] T008 [US1] Build the baseline image from elsa-core tag `3.6.3` (`docker/ElsaServer.Dockerfile`) from the tag's
+- [X] T008 [US1] Build the baseline image from elsa-core tag `3.6.3` (`docker/ElsaServer.Dockerfile`) from the tag's
   committed bytes (the Git URL build context in quickstart.md; a Windows working tree breaks `entrypoint.sh`), find its development admin credentials, and record the build command and image digest in
   `JTest/README.md` (FR-006).
-- [ ] T009 [US1] Install or update `JTest.Cli` to the latest release and run
+- [X] T009 [US1] Install or update `JTest.Cli` to the latest release and run
   `jtest validate "tests/**/*"` from `JTest/`; record the version and any invalid file in `JTest/ledger/runs.md`.
-- [ ] T010 [US1] Start a fresh baseline container, run `import-and-publish-workflows.json`, and record its result per
+- [X] T010 [US1] Start a fresh baseline container, run `import-and-publish-workflows.json`, and record its result per
   dataset in `JTest/ledger/runs.md`; a definition that fails to import on 3.6.3 is itself a baseline failure.
-- [ ] T011 [US1] Run the 41 suites of the acceptance set (`performance/baseline-dispatch-tests.json` is excluded,
+- [X] T011 [US1] Run the 41 suites of the acceptance set (`performance/baseline-dispatch-tests.json` is excluded,
   spec Q13) on the same container; record the run in `JTest/ledger/runs.md` and the Elsa 3
   result per suite in `JTest/ledger/suites.md`.
-- [ ] T012 [US1] Rerun every failing suite on a fresh container to separate intermittent failures from stable ones;
+- [X] T012 [US1] Rerun every failing suite on a fresh container to separate intermittent failures from stable ones;
   keep both runs in `JTest/ledger/runs.md`.
-- [ ] T013 [US1] For each failing assertion, add a row to `JTest/ledger/baseline-failures.md` with observed and expected
+- [X] T013 [US1] For each failing assertion, add a row to `JTest/ledger/baseline-failures.md` with observed and expected
   values and the suite's description (FR-007).
-- [ ] T014 [US1] Classify each row as suite defect, corrected behaviour or 3.6.3 defect, with evidence (suite
+- [X] T014 [US1] Classify each row as suite defect, corrected behaviour or 3.6.3 defect, with evidence (suite
   description, elsa-core 3.6.3 source or release notes, a minimal reproduction) and the proposed fix or `none
   (blocked)`.
-- [ ] T015 [US1] Check the If and Switch suites (`tests/branching/if-then-else-tests.json`, `switch-*`,
+- [X] T015 [US1] Check the If and Switch suites (`tests/branching/if-then-else-tests.json`, `switch-*`,
   `switchflow-*`) are present and cover the corpus's If, Switch and FlowSwitch activities; record any activity the
   corpus definitions use that no suite covers in the *Notes* section of `JTest/ledger/baseline-failures.md`.
-- [ ] T016 [US1] **Approval gate**: post the classified list on the PR and get the coordinator's approval of the whole
+- [X] T016 [US1] **Approval gate**: post the classified list on the PR and get the coordinator's approval of the whole
   list; record the approval link in `JTest/ledger/baseline-failures.md`.
-- [ ] T017 [US1] Apply the approved fixes to `JTest/tests/` and `JTest/templates-elsa3/`, and set `"version": 1` in
+- [X] T017 [US1] Apply the approved fixes to `JTest/tests/` and `JTest/templates-elsa3/`, and set `"version": 1` in
   `JTest/workflow-definitions/storage-drivers-variables-root-workflow.json` (spec Q14, approved),
   one commit, with the ledger row named per change; mark 3.6.3-defect suites `blocked: 3.6.3 defect <defect>` in
   `JTest/ledger/suites.md` (FR-008).
-- [ ] T018 [US1] Rerun the 41 suites of the acceptance set on a fresh container and confirm every unblocked suite passes (SC-001); record the
+- [X] T018 [US1] Rerun the 39 suites of the acceptance set on a fresh container and confirm every unblocked suite passes (SC-001); record the
   run.
 
 **Checkpoint**: green Elsa 3 baseline.
@@ -109,21 +109,21 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 **Independent test**: Elsa 3 rerun green; the diff of each suite shows only values moved behind parameters.
 
-- [ ] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb : direct
+- [X] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb : direct
   Elsa 3 API calls in `http` steps (the `events` suite and three `performance` suites call
   `/elsa/api/workflow-definitions/{id}/execute` and `/elsa/api/workflow-instances`), response fields read from those
   steps, reads inside template outputs beyond the projected fields (for example
   `instance.workflowState.activityExecutionContexts[0].properties.Variables[...]`), status words the translation table
   does not cover, and Elsa 3 generated identifiers; include the keys suites read inside `activityState` and `outputs`, which the Elsa 4
   templates must supply (contracts/templates.md); write the list to `JTest/ledger/refactor-scope.md`.
-- [ ] T020 [US2] For each Elsa 4 template that needs a parameter its Elsa 3 version lacks (for example the workflow
+- [X] T020 [US2] For each Elsa 4 template that needs a parameter its Elsa 3 version lacks (for example the workflow
   instance id for `elsa-activity-instance-get`, contracts/templates.md), add the parameter to the Elsa 3 template in
   `JTest/templates-elsa3/` without changing its outputs; for each direct API call or internal read listed in T019, add a new
   Elsa 3 template in `JTest/templates-elsa3/` that returns the value with a stated meaning.
-- [ ] T021 [US2] Move each listed value behind a template output, an environment value in `JTest/environments/elsa3.json`
+- [X] T021 [US2] Move each listed value behind a template output, an environment value in `JTest/environments/elsa3.json`
   or a suite parameter, and pass any new template parameters, in `JTest/tests/**`; no expected business value or
   assertion changes (FR-010).
-- [ ] T022 [US2] Rerun the 41 suites of the acceptance set on a fresh 3.6.3 container; the same suites pass as after T018 (SC-002 part 1);
+- [X] T022 [US2] Rerun the 39 suites of the acceptance set on a fresh 3.6.3 container; the same suites pass as after T018 (SC-002 part 1);
   record the run.
 
 **Checkpoint**: the suite files are frozen for the Elsa 4 work; later edits go through T029.
@@ -141,51 +141,51 @@ an approved incompatibility passes.
 case-insensitive lookup, and normalizes nothing the contract's translation table does not list; an output Elsa 4
 cannot produce with the same meaning fails the template with the output named (FR-011, FR-013).
 
-- [ ] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `elsa3.json`, differing only in
+- [X] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `elsa3.json`, differing only in
   engine-specific values; the executor base `{base}/workflows/http` comes from `ELSA_EXECUTOR_BASE_URL`) and `JTest/global-configuration.elsa4.json` (template search path `templates-elsa4/*`)
   per contracts/run-hosts.md.
-- [ ] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
+- [X] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
   contracts/templates.md.
-- [ ] T025 [P] [US3] Write the Elsa 4 versions of the templates added in T020, in `templates-elsa4/`, with outputs of
+- [X] T025 [P] [US3] Write the Elsa 4 versions of the templates added in T020, in `templates-elsa4/`, with outputs of
   the same meaning (the execute template follows contracts/templates.md, *Execute*: resolve the published artifact, start, read the
   instance until terminal within a deadline, take its `outputs`). The definition
   import, publish, delete and composite templates are not written for Elsa 4 (contracts/templates.md).
-- [ ] T026 [P] [US3] Write `templates-elsa4/elsa-api-workflow-instance-templates.json`: get, search, not-exists and
+- [X] T026 [P] [US3] Write `templates-elsa4/elsa-api-workflow-instance-templates.json`: get, search, not-exists and
   variable value, with the status and version translations.
-- [ ] T027 [P] [US3] Write `templates-elsa4/elsa-api-activity-instance-templates.json`: the eight
+- [X] T027 [P] [US3] Write `templates-elsa4/elsa-api-activity-instance-templates.json`: the eight
   `elsa-activity-instance-*` templates, with node-id suffix matching, execution-list counts and the counting rules of
   `assert-all-completed` and `assert-none-executed` in contracts/templates.md.
-- [ ] T028 [US3] Start a fresh Workbench with the T007 override on the HTTP definition (`http-endpoints.json`), run the
+- [X] T028 [US3] Start a fresh Workbench with the T007 override on the HTTP definition (`http-endpoints.json`), run the
   six `tests/http/*` suites with the Elsa 4 configuration, and fix templates until they pass or a failure is shown to
   be an engine or conversion result; record the run and receipt.
 - [ ] T029 [US3] **Approval gate** for suite edits: any change to a suite file or an Elsa 3 template needed on Elsa 4,
   and any raised `wait` in a suite or a template of either set, is added to `JTest/ledger/suite-changes.md` with its reason, approved by the coordinator, and, when it
   touches a suite file or the Elsa 3 set, verified on 3.6.3 before it lands (FR-012).
 - [ ] T030 [US3] Run `tests/single-outcome/single-outcome-tests.json` the same way; record the run.
-- [ ] T031 [US3] Start a fresh Workbench with the 34 definitions of the acceptance set (a `Files` list leaving out the
-  two excluded ones, spec Q13); copy the reconciliation receipt into
+- [X] T031 [US3] Start a fresh Workbench with the 32 definitions of the acceptance set (a `Files` list leaving out the
+  four excluded ones, spec Q13 and Q15); copy the reconciliation receipt into
   `JTest/ledger/runs.md` and fill the Reconciliation column of `JTest/ledger/dispositions.md`.
-- [ ] T032 [US3] Run the 41 suites of the acceptance set on that host; record the Elsa 4 result per suite in `JTest/ledger/suites.md`.
-- [ ] T033 [US3] For each failing suite, find the cause (template, converter, engine, prerequisite) and record it in
+- [X] T032 [US3] Run the 39 suites of the acceptance set on that host; record the Elsa 4 result per suite in `JTest/ledger/suites.md`.
+- [X] T033 [US3] For each failing suite, find the cause (template, converter, engine, prerequisite) and record it in
   `JTest/ledger/suites.md`; a template cause is fixed in `templates-elsa4/` and rerun; a missing prerequisite marks
   the suite `blocked: <prerequisite>` (FR-016); a value that comes back truncated or unavailable under the capture
   limits marks it `blocked: value capture` with the key and limit (FR-024).
-- [ ] T034 [US3] For a converter or engine cause: if the definition cannot convert faithfully, confirm it is refused
+- [X] T034 [US3] For a converter or engine cause: if the definition cannot convert faithfully, confirm it is refused
   with guidance and propose the `incompatible` bucket, recorded only after the coordinator approves it in
   `JTest/ledger/dispositions.md`; if a genuine Elsa 4 gap or converter defect, file a `needs-triage` issue
   (sub-issue of the initiative), mark the suite `blocked: <issue>` and leave the bucket `unclassified` until the
   issue is fixed, an approved adjusted copy passes (T036) or the definition is bucketed `incompatible`; never add a
   converter workaround (FR-016, FR-017).
-- [ ] T035 [US3] For each suite whose definition contains a join, decide from the failure whether the join is what stops
+- [X] T035 [US3] For each suite whose definition contains a join, decide from the failure whether the join is what stops
   it; mark `blocked: JOIN` with the construct and failure only then (FR-018), and keep the rest in the main run.
-- [ ] T036 [US3] **Approval gate** for adjustments: for a definition that needs an adjusted copy, add it under
+- [X] T036 [US3] **Approval gate** for adjustments: for a definition that needs an adjusted copy, add it under
   `JTest/adjusted/` with the exact change and reason in `JTest/ledger/dispositions.md`, get the coordinator's
   approval, and run the Elsa 4 host with the adjusted copy in place of the original via the reconciliation `Files`
   list (FR-014, FR-015).
-- [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked,
+- [X] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked,
   value-capture-blocked nor issue-blocked; the rest stay `unclassified` with the reason, and T043 completes SC-003.
 - [ ] T038 [US3] Once spec 1207 is implemented on the initiative branch (its status Implemented), merge the initiative branch into this branch and
-  make the qualifying run: the 41 suites of the acceptance set on a fresh Workbench from that head. Record it as the non-JOIN milestone run
+  make the qualifying run: the 39 suites of the acceptance set on a fresh Workbench from that head. Record it as the non-JOIN milestone run
   (FR-020, SC-004) only when every acceptance-set suite that SC-004 does not exempt passed in it; otherwise record it
   as a qualifying run and repeat T038 once the blocking issues or prerequisites are closed. Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
   only by approved T029 rows, that `JTest/templates-elsa3/` differs only by approved rows too, and rerun the changed suites
@@ -204,6 +204,9 @@ until their evidence exists. T049 to T051 (value capture) run alongside T039 to 
   failure in `JTest/ledger/suites.md`.
 - [ ] T040 [US4] J-002: reconcile those suites with the JOIN initiative's agreed contract and delivered implementation
   once it lands on the initiative branch; agree any adjustment through T036.
+  Also re-evaluate the two suites spec Q15 excluded (`branching/implicit-tests.json`, `branching/join-wait-all-active-tests.json`)
+  against that contract: bring them back, adjusted through T029/T036, or replace them with Elsa 4-only workflows and
+  suites that guard the decided behaviour.
 - [ ] T041 [US4] J-003: make the JOIN-dependent templates and waits work on Elsa 4 without changing expectations;
   suite edits go through T029.
 - [ ] T042 [US4] J-004: run the JOIN-blocked suites on a fresh Workbench from the qualified head and record the results.
@@ -213,7 +216,7 @@ until their evidence exists. T049 to T051 (value capture) run alongside T039 to 
   capture those values as it provides (update T007's commands in `JTest/README.md`) and adjust `templates-elsa4/`
   without changing expectations; suite edits go through T029.
 - [ ] T051 [US4] V-003: run those suites on a fresh Workbench from the qualified head and record the results.
-- [ ] T043 [US4] J-005: rerun the 41 suites of the acceptance set on the final initiative head, reconcile `JTest/ledger/dispositions.md`
+- [ ] T043 [US4] J-005: rerun the 39 suites of the acceptance set on the final initiative head, reconcile `JTest/ledger/dispositions.md`
   and `JTest/ledger/suites.md`, bucket every remaining definition of the acceptance set (SC-003), and record the coordinator's
   full-acceptance verdict (SC-005).
 

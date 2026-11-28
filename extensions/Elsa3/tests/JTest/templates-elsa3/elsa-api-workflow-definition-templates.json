@@ -1,0 +1,223 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Templates to execute Worklfow definition endpoints",
+        "description": ""
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-workflow-definition-import",
+                "description": "Imports an Elsa workflow definition",
+                "params": {
+                    "workflowDefinitionFile": {
+                        "required": true,
+                        "type": "string"
+                    },
+                    "authHeader": {
+                        "required": true,
+                        "type": "string"
+                    },
+                    "baseUrl": {
+                        "required": true,
+                        "type": "string",
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute import endpoint",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-definitions/import",
+                        "method": "POST",
+                        "file": "{{$.workflowDefinitionFile}}",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.body.id}}"
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.body.definitionId}}"
+                            }
+                        ],
+                        "save": {
+                            "versionId": "{{$.this.body.id}}",
+                            "version": "{{$.this.body.version}}",
+                            "definitionId": "{{$.this.body.definitionId}}",
+                            "response": "{{$.this.body}}"
+                        }
+                    }
+                ],
+                "output": {
+                    "workflowDefinitionVersionId": "{{$.versionId}}",
+                    "workflowDefinitionVersion": "{{$.version}}",
+                    "workflowDefinitionId": "{{$.definitionId}}",
+                    "workflowDefinition": "{{$.response}}"
+                }
+            },
+            {
+                "name": "elsa-workflow-definition-publish",
+                "description": "",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Authorization header: Bearer ***"
+                    },
+                    "workflowDefinition": {
+                        "type": "object",
+                        "required": true,
+                        "description": "Workflow definition"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-definitions",
+                        "method": "POST",
+                        "body": {
+                            "model": "{{$.workflowDefinition}}",
+                            "publish": true
+                        },
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.workflowDefinition.id}}",
+                                "expectedValue": "{{$.workflowDefinition.id}}"
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.workflowDefinition.definitionId}}",
+                                "expectedValue": "{{$.workflowDefinition.definitionId}}"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "http",
+                        "name": "Assert publish was successful",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-definitions/by-definition-id/{{$.workflowDefinition.definitionId}}?versionOptions=Latest",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.definitionId}}",
+                                "expectedValue": "{{$.workflowDefinition.definitionId}}"
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{ $.this.body.id }}",
+                                "expectedValue": "{{ $.workflowDefinition.id }}"
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{ $.this.body.version }}",
+                                "expectedValue": "{{ $.workflowDefinition.version }}"
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{ $.this.body.isPublished }}",
+                                "expectedValue": true
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "elsa-workflow-definition-delete",
+                "description": "Deletes the Elsa workflow with the specified workflow definition id",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "workflowDefinitionId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-definitions/{{$.workflowDefinitionId}}",
+                        "method": "DELETE",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 204
+                            }
+                        ]
+                    },
+                    {
+                        "type": "http",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-definitions?versionOptions=Latest&Page=0&PageSize=10&SearchTerm={{$.workflowDefinitionId}}&IsSystem=False&OrderDirection=Ascending",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.totalCount}}",
+                                "expectedValue": 0
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

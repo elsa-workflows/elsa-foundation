@@ -1,0 +1,160 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "15f05eb1e37a036f",
+    "definitionId": "32aa8cdf445d8276",
+    "name": "QA - JTest - Composition - Bulk Dispatch - Sub Workflow",
+    "createdAt": "2025-11-19T06:21:58.235604\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.5.0.0",
+    "variables": [],
+    "inputs": [
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Boolean",
+            "name": "ShouldFault",
+            "displayName": "ShouldFault",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false,
+        "incidentStrategyType": "Elsa.Workflows.IncidentStrategies.FaultStrategy, Elsa.Workflows.Core"
+    },
+    "root": {
+        "id": "6c87f2b9a85d4035",
+        "nodeId": "Workflow1:6c87f2b9a85d4035",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "text": null,
+                "id": "a59f46e87283fa08",
+                "nodeId": "Workflow1:6c87f2b9a85d4035:a59f46e87283fa08",
+                "name": "WriteLine1",
+                "type": "Elsa.WriteLine",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 101.9140625,
+                            "y": -30.5
+                        },
+                        "size": {
+                            "width": 159.625,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "condition": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getShouldFault();"
+                    }
+                },
+                "id": "bbc55898a04b375f",
+                "nodeId": "Workflow1:6c87f2b9a85d4035:bbc55898a04b375f",
+                "name": "FlowDecision1",
+                "type": "Elsa.FlowDecision",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -180,
+                            "y": -140
+                        },
+                        "size": {
+                            "width": 181.1875,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Should fault?"
+                }
+            },
+            {
+                "script": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "throw new Error(\u0027Some error\u0027);"
+                    }
+                },
+                "possibleOutcomes": null,
+                "result": null,
+                "id": "6280a00b1a758320",
+                "nodeId": "Workflow1:6c87f2b9a85d4035:6280a00b1a758320",
+                "name": "RunJavaScript1",
+                "type": "Elsa.RunJavaScript",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 101.9140625,
+                            "y": -239.765625
+                        },
+                        "size": {
+                            "width": 184.125,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Throw error"
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "bbc55898a04b375f",
+                    "port": "False"
+                },
+                "target": {
+                    "activity": "a59f46e87283fa08",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "bbc55898a04b375f",
+                    "port": "True"
+                },
+                "target": {
+                    "activity": "6280a00b1a758320",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

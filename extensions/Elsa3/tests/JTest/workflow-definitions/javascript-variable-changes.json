@@ -1,0 +1,378 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "5e1c7a0b9d2f4e60",
+    "definitionId": "5e1c7a0b9d2f4e61",
+    "name": "QA - JTest - Javascript variable changes",
+    "createdAt": "2026-11-28T00:00:00+00:00",
+    "version": 1,
+    "toolVersion": "3.5.0.0",
+    "variables": [
+        {
+            "id": "8a2d4c6e0f1b3a51",
+            "name": "ArrayVariable",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "8a2d4c6e0f1b3a52",
+            "name": "ObjectVariable",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "8a2d4c6e0f1b3a53",
+            "name": "HttpRequestBody",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        }
+    ],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "7ac1d0e5b2f43a10",
+        "nodeId": "Workflow1:7ac1d0e5b2f43a10",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "path": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "qa/javascript/variable-changes"
+                    }
+                },
+                "supportedMethods": {
+                    "typeName": "List<String>",
+                    "expression": {
+                        "type": "Object",
+                        "value": "[\"POST\"]"
+                    }
+                },
+                "authorize": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "policy": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal"
+                    }
+                },
+                "requestTimeout": null,
+                "requestSizeLimit": null,
+                "fileSizeLimit": null,
+                "allowedFileExtensions": null,
+                "blockedFileExtensions": null,
+                "allowedMimeTypes": null,
+                "exposeRequestTooLargeOutcome": false,
+                "exposeFileTooLargeOutcome": false,
+                "exposeInvalidFileExtensionOutcome": false,
+                "exposeInvalidFileMimeTypeOutcome": false,
+                "parsedContent": {
+                    "typeName": "Object",
+                    "memoryReference": {
+                        "id": "8a2d4c6e0f1b3a53"
+                    }
+                },
+                "files": null,
+                "routeData": null,
+                "queryStringData": null,
+                "headers": null,
+                "result": null,
+                "id": "9b3e5d7f1a2c4e01",
+                "nodeId": "Workflow1:7ac1d0e5b2f43a10:9b3e5d7f1a2c4e01",
+                "name": "HttpEndpoint1",
+                "type": "Elsa.HttpEndpoint",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -600,
+                            "y": 0
+                        },
+                        "size": {
+                            "width": 200,
+                            "height": 68
+                        }
+                    },
+                    "displayText": "POST qa/javascript/variable-changes"
+                }
+            },
+            {
+                "correlationId": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getHttpRequestBody().correlationId;"
+                    }
+                },
+                "id": "9b3e5d7f1a2c4e02",
+                "nodeId": "Workflow1:7ac1d0e5b2f43a10:9b3e5d7f1a2c4e02",
+                "name": "Correlate1",
+                "type": "Elsa.Correlate",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -360,
+                            "y": 0
+                        },
+                        "size": {
+                            "width": 200,
+                            "height": 68
+                        }
+                    },
+                    "displayText": "Correlate by the request"
+                }
+            },
+            {
+                "variable": {
+                    "id": "8a2d4c6e0f1b3a51",
+                    "name": "ArrayVariable",
+                    "typeName": "Object",
+                    "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getHttpRequestBody().array;"
+                    }
+                },
+                "id": "9b3e5d7f1a2c4e03",
+                "nodeId": "Workflow1:7ac1d0e5b2f43a10:9b3e5d7f1a2c4e03",
+                "name": "SetVariable1",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -120,
+                            "y": 0
+                        },
+                        "size": {
+                            "width": 200,
+                            "height": 68
+                        }
+                    },
+                    "displayText": "Set Array Variable"
+                }
+            },
+            {
+                "variable": {
+                    "id": "8a2d4c6e0f1b3a52",
+                    "name": "ObjectVariable",
+                    "typeName": "Object",
+                    "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getHttpRequestBody().object;"
+                    }
+                },
+                "id": "9b3e5d7f1a2c4e04",
+                "nodeId": "Workflow1:7ac1d0e5b2f43a10:9b3e5d7f1a2c4e04",
+                "name": "SetVariable2",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 120,
+                            "y": 0
+                        },
+                        "size": {
+                            "width": 200,
+                            "height": 68
+                        }
+                    },
+                    "displayText": "Set Object Variable"
+                }
+            },
+            {
+                "script": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "// S-15 addition: how a Run JavaScript change to a variable it read behaves.\r\nconst mode = getHttpRequestBody().mode;\r\nif (mode === 'copy') {\r\n    // Work on a copy: the variables must not change.\r\n    const arrayCopy = JSON.parse(JSON.stringify(getArrayVariable()));\r\n    arrayCopy.push('added');\r\n    const objectCopy = JSON.parse(JSON.stringify(getObjectVariable()));\r\n    objectCopy.added = 'yes';\r\n} else {\r\n    // Change each variable through an alias of the value read.\r\n    const array = getArrayVariable();\r\n    const arrayAlias = array;\r\n    arrayAlias.push('added');\r\n    const obj = getObjectVariable();\r\n    const objectAlias = obj;\r\n    objectAlias.added = 'yes';\r\n    if (mode === 'assign') {\r\n        // An intended change: assign the variables.\r\n        setArrayVariable(arrayAlias);\r\n        setObjectVariable(objectAlias);\r\n    }\r\n}"
+                    }
+                },
+                "possibleOutcomes": null,
+                "result": null,
+                "id": "9b3e5d7f1a2c4e05",
+                "nodeId": "Workflow1:7ac1d0e5b2f43a10:9b3e5d7f1a2c4e05",
+                "name": "RunJavaScript1",
+                "type": "Elsa.RunJavaScript",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 360,
+                            "y": 0
+                        },
+                        "size": {
+                            "width": 200,
+                            "height": 68
+                        }
+                    },
+                    "displayText": "Change the variables (mode from the request)"
+                }
+            },
+            {
+                "statusCode": {
+                    "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "OK"
+                    }
+                },
+                "content": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return {\r\n    arrayVariable: getArrayVariable(),\r\n    objectVariable: getObjectVariable(),\r\n    correlationId: getCorrelationId()\r\n}"
+                    }
+                },
+                "contentType": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "application/json"
+                    }
+                },
+                "responseHeaders": {
+                    "typeName": "HttpHeaders",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "{}"
+                    }
+                },
+                "id": "9b3e5d7f1a2c4e06",
+                "nodeId": "Workflow1:7ac1d0e5b2f43a10:9b3e5d7f1a2c4e06",
+                "name": "WriteHttpResponse1",
+                "type": "Elsa.WriteHttpResponse",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 600,
+                            "y": 0
+                        },
+                        "size": {
+                            "width": 200,
+                            "height": 68
+                        }
+                    },
+                    "displayText": "Return the variables as stored"
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "9b3e5d7f1a2c4e01",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "9b3e5d7f1a2c4e02",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "9b3e5d7f1a2c4e02",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "9b3e5d7f1a2c4e03",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "9b3e5d7f1a2c4e03",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "9b3e5d7f1a2c4e04",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "9b3e5d7f1a2c4e04",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "9b3e5d7f1a2c4e05",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "9b3e5d7f1a2c4e05",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "9b3e5d7f1a2c4e06",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

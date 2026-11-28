@@ -1,0 +1,266 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Templates for running workflows and reading workflow instance data",
+        "description": "Added by the engine-neutral refactor (spec 1235 T020): suites call these instead of the Elsa API directly. The Elsa 4 set has the same names, parameters and outputs."
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-execute-workflow-definition",
+                "description": "Runs the published workflow definition to its end and returns the finished run, with the variables of its root scope keyed by variable id",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowDefinitionId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "input": {
+                        "type": "object",
+                        "required": false,
+                        "default": {},
+                        "description": "Workflow input, keyed by input name"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Execute Workflow Definition'",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-definitions/{{ $.workflowDefinitionId }}/execute",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{ $.authHeader }}"
+                            }
+                        ],
+                        "body": {
+                            "input": "{{ $.input }}"
+                        },
+                        "save": {
+                            "workflowInstanceId": "{{ $.this.body.workflowState.id }}",
+                            "correlationId": "{{ $.this.body.workflowState.correlationId }}",
+                            "workflowStatus": "{{ $.this.body.workflowState.status }}",
+                            "workflowSubStatus": "{{ $.this.body.workflowState.subStatus }}",
+                            "output": "{{ $.this.body.workflowState.output }}",
+                            "variables": "{{ $.this.body.workflowState.activityExecutionContexts[0].properties.Variables }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                    "correlationId": "{{ $.correlationId }}",
+                    "workflowStatus": "{{ $.workflowStatus }}",
+                    "workflowSubStatus": "{{ $.workflowSubStatus }}",
+                    "output": "{{ $.output }}",
+                    "variables": "{{ $.variables }}"
+                }
+            },
+            {
+                "name": "elsa-execute-workflow-definition-from-file",
+                "description": "As elsa-execute-workflow-definition, with the request body ({ \"input\": { ... } }) read from a file",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowDefinitionId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "requestFile": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Path of a JSON file holding { \"input\": { ... } }"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Execute Workflow Definition'",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-definitions/{{ $.workflowDefinitionId }}/execute",
+                        "method": "POST",
+                        "file": "{{ $.requestFile }}",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{ $.authHeader }}"
+                            }
+                        ],
+                        "save": {
+                            "workflowInstanceId": "{{ $.this.body.workflowState.id }}",
+                            "correlationId": "{{ $.this.body.workflowState.correlationId }}",
+                            "workflowStatus": "{{ $.this.body.workflowState.status }}",
+                            "workflowSubStatus": "{{ $.this.body.workflowState.subStatus }}",
+                            "output": "{{ $.this.body.workflowState.output }}",
+                            "variables": "{{ $.this.body.workflowState.activityExecutionContexts[0].properties.Variables }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                    "correlationId": "{{ $.correlationId }}",
+                    "workflowStatus": "{{ $.workflowStatus }}",
+                    "workflowSubStatus": "{{ $.workflowSubStatus }}",
+                    "output": "{{ $.output }}",
+                    "variables": "{{ $.variables }}"
+                }
+            },
+            {
+                "name": "elsa-get-workflow-instance-variables",
+                "description": "Gets the variables the workflow instance keeps, keyed by variable id; a variable the instance does not keep is absent",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Get Workflow Instance'",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-instances/{{ $.workflowInstanceId }}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{ $.authHeader }}"
+                            }
+                        ],
+                        "save": {
+                            "variables": "{{ $.this.body.workflowState.activityExecutionContexts[0].properties.Variables }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "variables": "{{ $.variables }}"
+                }
+            },
+            {
+                "name": "elsa-get-workflow-instance-input-output",
+                "description": "Gets the workflow instance's input and output, keyed by input and output name",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Get Workflow Instance'",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-instances/{{ $.workflowInstanceId }}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{ $.authHeader }}"
+                            }
+                        ],
+                        "save": {
+                            "input": "{{ $.this.body.workflowState.input }}",
+                            "output": "{{ $.this.body.workflowState.output }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "input": "{{ $.input }}",
+                    "output": "{{ $.output }}"
+                }
+            },
+            {
+                "name": "elsa-count-workflow-instances",
+                "description": "Counts the workflow instances with the correlation id, status and sub-status (Elsa 3 status words)",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "correlationId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "workflowStatus": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Elsa 3 status, for example Finished"
+                    },
+                    "workflowSubStatus": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Elsa 3 sub-status, for example Finished"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Query Workflow Instances'",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-instances",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{ $.authHeader }}"
+                            }
+                        ],
+                        "body": {
+                            "page": 0,
+                            "pageSize": 10,
+                            "correlationId": "{{ $.correlationId }}",
+                            "isSystem": false,
+                            "status": "{{ $.workflowStatus }}",
+                            "subStatus": "{{ $.workflowSubStatus }}"
+                        },
+                        "save": {
+                            "count": "{{ $.this.body.totalCount }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "count": "{{ $.count }}"
+                }
+            }
+        ]
+    }
+}

@@ -1,0 +1,283 @@
+{
+  "version": "1.0",
+  "info": {
+    "name": "Testing the built-in Elsa Javascript functions",
+    "description": "Example, the following functions: variables, getCorrelationId, isNullOrWhiteSpace, isNullOrEmpty, parseGuid, newGuid, newGuidString, newShortGuid, bytesToString, bytesFromString"
+  },
+  "using": [
+  ],
+  "globals": {
+    "endpoint": "qa/javascript/elsa-functions"
+  },
+  "tests": [
+    {
+      "name": "Execute test case 'getCorrelationId'",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "getCorrelationId",
+            "correlationId": "custom-correlation-id"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result }}",
+              "expectedValue": "custom-correlation-id"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute test case 'isNullOrWhiteSpace'",
+      "description": "",
+      "datasets": [
+        {
+           "name": "empty",
+           "case": {
+              "text": "",
+              "expectedResult": true
+            }
+        },
+        {
+           "name": "whitespace",
+           "case": {
+              "text": "    ",
+              "expectedResult": true
+            }
+        },
+        {
+           "name": "null",
+           "case": {
+              "text": null,
+              "expectedResult": true
+            }
+        },
+        {
+           "name": "value",
+           "case": {
+              "text": "Text value",
+              "expectedResult": false
+            }
+        }
+      ],
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "isNullOrWhiteSpace",
+            "correlationId": "custom-correlation-id",
+            "text": "{{ $.case.text }}"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result }}",
+              "expectedValue": "{{ $.case.expectedResult }}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute test case 'isNullOrEmpty'",
+      "description": "",
+      "datasets": [
+        {
+           "name": "empty",
+           "case": {
+              "text": "",
+              "expectedResult": true
+            }
+        },
+        {
+           "name": "null",
+           "case": {
+              "text": null,
+              "expectedResult": true
+            }
+        },
+        {
+           "name": "whitespace",
+           "case": {
+              "text": "    ",
+              "expectedResult": false
+            }
+        },
+        {
+           "name": "value",
+           "case": {
+              "text": "Text value",
+              "expectedResult": false
+            }
+        }
+      ],
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "isNullOrEmpty",
+            "correlationId": "custom-correlation-id",
+            "text": "{{ $.case.text }}"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result }}",
+              "expectedValue": "{{ $.case.expectedResult }}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute test case 'parseGuid'",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "parseGuid",
+            "correlationId": "custom-correlation-id",
+            "text":"97a77799648a497aa5a7687424b8ea86"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result }}",
+              "expectedValue": "97a77799-648a-497a-a5a7-687424b8ea86"
+            }
+          ]
+        }
+      ]
+    },
+        {
+      "name": "Execute test case 'newGuid' and 'newGuidString'",
+      "description": "",
+      "datasets": [
+        {
+           "name": "newGuid",
+           "case": {
+              "method": "newGuid",
+              "expectedCharacterLength": 36
+            }
+        },
+        {
+           "name": "newGuidString",
+           "case": {
+              "method": "newGuidString",
+              "expectedCharacterLength": 36
+            }
+        }
+      ],
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "{{ $.case.method }}",
+            "correlationId": "custom-correlation-id"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "length",
+              "actualValue": "{{ $.this.body.result }}",
+              "expectedValue": 36
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute test case 'newShortGuid'",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "newShortGuid",
+            "correlationId": "custom-correlation-id"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "exists",
+              "actualValue": "{{ $.this.body.result }}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Execute test case 'parseBytes'",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "parseBytes",
+            "correlationId": "custom-correlation-id",
+            "text": "Custom test text1"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result }}",
+              "expectedValue": "Custom test text1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

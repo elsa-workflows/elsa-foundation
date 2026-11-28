@@ -1,0 +1,139 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "3dc72794a6f056d0",
+    "definitionId": "52d1bea42e264b2",
+    "name": "QA - JTest - Composition - Dispatch - Sub Workflow",
+    "createdAt": "2025-11-18T11:48:55.04163\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.5.0.0",
+    "variables": [],
+    "inputs": [
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "CustomInput",
+            "displayName": "Custom Input",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outputs": [
+        {
+            "type": "Object",
+            "name": "CustomOutput",
+            "displayName": "CustomOutput",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "d70a6ef1ad86384e",
+        "nodeId": "Workflow1:d70a6ef1ad86384e",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "outputName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "CustomOutput"
+                    }
+                },
+                "outputValue": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getCustomInput()"
+                    }
+                },
+                "id": "55e94f817394ad6b",
+                "nodeId": "Workflow1:d70a6ef1ad86384e:55e94f817394ad6b",
+                "name": "SetOutput1",
+                "type": "Elsa.SetOutput",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 860,
+                            "y": -200
+                        },
+                        "size": {
+                            "width": 132.328125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "script": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "function wait(ms){\r\n   var start = new Date().getTime();\r\n   var end = start;\r\n   while(end \u003C start \u002B ms) {\r\n     end = new Date().getTime();\r\n  }\r\n}\r\n\r\nwait(500);"
+                    }
+                },
+                "possibleOutcomes": null,
+                "result": null,
+                "id": "ce430ed4c9ba87ce",
+                "nodeId": "Workflow1:d70a6ef1ad86384e:ce430ed4c9ba87ce",
+                "name": "RunJavaScript1",
+                "type": "Elsa.RunJavaScript",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 399.7734375,
+                            "y": -200
+                        },
+                        "size": {
+                            "width": 379.390625,
+                            "height": 67.96875
+                        }
+                    },
+                    "showDescription": false,
+                    "displayText": "Wait 500 milliseconds before completion"
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "ce430ed4c9ba87ce",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "55e94f817394ad6b",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

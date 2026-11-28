@@ -1,0 +1,149 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "9c94fdf31c22f42b",
+    "definitionId": "61a8539ad084c337",
+    "name": "QA - JTest - Composition - Workflow as Activity - Sub Workflow",
+    "createdAt": "2025-11-18T13:50:00.959381\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.5.0.0",
+    "variables": [],
+    "inputs": [
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "CustomInput",
+            "displayName": "Custom Input",
+            "description": "",
+            "category": "Primitives"
+        },
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "Outcome",
+            "displayName": "Outcome",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outputs": [
+        {
+            "type": "Object",
+            "name": "CustomOutput",
+            "displayName": "CustomOutput",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outcomes": [
+        "fail",
+        "succeed"
+    ],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "usableAsActivity": true,
+        "autoUpdateConsumingWorkflows": true
+    },
+    "root": {
+        "id": "47b1399fa4d8b206",
+        "nodeId": "Workflow1:47b1399fa4d8b206",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "outputName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "CustomOutput"
+                    }
+                },
+                "outputValue": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getCustomInput();"
+                    }
+                },
+                "id": "e3ecf5663740c139",
+                "nodeId": "Workflow1:47b1399fa4d8b206:e3ecf5663740c139",
+                "name": "SetOutput1",
+                "type": "Elsa.SetOutput",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -340,
+                            "y": -180
+                        },
+                        "size": {
+                            "width": 132.328125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "outcomes": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getOutcome();"
+                    }
+                },
+                "id": "ef0533efe19a0186",
+                "nodeId": "Workflow1:47b1399fa4d8b206:ef0533efe19a0186",
+                "name": "Complete1",
+                "type": "Elsa.Complete",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -60,
+                            "y": -180
+                        },
+                        "size": {
+                            "width": 178.609375,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Set outcome"
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "e3ecf5663740c139",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "ef0533efe19a0186",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

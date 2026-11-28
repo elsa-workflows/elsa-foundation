@@ -1,0 +1,314 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "c6ead1197b5f0d49",
+    "definitionId": "bd94124913202141",
+    "name": "QA - JTest - Variables - Storage - Sub Workflow",
+    "description": "A sub workflow to test the storage of variables across a higher depth than just the root workflow",
+    "createdAt": "2026-01-09T16:47:43.078596\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.5.0.0",
+    "variables": [
+        {
+            "id": "fe2fea1874754463",
+            "name": "InputVariableMemory",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.MemoryStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "84e05a5c73d43dc4",
+            "name": "InputVariableWorkflowInstance",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        }
+    ],
+    "inputs": [
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.MemoryStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "InputMemory",
+            "displayName": "InputMemory",
+            "description": "",
+            "category": "Primitives"
+        },
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "InputWorkflowInstance",
+            "displayName": "InputWorkflowInstance",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outputs": [
+        {
+            "type": "Object",
+            "name": "Output",
+            "displayName": "Output",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "usableAsActivity": true,
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "9283535ff914196e",
+        "nodeId": "Workflow1:9283535ff914196e",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "condition": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "const inputMemory = getInputMemory();\r\nreturn inputMemory !== null \u0026\u0026 inputMemory !== undefined;"
+                    }
+                },
+                "id": "a25fa97d372c925b",
+                "nodeId": "Workflow1:9283535ff914196e:a25fa97d372c925b",
+                "name": "FlowDecision1",
+                "type": "Elsa.FlowDecision",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -200,
+                            "y": -180
+                        },
+                        "size": {
+                            "width": 210.859375,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Is memory input?"
+                }
+            },
+            {
+                "outputName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Output"
+                    }
+                },
+                "outputValue": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "Variable",
+                        "value": {
+                            "id": "84e05a5c73d43dc4",
+                            "name": "InputVariableWorkflowInstance",
+                            "typeName": "Object",
+                            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                        }
+                    }
+                },
+                "id": "30d703e3a0e757d8",
+                "nodeId": "Workflow1:9283535ff914196e:30d703e3a0e757d8",
+                "name": "SetOutput2",
+                "type": "Elsa.SetOutput",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 448.609375,
+                            "y": -52.03125
+                        },
+                        "size": {
+                            "width": 132.328125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "outputName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Output"
+                    }
+                },
+                "outputValue": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "Variable",
+                        "value": {
+                            "id": "fe2fea1874754463",
+                            "name": "InputVariableMemory",
+                            "typeName": "Object",
+                            "storageDriverTypeName": "Elsa.Workflows.MemoryStorageDriver, Elsa.Workflows.Core"
+                        }
+                    }
+                },
+                "id": "f1a11ca8954c2608",
+                "nodeId": "Workflow1:9283535ff914196e:f1a11ca8954c2608",
+                "name": "SetOutput1",
+                "type": "Elsa.SetOutput",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 388.609375,
+                            "y": -300
+                        },
+                        "size": {
+                            "width": 132.328125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "variable": {
+                    "id": "fe2fea1874754463",
+                    "name": "InputVariableMemory",
+                    "typeName": "Object",
+                    "storageDriverTypeName": "Elsa.Workflows.MemoryStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "var result = getInputMemory();\r\nresult.correlationId = getCorrelationId();\r\nreturn result;"
+                    }
+                },
+                "id": "2a8ea0fa7d1daf20",
+                "nodeId": "Workflow1:9283535ff914196e:2a8ea0fa7d1daf20",
+                "name": "SetVariable1",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 100,
+                            "y": -300
+                        },
+                        "size": {
+                            "width": 173.65625,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "variable": {
+                    "id": "84e05a5c73d43dc4",
+                    "name": "InputVariableWorkflowInstance",
+                    "typeName": "Object",
+                    "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "var result = getInputWorkflowInstance();\r\nresult.correlationId = getCorrelationId();\r\nreturn result;"
+                    }
+                },
+                "id": "7e8a877b0b380c9f",
+                "nodeId": "Workflow1:9283535ff914196e:7e8a877b0b380c9f",
+                "name": "SetVariable2",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 120,
+                            "y": -40
+                        },
+                        "size": {
+                            "width": 173.65625,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "2a8ea0fa7d1daf20",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "f1a11ca8954c2608",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "7e8a877b0b380c9f",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "30d703e3a0e757d8",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "a25fa97d372c925b",
+                    "port": "False"
+                },
+                "target": {
+                    "activity": "7e8a877b0b380c9f",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "a25fa97d372c925b",
+                    "port": "True"
+                },
+                "target": {
+                    "activity": "2a8ea0fa7d1daf20",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

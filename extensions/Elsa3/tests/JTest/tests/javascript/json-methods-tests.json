@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "info": {
+    "name": "Testing JSON functions",
+    "description": "Examples: toJson, JSON.stringify, JSON.parse"
+  },
+  "using": [],
+  "globals": {
+    "endpoint": "qa/javascript/json-methods"
+  },
+  "tests": [
+    {
+      "name": "Execute test case 'toJson'",
+      "description": "Asserted that the 'toJson' method resolves unicode characters in string values of properties.",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "toJson",
+            "json": {
+              "property": "value1",
+              "propertyWithUnicodes": "\u2018, \u000C, \u2014, ß"
+            }
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result }}",
+              "expectedValue": "{\"property\":\"value1\",\"propertyWithUnicodes\":\"‘, \\f, —, ß\"}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute test case 'jsonStringify'",
+      "description": "Asserted that the 'jsonStringify' method resolves unicode characters in string values of properties.",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "jsonStringify",
+            "json": {
+              "property": "value1",
+              "propertyWithUnicodes": "\u2018, \u000C, \u2014, ß"
+            }
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result }}",
+              "expectedValue": "{\"property\":\"value1\",\"propertyWithUnicodes\":\"‘, \\f, —, ß\"}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute test case 'jsonParse'",
+      "description": "Asserted that the 'JSON.parse' method resolves unicode characters in a JSON string.",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "jsonParse",
+            "json": "{\"property\":\"value1\",\"propertyWithUnicodes\":\"\\u2018, \\u000C, \\u2014, ß\"}"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result.property }}",
+              "expectedValue": "value1"
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.result.propertyWithUnicodes }}",
+              "expectedValue": "‘, \f, —, ß"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

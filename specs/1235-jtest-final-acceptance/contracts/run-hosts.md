@@ -16,7 +16,7 @@
 | Item | Value |
 |---|---|
 | Host | `apps/Elsa.Workbench`, built from the commit under test, default SQLite store deleted before the run |
-| Features enabled for the run | `Elsa3JsonReconciliation` with `Options:SourceId` `jtest` and `Options:Files`, entries `{Order, FilePath}`, listing the 34 definitions of the acceptance set (spec Q13) with adjusted copies in place of their originals (see data model); `Elsa3ImportActivitiesEntityFrameworkCore` (import persistence, not pulled in by dependencies); `WorkflowsRuntimeCheckpointPersistence` mode `Durable` |
+| Features enabled for the run | `Elsa3JsonReconciliation` with `Options:SourceId` `jtest` and `Options:Files`, entries `{Order, FilePath}`, listing the 32 definitions of the acceptance set (spec Q13, Q15) with adjusted copies in place of their originals (see data model); `Elsa3ImportActivitiesEntityFrameworkCore` (import persistence, not pulled in by dependencies); `WorkflowsRuntimeCheckpointPersistence` mode `Durable` |
 | Capture, after each start | `PUT /runtime/workflows/diagnostics/settings` setting activity input and output capture to snapshot level and a `variableWrites` override; these settings live in memory and reset on restart. The host policy caps capture at bounded snapshots (contracts/templates.md, *Snapshot limits*) |
 | Ready when | The reconciliation summary is logged and the API answers an authenticated request |
 | Receipt | The reconciliation summary and per-item diagnostics, kept with the run record |

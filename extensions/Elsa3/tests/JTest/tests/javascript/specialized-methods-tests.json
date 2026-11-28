@@ -1,0 +1,322 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing specialized javascript methods that can be executed with Jint 3; and should remain functional in future Jint versions",
+        "description": "Specialized methods include: Array.flat, optional object chaining, null coalescing, promises, top-level awaiting, complex logic operators such as '&&=, ||=, and ??=', string.replaceAll, numeric separator '1_000_000'"
+    },
+    "globals": {
+        "endpoint": "qa/javascript/specialized-methods",
+        "workflowDefinitionId": "c7576b41b8d5185e",
+        "workflowDefinitionVersion": 1,
+        "requestBody": {
+            "nestedArray": [
+                1,
+                [
+                    2,
+                    3
+                ],
+                [
+                    4,
+                    [
+                        5,
+                        6
+                    ]
+                ]
+            ],
+            "optionalChaining": {
+                "user": {
+                    "name": "John"
+                },
+                "undefinedChainPath": "user?.age"
+            },
+            "nullCoalescing": {
+                "nullValue": null,
+                "numericValue": 0,
+                "stringValue": "",
+                "defaultValueWhenNull": "default value when null!"
+            },
+            "promisesAllSettled": {
+                "fulfilledValue": 20,
+                "errorReason": "Error: promise rejected"
+            },
+            "topLevelAwait": {
+                "waitTimeMilliseconds": 1500,
+                "result": "waited ${waitTimeMilliseconds} milliseconds!"
+            },
+            "logicalAssignmentOperators": {
+                "&&=": {
+                    "valueAssignedWhenTrue": "Assigned because it is TRUE",
+                    "true": true,
+                    "false": false
+                },
+                "||=": {
+                    "valueAssignedWhenFalse": "Assigned because it is FALSE",
+                    "true": true,
+                    "false": false
+                },
+                "??=": {
+                    "valueAssignedWhenNull": "Assigned because it is NULL or UNDEFINED",
+                    "nullValue": null,
+                    "numericValue": 0,
+                    "stringValue": ""
+                }
+            },
+            "replaceAllOccurrences": {
+                "value": "apples, apples!",
+                "valueToReplace": "apples",
+                "replaceValueWith": "cherries"
+            }
+        }
+    },
+    "tests": [        
+        {
+            "name": "Act: Execute workflow definition",
+            "description": "Executes workflow",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "query": {
+                        "queryParam": "abc"
+                    },
+                    "body": "{{ $.globals.requestBody }}",
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 202
+                        }
+                    ],
+                    "save": {
+                        "$.globals.responseBody": "{{ $.this.body }}"
+                    }
+                }
+            ]
+        },
+        {
+           "name": "Assert: Array.flat",
+           "steps": [
+               {
+                 "type": "assert",                 
+                 "assert": [
+                    {
+                        "op": "length",
+                        "actualValue": "{{ $.globals.responseBody.flattenedArray }}",
+                        "expectedValue": 6
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.flattenedArray[0] }}",
+                        "expectedValue": 1
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.flattenedArray[1] }}",
+                        "expectedValue": 2
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.flattenedArray[2] }}",
+                        "expectedValue": 3
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.flattenedArray[3] }}",
+                        "expectedValue": 4
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.flattenedArray[4] }}",
+                        "expectedValue": 5
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.flattenedArray[5] }}",
+                        "expectedValue": 6
+                    }
+                  ]
+               }
+           ]
+        },
+        {
+           "name": "Assert: optional chaining",
+           "steps": [
+               {
+                 "type": "assert",                 
+                 "assert": [
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.optionalChaining.name }}",
+                        "expectedValue": "{{ $.globals.requestBody.optionalChaining.user.name }}"
+                    },
+                    {
+                        "op": "notexists",
+                        "actualValue": "{{ $.globals.responseBody.optionalChaining.age }}"
+                    }
+                  ]
+               }
+           ]
+        },
+        {
+           "name": "Assert: null coalescing",
+           "steps": [
+               {
+                 "type": "assert",                 
+                 "assert": [
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.nullCoalescing.numericValue }}",
+                        "expectedValue": "{{ $.globals.requestBody.nullCoalescing.numericValue }}"
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.nullCoalescing.stringValue }}",
+                        "expectedValue": "{{ $.globals.requestBody.nullCoalescing.stringValue }}"
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.nullCoalescing.nullValue }}",
+                        "expectedValue": "{{ $.globals.requestBody.nullCoalescing.defaultValueWhenNull }}"
+                    }
+                  ]
+               }
+           ]
+        },
+        {
+           "name": "Assert: Promise.allSettled",
+           "steps": [
+               {
+                 "type": "assert",                 
+                 "assert": [
+                    {
+                        "op": "length",
+                        "actualValue": "{{ $.globals.responseBody.promisesAllSettled }}",
+                        "expectedValue": 2
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.promisesAllSettled[0].status }}",
+                        "expectedValue": "fulfilled"
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.promisesAllSettled[0].value }}",
+                        "expectedValue": "{{ $.globals.requestBody.promisesAllSettled.fulfilledValue }}"
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.promisesAllSettled[1].status }}",
+                        "expectedValue": "rejected"
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.promisesAllSettled[1].reason }}",
+                        "expectedValue": "{{ $.globals.requestBody.promisesAllSettled.errorReason }}"
+                    }
+                  ]
+               }
+           ]
+        },
+        {
+           "name": "Assert: top-level await",
+           "steps": [
+               {
+                 "type": "assert",                 
+                 "assert": [
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.topLevelAwait }}",
+                        "expectedValue": "waited {{ $.globals.requestBody.topLevelAwait.waitTimeMilliseconds }} milliseconds!"
+                    }
+                  ]
+               }
+           ]
+        },
+        {
+           "name": "Assert: complex logic assignment operators",
+           "steps": [
+               {
+                 "type": "assert",                 
+                 "assert": [
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.logicalAssignmentOperators['&&='].true }}",
+                        "expectedValue": "{{ $.globals.requestBody.logicalAssignmentOperators['&&='].valueAssignedWhenTrue }}"
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.logicalAssignmentOperators['&&='].false }}",
+                        "expectedValue": false
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.logicalAssignmentOperators['||='].true }}",
+                        "expectedValue": true
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.logicalAssignmentOperators['||='].false }}",
+                        "expectedValue": "{{ $.globals.requestBody.logicalAssignmentOperators['||='].valueAssignedWhenFalse }}"
+                    },
+
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.logicalAssignmentOperators['??='].nullValue }}",
+                        "expectedValue": "{{ $.globals.requestBody.logicalAssignmentOperators['??='].valueAssignedWhenNull }}"
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.logicalAssignmentOperators['??='].undefinedValue }}",
+                        "expectedValue": "{{ $.globals.requestBody.logicalAssignmentOperators['??='].valueAssignedWhenNull }}"
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.logicalAssignmentOperators['??='].numericValue }}",
+                        "expectedValue": 0
+                    },
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.logicalAssignmentOperators['??='].stringValue }}",
+                        "expectedValue": ""
+                    }
+                  ]
+               }
+           ]
+        },
+        {
+           "name": "Assert: string.replaceAll",
+           "steps": [
+               {
+                 "type": "assert",                 
+                 "assert": [
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.replaceAll }}",
+                        "expectedValue": "{{ $.globals.requestBody.replaceAllOccurrences.replaceValueWith }}, {{ $.globals.requestBody.replaceAllOccurrences.replaceValueWith }}!"
+                    }
+                  ]
+               }
+           ]
+        },
+        {
+           "name": "Assert: numeric separator '_'",
+           "steps": [
+               {
+                 "type": "assert",                 
+                 "assert": [
+                    {
+                        "op": "equals",
+                        "actualValue": "{{ $.globals.responseBody.numericSeparator }}",
+                        "expectedValue": 1000000,
+                        "description": "Asserts whether 1_000_000 in javascript resolves to 1000000"
+                    }
+                  ]
+               }
+           ]
+        }
+    ]
+}

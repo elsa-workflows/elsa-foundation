@@ -1,0 +1,37 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test an HTTP Endpoint that supports query parameters",
+        "description": ""
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/http-endpoints/query-parameter",
+        "queryValue": "some_query_value_12345"
+    },
+    "tests": [
+        {
+            "name": "Test by executing the workflow definition with a query parameter value",            
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow and assert response",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}?queryValue={{ $.globals.queryValue }}",
+                    "method": "GET",                    
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 202
+                        },
+                        {
+                          "op": "equals",
+                          "actualValue": "{{ $.this.body.queryValue }}",
+                          "expectedValue": "{{ $.globals.queryValue }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

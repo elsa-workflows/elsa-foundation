@@ -1,0 +1,145 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing whether we can execute a workflow as activity - making sure we can: 1) specify input, 2) use output, 3) use outcome",
+        "description": ""
+    },
+    "globals": {
+        "endpoint": "qa/composition/workflow-as-activity",
+        "subWorkflowDefinitionId": "61a8539ad084c337",
+        "subWorkflowDefinitionVersion": 1,
+        "subWorkflowInput": {
+            "property1": "value1"
+        }
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Test case: handle input / output",
+            "description": "Simply asserting the response body; which verifies that the input is passed from HttpEndpoint.ParsedContent, to the input of sub workflow, and echoed back to the HttpResponse activity",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "subWorkflowInput": "{{ $.globals.subWorkflowInput }}",
+                        "expectedOutcome": "succeed"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.subWorkflowOutput.property1}}",
+                            "expectedValue": "{{ $.globals.subWorkflowInput.property1 }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Test case: outcomes",
+            "description": "Asserting that based on the outcome of the sub workflow, the root workflow can make decisions",
+            "datasets": [
+                {
+                    "name": "succeed",
+                    "case": {
+                        "expectedOutcome": "succeed",
+                        "expectedStatusCode": 202,
+                        "description": "202 is returned by the HttpResponse activity that is handling the 'succeed' outcome of the sub workflow"
+                    }
+                },
+                {
+                    "name": "fail",
+                    "case": {
+                        "expectedOutcome": "fail",
+                        "expectedStatusCode": 417,
+                        "description": "417 is returned by the HttpResponse activity that is handling the 'fail' outcome of the sub workflow"
+                    }
+                },
+                {
+                    "name": "unknown",
+                    "case": {
+                        "expectedOutcome": "unknown_outcome",
+                        "expectedStatusCode": 200,
+                        "description": "200 is returned; that is not any explicit status code that the workflow returns. Reason being: no HTTP responses are executed because the unknown outcome is not handled by root workflow"
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "subWorkflowInput": "{{ $.globals.subWorkflowInput }}",
+                        "expectedOutcome": "{{ $.case.expectedOutcome }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": "{{ $.case.expectedStatusCode }}",
+                            "description": "{{ $.case.description }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Test case: separate instance not created for sub workflow",
+            "description": "Simply asserting that a separate instance is not created for the workflow executed as activity",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "subWorkflowInput": "{{ $.globals.subWorkflowInput }}",
+                        "expectedOutcome": "succeed"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{$.this.body.correlationId}}"
+                        }
+                    ],
+                    "save": {
+                        "correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert instance never created",
+                    "template": "elsa-assert-workflow-instance-not-exists",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.correlationId }}"
+                    }
+                }
+            ]
+        }
+    ]
+}

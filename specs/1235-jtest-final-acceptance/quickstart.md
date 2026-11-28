@@ -1,5 +1,10 @@
 # Quickstart: running the JTest acceptance suite
 
+> **Amended 2026-11-28 (spec Q16, Q17).** The Elsa 4 side now runs on the Elsa 3 migration host (spec 1236), fed by
+> the migration CLI's `workflows inventory` output (spec 1237), and both engines run the run set: the acceptance
+> definitions with each approved adjusted copy in place of its original. The Workbench design below was used for
+> ledger runs 15 to 43 and stays as the record of that phase; the current procedure is the JTest README.
+
 Run from `extensions/Elsa3/tests/JTest/`. Install or update the JTest CLI outside this repository: its NuGet package
 source mapping does not allow `JTest.Cli`. Prerequisites: Docker running, the .NET SDK, and the JTest CLI:
 

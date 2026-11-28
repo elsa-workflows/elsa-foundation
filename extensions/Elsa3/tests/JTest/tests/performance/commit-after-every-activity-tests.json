@@ -1,0 +1,74 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Intense commit strategy: commit after every activity execution",
+        "description": "Executes a for loop, where the engine commits data after each activity execution. This tests the performance impact of many write operations occurring in a workflow execution."
+    },
+    "globals": {
+        "executeInput": {
+            "NumberOfActivitiesToExecute": "{{ $.globals.numberOfActivitiesToExecute }}"
+        },
+        "definitionId": "e3ddcece1187babf",
+        "currentIterationStepVariableId": "fbbc2932e0d13d2d",
+        "numberOfActivitiesToExecute": 1000
+    },
+    "categories": [
+        "performance",
+        "commit"
+    ],
+    "tests": [
+         {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Act & Assert - Execute workflow",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Execute",
+                    "template": "elsa-execute-workflow-definition",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "input": "{{ $.globals.executeInput }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.workflowStatus }}",
+                            "expectedValue": "Finished",
+                            "description": "Workflow state is finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.workflowSubStatus }}",
+                            "expectedValue": "Finished",
+                            "description": "Workflow sub-state is finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.currentIterationStepVariableId }}'] }}",
+                            "expectedValue": "{{ $.globals.numberOfActivitiesToExecute }}",
+                            "description": "All activities have been executed"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

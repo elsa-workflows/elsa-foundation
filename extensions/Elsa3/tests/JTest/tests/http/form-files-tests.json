@@ -1,0 +1,69 @@
+{
+  "version": "1.0",
+  "info": {
+    "name": "Tests the HttpEndpoint by sending a list of FormFiles as input (ContentType: multipart/form-data)",
+    "description": ""
+  },
+  "globals": {
+    "endpoint": "qa/http-endpoints/form-files"
+  },
+  "tests": [    
+    {
+      "name": "Run tests",      
+      "steps": [
+        {
+          "type": "http",
+          "name": "Execute workflow definition & assert response",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "formFiles":[
+            {
+              "contentType": "application/xml",
+              "fileName": "mock-data.xml",
+              "name": "mock-data-xml",
+              "path": "test-files/mock-data.xml"
+            },
+            {
+              "contentType": "text/plain",
+              "fileName": "mock-data.txt",
+              "name": "mock-data-txt",
+              "path": "test-files/mock-data.txt"
+            }
+          ],
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.count }}",
+              "expectedValue": 2              
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.parsedFormFiles[0].name }}",
+              "expectedValue": "mock-data-xml"
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.parsedFormFiles[0].content }}",
+              "expectedValue": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><note><to>Tove</to><from>Jani</from><body>Don't forget me this weekend!</body></note>"
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.parsedFormFiles[1].name }}",
+              "expectedValue": "mock-data-txt"
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.body.parsedFormFiles[1].content }}",
+              "expectedValue": "SOME PLAIN TEXT MOCK DATA"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

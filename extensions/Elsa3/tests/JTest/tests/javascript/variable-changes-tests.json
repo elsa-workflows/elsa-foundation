@@ -1,0 +1,269 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing how a Run JavaScript change to a variable it read behaves",
+        "description": "S-15 addition (not from the JTest corpus). Elsa 3 handed a script a live object variable but a copy of an array variable, so changing an array it read left the variable unchanged. Elsa 4 writes any change to a value it read, array or object, and warns (VF-WRITE-001) unless the script assigned the variable. The array length after the alias change comes from the environment: 3 on Elsa 3, 4 on Elsa 4."
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/javascript/variable-changes",
+        "workflowDefinitionId": "5e1c7a0b9d2f4e61",
+        "workflowDefinitionVersion": 1,
+        "changeActivityId": "9b3e5d7f1a2c4e05",
+        "array": [
+            "test1",
+            "test2",
+            "test3"
+        ],
+        "object": {
+            "key1": "test1",
+            "key2": "test2"
+        }
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Run JavaScript changes the variables it read: alias",
+            "description": "Change both variables through an alias, without assigning them.",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: execute the workflow (mode alias)",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "mode": "alias",
+                        "correlationId": "variable-changes-alias-{{ $.env.correlationId }}",
+                        "array": "{{ $.globals.array }}",
+                        "object": "{{ $.globals.object }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 200
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.arrayVariable }}",
+                            "expectedValue": "{{ $.env.aliasChangedArrayLength }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.objectVariable.added }}",
+                            "expectedValue": "yes"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.objectVariable.key1 }}",
+                            "expectedValue": "test1"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Find the workflow instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-activity-assert-change-warnings",
+                    "name": "Assert the change warnings of the Run JavaScript step",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{ $.globals.changeActivityId }}",
+                        "expectedCount": "{{ $.env.aliasChangeWarningCount }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Run JavaScript changes the variables it read: assign",
+            "description": "The same change, then assign both variables: an intended change, no warning.",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: execute the workflow (mode assign)",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "mode": "assign",
+                        "correlationId": "variable-changes-assign-{{ $.env.correlationId }}",
+                        "array": "{{ $.globals.array }}",
+                        "object": "{{ $.globals.object }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 200
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.arrayVariable }}",
+                            "expectedValue": 4
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.objectVariable.added }}",
+                            "expectedValue": "yes"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.objectVariable.key1 }}",
+                            "expectedValue": "test1"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Find the workflow instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-activity-assert-change-warnings",
+                    "name": "Assert the change warnings of the Run JavaScript step",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{ $.globals.changeActivityId }}",
+                        "expectedCount": 0
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Run JavaScript changes the variables it read: copy",
+            "description": "Change a JSON copy of each variable: the variables stay as they are, no warning.",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: execute the workflow (mode copy)",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "mode": "copy",
+                        "correlationId": "variable-changes-copy-{{ $.env.correlationId }}",
+                        "array": "{{ $.globals.array }}",
+                        "object": "{{ $.globals.object }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 200
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.arrayVariable }}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.body.objectVariable.added }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.objectVariable.key1 }}",
+                            "expectedValue": "test1"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Find the workflow instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-activity-assert-change-warnings",
+                    "name": "Assert the change warnings of the Run JavaScript step",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{ $.globals.changeActivityId }}",
+                        "expectedCount": 0
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,152 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "d8aa24517805ef6a",
+    "definitionId": "e3ec3010946b27c1",
+    "name": "QA - JTest - Performance - Dispatch Baseline - Subworkflow",
+    "description": "Subworflow that is dispatched in a parent workflow",
+    "createdAt": "2026-03-19T12:23:42.8522936\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.6.0.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "406bc324edc68282",
+        "nodeId": "Workflow1:406bc324edc68282",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "text": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Hello world"
+                    }
+                },
+                "id": "9ee4adfcdf0c9167",
+                "nodeId": "Workflow1:406bc324edc68282:9ee4adfcdf0c9167",
+                "name": "WriteLine1",
+                "type": "Elsa.WriteLine",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -200,
+                            "y": -100
+                        },
+                        "size": {
+                            "width": 159.625,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "text": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Hello world 2"
+                    }
+                },
+                "id": "1609c066359d6d53",
+                "nodeId": "Workflow1:406bc324edc68282:1609c066359d6d53",
+                "name": "WriteLine2",
+                "type": "Elsa.WriteLine",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 40,
+                            "y": -100
+                        },
+                        "size": {
+                            "width": 159.625,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "text": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Hello world 3"
+                    }
+                },
+                "id": "ac60f07eaf11dd47",
+                "nodeId": "Workflow1:406bc324edc68282:ac60f07eaf11dd47",
+                "name": "WriteLine3",
+                "type": "Elsa.WriteLine",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 284,
+                            "y": -100
+                        },
+                        "size": {
+                            "width": 159.625,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "9ee4adfcdf0c9167",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "1609c066359d6d53",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "1609c066359d6d53",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "ac60f07eaf11dd47",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

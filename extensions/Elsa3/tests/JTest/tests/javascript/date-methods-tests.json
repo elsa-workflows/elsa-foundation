@@ -1,0 +1,86 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing date methods",
+        "description": ""
+    },
+    "globals": {
+        "endpoint": "qa/javascript/date-methods"
+    },
+    "tests": [
+        {
+            "name": "Execute test case 'now'",
+            "description": "At the time of writing, the new Date() method in the Elsa executor, returns already a UTC time. Meaning, that the environment variable 'DATE_NOW_ISO_STRING' which is set before the tests are run, will always be later.",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "now"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{$.this.body.result }}" 
+                        },
+                        {
+                          "op": "greaterthan",
+                          "actualValue": "{{ $.this.body.result }}",
+                          "expectedValue": "{{ $.env.dateNowIsoString }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case 'nowUTC'",            
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "nowUTC"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{$.this.body.result }}" 
+                        },
+                        {
+                          "op": "greaterthan",
+                          "actualValue": "{{ $.this.body.result }}",
+                          "expectedValue": "{{ $.env.dateNowIsoString }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case 'toIsoString'",            
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "toISOString",
+                        "date": "2025-12-16T23:12:43.123+02:00"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{$.this.body.result }}" 
+                        },
+                        {
+                          "op": "equals",
+                          "actualValue": "{{ $.this.body.result }}",
+                          "expectedValue": "2025-12-16T21:12:43.123Z"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
