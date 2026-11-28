@@ -270,3 +270,10 @@ Elsa.Workflows.Runtime.Services.Executions.WorkflowExecutableStartSourceResolver
 Elsa.Workflows.Runtime.Services.Executions.WorkflowExecutableStartSourceResolver.ValidateCapturedInScopeAsync(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient!>! recipients, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Services.Executions.WorkflowExecutableStartSourceResolver.ValidateCapturedAsync(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient!>! recipients, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Services.Executions.WorkflowExecutableStartSourceResolver.WorkflowExecutableStartSourceResolver(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! sourceReferenceStore, System.TimeProvider! timeProvider) -> void
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.AllowAdHocChannels.get -> bool
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.AllowAdHocChannels.set -> void
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.Channels.get -> System.Collections.Generic.List<Elsa.Workflows.Runtime.Core.Models.ActivationChannelDefinition!>!
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.Channels.set -> void
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.WorkflowsActivationChannelsFeature() -> void
+virtual Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

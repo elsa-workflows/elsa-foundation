@@ -14,6 +14,12 @@
           "Microsoft.Extensions.Options": "10.0.0"
         }
       },
+      "Elsa.Specifications.PackageManifest.Generator": {
+        "type": "Direct",
+        "requested": "[0.0.1-preview.8, )",
+        "resolved": "0.0.1-preview.8",
+        "contentHash": "2oIY7sSleqZv2y1wfBPZxa4GcaR3+PVsxuo3Pd2bXMRpsUAWzAMYf83eAKrzp3FIX6OE5e89lawTaiALKT8/hQ=="
+      },
       "Microsoft.CodeAnalysis.PublicApiAnalyzers": {
         "type": "Direct",
         "requested": "[5.6.0, )",
