@@ -30,9 +30,11 @@ internal static class PostgresRootComposedInstallChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        var capabilities = shippedSet ? RootProfiles.Shipped
-            : RootProfiles.Formats[StoreFormat.RootRetirement] | RootProfiles.Formats[StoreFormat.RootParkInspection];
-        KernelDb Open() => KernelDb.ForUnshippedComposition(options, Composed, capabilities);
+        var capabilities = RootProfiles.Formats[StoreFormat.RootRetirement] | RootProfiles.Formats[StoreFormat.RootParkInspection];
+        KernelDb OpenFor(DbContextOptions<KernelDb> configured) => shippedSet
+            ? KernelDb.ForPostgresRootShipped(configured, new(PublicActor.ActorType, false))
+            : KernelDb.ForUnshippedComposition(configured, Composed, capabilities);
+        KernelDb Open() => OpenFor(options);
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(120));
         var stop = timeout.Token;
@@ -46,10 +48,8 @@ internal static class PostgresRootComposedInstallChecks
         var cold = Store();
         await cold.CreateAsync(1);
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
-        await admission.InstallAsync(stop);
-        await cold.InstallRootWorkflowHistoryAsync(stop);
-        await admission.InstallAsync(stop);
-        await cold.InstallRootWorkflowHistoryAsync(stop);
+        await ShippedComposition.InstallHistoryAsync(cold, admission, shippedSet, stop);
+        await ShippedComposition.InstallHistoryAsync(cold, admission, shippedSet, stop);
         Check(true, "a second install over the composed install keeps every definition");
 
         // A root of the real store path: started, finished, then retired by a selected Delete.
@@ -102,8 +102,7 @@ internal static class PostgresRootComposedInstallChecks
             UPDATE "Instances" SET "FoundationReference" = 'ref-parked', "FoundationTenant" = {tenant.Tenant}, "FoundationHeader" = {header},
                 "Revision" = 1, "FoundationWriteRevision" = 1 WHERE "Id" = '0/parked';
             """, stop);
-        await admission.InstallAsync(stop);
-        await cold.InstallRootWorkflowHistoryAsync(stop);
+        await ShippedComposition.InstallHistoryAsync(cold, admission, shippedSet, stop);
         Check(true, "reinstalling over roots, history and a retired marker keeps every definition");
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {DurableKeyJson.Write("parked on purpose")},
@@ -172,7 +171,7 @@ internal static class PostgresRootComposedInstallChecks
             using var identifiers = new NpgsqlCommandBuilder();
             var shadowed = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(new NpgsqlConnectionStringBuilder(connection)
                 { SearchPath = ShadowSchema + "," + identifiers.QuoteIdentifier(schema) }.ConnectionString).Options;
-            var shadow = new EfStore(() => KernelDb.ForUnshippedComposition(shadowed, Composed, capabilities), postgres: true);
+            var shadow = new EfStore(() => OpenFor(shadowed), postgres: true);
             Check(type != Model && (await Typed(shadow)).Items is [{ Reference: "ref-parked" }],
                 "the history read of the parked root's type lists it alone, beside a kept root of another type");
             // Each shadow filter returns the kept root's type, so a read whose call it captured would list the kept root.
@@ -207,8 +206,8 @@ internal static class PostgresRootComposedInstallChecks
         // and the recovery columns it added roll back. (The narrower set already records the Park revision, S5b-1.)
         async Task NarrowerInstallRefused()
         {
-            var added = RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.TimerRearm;
-            var narrowCapabilities = capabilities & ~added;
+            var narrowCapabilities = capabilities;
+            var widerCapabilities = narrowCapabilities | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + NarrowSchema, stop);
             var narrow = new DbContextOptionsBuilder<KernelDb>()
                 .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = NarrowSchema }.ConnectionString).Options;
@@ -217,7 +216,7 @@ internal static class PostgresRootComposedInstallChecks
             await new EfStore(() => KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities), postgres: true).CreateAsync(1);
             await new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities), TimeSpan.FromHours(1)).InstallAsync(stop);
             var wider = new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed,
-                narrowCapabilities | (capabilities & added)), TimeSpan.FromHours(1));
+                widerCapabilities), TimeSpan.FromHours(1));
             try
             {
                 await wider.InstallAsync(stop);
