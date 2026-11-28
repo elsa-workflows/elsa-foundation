@@ -59,8 +59,7 @@ describe("Test Run notifications", () => {
     expect(notify).toHaveBeenCalledOnce();
     const notification = notify.mock.calls[0][0];
     expect(notification).toMatchObject({ level, title });
-    if (result.workflowExecutionId) expect(notification.link).toEqual({ label: "Open run", path: "/workflows/instances/run%2F1" });
-    else expect(notification.link).toBeUndefined();
+    expect(notification.link).toBeUndefined();
   });
 
   it("retains dispatch failures inline with their error details", async () => {
