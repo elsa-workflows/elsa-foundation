@@ -44,8 +44,14 @@ public sealed class WorkbenchActorUserTaskWaitTests
             }
         };
         await QualifyAsync(() => WorkbenchProcess.StartAsync(shell, directory =>
-            File.Copy(Path.Combine(WorkbenchBuild.RepositoryRoot, "docker/compose/elsa-workbench.shells.json"),
-                Path.Combine(directory, "shells.json"), overwrite: true)));
+        {
+            var mounted = JsonNode.Parse(File.ReadAllText(Path.Combine(WorkbenchBuild.RepositoryRoot, "docker/compose/elsa-workbench.shells.json")))!;
+            var shellPath = Path.Combine(directory, "shells.json");
+            var development = JsonNode.Parse(File.ReadAllText(shellPath))!;
+            static JsonNode Features(JsonNode value) => value["CShells"]!["Shells"]!["default"]!["Features"]!;
+            Features(mounted)["FoundationIdentityOpenIddict"] = Features(development)["FoundationIdentityOpenIddict"]!.DeepClone();
+            File.WriteAllText(shellPath, mounted.ToJsonString());
+        }));
     }
 
     internal static async Task QualifyAsync(Func<Task<WorkbenchProcess>> start)
