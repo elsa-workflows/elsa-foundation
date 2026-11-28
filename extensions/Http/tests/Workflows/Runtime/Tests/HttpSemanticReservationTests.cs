@@ -191,14 +191,24 @@ public sealed class HttpSemanticReservationTests
             try { await Put(operation.ServiceProvider, "resource", "orders/{name}"); return true; }
             catch (TriggerOperationException error) when (error.Code == "route-conflict") { return false; }
         });
-        start.SetResult(); Assert.Single(await Task.WhenAll(publication, resource), accepted => accepted);
+        start.SetResult();
+        Assert.Single(await Task.WhenAll(publication, resource), accepted => accepted);
         using var verify = fixture.Open();
-        var reservations = await verify.ServiceProvider.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(Scope.Persistence,
+        var services = verify.ServiceProvider;
+        var reservations = await services.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(Scope.Persistence,
             new(HttpEndpointRouting.StimulusType));
-        Assert.Single(reservations.Items);
-        var serving = (await verify.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>().FindAsync("definition", "Published"))?.ActiveActivationId is not null;
-        var stored = await verify.ServiceProvider.GetRequiredService<IStandaloneTriggerStore>().FindAsync(Scope, "resource");
-        Assert.NotEqual(serving, stored is not null);
+        var reservation = Assert.Single(reservations.Items);
+        var slot = await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync("definition", "Published");
+        var store = services.GetRequiredService<IStandaloneTriggerStore>();
+        var stored = await store.FindAsync(Scope, "resource");
+        var receipt = await store.FindMutationAsync(Scope, "operator", "resource:1");
+        var publicationWon = await publication;
+        Assert.Equal(publicationWon ? "publication" : null, slot?.ActiveActivationId);
+        Assert.Equal(!publicationWon, stored is not null);
+        Assert.Equal(!publicationWon, receipt is not null);
+        Assert.Equal(publicationWon ? RuntimeIngressReservation.PublicationSlotOwner : RuntimeIngressReservation.StandaloneTriggerOwner,
+            reservation.OwnerKind);
+        Assert.Equal(publicationWon ? slot!.SlotId : "resource", reservation.OwnerId);
     }
 
     private static async Task Put(IServiceProvider services, string id, string route, string method = "POST", long revision = 1)
