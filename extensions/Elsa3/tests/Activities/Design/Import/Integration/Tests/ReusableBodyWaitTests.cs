@@ -19,8 +19,7 @@ public sealed class ReusableBodyWaitTests
 
         var run = await host.RunAsync(wrapper);
 
-        AssertApproved(run);
-        var delay = Assert.Single(run.Activities, state => state.AuthoredActivityId == "wait");
+        var delay = await AssertApprovedAsync(host, wrapper, run);
         Assert.True(delay.CompletedAt - delay.StartedAt >= TimeSpan.FromSeconds(2), $"Delay ran from {delay.StartedAt:O} to {delay.CompletedAt:O}.");
     }
 
@@ -35,11 +34,11 @@ public sealed class ReusableBodyWaitTests
         var wrapper = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item("waits-event-v1"), "workflowVersionId"));
         var publisher = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item($"{publisherFixture}-v1"), "workflowVersionId"));
         var waiting = await host.ExecuteAsync(wrapper);
-        await host.WaitForActiveNodeAsync(waiting, "wait");
+        await host.WaitForActiveNodeAsync(waiting, await host.ResolveBodyNodeIdAsync(wrapper, "wait"));
 
         var published = await host.RunAsync(publisher);
         Assert.True(published.Workflow?.Status == WorkflowExecutionStatus.Completed, published.Describe());
-        AssertApproved(await host.WaitForSettledAsync(waiting));
+        await AssertApprovedAsync(host, wrapper, await host.WaitForSettledAsync(waiting));
     }
 
     [Fact]
@@ -50,18 +49,23 @@ public sealed class ReusableBodyWaitTests
         Assert.Equal(HttpStatusCode.Created, apply.StatusCode);
         var wrapper = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(Assert.Single(items), "workflowVersionId"));
         var waiting = await host.ExecuteAsync(wrapper);
-        await host.WaitForActiveNodeAsync(waiting, "wait");
+        await host.WaitForActiveNodeAsync(waiting, await host.ResolveBodyNodeIdAsync(wrapper, "wait"));
 
         using var response = await host.Client.PostAsync("workflows/http/orders/approve", new StringContent("{}", Encoding.UTF8, "application/json"));
         Assert.True(response.StatusCode == HttpStatusCode.NoContent, $"{(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         Assert.Equal(waiting, Assert.Single(response.Headers.GetValues(KernelHttpEdge.WorkflowInstanceIdHeader)));
-        AssertApproved(await host.WaitForSettledAsync(waiting));
+        await AssertApprovedAsync(host, wrapper, await host.WaitForSettledAsync(waiting));
     }
 
-    private static void AssertApproved(RunState run)
+    private static async Task<ActivityExecutionInspectionSummaryProjection> AssertApprovedAsync(
+        Elsa3ImportHost host, PublishedWorkflow wrapper, RunState run)
     {
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
-        Assert.Contains(run.Activities, activity => activity.AuthoredActivityId == "wait" && activity.Status == ActivityExecutionStatus.Completed);
-        Assert.Contains("approved", run.ExecutedNodeIds);
+        var waitId = await host.ResolveBodyNodeIdAsync(wrapper, "wait");
+        var approvalId = await host.ResolveBodyNodeIdAsync(wrapper, "approved");
+        var wait = Assert.Single(run.Activities, activity => activity.ExecutableNodeId == waitId);
+        Assert.Equal(ActivityExecutionStatus.Completed, wait.Status);
+        Assert.Contains(run.Activities, activity => activity.ExecutableNodeId == approvalId);
+        return wait;
     }
 }

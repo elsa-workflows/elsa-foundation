@@ -24,7 +24,8 @@ public sealed class ReusableInstanceReadTests
         var run = await host.RunAsync(wrapper, new JsonObject());
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
-        Assert.Contains("approved", run.ExecutedNodeIds);
-        Assert.DoesNotContain("rejected", run.ExecutedNodeIds);
+        var executed = run.Activities.Select(activity => activity.ExecutableNodeId).ToArray();
+        Assert.Contains(await host.ResolveBodyNodeIdAsync(wrapper, "approved"), executed);
+        Assert.DoesNotContain(await host.ResolveBodyNodeIdAsync(wrapper, "rejected"), executed);
     }
 }
