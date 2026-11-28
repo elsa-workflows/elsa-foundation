@@ -274,7 +274,7 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   await settings.getByRole("button", { name: "Save", exact: true }).click();
   await expect(settings).toBeHidden();
   await edit.click();
-  await expect(settings.getByLabel(/^Workflow executable cache capacity/)).toHaveValue("5");
+  await expect(settings.getByLabel(/^Workflow executable cache capacity/)).toHaveValue("96");
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Review changes", exact: true }).click();
   const review = page.getByRole("dialog", { name: "Review changes", exact: true });
