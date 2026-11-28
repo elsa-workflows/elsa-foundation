@@ -169,10 +169,9 @@
     <ProjectReference Include="../../../../extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj" />
     <!-- Studio Preferences composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
     <ProjectReference Include="..\..\..\src\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Elsa.Workflows.Dashboard\Elsa.Workflows.Dashboard.csproj" />
+    <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Retained\Elsa.Workflows.Dashboard.Retained.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Reconciliation\Elsa3.Activities.Design.Import.Reconciliation.csproj" />
@@ -243,8 +242,6 @@
     <!-- Feature composition covers classic EF selectors alongside the retained provider. -->
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Http\src\Workflows\Runtime\Elsa.Workflows.Runtime.Http.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />

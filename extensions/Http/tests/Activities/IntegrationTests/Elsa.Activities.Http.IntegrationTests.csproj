@@ -55,18 +55,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="../Fixtures/ResponseReplayHost/ResponseReplayObservation.Core.cs" Link="ResponseReplayObservation.Core.cs" />
     <!-- Counts the runtime's EF commands for the command budgets. -->
     <Compile Include="../../../../../essentials/tests/Persistence/EntityFramework/Tests/CommandCaptureInterceptor.cs" Link="CommandCaptureInterceptor.cs" />
-    <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-closure.json" Link="Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-manifest.json" Link="Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="CommandBudgets/ef-command-budgets.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

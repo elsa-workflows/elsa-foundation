@@ -124,3 +124,26 @@ git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-b
 Current source keeps BPMN structure, Design and XML interchange packages and
 their authoring tests. Its retained BPMN publication tests exercise provenance
 without starting a classic workflow.
+
+## Classic executable import and HTTP response replay
+
+The classic artifact importer accepts portable executable closures and can start their
+workflows in a runtime-only host. The classic HTTP response replay tests use that importer
+and a disposable process fixture to verify recovery after process loss. Use the same source
+for the producer, importer, and fixture.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-artifact-http" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
+  cd "$compatibility_root/classic-artifact-http"
+  dotnet test essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true
+  dotnet test essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter FullyQualifiedName~WorkflowArtifactExportImportExecutionTests
+  dotnet test extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~ResponseReplaySafetyProcessTests|FullyQualifiedName~ResponseReplayObservationTests'
+)
+```
+
+Current source retains the Publishing executable export and material checks, the Design
+JSON workflow reconciliation path, and the Actor HTTP provider witnesses.

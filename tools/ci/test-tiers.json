@@ -104,16 +104,9 @@
       "medianMinutes": 0.08
     },
     {
-      "project": "extensions/Http/tests/Activities/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
-    },
-    {
       "project": "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
       "tier": "integration",
-      "trait": "child-process",
-      "medianMinutes": 7.21
+      "medianMinutes": null
     },
     {
       "project": "extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj",
@@ -584,7 +577,6 @@
     {
       "project": "essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
       "tier": "pr",
-      "trait": "child-process",
       "medianMinutes": 0.08
     },
     {
@@ -639,16 +631,6 @@
       "tier": "integration",
       "trait": "child-process",
       "medianMinutes": 3.85
-    },
-    {
-      "project": "essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.09
-    },
-    {
-      "project": "essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.01
     },
     {
       "project": "essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
@@ -886,7 +868,6 @@
           "essentials/tests/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj",
           "extensions/Diagnostics.OpenTelemetry/tests/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj",
           "essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
-          "essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj",
           "essentials/tests/Serialization/Tests/Elsa.Serialization.Tests.csproj",
           "essentials/tests/Locking/Tests/Elsa.Locking.Tests.csproj",
           "essentials/tests/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj",
@@ -966,7 +947,6 @@
           "extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
           "extensions/Dashboard/tests/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
           "essentials/tests/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj",
-          "essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
           "essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
           "essentials/tests/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj",
           "extensions/Diagnostics.StructuredLogs/tests/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj",
@@ -1031,7 +1011,6 @@
         "suites": [
           "activities-design",
           "weaver-records",
-          "command-cost",
           "identity",
           "secrets-ef-composition",
           "secrets-mysql",
@@ -1167,11 +1146,6 @@
       "project": "essentials/tests/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj",
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX",
       "retryOnFailure": false
-    },
-    {
-      "suite": "command-cost",
-      "project": "extensions/Http/tests/Activities/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
-      "require": "ELSA_COMMAND_COST_REQUIRE_MEASUREMENT"
     },
     {
       "suite": "locking-database",

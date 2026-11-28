@@ -271,7 +271,7 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   const settings = page.getByRole("dialog", { name: "Workflows Runtime EF Core Executable Artifact Persistence", exact: true });
   await expect(settings).toBeVisible();
   await capture(page, info, "feature-settings-dialog");
-  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click({ timeout: 10_000 });
   await expect(settings).toBeHidden();
   await edit.click();
   await settings.getByLabel(/^Workflow executable cache capacity/).fill("96");
@@ -279,7 +279,7 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   await expect(settings).toBeHidden();
   await edit.click();
   await expect(settings.getByLabel(/^Workflow executable cache capacity/)).toHaveValue("96");
-  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click({ timeout: 10_000 });
   await page.getByRole("button", { name: "Review changes", exact: true }).click();
   const review = page.getByRole("dialog", { name: "Review changes", exact: true });
   await expect(review).toBeVisible();
