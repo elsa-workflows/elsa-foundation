@@ -192,7 +192,7 @@ public sealed class CompositionHostAttestationProbeTests
     {
         const string oldOrigin = "https://old-studio.example.invalid";
         const string newOrigin = "https://new-studio.example.invalid";
-        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, directory =>
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Reloadable, directory =>
         {
             WorkbenchConfigurationFile.WriteValue(
                 Path.Join(directory, "appsettings.Development.json"),
@@ -227,9 +227,9 @@ public sealed class CompositionHostAttestationProbeTests
     [Fact]
     public async Task All_six_bundle_files_and_process_override_have_no_generation_bound_marker()
     {
-        var shell = WorkbenchShell.Development with
+        var shell = WorkbenchShell.Reloadable with
         {
-            Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = ProcessValue }
+            Settings = new Dictionary<string, string>(WorkbenchShell.Reloadable.Settings) { [ReceiptOverrideKey] = ProcessValue }
         };
         await using var host = await WorkbenchProcess.StartAsync(shell, directory =>
         {

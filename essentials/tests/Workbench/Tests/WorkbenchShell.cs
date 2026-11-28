@@ -18,6 +18,19 @@ public sealed record WorkbenchShell(
 
     public static readonly WorkbenchShell Development = new("Development", "shells.json", null, new Dictionary<string, string>());
 
+    // Configuration attestation exercises live shell replacement without an owned workflow engine.
+    public static readonly WorkbenchShell Reloadable = Development with
+    {
+        Settings = new Dictionary<string, string>
+        {
+            [$"{FeaturesPath}:ActorHttpConnections"] = "false",
+            [$"{FeaturesPath}:KernelActivitiesHttp"] = "false",
+            [$"{FeaturesPath}:KernelWorkflowDashboardQueries"] = "false",
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelHosting"] = "false",
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelRetainedApi"] = "false"
+        }
+    };
+
     public static readonly WorkbenchShell Baseline = new("Development", "shells.baseline.json", null, new Dictionary<string, string>());
 
     /// <summary>

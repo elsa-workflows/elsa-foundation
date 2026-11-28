@@ -327,7 +327,8 @@ DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` again
 
 ### Workbench mixed-preview compatibility
 
-Current Workbench runs workflows through the stock Actor shell. It refuses an enabled
+Current Workbench runs workflows through the stock Actor shell. Restart the process to change the
+Actor shell configuration. A refused live replacement leaves the active owner serving. It refuses an enabled
 `Elsa:CorePreview:Enabled` setting before opening a store. Deployments with that setting must
 drain their previous mixed Workbench on its matching immutable image, shell file and config.
 The verified mixed Workbench image is

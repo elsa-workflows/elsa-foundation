@@ -105,7 +105,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     {
         var directory = Directory.CreateTempSubdirectory("elsa-workbench-smoke-").FullName;
         CopySourceFile(shell.ShellFile, directory, "shells.json");
-        CopySourceFile("shells.Actor.Production.json", directory);
+        if (string.Equals(shell.Environment, "Production", StringComparison.OrdinalIgnoreCase))
+            CopySourceFile("shells.Actor.Production.json", directory);
         if (shell.EnvironmentOverlay is not null)
             CopySourceFile(shell.EnvironmentOverlay, directory, $"shells.{shell.Environment}.json");
         CopySourceFile("appsettings.json", directory);

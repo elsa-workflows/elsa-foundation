@@ -58,7 +58,7 @@ public sealed class CompositionActivationObservationTests
     [Fact]
     public async Task Authorized_reload_returns_safe_default_shell_readback()
     {
-        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Reloadable);
         var before = await ReadObservationAsync(host);
 
         Assert.Equal("default", before.Shell);
@@ -84,6 +84,28 @@ public sealed class CompositionActivationObservationTests
         var managementKey = host.ManagementClient.DefaultRequestHeaders
             .GetValues(WorkbenchProcess.ManagementKeyHeader).Single();
         Assert.DoesNotContain(managementKey, rawBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Stock_actor_reload_keeps_the_existing_ready_owner()
+    {
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        var before = await ReadObservationAsync(host);
+
+        using var response = await host.ManagementClient.PostAsync(ReloadPath, null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ReloadObservation>();
+
+        Assert.NotNull(body);
+        Assert.Equal("reload-failed", body.Outcome);
+        Assert.Equal(before.ActiveGeneration, body.PreviousGeneration);
+        Assert.Null(body.ReportedGeneration);
+        Assert.Equal(before.ActiveGeneration, body.ActiveGeneration);
+        Assert.True(body.Ready);
+        Assert.Equal(before.ProcessInstanceId, body.ProcessInstanceId);
+        Assert.Equal(before.ActiveGeneration, await ReadinessGenerationAsync(host));
+        using var kernelRead = await host.Client.GetAsync("/runtime/workflows/instances/page?take=1");
+        Assert.Equal(HttpStatusCode.Unauthorized, kernelRead.StatusCode);
     }
 
     [Fact]
@@ -115,7 +137,7 @@ public sealed class CompositionActivationObservationTests
     [Fact]
     public async Task Failed_candidate_reports_the_retained_ready_generation_without_error_details()
     {
-        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Reloadable);
         var before = await ReadObservationAsync(host);
         WorkbenchConfigurationFile.WriteOpenIddictSigningKey(Path.Join(host.ContentRoot, "shells.json"), Canary);
         await Task.Delay(TimeSpan.FromMilliseconds(1200)); // Allow the JSON configuration provider to observe the replacement.
