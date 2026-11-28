@@ -85,7 +85,7 @@ public static partial class SqliteEmbeddedHosting
         var changed = await store.UpgradeShippedRootFormatAsync(token);
         await using var current = KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
             publicEventHost: publicEventHost);
-        await EfStore.RequireSqliteRootAdmissionAsync(current, file.AdmissionDefinitions, token);
+        await EfStore.InstallSqliteShippedAsync(current, partitions: 1, token);
         return changed;
     }
 

@@ -1,6 +1,7 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Hosting;
+using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -123,6 +124,9 @@ internal static class UserTaskWaitFormatChecks
             await RefusesOtherFormatAsync(() => EfStore.RequireSqliteRootAdmissionAsync(wrongMarker, definitions, token));
         Require(await candidate.UpgradeShippedFormatAsync(token), "A stopped shipped SQLite file must advance exactly once.");
         Require(!await candidate.UpgradeShippedFormatAsync(token), "A resumed SQLite upgrade must be idempotent.");
+        var wrongScope = SqliteEmbeddedFoundation.WithRootStartProtection(path, "incorrect-actor-owner", actorType,
+            (_, _) => ValueTask.FromResult(true), EmbeddedTenant.Bind("other-publisher"));
+        await RefusesOtherFormatAsync(async () => await wrongScope.UpgradeShippedFormatAsync(token));
         await using var current = Open(candidate: true);
         await using var old = Open(candidate: false);
         await VerifyMarkersAsync(current, old, token);
@@ -179,8 +183,22 @@ internal static class UserTaskWaitFormatChecks
                     await selected.UpgradeShippedRootFormatAsync(token);
                 });
                 await VerifyMarkersAsync(current, other, token);
-                Require(await store.UpgradeShippedRootFormatAsync(token), "A stopped shipped PostgreSQL store must advance exactly once.");
-                Require(!await store.UpgradeShippedRootFormatAsync(token), "A resumed PostgreSQL upgrade must be idempotent.");
+                // The canonical installer treats caller-key receipts as authoritative. The migration must refuse before
+                // advancing any marker when that relation is absent.
+                await current.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationKeyReceipts" RENAME TO "WithheldTaskUpgradeKeyReceipts" """, token);
+                try
+                {
+                    await RefusesOtherFormatAsync(async () => await UpgradeAsync());
+                    await VerifyMarkersAsync(current, other, token);
+                }
+                finally
+                {
+                    await current.Database.ExecuteSqlRawAsync("""ALTER TABLE "WithheldTaskUpgradeKeyReceipts" RENAME TO "FoundationKeyReceipts" """, token);
+                }
+                Require(await UpgradeAsync(), "A stopped prior PostgreSQL store must advance and reopen exactly once.");
+                Require(!await UpgradeAsync(), "A resumed PostgreSQL upgrade must verify current authority and be idempotent.");
+                Task<bool> UpgradeAsync() => PostgresPreviewHosting.UpgradeShippedFormatAsync(staged, EventHost.ActorType,
+                    EventHost.ProtectsStarts, publisherScope: null, token);
                 await VerifyMarkersAsync(other, current, token);
                 await RefusesOtherFormatAsync(() => EfStore.RequireStoreVersionsAsync(current, token));
                 await EfStore.RequireStoreVersionsAsync(other, token);

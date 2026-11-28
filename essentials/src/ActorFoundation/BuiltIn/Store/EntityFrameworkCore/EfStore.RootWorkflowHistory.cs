@@ -21,6 +21,12 @@ public sealed partial class EfStore
             throw new StoreFormatException("This store profile does not carry workflow history.");
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         await RequireStoreVersionsAsync(db, token, FormatLock.Shared);
+        await InstallRootWorkflowHistoryUnderFormatFenceAsync(db, token);
+        await transaction.CommitAsync(token);
+    }
+
+    internal static async Task InstallRootWorkflowHistoryUnderFormatFenceAsync(KernelDb db, CancellationToken token)
+    {
         await RequirePreviewInstallSchemaAsync(db, token);
         await db.Database.ExecuteSqlRawAsync("""
             SELECT pg_advisory_xact_lock(48602345, 1);
@@ -108,7 +114,6 @@ public sealed partial class EfStore
             if (db.UsesRootPlayback)
                 await db.Database.ExecuteSqlRawAsync(PostgresPlaybackDefinitions(db.UsesRootPlaybackDescendants), token);
         }
-        await transaction.CommitAsync(token);
     }
 
     internal async Task<RootWorkflowHistoryPage> ReadRootWorkflowHistoryAsync(string tenant, string type, string? definition,

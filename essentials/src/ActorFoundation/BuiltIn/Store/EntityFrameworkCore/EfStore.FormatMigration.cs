@@ -53,7 +53,7 @@ public sealed partial class EfStore
     // their encoding. The next build can read those checkpoints before publishing the first task-specific message.
     internal Task<bool> UpgradeShippedRootFormatAsync(CancellationToken cancellationToken) =>
         AdvanceStoreFormatAsync(StoreFormat.RootShippedBeforeUserTasks, StoreFormat.RootShipped, VerifySourceAsync,
-            migrateData: null, cancellationToken);
+            AdvanceRootAuthoritiesAsync, cancellationToken);
 
     private static async Task VerifySourceAsync(KernelDb db, CancellationToken token)
     {
@@ -69,6 +69,21 @@ public sealed partial class EfStore
             await PostgresRootAdmission.VerifyUserTaskUpgradeSourceAsync(db, token);
         else
             throw new NotSupportedException("Actor user task waits require a shipped SQLite or PostgreSQL store.");
+    }
+
+    private static async Task AdvanceRootAuthoritiesAsync(KernelDb db, CancellationToken token)
+    {
+        // SQLite uses one marker plus the provider definitions. PostgreSQL also pins the exact protocol in each
+        // installed authority row. Those rows and the main protocol have to advance atomically.
+        if (!db.Database.IsNpgsql()) return;
+        int[] ids = [RootKeyedAdmission.AuthorityMarkerId, RootEventStarts.PublicAuthorityMarkerId,
+            RetainedResponseAuthorityMarkerId, PostgresRootAdmission.PreparedWaitAuthorityMarkerId];
+        var previous = StoreFormat.RootShippedBeforeUserTasks;
+        var changed = await db.StoreVersions.Where(row => ids.Contains(row.Id) && row.StoreSchema == previous.StoreSchema &&
+                row.MessageProtocol == previous.MessageProtocol && row.JournalCodec == previous.JournalCodec)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.MessageProtocol, StoreFormat.RootShipped.MessageProtocol), token);
+        if (changed != ids.Length)
+            throw new StoreFormatException("The old PostgreSQL root authority markers do not belong to the selected shipped format.");
     }
 
     private static bool Includes(string readable, int format) =>
