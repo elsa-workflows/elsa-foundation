@@ -105,7 +105,7 @@ public static class EfPersistencePreparation
         {
             var validation = EfPersistenceResourceValidator.Validate(
                 resolution,
-                EfModuleCatalog.Discover(featureAssemblies),
+                EfModuleCatalog.Discover(loadedAssemblies.Concat(featureAssemblies)),
                 context.ConfigurationData,
                 rootConfiguration,
                 verifyConnectionValues);

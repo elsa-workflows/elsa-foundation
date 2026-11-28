@@ -499,6 +499,7 @@ public sealed class EfDurableValuePageReuseTests
                 typeof(ActivitiesSequenceFeature).Assembly,
                 typeof(ApiCapabilitiesFeature).Assembly,
                 typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(RuntimeDbContext).Assembly,
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(TasksFeature).Assembly)

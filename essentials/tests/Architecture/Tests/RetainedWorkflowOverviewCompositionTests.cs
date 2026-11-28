@@ -142,7 +142,8 @@ public sealed class RetainedWorkflowOverviewCompositionTests
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(typeof(WorkflowsDashboardRetainedFeature).Assembly, typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeRetainedAttentionFeature).Assembly, typeof(WorkflowsRuntimeApiFeature).Assembly,
-                typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly, typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
+                typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly, typeof(RuntimeDbContext).Assembly,
+                typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsDesignApiFeature).Assembly, typeof(WorkflowDesignValidationsFeature).Assembly, typeof(TasksFeature).Assembly,
                 typeof(EventsFeature).Assembly, typeof(SerializationFeature).Assembly, typeof(ApiCapabilitiesFeature).Assembly,
                 typeof(FoundationIdentityAbstractionsFeature).Assembly,

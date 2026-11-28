@@ -13,7 +13,7 @@ internal sealed class NativeStandaloneTriggerRuntimeTarget(IWorkflowExecutableSt
     IRuntimePersistenceModeResolver? persistenceModes = null) : IStandaloneTriggerRuntimeTarget
 {
     internal const string Protocol = "elsa.runtime.native-ingress-start";
-    internal const string OriginMetadata = "runtime.ingress.origin.v1";
+    internal const string OriginMetadata = RuntimeMetadataKeys.StandaloneIngressOrigin;
     public string ModelKey => "native";
     public bool Supports(WorkflowExecutable? nativeWorkflow, RuntimeModelMaterial? model) => nativeWorkflow is not null && model is null;
 

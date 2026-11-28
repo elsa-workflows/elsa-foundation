@@ -13249,3 +13249,5 @@ static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator 
 static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator ==(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? left, Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? right) -> bool
 Elsa.Workflows.Runtime.Core.Constants.RuntimeIncidentFailureTypes
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeIncidentFailureTypes.SchedulerWorkPoisoned = "SchedulerWorkPoisoned" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.SavedStimulusStartOrigin = "runtime.savedStimulusStart" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.StandaloneIngressOrigin = "runtime.ingress.origin.v1" -> string!
