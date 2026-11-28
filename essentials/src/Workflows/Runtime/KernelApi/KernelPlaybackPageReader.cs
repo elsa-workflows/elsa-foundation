@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns host, KernelPlaybackCursor cursor,
     IActivityInspectionContextAsync authorization, TimeProvider time, RuntimeHistoryOccurrenceAuthorization? currentAuthorization = null,
-    RuntimeHistoryInspectionService? legacy = null)
+    KernelPreviewRunReads? preview = null)
     : IRuntimeHistoryOccurrencePageReader
 {
     private static readonly RuntimeHistoryCapturePolicy Policy = new(KernelHistoryJournal.Policy, 1, false, KernelHistoryJournal.SupportedKinds);
@@ -26,7 +26,7 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
         if (run is null) return null;
         if (run.Header is not { } header)
         {
-            if (legacy is null || KernelPlaybackCursor.Owns(request.SequenceToken)) return null;
+            if (KernelPlaybackCursor.Owns(request.SequenceToken) || preview?.History is not { } legacy) return null;
             var original = await legacy.ReadOccurrencesAsync(request, cancellationToken);
             return await FindAsync() is { Header: null } current && current.State.TenantId == run.State.TenantId ? original : null;
         }
@@ -75,7 +75,7 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
         {
             var initial = RuntimeHistoryIdentity.CreateBinding([authorization.TenantScope, authorization.AuditSubject,
                 await authorization.GetAuthorizationProfileAsync(cancellationToken)]);
-            if (legacy is not null) return await legacy.BindOccurrencesAsync(state, initial, cancellationToken);
+            if (preview?.History is { } legacy) return await legacy.BindOccurrencesAsync(state, initial, cancellationToken);
             return currentAuthorization is null ? null : await currentAuthorization.BindAsync(state, initial, cancellationToken);
         }
 

@@ -38,7 +38,11 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
     {
         services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: false);
         services.AddExecutableInspectionServices();
-        services.AddRunInspectionServices();
+        services.AddRunInspectionServices(provider => new WorkflowRunInspection(
+            provider.GetRequiredService<IWorkflowInstanceDetailsService>(),
+            provider.GetRequiredService<IActivityExecutionInspectionService>(),
+            timeProvider: provider.GetRequiredService<TimeProvider>(),
+            executables: provider.GetRequiredService<IWorkflowExecutableInspection>()));
         services.AddDataProtection();
     }
 
@@ -55,7 +59,12 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
         KernelParkInspection.Map(endpoints);
     }
 
-    public virtual void PostConfigureServices(IServiceCollection services) => ConfigureKernelServices(services, FeatureName);
+    public virtual void PostConfigureServices(IServiceCollection services)
+    {
+        ConfigureKernelServices(services, FeatureName);
+        services.AddScoped<KernelPreviewRunReads>();
+        services.TryAddScoped<ActivityExecutionBrowseSource>();
+    }
 
     internal static void ConfigureKernelServices(IServiceCollection services, string featureName)
     {
@@ -69,7 +78,6 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
         services.AddScoped<KernelPlaybackCursor>();
         services.AddApiCapabilitySource<KernelHistoryCapabilitySource>();
         services.AddApiCapabilitySource<KernelParkInspectionCapabilitySource>();
-        services.TryAddScoped<ActivityExecutionBrowseSource>();
         ReplaceService(typeof(IWorkflowInstanceListService), typeof(WorkflowInstanceListService), typeof(KernelWorkflowInstanceListService));
         ReplaceService(typeof(IWorkflowInstanceDetailsService), typeof(WorkflowInstanceDetailsService), typeof(KernelWorkflowInstanceDetailsService));
         ReplaceService(typeof(IActivityExecutionBrowseSource), typeof(ActivityExecutionBrowseSource), typeof(KernelActivityExecutionBrowseSource));

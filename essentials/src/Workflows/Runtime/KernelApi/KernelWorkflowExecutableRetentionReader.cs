@@ -8,7 +8,7 @@ using Kernel.WorkflowActor;
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelWorkflowExecutableRetentionReader(KernelRuns runs, IPersistenceAccessContextAccessor access,
-    LegacyWorkflowExecutableRetentionReader? legacy = null, KernelTestRuns? testRuns = null,
+    KernelTestRuns? testRuns = null, KernelPreviewRunReads? preview = null,
     IWorkflowTestScopeStore? testScopes = null, IWorkflowExecutionPartitionAccessor? partitions = null,
     IRuntimeKernelExecutablePinStore? pins = null) : IWorkflowExecutableRetentionReader
 {
@@ -16,7 +16,9 @@ internal sealed class KernelWorkflowExecutableRetentionReader(KernelRuns runs, I
 
     public async ValueTask<WorkflowExecutableRetention> ReadAsync(WorkflowExecutableRetentionQuery query, CancellationToken cancellationToken)
     {
-        var retention = legacy is null ? new WorkflowExecutableRetention() : await legacy.ReadAsync(query, cancellationToken);
+        var retention = preview?.ExecutableRetention is { } legacy
+            ? await legacy.ReadAsync(query, cancellationToken)
+            : new WorkflowExecutableRetention();
         var context = access.Current;
         if (!KernelRunStates.CanReadTenant(context, runs.Tenant)) return retention;
 

@@ -60,11 +60,15 @@ internal static class WorkflowsRuntimeApiHttpServices
         AddExecutableInspectionValidator(services);
     }
 
-    internal static void AddRunInspectionServices(this IServiceCollection services)
+    internal static void AddRunInspectionServices(this IServiceCollection services,
+        Func<IServiceProvider, IWorkflowRunInspection>? create = null)
     {
         // Other domains use the endpoint's run services through the single exact Runtime Core contract.
         WorkflowRunInspectionStartupTask.Validate(services);
-        services.TryAddScoped<IWorkflowRunInspection, WorkflowRunInspection>();
+        if (create is null)
+            services.TryAddScoped<IWorkflowRunInspection, WorkflowRunInspection>();
+        else
+            services.TryAddScoped(create);
 
         if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowRunInspectionStartupTask))
                 ?.ImplementationInstance is not WorkflowRunInspectionStartupTask validator || !validator.Owns(services))
