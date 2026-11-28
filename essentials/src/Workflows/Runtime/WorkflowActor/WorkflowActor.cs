@@ -259,13 +259,18 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         turn.SetHeader(previous == next ? turn.Header.TypeData : JsonSerializer.Serialize(next), labels);
     }
 
-    private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow) =>
-        new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent)
+    private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow)
+    {
+        var tenant = workflow.TestStart?.Tenant ?? header.Tenant;
+        var subject = workflow.TestStart is { } test ? test.SubjectId : workflow.PublishedStart?.SubjectId;
+        return new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent)
         {
             Definition = workflow.Definition,
             ExecutableSelection = workflow.ExecutableSelection,
-            TestScopeId = workflow.TestStart?.ScopeId
+            TestScopeId = workflow.TestStart?.ScopeId,
+            Subject = string.IsNullOrEmpty(subject) ? null : new(tenant, subject)
         };
+    }
 
     private static void RetainResponse(IActorTurn turn, string? key, object? value)
     {

@@ -120,6 +120,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         var model = new NativeExecutionModel(serving.Registry, new NativeExecutionOptions
         {
             Scripts = new ScopedScripts(scopes),
+            Decisions = serving.Capabilities.Decisions ? new ScopedDecisions(scopes, persistenceScope) : null,
             ConsoleOutput = Console.Out,
             Http = new NativeHttpOptions { Client = _client, ApplyConnection = ApplyHttpConnectionAsync },
             Expressions = expressions,
@@ -484,6 +485,17 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         catch (OperationCanceledException) when (drain.IsCancellationRequested)
         {
             logs.CreateLogger<KernelShellRuntime>().LogWarning("Inline Test Run settlements did not finish within the shell's disposal deadline.");
+        }
+    }
+
+    private sealed class ScopedDecisions(IServiceScopeFactory scopes, PersistenceScope persistenceScope) : INativeDecisions
+    {
+        public async ValueTask<NativeDecisionResult> EvaluateAsync(NativeDecisionInvocation invocation, CancellationToken cancellationToken)
+        {
+            if (!string.Equals(invocation.Tenant, persistenceScope.Value, StringComparison.Ordinal))
+                return new("Refused", null, new("decisions.invalid-pin", "The decision invocation belongs to another tenant."));
+            await using var scope = await scopes.CreateAsyncScopeAsync(persistenceScope);
+            return await scope.ServiceProvider.GetRequiredService<INativeDecisions>().EvaluateAsync(invocation, cancellationToken);
         }
     }
 

@@ -21,6 +21,7 @@ internal interface INativeTurn
     bool SavesWaitRecipes { get; }
     string OperationOrigin { get; }
     string? TestScopeId => null;
+    NativeDecisionSource? ExactDecisionSource => null;
     long Now { get; }
     NativeState State { get; }
     object? Ambient { get; }

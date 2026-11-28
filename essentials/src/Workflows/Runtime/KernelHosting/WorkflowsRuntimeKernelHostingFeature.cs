@@ -136,7 +136,8 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
                 capabilities: new KernelHostCapabilities(Schedules: servesSchedules, Timers: storage.TakesTimers,
                     Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits)
                 {
-                    HttpEndpoints = httpSelection.IsSelected(sp)
+                    HttpEndpoints = httpSelection.IsSelected(sp),
+                    Decisions = sp.GetRequiredService<IServiceProviderIsService>().IsService(typeof(Kernel.Native.INativeDecisions))
                 },
                 publicationScope: persistenceScope)
             {
