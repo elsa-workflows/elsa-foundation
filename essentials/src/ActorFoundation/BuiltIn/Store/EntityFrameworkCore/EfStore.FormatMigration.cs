@@ -66,7 +66,7 @@ public sealed partial class EfStore
             await RequireSqliteFoundationShapeAsync(db, partitions: 1, create: false, token);
         }
         else if (db.Database.IsNpgsql())
-            await PostgresRootAdmission.VerifyUserTaskUpgradeSourceAsync(db, token);
+            await PostgresRootAdmission.VerifyEstablishedShippedSourceAsync(db, token);
         else
             throw new NotSupportedException("Actor user task waits require a shipped SQLite or PostgreSQL store.");
     }

@@ -349,10 +349,10 @@ internal sealed partial class PostgresRootAdmission
     internal static async Task<uint?> PinRootCommitNamespaceAsync(KernelDb db, bool writesJournal, CancellationToken token) =>
         (await PinRootNamespaceAsync(db, loadIssuer: false, token, writesJournal))?.Marker;
 
-    internal static async Task VerifyUserTaskUpgradeSourceAsync(KernelDb db, CancellationToken token)
+    internal static async Task VerifyEstablishedShippedSourceAsync(KernelDb db, CancellationToken token)
     {
-        // The coordinator has already locked the exact prior format exclusively. Pin its actual relations before the
-        // coordinator reads Nodes, and verify both public actor authority and the enabled or disabled publisher scope.
+        // Pin the physical source. A migration holds the exclusive format lock before this check, which also
+        // binds its subsequent node lease read to the shard's actual namespace.
         var pin = await PinRootNamespaceAsync(db, loadIssuer: true, token, writesJournal: true)
             ?? throw new StoreFormatException("The task upgrade requires the selected PostgreSQL root source.");
         await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", token);

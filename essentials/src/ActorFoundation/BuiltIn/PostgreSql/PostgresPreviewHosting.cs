@@ -50,7 +50,13 @@ public static partial class PostgresPreviewHosting
         var host = new RootPublicEventHost(actorType, protectsStarts) { AuthoredStandaloneTenant = publisherScope?.Tenant };
         var previous = new EfStore(() => KernelDb.ForPostgresRootShippedBeforeUserTasks(options, host), postgres: true);
         var changed = await previous.UpgradeShippedRootFormatAsync(cancellationToken);
-        await InstallShippedAsync(options, actorType, protectsStarts, publisherScope, cancellationToken);
+
+        // An established shard count belongs to the store. Verify the current physical source instead of
+        // asking initial installation to create its default number of partitions.
+        await using var current = CreateShippedContext(options, actorType, protectsStarts, publisherScope);
+        await using var transaction = await current.Database.BeginTransactionAsync(cancellationToken);
+        await PostgresRootAdmission.VerifyEstablishedShippedSourceAsync(current, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return changed;
     }
 
