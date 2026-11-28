@@ -14,6 +14,15 @@ internal static class WorkbenchConfigurationFile
     public static void RemoveValue(string path, IReadOnlyList<string> segments) =>
         Update(path, segments, (parent, key) => parent.Remove(key));
 
+    public static async Task WaitForBlueprintValueAsync(WorkbenchProcess host, string value)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        const string blueprint = "/_admin/shells/default/blueprint";
+        while (!(await host.ManagementClient.GetStringAsync(blueprint, deadline.Token))
+            .Contains(value, StringComparison.Ordinal))
+            await Task.Delay(100, deadline.Token);
+    }
+
     private static void Update(string path, IReadOnlyList<string> segments, Action<JsonObject, string> update)
     {
         var root = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path))?.AsObject() : null;

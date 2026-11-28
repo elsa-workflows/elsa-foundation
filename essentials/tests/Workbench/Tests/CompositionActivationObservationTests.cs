@@ -140,7 +140,7 @@ public sealed class CompositionActivationObservationTests
         await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Reloadable);
         var before = await ReadObservationAsync(host);
         WorkbenchConfigurationFile.WriteOpenIddictSigningKey(Path.Join(host.ContentRoot, "shells.json"), Canary);
-        await Task.Delay(TimeSpan.FromMilliseconds(1200)); // Allow the JSON configuration provider to observe the replacement.
+        await WorkbenchConfigurationFile.WaitForBlueprintValueAsync(host, Canary);
 
         using var response = await host.ManagementClient.PostAsync(ReloadPath, null);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
