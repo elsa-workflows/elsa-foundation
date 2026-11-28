@@ -160,7 +160,9 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk((member, Literal(JsonSerializer.Deserialize<JsonElement>(literal).ToString(), type))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.RemovedInputBound, member);
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.RemovedInputBound, member);
+        Assert.Contains("clear", error.Guidance, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("before converting.", error.Guidance, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -168,7 +170,9 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("channelName", Expression("JavaScript", "return getChannel();"))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.RemovedInputBound, "channelName");
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.RemovedInputBound, "channelName");
+        Assert.Contains("clear", error.Guidance, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("before converting.", error.Guidance, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -193,7 +197,8 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("defaultItemInputKey", Expression("JavaScript", "return 'Item';"))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "literal");
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "literal");
+        AssertItemKeyGuidance(error);
     }
 
     [Theory]
@@ -203,7 +208,8 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("defaultItemInputKey", Literal(key))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "blank");
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "blank");
+        AssertItemKeyGuidance(error);
     }
 
     [Theory]
@@ -748,6 +754,13 @@ public sealed class Elsa3BulkDispatchConversionTests
     private static ExpressionDefinition ReadExpression(ArgumentState argument) =>
         (argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value))
         .Deserialize<ExpressionDefinition>(Elsa.Serialization.Core.JsonBaseline.Options)!;
+
+    // FR-019: an item key the conversion cannot use points to the items or a literal map.
+    private static void AssertItemKeyGuidance(Elsa3MigrationDiagnostic error)
+    {
+        Assert.Contains("put them in the items as members", error.Guidance, StringComparison.Ordinal);
+        Assert.Contains("literal 'input' map", error.Guidance, StringComparison.Ordinal);
+    }
 
     private static Elsa3MigrationDiagnostic AssertRefused(
         Elsa3MigrationResult<Elsa3ConvertedDefinition> result, string code, params string[] guidanceOrMessage)

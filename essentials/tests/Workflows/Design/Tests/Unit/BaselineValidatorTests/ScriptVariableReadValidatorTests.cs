@@ -166,7 +166,7 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
     [InlineData(BulkDispatchWorkflowsConstants.ChildFaultedSlotName)]
     public async Task A_bulk_dispatch_slot_reading_the_pass_item_and_index_raises_nothing(string slot)
     {
-        // Spec 1242 FR-008, plan Test scope: each pass's frame declares currentItem and currentIndex for all three slots.
+        // Spec 1242 FR-004 and FR-010, plan Test scope: each pass's frame declares currentItem and currentIndex for all three slots.
         var bulk = new ActivityNode("bulk", "av-bulk", [], []) { Structure = new ActivityNodeStructure(
             BulkDispatchWorkflowsConstants.StructureKind, BulkDispatchWorkflowsConstants.StructureSchemaVersion, JsonSerializer.SerializeToElement(new { })) };
         var handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), item => item.Kind == BulkDispatchWorkflowsConstants.StructureKind);
