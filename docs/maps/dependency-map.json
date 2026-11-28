@@ -9568,165 +9568,6 @@
       ]
     },
     {
-      "path": "essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests.csproj",
-      "name": "Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests",
-      "kind": "test",
-      "domain": "Elsa.Activities",
-      "sub_domain": "Compensation.Persistence.EntityFrameworkCore.ProviderTests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Compensation",
-          "path": "essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.ControlFlow",
-          "path": "essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Design.Reconciliation.Clr",
-          "path": "essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Flowchart",
-          "path": "essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Primitives",
-          "path": "essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Runtime.Core",
-          "path": "essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Runtime",
-          "path": "essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Sequence",
-          "path": "essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Serialization.SystemText",
-          "path": "essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Design.Core",
-          "path": "essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api",
-          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Core",
-          "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Resumption",
-          "path": "essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Testing",
-          "path": "essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Serialization.Testing",
-          "path": "essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.SqlServer",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.TimeProvider.Testing",
-          "version": "10.8.0"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "MySql.EntityFrameworkCore",
-          "version": "10.0.9"
-        },
-        {
-          "type": "external",
-          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
-          "version": "10.0.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.MsSql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.MySql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.PostgreSql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Xunit.SkippableFact",
-          "version": "1.5.23"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
       "path": "essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj",
       "name": "Elsa.Activities.Compensation.Tests",
       "kind": "test",
@@ -9750,18 +9591,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Activities.Design.Reconciliation.Clr",
-          "path": "essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Activities.Flowchart",
           "path": "essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Primitives",
-          "path": "essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -9770,18 +9601,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Activities.Runtime",
-          "path": "essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Activities.Sequence",
           "path": "essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Serialization.SystemText",
-          "path": "essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
         },
         {
           "type": "internal",
@@ -9790,48 +9611,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api",
-          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Resumption",
-          "path": "essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Testing",
-          "path": "essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Serialization.Testing",
-          "path": "essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
         },
         {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.TimeProvider.Testing",
-          "version": "10.8.0"
         },
         {
           "type": "external",
@@ -10233,8 +10019,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Activities.Runtime",
-          "path": "essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj"
+          "id": "Elsa.Activities.Runtime.Hosting",
+          "path": "essentials/src/Activities/Runtime/Hosting/Elsa.Activities.Runtime.Hosting.csproj"
         },
         {
           "type": "internal",
@@ -10575,11 +10361,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Activities.Runtime",
-          "path": "essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Expressions",
           "path": "essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj"
         },
@@ -10595,13 +10376,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api",
-          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
+          "id": "Elsa.Workflows.Runtime.Api.Http",
+          "path": "essentials/src/Workflows/Runtime/Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime",
-          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+          "id": "Elsa.Workflows.Runtime.Publications",
+          "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
         },
         {
           "type": "external",
@@ -17275,11 +17056,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Activities.Runtime",
-          "path": "essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Activities.Scheduling",
           "path": "essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj"
         },
@@ -17335,8 +17111,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api",
-          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
+          "id": "Elsa.Workflows.Runtime.Api.Http",
+          "path": "essentials/src/Workflows/Runtime/Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj"
         },
         {
           "type": "internal",
@@ -17345,8 +17121,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Scheduling",
-          "path": "essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+          "id": "Elsa.Workflows.Runtime.KernelHosting",
+          "path": "essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Publications",
+          "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
         },
         {
           "type": "internal",
@@ -17524,23 +17305,18 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api",
-          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Scheduling",
-          "path": "essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+          "id": "Elsa.Workflows.Runtime.PreparedSchedules",
+          "path": "essentials/src/Workflows/Runtime/PreparedSchedules/Elsa.Workflows.Runtime.PreparedSchedules.csproj"
         },
         {
           "type": "internal",
@@ -17924,13 +17700,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime",
-          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+          "id": "Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Workflows.Runtime.Publications",
+          "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
         },
         {
           "type": "external",
@@ -18003,8 +17779,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime",
-          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+          "id": "Elsa.Workflows.Runtime.Publications",
+          "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
         },
         {
           "type": "external",
