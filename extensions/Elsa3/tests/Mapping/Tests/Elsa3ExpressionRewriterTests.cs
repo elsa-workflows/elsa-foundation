@@ -232,13 +232,15 @@ public sealed class Elsa3ExpressionRewriterTests
     /// <summary>
     /// #6230: a member change is told to go, an assignment to the value itself to go to a local copy, and the latter also
     /// names what changes the instance value where the script runs: in a non-reusable Run JavaScript body the
-    /// workflowState setter (setCorrelationId, setWorkflowInstanceName), in an input a Correlate activity for the
-    /// correlation ID; a reusable workflow's body, which cannot correlate (#3023), and the instance ID have no route.
+    /// workflowState setter (setCorrelationId, setWorkflowInstanceName). Elsewhere, and for the instance ID, it names
+    /// none: whether an activity can change the value there depends on the workflow.
     /// </summary>
     [Theory]
     [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "Remove the change, or keep the member on a local object of the script's own, ")]
     [InlineData("getCorrelationId() += 'acme'", Elsa3JavaScriptMode.Script, false, "(let value = getCorrelationId();) and change the local; to change the instance's correlation ID, call setCorrelationId(value), ")]
-    [InlineData("getCorrelationId() = 'acme'", Elsa3JavaScriptMode.Expression, false, "; to change the instance's correlation ID, use a Correlate activity, ")]
+    [InlineData("getCorrelationId() = 'acme'", Elsa3JavaScriptMode.Expression, false, "(let value = getCorrelationId();) and change the local, in the Elsa 3 workflow before import.")]
+    [InlineData("[getCorrelationId()] = [1]", Elsa3JavaScriptMode.Expression, false, "JavaScript changes the value 'getCorrelationId()' returns itself.")]
+    [InlineData("getWorkflowInstanceId().x = 1", Elsa3JavaScriptMode.Expression, false, "That value is the workflow instance's text, which")]
     [InlineData("getCorrelationId() = 'acme'", Elsa3JavaScriptMode.Script, true, "(let value = getCorrelationId();) and change the local, in the Elsa 3 workflow before import.")]
     [InlineData("getCorrelationId()++", Elsa3JavaScriptMode.Expression, false, "JavaScript changes the value 'getCorrelationId()' returns itself.")]
     [InlineData("getWorkflowInstanceName() = 'acme'", Elsa3JavaScriptMode.Script, false, "; to change the instance's name, call setWorkflowInstanceName(value), ")]

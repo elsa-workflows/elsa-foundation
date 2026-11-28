@@ -2125,8 +2125,8 @@ public sealed class Elsa3ExpressionRewriter(
             // as usual, so the target's other checks still report: an ambient value it also reaches, an undeclared name,
             // a custom global. In a with statement's body a call may read the with object, which the with statement's
             // refusal covers.
-            if (changeTarget is not null && _withBodyDepth == 0 && InstanceReaderOf(changeTarget) is { } instanceReader)
-                Issues.Add(InstanceValueChange(instanceReader, changesMember: changeTarget is not CallExpression));
+            if (changeTarget is not null && _withBodyDepth == 0 && InstanceReaderOf(changeTarget) is { } instanceChange)
+                Issues.Add(InstanceValueChange(instanceChange.Reader, instanceChange.ThroughMember));
 
             if (changeTarget is not null && TargetReachesAmbientRoot(changeTarget))
             {
@@ -3460,16 +3460,16 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// The workflow instance built-in (<c>getCorrelationId</c>, …) a change of <paramref name="target"/> goes through
-        /// (#6230), or null. It follows the object chain and destructuring targets like
+        /// (#6230), and whether the change reaches it through a member rather than changing the call itself; or null. It follows the object chain and destructuring targets like
         /// <see cref="TargetReachesAmbientRoot"/>, so a computed key that reads one stays a read; unlike it, an object it
         /// does not follow is searched only where its value can come from, never as a whole. Like the ambient roots, a value
         /// held elsewhere first (a local, a literal's element, a call's result) is not tracked.
         /// </summary>
-        private string? InstanceReaderOf(Node target) => target switch
+        private (string Reader, bool ThroughMember)? InstanceReaderOf(Node target) => target switch
         {
-            MemberExpression member => InstanceReaderOf(member.Object),
+            MemberExpression member => InstanceReaderOf(member.Object) is { } reached ? reached with { ThroughMember = true } : null,
             ChainExpression chain => InstanceReaderOf(chain.Expression),
-            ArrayPattern or ObjectPattern or RestElement => target.ChildNodes.Select(InstanceReaderOf).FirstOrDefault(name => name is not null),
+            ArrayPattern or ObjectPattern or RestElement => target.ChildNodes.Select(InstanceReaderOf).FirstOrDefault(reached => reached is not null),
             Property property => InstanceReaderOf(property.Value),
             AssignmentPattern assigned => InstanceReaderOf(assigned.Left),
             // An object the converter does not follow is checked where its value can come from: either branch of a
@@ -3484,7 +3484,7 @@ public sealed class Elsa3ExpressionRewriter(
             {
                 Operator: Operator.Assignment or Operator.LogicalOrAssignment or Operator.LogicalAndAssignment or Operator.NullishCoalescingAssignment,
             } assignment => InstanceReaderOf(assignment.Right),
-            CallExpression call when IsInstanceReader(call) => ((Identifier)call.Callee).Name,
+            CallExpression call when IsInstanceReader(call) => (((Identifier)call.Callee).Name, false),
             _ => null,
         };
 
@@ -3510,7 +3510,8 @@ public sealed class Elsa3ExpressionRewriter(
             ? new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                 $"JavaScript may change a member reached through the value '{reader}()' returns. That value is the workflow instance's " +
-                "text (or null), which scripts only read; the conversion refuses the change rather than guess what it did in Elsa 3.",
+                (reader == "getWorkflowInstanceId" ? "text" : "text (or null)") +
+                ", which scripts only read; the conversion refuses the change rather than guess what it did in Elsa 3.",
                 "Remove the change, or keep the member on a local object of the script's own, in the Elsa 3 workflow before import.")
             : new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
@@ -3518,12 +3519,13 @@ public sealed class Elsa3ExpressionRewriter(
                 $"Copy the value into a local first (let value = {reader}();) and change the local{InstanceChangeRoute(reader)}, " +
                 "in the Elsa 3 workflow before import.");
 
-        /// <summary>Where the script runs, what changes the instance value <paramref name="reader"/> reads, if anything does.</summary>
+        /// <summary>
+        /// The setter that changes the instance value <paramref name="reader"/> reads, where the script can call one: in a
+        /// non-reusable Run JavaScript body. Elsewhere an activity would, which this script cannot tell exists there.
+        /// </summary>
         private string InstanceChangeRoute(string reader) => reader switch
         {
             "getCorrelationId" when ConvertsWorkflowState => "; to change the instance's correlation ID, call setCorrelationId(value)",
-            // A reusable workflow's body cannot run a Correlate activity yet (#3023), so it has no route.
-            "getCorrelationId" when !IsReusable => "; to change the instance's correlation ID, use a Correlate activity",
             "getWorkflowInstanceName" => "; to change the instance's name, call setWorkflowInstanceName(value)",
             _ => string.Empty,
         };
