@@ -7999,13 +7999,13 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api",
-          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
+          "id": "Elsa.Workflows.Runtime.Api.Http",
+          "path": "essentials/src/Workflows/Runtime/Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api.Http",
-          "path": "essentials/src/Workflows/Runtime/Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj"
+          "id": "Elsa.Workflows.Runtime",
+          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
         },
         {
           "type": "internal",
@@ -8184,6 +8184,11 @@
           "type": "internal",
           "id": "Elsa.Modularity.Core",
           "path": "essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Api",
+          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
         },
         {
           "type": "internal",
