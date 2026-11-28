@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Decisions.Core;
 using Elsa.Decisions.Persistence.Core;
 using Elsa.Decisions.Workflows.Runtime;
@@ -39,7 +40,7 @@ internal sealed class DecisionPinSource(IDecisionReader decisions, IDecisionComp
             if (versionId == "latest") versionId = asset.PublishedVersionId;
             var version = await decisions.FindVersionAsync(tenant, assetId, versionId, cancellationToken) ?? throw Invalid();
             if (version.AssetId != assetId || version.Id != versionId || version.IsSensitive ||
-                node.InputBindings.Values.Any(input => input.EffectivePolicy.HidesValue()))
+                node.InputBindings.Values.Any(input => RequiresValueProtection(input, context)))
                 throw new DecisionInvocationException("protected-binding-unsupported", "This decision binding cannot preserve the required workflow source or value protection.");
             var compiled = compiler.Compile(version.Xml, cancellationToken);
             if (!compiled.Success || compiled.Artifact is not { } artifact || artifact.ContentHash != version.Artifact.ContentHash ||
@@ -52,6 +53,27 @@ internal sealed class DecisionPinSource(IDecisionReader decisions, IDecisionComp
         }
         return new(nodeMetadata: claims);
     }
+
+    private static bool RequiresValueProtection(RuntimeInputBinding binding, ExecutableCompilationContext context)
+    {
+        if (RequiresValueProtection(binding.EffectivePolicy) ||
+            binding.Literal is { } literal && RequiresValueProtection(literal.Policy))
+            return true;
+
+        if (binding.Source is not (RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember))
+            return false;
+
+        var member = binding.WorkflowRequest?.MemberKey;
+        var declarations = context.Source.State.Inputs.Where(input =>
+            StringComparer.Ordinal.Equals(input.Name, member)).Take(2).ToArray();
+        return declarations is not [{ IsSensitive: not true, IsCredential: not true } source] ||
+            !string.IsNullOrWhiteSpace(source.StorageDriverType) || !string.IsNullOrWhiteSpace(source.ConnectionType) ||
+            StringComparer.Ordinal.Equals(source.Type.Alias, typeof(ConnectionReference).FullName);
+    }
+
+    private static bool RequiresValueProtection(ValueProtectionPolicy policy) =>
+        policy.HidesValue() || policy.RedactionMode is not null || policy.RetentionPolicy is not null ||
+        policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom;
 
     private static DecisionInvocationException Invalid() => new("invalid-selection", "An exact supported published decision must be selected as asset@version or asset@latest.");
 }
