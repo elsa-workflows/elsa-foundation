@@ -316,6 +316,8 @@ public sealed class EfActivityPublicationDesignCommit
             throw Conflict("The activity definition head changed before publication committed.");
         if (authoring.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
             throw Conflict("The activity definition is not Design-owned.");
+        if (authoring.ArchivedAt is not null)
+            throw Conflict("The activity definition is archived and cannot be published.");
 
         await EnsureNewVersionAsync(mutation.CatalogVersion, cancellationToken);
         await EnsurePublicationAbsentAsync(publication, cancellationToken);

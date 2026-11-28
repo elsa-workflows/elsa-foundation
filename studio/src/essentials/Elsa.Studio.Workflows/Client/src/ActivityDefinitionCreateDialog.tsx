@@ -1,0 +1,265 @@
+import { StudioLoadingStatus, AdvancedSection, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { AlertTriangle } from "lucide-react";
+import { StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioActivityDefinitionImplementationState, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { ActivityOutcomeContract, ActivityProviderAuthoringCapability, ActivityTypeKeyRules, CreateActivityDefinitionResponse } from "./activityDefinitionTypes";
+import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
+import { createActivityDefinition, useActivityAuthoringCapabilities, useWorkflowActivities } from "./api/activityDesign";
+import { observeActivityDefinitions } from "./activityDefinitionObservability";
+import { EditableCombobox } from "./EditableCombobox";
+import { deriveActivityCategorySuggestions } from "./activityCategories";
+import { createActivityNode } from "./workflowAdapter";
+import { canonicalizeStateForWire } from "./activityInputWire";
+import { WorkflowRootRadioCards } from "./workflow-editor/WorkflowRootCards";
+import { getCreateRootActivity } from "./workflow-editor/editorHelpers";
+import { defaultActivityGraphOutcomeChoice, getActivityGraphOutcomeMappingOptions } from "./activityGraphOutcomeMappingOptions";
+import { activityTypeKeyPrefix, describeActivityTypeKeyRules, validateActivityTypeKeyOverride } from "./activityTypeKeyRules";
+
+export interface ProviderChoice {
+  capability: ActivityProviderAuthoringCapability;
+  providerKey: string;
+  schemaVersion: string;
+  contribution?: StudioActivityDefinitionImplementationEditorContribution;
+  label: string;
+}
+
+export function ActivityDefinitionCreateDialog({ context, activityEditors, onClose, onCreated }: {
+  context: StudioEndpointContext;
+  activityEditors: StudioActivityDefinitionImplementationEditorContribution[];
+  onClose(): void;
+  onCreated(response: CreateActivityDefinitionResponse): void;
+}) {
+  const capabilitiesQuery = useActivityAuthoringCapabilities(context);
+  const catalogQuery = useWorkflowActivities(context);
+  const catalog = useMemo(() => catalogQuery.data?.activities ?? [], [catalogQuery.data?.activities]);
+  const categorySuggestions = useMemo(() => deriveActivityCategorySuggestions(catalog), [catalog]);
+  const choices = useMemo(() => createProviderChoices(capabilitiesQuery.data?.providers ?? [], activityEditors), [activityEditors, capabilitiesQuery.data?.providers]);
+  const hasSingleUsableProvider = choices.filter(choice => Boolean(choice.contribution)).length === 1;
+  const [selected, setSelected] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [category, setCategory] = useState("Custom");
+  const [rootActivityVersionId, setRootActivityVersionId] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [activityTypeKey, setActivityTypeKey] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const displayNameRef = useRef<HTMLInputElement>(null);
+  const activityTypeKeyRulesId = useId();
+
+
+  useEffect(() => {
+    const defaultChoice = defaultProviderChoice(choices);
+    setSelected(defaultChoice ? choiceValue(defaultChoice) : "");
+    if (choices.length > 0) displayNameRef.current?.focus();
+  }, [choices]);
+
+  const choice = choices.find(item => choiceValue(item) === selected);
+  const isGraphCreation = choice?.providerKey === "elsa.activity-graph";
+  useEffect(() => {
+    if (!isGraphCreation) {
+      setRootActivityVersionId(null);
+      return;
+    }
+    setRootActivityVersionId(current => (getCreateRootActivity(current, catalog)
+      ?? getCreateRootActivity(null, catalog))?.activityVersionId ?? null);
+  }, [catalog, isGraphCreation]);
+  const rules = capabilitiesQuery.data?.activityTypeKeyRules;
+  const activityTypeKeyError = rules?.allowsPreCreationOverride ? validateActivityTypeKeyOverride(activityTypeKey, rules) : null;
+  const canSubmit = Boolean(choice?.contribution && displayName.trim() && category.trim() && !submitting && !activityTypeKeyError && (!isGraphCreation || (rootActivityVersionId && getCreateRootActivity(rootActivityVersionId, catalog))));
+
+  const submit = async () => {
+    if (!choice?.contribution || !capabilitiesQuery.data || !canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    observeActivityDefinitions({ event: "create-start", surface: "creation", providerKey: choice.providerKey, providerSchemaVersion: choice.schemaVersion });
+    try {
+      const baseImplementation = choice.contribution.createInitialImplementation();
+      const initialGraph = isGraphCreation
+        ? createGraphInitialState(baseImplementation, catalog, rootActivityVersionId, choice.capability.requiredOutcomes)
+        : null;
+      const implementation = isGraphCreation ? initialGraph?.implementation ?? null : baseImplementation;
+      if (!implementation) throw new Error("The selected graph composition is unavailable in the authorized activity catalog.");
+      const contractSchemaVersion = capabilitiesQuery.data.contractSchemaVersions[0];
+      if (!contractSchemaVersion) throw new Error("No authorable public contract schema is available.");
+      const exactKey = activityTypeKey.trim();
+      const response = await createActivityDefinition(context, {
+        category: category.trim(),
+        displayName: displayName.trim(),
+        description: description.trim() || null,
+        ...(rules?.allowsPreCreationOverride && exactKey ? { activityTypeKey: exactKey } : {}),
+        provider: {
+          providerKey: choice.providerKey,
+          schemaVersion: choice.schemaVersion,
+          payload: implementation.payload
+        },
+        contract: {
+          contractSchemaVersion,
+          inputs: [],
+          outputs: [],
+          outcomes: initialGraph?.outcomes ?? choice.capability.requiredOutcomes.map(outcome => ({ ...outcome, description: outcome.description ?? null }))
+        },
+        layout: implementation.layout,
+        ...(implementation.activityPresentation ? { activityPresentation: implementation.activityPresentation } : {})
+      });
+      observeActivityDefinitions({ event: "create-success", surface: "creation", outcome: "ready", providerKey: choice.providerKey, providerSchemaVersion: choice.schemaVersion });
+      onCreated(response);
+    } catch (cause) {
+      observeActivityDefinitions({ event: "create-failure", surface: "creation", outcome: "failed", providerKey: choice.providerKey, providerSchemaVersion: choice.schemaVersion });
+      setError(createErrorCopy(cause, rules));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return <StudioDialog open title="New activity definition" className="ad-create-dialog" dismissDisabled={submitting} onClose={onClose}
+    initialFocusRef={displayNameRef} onEscapeKeyDown={event => {
+      if (event.target instanceof HTMLElement && event.target.matches('[role="combobox"][aria-expanded="true"]')) event.preventDefault();
+    }}
+    footer={<StudioDialogFooter confirmType="button" onCancel={onClose} cancelDisabled={submitting} confirmLabel={submitting ? "Creating…" : "Create"}
+      confirmDisabled={!canSubmit} onConfirm={() => void submit()} />}
+  >
+      {capabilitiesQuery.isPending ? <StudioLoadingStatus>Loading authorized authoring providers…</StudioLoadingStatus> : null}
+      {capabilitiesQuery.isError ? <div className="ad-inline-error" role="alert">Authoring capabilities are unavailable. Studio will not guess a provider or contract.</div> : null}
+      {capabilitiesQuery.data && choices.length === 0 ? <div className="ad-inline-error" role="alert">No authorable implementation provider is currently advertised.</div> : null}
+      {choices.length ? <div className="ad-form-grid">
+        {!hasSingleUsableProvider ? <StudioField label={<><span>Implementation type</span></>}><select name="provider" value={selected} onChange={event => setSelected(event.target.value)}><option value="" disabled>Select an implementation type</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.label}</option>)}</select></StudioField> : null}
+        {choice && !choice.contribution ? <div className="ad-inline-error" role="alert"><AlertTriangle size={17} aria-hidden /> The backend advertises this provider, but its exact Studio editor contribution is unavailable. Creation is disabled.</div> : null}
+        <StudioField label={<><span>Display name</span></>}><input ref={displayNameRef} name="displayName" value={displayName} onChange={event => setDisplayName(event.target.value)} aria-label="Display name" placeholder="e.g. Send invoice reminder" /></StudioField>
+        <ActivityCategoryCombobox value={category} suggestions={categorySuggestions} onChange={setCategory} />
+        {isGraphCreation ? <fieldset className="ad-form-wide ad-composition-picker wf-tokens"><legend>Graph composition</legend>{catalogQuery.isPending ? <StudioLoadingStatus>Loading the authorized graph composition catalog…</StudioLoadingStatus> : catalogQuery.isError ? <p className="ad-inline-error" role="alert">Graph compositions could not be loaded. Creation is disabled until the authorized catalog is available.</p> : <WorkflowRootRadioCards catalog={catalog} value={rootActivityVersionId} onChange={setRootActivityVersionId} />}</fieldset> : null}
+        <StudioField className="ad-form-wide" label="Description"><textarea name="description" value={description} onChange={event => setDescription(event.target.value)} rows={3} placeholder="Summarize what this activity does" /></StudioField>
+        <div className="ad-form-wide ad-create-advanced"><AdvancedSection onOpenChange={open => { if (!open) setActivityTypeKey(""); }}>
+          <div className="ad-create-advanced-content">
+            <div className="ad-key-summary"><strong>Activity Type Key</strong><span>{rules?.serverGenerated ? `Generated by the backend under ${rules.prefix}.` : "Defined by the backend authoring contract."} It is immutable after creation.</span></div>
+            {rules?.allowsPreCreationOverride ? <StudioField className="ad-form-wide" label={<><span>Exact Activity Type Key</span></>}><input name="activityTypeKey" value={activityTypeKey} onChange={event => setActivityTypeKey(event.target.value)} placeholder={`${activityTypeKeyPrefix(rules)}team-name.activity-name`} maxLength={rules.maximumLength} aria-invalid={Boolean(activityTypeKeyError)} aria-describedby={`${activityTypeKeyRulesId}${activityTypeKeyError ? ` ${activityTypeKeyRulesId}-error` : ""}`} /><ul id={activityTypeKeyRulesId} className="ad-key-rules">{describeActivityTypeKeyRules(rules).map(rule => <li key={rule}>{rule}</li>)}</ul>{activityTypeKeyError ? <small id={`${activityTypeKeyRulesId}-error`} className="ad-key-error" role="alert">{activityTypeKeyError}</small> : null}</StudioField> : null}
+          </div>
+        </AdvancedSection></div>
+      </div> : null}
+      {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
+  </StudioDialog>;
+}
+
+export function createProviderChoices(
+  providers: ActivityProviderAuthoringCapability[],
+  contributions: StudioActivityDefinitionImplementationEditorContribution[]
+) {
+  return providers.flatMap(capability => {
+    const authorableSchemas = capability.manifestSchemas
+      .filter(schema => schema.isAuthorable)
+      .sort((left, right) => compareSchemaVersions(right.schemaVersion, left.schemaVersion));
+    const supportedSchema = authorableSchemas.find(schema => contributions.some(item =>
+      item.providerKey === capability.providerKey && item.providerSchemaVersion === schema.schemaVersion));
+    const schema = supportedSchema ?? authorableSchemas[0];
+    if (!schema) return [];
+    return [{
+      capability,
+      providerKey: capability.providerKey,
+      schemaVersion: schema.schemaVersion,
+      contribution: contributions.find(item => item.providerKey === capability.providerKey && item.providerSchemaVersion === schema.schemaVersion),
+      label: capability.displayName.trim() || capability.providerKey
+    }];
+  });
+}
+
+export function defaultProviderChoice(choices: ProviderChoice[]) {
+  const usableChoices = choices.filter(choice => Boolean(choice.contribution));
+  return usableChoices.length === 1 ? usableChoices[0] : null;
+}
+
+export function isActivityGraphOnlyChoice(choices: ProviderChoice[]) {
+  return choices.length === 1 && choices[0].providerKey === "elsa.activity-graph";
+}
+
+export function createGraphInitialImplementation(
+  implementation: StudioActivityDefinitionImplementationState,
+  catalog: ActivityCatalogItem[],
+  rootActivityVersionId: string | null
+): StudioActivityDefinitionImplementationState | null {
+  return createGraphInitialState(implementation, catalog, rootActivityVersionId, [])?.implementation ?? null;
+}
+
+export function createGraphInitialState(
+  implementation: StudioActivityDefinitionImplementationState,
+  catalog: ActivityCatalogItem[],
+  rootActivityVersionId: string | null,
+  requiredOutcomes: ActivityOutcomeContract[]
+): { implementation: StudioActivityDefinitionImplementationState; outcomes: ActivityOutcomeContract[] } | null {
+  if (!rootActivityVersionId) return null;
+  const rootDescriptor = catalog.find(item => item.activityVersionId === rootActivityVersionId);
+  if (rootDescriptor?.available === false || !rootDescriptor?.authoringTemplate) return null;
+  const rootActivity = canonicalizeStateForWire({ rootActivity: createActivityNode(rootDescriptor, "root") }).rootActivity!;
+  const payload = implementation.payload && typeof implementation.payload === "object" && !Array.isArray(implementation.payload)
+    ? implementation.payload as Record<string, unknown>
+    : {};
+  const supportsOutcomeMappings = Object.prototype.hasOwnProperty.call(payload, "outcomeMappings");
+  const graphOutcomes = supportsOutcomeMappings
+    ? initializeGraphBoundaryOutcomes(rootActivity, catalog.find(item => item.activityVersionId === rootActivity.activityVersionId), requiredOutcomes)
+    : null;
+  return {
+    implementation: {
+      ...implementation,
+      payload: {
+        ...payload,
+        rootActivity,
+        ...(graphOutcomes ? { outcomeMappings: graphOutcomes.mappings } : {})
+      }
+    },
+    outcomes: graphOutcomes?.outcomes ?? requiredOutcomes.map(outcome => ({ ...outcome, description: outcome.description ?? null }))
+  };
+}
+
+export function initializeGraphBoundaryOutcomes(
+  rootActivity: ActivityNode,
+  catalogItem: ActivityCatalogItem | undefined,
+  requiredOutcomes: ActivityOutcomeContract[]
+) {
+  const outcomes = requiredOutcomes.map(outcome => ({ ...outcome, description: outcome.description ?? null }));
+  const sourceOutcomes = getActivityGraphOutcomeMappingOptions(rootActivity, catalogItem, { outcomes }).sourceOutcomes;
+  // Unmatched required outcomes intentionally stay unmapped; never guess a root outcome key.
+  const mappings = outcomes.flatMap(outcome => outcome.isEmitted && sourceOutcomes.some(source => source.referenceKey === outcome.referenceKey)
+    ? [{ sourceOutcomeReferenceKey: outcome.referenceKey, boundaryOutcomeReferenceKey: outcome.referenceKey }]
+    : []);
+
+  if (outcomes.length === 0) {
+    const choice = defaultActivityGraphOutcomeChoice(sourceOutcomes);
+    if (choice) {
+      outcomes.push({ referenceKey: choice.referenceKey, name: choice.name, isEmitted: true, description: null });
+      mappings.push({ sourceOutcomeReferenceKey: choice.referenceKey, boundaryOutcomeReferenceKey: choice.referenceKey });
+    }
+  }
+
+  return { outcomes, mappings };
+}
+
+function choiceValue(choice: Pick<ProviderChoice, "providerKey" | "schemaVersion">) {
+  return `${choice.providerKey}|${choice.schemaVersion}`;
+}
+
+function compareSchemaVersions(left: string, right: string) {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+}
+
+export function ActivityCategoryCombobox({ value, suggestions, onChange }: {
+  value: string;
+  suggestions: string[];
+  onChange(value: string): void;
+}) {
+  return <EditableCombobox
+    label="Category"
+    name="category"
+    value={value}
+    suggestions={suggestions}
+    onChange={onChange}
+    placeholder="e.g. Custom"
+  />;
+}
+
+function createErrorCopy(error: unknown, rules?: ActivityTypeKeyRules) {
+  if (error instanceof StudioHttpError) {
+    const payload = error.payload as { errorCode?: string } | null;
+    if (payload?.errorCode === "activity.definition.key-conflict") return "That Activity Type Key already exists in this scope. Choose another exact key; Studio will not suffix it.";
+    if (payload?.errorCode === "activity.definition.key-invalid") return `The exact Activity Type Key must start with ${rules ? activityTypeKeyPrefix(rules) : "the advertised prefix"} and follow the listed format. See the key rules under Advanced.`;
+    if (error.status === 403) return "This account is not authorized to create with the selected provider.";
+  }
+  return "The Activity Definition was not created. No partial identity is shown; review the fields and try again.";
+}

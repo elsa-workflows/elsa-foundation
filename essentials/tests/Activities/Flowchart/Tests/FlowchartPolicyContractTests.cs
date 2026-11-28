@@ -3,9 +3,6 @@ using Elsa.Activities.Flowchart.Exceptions;
 using Elsa.Activities.Flowchart.Internal;
 using Elsa.Activities.Flowchart.Internal.Policies;
 using Elsa.Activities.Flowchart.Models;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Models;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Flowchart.Tests;
@@ -71,31 +68,6 @@ public sealed class FlowchartPolicyContractTests
         Assert.Single(context.Connections);
     }
 
-    [Fact]
-    public async Task NodePolicy_CanScheduleNodeThroughReturnedCommand()
-    {
-        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
-            ["actexec-flowchart", "actexec-a", "actexec-c"],
-            services => services.AddSingleton<IFlowchartPolicy, ScheduleNodePolicy>());
-        var executable = fixture.NewExecutable(
-            children:
-            [
-                fixture.NewProbeNode("node-a"),
-                fixture.NewProbeNode("node-c")
-            ],
-            connections: [],
-            startNodeId: "node-a",
-            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
-            {
-                ["node-a"] = new(ScheduleNodePolicy.Kind)
-            });
-
-        await fixture.ExecuteAsync(executable);
-
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
-        Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-c"));
-    }
-
     private sealed class DuplicateDirectContinuationPolicy : IFlowchartPolicy
     {
         public string PolicyKind => FlowchartPolicyKinds.DirectContinuation;
@@ -115,18 +87,5 @@ public sealed class FlowchartPolicyContractTests
         public string PolicyKind => "test/whitespace";
         public string DisplayName => "Duplicate Whitespace";
         public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new();
-    }
-
-    private sealed class ScheduleNodePolicy : IFlowchartPolicy
-    {
-        public const string Kind = "test/schedule-node";
-
-        public string PolicyKind => Kind;
-        public string DisplayName => "Test Schedule Node";
-
-        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) =>
-            new([
-                new FlowchartPolicyCommand(FlowchartPolicyCommandKind.ScheduleNode, nodeId: "node-c")
-            ]);
     }
 }

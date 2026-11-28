@@ -48,3 +48,5 @@ Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultNodes.get -> in
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultNodes.set -> void
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxStatements.get -> int?
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxStatements.set -> void
+Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators
+static Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators.Create(Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions! options) -> Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator!

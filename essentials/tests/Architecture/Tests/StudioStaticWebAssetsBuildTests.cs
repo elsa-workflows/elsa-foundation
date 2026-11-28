@@ -50,7 +50,7 @@ public sealed class StudioStaticWebAssetsBuildTests
                       </_MSBuildProjectReferenceExistent>
                     </ItemGroup>
                   </Target>
-                  <Import Project="{SecurityElement.Escape(Path.Join(RepoRoot, "Studio", "Directory.Build.targets"))}"
+                  <Import Project="{SecurityElement.Escape(Path.Join(RepoRoot, "studio", "Directory.Build.targets"))}"
                           Condition="'$(UseStudioPathFix)' == 'true'" />
                   <Target Name="RecordAssetSources" DependsOnTargets="ResolveReferencedProjectsStaticWebAssetsConfiguration">
                     <WriteLinesToFile File="{SecurityElement.Escape(sources)}"

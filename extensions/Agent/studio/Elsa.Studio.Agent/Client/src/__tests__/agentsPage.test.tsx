@@ -11,7 +11,7 @@ vi.mock("@elsa-workflows/studio-sdk", async original => ({
   useOptionalAuthContext: () => auth.session ? { session: auth.session } : null
 }));
 
-import { AgentsPage, activityDefinitionPath } from "../AgentsPage";
+import { AgentsPage, agentWorkspaceDraftPath } from "../AgentsPage";
 import type { AgentRow } from "../agentsApi";
 
 const cleanup = new Set<() => void>();
@@ -107,7 +107,7 @@ describe("agents page", () => {
     const text = (id: string) => [...container.querySelectorAll("[role='row']")].find(x => x.textContent?.includes(`Agent ${id}`))?.textContent ?? "";
 
     expect(text("draft")).toContain("Not published");
-    expect(text("draft")).toContain("1 draft of any kind in this definition");
+    expect(text("draft")).toContain("1 draft in this definition");
     expect(text("configured")).toContain("Configuration");
     expect(text("configured")).toContain("Read-only; fork it to change it");
     expect(text("pinned")).toContain("Configuration");
@@ -117,11 +117,34 @@ describe("agents page", () => {
     // Another provider's published version is not the agent's publication, and is disclosed without its provider key.
     expect(text("mixed")).toContain("Not published");
     expect(text("mixed")).not.toContain("Published 1.0.0");
-    expect(text("mixed")).toContain("Its latest version is another kind of activity");
-    expect(text("mixed")).toContain("1 draft · 1 version of any kind in this definition");
+    expect(text("mixed")).toContain("Latest version belongs to another kind of activity");
+    expect(text("mixed")).toContain("1 draft in this definition");
     expect(text("mixed")).not.toContain("elsa.activity-graph");
     expect(text("retired")).toContain("1.0.0 retired");
     expect(text("retired")).not.toContain("Published");
+  });
+
+  it("shows latest and published Agent versions in one definition row without merging equal names", async () => {
+    const first = row("first", { definition: { ...row("first").definition, displayName: "Shared name" },
+      lifecycle: { draftCount: 2, versionCount: 3,
+        head: { versionId: "first-v3", version: "3.0.0", lifecycle: "active", providerKey: "elsa.agent", providerSchemaVersion: "2" },
+        recommendation: { versionId: "first-v2", version: "2.0.0", lifecycle: "active", providerKey: "elsa.agent", providerSchemaVersion: "2" } } });
+    const second = row("second", { definition: { ...row("second").definition, displayName: "Shared name" },
+      lifecycle: { draftCount: 0, versionCount: 1,
+        head: { versionId: "second-v1", version: "1.0.0", lifecycle: "active", providerKey: "elsa.agent", providerSchemaVersion: "2" } } });
+    const { context } = fakeContext([{ items: [first, second], totalCount: 2 }]);
+    const container = await render(context);
+    const rows = [...container.querySelectorAll("[role='row']")];
+
+    expect(rows.filter(item => item.textContent?.includes("Shared name"))).toHaveLength(2);
+    expect(container.textContent).toContain("Latest version");
+    expect(container.textContent).toContain("Published version");
+    expect(rows[1].textContent).toContain("3.0.0");
+    expect(rows[1].textContent).toContain("Published 2.0.0");
+    expect(rows[1].textContent).toContain("2 drafts in this definition");
+    expect(rows[2].textContent).toContain("1.0.0");
+    expect(rows[2].textContent).toContain("Published 1.0.0");
+    expect(rows[2].textContent).not.toContain("draft");
   });
 
   it("continues with the server's cursor and appends the next page", async () => {
@@ -147,7 +170,7 @@ describe("agents page", () => {
     const container = await render(context);
 
     expect(container.textContent).toContain("Published 1.0.0");
-    expect(container.textContent).toContain("Its latest version is another kind of activity");
+    expect(container.textContent).toContain("Latest version belongs to another kind of activity");
   });
 
   it("says when the list changed under its cursor and restarts only when asked", async () => {
@@ -225,17 +248,16 @@ describe("agents page", () => {
     await settle();
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
     await settle();
-    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
-    expect(container.querySelector('[role="table"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     await settle();
-    const name = container.querySelector(".agent-create-form input");
+    const name = document.querySelector('[role="dialog"] input');
     expect(document.activeElement).toBe(name);
     finish({ items: [row("a")], totalCount: 1 });
     await settle();
 
-    expect(container.querySelector(".agent-collection-count")).toBeNull();
+    expect(container.querySelector(".agent-collection-count")?.textContent).toContain("1 agent");
     expect(document.activeElement).toBe(name);
-    [...container.querySelectorAll("button")].find(x => x.textContent === "Cancel")!.click();
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(x => x.textContent === "Cancel")!.click();
     await settle();
     expect(container.querySelector(".agent-collection-count")?.textContent).toBe("1 agent");
   });
@@ -271,20 +293,19 @@ describe("agents page", () => {
     expect(container.querySelector("[role='row']")).toBeNull();
   });
 
-  it("creates an agent draft with the newest schema and opens it in the generic editor", async () => {
+  it("creates an agent draft with the newest schema and opens it in the Agent workspace", async () => {
     const navigate = vi.fn();
     const { context, postJson } = fakeContext([{ items: [], totalCount: 0 }]);
     const container = await render(context, navigate);
 
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
     await settle();
-    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
-    expect(container.querySelector('[role="table"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     await settle();
-    input(container.querySelector(".agent-create-form input")!, "Copywriter");
-    input(container.querySelector(".agent-create-form textarea")!, "Writes short articles.");
+    input(document.querySelector('[role="dialog"] input')!, "Copywriter");
+    input(document.querySelector('[role="dialog"] textarea')!, "Writes short articles.");
     await settle();
-    (container.querySelector(".agent-create-form") as HTMLFormElement).requestSubmit();
+    (document.querySelector('form[role="dialog"]') as HTMLFormElement).requestSubmit();
     await settle();
 
     const [path, body] = postJson.mock.calls[0] as [string, Record<string, unknown>];
@@ -294,8 +315,8 @@ describe("agents page", () => {
     expect(body.provider).toMatchObject({ providerKey: "elsa.agent", schemaVersion: "2",
       payload: { instructions: "", allowContinuity: false, limits: { maximumModelCalls: 8, timeoutMilliseconds: 300000 } } });
     expect(body.contract).toEqual({ contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] });
-    expect(navigate).toHaveBeenCalledWith(activityDefinitionPath("new-agent", "draft-1"));
-    expect(activityDefinitionPath("new-agent", "draft-1")).toBe("/workflows/activity-definitions?definition=new-agent&section=editor&draft=draft-1");
+    expect(navigate).toHaveBeenCalledWith(agentWorkspaceDraftPath("new-agent", "draft-1"));
+    expect(agentWorkspaceDraftPath("new-agent", "draft-1")).toBe("/agents/workspace/new-agent/drafts/draft-1");
   });
 
   it("offers no creation to a signed-in reader without the manage permission", async () => {
@@ -315,8 +336,8 @@ describe("agents page", () => {
 
     newAgent()!.click();
     await settle();
-    expect(document.activeElement).toBe(container.querySelector(".agent-create-form input"));
-    [...container.querySelectorAll("button")].find(x => x.textContent === "Cancel")!.click();
+    expect(document.activeElement).toBe(document.querySelector('[role="dialog"] input'));
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(x => x.textContent === "Cancel")!.click();
     await settle();
 
     expect(document.activeElement).toBe(newAgent());
@@ -329,12 +350,11 @@ describe("agents page", () => {
 
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
     await settle();
-    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
-    expect(container.querySelector('[role="table"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     await settle();
-    input(container.querySelector(".agent-create-form input")!, "Copywriter");
+    input(document.querySelector('[role="dialog"] input')!, "Copywriter");
     await settle();
-    (container.querySelector(".agent-create-form") as HTMLFormElement).requestSubmit();
+    (document.querySelector('form[role="dialog"]') as HTMLFormElement).requestSubmit();
     await settle();
 
     expect(document.activeElement?.textContent).toBe("The agent could not be created. Nothing was saved.");
@@ -348,27 +368,25 @@ describe("agents page", () => {
     expect(container.textContent).toContain("Agent a");
   });
 
-  it("drops a slower draft lookup once another row was opened", async () => {
+  it("opens the Agent workspace without resolving drafts in the collection", async () => {
     const navigate = vi.fn();
-    let finish: (drafts: string[]) => void = () => undefined;
-    const slow = new Promise<string[]>(resolve => { finish = resolve; });
-    const { context } = fakeContext([{ items: [row("a"), row("draft", { lifecycle: { draftCount: 1, versionCount: 0, head: null } })], totalCount: 2 }], { drafts: { draft: slow } });
+    const { context, getJson } = fakeContext([{ items: [row("a"), row("draft", { lifecycle: { draftCount: 1, versionCount: 0, head: null } })], totalCount: 2 }]);
     const container = await render(context, navigate);
     const rowFor = (id: string) => [...container.querySelectorAll("[role='row']")].find(x => x.textContent?.includes(`Agent ${id}`)) as HTMLElement;
 
     rowFor("draft").click();
     await settle();
     rowFor("a").click();
-    finish(["draft-1"]);
     await settle();
 
-    expect(navigate.mock.calls.map(call => call[0])).toEqual(["/workflows/activity-definitions?definition=a&version=a-v1"]);
+    expect(navigate.mock.calls.map(call => call[0])).toEqual(["/agents/workspace/draft", "/agents/workspace/a?fallbackVersion=a-v1"]);
+    expect(getJson.mock.calls.some(call => String(call[0]).includes("/drafts?"))).toBe(false);
   });
 
-  it("opens a row's own resource: its published version, its only draft, or the definition to choose from", async () => {
+  it("opens the Agent workspace and preserves the exact published fallback", async () => {
     const navigate = vi.fn();
     const draftOnly = (id: string) => row(id, { lifecycle: { draftCount: 2, versionCount: 0, head: null } });
-    const { context, getJson } = fakeContext([{ items: [row("a"), draftOnly("one"), draftOnly("two")], totalCount: 3 }], { drafts: { one: ["draft-1"], two: ["draft-2", "draft-3"] } });
+    const { context, getJson } = fakeContext([{ items: [row("a"), draftOnly("one"), draftOnly("two")], totalCount: 3 }]);
     const container = await render(context, navigate);
     const open = async (id: string) => {
       ([...container.querySelectorAll("[role='row']")].find(x => x.textContent?.includes(`Agent ${id}`)) as HTMLElement).click();
@@ -380,11 +398,10 @@ describe("agents page", () => {
     await open("two");
 
     expect(navigate.mock.calls.map(call => call[0])).toEqual([
-      "/workflows/activity-definitions?definition=a&version=a-v1",
-      "/workflows/activity-definitions?definition=one&section=editor&draft=draft-1",
-      "/workflows/activity-definitions?definition=two&section=drafts"
+      "/agents/workspace/a?fallbackVersion=a-v1",
+      "/agents/workspace/one",
+      "/agents/workspace/two"
     ]);
-    const draftQuery = new URL(getJson.mock.calls.map(call => String(call[0])).find(path => path.includes("/one/drafts"))!, "http://studio").searchParams;
-    expect(Object.fromEntries(draftQuery)).toEqual({ limit: "2", providerKey: "elsa.agent", status: "Active" });
+    expect(getJson.mock.calls.some(call => String(call[0]).includes("/drafts?"))).toBe(false);
   });
 });

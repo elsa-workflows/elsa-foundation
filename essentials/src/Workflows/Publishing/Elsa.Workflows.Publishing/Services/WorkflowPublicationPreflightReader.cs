@@ -72,6 +72,7 @@ public sealed class WorkflowPublicationPreflightReader(
         ValidateExpectedPublication(expectedPublicationId, slot);
 
         var candidateClaims = triggerExtractor.Evaluate(executable).Bindings
+            .Where(binding => binding.Cardinality != TriggerCardinality.ReservationOnly)
             .Select(binding => Claim(candidatePublicationId, binding))
             .ToArray();
         var authoritativeSets = new List<PublicationAuthoritativeClaimSet>();
@@ -84,7 +85,8 @@ public sealed class WorkflowPublicationPreflightReader(
                 activeActivationId,
                 authoritativeSlot.SlotName,
                 StringComparer.Ordinal.Equals(activeActivationId, slot?.ActiveActivationId),
-                activeBindings.Select(binding => Claim(activeActivationId, binding)).ToArray()));
+                activeBindings.Where(binding => binding.Cardinality != TriggerCardinality.ReservationOnly)
+                    .Select(binding => Claim(activeActivationId, binding)).ToArray()));
         }
 
         return new WorkflowPublicationPreflightPlan(

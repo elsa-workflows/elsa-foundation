@@ -1,0 +1,221 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "ActivitiesBpmn": {},
+          "ActivitiesBpmnDesign": {},
+          "ActivitiesBpmnInterchange": {},
+          "ActivitiesCompensation": {},
+          "ActivitiesControlFlow": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesDispatchWorkflowDesign": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesDesignReconciliation": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesGraphRuntimeHosting": {},
+          "ActivitiesRuntimeHosting": {},
+          "ActivitiesSequence": {},
+          "ApiCapabilities": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": ""
+            }
+          },
+          "DiagnosticsOpenTelemetry": {},
+          "DiagnosticsOpenTelemetryEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-diagnostics.db"
+          },
+          "DiagnosticsStructuredLogsEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-diagnostics.db"
+          },
+          "DiagnosticsStructuredLogs": {},
+          "Events": {},
+          "Expressions": {},
+          "ExpressionsApi": {},
+          "FileSystemDistributedLocking": {},
+          "Weaver": {},
+          "WeaverApi": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityApi": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true,
+            "AllowedReturnUrlOrigins": [
+              "https://localhost:7030",
+              "http://localhost:5089"
+            ]
+          },
+          "IdentityIamEntityFrameworkCore": {},
+          "IdentityProviderConfigurationEntityFrameworkCore": {},
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "IsDevelopmentOrDemo": true,
+            "SeedAdminUserName": "admin",
+            "SeedAdminPassword": "Password123!",
+            "SeedAdminEmail": "admin@elsa.local",
+            "SeedAdminRoleName": "administrator"
+          },
+          "FoundationIdentityOidc": {
+            "IsDefault": false
+          },
+          "FoundationIdentityOpenIddict": {
+            "IsDevelopmentOrDemo": true
+          },
+          "WeaverWorkflows": {},
+          "WeaverWorkflowsRuntime": {},
+          "WeaverGitHubCopilot": {
+            "Enabled": true,
+            "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
+            "Model": "auto",
+            "BaseDirectory": ".elsa/copilot"
+          },
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
+          "Http": {},
+          "HttpJavaScript": {},
+          "JavaScriptActivities": {},
+          "JavaScriptEndpoints": {},
+          "JavaScriptExpressions": {
+            "TypeDescriptors": [
+              {
+                "TypeFullName": "System.DateTime"
+              },
+              {
+                "TypeFullName": "System.DateTimeOffset"
+              },
+              {
+                "TypeFullName": "System.TimeSpan"
+              },
+              {
+                "TypeFullName": "System.Guid"
+              },
+              {
+                "TypeFullName": "System.Random"
+              },
+              {
+                "TypeFullName": "System.Object"
+              },
+              {
+                "TypeFullName": "System.Text.Json.Nodes.JsonNode, System.Text.Json"
+              },
+              {
+                "TypeFullName": "System.String"
+              },
+              {
+                "TypeFullName": "System.Boolean"
+              },
+              {
+                "TypeFullName": "System.Int16"
+              },
+              {
+                "TypeFullName": "System.Int32"
+              },
+              {
+                "TypeFullName": "System.Int64"
+              },
+              {
+                "TypeFullName": "System.Decimal"
+              },
+              {
+                "TypeFullName": "System.Single"
+              },
+              {
+                "TypeFullName": "System.Double"
+              },
+              {
+                "TypeFullName": "System.Byte[]"
+              },
+              {
+                "TypeFullName": "System.IO.Stream"
+              },
+              {
+                "TypeFullName": "System.DateOnly"
+              },
+              {
+                "TypeFullName": "System.TimeOnly"
+              },
+              {
+                "TypeFullName": "System.Collections.Generic.IDictionary`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"
+              }
+            ]
+          },
+          "JavaScriptJintEngine": {},
+          "JavaScriptWorkflowsDesign": {},
+          "Liquid": {},
+          "Mediator": {},
+          "MemoryCache": {},
+          "ModularityApi": {},
+          "Primitives": {},
+          "Secrets": {
+            "EncryptionKey": "development-demo-only-secrets-encryption-key"
+          },
+          "SecretsApi": {},
+          "ActorSecretsWorkflows": {},
+          "SecretsEntityFrameworkCore": {},
+          "AgentDesign": {},
+          "AgentApi": {},
+          "AnthropicAgents": {},
+          "AzureOpenAIAgents": {},
+          "OpenAIAgents": {},
+          "Connections": {},
+          "ActorHttpConnections": {},
+          "Decisions": {},
+          "DecisionsDesign": {},
+          "DecisionsApi": {},
+          "DecisionsEntityFrameworkCore": {},
+          "ConnectionsApi": {},
+          "ConnectionsDesign": {},
+          "Serialization": {},
+          "AttentionApi": {},
+          "ModularityAttention": {},
+          "StudioPreferences": {},
+          "StudioPreferencesApi": {},
+          "StudioPreferencesEntityFrameworkCore": {},
+          "Tasks": {},
+          "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
+          "StandaloneTriggersApi": {},
+          "StandaloneHttpTriggerAuthoring": {},
+          "StandaloneEventTriggerAuthoring": {},
+          "StandaloneScheduleTriggerAuthoring": {},
+          "StudioDashboardApi": {},
+          "StudioDashboardEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-studio-dashboards.db"
+          },
+          "StudioDashboardWeaver": {},
+          "KernelWorkflowDashboardQueries": {},
+          "KernelActivitiesHttp": {},
+          "WorkflowsRuntimeKernelRetainedApi": {},
+          "WorkflowsRuntimeKernelHosting": {
+            "Provider": "SQLite",
+            "PreparedStandaloneStarts": true
+          },
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
+            "Provider": "SQLite",
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+          },
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {
+            "Provider": "SQLite"
+          },
+          "KernelActivitiesScheduling": {},
+          "WorkflowsDashboardRetained": {},
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {},
+          "WorkflowsRuntimeRetainedAttention": {},
+          "PreparedStandaloneScheduleTriggers": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

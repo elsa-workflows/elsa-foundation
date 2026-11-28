@@ -30,11 +30,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\extensions\Tasks\src\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\Artifacts\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
 </Project>

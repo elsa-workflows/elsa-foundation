@@ -9,11 +9,13 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Kernel.Workflows brings Kernel.Durable and Kernel.Runtime. -->
-    <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
+    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />
     <Using Include="Kernel.Durable" />
     <Using Include="Kernel.Workflows" />
+    <Using Include="Kernel.ReviewFixtures" />
+    <Compile Include="../ModeledTicket.cs" Link="ModeledTicket.cs" />
   </ItemGroup>
 </Project>

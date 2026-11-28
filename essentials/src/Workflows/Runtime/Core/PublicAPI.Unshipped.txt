@@ -1098,6 +1098,7 @@ Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationAuthority.TryDeactivate
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationCoordinator
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationCoordinator.ActivateAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowActivationCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationResult!>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationCoordinator.DeactivateAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowDeactivationCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationCoordinator.RequiresInactiveAcknowledgment.get -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationCoordinator.EnsureServingAsync(string! workflowDefinitionId, string! slotName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationResult!>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationSwitch
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationSwitch.TryActivateAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlotRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationTransition!>
@@ -1179,6 +1180,7 @@ Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.CancelDeletionAsy
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.DeleteAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableDeletionGuard! guard, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.DeleteAsync(string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.FindAsync(string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable?>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.ListMaterialRetentionRootIdsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.ListPageAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable!>!>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.ReleaseRootWriteLeaseAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRootWriteLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.RenewRootWriteLeaseAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRootWriteLease! lease, System.DateTimeOffset expiresAt, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
@@ -1259,7 +1261,29 @@ Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue.SupportsClaima
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue.SupportsTargetedDeletion.get -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher.DispatchAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest! request, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope requiredScope = Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope.Published, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowDirectTestRunDispatcher
+const Elsa.Workflows.Runtime.Core.Contracts.IWorkflowDirectTestRunDispatcher.TriggerBindingKey = "workflow-test-run" -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowDirectTestRunDispatcher.IsStoppedAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowDirectTestRunDispatcher.ObserveAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation?>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowDirectTestRunDispatcher.RequestStopAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowDirectTestRunDispatcher.SupportsTrigger(string! driverId) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Prepared = 0 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Pending = 1 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Disarmed = 2 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Started = 3 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Ended = 4 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Retired = 5 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.CompletedWithoutRecord = 6 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Unavailable = 7 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Refused = 8 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.RateLimited = 9 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.AdmitIsolatedActorAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, string! actorReference, System.Func<System.DateTimeOffset>! readClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.BeginInlineStartAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, System.Func<System.DateTimeOffset>! readClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.SettleInlineStartAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState outcome, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.BeginHeldInlineStartAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, System.Guid attemptId, System.Func<System.DateTimeOffset>! readClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.SettleHeldInlineStartAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, System.Guid attemptId, Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState? outcome, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.AssertOpenAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, System.DateTimeOffset observedAt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeCleaner
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeCleaner.CloseAsync(string! scopeId, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeCloseReason reason, System.DateTimeOffset requestedAt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeCleanupResult!>
@@ -1464,6 +1488,28 @@ Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics.Reco
 Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics.RecordInlineCascadeDispatch() -> void
 Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics.Reset() -> void
 Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics.RuntimeSchedulerDispatchDiagnostics() -> void
+Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.ActivityExecuteSpanName = "elsa.runtime.activity.execute" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.ActivitySourceName = "Elsa.Workflows.Runtime" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointCommitSpanName = "elsa.runtime.checkpoint.commit" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointIdTag = "elsa.checkpoint.id" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointMandatoryTag = "elsa.checkpoint.mandatory" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointPersistenceDecisionTag = "elsa.checkpoint.persistence_decision" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointPostCommitIntentsTag = "elsa.checkpoint.post_commit_intents" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CommandKindTag = "elsa.command.kind" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DispatchSpanName = "elsa.runtime.dispatch" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainItemsProcessedTag = "elsa.drain.items_processed" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainMaxWorkItemsTag = "elsa.drain.max_work_items" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainOutermostTag = "elsa.drain.outermost" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainSpanName = "elsa.runtime.drain" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainStopReasonTag = "elsa.drain.stop_reason" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.HandlerNameTag = "elsa.handler.name" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.OutcomeCompleted = "completed" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.OutcomeFaulted = "faulted" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.OutcomeTag = "elsa.outcome" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.PoisonFenceFallbackTag = "elsa.poison.fence_fallback" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.WorkItemIdTag = "elsa.work_item.id" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.WorkflowExecutionIdTag = "elsa.workflow.execution_id" -> string!
 Elsa.Workflows.Runtime.Core.Exceptions.BackgroundActivityWorkConflictException
 Elsa.Workflows.Runtime.Core.Exceptions.BackgroundActivityWorkConflictException.BackgroundActivityWorkConflictException(string! workflowExecutionId, string! workId, string! reason) -> void
 Elsa.Workflows.Runtime.Core.Exceptions.BackgroundActivityWorkConflictException.WorkId.get -> string!
@@ -5729,6 +5775,7 @@ Elsa.Workflows.Runtime.Core.Models.TestRunWaitPrepareContext.Wait.init -> void
 Elsa.Workflows.Runtime.Core.Models.TriggerCardinality
 Elsa.Workflows.Runtime.Core.Models.TriggerCardinality.Exclusive = 0 -> Elsa.Workflows.Runtime.Core.Models.TriggerCardinality
 Elsa.Workflows.Runtime.Core.Models.TriggerCardinality.FanOut = 1 -> Elsa.Workflows.Runtime.Core.Models.TriggerCardinality
+Elsa.Workflows.Runtime.Core.Models.TriggerCardinality.ReservationOnly = 2 -> Elsa.Workflows.Runtime.Core.Models.TriggerCardinality
 Elsa.Workflows.Runtime.Core.Models.TriggerStimulusDescriptor
 Elsa.Workflows.Runtime.Core.Models.TriggerStimulusDescriptor.CorrelationScope.get -> string?
 Elsa.Workflows.Runtime.Core.Models.TriggerStimulusDescriptor.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
@@ -5912,6 +5959,7 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome.Activated = 0 -> El
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome.AlreadyActive = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome.AlreadyInactive = 5 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome.ChannelNotAllowed = 6 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome
+Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome.CommittedPending = 7 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome.Conflict = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome.Deactivated = 4 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome.Failed = 3 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationOutcome
@@ -6012,6 +6060,8 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSource.SourceId.init -> voi
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSource.WorkflowActivationSource(string! Kind, string? SourceId = null) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.ChannelValidation = 6 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
+Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.Mapping = 7 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
+Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.ServingCheck = 8 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.None = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.ProjectionActivation = 4 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.ProjectionPreparation = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
@@ -6930,6 +6980,8 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.Agent.ge
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.CommandDispatch.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandDispatchResult!
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.PinnedExecutable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.PinnedSource.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.TestRunCompletedWithoutRecord.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.TestRunCompletedWithoutRecord.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.WorkflowExecutionId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.WorkflowExecutionStartDispatchResult(string! workflowExecutionId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! pinnedExecutable, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandDispatchResult! commandDispatch, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionActorDescriptor! agent, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance? pinnedSource = null) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState
@@ -7176,10 +7228,20 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.ClosedAt.get -> Syste
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.ClosingAt.get -> System.DateTimeOffset?
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.CreatedAt.get -> System.DateTimeOffset
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.InlineStart.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState?
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.InlineStart.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.HeldInlineAttempt.get -> System.Guid?
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.HeldInlineAttempt.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.Scope.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope!
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.State.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.WorkflowTestScopeRecord(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState state, System.DateTimeOffset createdAt, System.DateTimeOffset? closingAt = null, System.DateTimeOffset? closedAt = null, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeCloseReason? closeReason = null) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Pending = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.CompletedWithoutRecord = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Refused = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Unavailable = 3 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.RateLimited = 4 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Closed = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Closing = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Open = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
@@ -9239,6 +9301,7 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceArtif
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceCleanupBatch.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceCleanupBatch? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceCleanupBatch? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceCleanupBatch.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceCleanupBatch? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceCleanupBatch? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceComparer.SameIdentity(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceComparer.SameInspectionSidecars(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceComparer.SameSnapshot(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceDefinitionVersionPageQuery.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceDefinitionVersionPageQuery? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceDefinitionVersionPageQuery? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceDefinitionVersionPageQuery.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceDefinitionVersionPageQuery? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceDefinitionVersionPageQuery? right) -> bool
@@ -9344,6 +9407,7 @@ virtual Elsa.Workflows.Runtime.Core.Contracts.WorkflowExecutableStoreDecorator.C
 virtual Elsa.Workflows.Runtime.Core.Contracts.WorkflowExecutableStoreDecorator.DeleteAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableDeletionGuard! guard, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 virtual Elsa.Workflows.Runtime.Core.Contracts.WorkflowExecutableStoreDecorator.DeleteAsync(string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 virtual Elsa.Workflows.Runtime.Core.Contracts.WorkflowExecutableStoreDecorator.FindAsync(string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable?>
+virtual Elsa.Workflows.Runtime.Core.Contracts.WorkflowExecutableStoreDecorator.ListMaterialRetentionRootIdsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>
 virtual Elsa.Workflows.Runtime.Core.Contracts.WorkflowExecutableStoreDecorator.ListPageAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable!>!>
 virtual Elsa.Workflows.Runtime.Core.Contracts.WorkflowExecutableStoreDecorator.ReleaseRootWriteLeaseAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRootWriteLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 virtual Elsa.Workflows.Runtime.Core.Contracts.WorkflowExecutableStoreDecorator.RenewRootWriteLeaseAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRootWriteLease! lease, System.DateTimeOffset expiresAt, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
@@ -11728,9 +11792,35 @@ override Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerInvocat
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeIngressDeliveryStore.ReadCommittedRecipientAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeIngressCommandOrigin! origin, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeCommittedRecipient!>
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerInvocationContext.StandaloneTriggerInvocationContext(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionPartition! Partition, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! Actor) -> void
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerInvocationContext.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerInvocationContext!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Authority.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Authority.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.CommittedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.CommittedAt.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Deconstruct(out Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionPartition! Partition, out string! Occurrence, out string! PublisherActor, out string! EventName, out System.Text.Json.JsonElement Payload, out System.DateTimeOffset CommittedAt, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! Authority) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.EventName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.EventName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Occurrence.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Occurrence.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Partition.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionPartition!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Partition.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Payload.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Payload.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.PublisherActor.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.PublisherActor.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.RuntimeAuthoredStandaloneEvent(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionPartition! Partition, string! Occurrence, string! PublisherActor, string! EventName, System.Text.Json.JsonElement Payload, System.DateTimeOffset CommittedAt, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! Authority) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Scope.init -> void
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerAdmissionRefusedException
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerSourceDescriptor
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerSourceDescriptor.Deconstruct(out string! TypeKey, out int SchemaVersion, out string! SourceFamily, out Elsa.Primitives.Models.ValueTypeDescriptor! PayloadSchema) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventAvailability
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventAvailability.Supports(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventIngress
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventIngress.AdmitAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventIngress.SupportsAdmission.get -> bool
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerIngress<TSource>
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerSignal.PayloadSchema.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerInvocationContext.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
@@ -12593,6 +12683,13 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryDetailsStore.FindEventDetai
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryDetailsStore.FindBookmarkDetailsAsync(string! workflowExecutionId, string! bookmarkId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryHead? Head, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBookmark? Bookmark)>
 static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeHistorySource(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! commit) -> string!
 
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.StandaloneTriggerResourceCommitted(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! triggerId, string! typeKey, long revision) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.TriggerId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.TypeKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.Revision.get -> long
+
 Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault
 Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault.RuntimeInitialStartFault(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! work, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord! poison) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault.Work.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!
@@ -12649,7 +12746,529 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.SequenceToken.ge
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.HasNewerHistory.get -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.IsEligible(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent! observation) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.IsEligibleKind(string! name) -> bool
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CoalescedFlush = "runtime.coalescing.flush" -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.WithPostCommitCausation(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! commit, System.Func<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent!, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?>! ownerFactory, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitDurableSourceIntentHandler.CanRecordHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.CanRecordHistory(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.PublicationObservation(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy! policy, Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, string! receiptId, string! name, System.DateTimeOffset occurredAt, string! reasonCode) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.HasRetainedSourceScope(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> bool
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.WorkflowDeclaredInput(string! name, Elsa.Primitives.Models.TypeReference! type, bool isRequired, System.Text.Json.JsonElement? defaultValue, bool isNullable) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.IsNullable.get -> bool
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.WorkflowDeclaredInput(string! name, Elsa.Primitives.Models.TypeReference! type, bool isRequired, System.Text.Json.JsonElement? defaultValue, bool isNullable, bool hasExplicitNullDefault) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.HasExplicitNullDefault.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryCausation.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCausation.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitEnricher.CanSupplyHistorySource(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistorySourceExtension! source) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IStimulusRouter.CanRecordHistory(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher.CanPreserveHistoryCausation(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.PublicationObservationKinds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.SupportsHistoryResponsibility.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.ListPendingHistoryAsync(Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.DurableTimer!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.AcknowledgeHistoryAsync(string! workflowExecutionId, string! timerId, string! historyEventId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.CompleteClaimWithHistoryAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDurableTimerClaim! claim, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation! observation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeDurableTimerClaimTransitionResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.RetireWithHistoryAsync(string! workflowExecutionId, string! timerId, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation! observation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Models.DurableTimer.HistoryResponsibility.init -> void
+Elsa.Workflows.Runtime.Core.Models.DurableTimer.HistoryResponsibility.get -> Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility?
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryFacts.Kinds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryFacts.CreateScheduled(Elsa.Workflows.Runtime.Core.Models.DurableTimer! timer, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy! policy, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? cause = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation?
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryFacts.CreateCancelled(Elsa.Workflows.Runtime.Core.Models.DurableTimer! timer, System.DateTimeOffset occurredAt, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? cause = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation?
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryFacts.CreateDispatched(Elsa.Workflows.Runtime.Core.Models.DurableTimer! timer, System.DateTimeOffset occurredAt, Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchStatus status, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? cause = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation?
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryFacts.CreateRetired(Elsa.Workflows.Runtime.Core.Models.DurableTimer! timer, System.DateTimeOffset occurredAt, string! reasonCode, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? cause = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation?
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.DurableTimerHistoryQuery(int limit = 100, string? continuationToken = null) -> void
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.DurableTimerHistoryResponsibility(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy! policy, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent!>! pendingEvents, bool retired) -> void
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.PendingEvents.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent!>!
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.Retired.get -> bool
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.Policy.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy!
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryFacts
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.operator !=(Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility? left, Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.operator ==(Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility? left, Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.Equals(Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility!
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.operator !=(Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery? left, Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.operator ==(Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery? left, Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.Equals(object? obj) -> bool
+override sealed Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.Equals(Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery? other) -> bool
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryQuery!
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.HasPendingHistoryAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.DischargeUnrecordedCompletionAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! completion, int limit = 256, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.NoRecordCompletion.get -> Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion?
+Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.NoRecordCompletion.init -> void
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.DurableTimerNoRecordCompletion(string! checkpointId, System.DateTimeOffset completedAt) -> void
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.CompletedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.CheckpointId.get -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryNoRecordCompletion.Validate(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! completion) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryNoRecordCompletion
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.operator !=(Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? left, Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.operator ==(Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? left, Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.Equals(Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryTimerSupport
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryTimerSupport.CanCapture.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.CanInspectHistorySources(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! history) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.CanDischargeUnrecordedCompletion(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore! checkpointStore) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.ListDuePageAsync(System.DateTimeOffset asOf, Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.DurableTimer!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerScheduler.CanRecordHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IPostCommitOutboxLookupStore.CanInspectHistorySources(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! history) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest.ChildHistorySource.get -> Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest.ChildHistorySource.init -> void
+Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ChildHistorySource.get -> Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext?
+Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ChildHistorySource.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher.CanDispatchChildHistorySource(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IBookmarkResumeDispatcher.CanDispatchChildHistorySource(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+
+
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector.ModelKey.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector.Project(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState! execution) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStatus?
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.RuntimeKernelScheduleOccurrence(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, string! ScheduleKey, string! ScheduleReference, string! SlotName, string! ActivationId, long PublicationRevision, long ArmGeneration, string! TimerDeliveryId, System.DateTimeOffset Due, System.DateTimeOffset AcceptBefore, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, string! TriggerNode, string! PinnedStart) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Scope.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ScheduleKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ScheduleKey.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ScheduleReference.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ScheduleReference.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.SlotName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.SlotName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ActivationId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ActivationId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.PublicationRevision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.PublicationRevision.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ArmGeneration.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ArmGeneration.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.TimerDeliveryId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.TimerDeliveryId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Due.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Due.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.AcceptBefore.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.AcceptBefore.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Executable.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.TriggerNode.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.TriggerNode.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.PinnedStart.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.PinnedStart.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Id.get -> string!
+const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ReservationType = "kernel-schedule-publication-v1" -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.ReservationKey(string! scheduleKey) -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryAcceptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.DateTimeOffset>>! readScheduleClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryAcceptAttemptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, System.DateTimeOffset attemptDeadline, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.DateTimeOffset>>! readScheduleClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome.Accepted = 1 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome.Refused = 2 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome.Retry = 0 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.RuntimeKernelScheduleOccurrenceCursor(long AcceptedAtUtcTicks, string! Id) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.AcceptedAtUtcTicks.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.AcceptedAtUtcTicks.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.Id.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor.Id.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.RuntimeKernelScheduleOccurrenceDelivery(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! Occurrence, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor! Cursor) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.Occurrence.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.Occurrence.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.Cursor.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery.Cursor.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceDeliveryStore
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceDeliveryStore.ListPendingAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor? after, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceDeliveryStore.ListPendingAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor? after, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor! through, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceDelivery!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceDeliveryStore.MarkMaterializedAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, string! actorReference, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceDeliveryStore.ReadPendingTailAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleRetentionRoots
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleRetentionRoots.ListPinnedExecutableArtifactIdsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.RuntimeKernelScheduleControlOwner(string! SlotId, string! SlotName, string! ActivationId, long PublicationRevision, string! SourceReferenceId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.SlotId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.SlotId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.SlotName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.SlotName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.ActivationId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.ActivationId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.PublicationRevision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.PublicationRevision.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.SourceReferenceId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.SourceReferenceId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Executable.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Deconstruct(out string! SlotId, out string! SlotName, out string! ActivationId, out long PublicationRevision, out string! SourceReferenceId, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner? right) -> bool
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.RuntimeKernelScheduleControl(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, string! ScheduleKey, string! DefinitionId, string! TriggerNode, long Revision, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner? Owner) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Scope.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.ScheduleKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.ScheduleKey.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.TriggerNode.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.TriggerNode.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Revision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Revision.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Owner.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Owner.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Deconstruct(out Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, out string! ScheduleKey, out string! DefinitionId, out string! TriggerNode, out long Revision, out Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner? Owner) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl? right) -> bool
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.RuntimeKernelScheduleControlPage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl!>! Items, string? Next) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.Items.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.Next.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.Next.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl!>! Items, out string? Next) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage? right) -> bool
+
+const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.ScheduleKeyMetadata = "schedule-key" -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.CanonicalScope(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope) -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlReader
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlReader.FindAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! scheduleKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlReader.ListAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string? after, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlReader.ListAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string? after, string! through, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlPage!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlReader.ReadTailAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlScanPage
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlScanPage.HasMore.get -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlScanPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlScanStore
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlScanStore.ReadScanPageAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlScanPage?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlScanStore.TryAdvanceScanAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleControlScanPage! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.RuntimeKernelScheduleMaterializedOccurrence(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! Occurrence, string! ActorReference, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor! Cursor) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.Occurrence.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.Occurrence.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.ActorReference.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.ActorReference.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.Cursor.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.Cursor.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.Deconstruct(out Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! Occurrence, out string! ActorReference, out Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor! Cursor) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceRetirementStore
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceRetirementStore.ListMaterializedAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor? after, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceRetirementStore.ListMaterializedAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor? after, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor! through, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleMaterializedOccurrence!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceRetirementStore.ReadMaterializedTailAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceCursor?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceRetirementStore.TryRetireAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, string! actorReference, System.Func<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence!, string!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<bool>>! confirmRetired, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowScheduleAdoption
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowScheduleAdoption.TryAdoptSchedulesAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot! slot, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! source, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding!>! claims, System.Collections.Generic.IReadOnlyCollection<string!>! alsoServing, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.RuntimeKernelExecutablePin(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! Scope, string! Tenant, string! ActorReference, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, string! Issuance) -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Scope.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Tenant.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Tenant.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.ActorReference.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.ActorReference.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Executable.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Issuance.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Issuance.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.PersistenceScope! Scope, out string! Tenant, out string! ActorReference, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, out string! Issuance) -> void
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.Equals(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? other) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.<Clone>$() -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!
+static Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.operator ==(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? left, Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin.operator !=(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? left, Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin? right) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.RuntimeKernelExecutablePinPage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>! Items, string? Next) -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Items.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Next.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Next.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>! Items, out string? Next) -> void
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.Equals(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? other) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.<Clone>$() -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage!
+static Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.operator ==(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? left, Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage.operator !=(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? left, Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage? right) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof.Unresolved = 0 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof.BirthRetired = 1 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof.IssuanceFencedAbsent = 2 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.TryPinAsync(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>! pins, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.TryPinPublishedAsync(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin! pin, Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot! slot, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.TryPinTestRunAsync(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin! pin, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! source, Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunActorBinding? observedBinding, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.TryPinAttachedTestRunAsync(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin! pin, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! source, Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunActorBinding! root, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunHttpReply.OwnerAccepted.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunHttpReply.OwnerAccepted.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.ReadOpenTailAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.ListOpenAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string? after, string! through, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinPage!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.TryReleaseAsync(Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin! pin, System.Func<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePinProof>>! confirmAsync, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinStore.ListPinnedExecutableArtifactIdsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanPage
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanPage.HasMore.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Contracts.RuntimeKernelExecutablePin!>!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanStore
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanStore.ReadScanPageAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanPage?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanStore.TryAdvanceScanAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanPage! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Continuity.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Continuity.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.RuntimeKernelScheduleContinuity(string! Stamp, string! Stimulus, System.DateTimeOffset FoundationActivatedAt) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.Stamp.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.Stamp.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.Stimulus.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.Stimulus.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.FoundationActivatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.FoundationActivatedAt.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity? right) -> bool
+const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.ScheduleStimulusMetadata = "schedule-stimulus" -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Origin.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Origin.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.RuntimeKernelScheduleOccurrenceOrigin(string? TenantId, string! Fingerprint) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.TenantId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.Fingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.Fingerprint.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryHandoffAttemptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! origin, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! successor, string! continuity, System.DateTimeOffset attemptDeadline, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.DateTimeOffset>>! readScheduleClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.WorkflowScheduleCutoverClock
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.WorkflowScheduleCutoverClock.WorkflowScheduleCutoverClock(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<long>>! readMilliseconds) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.WorkflowScheduleCutoverClock.ReadAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! selected, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.DateTimeOffset>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryAcceptSelectedAttemptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! occurrence, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! material, System.DateTimeOffset attemptDeadline, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.DateTimeOffset>>! readScheduleClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryHandoffSelectedAttemptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! origin, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! successor, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! material, string! continuity, System.DateTimeOffset attemptDeadline, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.DateTimeOffset>>! readScheduleClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome>
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.RuntimeKernelEventEntry(string! Node, string! Name) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.Node.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.Node.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.Name.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.Name.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.Deconstruct(out string! Node, out string! Name) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry? right) -> bool
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.RuntimeKernelEventSource(string! ActivationId, string! ReferenceId, string! Kind, string! SourceId, string? SourceVersion, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.ActivationId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.ActivationId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.ReferenceId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.ReferenceId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Kind.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Kind.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.SourceId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.SourceId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.SourceVersion.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.SourceVersion.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Executable.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Deconstruct(out string! ActivationId, out string! ReferenceId, out string! Kind, out string! SourceId, out string? SourceVersion, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource? right) -> bool
+
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.RuntimeKernelEventPublication(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, string! SlotId, string! SlotName, string! DefinitionId, long Revision, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource? Source, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry!>! Entries) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Scope.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.SlotId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.SlotId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.SlotName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.SlotName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Revision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Revision.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Source.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Source.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Entries.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Entries.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Deconstruct(out Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! Scope, out string! SlotId, out string! SlotName, out string! DefinitionId, out long Revision, out Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource? Source, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventEntry!>! Entries) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication? right) -> bool
+
+const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.ReservationType = "kernel-event-publication-v1" -> string!
+const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.EventNameMetadata = "event-name" -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.ReservationKey(string! slotId, string! node) -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore.FindAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! slotId, long revision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore.FindCurrentAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! slotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore.ListAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, bool superseded, string? afterSlot, long afterRevision, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore.ReadScanTailAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore.ListScanAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, bool superseded, long after, long through, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore.ListLegacyScanAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, bool superseded, string? afterSlot, long afterRevision, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore.AcknowledgeAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication! publication, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelEventPublicationStore.ReleaseDrainedAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication! publication, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Mode.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceMode?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventSource.Mode.init -> void
+const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication.ModeMetadata = "event-mode" -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.RuntimeKernelEventPublicationScanItem(long Ordinal, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication! Publication) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.Ordinal.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.Ordinal.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.Publication.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.Publication.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.Deconstruct(out long Ordinal, out Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublication! Publication) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.Equals(object? obj) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? right) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowHttpActivities
+Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowHttpActivities.KernelWorkflowHttpActivities() -> void
+Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowScheduleActivities
+Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowScheduleActivities.KernelWorkflowScheduleActivities() -> void
+Elsa.Workflows.Runtime.Core.Contracts.StandaloneWorkflowHttpRouteProjection
+Elsa.Workflows.Runtime.Core.Contracts.StandaloneWorkflowHttpRouteProjection.StandaloneWorkflowHttpRouteProjection() -> void
+Elsa.Workflows.Runtime.Core.Models.RecurringScheduleInterval
+static Elsa.Workflows.Runtime.Core.Models.RecurringScheduleInterval.ParsePositive(string! expression) -> System.TimeSpan
+Elsa.Workflows.Runtime.Core.Contracts.IRecurringTriggerScheduleStore.ClaimDueResourceOccurrencesAsync(Elsa.Workflows.Runtime.Core.Models.RecurringTriggerOccurrenceClaimRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RecurringTriggerOccurrenceClaim!>!>
+Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind.PreparedActorBirth = 3 -> Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStartAttemptProof
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStartAttemptProof.ObserveAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! actorReference, string! issuance, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.RuntimePreparedStartProof>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStartHandoff
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStartHandoff.CommitPreparedStartAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, string! recipientId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeCommittedRecipient?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStartHandoff.ReadPreparedStartAttemptAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeCommittedRecipientAuthority! authority, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<(long Generation, bool Disarmed)?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStartHandoff.TryBindPreparedStartAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, Elsa.Workflows.Runtime.Core.Models.RuntimeCommittedRecipientAuthority! authority, long previousGeneration, string! tenant, string! actorReference, string! issuance, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStartHandoff.ReconcilePreparedStartAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, Elsa.Workflows.Runtime.Core.Models.RuntimeCommittedRecipientAuthority! authority, long generation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem!>
+Elsa.Workflows.Runtime.Core.Contracts.RuntimePreparedStartProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimePreparedStartProof.Unresolved = 0 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimePreparedStartProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimePreparedStartProof.Accepted = 1 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimePreparedStartProof
+Elsa.Workflows.Runtime.Core.Contracts.RuntimePreparedStartProof.Disarmed = 2 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimePreparedStartProof
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.Selects(Elsa.Workflows.Runtime.Core.Models.RuntimeStandaloneIngressSource! source, Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionRecipient! recipient) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.DeliverAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, string! recipientId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRunReader
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRunReader.ReadAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionRecipient! recipient, Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceReceipt! receipt, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStandaloneHttpResponseReader
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStandaloneHttpResponseReader.ReadAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! sourceOutboxItemId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse!>
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.RuntimeStandaloneHttpResponse(Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState State, string? ActorReference = null, int StatusCode = 0, string? ContentType = null, System.Text.Json.JsonElement? Body = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? Headers = null) -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Deconstruct(out Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState State, out string? ActorReference, out int StatusCode, out string? ContentType, out System.Text.Json.JsonElement? Body, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>? Headers) -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.State.get -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.State.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.ActorReference.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.ActorReference.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.StatusCode.get -> int
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.StatusCode.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.ContentType.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.ContentType.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Body.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Body.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Headers.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Legacy = 0 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Pending = 1 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Missing = 2 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.TooLarge = 3 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Ready = 4 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeIngressDeliveryStore.RequiresEmptyHttpWaitCohort.get -> bool
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.StandaloneHttpExactPath = "runtime.standaloneHttpExactPath" -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.PrepareSourceAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.CanAdmit(Elsa.Workflows.Runtime.Core.Models.RuntimeStandaloneIngressSource! source, Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionRecipient! recipient) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowHttpConnectionApplier
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowHttpConnectionApplier.ApplyAsync(System.Net.Http.HttpRequestMessage! request, string! name, string! tenantId, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSecretMask! mask, string! executionId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.<Clone>$() -> Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection!
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.CaptureMode.get -> Elsa.Workflows.Runtime.Core.Models.RuntimePayloadCaptureMode?
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.CaptureMode.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.CapturedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.CapturedAt.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Deconstruct(out string! Name, out System.Text.Json.JsonElement? Value, out bool IsRedacted, out string? RedactionReason, out Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor! Type, out System.DateTimeOffset CapturedAt) -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Equals(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? other) -> bool
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.IsRedacted.get -> bool
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.IsRedacted.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Name.get -> string!
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Name.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.RedactionReason.get -> string?
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.RedactionReason.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Type.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor!
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Type.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Value.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Value.init -> void
+Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.WorkflowOutputProjection(string! Name, System.Text.Json.JsonElement? Value, bool IsRedacted, string? RedactionReason, Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor! Type, System.DateTimeOffset CapturedAt) -> void
+static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator !=(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? left, Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? right) -> bool
+static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator ==(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? left, Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? right) -> bool
+Elsa.Workflows.Runtime.Core.Constants.RuntimeIncidentFailureTypes
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeIncidentFailureTypes.SchedulerWorkPoisoned = "SchedulerWorkPoisoned" -> string!
+const Elsa.Workflows.Runtime.Core.Models.RuntimeOutputCapture.WorkflowVariableValueIdPrefix = "variable:" -> string!
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>.FencedClaimLease(Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim!>! renew, System.TimeSpan visibilityTimeout, System.TimeProvider! timeProvider) -> void
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>.RunAsync<TResult>(TClaim! claim, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<TResult>>! sideEffect, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim!, TResult>!>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>.RunRenewingAsync<TResult>(TClaim! claim, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<TResult>>! sideEffect, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim!, TResult>!>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.Claim.get -> TClaim!
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.ClaimLost.get -> bool
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.Exception.get -> System.Exception?
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.Result.get -> TResult?
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.Status.get -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.Completed = 0 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.Faulted = 1 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.LostBeforeSideEffect = 2 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.LostDuringSideEffect = 3 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke(TClaim! claim, System.DateTimeOffset now, System.TimeSpan visibilityTimeout, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TClaim?>
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.SavedStimulusStartOrigin = "runtime.savedStimulusStart" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.StandaloneIngressOrigin = "runtime.ingress.origin.v1" -> string!
+Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId
+static Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId.EnsureNotWritten(System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.ExecutionLivenessState!>!>! changes) -> void
+static Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId.For(string! workflowExecutionId) -> string!

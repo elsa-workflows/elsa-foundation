@@ -166,6 +166,9 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("datetime");
+
                     b.Property<string>("RecommendedVersionIdIdentityHash")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
@@ -700,6 +703,9 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetime");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
                         .HasColumnType("datetime");
 
                     b.Property<string>("ValidFromKey")

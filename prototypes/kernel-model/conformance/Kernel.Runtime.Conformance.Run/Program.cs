@@ -6,4 +6,16 @@ using InMemoryProvider = Kernel.Store.Conformance.InMemoryProvider;
 //   dotnet ... semantic-broken
 //   dotnet ... stress 20 2000
 //   dotnet ... stress-broken 10 1000
+if (args is ["scope-rounds"]) return await ScopeRoundChecks.RunAsync();
+if (args is ["set-gain"]) return await SetGainChecks.RunAsync();
+if (args is ["set-release"]) return await SetReleaseChecks.RunAsync();
+if (args is ["contracts"]) return ContractBoundaryCheck.Run();
+if (args.Contains("semantic", StringComparer.Ordinal) && ContractBoundaryCheck.Run() != 0) return 1;
+if (args.Contains("semantic", StringComparer.Ordinal) && await WorkflowActorChecks.RunAsync() != 0) return 1;
+if (args.Contains("semantic", StringComparer.Ordinal) && await LoopYieldCheck.RunAsync() != 0) return 1;
+if (args.Contains("semantic", StringComparer.Ordinal) && await ScopeRoundChecks.RunAsync() != 0) return 1;
+if (args.Contains("semantic", StringComparer.Ordinal) && await SetGainChecks.RunAsync() != 0) return 1;
+if (args.Contains("semantic", StringComparer.Ordinal) && await SetReleaseChecks.RunAsync() != 0) return 1;
+if (args.Contains("semantic", StringComparer.Ordinal) && await FixedHostHeartbeatCheck.RunAsync() != 0) return 1;
+if (args.Contains("semantic", StringComparer.Ordinal) && await WatchdogChecks.RunAsync() != 0) return 1;
 return await Cli.RunAsync(new BuiltInProvider(), new InMemoryProvider(), args);

@@ -27,7 +27,7 @@
 .extension-builder-metadata dt {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 600);
 }
 
 .extension-builder-metadata dd {
@@ -47,7 +47,7 @@
 
 .extension-builder-inspector-section h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--studio-body-size);
 }
 
 .extension-builder-manifest-code {
@@ -58,7 +58,7 @@
   background: var(--studio-bg);
   color: var(--studio-text);
   font-family: var(--studio-font-mono);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   line-height: 1.45;
   margin: 0;
   padding: 10px;
@@ -87,7 +87,7 @@
 .extension-builder-contribution-row code {
   color: var(--studio-text-muted);
   font-family: var(--studio-font-mono);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .extension-builder-diagnostic-row {
@@ -172,7 +172,7 @@
   align-items: center;
   gap: 7px;
   font-size: var(--studio-label-size);
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 600);
   color: var(--studio-text-muted);
   cursor: pointer;
   user-select: none;
@@ -202,7 +202,7 @@
 .extension-builder-solution-picker span {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 600);
 }
 
 .extension-builder-solution-picker select {
@@ -253,7 +253,7 @@
   min-width: 0;
   overflow: hidden;
   font-family: var(--studio-font-mono);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -311,7 +311,7 @@
   background: transparent;
   color: var(--studio-text-muted);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   line-height: 1;
 }
 
@@ -349,7 +349,7 @@
   background: var(--studio-bg);
   color: var(--studio-text);
   font-family: var(--studio-font-mono);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   line-height: 1.55;
   letter-spacing: 0;
 }
@@ -387,7 +387,7 @@
 
 .extension-builder-code-panel .studio-code-editor-diagnostic span {
   font-family: var(--studio-font-mono);
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 600);
 }
 
 .extension-builder-code-panel .studio-code-editor-diagnostic small {
@@ -421,7 +421,7 @@
 
 .extension-builder-editor-status code {
   font-family: var(--studio-font-mono);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .extension-builder-inline-diagnostics {
@@ -485,7 +485,7 @@
   min-width: 0;
   overflow: hidden;
   font-family: var(--studio-font-mono);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -510,7 +510,7 @@
   background: var(--studio-bg);
   color: var(--studio-text);
   font-family: var(--studio-font-mono);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   line-height: 1.5;
   padding: 10px;
   white-space: pre;
@@ -576,15 +576,15 @@
 
 .extension-builder-stat strong {
   color: var(--studio-text);
-  font-size: 22px;
-  font-weight: 720;
+  font-size: var(--studio-page-title-size);
+  font-weight: var(--studio-title-weight, 600);
   line-height: 1;
 }
 
 .extension-builder-stat span {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
-  font-weight: 650;
+  font-weight: var(--studio-title-weight, 600);
 }
 
 .extension-builder-create-bar {
@@ -612,7 +612,7 @@
   gap: 7px;
   margin: 0;
   font-size: var(--studio-body-size);
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 600);
 }
 
 .extension-builder-create-fields {
@@ -640,9 +640,8 @@
   margin: 4px 0 0;
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
-  font-weight: 800;
+  font-weight: var(--studio-title-weight, 600);
   letter-spacing: .05em;
-  text-transform: uppercase;
 }
 
 .extension-builder-empty {
@@ -702,7 +701,7 @@
 
 .extension-builder-solution-card h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--studio-body-size);
   line-height: 1.25;
 }
 
@@ -791,7 +790,7 @@
   color: var(--studio-accent);
   cursor: pointer;
   font-size: var(--studio-body-size);
-  font-weight: 650;
+  font-weight: var(--studio-title-weight, 600);
   padding: 5px 8px 5px 5px;
 }
 
@@ -802,13 +801,13 @@
 .extension-builder-crumb {
   min-width: 0;
   overflow: hidden;
-  font-size: 14px;
+  font-size: var(--studio-body-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .extension-builder-crumb strong {
-  font-weight: 720;
+  font-weight: var(--studio-title-weight, 600);
 }
 
 .extension-builder-ide {
@@ -834,9 +833,8 @@
   padding: 9px 12px;
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
-  font-weight: 800;
+  font-weight: var(--studio-title-weight, 600);
   letter-spacing: .05em;
-  text-transform: uppercase;
 }
 
 .extension-builder-explorer-scroll {
@@ -852,7 +850,7 @@
 .extension-builder-explorer-label {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 600);
 }
 
 .extension-builder-project-switch {
@@ -891,7 +889,7 @@
   place-items: center;
   width: 16px;
   color: var(--studio-text-muted);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
 }
 
 .extension-builder-file-actions {
@@ -919,18 +917,6 @@
   padding-top: 9px;
 }
 
-.extension-builder-explorer-details > summary {
-  color: var(--studio-text-muted);
-  cursor: pointer;
-  font-size: var(--studio-label-size);
-  font-weight: 800;
-  list-style-position: inside;
-}
-
-.extension-builder-explorer-details > summary:hover {
-  color: var(--studio-accent);
-}
-
 .extension-builder-explorer-details label {
   display: grid;
   gap: 4px;
@@ -939,7 +925,7 @@
 .extension-builder-explorer-details label span {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 600);
 }
 
 .extension-builder-explorer-details input,
@@ -1009,42 +995,6 @@
   border-bottom: 1px solid var(--studio-border);
 }
 
-.extension-builder-dock-tabs > button[role="tab"] {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-radius: var(--studio-radius-sm);
-  background: transparent;
-  color: var(--studio-text-muted);
-  cursor: pointer;
-  font-size: var(--studio-label-size);
-  font-weight: 700;
-  padding: 5px 10px;
-}
-
-.extension-builder-dock-tabs > button[role="tab"]:hover {
-  color: var(--studio-text);
-}
-
-.extension-builder-dock-tabs > button[role="tab"].active {
-  background: var(--studio-surface-muted);
-  color: var(--studio-text);
-}
-
-.extension-builder-dock-badge {
-  border-radius: 999px;
-  background: var(--studio-surface-muted);
-  padding: 0 6px;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.extension-builder-dock-badge.warn {
-  background: color-mix(in srgb, var(--studio-warning) 22%, var(--studio-surface));
-  color: var(--studio-warning);
-}
-
 .extension-builder-dock-spacer {
   flex: 1;
 }
@@ -1056,12 +1006,41 @@
   padding: 12px 14px;
 }
 
+@media (max-width: 640px) {
+  .extension-builder-page-workspace {
+    height: auto;
+  }
+
+  .extension-builder-shell {
+    grid-template-rows: auto auto auto;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .extension-builder-commandbar,
+  .extension-builder-commandbar-right,
+  .extension-builder-dock-tabs {
+    flex-wrap: wrap;
+  }
+
+  .extension-builder-ide {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: clamp(8rem, 22dvh, 12rem) clamp(12rem, 32dvh, 21rem);
+    overflow: auto;
+  }
+
+  .extension-builder-explorer {
+    border-right: 0;
+    border-bottom: 1px solid var(--studio-border);
+  }
+}
+
 .extension-builder-autosave-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: var(--studio-label-size);
-  font-weight: 650;
+  font-weight: var(--studio-title-weight, 600);
   color: var(--studio-text-muted);
   cursor: pointer;
   user-select: none;

@@ -61,6 +61,10 @@ public sealed class BookmarkResumeDispatchRequest
         TestRunDelivery = testRunDelivery;
     }
 
+    /// <summary>In-process native child history responsibility; never serialized and never bookmark authority.</summary>
+    [JsonIgnore]
+    public PostCommitDeliveryContext? ChildHistorySource { get; init; }
+
     /// <summary>Optional captured physical wait condition, enforced atomically on initial consumption.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedRecipient { get; init; }

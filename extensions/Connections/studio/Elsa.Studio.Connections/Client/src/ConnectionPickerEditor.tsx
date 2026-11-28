@@ -1,3 +1,4 @@
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StudioEndpointContext, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
@@ -87,7 +88,7 @@ export function ConnectionPickerEditor({
         {visibleState.status === "error" ? (
           <>
             Connections could not be loaded.{" "}
-            <button type="button" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry</button>
+            <StudioButton onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry</StudioButton>
           </>
         ) : null}
         {unavailable ? "This connection is unavailable." : null}

@@ -469,10 +469,14 @@ class VerdictTests(unittest.TestCase):
         acceptance.configure_dashboard_qualification(settings, shells)
         self.assertFalse(settings['Elsa']['Readiness']['WarmDefaultShell'])
         qualification = settings['Qualification']
-        self.assertEqual(1, len(qualification['Principals']))
+        self.assertEqual(2, len(qualification['Principals']))
         self.assertEqual('default', qualification['Principals'][0]['tenant'])
         profiles = qualification['GrantProfiles']
-        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source'}, set(profiles))
+        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source', 'history-reader', 'history-no-structure'}, set(profiles))
+        self.assertEqual({'workflows/activity-executions:inspect'},
+                         set(profiles['history-reader']) - set(profiles['history-no-structure']))
+        self.assertEqual({'api-capabilities:read', 'workflows/runtime:read'}, set(profiles['history-no-structure']))
+        self.assertEqual('history-reader', qualification['Principals'][1]['username'])
         self.assertEqual({'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'},
                          set(profiles['dashboard-native-reader']) - set(profiles['dashboard-native-no-source']))
         self.assertFalse(any('*' in grant or 'agent' in grant or grant.endswith(':manage') or grant.endswith(':share')
@@ -583,12 +587,16 @@ class VerdictTests(unittest.TestCase):
             request.assert_not_called()
 
     def test_inherited_credentials_and_store_overrides_are_not_forwarded(self):
+        # The Core Preview's switches and store reach a host only through core_preview.py's own composition.
         with patch.dict(os.environ, {'ConnectionStrings__Elsa': 'private', 'OPENAI_API_KEY': 'private', 'PATH': '/bin',
+                                     'ConnectionStrings__KernelCorePreview': 'private', 'Elsa__CorePreview__Enabled': 'true',
+                                     'Elsa__CorePreview__Publications': 'true',
                                      'DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE': 'false',
                                      'DOTNET_USE_POLLING_FILE_WATCHER': '1'}, clear=True):
             env = acceptance.clean_environment()
         self.assertNotIn('OPENAI_API_KEY', env)
         self.assertNotIn('ConnectionStrings__Elsa', env)
+        self.assertFalse([key for key in env if 'CorePreview' in key], 'The ordinary composition must not inherit the Core Preview')
         self.assertEqual('/bin', env['PATH'])
         self.assertEqual('false', env['DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE'])
         self.assertEqual('1', env['DOTNET_USE_POLLING_FILE_WATCHER'])
@@ -647,7 +655,7 @@ class CopyAssetOwnershipTests(unittest.TestCase):
 
 class CompositionTests(unittest.TestCase):
     def setUp(self):
-        self.shells = json.loads((acceptance.ROOT / 'apps/Elsa.Workbench/shells.json').read_text(encoding='utf-8-sig'))
+        self.shells = json.loads((acceptance.ROOT / 'server/apps/Elsa.Workbench.Host/shells.json').read_text(encoding='utf-8-sig'))
         self.features = self.shells['CShells']['Shells']['default']['Features']
 
     def test_subset_lists_name_only_currently_configured_features(self):
@@ -661,7 +669,7 @@ class CompositionTests(unittest.TestCase):
         # Design-only is deferred to #4160; only the runtime-only subset is composed.
         self.assertEqual({'runtime-api-subset'}, set(acceptance.SUBSET_COMPOSITIONS))
         self.assertTrue({'WorkflowsDesignApi', 'ActivitiesDesignApi', 'ConnectionsApi', 'SecretsApi'} <= set(acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove']))
-        self.assertNotIn('WorkflowsRuntimeApi', acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove'])
+        self.assertNotIn('WorkflowsRuntimeKernelRetainedApi', acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove'])
         # The ordinary admin seed that every other journey and cleanup signs in with stays committed.
         self.assertEqual('admin', self.features[acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName'])
 
@@ -782,21 +790,21 @@ class OrchestrationTests(unittest.TestCase):
             # These commands are mocked: keep their simulated fixture build entirely in an owned source copy.
             source = Path(temporary) / 'source'
             for relative in (
-                'apps/Elsa.Workbench/appsettings.json',
-                'apps/Elsa.Workbench/shells.json',
-                'Studio/src/apps/Elsa.Studio.Web/appsettings.json',
-                'Studio/src/apps/Elsa.Studio.Web/shells.json',
+                'server/apps/Elsa.Workbench.Host/appsettings.json',
+                'server/apps/Elsa.Workbench.Host/shells.json',
+                'studio/src/apps/Elsa.Studio.Workbench.Host/appsettings.json',
+                'studio/src/apps/Elsa.Studio.Workbench.Host/shells.json',
                 'e2e-tests/activity-data-selection/fixtures/fixture.targets',
                 'e2e-tests/activity-data-selection/fixtures/CustomerFixture.cs',
             ):
                 target = source / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((acceptance.ROOT / relative).read_bytes())
-            workflow_module = source / 'Studio/src/essentials/Elsa.Studio.Workflows'
+            workflow_module = source / 'studio/src/essentials/Elsa.Studio.Workflows'
             for relative in acceptance.COPY_SOURCE_PATHS:
                 target = workflow_module / 'Client/src' / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes((acceptance.ROOT / 'Studio/src/essentials/Elsa.Studio.Workflows/Client/src' / relative).read_bytes())
+                target.write_bytes((acceptance.ROOT / 'studio/src/essentials/Elsa.Studio.Workflows/Client/src' / relative).read_bytes())
             assets = workflow_module / 'wwwroot/studio/modules/workflows'
             assets.mkdir(parents=True)
             (assets / 'copy-current.js').write_bytes(b'synthetic compiled copy module')
@@ -804,15 +812,19 @@ class OrchestrationTests(unittest.TestCase):
                 (assets / f'synthetic-workflow-module-{index:04d}.js').touch()
 
             @contextmanager
-            def fake_host(directory, dll, url, ready, log, env):
+            def fake_host(directory, dll, url, ready, log, env, on_started=None):
                 seed = None
-                if dll == 'Elsa.Workbench.dll':
+                features = {}
+                if dll == 'Elsa.Workbench.Host.dll':
                     shells = json.loads((directory / 'shells.json').read_text())
-                    seed = shells['CShells']['Shells']['default']['Features'][acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName']
-                settings = json.loads((directory / 'appsettings.json').read_text()) if dll == 'Elsa.Workbench.dll' else {}
+                    features = shells['CShells']['Shells']['default']['Features']
+                    seed = features[acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName']
+                settings = json.loads((directory / 'appsettings.json').read_text()) if dll == 'Elsa.Workbench.Host.dll' else {}
                 principals = settings.get('Qualification', {}).get('Principals', [])
-                events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready))
+                events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready, tuple(sorted(item['username'] for item in principals))))
                 process = SimpleNamespace(pid=1000 + len(events), returncode=None)
+                if on_started is not None:
+                    on_started(process)
                 try:
                     yield process
                 finally:
@@ -831,7 +843,7 @@ class OrchestrationTests(unittest.TestCase):
                     }))
                     return
                 if log.name == 'fixture-cleanup-build.log':
-                    dll = source / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+                    dll = source / 'server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
                     dll.parent.mkdir(parents=True, exist_ok=True)
                     dll.write_bytes(b'fixture-free default host')
                     return
@@ -866,10 +878,11 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual({'executed': 1, 'sourceSha': 'abc', 'kind': 'isolated-shared-components', 'portOverrideConfirmed': False}, report['isolatedFieldGallery'])
         starts = [event for event in events if event[0] == 'start']
         seed, owned = starts[0], starts[1:]
-        self.assertEqual(('workbench', 'Elsa.Workbench.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
-        self.assertEqual(('stop', 'workbench', 'Elsa.Workbench.dll'), events[1], 'The seed boot stops before any acceptance host starts')
+        self.assertEqual(('workbench', 'Elsa.Workbench.Host.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
+        self.assertEqual(('stop', 'workbench', 'Elsa.Workbench.Host.dll'), events[1], 'The seed boot stops before any acceptance host starts')
         self.assertEqual(0, seed[7], 'The first-boot seed must not create the Dashboard reader before grant narrowing')
-        self.assertEqual(1, owned[0][7], 'Only the combined acceptance boot creates the independent Dashboard reader')
+        self.assertEqual(2, owned[0][7], 'Combined acceptance has only the independent Dashboard and history readers')
+        self.assertEqual(('dashboard-reader', 'history-reader'), owned[0][9])
         self.assertEqual('/__qualification/ready', owned[0][8])
         self.assertEqual(0, owned[2][7], 'The runtime-only subset does not receive Dashboard qualification principals')
         self.assertEqual(('restrict', 'workbench'), events[2])
@@ -881,6 +894,10 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(owned[2][3], owned[3][6])
         browser = next(event[1] for event in events if event[0] == 'browser')
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
+        expected_processes = {'restrictedSeedBackend', 'backend', 'studio', 'runtime-api-subset-backend', 'runtime-api-subset-studio'}
+        self.assertEqual(expected_processes, set(report['ownedPids']))
+        self.assertEqual(expected_processes, set(report['hostExitCodes']))
+        self.assertTrue(all(code == 0 for code in report['hostExitCodes'].values()))
         self.assertNotIn('UX_DESIGN_STUDIO_URL', browser)
         self.assertEqual(report['ownedRoot'], browser['UX_ACCEPTANCE_OWNED_ROOT'])
         self.assertNotIn('UX_WORKFLOW_ASSET_SHA256S', browser)
@@ -905,7 +922,7 @@ class OrchestrationTests(unittest.TestCase):
             output = Path(temporary) / 'out'
 
             @contextmanager
-            def fake_host(directory, dll, url, ready, log, env):
+            def fake_host(directory, dll, url, ready, log, env, on_started=None):
                 starts.append(directory.name)
                 process = SimpleNamespace(pid=2000 + len(starts), returncode=None)
                 try:
@@ -941,6 +958,8 @@ class OrchestrationTests(unittest.TestCase):
 class ActivityDataCompositionTests(unittest.TestCase):
     def test_defaults_and_explicit_inventory(self):
         self.assertEqual(acceptance.NORMAL_JOURNEYS, acceptance.selected_journeys())
+        with self.assertRaisesRegex(ValueError, 'pinned classic Workbench checkout'):
+            acceptance.selected_journeys(['recorded activity playback transport'])
         for mode in ('minimal', 'default-off'):
             with self.assertRaises(ValueError): acceptance.selected_journeys(None, mode)
         for choices in ([], ['unknown'], ['choose nested activity data'] * 2):
@@ -966,6 +985,17 @@ class ActivityDataCompositionTests(unittest.TestCase):
                 self.assertEqual(({'Keep', 'WorkflowDesignValidations'} if mode == 'minimal' else backend_keys | {'Keep', 'WorkflowDesignValidations'}), set(b))
                 self.assertEqual(({'Keep'} if mode == 'minimal' else studio_keys | {'Keep'}), set(f))
 
+
+    def test_proof_types_are_enabled_only_for_the_typed_collection_journey(self):
+        original = {'CShells': {'Shells': {'default': {'Features': {'Keep': {}}}}}}
+        studio = {'CShells': {'Shells': {'Default': {'Features': {'Keep': {}}}}}}
+        backend = copy.deepcopy(original)
+        acceptance.configure_activity_data(backend, copy.deepcopy(studio), 'normal', {'agent authoring and navigation'})
+        self.assertEqual(original, backend)
+        acceptance.configure_activity_data(backend, copy.deepcopy(studio), 'normal', set(acceptance.PROOF_TYPE_JOURNEYS))
+        self.assertEqual({'Keep', 'ActivityDataSelectionProofTypes'}, set(backend['CShells']['Shells']['default']['Features']))
+        self.assertTrue(acceptance.PROOF_TYPE_JOURNEYS <= acceptance.NORMAL_JOURNEYS)
+        self.assertFalse(acceptance.PROOF_TYPE_JOURNEYS & acceptance.DATA_JOURNEYS)
 
     def test_live_minimal_graph_and_descriptors_are_non_vacuous(self):
         observation = {'features': [
@@ -1006,7 +1036,7 @@ class SourcePairTests(unittest.TestCase):
             state = lambda root: ("frontend-head", " M component.tsx") if root == studio else ("backend-head", "")
             with patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command") as command:
                 with self.assertRaisesRegex(ValueError, "dirty run"):
-                    acceptance.run(output, 'existing home widgets and layout defaults', studio)
+                    acceptance.run(output, 'save template toast', studio)
             command.assert_not_called()
             report = json.loads((output / "report.json").read_text())
             self.assertTrue(report["studioDirty"])
@@ -1018,7 +1048,7 @@ class SourcePairTests(unittest.TestCase):
             output = Path(directory) / "evidence"
             with patch.dict(os.environ, {"UX_PR_HEAD_SHA": "f" * 40}), patch.object(acceptance, "source_state", return_value=("a" * 40, "")), patch.object(acceptance, "command") as command:
                 with self.assertRaisesRegex(ValueError, "PR head"):
-                    acceptance.run(output, 'existing home widgets and layout defaults')
+                    acceptance.run(output, 'save template toast')
             command.assert_not_called()
             self.assertEqual("failed", json.loads((output / "report.json").read_text())["status"])
 
@@ -1028,7 +1058,7 @@ class SourcePairTests(unittest.TestCase):
                 root = Path(directory); output = root / 'evidence'
                 fixture = root / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
                 fixture.parent.mkdir(parents=True); fixture.write_text('test import'); fixture.with_name('CustomerFixture.cs').write_text('test fixture')
-                dll = root / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+                dll = root / 'server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
                 dll.parent.mkdir(parents=True)
                 def command(_args, log, **_kwargs):
                     if log.name == 'backend-build.log': raise RuntimeError('primary build failure')
@@ -1078,11 +1108,11 @@ class SourcePairTests(unittest.TestCase):
             state = lambda root: ("frontend-head", "") if root == studio else ("backend-head", "")
             with patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command", side_effect=command):
                 with self.assertRaisesRegex(RuntimeError, "build selection"):
-                    acceptance.run(output, 'existing home widgets and layout defaults', studio)
-            self.assertEqual(studio / "Studio", calls[1][1])
-            self.assertEqual(studio / "Studio", calls[2][1])
+                    acceptance.run(output, 'save template toast', studio)
+            self.assertEqual(studio / "studio", calls[1][1])
+            self.assertEqual(studio / "studio", calls[2][1])
             self.assertIn("tests/browser/playwright.outlined-fields.config.ts", calls[2][0])
-            self.assertIn(str(studio / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"), calls[3][0])
+            self.assertIn(str(studio / "studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj"), calls[3][0])
             report = json.loads((output / "report.json").read_text())
             self.assertEqual("backend-head", report["sourceSha"])
             self.assertEqual("frontend-head", report["studioSourceSha"])
@@ -1170,7 +1200,7 @@ class ExpressionProofTests(unittest.TestCase):
                 with self.assertRaises(ValueError): acceptance.validate_expression_preservation(wrong_native, broken)
 
     def test_mode_inventory_keeps_all_normal_titles_and_requires_actual_native_controls(self):
-        self.assertEqual(acceptance.JOURNEYS - {'preserve expression data without optional modules'}, acceptance.selected_journeys())
+        self.assertEqual(acceptance.JOURNEYS - acceptance.CLASSIC_JOURNEYS - {'preserve expression data without optional modules'}, acceptance.selected_journeys())
         self.assertTrue(acceptance.EXPRESSION_JOURNEYS <= acceptance.selected_journeys())
         expected = {'choose data for activity outputs', 'insert JavaScript activity data'}
         self.assertEqual(expected, acceptance.selected_journeys(expected, 'default-off'))

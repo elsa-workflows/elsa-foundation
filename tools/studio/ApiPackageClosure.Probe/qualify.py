@@ -119,7 +119,7 @@ def qualify(args):
         else:
             version = args.version
             for package_id in IDS:
-                project = REPO / SUPPORT_PROJECTS.get(package_id, "Studio/src/essentials/" + package_id + "/" + package_id + ".csproj")
+                project = REPO / SUPPORT_PROJECTS.get(package_id, "studio/src/essentials/" + package_id + "/" + package_id + ".csproj")
                 run("pack-" + package_id, ["dotnet", "pack", str(project), "-c", "Release", "-p:Version=" + version, "-o", str(feed)], REPO)
 
         packages = {identity(path)[0]: path for path in feed.glob("*.nupkg")}

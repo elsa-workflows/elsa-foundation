@@ -90,10 +90,9 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
     Worker? other = null;   // the second owner, from the waits on
     async Task Row(string name, Func<Task> body)
     {
-        // Both leases fresh before counting starts: an idle pass beats a third of a lease after the last renewal, and a
-        // row's count should not depend on how long the rows before it took.
-        await owner.BeatAsync();
-        if (other is not null) await other.BeatAsync();
+        // Renew the leases outside the cost measurement.
+        await new NodeHeartbeat(owner.Node, store, [owner], hour.Lease, hour.Lease).BeatAsync();
+        if (other is not null) await new NodeHeartbeat(other.Node, store, [other], hour.Lease, hour.Lease).BeatAsync();
         counter.Reset();
         await body();
         // PostgreSQL: Npgsql sends BEGIN with the first command of the transaction, so a round trip is a command or a COMMIT/ROLLBACK.
@@ -194,21 +193,28 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
     // another node take over; the stalled one wakes up with stale memory and finds out at its next commit.
     var loops = Enumerable.Range(0, nodes).SelectMany(node => Enumerable.Range(0, partitions).Select(partition => Task.Run(async () =>
     {
-        var (random, worker) = (new Random(node * 31 + partition), new Worker("node" + node, partition, store, new WorkflowInstance(Models()), options));
+        var (random, worker) = (new Random(node * 31 + partition), new Worker($"node{node}.p{partition}", partition, store, new WorkflowInstance(Models()), options));
+        var heartbeat = new NodeHeartbeat(worker.Node, store, [worker], options.Lease, options.Lease);
+        long nextHeartbeat = 0;
         while (!stop.IsCancellationRequested)
         {
-            if (!worker.Owns)
+            if (!worker.Owns && worker.Pending.Count == 0)
             {
                 await new DurableHost([worker]).ActivateAsync(worker.Partition);
-                if (!worker.Owns) await Task.Delay(20);
-                continue;
+                if (!worker.Owns)
+                {
+                    await Task.Delay(20);
+                    continue;
+                }
             }
-            await worker.PollAsync();
-            await worker.LoadAsync();
-            await worker.MeetAsync();
-            foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
-            if (worker.NeedsFlush) await worker.FlushAsync();
-            else await worker.BeatAsync();
+            // A Worker with only pending partitions still needs a pass to judge its next heartbeat.
+            await worker.WokenAsync(null);
+            await worker.RunAsync();
+            if (Environment.TickCount64 >= nextHeartbeat)
+            {
+                nextHeartbeat = Environment.TickCount64 + (long)(options.Lease.TotalMilliseconds / 3);
+                await heartbeat.BeatAsync();
+            }
             if (!calm && random.Next(25) == 0)
             {
                 Interlocked.Increment(ref stalls);

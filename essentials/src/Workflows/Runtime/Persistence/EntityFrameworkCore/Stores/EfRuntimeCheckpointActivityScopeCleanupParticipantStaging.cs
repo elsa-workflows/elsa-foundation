@@ -11,6 +11,7 @@ internal static class EfRuntimeCheckpointActivityScopeCleanupParticipantStaging
         RuntimeDbContext context,
         IReadOnlyCollection<ActivityScopeCleanupRequest> cleanups,
         string scope,
+        DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -24,6 +25,9 @@ internal static class EfRuntimeCheckpointActivityScopeCleanupParticipantStaging
         cancellationToken.ThrowIfCancellationRequested();
         if (context.Database.CurrentTransaction is null)
             throw new InvalidOperationException("Activity-scope cleanup requires the caller-owned checkpoint transaction.");
+
+        if (cleanups.Any(cleanup => cleanup.TimerIds.Count > 0) && !EfTimerHistoryOwner.HasWritableTimerModel(context))
+            throw new NotSupportedException("Timer cleanup requires its canonical complete read/write mapping before acknowledging absence.");
 
         var staged = cleanups.Select(cleanup => new StagedCleanup(
                 Identify(cleanup.BookmarkIds, bookmarkId => EfBookmarkStateStore.CreateId(scope, cleanup.WorkflowExecutionId, bookmarkId)),
@@ -42,7 +46,7 @@ internal static class EfRuntimeCheckpointActivityScopeCleanupParticipantStaging
             cancellationToken);
         var timers = await EfRuntimeCheckpointParticipantRows.LoadAsync(
             staged.SelectMany(entry => entry.Timers.Select(resource => resource.RowId)).ToArray(),
-            batch => context.DurableTimers.Where(row => batch.Contains(row.Id)),
+            batch => context.DurableTimers.AsTracking().Where(row => batch.Contains(row.Id)),
             row => row.Id,
             cancellationToken);
         var workItems = await EfRuntimeCheckpointParticipantRows.LoadAsync(
@@ -55,8 +59,14 @@ internal static class EfRuntimeCheckpointActivityScopeCleanupParticipantStaging
         {
             Remove(entry.Bookmarks, bookmarks, context.Bookmarks, cancellationToken,
                 (row, bookmarkId, rowId) => EfBookmarkStateStore.MapChecked(row, scope, entry.WorkflowExecutionId, bookmarkId, rowId));
-            Remove(entry.Timers, timers, context.DurableTimers, cancellationToken,
-                (row, timerId, _) => EfDurableTimerStore.ReadChecked(row, scope, entry.WorkflowExecutionId, timerId));
+            foreach (var (timerId, rowId) in entry.Timers)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (timers.GetValueOrDefault(rowId) is not { } row) continue;
+                var timer = EfDurableTimerStore.ReadChecked(row, scope, entry.WorkflowExecutionId, timerId);
+                EfDurableTimerStore.StageRetirementOrDeletion(context, row, timer,
+                    DurableTimerHistoryFacts.CreateCancelled(timer, occurredAt));
+            }
             Remove(entry.WorkItems, workItems, context.SchedulerWorkItems, cancellationToken,
                 (row, workItemId, _) => EfSchedulerWorkQueueStore.ReadChecked(row, scope, entry.WorkflowExecutionId, workItemId));
         }

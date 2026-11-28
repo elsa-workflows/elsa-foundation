@@ -61,7 +61,7 @@ afterEach(() => {
 describe("entered secret visibility", () => {
   it("explicitly associates the create description label with its textarea", () => {
     const { container } = renderDialog("create");
-    const description = container.querySelector<HTMLTextAreaElement>(".secrets-modal textarea")!;
+    const description = container.querySelector<HTMLTextAreaElement>("[role=dialog] textarea")!;
     expect(description.id).toBeTruthy();
     expect(description.labels?.[0]?.htmlFor).toBe(description.id);
     expect(description.labels?.[0]?.textContent).toBe("Description");
@@ -288,7 +288,7 @@ describe("Create dialog regression contract", () => {
     expect(fieldControl<HTMLInputElement>(dialog, "Value").value).toBe("authored-value");
     selectOption(fieldControl<HTMLSelectElement>(dialog, "Store"), "Configuration");
     expect(fieldControl<HTMLInputElement>(dialog, "Configuration key").value).toBe(" Auth:Payments ");
-    flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    flushSync(() => (dialog.matches("form") ? dialog : dialog.querySelector("form"))!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 
     expect(onSave).toHaveBeenCalledWith({
       name: "test-key",
@@ -337,7 +337,7 @@ describe("Create dialog regression contract", () => {
     change(fieldControl<HTMLInputElement>(dialog, "Value"), "  raw-source-value  ");
     const localExpiry = "2030-01-02T03:04";
     change(fieldControl<HTMLInputElement>(dialog, "Expires"), localExpiry);
-    flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    flushSync(() => (dialog.matches("form") ? dialog : dialog.querySelector("form"))!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 
     expect(onSave).toHaveBeenCalledWith({
       name: "PAYMENTS.Api",
@@ -382,7 +382,7 @@ describe("Create dialog regression contract", () => {
     expect(fieldControl<HTMLInputElement>(container, "Value").value).toBe("material");
   });
 
-  it.each(["create", "rotate"] as const)("focuses, contains, and restores focus for %s", mode => {
+  it.each(["create", "rotate"] as const)("focuses, contains, and restores focus for %s", async mode => {
     const { container, opener } = renderDialogWithTrigger(mode);
     flushSync(() => {
       opener.focus();
@@ -394,12 +394,12 @@ describe("Create dialog regression contract", () => {
     expect(document.activeElement).toBe(dialog.querySelector("[data-dialog-initial-focus]") ?? focusable[0]);
 
     focusable[0].focus();
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
     expect(document.activeElement).toBe(focusable.at(-1));
 
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(container.querySelector("[role='dialog']")).toBeNull();
-    expect(document.activeElement).toBe(opener);
+    await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
   it.each(["create", "rotate"] as const)("does not dismiss %s while saving", async mode => {
@@ -421,11 +421,11 @@ describe("Create dialog regression contract", () => {
     expect(cancel.disabled).toBe(true);
     flushSync(() => cancel.click());
     expect(container.querySelector("[role='dialog']")).toBe(dialog);
-    flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    flushSync(() => (dialog.matches("form") ? dialog : dialog.querySelector("form"))!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(onSave).toHaveBeenCalledTimes(1);
 
     const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
-    window.dispatchEvent(escape);
+    document.activeElement?.dispatchEvent(escape);
     expect(escape.defaultPrevented).toBe(true);
     expect(container.querySelector("[role='dialog']")).toBe(dialog);
 
@@ -454,7 +454,7 @@ describe("Create dialog regression contract", () => {
     const value = dialog.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!;
     change(technicalName, "preserved.secret");
     change(value, "preserved-secret-value");
-    flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    flushSync(() => (dialog.matches("form") ? dialog : dialog.querySelector("form"))!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(dialog.querySelector("[role='alert']")).not.toBeNull());
@@ -497,8 +497,8 @@ function renderDialog(mode: DialogMode, options: DialogRenderOptions = {}) {
   };
   cleanup.add(() => { flushSync(() => root.unmount()); container.remove(); });
   render(mode);
-  if (mode === "create") change(fieldControl<HTMLInputElement>(container, "Technical name"), "test-key");
-  return { container, onSave, render };
+  if (mode === "create") change(fieldControl<HTMLInputElement>(document.body, "Technical name"), "test-key");
+  return { container: document.body, onSave, render };
 }
 
 function renderDialogWithTrigger(mode: "create" | "rotate", onSave: (request: SecretSaveRequest) => Promise<void> = vi.fn(async () => undefined)) {
@@ -508,7 +508,7 @@ function renderDialogWithTrigger(mode: "create" | "rotate", onSave: (request: Se
   flushSync(() => root.render(<DialogHarness mode={mode} onSave={onSave} />));
   cleanup.add(() => { flushSync(() => root.unmount()); container.remove(); });
   const opener = container.querySelector<HTMLButtonElement>("button")!;
-  return { container, opener };
+  return { container: document.body, opener };
 }
 
 function DialogHarness({ mode, onSave }: { mode: "create" | "rotate"; onSave(request: SecretSaveRequest): Promise<void> }) {

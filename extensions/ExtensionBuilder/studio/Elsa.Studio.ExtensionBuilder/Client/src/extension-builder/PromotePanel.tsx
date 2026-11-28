@@ -23,7 +23,7 @@ export function PromotePanel({
   onPromote(): void;
 }) {
   const promoteReason = !capabilities.canPromote
-    ? "Requires canPromote"
+    ? "Promoting a package requires promotion permission"
     : !isBuildSucceeded(activeBuild)
       ? "A succeeded build is required"
       : !artifact

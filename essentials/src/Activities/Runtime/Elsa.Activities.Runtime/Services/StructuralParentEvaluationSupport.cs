@@ -410,7 +410,7 @@ internal static class StructuralParentEvaluationSupport
             (source.HistorySourceFacts ?? []).Concat(CancellationIncidentFacts(subtreeCancellations))
                 .Concat((incidentChanges ?? []).Select(incident => RuntimeHistoryIncidentFacts.DecisionApplied(incident))), cancellationToken);
         if (childControlContribution is not null)
-            commit = childControlContribution.Apply(commit);
+            commit = await childControlContribution.ApplyAsync(commit, checkpointCommitter, cancellationToken);
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
@@ -534,7 +534,7 @@ internal static class StructuralParentEvaluationSupport
 
         commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () => (source.HistorySourceFacts ?? []).Concat(CancellationIncidentFacts(subtreeCancellations)), cancellationToken);
         if (childControlContribution is not null)
-            commit = childControlContribution.Apply(commit);
+            commit = await childControlContribution.ApplyAsync(commit, checkpointCommitter, cancellationToken);
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 

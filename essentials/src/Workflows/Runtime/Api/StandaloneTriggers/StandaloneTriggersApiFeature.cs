@@ -5,6 +5,7 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Foundation.Identity.Extensions;
+using Elsa.Tasks.Core;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -37,6 +38,7 @@ public class StandaloneTriggersApiFeature : IWebShellFeature, IPostConfigureShel
         services.TryAddScoped<ITriggerManagementCommitter, AuthoringTriggerCommitter>();
         services.TryAddScoped<TriggerManagement>();
         services.TryAddScoped<TriggerDeliveryOperations>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateTriggerOutcomeProjectors>());
         services.AddPermissionContributor<TriggerPermissionContributor>();
         services.AddApiCapabilitySource<StandaloneTriggerCapabilitySource>();
     }

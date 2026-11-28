@@ -32,7 +32,7 @@ python3 tools/studio/Composition.Probe/prepare_weaver_studio.py --output /absolu
 
 This command writes source and hash evidence only. It does not build or start a host. The M1 fixture has source project references and explicitly records `independentPackageWitness: false`; #3438 must separately establish real package consumption before contract freeze.
 
-After the owning delivery run starts fresh Studio/backend processes with the public composition APIs and supplies a seeded workflow, run the browser observations against their explicit URLs:
+After the owning delivery run starts fresh studio/backend processes with the public composition APIs and supplies a seeded workflow, run the browser observations against their explicit URLs:
 
 ```sh
 ELSA_WEAVER_OWNED_URL=http://127.0.0.1:owned-studio-port \
@@ -41,7 +41,7 @@ ELSA_WEAVER_OWNED_AUTH_STATE=/absolute/private/fresh-normal-login-storage-state.
 ELSA_WEAVER_OWNED_ARTIFACTS=/absolute/private/owned-browser-results \
 ELSA_WEAVER_WORKFLOW_ID=owned-definition-id \
 ELSA_WEAVER_ACTIVITY_ID=owned-node-id \
-pnpm --dir Studio exec playwright test --config tests/browser/playwright.weaver-composed.config.ts
+pnpm --dir studio exec playwright test --config tests/browser/playwright.weaver-composed.config.ts
 ```
 
 The dedicated suite starts no host, uses no mocked network routes, and rejects the known developer ports. It observes native working state/undo without implicit persistence, and the unrelated note's actual file-backed revision/value/write count, including duplicate execution. Its results are deterministic composed-host evidence; they are separate from provider-protocol tests and any opt-in live-provider qualification.

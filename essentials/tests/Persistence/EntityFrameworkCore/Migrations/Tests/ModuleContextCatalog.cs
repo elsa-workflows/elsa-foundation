@@ -14,7 +14,6 @@ using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -43,7 +42,6 @@ internal static class ModuleContextCatalog
         typeof(StudioPreferencesDbContext).Assembly,
         typeof(WorkflowsDesignDbContext).Assembly,
         typeof(PublishingSnapshotReviewDbContext).Assembly,
-        typeof(ExecutionPlacementDbContext).Assembly,
         typeof(RuntimeDbContext).Assembly,
         typeof(Elsa3ImportDbContext).Assembly
     ];

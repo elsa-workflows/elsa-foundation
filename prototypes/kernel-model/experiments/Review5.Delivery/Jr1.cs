@@ -102,8 +102,9 @@ sealed class Jr1(string variant, JrRules rules)
         _effectKey = Json.Read<BackgroundArgs>(_arguments).EffectKey!;
         _builtTicket = Real.Ticket(Self.Id, _jobKey, 1);
         _ticket = TicketKey(Generation);
-        var ticket = new Message(_ticket.Id, Self, Kinds.Job, Json.Write(new JobTicketPayload(NativeModel.ModelKey, _jobKey, _arguments)), Self.Id,
-            TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope);
+        var ticket = ModeledTicket.Issue(new Message(_ticket.Id, Self, Kinds.Job,
+            Json.Write(new JobTicketPayload(NativeModel.ModelKey, _jobKey, _arguments)), Self.Id,
+            TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope));
         _row = new InstanceRow(Self.Id, NativeModel.ModelKey, "job", InstanceStatus.Running, Json.Write(start.State), 1, null,
             Jobs: DurableKeyJson.WriteKeys([_jobKey]), Creation: 1, StartIntent: "harness-intent");
         await Commit(new TurnCommit(Self.Id, _row, null, [], [], [ticket], [], [], null));
@@ -323,8 +324,8 @@ sealed class Jr1(string variant, JrRules rules)
             var resultRow = _store.Messages.GetValueOrDefault(resultKey);
             if (ProbesResult && resultRow is { Done: false }) { _report.Line($"recover: lookup {job}: ticket done or absent, result row {resultKey.Id} pending; it stays, no restart"); continue; }
             if (ProbesResult && resultRow is not null && _keptBy.GetValueOrDefault(resultKey) == "Arrived") { _report.Line($"recover: lookup {job}: ticket done or absent, result row {resultKey.Id} kept Arrived; its page restores it, no restart"); continue; }
-            var restartedRow = new Message(TicketKey(current + 1).Id, Self, Kinds.Job,
-                Json.Write(new JobTicketPayload(NativeModel.ModelKey, job, _arguments)), Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope);
+            var restartedRow = ModeledTicket.Issue(new Message(TicketKey(current + 1).Id, Self, Kinds.Job,
+                Json.Write(new JobTicketPayload(NativeModel.ModelKey, job, _arguments)), Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope));
             await Commit(new TurnCommit(Self.Id, null, null, [], [], [restartedRow], [], [], null));
             _registry[job] = current + 1;
             _restartedId = restartedRow.Id;
@@ -337,8 +338,8 @@ sealed class Jr1(string variant, JrRules rules)
             if (reason != "Arrived" || !_store.Messages.TryGetValue(key, out var row) || row.Message.Kind != Kinds.Job || !KeepsUndoneTicket) continue;
             var (job, generation) = JobOf(row.Message);
             if (!_registry.TryGetValue(job, out var current) || generation != current) continue;
-            var restarted = new Message(TicketKey(current + 1).Id, Self, Kinds.Job,
-                Json.Write(new JobTicketPayload(NativeModel.ModelKey, job, _arguments)), Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope);
+            var restarted = ModeledTicket.Issue(new Message(TicketKey(current + 1).Id, Self, Kinds.Job,
+                Json.Write(new JobTicketPayload(NativeModel.ModelKey, job, _arguments)), Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_ticket.Scope));
             await Commit(new TurnCommit(Self.Id, null, null, [], [], [restarted], [], [], null));
             _registry[job] = current + 1;
             _restartedId = restarted.Id;

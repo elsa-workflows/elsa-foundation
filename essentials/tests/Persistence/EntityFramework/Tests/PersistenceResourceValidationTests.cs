@@ -9,8 +9,8 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 
 public sealed class PersistenceResourceValidationTests
 {
-    private const string Aggregate = "WorkflowsRuntimeEntityFrameworkCore";
-    private const string Execution = "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence";
+    private const string Aggregate = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+    private const string Execution = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
 
     [Fact]
     public void Mixed_shared_context_with_opaque_legacy_configurator_refuses_before_materialization()
@@ -68,8 +68,8 @@ public sealed class PersistenceResourceValidationTests
         bool opaqueExecution = false) =>
         new(new ShellId("default"), configuration, [Aggregate, Execution], [], [],
             [
-                new ShellFeaturePreparationDescriptor(Aggregate, [], typeof(RuntimeEntityFrameworkCoreFeature), false),
-                new ShellFeaturePreparationDescriptor(Execution, [], typeof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature), opaqueExecution)
+                new ShellFeaturePreparationDescriptor(Aggregate, [], typeof(RuntimeArtifactsEntityFrameworkCoreFeature), false),
+                new ShellFeaturePreparationDescriptor(Execution, [], typeof(RuntimeWorkflowTestScopeEntityFrameworkCoreFeature), opaqueExecution)
             ],
             [Aggregate, Execution], [], []);
 }

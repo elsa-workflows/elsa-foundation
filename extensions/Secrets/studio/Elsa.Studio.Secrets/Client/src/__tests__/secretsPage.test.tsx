@@ -24,9 +24,9 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
 
     const header = container.querySelector<HTMLElement>(".studio-page-header")!;
-    const create = header.querySelector<HTMLButtonElement>("button[aria-label='Create secret']");
+    const create = header.querySelector<HTMLButtonElement>("button[aria-label='New secret']");
     expect(create).not.toBeNull();
-    expect(create?.textContent).toContain("Create secret");
+    expect(create?.textContent).toContain("New secret");
     expect(create?.getAttribute("data-variant")).toBe("primary");
     expect(header.querySelectorAll("button[data-variant='primary']")).toHaveLength(1);
   });
@@ -35,9 +35,9 @@ describe("secrets page", () => {
     const { container } = render();
     await waitForText(container, "Payments API");
 
-    const row = container.querySelector<HTMLButtonElement>("button[aria-label='Edit payments.api']")?.closest("tr");
+    const row = container.querySelector<HTMLButtonElement>("a[data-secret-open='payments.api']")?.closest("tr");
     expect(row).not.toBeNull();
-    expect(row?.querySelector("button[aria-label='Edit payments.api']")).not.toBeNull();
+    expect(row?.querySelector("a[data-secret-open='payments.api']")).not.toBeNull();
     expect(row?.querySelector("button[aria-label='Rotate payments.api']")).toBeNull();
 
     const trigger = row?.querySelector<HTMLButtonElement>("button[aria-label='Actions for payments.api']");
@@ -92,7 +92,7 @@ describe("secrets page", () => {
     clickButton(container, "Cancel");
     await waitForText(container, "Payments API");
     expect(container.querySelector(".secrets-editor-page")).toBeNull();
-    await waitFor(() => document.activeElement?.getAttribute("data-secret-edit") === "payments.api");
+    await waitFor(() => document.activeElement?.getAttribute("data-secret-open") === "payments.api");
     expect(putJson).not.toHaveBeenCalled();
     await openEditor(container);
     expect(container.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value).toBe("Payments API");
@@ -106,7 +106,7 @@ describe("secrets page", () => {
     expect(document.activeElement?.textContent).toBe("Storage & lifetime");
     expect(container.querySelector("[role=tab][aria-selected=true]")?.textContent).toBe("Storage & lifetime");
     clickButton(container, "Cancel"); await waitForText(container, "Payments API");
-    await waitFor(() => document.activeElement?.getAttribute("data-secret-edit") === "payments.api");
+    await waitFor(() => document.activeElement?.getAttribute("data-secret-open") === "payments.api");
   });
 
   it("saves metadata and returns to the updated list", async () => {
@@ -119,11 +119,11 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
     await openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector(".secrets-editor-page")).toBeNull();
     await waitFor(() => container.querySelector("table")?.textContent?.includes("Updated payments") === true);
-    await waitFor(() => document.activeElement?.getAttribute("data-secret-edit") === "payments.api");
+    await waitFor(() => document.activeElement?.getAttribute("data-secret-open") === "payments.api");
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Updated payments", description: "Token for payment provider" });
   });
 
@@ -150,12 +150,12 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
     await openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Pending save"));
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => putJson.mock.calls.length === 1);
     const editor = container.querySelector<HTMLElement>(".secrets-editor-page")!;
     flushSync(() => editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(container.querySelector(".secrets-editor-page")).toBe(editor);
-    await waitFor(() => [...editor.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.includes("Back to secrets"))?.disabled === true);
+    await waitFor(() => [...editor.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.includes("Secrets"))?.disabled === true);
     finishSave(paymentSecret());
     await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector(".secrets-editor-page")).toBeNull();
@@ -167,13 +167,13 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
     await openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Retry payments"));
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitForText(container, "Metadata save unavailable.");
     const editor = container.querySelector<HTMLElement>(".secrets-editor-page")!;
     expect(editor).not.toBeNull();
     expect(editor.querySelector("[role=alert]")?.textContent).toContain("Metadata save unavailable.");
     expect(editor.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value).toBe("Retry payments");
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector(".secrets-editor-page")).toBeNull();
     expect(putJson).toHaveBeenCalledTimes(2);
@@ -187,13 +187,13 @@ describe("secrets page", () => {
     await clickSecretAction(container, "payments.api", "Test");
     await waitFor(() => notifications.notify.mock.calls.length === 1);
     expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Secret test succeeded.", message: "(resolved): Secret resolved successfully." });
-    expect(container.querySelector(".secrets-notification")).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
     await clickSecretAction(container, "payments.api", "Test");
     await waitForText(container, "Test failed (unavailable): Provider unavailable.");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Provider unavailable.");
     expect(notifications.notify).toHaveBeenCalledTimes(1);
     flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Dismiss error"]')!.click());
-    expect(container.querySelector(".secrets-notification")).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   it("does not toast a test result from an obsolete backend context", async () => {
@@ -225,12 +225,12 @@ describe("secrets page", () => {
     await waitFor(() => postJson.mock.calls.length === 1);
     holdList = true;
     setVisible(false); setVisible(true);
-    await waitForText(container, "Loading secrets…");
+    await waitFor(() => Boolean(container.querySelector('[aria-label="Loading secrets"][aria-busy="true"]')));
     finish({ succeeded: true, code: "resolved" }); await work; await Promise.resolve();
     expect(notifications.notify).not.toHaveBeenCalled();
     finishList([paymentSecret({ status: action === "Revoke" ? "Revoked" : "Active" })]);
     await waitFor(() => !container.textContent?.includes("Loading secrets…") && container.querySelector('[data-secret-open="payments.api"]') !== null);
-    if (action === "Revoke") await waitFor(() => container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    if (action === "Revoke") await waitFor(() => container.querySelector(".studio-status-chip")?.textContent === "Revoked");
     await clickSecretAction(container, "payments.api", "Test");
     await waitFor(() => notifications.notify.mock.calls.length === 1);
     expect(postJson).toHaveBeenCalledTimes(2);
@@ -249,7 +249,7 @@ describe("secrets page", () => {
     await waitFor(() => listRequests.length > before && container.querySelector("tr td") !== null);
     expect(revoked).toBe(false);
     finish();
-    if (outcome === "success") await waitFor(() => container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    if (outcome === "success") await waitFor(() => container.querySelector(".studio-status-chip")?.textContent === "Revoked");
     else await waitForText(container, "Revoke refused.");
     if (outcome === "success") expect(listRequests.length).toBeGreaterThan(before + 1);
     expect(notifications.notify).not.toHaveBeenCalled();
@@ -273,7 +273,7 @@ describe("secrets page", () => {
     view.setVisible(true);
     await waitFor(() => action === "Delete"
       ? view.container.querySelector('[data-secret-open="payments.api"]') === null && view.container.textContent?.includes("No secrets yet") === true
-      : view.container.querySelector(".secrets-badge")?.textContent === "Revoked");
+      : view.container.querySelector(".studio-status-chip")?.textContent === "Revoked");
     expect(mutation).toHaveBeenCalledTimes(1);
     expect(notifications.notify).not.toHaveBeenCalled();
     view.unmount();
@@ -312,15 +312,15 @@ describe("secrets page", () => {
     await waitForText(container, "No secrets yet");
     expect(container.querySelector(".secrets-detail")).toBeNull();
     expect(container.textContent).not.toContain("Select a secret.");
-    clickButton(container, "Create secret");
-    await waitFor(() => !!container.querySelector(".secrets-editor-page[aria-label='Create secret']"));
+    clickButton(container, "New secret");
+    await waitFor(() => !!container.querySelector(".secrets-create-shell[role=dialog]"));
   });
 
   it("retains the standalone create form across option failure and retries in place", async () => {
     let calls = 0;
     const descriptors = { types: [{ name: "text", displayName: "Text", supportedStoreNames: ["encrypted"] }], stores: [{ name: "encrypted", displayName: "Encrypted", isReadOnly: false }], scopes: [] };
     const { container } = render({ getDescriptors: () => { if (++calls === 3) throw new Error("private-options-error"); return descriptors; } });
-    await waitForText(container, "Payments API"); clickButton(container, "Create secret");
+    await waitForText(container, "Payments API"); clickButton(container, "New secret");
     await waitFor(() => container.querySelector(".secrets-create-form") !== null);
     const name = container.querySelector<HTMLInputElement>('[data-secret-field="name"]')!;
     const value = container.querySelector<HTMLInputElement>('[data-secret-field="value"]')!;
@@ -354,10 +354,10 @@ describe("secrets page", () => {
 
     endpoint = "new";
     changeEndpoint("/new-endpoint");
-    await waitFor(() => !container.querySelector<HTMLButtonElement>(".studio-page-actions button[aria-label='Create secret']")?.disabled);
-    clickButton(container, "Create secret");
-    await waitFor(() => !!container.querySelector(".secrets-editor-page[aria-label='Create secret'] select[id^='scope-select-']"));
-    const scopeSelect = container.querySelector<HTMLSelectElement>(".secrets-editor-page[aria-label='Create secret'] select[id^='scope-select-']")!;
+    await waitFor(() => !container.querySelector<HTMLButtonElement>(".studio-page-actions button[aria-label='New secret']")?.disabled);
+    clickButton(container, "New secret");
+    await waitFor(() => !!container.querySelector(".secrets-create-shell[role=dialog] select[id^='scope-select-']"));
+    const scopeSelect = container.querySelector<HTMLSelectElement>(".secrets-create-shell[role=dialog] select[id^='scope-select-']")!;
     await waitFor(() => [...scopeSelect.options].some(option => option.value === "module.current"));
 
     finishObsolete(new Error("old endpoint failed"));
@@ -415,17 +415,14 @@ describe("secrets page", () => {
 
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
     change(search, "confirmed-query");
-    clickButton(container, "Search");
     await waitFor(() => Boolean(container.querySelector(".secrets-count")?.textContent?.includes("for “confirmed-query”")));
-    const acceptedCount = container.querySelector(".secrets-count")?.textContent;
-    change(container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!, "unsubmitted-name");
-    expect(container.querySelector(".secrets-count")?.textContent).toBe(acceptedCount);
-    expect(container.querySelector(".secrets-count")?.textContent).not.toContain("unsubmitted-name");
+    change(search, "latest-name");
+    await waitForText(container, "for “latest-name”");
 
     const scope = [...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")]
       .find(select => select.labels?.[0]?.textContent === "Scope")!;
     selectValue(scope, "scope.1");
-    expect(container.querySelector(".secrets-count")?.textContent).toContain("1 shown · 100 loaded · 101 results for “confirmed-query”");
+    expect(container.querySelector(".secrets-count")?.textContent).toContain("1 shown · 100 loaded · 101 results for “latest-name”");
   });
 
   it("keeps a selected scope visible when a later search returns a different scope", async () => {
@@ -446,7 +443,6 @@ describe("secrets page", () => {
     selectValue(scope, "scope.1");
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
     change(search, laterSecret.name);
-    clickButton(container, "Search");
 
     await waitFor(() => container.querySelector(".secrets-count")?.textContent === `0 shown · 1 loaded · 1 result for “${laterSecret.name}”`);
     expect(scope.value).toBe("scope.1");
@@ -458,7 +454,7 @@ describe("secrets page", () => {
     expect(scope.value).toBe("");
   });
 
-  it("keeps toolbar Refresh on the accepted query while search text is a draft", async () => {
+  it("refreshes the most recently typed search", async () => {
     const { container, listRequests } = render({
       getItems: () => [paymentSecret()],
       getTotalCount: () => 1
@@ -467,20 +463,20 @@ describe("secrets page", () => {
 
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
     change(search, "queryA");
-    clickButton(container, "Search");
     await waitFor(() => container.querySelector(".secrets-count")?.textContent === "1 shown · 1 loaded · 1 result for “queryA”");
     expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
 
     change(search, "draftB");
+    await waitForText(container, "for “draftB”");
     clickButton(container, "Refresh");
-    await waitFor(() => listRequests.length === 3);
+    await waitFor(() => listRequests.length === 4);
     await waitFor(() => !!container.querySelector(".secrets-count"));
-    expect(container.querySelector(".secrets-count")?.textContent).toBe("1 shown · 1 loaded · 1 result for “queryA”");
-    expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
+    expect(container.querySelector(".secrets-count")?.textContent).toBe("1 shown · 1 loaded · 1 result for “draftB”");
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("draftB");
     expect(search.value).toBe("draftB");
   });
 
-  it("keeps metadata-save reloads on the accepted query while search text is a draft", async () => {
+  it("reloads the most recently typed search after saving metadata", async () => {
     let current = paymentSecret({ scope: "scope.A" });
     const putJson = vi.fn(async (_url: string, request: { displayName: string; description: string }) => {
       current = paymentSecret({ ...request, scope: "scope.A" });
@@ -495,23 +491,23 @@ describe("secrets page", () => {
 
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
     change(search, "queryA");
-    clickButton(container, "Search");
     await waitFor(() => container.querySelector(".secrets-count")?.textContent === "1 shown · 1 loaded · 1 result for “queryA”");
     expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
 
     change(search, "draftB");
+    await waitForText(container, "for “draftB”");
     await openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
 
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Updated payments", description: "Token for payment provider" });
-    expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
-    await waitFor(() => container.querySelector(".secrets-count")?.textContent === "1 shown · 1 loaded · 1 result for “queryA”");
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("draftB");
+    await waitFor(() => container.querySelector(".secrets-count")?.textContent === "1 shown · 1 loaded · 1 result for “draftB”");
     expect(container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")?.value).toBe("draftB");
   });
 
-  it("retries the failed query instead of the later search draft", async () => {
+  it("retries the failed query and immediately applies subsequent edits", async () => {
     let failAttempt = true;
     const { container, listRequests } = render({
       getItems: url => {
@@ -528,18 +524,18 @@ describe("secrets page", () => {
 
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
     change(search, "queryB");
-    clickButton(container, "Search");
     await waitForText(container, "Secrets could not be loaded.");
     expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryB");
 
-    change(search, "draftC");
     clickButton(container, "Retry");
     await waitFor(() => listRequests.length === 3);
     await waitFor(() => !!container.querySelector(".secrets-count"));
     expect(container.querySelector(".secrets-count")?.textContent).toBe("1 shown · 1 loaded · 1 result for “queryB”");
 
     expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryB");
-    expect(search.value).toBe("draftC");
+    change(search, "draftC");
+    await waitForText(container, "No results for “draftC”");
+    expect(getSearchTerm(listRequests.at(-1)!)).toBe("draftC");
   });
 
   it("does not label a complete full page as partial", async () => {
@@ -566,14 +562,14 @@ describe("secrets page", () => {
     expect(container.textContent).toContain("No loaded secrets match your filters");
   });
 
-  it("keeps empty-result wording tied to the completed search while text is only a draft", async () => {
+  it("updates empty-result wording when typing a search", async () => {
     const { container } = render({ getItems: () => [] });
     await waitForText(container, "No secrets yet");
 
     change(container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!, "not-submitted");
 
-    expect(container.textContent).toContain("No secrets yet");
-    expect(container.textContent).not.toContain("No secrets match your filters");
+    await waitForText(container, "No results for “not-submitted”");
+    expect(container.textContent).not.toContain("No secrets yet");
   });
 
   it("keeps a complete empty search distinct from the initial empty collection", async () => {
@@ -581,7 +577,6 @@ describe("secrets page", () => {
     await waitForText(container, "No secrets yet");
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
     change(search, "missing-secret");
-    clickButton(container, "Search");
     await waitForText(container, "No results for “missing-secret”");
 
     expect(container.querySelector(".studio-result-state button")?.textContent).toContain("Clear filters");
@@ -601,7 +596,6 @@ describe("secrets page", () => {
     await waitForText(container, "No loaded secrets match your filters");
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
     change(search, "missing-secret");
-    clickButton(container, "Search");
 
     await waitFor(() => container.querySelector(".secrets-count")?.textContent === "0 shown · 0 loaded · 0 results for “missing-secret”");
     expect(container.querySelector(".studio-result-state h3")?.textContent).toBe("No results for “missing-secret”");
@@ -633,12 +627,10 @@ describe("secrets page", () => {
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
 
     change(search, "earlier");
-    clickButton(container, "Search");
     await waitFor(() => !!finishEarlier);
     expect(new URL(listRequests.at(-1)!, "https://fixture.example").searchParams.get("search")).toBe("earlier");
 
     change(search, "latest");
-    clickButton(container, "Search");
     await waitForText(container, "Latest result");
     finishEarlier();
     await earlierResponseFinished;
@@ -732,7 +724,6 @@ describe("secrets page", () => {
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search secrets']")!;
 
     change(search, laterSecret.name);
-    clickButton(container, "Search");
     await waitForText(container, "Known later credentials");
     expect(container.querySelector("[data-secret-open='known.later.secret']")).not.toBeNull();
     expect(getSearchTerm(listRequests.at(-1)!)).toBe(laterSecret.name);
@@ -742,7 +733,7 @@ describe("secrets page", () => {
     const scope = [...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")]
       .find(select => select.labels?.[0]?.textContent === "Scope")!;
     selectValue(scope, laterSecret.scope!);
-    const trigger = container.querySelector<HTMLButtonElement>("[data-secret-edit='known.later.secret']")!;
+    const trigger = container.querySelector<HTMLButtonElement>("[data-secret-open='known.later.secret']")!;
     trigger.focus();
     flushSync(() => trigger.click());
     expect(container.querySelector(".secrets-editor-page")).not.toBeNull();
@@ -752,14 +743,13 @@ describe("secrets page", () => {
     await waitFor(() => container.querySelector(".secrets-edit-form") !== null);
     clickButton(container, "Cancel", ".secrets-editor-page");
     await waitFor(() => !container.querySelector(".secrets-editor-page"));
-    await waitFor(() => document.activeElement?.getAttribute("data-secret-edit") === "known.later.secret");
+    await waitFor(() => document.activeElement?.getAttribute("data-secret-open") === "known.later.secret");
     expect(container.querySelector("[data-secret-open='known.later.secret']")).not.toBeNull();
     expect([...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")].find(s => s.labels?.[0]?.textContent === "Scope")?.value).toBe(laterSecret.scope);
     expect(container.querySelector(".secrets-count")?.textContent).toContain(`1 shown · 1 loaded · 1 result for “${laterSecret.name}”`);
 
     const returnedSearch = container.querySelector<HTMLInputElement>('input[aria-label="Search secrets"]')!;
     change(returnedSearch, laterSecret.displayName);
-    flushSync(() => returnedSearch.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     await waitFor(() => getSearchTerm(listRequests.at(-1)!) === laterSecret.displayName);
     await waitForText(container, `for “${laterSecret.displayName}”`);
     expect(getSearchTerm(listRequests.at(-1)!)).toBe(laterSecret.displayName);
@@ -788,7 +778,7 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
 
     expect(container.textContent).toContain("payments.api");
-    expect(container.querySelector("button[aria-label='Edit payments.api']")).not.toBeNull();
+    expect(container.querySelector("a[data-secret-open='payments.api']")).not.toBeNull();
     expect(container.textContent).not.toContain("raw-secret-value");
     unmount();
   });
@@ -818,7 +808,7 @@ describe("secrets page", () => {
     const { container } = render();
     await waitForText(container, "Payments API");
     container.querySelector<HTMLButtonElement>("button[aria-label='Copy technical name payments.api']")!.click();
-    await waitForText(container, "Copy failed");
+    await waitForText(container, "Could not copy technical name");
     expect(container.textContent).not.toContain("Copied");
     expect(container.textContent).toContain("payments.api");
   });
@@ -837,7 +827,7 @@ describe("secrets page", () => {
     });
 
     await waitForText(container, "Payments API");
-    clickButton(container, "Create secret");
+    clickButton(container, "New secret");
     await waitFor(() => !!container.querySelector(".secrets-create-form"));
     const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".secrets-create-form input"));
     change(inputs[0], "smtp-password");
@@ -851,7 +841,7 @@ describe("secrets page", () => {
     await waitForText(container, "smtp-password");
     expect(postJson).toHaveBeenCalledWith("/secrets", expect.objectContaining({ value: "secret-value" }));
     expect(notifications.notify).toHaveBeenCalledTimes(1);
-    expect(container.querySelector(".secrets-notification")).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
     unmount();
   });
 
@@ -863,7 +853,7 @@ describe("secrets page", () => {
     await openEditor(container);
     await waitFor(() => container.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value === "Payments API");
     change(container.querySelector<HTMLTextAreaElement>(".secrets-edit-form textarea")!, "");
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
 
     await waitFor(() => putJson.mock.calls.length > 0);
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Payments API", description: "" });
@@ -959,7 +949,7 @@ function render(options: {
     cleanup.delete(unmount);
   };
   cleanup.add(unmount);
-  return { container: host, unmount, listRequests, metadataRequests, setVisible: (next: boolean) => { visible = next; renderPage(); }, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
+  return { container: document.body, unmount, listRequests, metadataRequests, setVisible: (next: boolean) => { visible = next; renderPage(); }, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
 }
 
 function getSearchTerm(url: string) {
@@ -1049,7 +1039,7 @@ function selectValue(element: HTMLSelectElement, value: string) {
 }
 
 async function openEditor(container: HTMLElement) {
-  const trigger = container.querySelector<HTMLButtonElement>("button[aria-label='Edit payments.api']")!;
+  const trigger = container.querySelector<HTMLButtonElement>("a[data-secret-open='payments.api']")!;
   trigger.focus();
   flushSync(() => trigger.click());
   await waitFor(() => container.querySelector(".secrets-edit-form") !== null);

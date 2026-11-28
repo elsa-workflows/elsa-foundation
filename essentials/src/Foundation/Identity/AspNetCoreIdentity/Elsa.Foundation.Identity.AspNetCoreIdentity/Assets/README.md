@@ -15,7 +15,7 @@ woodland) artwork remains available for explicitly configured hosts. All assets 
 and require no third-party photo/CDN account.
 
 Integrators select artwork through `Identity:Login:Artwork` or `LoginPageOptions.Artwork`, or replace
-it with `ImageUrl`. See the canonical [branding guide](../../../../../../../Studio/docs/branding.md#configure-the-actual-credential-page)
+it with `ImageUrl`. See the canonical [branding guide](../../../../../../../studio/docs/branding.md#configure-the-actual-credential-page)
 for the artwork catalog and JSON, environment variable and C# configuration examples.
 
 ## Field Guide

@@ -32,7 +32,7 @@ def digest(data):
 
 
 def pinned_version(name):
-    return next(node.attrib["Version"] for node in ET.parse(REPO / "Studio/Directory.Packages.props").getroot().iter("PackageVersion")
+    return next(node.attrib["Version"] for node in ET.parse(REPO / "studio/Directory.Packages.props").getroot().iter("PackageVersion")
                 if node.attrib.get("Include") == name)
 
 
@@ -80,9 +80,8 @@ class Artifacts:
         mapping = ET.SubElement(root, "packageSourceMapping")
         entries = [
             ("candidate", str(self.feed), list(self.packages) + [CUSTOM_ID]),
-            ("nuget.org", "https://api.nuget.org/v3/index.json", ["*"]),
+            ("nuget.org", "https://api.nuget.org/v3/index.json", ["*", "Nuplane", "Nuplane.*"]),
             ("CShells", "https://f.feedz.io/valence-works/cshells/nuget/index.json", ["CShells", "CShells.*"]),
-            ("Nuplane", "https://f.feedz.io/valence-works/nuplane/nuget/index.json", ["Nuplane", "Nuplane.*"]),
             ("Specifications", "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json", ["Elsa.Specifications.*"]),
         ]
         for key, url, patterns in entries:
@@ -112,12 +111,12 @@ class Artifacts:
                     shutil.copytree(original, producer / relative, dirs_exist_ok=True)
                     generated.update({str(path.relative_to(REPO)): digest(path.read_bytes()) for path in original.rglob("*") if path.is_file()})
             properties = ["-p:Version=" + self.version, "-p:SourceRevisionId=" + self.source]
-            self.run("producer-build", [self.dotnet, "build", "Studio/Elsa.Studio.slnx", "-c", "Release", *properties], producer)
-            self.run("producer-pack", [self.dotnet, "pack", "Studio/Elsa.Studio.slnx", "-c", "Release", "--no-build", *properties, "-o", str(self.feed)], producer)
+            self.run("producer-build", [self.dotnet, "build", "studio/Elsa.Studio.slnx", "-c", "Release", *properties], producer)
+            self.run("producer-pack", [self.dotnet, "pack", "studio/Elsa.Studio.slnx", "-c", "Release", "--no-build", *properties, "-o", str(self.feed)], producer)
             self.run("producer-inventory", ["python3", "tools/ci/verify_studio_nuget_packages.py", "--packages", str(self.feed), "--version", self.version], producer)
             for item in inventory["support_projects"]:
                 self.run("producer-support-" + item["id"], [self.dotnet,"pack",item["project"],"-c","Release",*properties,"-o",str(self.feed)],producer)
-            self.run("reference-web-publish", [self.dotnet, "publish", "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj", "-c", "Release", "--no-build", *properties, "-o", str(self.root / "reference-web-published")], producer)
+            self.run("reference-web-publish", [self.dotnet, "publish", "studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj", "-c", "Release", "--no-build", *properties, "-o", str(self.root / "reference-web-published")], producer)
             self.report.update(producer="owned committed source snapshot and actual production projects", producerSource=self.source,
                                generatedInputHashes=generated, referenceWebPublished=True)
         for path in self.feed.glob("*.nupkg"):
@@ -179,7 +178,7 @@ class Artifacts:
         (source / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": features}}}}))
         settings = {"Logging": {"LogLevel": {"Default": "Warning", "Microsoft.Hosting.Lifetime": "Information"}},
                     "Studio": {"HostId": "composition-" + name, "Auth": {"Enabled": False, "SessionCacheSeconds": 0}},
-                    "Nuplane": {"Setup": {"AutomaticReconciliation": False}, "Loading": {"Enabled": True}},
+                    "Nuplane": {"Reconciliation": {"EnableAutomaticReconciliation": False}, "Loading": {"Enabled": True}},
                     "Qualification": {"EnrollOwnedStore": True}}
         (source / "appsettings.json").write_text(json.dumps(settings))
         cache = self.root / (name + "-cache")
@@ -198,7 +197,7 @@ class Artifacts:
         graph = json.loads((source / "obj/project.assets.json").read_text())
         check(all(library["type"] == "package" for library in graph["libraries"].values()), name + " used a project/source dependency")
         check({Path(folder).resolve() for folder in graph["packageFolders"]} == {cache.resolve()}, name + " used an external NuGet cache")
-        check(not any(key.startswith(("Elsa.Studio.Web/", "Elsa.Modularity.Api/", "Elsa.Identity", "Elsa.Clustering")) for key in graph["libraries"]), name + " has unintended Web/backend dependencies")
+        check(not any(key.startswith(("Elsa.Studio.Workbench.Host/", "Elsa.Modularity.Api/", "Elsa.Identity", "Elsa.Clustering")) for key in graph["libraries"]), name + " has unintended Web/backend dependencies")
         if "ADMINISTRATION" not in constants:
             check(not any(key.startswith(("Nuplane", "Elsa.Modularity", "Elsa.Studio.Hosting.Nuplane/")) for key in graph["libraries"]), name + " unexpectedly requires administration")
         if "THEMES" not in constants:

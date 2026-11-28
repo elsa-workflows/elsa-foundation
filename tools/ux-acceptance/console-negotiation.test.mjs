@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isReadOnlyConsoleNegotiation } from "../../Studio/tests/acceptance/consoleNegotiation.mjs";
+import { isReadOnlyConsoleNegotiation } from "../../studio/tests/acceptance/consoleNegotiation.mjs";
 
 const backend = "http://localhost:50925";
 const endpoint = `${backend}/_elsa/server/diagnostics/console-logs/hub/negotiate?negotiateVersion=1`;

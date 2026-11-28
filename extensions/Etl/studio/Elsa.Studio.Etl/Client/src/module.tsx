@@ -26,9 +26,9 @@ export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "proper
     },
     routes: [
       { id: "etl-definitions", path: "/etl/definitions", label: "ETL definitions", requiresBackend:design,
-        component: () => <EtlDefinitionsPage context={api.backend} dialogs={api.dialogs} notifications={api.notifications} /> },
+        component: ({navigate}) => <EtlDefinitionsPage navigate={navigate} context={api.backend} dialogs={api.dialogs} notifications={api.notifications} /> },
       { id: "etl-connectors", path: "/etl/connectors", label: "Connector pipelines", requiresBackend:design,
-        component: () => <EtlDefinitionsPage context={api.backend} dialogs={api.dialogs} notifications={api.notifications} profile="connector" /> },
+        component: ({navigate}) => <EtlDefinitionsPage navigate={navigate} context={api.backend} dialogs={api.dialogs} notifications={api.notifications} profile="connector" /> },
       { id: "etl-runs", path: "/etl/runs", label: "ETL runs", requiresBackend:runtime,
         component: () => <EtlRunsPage context={api.backend} backendSession={api.backendSession} dialogs={api.dialogs} /> }
     ]

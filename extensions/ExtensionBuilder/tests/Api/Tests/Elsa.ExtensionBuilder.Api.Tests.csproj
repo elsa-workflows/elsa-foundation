@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Git\Elsa.Git.csproj" />
+    <ProjectReference Include="..\..\..\..\Git\src\Elsa.Git\Elsa.Git.csproj" />
     <ProjectReference Include="..\..\..\..\..\essentials\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
   </ItemGroup>
 

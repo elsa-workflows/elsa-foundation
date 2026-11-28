@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="OpenIddict.Abstractions" />
     <PackageReference Include="OpenIddict.AspNetCore" />
   </ItemGroup>

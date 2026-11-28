@@ -46,7 +46,7 @@ export function ExtensionBuilderWorkspace() {
             type="button"
             className="studio-button"
             disabled={saveBusy || !capabilities!.canEditFiles || !activeFilePath}
-            title={!capabilities!.canEditFiles ? "Requires canEditFiles" : autoSave ? "Force save and resync (auto-save also saves as you type)" : undefined}
+            title={!capabilities!.canEditFiles ? "Editing requires file permission" : autoSave ? "Force save and resync (auto-save also saves as you type)" : undefined}
             onClick={() => builder.handleSaveFile()}
           >
             {saveBusy ? <Loader2 size={15} className="is-spinning" aria-hidden="true" /> : <Save size={15} />}

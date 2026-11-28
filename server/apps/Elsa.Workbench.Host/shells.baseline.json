@@ -1,0 +1,98 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "Primitives": {},
+          "FileSystemDistributedLocking": {},
+          "Serialization": {},
+          "Tasks": {},
+          "MemoryCache": {},
+          "Mediator": {},
+          "ModularityApi": {},
+          "Events": {},
+          "Expressions": {},
+          "ExpressionsApi": {},
+          "ApiCapabilities": {},
+          "Secrets": {
+            "EncryptionKey": "development-demo-only-secrets-encryption-key"
+          },
+          "SecretsApi": {},
+          "ActorSecretsWorkflows": {},
+          "Connections": {},
+          "ActorHttpConnections": {},
+          "ConnectionsApi": {},
+          "ConnectionsDesign": {},
+          "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesGraphRuntimeHosting": {},
+          "ActivitiesRuntimeHosting": {},
+          "ActivitiesBpmn": {},
+          "ActivitiesBpmnDesign": {},
+          "ActivitiesBpmnInterchange": {},
+          "ActivitiesCompensation": {},
+          "ActivitiesControlFlow": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesSequence": {},
+          "ActivitiesDesignReconciliation": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": ""
+            }
+          },
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
+          "Weaver": {},
+          "WeaverApi": {},
+          "WeaverWorkflows": {},
+          "WeaverWorkflowsRuntime": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityOidc": {},
+          "WeaverGitHubCopilot": {
+            "Enabled": true,
+            "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
+            "Model": "auto",
+            "BaseDirectory": ".elsa/copilot"
+          },
+          "StudioDashboardApi": {},
+          "StudioDashboardEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-studio-dashboards.db"
+          },
+          "StudioDashboardWeaver": {},
+          "KernelWorkflowDashboardQueries": {},
+          "KernelActivitiesHttp": {},
+          "WorkflowsRuntimeKernelRetainedApi": {},
+          "WorkflowsRuntimeKernelHosting": {
+            "Provider": "SQLite"
+          },
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
+            "Provider": "SQLite",
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+          },
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {
+            "Provider": "SQLite"
+          },
+          "KernelActivitiesScheduling": {},
+          "WorkflowsDashboardRetained": {},
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {},
+          "WorkflowsRuntimeRetainedAttention": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

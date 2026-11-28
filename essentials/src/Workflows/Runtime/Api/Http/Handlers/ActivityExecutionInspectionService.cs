@@ -1,0 +1,49 @@
+using Elsa.Workflows.Runtime.Inspection.Core;
+using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+
+namespace Elsa.Workflows.Runtime.Api.Handlers;
+
+public sealed class ActivityExecutionInspectionService(
+    IWorkflowExecutionStateStore workflowExecutionStateStore,
+    IActivityExecutionInspectionStore inspectionStore,
+    IActivityInspectionContextAsync authorization,
+    IActivityExecutionHierarchyStore? hierarchyStore = null) : IActivityExecutionInspectionService
+{
+    public async Task<ActivityExecutionInspectionView?> GetAsync(GetActivityExecution request, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.ActivityExecutionId);
+
+        var workflowExecution = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
+        return workflowExecution is null ? null : await GetAsync(workflowExecution, request, cancellationToken);
+    }
+
+    /// <summary>Inspects an activity against an exact run already located by the caller.</summary>
+    public async Task<ActivityExecutionInspectionView?> GetAsync(WorkflowExecutionState workflowExecution, GetActivityExecution request,
+        CancellationToken cancellationToken)
+    {
+        if (workflowExecution.WorkflowExecutionId != request.WorkflowExecutionId ||
+            !await authorization.CanInspectStructureAsync(workflowExecution, cancellationToken))
+            return null;
+
+        var projection = await inspectionStore.FindAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
+        if (projection is null)
+            return null;
+        var boundary = hierarchyStore is null
+            ? null
+            : await hierarchyStore.FindBoundaryAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
+        var attempt = hierarchyStore is null
+            ? null
+            : await hierarchyStore.FindAttemptNavigationAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
+        return ActivityExecutionInspectionView.From(
+            projection,
+            boundary,
+            await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken),
+            attempt,
+            await authorization.CanResolveSensitiveValuePayloadsAsync(workflowExecution, cancellationToken));
+    }
+}

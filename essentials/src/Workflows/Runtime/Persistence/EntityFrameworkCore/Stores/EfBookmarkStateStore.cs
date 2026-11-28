@@ -467,7 +467,8 @@ public sealed class EfBookmarkStateStore(
     internal static string CreateId(string scope, string workflowExecutionId, string bookmarkId) =>
         Hash($"{scope.Length}:{scope}{workflowExecutionId.Length}:{workflowExecutionId}{bookmarkId.Length}:{bookmarkId}");
 
-    private static string StimulusLookupKey(string stimulusType, string stimulusHash) => Hash($"{stimulusType.Length}:{stimulusType}{stimulusHash}");
+    private static string StimulusLookupKey(string stimulusType, string stimulusHash) =>
+        EfBookmarkStimulusEvidence.LookupKey(stimulusType, stimulusHash);
     private static string StimulusBinding(string stimulusType, string stimulusHash) =>
         $"{stimulusType.Length}:{stimulusType}{stimulusHash.Length}:{stimulusHash}";
     private static string StimulusTypeLookupKey(string stimulusType) => Hash(stimulusType);

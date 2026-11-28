@@ -35,7 +35,7 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
         if (incompatible is not null)
             return ValueTask.FromResult(incompatible);
 
-        var context = ProjectContext(request.Scope.Context);
+        var context = JavaScriptCallbackItems.Project(ProjectContext(request.Scope.Context), request.Source, request.Cursor, cancellationToken);
         var (source, cursor) = NormalizeEmptyAccessorCalls(request.Source, request.Cursor);
         var items = ExpressionToolingSymbolResolver.Complete(context, source, cursor)
             .OrderByDescending(symbol => MatchesExpectedResult(symbol, request.Scope.Context))
@@ -56,11 +56,12 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
             return ValueTask.FromResult(incompatible);
 
         var (source, position) = NormalizeEmptyAccessorCalls(request.Source, request.Position);
-        var symbol = ExpressionToolingSymbolResolver.Resolve(ProjectContext(request.Scope.Context), source, position);
+        var context = JavaScriptCallbackItems.Project(ProjectContext(request.Scope.Context), request.Source, request.Position, cancellationToken);
+        var symbol = ExpressionToolingSymbolResolver.Resolve(context, source, position);
         if (symbol is null)
             return ValueTask.FromResult(ExpressionToolingOutcome<ExpressionHover>.SupportedEmpty(new ExpressionHover(string.Empty), SupportedVersion, request.Scope.Document.DocumentRevision, request.Scope.Context.ContextRevision));
 
-        var contents = string.Join(Environment.NewLine, new[] { symbol.Label, symbol.Documentation }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        var contents = string.Join(Environment.NewLine, new[] { string.IsNullOrWhiteSpace(symbol.Detail) ? symbol.Label : symbol.Detail.StartsWith(symbol.Label + "(", StringComparison.Ordinal) ? symbol.Detail : $"{symbol.Label}: {symbol.Detail}", symbol.Documentation }.Where(value => !string.IsNullOrWhiteSpace(value)));
         return ValueTask.FromResult(ExpressionToolingOutcome<ExpressionHover>.Success(new ExpressionHover(contents), SupportedVersion, request.Scope.Document.DocumentRevision, request.Scope.Context.ContextRevision));
     }
 

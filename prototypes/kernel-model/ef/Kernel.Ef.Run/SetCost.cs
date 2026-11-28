@@ -17,8 +17,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 /// <c>sim --placement-check</c> runs it); contiguous sets are the fair ranges. Each row runs <c>runs</c> times from its own
 /// setup, which is not counted; the counts are the most common run's (the runs whose counts differ are listed) and the time is the
 /// median. Counted as the cost runs count: commands, BEGINs, COMMITs, the TCP round trips through the proxy and, on
-/// PostgreSQL, the Execute frames (one per statement). "Rows" are the fence rows the operation wrote, read back from
-/// the Partitions table before and after (owner, epoch, lease or position changed).
+/// PostgreSQL, the Execute frames (one per statement). "Changed" counts the partition rows whose owner, epoch or position
+/// changed between the two reads. WAL measurement covers the physical writes.
 /// </summary>
 static class SetCost
 {
@@ -49,9 +49,9 @@ static class SetCost
             await using var db = admin();
             await db.Database.ExecuteSqlRawAsync(target.Quote(sql), values);
         }
-        Task FreeAll() => Sql("""UPDATE "Partitions" SET "Owner" = NULL, "LeaseUntil" = 0""");
-        Task AgeNodes() => Sql("""UPDATE "Nodes" SET "SeenAt" = 0""");
-        Task Assign(IEnumerable<int> set, string owner) => Sql($"""UPDATE "Partitions" SET "Owner" = {"{0}"}, "LeaseUntil" = 0 WHERE "Id" IN ({string.Join(", ", set)})""", owner);
+        Task FreeAll() => Sql("""UPDATE "Partitions" SET "Owner" = NULL""");
+        Task AgeNodes() => Sql("""UPDATE "Nodes" SET "SeenAt" = 0, "LeaseUntil" = 0""");
+        Task Assign(IEnumerable<int> set, string owner) => Sql($"""UPDATE "Partitions" SET "Owner" = {"{0}"} WHERE "Id" IN ({string.Join(", ", set)})""", owner);
         void Expect(bool ok, string what)
         {
             if (ok) return;
@@ -70,7 +70,7 @@ static class SetCost
             var upper = a.OrderDescending().Take(a.Count / 2).ToHashSet();     // the half a balancer gives up first: the highest
             Console.WriteLine($"\n{target.Engine}: {await target.DescribeAsync()}; fence {(target.FenceInBatch ? "in the batch" : "checked")}; commit {target.CommitWriter}; {Count} virtual partitions, {NodeCount} nodes");
             Console.WriteLine($"shape {shape}: the four sets are {string.Join(", ", four.Select(s => $"{s.Count} in {Ranges(s)} ranges"))}; node A holds {a.Count} in {Ranges(a)} ranges ({Describe(a)})");
-            Console.WriteLine($"{"run",-92} {"commands",8} {"begin",5} {"commit",6} {"counted",7} {"tcp",5} {"exec",5} {"rows",5} {"ms",9}");
+            Console.WriteLine($"{"run",-92} {"commands",8} {"begin",5} {"commit",6} {"counted",7} {"tcp",5} {"exec",5} {"changed",7} {"ms",9}");
 
             async Task<DurableHost> GainAsync(IReadOnlyCollection<int> set, string node, List<IScopeActivation>? activations = null)
             {
@@ -97,7 +97,8 @@ static class SetCost
             await meter.RowAsync($"take: one set take of A's {a.Count} while a live node holds the upper {upper.Count} (fixed host)", runs, async () =>
             {
                 await FreeAll();
-                await Sql($"""UPDATE "Partitions" SET "Owner" = 'live', "LeaseUntil" = {long.MaxValue / 2} WHERE "Id" IN ({string.Join(", ", upper)})""");
+                await store.NodeHeartbeatAsync("live", Hour, Hour);
+                await Sql($"""UPDATE "Partitions" SET "Owner" = 'live' WHERE "Id" IN ({string.Join(", ", upper)})""");
             }, async () =>
             {
                 var worker = new Worker(Name("a"), a, store, Actors(), options);
@@ -105,13 +106,12 @@ static class SetCost
                 Expect(worker.Fences.Count == a.Count - upper.Count, "the set take got the free half");
             });
 
-            // 2. Beat, heartbeat and the idle set poll, on a node that holds A.
+            // 2. Node heartbeat and idle poll on a node that holds A.
             await FreeAll();
             var held = await GainAsync(a, Name("a"));
             var node = held.NodeWorker!;
             await node.PollAsync();
-            await meter.RowAsync($"beat: the node's worker renews its {a.Count} (an empty fenced commit)", runs, null, () => node.BeatAsync());
-            await meter.RowAsync("heartbeat: the membership's node row, live count and free list", runs, null, async () => await store.HeartbeatAsync(node.Node, Hour));
+            await meter.RowAsync("heartbeat: the node row, ownership list and membership", runs, null, async () => await held.HeartbeatAsync(Hour));
             await meter.RowAsync($"poll: the set poll over {a.Count}, nothing to read", runs, null, () => node.PollAsync());
 
             // SQL Server (#4812): the set poll inlines each partition's epoch, so a take changes its text; count the cached plans.
@@ -228,7 +228,7 @@ static class SetCost
                 for (var i = 0; i < sets.Length; i++) members.Add(await Member.StartAsync($"{prefix}-n{i}", store, Actors(), options, flaws));
                 for (var i = 0; i < sets.Length; i++)
                     foreach (var p in sets[i]) await members[i].Runtime.ActivateAsync(p);
-                foreach (var m in members) await store.HeartbeatAsync(m.Name, Hour);
+                foreach (var m in members) await m.Runtime.HeartbeatAsync();
                 return members;
             }
             List<Member> live = [];
@@ -241,7 +241,8 @@ static class SetCost
             }, async () =>
             {
                 joiner = await Member.StartAsync(live[0].Name[..^1] + "3", store, Actors(), options, flaws);
-                await joiner.Runtime.BalanceAsync();      // its first round: its heartbeat, and nothing free to ask for
+                await joiner.Runtime.HeartbeatAsync();
+                await joiner.Runtime.BalanceAsync();      // its first round finds nothing free to ask for
                 live.Add(joiner);
                 meter.Note(await RoundsAsync(live, before));
             });
@@ -261,7 +262,7 @@ static class SetCost
                 live = await Cluster(four, Name("l"));
                 before = Owners(live);
                 await live[1].Runtime.StopAsync();
-                await Sql("""UPDATE "Nodes" SET "SeenAt" = 0 WHERE "Id" = {0}""", live[1].Name);
+                await Sql("""UPDATE "Nodes" SET "SeenAt" = 0, "LeaseUntil" = 0 WHERE "Id" = {0}""", live[1].Name);
                 live.RemoveAt(1);
             }, async () => meter.Note(await RoundsAsync(live, before)));
             Expect(live.Sum(m => m.Held) == Count, "the leave left nothing unheld");
@@ -269,8 +270,7 @@ static class SetCost
             {
                 live = await Cluster(four, Name("d"));
                 before = Owners(live);
-                await Sql("""UPDATE "Partitions" SET "LeaseUntil" = 0 WHERE "Owner" = {0}""", live[1].Name);
-                await Sql("""UPDATE "Nodes" SET "SeenAt" = 0 WHERE "Id" = {0}""", live[1].Name);
+                await Sql("""UPDATE "Nodes" SET "SeenAt" = 0, "LeaseUntil" = 0 WHERE "Id" = {0}""", live[1].Name);
                 live.RemoveAt(1);      // dead: its worker is never called again
             }, async () => meter.Note(await RoundsAsync(live, before)));
             Expect(live.Sum(m => m.Held) == Count, "the takeover left nothing unheld");
@@ -286,7 +286,11 @@ static class SetCost
         for (var changed = true; changed && rounds < 32; rounds++)
         {
             var start = Owners(live);
-            foreach (var m in live.OrderBy(m => m.Name, StringComparer.Ordinal)) await m.Runtime.BalanceAsync();
+            foreach (var m in live.OrderBy(m => m.Name, StringComparer.Ordinal))
+            {
+                await m.Runtime.HeartbeatAsync();
+                await m.Runtime.BalanceAsync();
+            }
             changed = !Owners(live).SequenceEqual(start);
         }
         var after = Owners(live);
@@ -305,8 +309,8 @@ static class SetCost
 
         public static async Task<Member> StartAsync(string name, EfStore store, IActorType actors, WorkerOptions options, Flaw flaws)
         {
-            var runtime = new PartitionRuntime(name, new Ranked(store), Count, Hour, flaws: flaws);
-            await runtime.StartAsync(DurableHost.ForNode(name, store, actors, Count, options));
+            var runtime = new PartitionRuntime(name, store, Count, Hour, flaws: flaws);
+            await runtime.StartAsync(new Ranked(DurableHost.ForNode(name, store, actors, Count, options), name));
             return new Member { Name = name, Runtime = runtime };
         }
     }
@@ -316,13 +320,19 @@ static class SetCost
     /// <see cref="Flaw.ContiguousOnlyBalancer"/> reads (the in-memory membership gives it; the EF store does not). The
     /// rank's read is the admin's, not counted.
     /// </summary>
-    private sealed class Ranked(EfStore store) : IMembership
+    private sealed class Ranked(DurableHost host, string node) : IScopeHost, IScopeCount, INodeLeaseHost
     {
         public static Func<KernelDb>? Admin;
 
-        public async ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
+        public TimeSpan? NodeLease => host.NodeLease;
+        public ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken token = default) => host.ActivateAsync(scope, token);
+        public ValueTask CheckScopesAsync(int scopes, CancellationToken token = default) => host.CheckScopesAsync(scopes, token);
+        public IScopeHostRun? AttachRuntime() => ((IScopeHost)host).AttachRuntime();
+        public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken token = default) => host.PassAsync(token);
+
+        public async ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default)
         {
-            var cluster = await store.HeartbeatAsync(node, window, cancellationToken);
+            if (await host.HeartbeatAsync(window, cancellationToken) is not { } cluster) return null;
             if (Admin is null) return cluster;
             await using var db = Admin();
             var names = await db.Nodes.AsNoTracking().Where(n => n.SeenAt >= cluster.Now - (long)window.TotalMilliseconds).Select(n => n.Id).ToListAsync(cancellationToken);
@@ -368,7 +378,7 @@ static class SetCost
         return string.Join(", ", runs);
     }
 
-    /// <summary>Counts and prints one row: the counters around the body, the fence rows it wrote, the median time.</summary>
+    /// <summary>Counts and prints one row: the counters around the body, the fence rows whose values changed, the median time.</summary>
     private sealed class Meter(Target target, Counting counter, Classes classes, Func<KernelDb> admin)
     {
         private string? _note;
@@ -380,10 +390,10 @@ static class SetCost
             public string Key => $"{Commands} {Begun} {Ended} {Tcp} {Exec} {Rows}";
         }
 
-        private async Task<Dictionary<int, (string?, long, long, long)>> FencesAsync()
+        private async Task<Dictionary<int, (string?, long, long)>> FencesAsync()
         {
             await using var db = admin();
-            return await db.Partitions.AsNoTracking().ToDictionaryAsync(p => p.Id, p => (p.Owner, p.Epoch, p.LeaseUntil, p.Position));
+            return await db.Partitions.AsNoTracking().ToDictionaryAsync(p => p.Id, p => (p.Owner, p.Epoch, p.Position));
         }
 
         private async Task<Sample> MeasureAsync(Func<Task> body, bool wal)
@@ -416,9 +426,9 @@ static class SetCost
             // The counts shown are the most common run's (the first run of a row may open connections: their handshakes count).
             var s = samples.GroupBy(x => x.Key).OrderByDescending(g => g.Count()).First().First();
             var median = samples.Select(x => x.Ms).Order().ElementAt(samples.Count / 2);
-            Console.WriteLine($"{name,-92} {s.Commands,8} {s.Begun,5} {s.Ended,6} {s.Counted,7} {s.Tcp,5} {s.Exec,5} {s.Rows,5} {median,9:F1}");
+            Console.WriteLine($"{name,-92} {s.Commands,8} {s.Begun,5} {s.Ended,6} {s.Counted,7} {s.Tcp,5} {s.Exec,5} {s.Rows,7} {median,9:F1}");
             var keys = samples.Select(x => x.Key).Distinct().ToList();
-            if (keys.Count > 1) Console.WriteLine("    the runs' counts differ (commands begin commit tcp exec rows): " + string.Join(" | ", samples.Select(x => x.Key)));
+            if (keys.Count > 1) Console.WriteLine("    the runs' counts differ (commands begin commit tcp exec changed rows): " + string.Join(" | ", samples.Select(x => x.Key)));
             Console.WriteLine($"    statements by kind: {s.Classes}; ms per run: {string.Join(" ", samples.Select(x => x.Ms.ToString("F1", CultureInfo.InvariantCulture)))}");
             if (note is not null) Console.WriteLine("    " + note);
             if (s.Wal is not null) Console.WriteLine(s.Wal);
@@ -548,7 +558,7 @@ static class SetCost
                 _ when text.Contains("\"Seen\" <") || text.Contains("`Seen` <") => "poll",
                 _ when text.Contains("\"Attempts\" + 1") || text.Contains("`Attempts` + 1") => "death count",
                 _ when text.Contains("SET \"Owner\" = NULL") || text.Contains("SET `Owner` = NULL") => "release",
-                _ when (text.Contains("\"Owner\" =") || text.Contains("`Owner` =")) && (text.Contains("\"Epoch\" + 1") || text.Contains("`Epoch` + 1")) && (text.Contains("\"LeaseUntil\" <") || text.Contains("`LeaseUntil` <")) => "take",
+                _ when (text.Contains("\"Owner\" =") || text.Contains("`Owner` =")) && (text.Contains("\"Epoch\" + 1") || text.Contains("`Epoch` + 1")) => "take",
                 _ when text.Contains("\"Epoch\" + 1") || text.Contains("`Epoch` + 1") => "retake",
                 _ when text.Contains("UPDATE \"Partitions\" AS p") || text.Contains("UPDATE `Partitions`") || text.Contains("UPDATE \"Partitions\" SET \"Position\"") => "commit (fenced)",
                 _ when text.Contains("\"Partitions\"") || text.Contains("`Partitions`") => "partitions (other)",

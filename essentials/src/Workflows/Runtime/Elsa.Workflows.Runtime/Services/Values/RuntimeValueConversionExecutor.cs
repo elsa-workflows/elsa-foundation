@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// <summary>
 /// Strict runtime interpreter for publication-pinned value-conversion plans.
 /// It deliberately contains no converter discovery: only built-in pinned operations and the pinned
-/// <c>elsa.json@1</c> / <c>elsa.xml@1</c> profiles are executable in this slice.
+/// <c>elsa.json@1</c>, <c>elsa.json-string@1</c>, and <c>elsa.xml@1</c> profiles are executable in this slice.
 /// </summary>
 public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellKnownTypeRegistry = null) : IRuntimeValueConversionExecutor
 {
@@ -69,8 +69,16 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
 
     private static void ValidatePlan(ValueConversionPlan plan)
     {
-        if (plan.Operation == ValueConversionOperation.Profile && !IsJsonProfile(plan) && !IsXmlProfile(plan))
+        if (plan.Operation == ValueConversionOperation.Profile && !IsJsonProfile(plan) && !IsJsonStringProfile(plan) && !IsXmlProfile(plan))
             throw Reject(plan, "the pinned conversion profile is not available in this runtime slice");
+
+        if (IsJsonStringProfile(plan) &&
+            (plan.Mode is not (ValueConversionMode.JsonString or ValueConversionMode.Profile) ||
+             plan.SourceRepresentation is not (ValueRepresentation.TypedValue or ValueRepresentation.StructuredValue) ||
+             !ValueConversionCompatibility.IsPlainString(plan.TargetType)))
+            throw Reject(plan, "JSON serialization requires a typed or structured source and a plain scalar String target");
+        if (plan.Mode == ValueConversionMode.JsonString && !IsJsonStringProfile(plan))
+            throw Reject(plan, "JSON-string mode requires the pinned elsa.json-string@1 profile");
 
         switch (plan.Operation)
         {
@@ -158,6 +166,8 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
 
     private JsonElement ConvertProfile(JsonElement value, ValueConversionPlan plan)
     {
+        if (IsJsonStringProfile(plan))
+            return SerializeJsonAsString(value, plan);
         if (IsXmlProfile(plan))
             return ConvertXmlProfile(value, plan);
         if (!IsJsonProfile(plan))
@@ -177,6 +187,15 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             return CanonicalizeAny(root, plan);
 
         return ConvertTypedJson(root, plan);
+    }
+
+    private static JsonElement SerializeJsonAsString(JsonElement value, ValueConversionPlan plan)
+    {
+        var nodeCount = CountJsonNodes(value, plan, depth: 1);
+        if (nodeCount > plan.Limits.MaxCollectionItems)
+            throw Reject(plan, $"maximum JSON node count '{plan.Limits.MaxCollectionItems}' was exceeded");
+
+        return JsonSerializer.SerializeToElement(value.GetRawText());
     }
 
     private JsonElement ConvertXmlProfile(JsonElement value, ValueConversionPlan plan)
@@ -709,6 +728,9 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
 
     private static bool IsJsonProfile(ValueConversionPlan plan) =>
         plan.Profile is { Id: "elsa.json", Version: "1" };
+
+    private static bool IsJsonStringProfile(ValueConversionPlan plan) =>
+        plan.Profile is { Id: "elsa.json-string", Version: "1" };
 
     private static bool IsXmlProfile(ValueConversionPlan plan) =>
         plan.Profile is { Id: "elsa.xml", Version: "1" };

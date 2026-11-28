@@ -51,7 +51,7 @@ public sealed class MongoProvider(string connection, MongoStoreOptions options) 
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)
     {
         var database = "kconf_" + Guid.NewGuid().ToString("N")[..12];
-        var storeOptions = options with { BrokenFence = setup.BrokenFence, NodeLease = setup.NodeLease };
+        var storeOptions = options with { BrokenFence = setup.BrokenFence };
         var counter = setup.Counting ? new CommandCounter() : null;
         var worker = counter is null ? _worker.Value : Client(connection, "kernel-cost", counter.Started);
         var store = new MongoStore(worker, database, storeOptions);
@@ -81,7 +81,7 @@ public sealed class MongoProvider(string connection, MongoStoreOptions options) 
                 await db.GetCollection<BsonDocument>(name).DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", from)));
         };
 
-        public override IKernelStore NewClient() => new MongoStore(provider._outside.Value[Interlocked.Increment(ref _next) % 2], database, new MongoStoreOptions { NodeLease = store.NodeLeaseAvailable });
+        public override IKernelStore NewClient() => new MongoStore(provider._outside.Value[Interlocked.Increment(ref _next) % 2], database);
 
         /// <summary>K1b: a partition document whose owner has no node document, for the missing-record case.</summary>
         public override Func<string, Task>? DeleteNodeRecord => node =>

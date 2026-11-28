@@ -9,13 +9,13 @@ namespace Elsa.Versioning.Calculator.Tests;
 /// commit's tree by the scan the maps generator runs, so the map need not be committed, and history keeps its bytes.
 /// </summary>
 /// <remarks>
-/// The scan reads only the consolidated layout, so these histories put their projects under <c>Essentials/</c> and
+/// The scan reads only the consolidated layout, so these histories put their projects under <c>essentials/</c> and
 /// <c>Extensions/</c>, with the lock files the scan reads pinned-transitive edges from.
 /// </remarks>
 public sealed class DerivedDatasetTests : IDisposable
 {
-    private const string Primitives = "Essentials/src/Primitives/Elsa.Primitives.csproj";
-    private const string Tasks = "Essentials/src/Tasks/Elsa.Tasks.csproj";
+    private const string Primitives = "essentials/src/Primitives/Elsa.Primitives.csproj";
+    private const string Tasks = "essentials/src/Tasks/Elsa.Tasks.csproj";
     private const string Agent = "Extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj";
 
     private readonly SyntheticRepository repo = new() { WriteLockFiles = true };
@@ -27,9 +27,9 @@ public sealed class DerivedDatasetTests : IDisposable
         repo.AddProject(Primitives, line: "A");
         repo.AddProject(Tasks, references: [Primitives], packages: ["Cronos"], pinnedTransitive: ["Microsoft.Extensions.Primitives"]);
         repo.AddProject(Agent, references: [Tasks]);
-        repo.AddProject("Essentials/tests/Tasks/Elsa.Tasks.Tests.csproj", packable: false, references: [Tasks]);
-        repo.Write("Essentials/src/Tasks/Scheduler.cs", "public sealed class Scheduler;");
-        repo.Write("Essentials/src/Primitives/Primitive.cs", "public sealed class Primitive;");
+        repo.AddProject("essentials/tests/Tasks/Elsa.Tasks.Tests.csproj", packable: false, references: [Tasks]);
+        repo.Write("essentials/src/Tasks/Scheduler.cs", "public sealed class Scheduler;");
+        repo.Write("essentials/src/Primitives/Primitive.cs", "public sealed class Primitive;");
         repo.Write("Extensions/Weaver/src/Core/Agent.cs", "public sealed class Agent;");
     }
 
@@ -39,7 +39,7 @@ public sealed class DerivedDatasetTests : IDisposable
         using var current = new SyntheticRepository { WriteLockFiles = true };
         const string library = "essentials/src/Tasks/Elsa.Tasks.csproj";
         const string extension = "extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj";
-        const string host = "apps/Elsa.Workbench/Elsa.Workbench.csproj";
+        const string host = "server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj";
         const string test = "extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj";
         current.AddProject(library);
         current.AddProject(extension, references: [library]);
@@ -84,9 +84,9 @@ public sealed class DerivedDatasetTests : IDisposable
         var snapshot = Snapshot(commit, DatasetSource.Auto);
 
         Assert.True(snapshot.MapDerived);
-        Assert.Equal([Primitives, Tasks, "Essentials/tests/Tasks/Elsa.Tasks.Tests.csproj", Agent], snapshot.Map.Nodes.Select(node => node.Path));
+        Assert.Equal([Agent, Primitives, Tasks, "essentials/tests/Tasks/Elsa.Tasks.Tests.csproj"], snapshot.Map.Nodes.Select(node => node.Path));
         Assert.Equal("A", snapshot.Map.ByPath[Primitives].Line);
-        Assert.False(snapshot.Map.ByPath["Essentials/tests/Tasks/Elsa.Tasks.Tests.csproj"].Packable);
+        Assert.False(snapshot.Map.ByPath["essentials/tests/Tasks/Elsa.Tasks.Tests.csproj"].Packable);
         Assert.Contains(snapshot.Map.ByPath[Tasks].Edges, edge => edge is { Kind: MapEdgeKind.PinnedTransitive, Id: "Microsoft.Extensions.Primitives", Version: "10.0.10" });
         Assert.Contains(snapshot.Map.ByPath[Agent].Edges, edge => edge is { Kind: MapEdgeKind.Internal, Path: Tasks });
     }
@@ -130,7 +130,7 @@ public sealed class DerivedDatasetTests : IDisposable
         var exception = Assert.Throws<InvalidOperationException>(() => Snapshot(commit, DatasetSource.Auto));
 
         Assert.StartsWith($"Cannot derive the dependency map at {commit}: ", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("Essentials/src/Tasks/packages.lock.json", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("essentials/src/Tasks/packages.lock.json", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public sealed class DerivedDatasetTests : IDisposable
     public void The_map_derived_from_head_is_what_the_generator_writes_from_a_clean_checkout()
     {
         var workingTree = RepoContext.Discover(AppContext.BaseDirectory);
-        var status = Git(workingTree.Root, "status", "--porcelain", "--", "essentials", "extensions", "apps", "Essentials", "Extensions", "Directory.Build.props", "Directory.Packages.props", "VersionLines.props");
+        var status = Git(workingTree.Root, "status", "--porcelain", "--", "server", "essentials", "extensions", "apps", "Essentials", "Extensions", "Directory.Build.props", "Directory.Packages.props", "VersionLines.props");
         if (status.Length > 0)
             return;
 

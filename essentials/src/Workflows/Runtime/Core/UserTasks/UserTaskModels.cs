@@ -12,6 +12,7 @@ public static class UserTaskProtocol
     public const string StimulusType = "Elsa.UserTask";
     public const string ResumeTarget = "resume-target:user-task";
     public const string BasicForms = "elsa.basic-forms/1";
+    public const string FormDraftVersion = "$draft";
 }
 
 public enum UserTaskStatus { Staged, Open, Claimed, CompletionPending, Completed, Cancelled }
@@ -19,11 +20,34 @@ public enum UserTaskStatus { Staged, Open, Claimed, CompletionPending, Completed
 /// <summary>Frozen safe field definition; keys and choices use ordinal, case-sensitive identity.</summary>
 public sealed record UserTaskField(string Key, string Label, string Kind, bool Required = false, bool ReadOnly = false,
     string? Help = null, decimal? Minimum = null, decimal? Maximum = null, int? MaxLength = null,
-    IReadOnlyList<string>? Choices = null);
+    IReadOnlyList<string>? Choices = null)
+{
+    public UserTaskFieldPresentation? Presentation { get; init; }
+    public bool MustBeTrue { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ControlId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? Configuration { get; init; }
+}
 
-public sealed record UserTaskForm(string Id, string Version, string Name, string Provider, IReadOnlyList<UserTaskField> Fields);
+public sealed record UserTaskFieldPresentation(string Display, string? TrueLabel = null, string? FalseLabel = null,
+    string? UnansweredLabel = null);
+
+public sealed record UserTaskForm(string Id, string Version, string Name, string Provider, IReadOnlyList<UserTaskField> Fields)
+{
+    public string? Description { get; init; }
+}
 public sealed record UserTaskFormPage(IReadOnlyList<UserTaskFormVersion> Items, string? Next);
 public sealed record UserTaskFormVersion(string TenantId, UserTaskForm Form, DateTimeOffset CreatedAt, string CreatedBy);
+public sealed record UserTaskFormDraft(string TenantId, string Id, UserTaskForm? Form, long Revision, DateTimeOffset UpdatedAt, string UpdatedBy)
+{
+    public bool Deleted { get; init; }
+}
+public sealed record UserTaskFormDefinition(string TenantId, string Id, UserTaskFormVersion? LatestPublished, UserTaskFormDraft? Draft, long Revision)
+{
+    public bool Deleted { get; init; }
+}
+public sealed record UserTaskFormDefinitionPage(IReadOnlyList<UserTaskFormDefinition> Items, string? Next);
 public sealed record UserTaskHistory(string Operation, string ActorId, DateTimeOffset At, string? Action = null,
     string? AssigneeId = null, string? GroupId = null);
 public sealed record UserTaskResponse(

@@ -1,0 +1,13 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Features": {
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
+            "RecoveryContinuationSigningKey": ""
+          }
+        }
+      }
+    }
+  }
+}

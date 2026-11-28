@@ -17,6 +17,9 @@ public interface IRuntimePostCommitIntentDispatcher
         ValueTask.FromException(new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.DeliveryKind,
             new NotSupportedException("The selected dispatcher does not support this source family."), false));
 
+    /// <summary>Qualifies the actual selected source owner and observation pair; legacy dispatchers refuse.</summary>
+    bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
     /// <summary>The additive context path requires explicit dispatcher support; legacy dispatchers retain their intent-only path.</summary>
     /// <remarks>The context is not independent authorization; a consumer revalidates its domain/provider boundary before effects.</remarks>
     /// <exception cref="RuntimePostCommitSourceBoundaryException">The selected dispatcher cannot preserve a required source; delivery remains owed.</exception>

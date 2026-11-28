@@ -154,6 +154,9 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("character varying(450)")
                         .UseCollation("C");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("RecommendedVersionIdIdentityHash")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -640,6 +643,9 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("C");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ValidFromKey")

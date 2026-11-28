@@ -1,0 +1,17 @@
+# Elsa 3 mapping, import, and workflow compatibility.
+Elsa.Activities.DispatchWorkflow.Design
+Elsa.Activities.DispatchWorkflow.Runtime
+Elsa.Expressions.Api
+Elsa.Expressions.JavaScript
+Elsa.Expressions.JavaScript.Jint
+Elsa.Expressions.Liquid
+Elsa.Http.JavaScript
+Elsa.Workflows.Design.JavaScript
+Elsa.Workflows.Runtime.JavaScript
+Elsa3.Activities.Design.Import
+Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore
+Elsa3.Activities.Design.Import.Publishing
+Elsa3.Mapping
+
+# Startup import runs when shells.json configures an import source.
+Elsa3.Activities.Design.Import.Reconciliation

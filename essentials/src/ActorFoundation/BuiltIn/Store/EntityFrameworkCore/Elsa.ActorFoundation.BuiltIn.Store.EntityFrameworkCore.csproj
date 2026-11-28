@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Kernel.EntityFramework</RootNamespace>
+    <AssemblyName>Kernel.EntityFramework</AssemblyName>
+    <PackageId>Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore</PackageId>
+    <Description>Relational stores for the Built-in Actor Foundation, using Entity Framework Core for schema and cold paths.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <NoWarn>$(NoWarn);EF1002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="MySql.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- Carry these central floors into prototype projects which do not use central package management. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj" />
+    <ProjectReference Include="../../../Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Ef.Conformance" />
+    <InternalsVisibleTo Include="Kernel.Foundation.Postgres" />
+    <InternalsVisibleTo Include="Kernel.Foundation.Sqlite" />
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

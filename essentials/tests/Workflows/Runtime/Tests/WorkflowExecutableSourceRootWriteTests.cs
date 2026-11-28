@@ -5,9 +5,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
-using Elsa.Workflows.Runtime.Services.Executions;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -150,30 +147,6 @@ public sealed class WorkflowExecutableSourceRootWriteTests
             Assert.Equal(expired, await sources.FindAsync("source") is null);
         }
         finally { release.Set(); await holder; }
-    }
-
-    [Fact]
-    public async Task Native_fenced_source_root_real_manager_and_collector_preserve_the_published_dependency_closure()
-    {
-        var clock = new FakeTimeProvider(Now); var artifacts = new InMemoryWorkflowExecutableStore(); var sources = new InMemoryWorkflowExecutableSourceReferenceStore(artifacts, clock);
-        var child = Material("child"); var root = Material("root", child); await artifacts.SaveBatchAsync([root, child]);
-        var manager = new WorkflowExecutableRootWriteLeaseManager(artifacts, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), clock);
-        await manager.ExecuteFencedAsync([root.Identity], "invocation", async (grants, ct) => { await sources.SaveWithRootWriteLeasesAsync(Reference(root), root.Identity, grants, ct); });
-        var collector = new WorkflowExecutableReferenceGarbageCollector(artifacts, sources, new InMemoryExecutableActivityTemplateStore(), new InMemoryWorkflowExecutionStateStore(), null, Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }), clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
-        Assert.False((await collector.SweepAsync()).DidWork); Assert.NotNull(await artifacts.FindAsync(root.Identity.ArtifactId)); Assert.NotNull(await artifacts.FindAsync(child.Identity.ArtifactId));
-    }
-
-    [Fact]
-    public async Task Native_fenced_source_root_collection_wins_then_old_grants_cannot_publish_over_recreated_material()
-    {
-        var clock = new FakeTimeProvider(Now); var artifacts = new InMemoryWorkflowExecutableStore(); var sources = new InMemoryWorkflowExecutableSourceReferenceStore(artifacts, clock);
-        var root = Material("root"); await artifacts.SaveAsync(root); var grants = await Grants(artifacts, clock, root); await artifacts.ReleaseRootWriteLeaseAsync(grants[0]);
-        var collector = new WorkflowExecutableReferenceGarbageCollector(artifacts, sources, new InMemoryExecutableActivityTemplateStore(), new InMemoryWorkflowExecutionStateStore(), null, Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }), clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
-        await collector.SweepAsync(); Assert.Null(await artifacts.FindAsync(root.Identity.ArtifactId));
-        await artifacts.SaveAsync(root);
-        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseLostException>(() => sources.SaveWithRootWriteLeasesAsync(Reference(root), root.Identity, grants).AsTask());
-        Assert.Empty(await sources.ListAllAsync());
-        await sources.SaveWithRootWriteLeasesAsync(Reference(root), root.Identity, await Grants(artifacts, clock, root)); Assert.NotNull(await sources.FindAsync("source"));
     }
 
     [Fact]

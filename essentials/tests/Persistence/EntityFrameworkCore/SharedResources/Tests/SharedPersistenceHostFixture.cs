@@ -7,11 +7,14 @@ namespace Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests;
 /// <summary>Runs the built Workbench with named target connections and supports a clean process restart.</summary>
 public sealed class SharedPersistenceHostFixture : IAsyncDisposable
 {
+    internal const string RuntimeArtifacts = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+    internal const string RuntimeTestScope = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
+    private const string DefaultResourceKey = "Elsa:Persistence:DefaultResource";
     public static IReadOnlyDictionary<string, string> PrimaryResourceSettings()
     {
         var settings = new Dictionary<string, string>
         {
-            ["Elsa:Persistence:DefaultResource"] = "primary",
+            [DefaultResourceKey] = "primary",
             ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
             ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
             // The original shared-layout fixture keeps its four-module scope. The separate
@@ -33,6 +36,18 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
         settings["CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:DiagnosticsStructuredLogsEntityFrameworkCore"] = "diagnostics";
         settings["CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:DiagnosticsOpenTelemetryEntityFrameworkCore"] = "diagnostics";
         return settings;
+    }
+
+    internal static void ConfigureNamedRuntimeTargets(string contentRoot, string? additionalFeature = null)
+    {
+        var shellFile = Path.Combine(contentRoot, "shells.json");
+        var root = JsonNode.Parse(File.ReadAllText(shellFile))!;
+        var features = root["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
+        features[RuntimeArtifacts]!.AsObject().Remove("Provider");
+        features[RuntimeTestScope]!.AsObject().Remove("Provider");
+        if (additionalFeature is not null)
+            features[additionalFeature] = new JsonObject();
+        File.WriteAllText(shellFile, root.ToJsonString());
     }
 
     public static void RemoveLegacyDiagnosticsTargets(string contentRoot)
@@ -57,7 +72,13 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
         Action<string>? prepareContentRoot = null)
     {
         _targets = targets;
-        _prepareContentRoot = prepareContentRoot;
+        _prepareContentRoot = settings?.ContainsKey(DefaultResourceKey) == true
+            ? contentRoot =>
+            {
+                ConfigureNamedRuntimeTargets(contentRoot);
+                prepareContentRoot?.Invoke(contentRoot);
+            }
+            : prepareContentRoot;
         var combined = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["ConnectionStrings:Shared"] = targets.PrimaryConnectionString,
@@ -80,6 +101,7 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
     {
         if (command is not ("list" or "validate"))
             throw new ArgumentOutOfRangeException(nameof(command));
+        stageAuthoredConfig |= _prepareContentRoot is not null;
         var builtHostDirectory = Path.GetDirectoryName(WorkbenchBuild.AssemblyPath())!;
         var hostDirectory = stageAuthoredConfig ? StageToolingHost(builtHostDirectory) : builtHostDirectory;
         var targetFramework = Path.GetFileName(builtHostDirectory);

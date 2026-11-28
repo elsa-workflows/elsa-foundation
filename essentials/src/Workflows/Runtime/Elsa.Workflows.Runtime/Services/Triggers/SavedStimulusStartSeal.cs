@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -9,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// <summary>Canonical validation performed by the physical source owner, never by a caller-supplied witness.</summary>
 internal static class SavedStimulusStartSeal
 {
-    internal const string OriginMetadata = "runtime.savedStimulusStart";
+    internal const string OriginMetadata = RuntimeMetadataKeys.SavedStimulusStartOrigin;
 
     internal static void ValidateWorkOrigin(RuntimeSchedulerWorkItem work, RuntimeStimulusDeliveryOrigin? origin)
     {

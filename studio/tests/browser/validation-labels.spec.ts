@@ -1,0 +1,74 @@
+import { expect, test } from "@playwright/test";
+
+test("validation and rejection copy names activities by display name, not node id", async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 720 });
+  await page.goto("/?mode=validation-labels&theme=light");
+
+  const fixture = page.getByTestId("validation-labels-fixture");
+  await expect(fixture).toBeVisible();
+  await expect(fixture).toContainText("Required input \"Text\" on \"Say hello\" (Write Line) is empty.");
+  await expect(fixture).not.toContainText("writeline-22ab948a");
+  await expect(fixture).not.toContainText("pinned default");
+  await expect(page.locator(".wf-alert-code")).toHaveText("VF-ACT-003");
+  await expect(page.locator(".wf-validation-message").first()).toHaveAttribute("title", "writeline-22ab948a");
+  await expect(page.locator(".wf-runtime-reason")).toHaveAttribute("title", /writeline-22ab948a/);
+});
+
+test("wraps replay-safe warnings in the bounded validation footer and keeps Go to available on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 720 });
+  await page.goto("/?mode=validation-labels&warnings=1");
+
+  const validation = page.locator(".wf-validation");
+  const messages = validation.locator(".wf-validation-message");
+  const actions = validation.getByRole("button", { name: "Go to" });
+  await expect(validation.locator(".wf-validation-summary")).toContainText("2 warnings · publishing is not blocked");
+  await expect(messages).toHaveCount(2);
+  await expect(messages.first()).toContainText("If this is demo-only logging, no action is needed.");
+  await expect(actions).toHaveCount(2);
+  expect(await validation.evaluate(element => getComputedStyle(element).maxHeight)).toBe("148px");
+  expect(await messages.first().evaluate(element => getComputedStyle(element).whiteSpace)).toBe("normal");
+  expect(await messages.first().evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(20);
+
+  await actions.nth(1).click();
+});
+
+test("captures Classic light before/after screenshots of named validation copy", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 960, height: 720 });
+
+  await page.goto("/?mode=validation-labels-before&theme=light");
+  await expect(page.getByTestId("validation-labels-fixture")).toBeVisible();
+  await expect(page.getByTestId("validation-labels-fixture")).toContainText("writeline-22ab948a");
+  await page.screenshot({
+    path: testInfo.outputPath("2698-before-classic-light.png"),
+    animations: "disabled"
+  });
+
+  await page.goto("/?mode=validation-labels&theme=light");
+  await expect(page.getByTestId("validation-labels-fixture")).toContainText("\"Say hello\" (Write Line)");
+  await expect(page.getByTestId("validation-labels-fixture")).not.toContainText("writeline-22ab948a");
+  await page.screenshot({
+    path: testInfo.outputPath("2698-after-classic-light.png"),
+    animations: "disabled"
+  });
+});
+
+for (const theme of ["light", "dark"]) {
+  test(`compilation rejection retains its reason without execution requests or controls (${theme})`, async ({ page }) => {
+    const requests: string[] = [];
+    await page.route("**/rejected-fixture-api/**", async route => {
+      requests.push(route.request().url());
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ message: "Workflow test run was not found." }) });
+    });
+    await page.clock.install();
+    await page.goto(`/?mode=validation-labels&theme=${theme}`);
+    const summary = page.getByRole("region", { name: "Test run summary", exact: true });
+    await expect(summary.locator(".wf-runtime-status-outcome")).toBeVisible();
+    await expect(summary.locator(".studio-status-chip")).toHaveText("Rejected");
+    await expect(page.locator(".wf-runtime-reason")).toContainText("Say hello");
+    await expect(page.getByRole("region", { name: "Test Run controls" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Reconnect execution" })).toHaveCount(0);
+    await page.clock.runFor(10000);
+    await expect(page.getByTestId("validation-labels-fixture")).not.toContainText("Workflow test run was not found.");
+    expect(requests).toEqual([]);
+  });
+}

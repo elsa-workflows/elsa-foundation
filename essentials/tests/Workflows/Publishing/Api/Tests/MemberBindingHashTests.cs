@@ -99,12 +99,6 @@ public sealed class MemberBindingHashTests
         Assert.NotEqual(ScopedActivityResultHashTests.TemplateHash(Node(Baseline(variant))),
             ScopedActivityResultHashTests.TemplateHash(Node(Variant(variant))));
 
-    [Theory]
-    [MemberData(nameof(Variants))]
-    public void A_single_field_change_moves_the_input_snapshot_binding_fingerprint(string variant) =>
-        Assert.NotEqual(WholeValueBindingHashTests.BindingFingerprint(Node(Baseline(variant))),
-            WholeValueBindingHashTests.BindingFingerprint(Node(Variant(variant))));
-
     [Fact]
     public void The_same_member_read_hashes_the_same()
     {

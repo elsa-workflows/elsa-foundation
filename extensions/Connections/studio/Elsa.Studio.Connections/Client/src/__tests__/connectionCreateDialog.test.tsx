@@ -30,11 +30,11 @@ describe("connection editing", () => {
     expect(control<HTMLInputElement>(container, "Display name").value).toBe("Payments");
     expect(control<HTMLInputElement>(container, "Tags").value).toBe("production, billing");
     expect(container.querySelector('input[value="unchanged"]')).toHaveProperty("checked", true);
-    expect(button(container, "Save changes").disabled).toBe(false);
+    expect(button(container, "Save").disabled).toBe(false);
     expect(container.querySelector("form")!.checkValidity()).toBe(true);
     changeText(container, "Display name", "Updated payments");
     changeText(container, "Tags", tags);
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => putJson.mock.calls.length === 1);
     expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", {
       displayName: "Updated payments", tags: tags ? ["updated", "finance"] : [],
@@ -45,16 +45,16 @@ describe("connection editing", () => {
   it("validates replacement credentials and allows returning to the stored credential", async () => {
     const { container, putJson } = renderEdit();
     chooseRadio(container, "New value");
-    expect(button(container, "Save changes").disabled).toBe(true);
+    expect(button(container, "Save").disabled).toBe(true);
     changeText(container, "New value for API key", "   ");
-    expect(button(container, "Save changes").disabled).toBe(true);
-    chooseRadio(container, "Existing Secret");
-    expect(button(container, "Save changes").disabled).toBe(true);
+    expect(button(container, "Save").disabled).toBe(true);
+    chooseRadio(container, "Existing secret");
+    expect(button(container, "Save").disabled).toBe(true);
     chooseRadio(container, "Keep stored credential");
-    expect(button(container, "Save changes").disabled).toBe(false);
+    expect(button(container, "Save").disabled).toBe(false);
     chooseRadio(container, "New value");
     changeText(container, "New value for API key", "replacement");
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => putJson.mock.calls.length === 1);
     expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", expect.objectContaining({
       secretFields: { apiKey: { value: "replacement" } }
@@ -64,10 +64,10 @@ describe("connection editing", () => {
   it("requires a credential when the edited connection has no stored credential", async () => {
     const { container, putJson } = renderEdit([]);
     expect(container.querySelector('input[value="unchanged"]')).toBeNull();
-    expect(button(container, "Save changes").disabled).toBe(true);
+    expect(button(container, "Save").disabled).toBe(true);
     await waitFor(() => container.textContent?.includes("Payments API") === true);
     chooseSecret(container, "API key", "payments.api");
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => putJson.mock.calls.length === 1);
     expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", expect.objectContaining({
       secretFields: { apiKey: { sourceKind: "secret", existingSecretName: "payments.api" } }
@@ -117,7 +117,7 @@ describe("connection credential creation", () => {
     expect(container.querySelector(".studio-advanced-section button")?.getAttribute("aria-expanded")).toBe(field === "name" ? "false" : "true");
     expect(container.querySelector(".studio-advanced-section")?.textContent?.includes("Error")).toBe(field !== "name");
     expect(control<HTMLInputElement>(container, "Name").value).toBe("retained.connection");
-    expect(control<HTMLSelectElement>(container, "Existing Secret for API key").value).toBe("payments.api");
+    expect(control<HTMLSelectElement>(container, "Existing secret for API key").value).toBe("payments.api");
     expect(control<HTMLInputElement>(container, "Base URL").value).toBe("https://api.example");
     expect(container.textContent).not.toContain(rawSecretValue);
     const correction = control<HTMLInputElement>(container, label);
@@ -131,7 +131,7 @@ describe("connection credential creation", () => {
   it("explains missing required credentials and clears their error when supplied", async () => {
     const { container } = renderApiKeyDialog();
     await waitFor(() => container.textContent?.includes("Payments API") === true);
-    const picker = control<HTMLSelectElement>(container, "Existing Secret for API key");
+    const picker = control<HTMLSelectElement>(container, "Existing secret for API key");
     flushSync(() => picker.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
     expect(picker.getAttribute("aria-invalid")).toBe("true");
     expect(container.textContent).toContain("API key is required.");
@@ -149,7 +149,7 @@ describe("connection credential creation", () => {
     expect(input.getAttribute("aria-invalid")).not.toBe("true");
   });
 
-  it("puts the required API key before optional settings and keeps the existing Secret path metadata-only", async () => {
+  it("puts the required API key before optional settings and keeps the existing secret path metadata-only", async () => {
     const { container, calls } = renderApiKeyDialog();
 
     await waitFor(() => container.textContent?.includes("Payments API") === true);
@@ -185,7 +185,7 @@ describe("connection credential creation", () => {
     await waitFor(() => container.textContent?.includes("Payments API") === true);
     changeText(container, "Name", "api.connection");
     changeSelect(container, "Auth scheme", "bearer");
-    await waitFor(() => control<HTMLSelectElement>(container, "Existing Secret for Access token").options.length > 1);
+    await waitFor(() => control<HTMLSelectElement>(container, "Existing secret for Access token").options.length > 1);
     chooseSecret(container, "Access token", "payments.api");
     expect(button(container, "Create").disabled).toBe(true);
     expect(container.textContent).toContain("Enter the Base URL above or configure Allowed hosts in More options.");
@@ -365,7 +365,7 @@ describe("connection credential creation", () => {
     expect(placement.closest(".studio-advanced-section")).toBeNull();
   });
 
-  it("defaults to existing Secrets and sends only reference fields", async () => {
+  it("defaults to existing secrets and sends only reference fields", async () => {
     const calls: Array<{ url: string; body: unknown }> = [];
     const postJson = vi.fn(async (url: string, body: unknown) => {
       calls.push({ url, body });
@@ -431,9 +431,9 @@ describe("connection credential creation", () => {
     changeText(container, "Name", "provider.connection");
     chooseSecret(container, "Access token", "payments.api");
     chooseSecret(container, "Signing key", "signing.key");
-    changeText(container, "Search Secrets for Access token", "no-match");
+    changeText(container, "Search secrets for Access token", "no-match");
     await waitFor(() => container.textContent?.includes("Showing up to 50 matches") === true);
-    const selected = control<HTMLSelectElement>(container, "Existing Secret for Access token");
+    const selected = control<HTMLSelectElement>(container, "Existing secret for Access token");
     expect(selected.value).toBe("payments.api");
     expect(selected.textContent).toContain("Payments API · payments.api");
     expect(button(container, "Create").disabled).toBe(false);
@@ -461,8 +461,8 @@ describe("connection credential creation", () => {
     });
     const { container } = renderDialog({ context: endpointContext(postJson) });
 
-    changeText(container, "Search Secrets for Access token", "pay");
-    changeText(container, "Search Secrets for Access token", "payments");
+    changeText(container, "Search secrets for Access token", "pay");
+    changeText(container, "Search secrets for Access token", "payments");
     expect(calls.filter(call => call.url === "/secrets/picker")).toHaveLength(2);
 
     await vi.advanceTimersByTimeAsync(249);
@@ -488,8 +488,8 @@ describe("connection credential creation", () => {
     chooseSecret(container, "Access token", "payments.api");
     chooseRadio(container, "New value");
     changeText(container, "New value for Access token", "discard-this-value");
-    chooseRadio(container, "Existing Secret");
-    expect(control<HTMLSelectElement>(container, "Existing Secret for Access token").value).toBe("");
+    chooseRadio(container, "Existing secret");
+    expect(control<HTMLSelectElement>(container, "Existing secret for Access token").value).toBe("");
     expect(button(container, "Create").disabled).toBe(true);
     chooseSecret(container, "Access token", "payments.api");
     chooseSecret(container, "Signing key", "signing.key");
@@ -528,7 +528,7 @@ describe("connection credential creation", () => {
     chooseSecret(container, "Access token", "payments.api");
     changeSelect(container, "Auth scheme", "basic");
 
-    expect(control<HTMLSelectElement>(container, "Existing Secret for Password").value).toBe("");
+    expect(control<HTMLSelectElement>(container, "Existing secret for Password").value).toBe("");
     const username = control<HTMLInputElement>(container, "Username (required)");
     const password = Array.from(container.querySelectorAll("legend")).find(item => item.textContent === "Password (required)")!;
     expect(username.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
@@ -560,8 +560,8 @@ describe("connection credential creation", () => {
     const { container } = renderDialog({ context: endpointContext(postJson), onCancel });
 
     expect(document.activeElement).toBe(control<HTMLInputElement>(container, "Name"));
-    await waitFor(() => container.textContent?.includes("Secrets read permission") === true);
-    expect(container.textContent).toContain("Access to existing Secrets is denied.");
+    await waitFor(() => container.textContent?.includes("secrets read permission") === true);
+    expect(container.textContent).toContain("Access to existing secrets is denied.");
     expect(container.textContent).not.toContain(rawSecretValue);
     clickButton(container, "Retry");
     await waitFor(() => container.textContent?.includes("Payments API") === true);
@@ -573,7 +573,7 @@ describe("connection credential creation", () => {
     expect(document.activeElement).toBe(button(container, "Cancel"));
     document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     expect(document.activeElement).toBe(close);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -583,7 +583,7 @@ describe("connection credential creation", () => {
       .mockResolvedValue(pickerResponse());
     const { container } = renderDialog({ context: endpointContext(postJson) });
 
-    await waitFor(() => container.textContent?.includes("Existing Secrets could not be loaded.") === true);
+    await waitFor(() => container.textContent?.includes("Existing secrets could not be loaded.") === true);
     expect(container.textContent).not.toContain("provider failure details");
     clickButton(container, "Retry");
     await waitFor(() => container.textContent?.includes("Payments API") === true);
@@ -604,12 +604,12 @@ describe("connection credential creation", () => {
     clickButton(container, "Create");
 
     await waitFor(() => container.textContent?.includes("The selected secret is unavailable") === true);
-    expect(control<HTMLSelectElement>(container, "Existing Secret for Access token").value).toBe("payments.api");
-    expect(control<HTMLSelectElement>(container, "Existing Secret for Signing key").value).toBe("signing.key");
+    expect(control<HTMLSelectElement>(container, "Existing secret for Access token").value).toBe("payments.api");
+    expect(control<HTMLSelectElement>(container, "Existing secret for Signing key").value).toBe("signing.key");
     expect(button(container, "Create").disabled).toBe(false);
   });
 
-  it("restores focus to the Create connection opener while the post-create refresh is pending", async () => {
+  it("restores focus to the New connection opener while the post-create refresh is pending", async () => {
     const refresh = deferred<{ items: ConnectionMetadata[] }>();
     let listCalls = 0;
     const getJson = vi.fn((url: string) => {
@@ -625,8 +625,8 @@ describe("connection credential creation", () => {
     (context.http as unknown as { getJson: (url: string) => Promise<unknown> }).getJson = getJson;
     const { container: host } = renderConnectionsPage(context);
 
-    await waitFor(() => !button(host, "Create connection").disabled);
-    const opener = button(host, "Create connection");
+    await waitFor(() => !button(host, "New connection").disabled);
+    const opener = button(host, "New connection");
     opener.focus();
     flushSync(() => opener.click());
     await waitFor(() => host.querySelector('[role="dialog"]') !== null);
@@ -664,19 +664,19 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    expect(button(host, "Create connection").disabled).toBe(false);
+    expect(button(host, "New connection").disabled).toBe(false);
     rerender(endpointB);
     await waitFor(() => host.textContent?.includes("Endpoint B is unavailable.") === true);
 
     expect(host.textContent).not.toContain("Endpoint A Connection");
-    expect(button(host, "Create connection").disabled).toBe(true);
+    expect(button(host, "New connection").disabled).toBe(true);
 
     endpointBUnavailable = false;
-    clickButton(host, "Search");
+    clickButton(host, "Retry");
     await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
     expect(host.textContent).not.toContain("Endpoint A Connection");
-    expect(button(host, "Create connection").disabled).toBe(false);
-    clickButton(host, "Create connection");
+    expect(button(host, "New connection").disabled).toBe(false);
+    clickButton(host, "New connection");
     await waitFor(() => host.querySelector('[role="dialog"]') !== null);
     expect(control<HTMLSelectElement>(host, "Type").value).toBe("endpoint-b");
   });
@@ -701,9 +701,9 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA, dialogs);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, action);
-    expect(dialogs.confirm).toHaveBeenCalledWith({ message: `${action} a.connection?`, tone: "danger" });
+    expect(dialogs.confirm).toHaveBeenCalledWith({ title: `${action} connection`, confirmLabel: action, message: `${action} a.connection?`, tone: "danger" });
 
     rerender(endpointB);
     await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
@@ -725,7 +725,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, "Test");
     expect(endpointA.http.postJson).toHaveBeenCalledWith("/connections/a.connection/test", {});
 
@@ -749,7 +749,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, "Test");
 
     rerender(endpointB);
@@ -804,9 +804,10 @@ describe("connection credential creation", () => {
 
     const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
     const content = dialog.querySelector<HTMLElement>(".connections-create-content")!;
-    const actions = dialog.querySelector<HTMLElement>(".connections-create-actions")!;
+    const actions = dialog.querySelector<HTMLElement>(".studio-dialog-footer")!;
     expect(content.contains(actions)).toBe(false);
-    expect(actions.parentElement).toBe(dialog.querySelector("form"));
+    expect(actions.parentElement).toBe(dialog);
+    expect(actions.querySelector<HTMLButtonElement>('button[type="submit"]')?.form).toBe(dialog.querySelector("form"));
 
     changeText(container, "Name", "preserved.connection");
     chooseSecret(container, "Access token", "payments.api");
@@ -946,7 +947,7 @@ function renderConnectionsPage(initialContext: StudioEndpointContext, dialogs = 
     flushSync(() => root.unmount());
     host.remove();
   });
-  return { container: host, rerender: render, dialogs };
+  return { container: document.body, rerender: render, dialogs };
 }
 
 function installConnectionList(context: StudioEndpointContext, connection: ConnectionMetadata) {
@@ -987,7 +988,7 @@ function renderDialog(options: {
     host.remove();
   };
   cleanups.push(cleanup);
-  return { container: host, rerender: render, cleanup };
+  return { container: document.body, rerender: render, cleanup };
 }
 
 function renderApiKeyDialog(descriptors = apiKeyDescriptors) {
@@ -1073,7 +1074,7 @@ function changeSelect(container: HTMLElement, labelText: string, value: string) 
 }
 
 function chooseSecret(container: HTMLElement, labelText: string, value: string) {
-  changeSelect(container, `Existing Secret for ${labelText}`, value);
+  changeSelect(container, `Existing secret for ${labelText}`, value);
 }
 
 function chooseRadio(container: HTMLElement, labelText: string) {

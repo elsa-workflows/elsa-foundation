@@ -2,9 +2,9 @@
 
 Elsa Studio is the visual client you use with an Elsa server: you design workflows, publish them, run them and inspect what happened.
 
-To try a published Workbench and Studio image pair, follow [Try Elsa locally](../essentials/quickstart.md). Those images are pinned by digest and are not built from current `main`. To run Studio from this repository, use the [Studio source quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/docs/contributing/studio-source-quickstart.md) with a source-built Workbench.
+To try a published Workbench and Studio image pair, follow [Try Elsa locally](../essentials/quickstart.md). Those images are pinned by digest and are not built from current `main`. To run Studio from this repository, use the [Studio source quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/studio/docs/contributing/studio-source-quickstart.md) with a source-built Workbench.
 
-Studio's source lives in the [`Studio/` folder](https://github.com/elsa-workflows/elsa-foundation/tree/main/Studio) of the Foundation repository. See the [Studio overview](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/README.md) and [Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/CONTRIBUTING.md). Older issues remain in the former [Elsa Foundation Studio repository](https://github.com/elsa-workflows/elsa-foundation-studio).
+Studio's source lives in the [`studio/` folder](https://github.com/elsa-workflows/elsa-foundation/tree/main/studio) of the Foundation repository. See the [Studio overview](https://github.com/elsa-workflows/elsa-foundation/blob/main/studio/README.md) and [Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation/blob/main/studio/CONTRIBUTING.md). Older issues remain in the former [Elsa Foundation Studio repository](https://github.com/elsa-workflows/elsa-foundation-studio).
 
 Use [folders, tags and saved views](organizing-workflows.md) to organize a large workflow library.
 
@@ -26,7 +26,19 @@ Both views show brief visual cues for newly recorded activity changes. Sequence 
 
 BPMN connections and external execution boundaries do not gain inferred traversal animation. A dispatched child workflow is a separate execution; inspect its own run for the evidence it exposes. Custom activities and external providers retain their existing pinned structure and available evidence, without expanding their internal execution onto the parent canvas.
 
-Captured values depend on the server's capture policy and your access. Missing, unavailable or redacted values stay explicitly identified. Following a run does not enable additional data capture or provide engine pause, rewind or recorded playback.
+Captured values depend on the server's capture policy and your access. Missing, unavailable or redacted values stay explicitly identified. Following a run does not enable additional data capture or provide engine pause or rewind.
+
+## Step through recorded activities
+
+Open an existing run from **Runs**. When its server provides activity recording, **Activity playback** lets you inspect recorded activity occurrences while keeping your chosen **Timeline** or **Diagram** view. Selecting a timeline entry keeps Timeline open. Choose **Inspect owning execution →** when you want the selected occurrence's Activity details.
+
+Use **Previous** and **Next** to move one occurrence at a time, or drag **Activity position** to seek. Focus the position control and use the arrow keys to step with the keyboard. Repeated activities and retries have separate execution identities; the selected occurrence determines the details you inspect.
+
+Choose **Play** to advance automatically and **Pause** to stop. **Presentation pace** offers 0.5×, 1×, 2× and 4×; 1× shows one activity step per second. The original timestamps and recorded waits remain unchanged. Manual navigation, explicit Activity inspection and switching away from the run pause playback. At the end of an available segment, **Replay** starts again only when you choose it.
+
+Playback keeps its recorded range while a live run continues. Pause and choose **Include new history** to include subsequent observations. **Refresh playback** checks the available range again. Playback does not execute activities or change the running workflow.
+
+The controls describe missing, partial or unavailable recording and stop at known gaps. Direct scrubbing needs a known, supported position range. Missing diagram material does not remove readable timeline facts. Recorded order alone does not establish a causal route or reconstruct earlier workflow state; captured values still depend on recording policy and your current access.
 
 ## What Studio looks like
 

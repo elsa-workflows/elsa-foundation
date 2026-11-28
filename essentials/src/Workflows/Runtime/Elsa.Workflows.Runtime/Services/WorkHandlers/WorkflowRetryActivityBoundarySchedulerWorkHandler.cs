@@ -134,7 +134,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             [RuntimeMetadataKeys.PinnedArtifactHash] = command.PinnedExecutable.ArtifactHash
         };
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:activity-boundary-retry:{newActivityExecutionId}";
-        return new RuntimeCheckpointCommit(
+        var commit = new RuntimeCheckpointCommit(
             $"commit:{workItem.WorkItemId}:activity-boundary-retry:{newActivityExecutionId}",
             new RuntimeCheckpoint(
                 checkpointId,
@@ -154,6 +154,11 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
                 operational: []),
             [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(workItem, newActivityExecutionId, scheduleWorkItem, occurredAt)],
             metadata);
+        return await checkpointCommitter.AddCompleteHistorySourceFactsAsync(commit, () =>
+            [new RuntimeHistorySourceFact(RuntimeHistorySourceFactKind.ActivityRetryScheduled,
+                prior.InvocationId, occurredAt, prior.InvocationId,
+                relatedActivityExecutionId: newActivityExecutionId, reasonCode: "boundary-retry-prepared",
+                causation: new RuntimeHistoryCausation(CommandId: workItem.CommandId, SchedulerWorkItemId: workItem.WorkItemId))], cancellationToken);
     }
 
     private static DurableValueState CloneInput(

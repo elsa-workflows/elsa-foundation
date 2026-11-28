@@ -1903,7 +1903,7 @@ function templates() {
       id: "elsa-activity",
       name: "Elsa activity/module",
       description: "Creates an Elsa activity extension.",
-      scope: "Project",
+      scope: "project",
       compatibleFileExtensions: [".slnx", ".csproj"],
       parameters: [
         { name: "packageId", displayName: "Package id", required: true, defaultValue: "Company.Extensions.ElsaActivity" },

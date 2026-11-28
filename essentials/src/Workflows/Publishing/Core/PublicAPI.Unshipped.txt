@@ -29,6 +29,7 @@ const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PublicationS
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.SlotOwnerConflict = "slot_owner_conflict" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.SlotRevisionConflict = "slot_revision_conflict" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.TriggerConflict = "trigger_conflict" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.DefinitionUnsupported = "definition_unsupported" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.UnsupportedAction = "unsupported_action" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.WorkflowPolicyMismatch = "workflow_policy_mismatch" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationProjectionKinds.HttpRoutes = "HttpRoutes" -> string!
@@ -937,6 +938,7 @@ Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunDraftSnapshot.State.get -> 
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunDraftSnapshot.State.init -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunDraftSnapshot.WorkflowTestRunDraftSnapshot(string! DefinitionId, string! DefinitionVersionId, string! ArtifactVersion, Elsa.Workflows.Design.Core.Models.WorkflowDefinitionState! State, System.DateTimeOffset RequestedAt, System.DateTimeOffset? ExpiresAt) -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
+Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.CompletedWithoutRecord = 8 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.DispatchAccepted = 1 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.DispatchDeferred = 4 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.DispatchDuplicate = 2 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
@@ -1408,3 +1410,5 @@ Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.C
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphIntrinsicInputs(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.InputDefinition!>! inputDefinitions, System.Collections.Generic.IEnumerable<Elsa.Workflows.Design.Core.Models.ArgumentState!>! inputStates) -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!>!
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphVariables(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.VariableDefinition!>! variables) -> System.Text.Json.JsonElement
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.PinAssignmentSourceConversion(string! nodeId, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding! binding, Elsa.Primitives.Models.TypeReference? sourceType) -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!
+Elsa.Workflows.Publishing.Core.Contracts.IGlobalClrActivityMaterialReader
+Elsa.Workflows.Publishing.Core.Contracts.IGlobalClrActivityMaterialReader.FindAsync(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersionPublication! publication, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<(Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate! Template, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference)?>

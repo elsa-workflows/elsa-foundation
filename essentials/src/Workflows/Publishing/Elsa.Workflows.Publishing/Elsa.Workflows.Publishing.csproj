@@ -28,7 +28,7 @@
     <ProjectReference Include="..\..\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
+    <ProjectReference Include="..\..\Runtime\Publications\Elsa.Workflows.Runtime.Publications.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="..\Releases\Capture\Core\Elsa.Workflows.Publishing.Releases.Capture.Core.csproj" />
   </ItemGroup>

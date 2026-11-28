@@ -1,0 +1,166 @@
+using System.Data;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Microsoft.EntityFrameworkCore;
+using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
+
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+
+internal sealed partial class EfRuntimeKernelExecutablePinStore
+{
+    private async Task AssignOrdinalsAsync(PersistenceScope scope, RuntimeKernelExecutablePinEntity[] pins, CancellationToken token)
+    {
+        var state = await ScanState(scope).SingleOrDefaultAsync(token);
+        if (state is null)
+        {
+            state = NewState(scope);
+            context.KernelExecutablePinScans.Add(state);
+        }
+        RequireScanScope(state, scope);
+        state.SchemaVersion = WriteScanVersion(state.SchemaVersion);
+        // Zero is reserved for the frozen prefix created by the predecessor writer. The same transaction
+        // commits the allocated positive ordinals and pins, so opening a pass cannot miss a late insert.
+        foreach (var pin in pins)
+            pin.InsertionOrdinal = state.LastOrdinal = checked(state.LastOrdinal + 1);
+    }
+
+    public async ValueTask<IRuntimeKernelExecutablePinScanPage?> ReadScanPageAsync(PersistenceScope scope, int limit,
+        CancellationToken cancellationToken = default)
+    {
+        Bind(scope);
+        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
+        var scopeKey = Encode(scope.Value);
+        var pins = OpenPins(context, scope).Where(row => row.ScopeKey == scopeKey);
+        var state = await ScanState(scope).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+        if (state is not null) RequireScanScope(state, scope);
+        var position = state?.Through is not null ? Position(state) : await OpenScanAsync(scope, pins, cancellationToken);
+        if (position is null) return null;
+
+        // The release stamp is null for all open pins. Including it in the order lets PostgreSQL
+        // stop at the limit directly from the composite index.
+        var ordered = pins.Where(row => row.InsertionOrdinal <= position.Through)
+            .OrderBy(row => row.ReleasedAtUtcTicks).ThenBy(row => row.InsertionOrdinal).ThenBy(row => row.Id);
+        var allowance = limit + 1;
+        RuntimeKernelExecutablePinEntity[] rows;
+        if (position is { AfterOrdinal: 0, AfterId: { } afterId })
+        {
+            // Only the migrated prefix can share an ordinal. Seek the remaining prefix by id,
+            // then fill any unused allowance with new pins in ordinal order.
+            rows = await ordered.Where(row => row.InsertionOrdinal == 0 && string.Compare(row.Id, afterId) > 0)
+                .Take(allowance).ToArrayAsync(cancellationToken);
+            if (rows.Length < allowance && position.Through > 0)
+                rows = [.. rows, .. await ReadAfterAsync(ordered, 0, allowance - rows.Length, cancellationToken)];
+        }
+        else
+        {
+            rows = position.AfterId is null
+                ? await ordered.Take(allowance).ToArrayAsync(cancellationToken)
+                : await ReadAfterAsync(ordered, position.AfterOrdinal, allowance, cancellationToken);
+        }
+        var next = rows.Length > limit ? (rows[limit - 1].InsertionOrdinal, rows[limit - 1].Id) : ((long, string)?)null;
+        return new ScanPage(scope, rows.Take(limit).Select(row => ReadOpen(row, scope)).ToArray(), position, next);
+    }
+
+    private static Task<RuntimeKernelExecutablePinEntity[]> ReadAfterAsync(IOrderedQueryable<RuntimeKernelExecutablePinEntity> ordered,
+        long ordinal, int allowance, CancellationToken token) =>
+        ordered.Where(row => row.InsertionOrdinal > ordinal).Take(allowance).ToArrayAsync(token);
+
+    public async ValueTask<bool> TryAdvanceScanAsync(PersistenceScope scope, IRuntimeKernelExecutablePinScanPage page,
+        CancellationToken cancellationToken = default)
+    {
+        Bind(scope);
+        if (page is not ScanPage selected || selected.Scope != scope)
+            throw new ArgumentException("The attempted executable pin page belongs to a different scan scope.", nameof(page));
+        var position = selected.Position;
+        var next = selected.Next;
+        var through = next is null ? (long?)null : position.Through;
+        var afterOrdinal = next?.Ordinal ?? 0;
+        var afterId = next?.Id;
+        var scopeKey = Encode(scope.Value);
+        var schemaVersion = WriteScanVersion(position.SchemaVersion);
+        var count = await ScanState(scope).Where(state => state.ScopeKey == scopeKey && state.SchemaVersion == position.SchemaVersion && state.Pass == position.Pass &&
+                state.Through == position.Through && state.AfterOrdinal == position.AfterOrdinal && state.AfterId == position.AfterId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(state => state.Through, through)
+                .SetProperty(state => state.AfterOrdinal, afterOrdinal).SetProperty(state => state.AfterId, afterId)
+                .SetProperty(state => state.SchemaVersion, schemaVersion), cancellationToken);
+        return count == 1;
+    }
+
+    private ValueTask<ScanPosition?> OpenScanAsync(PersistenceScope scope, IQueryable<RuntimeKernelExecutablePinEntity> pins,
+        CancellationToken token)
+    {
+        const string operation = "Opening the executable pin scan";
+        return Writes.RunUntilSettledAsync<ScanPosition?>(context, async () =>
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
+            var state = await ScanState(scope).SingleOrDefaultAsync(token);
+            if (state is not null) RequireScanScope(state, scope);
+            if (state?.Through is not null)
+            {
+                var current = Position(state);
+                await context.RollbackAndClearAsync(transaction);
+                return current;
+            }
+
+            if (!await pins.AnyAsync(token))
+            {
+                await context.RollbackAndClearAsync(transaction);
+                return (ScanPosition?)null;
+            }
+            if (state is null)
+            {
+                state = NewState(scope);
+                context.KernelExecutablePinScans.Add(state);
+            }
+            if (state.AfterOrdinal != 0 || state.AfterId is not null) throw InvalidScan();
+
+            state.Pass = Guid.NewGuid();
+            state.Through = state.LastOrdinal;
+            state.SchemaVersion = WriteScanVersion(state.SchemaVersion);
+            var position = Position(state);
+            return await context.TryCommitAndClearAsync(transaction, Writes, operation, token) is { } conflict
+                ? EfWriteAttempt<ScanPosition?>.Retry(conflict) : position;
+        }, error => throw new InvalidOperationException("The executable pin scan changed concurrently.", error), token);
+    }
+
+    private IQueryable<RuntimeKernelExecutablePinScanEntity> ScanState(PersistenceScope scope)
+    {
+        var hash = Hash(scope.Value);
+        return context.KernelExecutablePinScans.Where(row => row.ScopeKeyHash == hash);
+    }
+
+    private static RuntimeKernelExecutablePinScanEntity NewState(PersistenceScope scope) => new()
+    {
+        ScopeKeyHash = Hash(scope.Value), ScopeKey = Encode(scope.Value)
+    };
+
+    private static void RequireScanScope(RuntimeKernelExecutablePinScanEntity state, PersistenceScope scope)
+    {
+        EfSchemaVersion.EnsureReadable(RuntimeKernelExecutablePinEfModule.Chain, state.SchemaVersion);
+        if (state.ScopeKeyHash != Hash(scope.Value) || state.ScopeKey != Encode(scope.Value) || state.LastOrdinal < 0)
+            throw InvalidScan();
+    }
+
+    private string WriteScanVersion(string current) => RuntimeSchemaWriteVersion.For(context, RuntimeKernelExecutablePinEfModule.SchemaFamily,
+        RuntimeKernelExecutablePinEfModule.SchemaVersion, current);
+
+    private static ScanPosition Position(RuntimeKernelExecutablePinScanEntity state)
+    {
+        if (state.Pass == Guid.Empty || state.Through is not { } through || through < 0 || through > state.LastOrdinal ||
+            state.AfterOrdinal < 0 || state.AfterOrdinal > through || state.AfterId is null && state.AfterOrdinal != 0 ||
+            state.AfterId is { } after && (after.Length != 64 || after.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") >= 0))
+            throw InvalidScan();
+        return new(state.Pass, through, state.AfterOrdinal, state.AfterId, state.SchemaVersion);
+    }
+
+    private static InvalidDataException InvalidScan() => new("The persisted executable pin scan position is invalid.");
+
+    private sealed record ScanPosition(Guid Pass, long Through, long AfterOrdinal, string? AfterId, string SchemaVersion);
+    private sealed record ScanPage(PersistenceScope Scope, IReadOnlyList<RuntimeKernelExecutablePin> Items, ScanPosition Position,
+        (long Ordinal, string Id)? Next) : IRuntimeKernelExecutablePinScanPage
+    {
+        public bool HasMore => Next is not null;
+    }
+}

@@ -134,6 +134,8 @@ public sealed class ActivityDefinitionManagementProjectionRevision : ActivityMan
     public long VersionCount { get; set; }
 
     public DateTimeOffset UpdatedAt { get; init; }
+
+    public DateTimeOffset? ArchivedAt { get; init; }
 }
 
 /// <summary>Disclosure-safe temporal draft summary.</summary>

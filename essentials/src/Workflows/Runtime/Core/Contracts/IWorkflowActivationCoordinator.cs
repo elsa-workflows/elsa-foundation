@@ -36,6 +36,9 @@ public interface IWorkflowActivationCoordinator
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<WorkflowActivationResult>(cancellationToken) :
             ValueTask.FromException<WorkflowActivationResult>(new NotSupportedException("This activation coordinator does not support material-neutral deactivation."));
 
+    /// <summary>Whether an empty slot can still await acknowledgment of its external serving projection.</summary>
+    bool RequiresInactiveAcknowledgment => false;
+
     /// <summary>
     /// Makes sure the activation the slot names serves, and writes nothing when it does. A slot a version before #2230 left
     /// on its way to serving is repaired (<see cref="IWorkflowActivationSwitch.TryRepairAsync"/>) and the trigger

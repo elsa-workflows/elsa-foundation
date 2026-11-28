@@ -8,6 +8,7 @@ namespace Elsa3.Activities.Design.Import.Endpoints;
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(ReusableActivityImportSelectionRequest))]
 [JsonSerializable(typeof(ReusableActivityImportApplyHttpRequest))]
+[JsonSerializable(typeof(ReusableActivityDraftApplyHttpRequest))]
 [JsonSerializable(typeof(ReusableActivityImportUploadResult))]
 [JsonSerializable(typeof(ReusableActivityImportAnalysisPage))]
 [JsonSerializable(typeof(ReusableActivityImportSelectionReadiness))]

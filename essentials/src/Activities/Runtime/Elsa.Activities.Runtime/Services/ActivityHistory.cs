@@ -4,7 +4,7 @@ namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>Actual callback observations carried by its existing outcome checkpoint, never an extra boundary.</summary>
 internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string activityId, string? attemptId, TimeProvider clock,
-    RuntimeHistoryCausation? cause, CancellationToken cancellationToken)
+    RuntimeHistoryCausation? cause, CancellationToken cancellationToken, RuntimeHistoryCapturePolicy policy)
 {
     private readonly List<RuntimeHistorySourceFact> _facts = [];
     private bool _started;
@@ -23,7 +23,7 @@ internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string acti
     {
         if (!RuntimeHistorySourceFacts.IsFinalProfile(policy)) return null;
         return new(work, state.InvocationId, state.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId,
-            clock, cause is null ? new(CommandId: work.CommandId, SchedulerWorkItemId: work.WorkItemId) : cause with { CommandId = work.CommandId, SchedulerWorkItemId = work.WorkItemId }, cancellationToken);
+            clock, cause is null ? new(CommandId: work.CommandId, SchedulerWorkItemId: work.WorkItemId) : cause with { CommandId = work.CommandId, SchedulerWorkItemId = work.WorkItemId }, cancellationToken, policy!);
     }
 
     internal static async ValueTask<T> ObserveAsync<T>(ActivityHistory? history, Func<ValueTask<T>> callback, Func<T, string> kind)
@@ -61,7 +61,11 @@ internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string acti
 
     internal IReadOnlyList<RuntimeHistorySourceFact> Materialize(RuntimeStructuralContinuation? continuation = null) =>
         Array.AsReadOnly(_facts.Where(fact => fact.Kind is RuntimeHistorySourceFactKind.ActivityContinuationStarted or RuntimeHistorySourceFactKind.ActivityContinuationReturned)
-            .Concat(_started ? continuation?.MaterializeHistorySourceFacts(_returnedAt) ?? [] : [])
+            .Concat(_started ? continuation?.MaterializeHistorySourceFacts(_returnedAt).Where(fact => policy is { PolicyId: "runtime-history-v5", Version: 5 } ||
+                fact.Kind is not (RuntimeHistorySourceFactKind.CompensationRegistered or RuntimeHistorySourceFactKind.CompensationStarted or
+                    RuntimeHistorySourceFactKind.CompensationHandlerScheduled or RuntimeHistorySourceFactKind.CompensationHandlerCompleted or
+                    RuntimeHistorySourceFactKind.CompensationHandlerFaulted or RuntimeHistorySourceFactKind.CompensationConfirmed or
+                    RuntimeHistorySourceFactKind.CompensationResolved or RuntimeHistorySourceFactKind.CompensationCompleted or RuntimeHistorySourceFactKind.CompensationAbandoned)) ?? [] : [])
             .Concat(_facts.Where(fact => fact.Kind is not (RuntimeHistorySourceFactKind.ActivityContinuationStarted or RuntimeHistorySourceFactKind.ActivityContinuationReturned))).ToArray());
 
     private DateTimeOffset Record(RuntimeHistorySourceFactKind kind, string? reason = null, IReadOnlyList<string>? outcomes = null)

@@ -13,6 +13,102 @@ namespace Elsa.Decisions.Design.Tests;
 
 public sealed class DecisionLifecycleTests
 {
+    [Fact]
+    public async Task Unpublish_and_recycle_preserve_history_restore_unpublished_and_purge_retained_records()
+    {
+        await using var fixture = await Fixture.Create();
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "Lifecycle", Fixture.Xml));
+        var published = await fixture.Service.PublishAsync(fixture.Caller, asset.Id, new("publish", asset.Revision));
+        var current = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id) ?? throw new InvalidOperationException("Published decision was not persisted.");
+        var item = await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null,
+            new("case", "Expected result", Fixture.Input("1"), "Success", Fixture.Expected("Automatic")));
+        await fixture.Service.TestAsync(fixture.Caller, asset.Id,
+            new("run", current.SourceHash, [new(item.Id, item.Revision)], current.Revision));
+
+        var unpublishRequest = new DecisionLifecycleRequest("unpublish", current.Revision);
+        Assert.False((await fixture.Service.UnpublishAsync(fixture.Caller, asset.Id, unpublishRequest)).Replayed);
+        Assert.True((await fixture.Service.UnpublishAsync(fixture.Caller, asset.Id, unpublishRequest)).Replayed);
+        var unpublished = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id);
+        Assert.Null(unpublished!.PublishedVersionId);
+        Assert.NotNull(await fixture.Reader.FindVersionAsync(fixture.Caller.TenantId, asset.Id, published.Id));
+        var unavailable = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.EvaluateAsync(
+            fixture.Caller, asset.Id, new(published.Id, Fixture.Input("1"))));
+        Assert.Equal("conflict", unavailable.Code);
+
+        var recycleRequest = new DecisionLifecycleRequest("recycle", unpublished.Revision);
+        Assert.False((await fixture.Service.RecycleAsync(fixture.Caller, asset.Id, recycleRequest)).Replayed);
+        Assert.True((await fixture.Service.RecycleAsync(fixture.Caller, asset.Id, recycleRequest)).Replayed);
+        var recycled = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id) ?? throw new InvalidOperationException("Recycled decision was not persisted.");
+        Assert.NotNull(recycled.DeletedAt);
+        Assert.Null(recycled.PublishedVersionId);
+        Assert.Empty(await fixture.Service.ListAsync(fixture.Caller));
+        Assert.Equal(asset.Id, Assert.Single(await fixture.Service.RecycleBinAsync(fixture.Caller)).Id);
+        Assert.Single(await fixture.Reader.ListVersionsAsync(fixture.Caller.TenantId, asset.Id));
+        Assert.Single(await fixture.Reader.ListCasesAsync(fixture.Caller.TenantId, asset.Id));
+        Assert.Single(await fixture.Reader.ListRunsAsync(fixture.Caller.TenantId, asset.Id));
+
+        var restoreRequest = new DecisionLifecycleRequest("restore", recycled.Revision);
+        Assert.False((await fixture.Service.RestoreAsync(fixture.Caller, asset.Id, restoreRequest)).Replayed);
+        Assert.True((await fixture.Service.RestoreAsync(fixture.Caller, asset.Id, restoreRequest)).Replayed);
+        var restored = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id);
+        Assert.Null(restored!.DeletedAt);
+        Assert.Null(restored.PublishedVersionId);
+        Assert.Contains(await fixture.Service.ListAsync(fixture.Caller), item => item.Id == asset.Id);
+
+        await fixture.Service.RecycleAsync(fixture.Caller, asset.Id, new("recycle-again", restored.Revision));
+        var readyToPurge = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id);
+        await fixture.Service.PurgeAsync(fixture.Caller, asset.Id, new("purge", readyToPurge!.Revision));
+        Assert.Null(await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id));
+        Assert.Empty(await fixture.Reader.ListVersionsAsync(fixture.Caller.TenantId, asset.Id));
+        Assert.Empty(await fixture.Reader.ListCasesAsync(fixture.Caller.TenantId, asset.Id));
+        Assert.Empty(await fixture.Reader.ListRunsAsync(fixture.Caller.TenantId, asset.Id));
+    }
+
+    [Fact]
+    public async Task Recycling_a_published_asset_unpublishes_it_in_the_same_revision_checked_transition()
+    {
+        await using var fixture = await Fixture.Create();
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "Published policy", Fixture.Xml));
+        var published = await fixture.Service.PublishAsync(fixture.Caller, asset.Id, new("publish", asset.Revision));
+        var current = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id) ?? throw new InvalidOperationException("Published decision was not persisted.");
+
+        await fixture.Service.RecycleAsync(fixture.Caller, asset.Id, new("recycle", current.Revision));
+        var recycled = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id) ?? throw new InvalidOperationException("Recycled decision was not persisted.");
+        Assert.NotNull(recycled.DeletedAt);
+        Assert.Null(recycled.PublishedVersionId);
+        Assert.NotNull(await fixture.Reader.FindVersionAsync(fixture.Caller.TenantId, asset.Id, published.Id));
+        Assert.Empty(await fixture.Service.ListAsync(fixture.Caller));
+    }
+
+    [Fact]
+    public async Task Lifecycle_commands_require_current_revision_correct_state_and_keep_purge_replay()
+    {
+        await using var fixture = await Fixture.Create();
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "Lifecycle", Fixture.Xml));
+        var stale = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.RecycleAsync(
+            fixture.Caller, asset.Id, new("stale-recycle", "stale")));
+        Assert.Equal("conflict", stale.Code);
+        var activePurge = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.PurgeAsync(
+            fixture.Caller, asset.Id, new("active-purge", asset.Revision)));
+        Assert.Equal("conflict", activePurge.Code);
+
+        await fixture.Service.RecycleAsync(fixture.Caller, asset.Id, new("recycle", asset.Revision));
+        var recycled = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id) ?? throw new InvalidOperationException("Recycled decision was not persisted.");
+        var foreign = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.PurgeAsync(
+            fixture.Caller with { TenantId = "tenant-b" }, asset.Id, new("foreign-purge", recycled.Revision)));
+        Assert.Equal("not-found", foreign.Code);
+
+        var request = new DecisionLifecycleRequest("purge", recycled.Revision);
+        var confirmation = await fixture.Service.PurgeAsync(fixture.Caller, asset.Id, request);
+        var replay = await fixture.Service.PurgeAsync(fixture.Caller, asset.Id, request);
+        Assert.False(confirmation.Replayed);
+        Assert.True(replay.Replayed);
+        var divergent = await Assert.ThrowsAsync<DecisionDesignException>(async () => await fixture.Service.PurgeAsync(
+            fixture.Caller, asset.Id, request with { ExpectedRevision = "different" }));
+        Assert.Equal("conflict", divergent.Code);
+        Assert.Null(await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id));
+    }
+
     [Theory]
     [InlineData("BudgetExceeded")]
     [InlineData("Cancelled")]

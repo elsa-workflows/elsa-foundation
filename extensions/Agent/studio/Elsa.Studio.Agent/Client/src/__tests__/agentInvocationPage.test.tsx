@@ -64,7 +64,7 @@ describe("agent invocation page", () => {
     expect(container.querySelector("[data-testid='evidence-output']")!.textContent).toBe("Moss gardens reward patience.");
     expect(container.querySelector("[data-testid='evidence-usage']")!.textContent).toBe("5 input, 3 output, 8 total tokens");
     expect(container.textContent).toContain("copywriter-v3");
-    [...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Open the run")!.click();
+    [...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Workflow run")!.click();
     expect(navigate).toHaveBeenCalledWith(runPath(reference));
     expect(getJson).toHaveBeenCalledTimes(1);
   });

@@ -80,3 +80,15 @@ internal sealed class RecordingAgentProvider : IWorkflowExecutionActorProvider, 
             envelope.EnqueuedAt));
     }
 }
+
+internal sealed class AdmissionAccess : IPersistenceAccessContextAccessor
+{
+    public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new("default"));
+}
+
+internal sealed class AdmissionCodec : IRuntimeRecoveryContinuationCodec
+{
+    public string Encode(string purpose, ReadOnlySpan<byte> payload) => purpose + ":" + Convert.ToBase64String(payload);
+
+    public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token[(purpose.Length + 1)..]);
+}

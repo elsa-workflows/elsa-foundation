@@ -19,7 +19,7 @@ public sealed class SharedStoreConformanceFixture(SharedStoreFault fault = Share
     public const string Name = "shared-store";
 
     private readonly SharedMembershipStore _store = new();
-    // After 2020: the runtime tier composes the distributed runtime on these clocks, and its identities need one.
+    // The legacy distributed-runtime suite uses the same fixture and requires dates after 2020.
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero));
     private readonly List<Member> _members = [];
 

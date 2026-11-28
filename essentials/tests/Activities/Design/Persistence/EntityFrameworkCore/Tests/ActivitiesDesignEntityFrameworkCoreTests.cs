@@ -69,6 +69,120 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
     }
 
     [Fact]
+    public async Task Sqlite_archive_hides_current_and_stale_collection_and_picker_reads_without_deleting_artifacts()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = new ActivitiesDesignSqliteDbContext(new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options);
+        await db.Database.MigrateAsync();
+        var now = DateTimeOffset.UtcNow;
+        var definition = Definition("d1", "tenant-a");
+        var authoring = new ActivityDefinitionAuthoringState
+        {
+            Id = "authoring-d1", DefinitionId = "d1", TenantId = "tenant-a",
+            ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design),
+            HeadVersionId = "v1", RecommendedVersionId = "v1"
+        };
+        var draft = Draft("draft-1", "d1", "tenant-a", 1, "v1");
+        db.ActivityDefinitions.Add(definition);
+        db.ActivityDefinitionAuthoringStates.Add(authoring);
+        db.ActivityDefinitionDrafts.Add(draft);
+        db.ActivityDefinitionDraftLayouts.Add(Layout(draft.Id, "tenant-a", draft.Revision));
+        db.ActivityDefinitionVersions.Add(Version("d1", "v1", "tenant-a"));
+        db.ActivityDefinitionVersionPublications.Add(Publication("d1", "v1", "tenant-a", "provider"));
+        await db.SaveChangesAsync();
+
+        var projectionWriter = new EfActivityManagementProjectionWriter(db);
+        await projectionWriter.WriteAsync(new(now, [new(definition, authoring)], [], []));
+        var stores = new EfActivityDesignStores(db, projectionWriter: projectionWriter);
+        var projectionStore = (IActivityDefinitionManagementProjectionStore)stores;
+        var beforeArchive = await projectionStore.GetCurrentSnapshotAsync();
+        Assert.Single((await projectionStore.ReadDefinitionsAsync(new("tenant-a", beforeArchive.Sequence, 0, 10))).Items);
+        Assert.Single((await ((IRecommendedActivityDefinitionPickerStore)stores).ReadAsync("tenant-a", 0, 10)).Items);
+
+        await ((IArchiveActivityDefinitionCommand)stores).ExecuteAsync(new("d1", "tenant-a", "tenant-a", now.AddMinutes(1)));
+        db.ChangeTracker.Clear();
+
+        var archivedAuthoring = await ((IActivityDefinitionAuthoringStore)stores).FindAsync("d1");
+        Assert.NotNull(archivedAuthoring?.ArchivedAt);
+        Assert.Empty((await projectionStore.ReadDefinitionsAsync(new("tenant-a", null, 0, 10))).Items);
+        Assert.Empty((await projectionStore.ReadDefinitionsAsync(new("tenant-a", beforeArchive.Sequence, 0, 10))).Items);
+        Assert.Empty((await ((IRecommendedActivityDefinitionPickerStore)stores).ReadAsync("tenant-a", 0, 10)).Items);
+        Assert.NotNull(await ((IActivityDefinitionVersionPublicationStore)stores).FindAsync("v1"));
+        Assert.NotNull(await ((IActivityDefinitionDraftStore)stores).FindAsync("draft-1"));
+        Assert.NotNull(await ((IActivityDefinitionStore)stores).GetAsync("d1"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ((IReplaceActivityDraftCommand)stores).ExecuteAsync(new("draft-1", 1, draft.State, [])));
+
+        var archivedSnapshot = await projectionStore.GetCurrentSnapshotAsync();
+        var archivedPage = await projectionStore.ReadDefinitionsAsync(new("tenant-a", archivedSnapshot.Sequence, 0, 10, ArchivedOnly: true));
+        Assert.Equal("d1", Assert.Single(archivedPage.Items).DefinitionId);
+
+        await ((IRestoreActivityDefinitionCommand)stores).ExecuteAsync(new("d1", "tenant-a", "tenant-a", now.AddMinutes(2)));
+        db.ChangeTracker.Clear();
+
+        Assert.Null((await ((IActivityDefinitionAuthoringStore)stores).FindAsync("d1"))?.ArchivedAt);
+        Assert.Single((await projectionStore.ReadDefinitionsAsync(new("tenant-a", null, 0, 10))).Items);
+        Assert.Empty((await projectionStore.ReadDefinitionsAsync(new("tenant-a", null, 0, 10, ArchivedOnly: true))).Items);
+        Assert.Empty((await projectionStore.ReadDefinitionsAsync(new("tenant-a", archivedSnapshot.Sequence, 0, 10, ArchivedOnly: true))).Items);
+        Assert.Single((await ((IRecommendedActivityDefinitionPickerStore)stores).ReadAsync("tenant-a", 0, 10)).Items);
+        Assert.NotNull(await ((IActivityDefinitionVersionPublicationStore)stores).FindAsync("v1"));
+        Assert.NotNull(await ((IActivityDefinitionDraftStore)stores).FindAsync("draft-1"));
+
+        var restoredSnapshot = await projectionStore.GetCurrentSnapshotAsync();
+        await ((IRestoreActivityDefinitionCommand)stores).ExecuteAsync(new("d1", "tenant-a", "tenant-a", now.AddMinutes(3)));
+        Assert.Equal(restoredSnapshot.Sequence, (await projectionStore.GetCurrentSnapshotAsync()).Sequence);
+    }
+
+    [Fact]
+    public async Task Sqlite_archive_accepts_a_design_definition_with_no_versions()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = new ActivitiesDesignSqliteDbContext(new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options);
+        await db.Database.MigrateAsync();
+        db.ActivityDefinitions.Add(Definition("d1", "tenant-a"));
+        db.ActivityDefinitionAuthoringStates.Add(new()
+        {
+            Id = "authoring-d1", DefinitionId = "d1", TenantId = "tenant-a",
+            ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design)
+        });
+        await db.SaveChangesAsync();
+
+        var stores = new EfActivityDesignStores(db);
+        await ((IArchiveActivityDefinitionCommand)stores).ExecuteAsync(new("d1", "tenant-a", "tenant-a", DateTimeOffset.UtcNow));
+
+        Assert.NotNull((await ((IActivityDefinitionAuthoringStore)stores).FindAsync("d1"))?.ArchivedAt);
+        Assert.Empty(await db.ActivityDefinitionVersionPublications.ToListAsync());
+
+        await ((IRestoreActivityDefinitionCommand)stores).ExecuteAsync(new("d1", "tenant-a", "tenant-a", DateTimeOffset.UtcNow.AddMinutes(1)));
+
+        Assert.Null((await ((IActivityDefinitionAuthoringStore)stores).FindAsync("d1"))?.ArchivedAt);
+        Assert.Empty((await ((IRecommendedActivityDefinitionPickerStore)stores).ReadAsync("tenant-a", 0, 10)).Items);
+    }
+
+    [Fact]
+    public async Task Sqlite_archive_rejects_source_owned_definitions()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = new ActivitiesDesignSqliteDbContext(new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options);
+        await db.Database.MigrateAsync();
+        db.ActivityDefinitions.Add(Definition("d1", "tenant-a"));
+        db.ActivityDefinitionAuthoringStates.Add(new()
+        {
+            Id = "authoring-d1", DefinitionId = "d1", TenantId = "tenant-a",
+            ContentAuthority = new(ActivityContentAuthorityKind.ProviderSource, "test-provider", "test-source")
+        });
+        await db.SaveChangesAsync();
+
+        var stores = new EfActivityDesignStores(db);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ((IArchiveActivityDefinitionCommand)stores)
+            .ExecuteAsync(new("d1", "tenant-a", "tenant-a", DateTimeOffset.UtcNow)));
+        Assert.Null((await ((IActivityDefinitionAuthoringStore)stores).FindAsync("d1"))?.ArchivedAt);
+    }
+
+    [Fact]
     public async Task Sqlite_version_lists_use_definition_then_semver_ordinal_order_and_empty_snapshots_use_epoch()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

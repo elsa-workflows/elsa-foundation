@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField, StudioRadioGroup } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { pickConnectionSecrets } from "./connectionsApi";
@@ -45,7 +45,6 @@ export function ConnectionCredentialField({
   const selectId = useId();
   const statusId = useId();
   const detailsId = useId();
-  const radioName = useId();
   const source = value.source;
   const selectedName = value.source === "secret" ? value.existingSecretName : "";
   const selectedSecret = value.source === "secret" ? value.selectedSecret : undefined;
@@ -56,8 +55,8 @@ export function ConnectionCredentialField({
   const selectionUnavailable = selectionUnresolved || selectionExpired;
   const invalid = selectionUnavailable && source === "secret";
   const missing = source !== "unchanged" && field.required && (source === "secret" ? !selectedName : value.source !== "value" || !value.value.trim());
-  const validationMessage = error || (invalid ? "Select an available active text Secret before creating this connection." :
-    touched && missing ? `${field.displayName} is required. Choose an existing Secret or enter a new value.` : null);
+  const validationMessage = error || (invalid ? "Select an available active text secret before creating this connection." :
+    touched && missing ? `${field.displayName} is required. Choose an existing secret or enter a new value.` : null);
   const errorId = `${selectId}-error`;
 
   useEffect(() => {
@@ -93,40 +92,21 @@ export function ConnectionCredentialField({
     <fieldset className="connection-credential-field" disabled={disabled} aria-describedby={detailsId}>
       <legend id={labelId}>{field.displayName}{field.required ? " (required)" : ""}</legend>
       <p id={detailsId} className="connection-credential-help">
-        Choose an existing Secret or enter a new value. Secret values are never loaded here.
+        Choose an existing secret or enter a new value. Secret values are never loaded here.
       </p>
-      <div className="connection-credential-sources">
-        {allowUnchanged ? <label>
-          <input type="radio" name={radioName} value="unchanged" checked={source === "unchanged"}
-            onChange={() => { setTouched(false); onChange({ source: "unchanged" }); }} />
-          Keep stored credential
-        </label> : null}
-        <label>
-          <input
-            type="radio"
-            name={radioName}
-            value="secret"
-            checked={source === "secret"}
-            onChange={() => changeSource("secret")}
-          />
-          Existing Secret
-        </label>
-        <label>
-          <input
-            type="radio"
-            name={radioName}
-            value="value"
-            checked={source === "value"}
-            onChange={() => changeSource("value")}
-          />
-          New value
-        </label>
-      </div>
+      <StudioRadioGroup<"unchanged" | "secret" | "value"> inline label={`${field.displayName} credential source`} value={source}
+        options={[
+          ...(allowUnchanged ? [{ value: "unchanged" as const, label: "Keep stored credential" }] : []),
+          { value: "secret", label: "Existing secret" }, { value: "value", label: "New value" }
+        ]} onChange={next => {
+          if (next === "unchanged") { setTouched(false); onChange({ source: next }); }
+          else changeSource(next);
+        }} />
 
       {source === "unchanged" ? <p>The stored credential will be kept.</p> : source === "secret" ? (
         <div className="connection-secret-picker">
           <div className="connection-secret-search-row">
-            <label htmlFor={searchId}>Search Secrets for {field.displayName}</label>
+            <label htmlFor={searchId}>Search secrets for {field.displayName}</label>
             <input
               id={searchId}
               type="search"
@@ -134,11 +114,11 @@ export function ConnectionCredentialField({
               autoComplete="off"
               onChange={event => setSearch(event.target.value)}
             />
-            <button type="button" onClick={() => setRefreshAttempt(attempt => attempt + 1)}>
-              {visibleState.status === "error" ? "Retry" : "Refresh Secrets"}
-            </button>
+            <StudioButton onClick={() => setRefreshAttempt(attempt => attempt + 1)}>
+              {visibleState.status === "error" ? "Retry" : "Refresh secrets"}
+            </StudioButton>
           </div>
-          <StudioField controlId={selectId} label={<>Existing Secret for {field.displayName}</>}>
+          <StudioField controlId={selectId} label={<>Existing secret for {field.displayName}</>}>
           <select
             id={selectId}
             value={selectedName}
@@ -156,7 +136,7 @@ export function ConnectionCredentialField({
               if (nextSecret) onChange({ source: "secret", existingSecretName: nextSecret.name, selectedSecret: nextSecret });
             }}
           >
-            <option value="">Select an active text Secret</option>
+            <option value="">Select an active text secret</option>
             {hasSelectedOption ? (
               <option value={selectedName}>{formatSecret(selectedSecret, selectedName, "Selected")}</option>
             ) : null}
@@ -170,11 +150,11 @@ export function ConnectionCredentialField({
             role={visibleState.status === "error" ? "alert" : "status"}
             aria-live="polite"
           >
-            {visibleState.status === "loading" ? "Loading eligible text Secrets…" : null}
-            {visibleState.status === "error" && visibleState.denied ? "Access to existing Secrets is denied. You need Secrets read permission; you can enter a new value instead." : null}
-            {visibleState.status === "error" && !visibleState.denied ? "Existing Secrets could not be loaded. Retry or enter a new value." : null}
-            {visibleState.status === "ready" && visibleState.items.length === 0 ? "No active text Secrets match this search." : null}
-            {visibleState.status === "ready" && visibleState.capped ? "Showing up to 50 matches. Refine your search to find another Secret." : null}
+            {visibleState.status === "loading" ? "Loading eligible text secrets…" : null}
+            {visibleState.status === "error" && visibleState.denied ? "Access to existing secrets is denied. You need secrets read permission; you can enter a new value instead." : null}
+            {visibleState.status === "error" && !visibleState.denied ? "Existing secrets could not be loaded. Retry or enter a new value." : null}
+            {visibleState.status === "ready" && visibleState.items.length === 0 ? "No active text secrets match this search." : null}
+            {visibleState.status === "ready" && visibleState.capped ? "Showing up to 50 matches. Refine your search to find another secret." : null}
           </p>
           {!validationMessage && selectedSecret ? (
             <p className="connection-secret-selection">Selected: {formatSecret(selectedSecret)}</p>

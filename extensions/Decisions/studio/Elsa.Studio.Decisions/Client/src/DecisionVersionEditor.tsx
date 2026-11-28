@@ -58,7 +58,10 @@ export function DecisionVersionEditor({ api, value, disabled, onChange, onValida
   // The handed-off name only bridges the gap until the reloaded list lists the decision; after that, a
   // decision that disappears again reads as unavailable like any other.
   useEffect(() => { if (created && assets.some(item => item.id === created.id)) setCreated(null); }, [assets, created]);
-  const unpublished = !loading && !loadingVersions && !error && !!assetId && choices.length === 0;
+  const selectedAsset = assets.find(item => item.id === assetId);
+  const createdSelection = created?.id === assetId;
+  const unavailable = !loading && !!assetId && !selectedAsset && !createdSelection;
+  const unpublished = !loading && !loadingVersions && !error && (!!selectedAsset && !selectedAsset.publishedVersionId || createdSelection);
   const loadVersions = useCallback((id: string, indicate: boolean) => {
     const generation = ++versionsGeneration.current;
     if (indicate) setLoadingVersions(true);
@@ -90,11 +93,12 @@ export function DecisionVersionEditor({ api, value, disabled, onChange, onValida
     loadVersions(assetId, indicate);
     return () => { versionsGeneration.current += 1; };
   }, [api, assetId, freshness, loadVersions]);
-  useEffect(() => { onValidationChange?.(!assetId || !selection || unpublished || !!error); return () => onValidationChange?.(false); }, [assetId, selection, unpublished, error, onValidationChange]);
+  useEffect(() => { onValidationChange?.(!assetId || !selection || loading || loadingVersions || unavailable || unpublished || !!error); return () => onValidationChange?.(false); }, [assetId, selection, loading, loadingVersions, unavailable, unpublished, error, onValidationChange]);
   return <div className="decision-version-picker"><StudioField label="Decision"><select aria-label="Business decision" disabled={disabled || loading} value={assetId} onChange={event => { disarmHandoff(); setError(""); onChange(event.target.value ? `${event.target.value}@latest` : ""); }}><option value="">Select a decision</option>{assetId && !assets.some(item => item.id === assetId) ? <option value={assetId}>{created?.id === assetId ? created.name : `Unavailable decision (${assetId})`}</option> : null}{assets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></StudioField>
     {can(api, "decisions:manage") ? <StudioButton className="decision-new-shortcut" size="sm" disabled={disabled} title="Opens the decision editor in a new tab" onClick={openNewDecision}><Plus size={14} aria-hidden="true" /> New decision</StudioButton> : null}
-    <StudioField label="Version"><select aria-label="Business decision version" disabled={disabled || !assetId} value={selection} onFocus={() => { if (assetId) loadVersions(assetId, false); }} onChange={event => { disarmHandoff(); onChange(`${assetId}@${event.target.value}`); }}><option value="latest">Latest when workflow is published</option>{selection && selection !== "latest" && !choices.some(item => item.id === selection) ? <option value={selection}>Unavailable version ({selection})</option> : null}{choices.map(item => <option key={item.id} value={item.id}>Version {item.number}</option>)}</select></StudioField>
+    <StudioField label="Version"><select aria-label="Business decision version" disabled={disabled || !assetId || unavailable} value={selection} onFocus={() => { if (assetId) loadVersions(assetId, false); }} onChange={event => { disarmHandoff(); onChange(`${assetId}@${event.target.value}`); }}><option value="latest" disabled={unpublished}>Latest when workflow is published</option>{selection && selection !== "latest" && !choices.some(item => item.id === selection) ? <option value={selection} disabled={unpublished}>Unavailable version ({selection})</option> : null}{choices.map(item => <option key={item.id} value={item.id} disabled={unpublished}>Version {item.number}</option>)}</select></StudioField>
     <p className="decision-muted">Workflow publication freezes the selected policy. Later changes do not switch an existing published workflow.</p>
-    {unpublished ? <StudioAlert tone="warning">This decision has no published version. Publish it first; Review &amp; publish cannot pin a draft with @latest.</StudioAlert> : null}
+    {unavailable ? <StudioAlert tone="warning">This decision is unavailable in active inventory. Restore it before selecting a version for a workflow.</StudioAlert> : null}
+    {unpublished ? <StudioAlert tone="warning">This decision has no published version and is unpublished. Publish it before selecting a version for a new workflow binding.</StudioAlert> : null}
     {error ? <p role="alert">{error}</p> : null}</div>;
 }

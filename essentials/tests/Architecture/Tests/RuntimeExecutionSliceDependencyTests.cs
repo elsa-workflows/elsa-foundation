@@ -1,6 +1,11 @@
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Api.Authorization;
+using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.KernelApi;
+using Elsa.Workflows.Runtime.KernelHosting;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -20,7 +25,7 @@ public sealed class RuntimeExecutionSliceDependencyTests
     public void RuntimeApi_DoesNotReferenceWorkflowDesignOrPublishing()
     {
         AssertNoReferences(
-            typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(WorkflowRuntimePermissions).Assembly,
             "Elsa.Workflows.Design.",
             "Elsa.Workflows.Publishing.");
     }
@@ -34,13 +39,52 @@ public sealed class RuntimeExecutionSliceDependencyTests
     }
 
     [Fact]
-    public void PublishingEngine_DoesNotReferenceRuntimeApi()
+    public void PublishingEngine_DoesNotReferenceClassicRuntimeOrItsApi()
     {
-        // The endpoint-free publish engine composes the Runtime triggers feature via DependsOn
-        // (a shell-composition edge), not an assembly reference — so it must not pull in Runtime.Api.
-        AssertNoReferences(
-            typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,
-            "Elsa.Workflows.Runtime.Api");
+        var engine = typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly;
+        AssertNoReferences(engine, "Elsa.Workflows.Runtime.Api");
+        Assert.DoesNotContain(engine.GetReferencedAssemblies(), reference => reference.Name == "Elsa.Workflows.Runtime");
+        Assert.DoesNotContain(typeof(Elsa.Workflows.Runtime.Extensions.WorkflowPublicationDefaults).Assembly.GetReferencedAssemblies(),
+            reference => reference.Name == "Elsa.Workflows.Runtime");
+    }
+
+    [Fact]
+    public void KernelApi_DoesNotReferenceBroadRuntimeApi()
+    {
+        Assert.DoesNotContain(typeof(WorkflowsRuntimeKernelRetainedApiFeature).Assembly.GetReferencedAssemblies(),
+            reference => reference.Name == "Elsa.Workflows.Runtime.Api");
+    }
+
+    [Fact]
+    public void KernelHosting_DoesNotReferenceBroadRuntimeApi()
+    {
+        Assert.DoesNotContain(typeof(WorkflowsRuntimeKernelHostingFeature).Assembly.GetReferencedAssemblies(),
+            reference => reference.Name == "Elsa.Workflows.Runtime.Api");
+    }
+
+    [Fact]
+    public void ActorKernelModules_DoNotReferenceTheClassicRunner()
+    {
+        foreach (var module in new[] { typeof(WorkflowsRuntimeKernelRetainedApiFeature), typeof(WorkflowsRuntimeKernelHostingFeature) })
+            Assert.DoesNotContain(module.Assembly.GetReferencedAssemblies(),
+                reference => reference.Name == "Elsa.Workflows.Runtime");
+    }
+
+    [Fact]
+    public void RetainedRuntimeAndPublishingEf_DoNotReferenceClassicRuntimePersistence()
+    {
+        foreach (var module in new[] { typeof(RuntimeArtifactsEntityFrameworkCoreFeature),
+                     typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature), typeof(PublishingEntityFrameworkCoreFeature) })
+            Assert.DoesNotContain(module.Assembly.GetReferencedAssemblies(),
+                reference => reference.Name is "Elsa.Workflows.Runtime" or "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore");
+    }
+
+    [Fact]
+    public void RetainedAttention_DoesNotReferenceClassicRuntime()
+    {
+        var assembly = typeof(WorkflowsRuntimeRetainedAttentionFeature).Assembly;
+        Assert.Equal("Elsa.Workflows.Runtime.Attention", assembly.GetName().Name);
+        Assert.DoesNotContain(assembly.GetReferencedAssemblies(), reference => reference.Name == "Elsa.Workflows.Runtime");
     }
 
     private static void AssertNoReferences(System.Reflection.Assembly assembly, params string[] forbiddenPrefixes)

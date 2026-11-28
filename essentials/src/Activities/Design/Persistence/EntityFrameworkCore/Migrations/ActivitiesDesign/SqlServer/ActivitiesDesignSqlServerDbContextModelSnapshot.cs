@@ -155,6 +155,9 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(450)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("RecommendedVersionIdIdentityHash")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
@@ -641,6 +644,9 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("ValidFromKey")

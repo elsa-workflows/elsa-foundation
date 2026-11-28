@@ -13,7 +13,7 @@ Three ways to run, fastest first:
   Hub and run them; no clone, no build. See [Quick start — published images](#quick-start--published-images-no-clone-or-build)
   right below. Best for just trying the stack.
 - **Fast path (build)** — Postgres + Elsa.Workbench only, built from this repo. Good for API/backend work.
-- **Full stack (build)** — adds the Elsa Studio management UI, whose image is built from a *sibling* repo.
+- **Full stack (build)** — adds Studio Workbench, built from the same checkout.
 
 > This is a quickstart. For the full container/image reference — the complete environment-variable
 > surface, mounts, the demo persistence composition, and troubleshooting — see
@@ -29,20 +29,19 @@ CI publishes two images to Docker Hub — **`elsaworkflows/elsa-workbench`** and
 `sha-<short-commit>`. There are no `4` / `4.0` / `4.0.0` release tags yet — Elsa 4 is pre-release.
 Run the whole stack straight from these images.
 
+> `elsaworkflows/elsa-studio` runs the Studio Essentials profile, which pairs with `elsaworkflows/elsa-essentials-host`.
+> Against Workbench it shows the screens of the curated modules. The Studio app with every module compiled in publishes as
+> `elsaworkflows/elsa-studio-workbench`, and the bare shell publishes as `elsaworkflows/elsa-studio-foundation`.
+> See [Studio Docker](../../studio/docs/docker.md).
+
 For a pinned, isolated check that Studio can create and run a workflow against Workbench, see
 [Verify the published Studio–Workbench pair](../../docs/contributing/published-image-pair.md).
 
-> **Persistence is ephemeral here.** The server image's baked-in default composition is **SQLite**
-> (written under `/app`), which is discarded when the `elsa-workbench` container is removed. For
-> durable, Postgres-backed persistence, use the build-from-source reference stack in sections 2–3
-> below. The one exception is the Data Protection key ring, which protects the sign-in cookie and the
-> antiforgery tokens: both examples below keep it in a SQLite file on the `elsa-data` volume
-> (`Elsa__DataProtection__EntityFrameworkCore__*`, mounted at `/app/data`), so the keys survive a
-> restart and a recreate of `elsa-workbench` for as long as that volume exists. A recreate still signs
-> everyone out here: the identity store is SQLite inside the container too, so a recreated container
-> seeds its users again and an earlier session no longer matches a user. Only a stack whose identity
-> store is on a persistent database, such as the Postgres reference stack below, keeps everyone signed
-> in across a recreate. See [Data Protection keys](../../docs/docker.md#data-protection-keys).
+> The image stack keeps the Actor database, the shared Elsa platform database, and the Data
+> Protection key ring on the `elsa-data` volume. Keep the volume across container recreations
+> so Actor state and its publication material survive together. Separately configured SQLite
+> files, such as diagnostics and Studio dashboards, stay in the container.
+> See [Data Protection keys](../../docs/docker.md#data-protection-keys).
 >
 > The `elsa-data` volume needs an image built after #2191, which creates `/app/data` owned by the
 > image's `$APP_UID` (1654). With an older image the volume starts out owned by root and the container
@@ -85,12 +84,12 @@ The following alternative uses Bash and OpenSSL. Before running it, check that t
 and `14000` are unused. Start the server, then Studio pointed at it:
 
 ```bash
-# Elsa.Workbench (SQLite default composition; elsa-workbench-packages is the Nuplane package feed, elsa-data
-# holds the Data Protection key ring).
+# Elsa.Workbench uses SQLite. elsa-workbench-packages holds the Nuplane feed.
+# elsa-data holds the Actor and platform databases and the Data Protection key ring.
 # DEMO ONLY: Migrate__Policy=AutoMigrate applies the migrations as the container starts, as the compose file does.
 # Real production keeps the image's default Validate policy and applies them first (see below the example).
-# The last four -e flags supply the Production secrets: recovery and hierarchy cursor signing keys,
-# the seed admin password, and a freshly generated access-token signing key (needs openssl on your machine).
+# The demo supplies the retained Runtime recovery signing key, Secrets key, admin password,
+# and an access-token signing key (generated using openssl).
 docker run -d --name elsa-workbench \
   -p 127.0.0.1:13000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
@@ -100,8 +99,10 @@ docker run -d --name elsa-workbench \
   -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0=http://localhost:14000 \
   -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
   -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
-  -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
-  -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey=elsa-docker-demo-hierarchy-cursor-key \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__SqlitePath=/app/data/elsa-workbench-actors.db \
+  -e "ConnectionStrings__Elsa=Data Source=/app/data/elsa.db" \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
+  -e CShells__Shells__default__Features__Secrets__EncryptionKey=elsa-docker-demo-secrets-encryption-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
   -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
   -v elsa-workbench-packages:/app/packages \
@@ -163,7 +164,7 @@ Demo credentials and the demo-only warning are the same as the [table in section
   docker compose version
   ```
 
-- **For the full stack:** Studio is included under `Studio/` in this same repository.
+- **For the full stack:** Use Node.js 22.13 or later and pnpm to build the Studio frontend in this checkout.
 - **No credentials required.** All NuGet feeds used by the image builds are public, so the builds
   work on a clean machine with no `~/.nuget` setup.
 
@@ -180,8 +181,14 @@ From `docker/compose`:
 docker compose up --build
 ```
 
-This builds the `elsa-workbench:local` image (context is the repo root) and starts two services:
-`postgres` and `elsa-workbench`. Compose waits for Postgres to be healthy before starting the server.
+This builds the `elsa-workbench:local` image from the repo root. Compose waits for PostgreSQL,
+creates the dedicated `elsa_actors` database through `actor-database`, and then starts `elsa-workbench`.
+
+The stock local and Compose shells enable Actor HTTP Connections. Published workflow jobs can
+use a tenant-owned HTTP connection with Basic, Bearer, or API key authentication. Isolated Test Runs
+and connections that refresh credentials are unsupported on this path. See the
+[Workbench compatibility notes](../../docs/docker.md#workbench-mixed-preview-compatibility)
+if you are replacing an earlier mixed-preview container.
 
 Once the server reports healthy, hit its root endpoint:
 
@@ -205,10 +212,11 @@ continue to step 3.
 
 ## 3. Full stack — add Elsa Studio
 
-The Studio image is built from this repository, with the Foundation root as its build context.
-From `docker/compose`, bring up the whole stack with the `studio` profile:
+From `docker/compose`, generate the Studio frontend assets and build the stack with the `studio` profile.
 
 ```bash
+pnpm --dir ../../studio install --frozen-lockfile
+pnpm --dir ../../studio build
 docker compose --profile studio up --build
 ```
 
@@ -272,18 +280,19 @@ For the rest of the identity settings, see
 
 ## 5. Verify Postgres persistence
 
-The stack composes Elsa.Workbench with the EF Core persistence features on Postgres (via the mounted
-`elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
+The source stack stores design, publishing, identity, and retained Runtime metadata in the `elsa`
+database. The `actor-database` init service creates `elsa_actors` on the same PostgreSQL server
+before Workbench starts. Actor Foundation owns that database and installs its tables on shell
+activation. The image-only stack stores its Actor database under the Workbench data volume.
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
+docker compose exec postgres psql -U elsa -d elsa_actors -c '\dt'
 ```
 
-Each module owns its own tables, so `\dt` lists one per entity across the composed modules: the design
-modules contribute `elsa_workflow_definitions_v2`, `elsa_workflow_definition_drafts`,
-`elsa_workflow_definition_versions` and their siblings, and the runtime module contributes the
-`runtime_*` family (`runtime_workflow_execution_state`, `runtime_checkpoint_commit`, and so on). Each
-module also keeps its own EF migrations history table, named `__EFMigrationsHistory_<module>`.
+The metadata database contains each installed module's tables and its
+`__EFMigrationsHistory_<module>` history table. The Actor database contains the workflow execution
+state, inbox, and journal.
 
 To confirm a workflow you designed actually landed:
 
@@ -338,7 +347,7 @@ Studio__BackendModuleManagementApiKey=<your-key>
 server node:
 
 ```
-CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=<your-key>
+CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey=<your-key>
 ```
 
 **Replace the demo identity secrets** on the `elsa-workbench` service. The signing key is a base64 PKCS#8
@@ -374,7 +383,6 @@ container on one database needs the same one.
 
 ## 7. Troubleshooting
 
-The common failure modes — `FeatureNotFoundException: WorkflowsRuntimeResumption`, the
-`Failed to connect to 127.0.0.1:5432` connection-string binding issue, and Studio CORS / backend
-connectivity errors — are documented in
+Troubleshooting covers classic mounted shells that request `WorkflowsRuntimeResumption`,
+`Failed to connect to 127.0.0.1:5432` connection-string binding, and Studio or CORS connectivity in
 [`docs/docker.md`](../../docs/docker.md#troubleshooting). Start there.

@@ -51,6 +51,7 @@ describe("ETL run inspection", () => {
     expect(container.textContent).toContain("Recorded claim expired");
     expect(container.textContent).toContain("12–14 (end exclusive), 128 bytes");
     expect(container.textContent).toContain("does not prove a worker stopped or released memory");
+    expect(container.querySelector<HTMLTimeElement>("tbody .studio-timestamp")?.dateTime).toBe("2026-10-20T11:00:00Z");
     expect(container.querySelector('[role="region"]')?.getAttribute("tabindex")).toBe("0");
     expect(container.textContent).not.toContain("Complete");
   });
@@ -76,10 +77,13 @@ describe("ETL run inspection", () => {
         owedBatch: null, acceptedMainEffects: 1, acceptedErrorEffects: 0 }
     ]} />));
     const rows = Array.from(container.querySelectorAll("tbody tr")).map(row => row.textContent ?? "");
-    expect(rows[0]).toContain("Next poll at 2026-11-02T18:01:00Z");
+    const timestamps = Array.from(container.querySelectorAll<HTMLTimeElement>("tbody .studio-timestamp"), timestamp => timestamp.dateTime);
+    expect(rows[0]).toContain("Next poll at");
     expect(rows[0]).not.toContain("Eligible after");
-    expect(rows[1]).toContain("Eligible after 2026-11-02T18:00:30Z");
+    expect(rows[1]).toContain("Eligible after");
     expect(rows[1]).not.toContain("Next poll at");
+    expect(timestamps).toContain("2026-11-02T18:01:00Z");
+    expect(timestamps).toContain("2026-11-02T18:00:30Z");
   });
 
   it("labels a connector run without a reported mode as finite", () => {

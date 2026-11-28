@@ -106,7 +106,7 @@ describe("agent editor", () => {
       const result = await focus({ location: { providerKey: "elsa.agent", jsonPointer: pointer }, subject: { kind: "ActivityDefinition", id: "elsa.agent" }, editorElement: container });
       expect(result.kind).toBe("focused");
       expect(document.activeElement).toBe(field(container, label));
-      if (pointer.startsWith("/limits/")) expect(container.querySelector<HTMLDetailsElement>(".agent-advanced")!.open).toBe(true);
+      if (pointer.startsWith("/limits/")) expect(container.querySelector(".studio-advanced-section button")?.getAttribute("aria-expanded")).toBe("true");
     }
     const unsupported = await focus({ location: { providerKey: "elsa.agent", jsonPointer: "/future-private-field" }, subject: { kind: "ActivityDefinition", id: "elsa.agent" }, editorElement: container });
     expect(unsupported.kind).toBe("unsupported");
@@ -239,6 +239,29 @@ describe("agent editor", () => {
     expect(postJson).toHaveBeenLastCalledWith("/connections/picker", { typeName: "agent-azure-openai" }, expect.anything());
   });
 
+  it("consolidates an unavailable saved connection warning and retries without changing the saved model", async () => {
+    const fixture: Fixture = { capabilities: "unusable", connections: {} };
+    const { context, postJson } = fakeContext(fixture);
+    const saved = configured();
+    const { container, latest } = await render(context, saved, { readOnly: true });
+
+    const alerts = [...container.querySelectorAll<HTMLElement>(".agent-model > .studio-alert")];
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].dataset.tone).toBe("warning");
+    expect(alerts[0].textContent).toContain('The saved connection “writer” is unavailable.');
+    expect(alerts[0].textContent).toContain("It’s still saved.");
+    expect(alerts[0].textContent).toContain("Connections");
+    expect(alerts[0].textContent).toContain("Retry");
+    expect(latest().model).toEqual(saved.model);
+
+    fixture.capabilities = undefined;
+    button(container, "Retry")!.click();
+    await settle();
+
+    expect(postJson.mock.calls.filter(call => call[0] === "/agent/model-capabilities").length).toBeGreaterThan(1);
+    expect(latest().model).toEqual(saved.model);
+  });
+
   it("offers the connection's current model when the saved one is stale", async () => {
     const { context } = fakeContext({ capabilities: "unusable" });
     const { container, latest } = await render(context, { ...configured(), model: { providerKey: "anthropic", connectionName: "writer", modelId: "old-model" } });
@@ -345,7 +368,7 @@ describe("agent editor", () => {
     const controls = [...container.querySelectorAll("input, textarea, select")] as HTMLInputElement[];
     expect(controls.length).toBeGreaterThan(4);
     for (const control of controls) expect(control.disabled || control.closest("fieldset")?.disabled).toBe(true);
-    expect([...container.querySelectorAll("button")].filter(x => !x.disabled && !x.closest("fieldset[disabled]"))).toHaveLength(0);
+    expect([...container.querySelectorAll("button")].filter(x => !x.hasAttribute("aria-expanded") && !x.disabled && !x.closest("fieldset[disabled]"))).toHaveLength(0);
     // Read-only still shows what the saved model would need, without offering to change it.
     expect(container.textContent).not.toContain("Remove unsupported settings");
   });

@@ -35,17 +35,28 @@ internal sealed class StimulusDeliveryServices(
 
     internal void RequireBoundary(PostCommitDeliveryContext source)
     {
-        var rawExecutions = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore) ? physicalExecutions?.Value : executions;
-        var rawActivities = activities.GetType() == typeof(CoalescingActivityExecutionStateStore) ? physicalActivities?.Value : activities;
-        var rawOutbox = outbox.GetType() == typeof(CoalescingRuntimePostCommitOutboxStore) ? physicalOutbox?.Value : outbox;
         (access?.Current ?? throw new NotSupportedException("Source-owned stimulus delivery requires explicit persistence access.")).EnsureScope(source.Scope);
-        if (rawExecutions is null || rawActivities is null || rawOutbox is null ||
-            !sources.CanRetainExecutables(rawOutbox, material, references, rawExecutions) ||
-            !checkpoints.CanCommitExactBookmarkResume(bookmarks, rawExecutions, rawActivities))
+        if (!SupportsBoundary())
             throw new NotSupportedException("Source-owned stimulus delivery requires coherent physical source, retention and exact resume stores.");
         if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null &&
             (source.Claim.Item.SubscriptionDeliveryProtocolVersion != 1 || subscriptions is null || subscriptionDelivery is null || ingress?.SupportsWorkflowCohort(source.Intent.Kind) != true))
             throw new NotSupportedException("The declared combined source protocol requires coherent independent subscription selection and delivery.");
+    }
+
+    internal bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        _ = (access?.Current ?? throw new NotSupportedException("Source-owned stimulus history requires explicit persistence access.")).RequireScope();
+        return _requests.Owns(intentKind) && writer.CanRecordHistory(reader) && checkpoints.CanCommitHistory(reader) && SupportsBoundary();
+    }
+
+    private bool SupportsBoundary()
+    {
+        var rawExecutions = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore) ? physicalExecutions?.Value : executions;
+        var rawActivities = activities.GetType() == typeof(CoalescingActivityExecutionStateStore) ? physicalActivities?.Value : activities;
+        var rawOutbox = outbox.GetType() == typeof(CoalescingRuntimePostCommitOutboxStore) ? physicalOutbox?.Value : outbox;
+        return rawExecutions is not null && rawActivities is not null && rawOutbox is not null &&
+            sources.CanRetainExecutables(rawOutbox, material, references, rawExecutions) &&
+            checkpoints.CanCommitExactBookmarkResume(bookmarks, rawExecutions, rawActivities);
     }
 
     internal StimulusDispatchRequest Request(PostCommitDeliveryContext source) => _requests.Read(source);
@@ -153,7 +164,7 @@ internal sealed class StimulusDeliveryServices(
             ?? throw new InvalidDataException("The exact saved wait is absent from its source cohort.");
         var resume = new BookmarkResumeDispatchRequest(executionId, request.StimulusType, request.StimulusHash, request.Input,
             $"{request.IdempotencyKey}:resume:{executionId}", request.RequestedBy, request.BuildDispatchMetadata(), request.PayloadType,
-            request.ProviderId, bookmarkId, null);
+            request.ProviderId, bookmarkId, null) { HistoryCausation = source.Intent.HistoryCausation };
         var observed = await bookmarks.ObserveAsync(executionId, bookmarkId, cancellationToken);
         if (observed is null) return new(source, resume, expected, null);
         var execution = await executions.FindAsync(executionId, cancellationToken)

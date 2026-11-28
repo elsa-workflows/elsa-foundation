@@ -31,6 +31,15 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         { _delivery = provider.GetRequiredService<StimulusDeliveryServices>(),
           _historyServices = provider.GetService<RuntimeHistoryOptions>() is null ? null : provider };
 
+    bool IBookmarkResumeDispatcher.CanDispatchChildHistorySource(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        _historyServices?.GetService<NativeChildHistoryTransport>()?.CanRecord(writer, reader, _workflowExecutionStateStore, _timeProvider) == true;
+
+    private ValueTask ValidateChildHistoryAsync(BookmarkResumeDispatchRequest request, CancellationToken token) =>
+        request.ChildHistorySource is not { } source ? ValueTask.CompletedTask :
+        (_historyServices?.GetService<NativeChildHistoryTransport>() ?? throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+            new NotSupportedException("The selected resume transport cannot preserve native child history responsibility."), true))
+            .ValidateAsync(source, request.WorkflowExecutionId, request.BookmarkId, token);
+
     bool IBookmarkResumeDispatcher.CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
     {
         ResolveHistory();
@@ -116,6 +125,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        await ValidateChildHistoryAsync(request, cancellationToken);
         BookmarkResumeDispatchResult Unmatched() => new(BookmarkResumeDispatchStatus.NotFound, request.WorkflowExecutionId,
             reason: "The exact saved wait is retired or no longer eligible.");
         var source = saved?.Source ?? unmatched?.Source;
@@ -141,7 +151,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             receiptId = Guid.NewGuid().ToString("N");
             var logicalDelivery = source?.SourceOutboxItemId ?? (request.IdempotencyKey is { } key
                 ? RuntimeHistoryIdentity.CreateBinding([request.WorkflowExecutionId, key]) : receiptId);
-            cause = source is null ? request.HistoryCausation ?? new RuntimeHistoryCausation() :
+            cause = source is null ? request.HistoryCausation ?? new RuntimeHistoryCausation() : source.Intent.HistoryCausation ??
                 new RuntimeHistoryCausation(WorkflowExecutionId: source.Intent.WorkflowExecutionId, DeliveryId: source.SourceOutboxItemId);
             cause = cause with { DeliveryId = cause.DeliveryId ?? logicalDelivery };
             var receipt = RuntimeHistoryDeliveryObservations.Create(policy, request.WorkflowExecutionId, receiptId, "DeliveryReceived", receivedAt,
@@ -324,6 +334,10 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             triggerDelivery: triggerDelivery,
             testRunDelivery: request.TestRunDelivery)
             { ExpectedBookmarkResume = saved?.Expected ?? request.ExpectedRecipient, HistoryCausation = historyCause });
+        // A known source origin must survive the ordinary command wire exactly, including opaque UTF-16 fields.
+        if (historyCause is not null && payload.GetProperty(nameof(RuntimeResumeBookmarkCommandPayload.HistoryCausation))
+                .Deserialize<RuntimeHistoryCausation>() != historyCause)
+            throw new InvalidOperationException("The ordinary resume command cannot preserve its exact known history origin.");
         var command = new WorkflowExecutionCommand(
             CommandId: commandId,
             WorkflowExecutionId: request.WorkflowExecutionId,
@@ -352,6 +366,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
         if (saved is not null && (await _delivery!.PrepareResumeAsync(saved.Source, request.WorkflowExecutionId, request.BookmarkId!, cancellationToken)).Eligible is null)
             return new(BookmarkResumeDispatchStatus.NotFound, request.WorkflowExecutionId, reason: "The exact saved wait retired before enqueue.");
+        await ValidateChildHistoryAsync(request, cancellationToken);
         var commandDispatch = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
         var status = MapDispatchStatus(commandDispatch.Status);
 

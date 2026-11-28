@@ -24,8 +24,9 @@
     <ProjectReference Include="..\..\..\..\src\Core\Elsa.Weaver.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Elsa.Weaver.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
-    <!-- The started Runtime-only host (SC-009) composes the real Workflows Runtime API, which references no Design assembly. -->
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\ActorFoundation\Hosting\Elsa.ActorFoundation.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\KernelApi\Elsa.Workflows.Runtime.KernelApi.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Publications\Elsa.Workflows.Runtime.Publications.csproj" />
   </ItemGroup>
 
   <ItemGroup>

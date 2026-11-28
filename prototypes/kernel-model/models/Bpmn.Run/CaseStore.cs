@@ -3,6 +3,8 @@ namespace Kernel.Bpmn.Run;
 /// <summary>Observe actual instance commit attempts; lease-only heartbeats are excluded.</summary>
 internal sealed class CaseStore(IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
+
     private readonly Dictionary<string, int> _attempts = new(StringComparer.Ordinal);
     public int Attempts(string instance) => _attempts.GetValueOrDefault(instance);
 

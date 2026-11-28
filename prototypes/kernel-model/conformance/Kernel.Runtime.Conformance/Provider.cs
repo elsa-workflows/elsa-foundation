@@ -75,6 +75,9 @@ public interface IRuntimeNode
     /// own placement would. It returns once the move is asked for; the scope is given up here, then activated there.
     /// </summary>
     Task MoveAsync(int scope, IRuntimeNode to) => throw new NotSupportedException("this runtime places scopes with the kernel's balancer");
+
+    /// <summary>K1b: heartbeats sent and renewed. Zero when the node has no node-lease loop.</summary>
+    (long Sent, long Renewed) Heartbeats => (0, 0);
 }
 
 /// <summary>The reference: the built-in runtime, one <see cref="RuntimeNode"/> per node, on one wake signal per side.</summary>
@@ -128,5 +131,6 @@ public sealed class BuiltInProvider : IRuntimeProvider
         public ValueTask WakeAsync(InstanceRef actor) => runtime.WakeAsync(actor);
         public Task StopAsync() => runtime.StopAsync().AsTask();
         public Task KillAsync() => runtime.KillAsync().AsTask();
+        public (long Sent, long Renewed) Heartbeats => runtime.Heartbeats;
     }
 }

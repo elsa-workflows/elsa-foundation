@@ -1,12 +1,12 @@
 # Business decisions qualification
 
-Run from the repository root with .NET 10, Node/pnpm and Playwright Chromium installed. Use the normal build-slot wrapper. All host witnesses own temporary processes, home directories and SQLite stores; they do not use a running developer host.
+Run the workflow and browser commands from the [pinned classic Workbench checkout](../../docs/contributing/workbench-compatibility-tests.md#classic-composed-studio-and-decision-runtime) with .NET 10, Node/pnpm and Playwright Chromium installed. Use the normal build-slot wrapper. All host witnesses own temporary processes, home directories and SQLite stores; they do not use a running developer host.
 
 ```sh
-pnpm --dir Studio install --frozen-lockfile
-pnpm --dir Studio exec playwright install chromium
-pnpm --dir Studio --filter @elsa-workflows/studio-decisions test
-pnpm --dir Studio --filter @elsa-workflows/studio-decisions typecheck
+pnpm --dir studio install --frozen-lockfile
+pnpm --dir studio exec playwright install chromium
+pnpm --dir studio --filter @elsa-workflows/studio-decisions test
+pnpm --dir studio --filter @elsa-workflows/studio-decisions typecheck
 python3 tools/ux-acceptance/run.py --journey 'business decisions authoring and explanations' --output /tmp/decisions-studio-new-run
 python3 tools/decisions/qualify-execution.py --output /tmp/decisions-execution-new-run
 ```
@@ -15,7 +15,7 @@ Both host runners require committed clean source and a new output directory. The
 
 The execution runner compares direct, Sequence, Flowchart, public dynamic-input and ordinary BPMN bound-task results and actual rule traces. It publishes changed rules while another caller waits, stops the owned process, disables Decisions API/Design/EF/workflow-design features, and resumes with the original frozen artifact. It also provisions seven real restricted users across two tenants, exercises independent grants and output/source disclosure, revokes Evaluate through the persisted Identity role store, and proves refusal after restart. Private credentials are deleted with its disposable directory; only public receipts leave it.
 
-Run each complete Decisions test project under `Extensions/Decisions/tests/` with `dotnet test <project> -c Release -p:RestoreLockedMode=true -m:1 /nr:false`, and compare `--list-tests` with executed counts. The suites cover all five selected policies, typed results, null/no-match, exact 34-digit values, bounds/cancellation, actual trace, unsupported dormant cells, CAS/publication/replay/retention, final service cardinality, authority, protected dynamic inputs and workflow disclosure. Causal red/green controls and counts are summarized in the [implementation receipt](evidence/implementation-checkpoint.md).
+Run the Decisions test projects under `extensions/Decisions/tests/` with `dotnet test <project> -c Release -p:RestoreLockedMode=true -m:1 /nr:false`, and compare `--list-tests` with executed counts. The suites cover all five selected policies, typed results, null/no-match, exact 34-digit values, bounds/cancellation, actual trace, unsupported dormant cells, CAS/publication/replay/retention, final service cardinality, authority, protected dynamic inputs and workflow disclosure. Causal red/green controls and counts are summarized in the [implementation receipt](evidence/implementation-checkpoint.md).
 
 The [cold package witness](evidence/standalone-package/README.md) records the actual computed-version package consumer and dependency closure. The [pinned interchange fixture](evidence/interop/README.md) provides its own runnable external-editor/reference-engine reproduction, finite normative cases and explicit disagreements. Neither source-project references nor an XML rendering alone establish those outcomes.
 

@@ -23,6 +23,7 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | `IActivityPublicationCandidateEvaluator` *(Publishing Core)* | `ActivityPublicationCandidateEvaluator` (scoped) | One publication verdict combines validated candidate content, compiler diagnostics and selected capability readiness. |
 | `IActivityPublicationReadiness` *(Publishing Core)* | `ActivityPublicationReadiness` (scoped) | Runtime/storage availability or its stable review fingerprint differs. |
 | `IActivityCatalogProjection` *(Publishing Core)* | `ActivityCatalogProjection` (scoped) | Derived read-only activity descriptors/publication metadata need a different projection. |
+| `IActivityDraftPublicationIdentity` *(Publishing API)* | Optional scoped reservation lookup | Binds reviewed publication of an imported draft to the ID and SemVer already referenced by its callers. |
 | `IActivityPublicationVersionPolicy` *(Publishing Core)* | `ActivityPublicationVersions` (scoped) | Release choices differ while respecting the contract compatibility floor. |
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
 | `IWorkflowActivationAuthority` *(Core — Elsa.Workflows.Runtime.Core)* | `InMemoryWorkflowActivationAuthority` (singleton) | Activation-slot authority and revision CAS must survive restart. Owned by Runtime, not Publishing. |
@@ -105,7 +106,7 @@ and compensation. A losing or failed candidate cannot make the old publication i
 Publishing has no projection seam of its own. `PublicationActivator` hands each candidate to Runtime's
 `IWorkflowActivationCoordinator`, which moves the slot, its serving projections and the replaced publication's source
 reference in one commit; `IWorkflowActivationSwitch` in the
-[Workflows Runtime extension points](../../Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) points to what that commit guarantees
+[Runtime Core](../../Runtime/Core/Contracts/IWorkflowActivationSwitch.cs) defines what that commit guarantees
 ([#2230](https://github.com/elsa-workflows/elsa-foundation/issues/2230)). Unpublish turns off every activation that
 serves the slot, whatever the slot's history, and retires the
 slot's publication record and every other `Active` record of the slot from the status it is in, a `Candidate` included. Derived
@@ -246,7 +247,7 @@ contributors remain supported. The agent registrations are documented in their
 ## Cross-domain seams consumed by the engine
 
 - Runtime executable artifacts, source references, trigger extraction/indexing, projection observers, and
-  recurring schedules: [Workflows Runtime extension points](../../Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
+  recurring schedules: [Runtime publication registration](../../Runtime/Publications/Extensions/WorkflowPublicationDefaults.cs).
 - Design version and layout reads used by compilation: [Workflows Design extension points](../../Design/Api/EXTENSION_POINTS.md).
 - Design reconciliation completion (`WorkflowVersionsReconciled`), subscribed by the engine's
   `PublishReconciledWorkflowVersions` for publish-on-reconcile (spec 147):

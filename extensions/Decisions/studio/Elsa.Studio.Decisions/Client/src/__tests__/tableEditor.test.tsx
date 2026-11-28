@@ -9,6 +9,12 @@ import { button, click, render, type } from "./helpers";
 const defaultXml = newDecisionXml();
 
 const key = (element: HTMLElement, value: string, options: KeyboardEventInit = {}) => flushSync(() => element.dispatchEvent(new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true, ...options })));
+function tableAction(host: HTMLElement, label: string) {
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="More table actions"]')!;
+  click(trigger);
+  const menu = document.getElementById(trigger.getAttribute("aria-controls")!)!;
+  click(Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(item => item.textContent === label)!);
+}
 const paste = (element: HTMLElement, text: string) => {
   const event = new Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clipboardData", { value: { getData: () => text } });
@@ -28,6 +34,21 @@ function Editor({ initial = defaultXml, readOnly = false, onChange = vi.fn(), on
 }
 
 describe("decision table grid editing", () => {
+  it("keeps help and secondary table tools inside the contextual menu", () => {
+    const { host } = render(<Editor />);
+    expect(host.querySelector(".decision-expression-help")).toBeNull();
+    expect(host.querySelectorAll('[role="grid"]')).toHaveLength(1);
+    expect(host.querySelector('[role="group"][aria-label="Structure"]')).not.toBeNull();
+    expect(host.querySelector(".decision-grid-footer")?.textContent).toContain("1 rule · 1 input · 1 output");
+    const menu = host.querySelector<HTMLButtonElement>('button[aria-label="More table actions"]')!;
+    click(menu);
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain("Expression help");
+    click(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(item => item.textContent === "Expression help")!);
+    expect(host.querySelector(".decision-expression-help")?.textContent).toContain("The server validates the supported profile.");
+    click(button(host, "Hide expression help"));
+    expect(host.querySelector(".decision-expression-help")).toBeNull();
+  });
+
   it("selects a cell, starts editing with Enter, commits with Enter, and cancels with Escape", async () => {
     const changed = vi.fn(), xml = newDecisionXml(), table = parseTable(xml);
     const { host } = render(<Editor initial={xml} onChange={changed} />);
@@ -184,16 +205,18 @@ describe("decision table grid editing", () => {
     const xml = newDecisionXml(), editable = render(<Editor initial={xml} />);
     const section = editable.host.querySelector(".decision-table-section")!;
     expect(section.classList.contains("is-expanded")).toBe(false);
-    click(button(editable.host, "Expand table"));
+    tableAction(editable.host, "Expand table");
     expect(section.classList.contains("is-expanded")).toBe(true);
-    expect(button(editable.host, "Collapse table").getAttribute("aria-pressed")).toBe("true");
-    click(button(editable.host, "Show annotations"));
+    tableAction(editable.host, "Collapse table");
+    expect(section.classList.contains("is-expanded")).toBe(false);
+    tableAction(editable.host, "Show annotations");
     expect(editable.host.querySelector("thead")?.textContent).toContain("Annotation");
 
     const readOnly = render(<Editor initial={xml} readOnly />);
-    click(button(readOnly.host, "Show annotations"));
+    tableAction(readOnly.host, "Show annotations");
     expect(readOnly.host.querySelector("thead")?.textContent).toContain("Annotation");
-    expect(button(readOnly.host, "Expand table").disabled).toBe(false);
+    tableAction(readOnly.host, "Expand table");
+    expect(readOnly.host.querySelector(".decision-table-section")?.classList.contains("is-expanded")).toBe(true);
   });
 
   it("rejects out-of-bounds paste without publishing a partial change", () => {

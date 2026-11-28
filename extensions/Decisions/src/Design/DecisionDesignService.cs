@@ -18,8 +18,17 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
     {
         await Ensure(caller, DecisionPermissions.Read, null, ct);
         var result = new List<DecisionAssetView>();
-        foreach (var asset in await reader.ListAssetsAsync(caller.TenantId, ct)) result.Add(await View(caller, asset, ct));
+        foreach (var asset in await reader.ListAssetsAsync(caller.TenantId, ct))
+            if (asset.DeletedAt is null) result.Add(await View(caller, asset, ct));
         return result;
+    }
+    public async ValueTask<IReadOnlyList<DecisionAssetView>> RecycleBinAsync(DecisionCaller caller, CancellationToken ct = default)
+    {
+        await Ensure(caller, DecisionPermissions.Read, null, ct);
+        var result = new List<DecisionAssetView>();
+        foreach (var asset in await reader.ListAssetsAsync(caller.TenantId, ct))
+            if (asset.DeletedAt is not null) result.Add(await View(caller, asset, ct));
+        return result.OrderByDescending(asset => asset.DeletedAt).ToArray();
     }
     public async ValueTask<DecisionAssetView> GetAsync(DecisionCaller caller, string id, CancellationToken ct = default)
     { await Ensure(caller, DecisionPermissions.Read, id, ct); return await View(caller, await Asset(caller, id, ct), ct); }
@@ -67,6 +76,47 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
         return await VersionView(caller, await Version(caller, id, saved.Id, ct), ct);
     }
 
+    public async ValueTask<DecisionWriteConfirmation> UnpublishAsync(DecisionCaller caller, string id, DecisionLifecycleRequest request, CancellationToken ct = default)
+    {
+        await Ensure(caller, DecisionPermissions.Publish, id, ct);
+        var operation = Operation(caller, request.OperationId);
+        var command = new DecisionAssetLifecycle(id, request.ExpectedRevision);
+        if (await Replayed(operation, "asset.unpublish", command, ct) is { } replay) return replay;
+        var asset = await Asset(caller, id, ct); Revision(asset.Revision, request.ExpectedRevision);
+        if (asset.PublishedVersionId is null) throw Conflict();
+        return await writer.UnpublishAsync(operation, command, ct);
+    }
+
+    public async ValueTask<DecisionWriteConfirmation> RecycleAsync(DecisionCaller caller, string id, DecisionLifecycleRequest request, CancellationToken ct = default)
+    {
+        await Ensure(caller, DecisionPermissions.Manage, id, ct);
+        var operation = Operation(caller, request.OperationId);
+        var command = new DecisionAssetLifecycle(id, request.ExpectedRevision);
+        if (await Replayed(operation, "asset.recycle", command, ct) is { } replay) return replay;
+        var asset = await Asset(caller, id, ct); Revision(asset.Revision, request.ExpectedRevision);
+        return await writer.RecycleAsync(operation, command, ct);
+    }
+
+    public async ValueTask<DecisionWriteConfirmation> RestoreAsync(DecisionCaller caller, string id, DecisionLifecycleRequest request, CancellationToken ct = default)
+    {
+        await Ensure(caller, DecisionPermissions.Manage, id, ct);
+        var operation = Operation(caller, request.OperationId);
+        var command = new DecisionAssetLifecycle(id, request.ExpectedRevision);
+        if (await Replayed(operation, "asset.restore", command, ct) is { } replay) return replay;
+        var asset = await DeletedAsset(caller, id, ct); Revision(asset.Revision, request.ExpectedRevision);
+        return await writer.RestoreAsync(operation, command, ct);
+    }
+
+    public async ValueTask<DecisionWriteConfirmation> PurgeAsync(DecisionCaller caller, string id, DecisionLifecycleRequest request, CancellationToken ct = default)
+    {
+        await Ensure(caller, DecisionPermissions.Manage, id, ct);
+        var operation = Operation(caller, request.OperationId);
+        var command = new DecisionAssetLifecycle(id, request.ExpectedRevision);
+        if (await Replayed(operation, "asset.purge", command, ct) is { } replay) return replay;
+        var asset = await DeletedAsset(caller, id, ct); Revision(asset.Revision, request.ExpectedRevision);
+        return await writer.PurgeAsync(operation, command, ct);
+    }
+
     public async ValueTask<IReadOnlyList<DecisionVersionView>> VersionsAsync(DecisionCaller caller, string id, CancellationToken ct = default)
     {
         await Ensure(caller, DecisionPermissions.Read, id, ct); _ = await Asset(caller, id, ct);
@@ -75,7 +125,7 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
         return result.OrderByDescending(v => v.Number).ToArray();
     }
     public async ValueTask<DecisionVersionView> GetVersionAsync(DecisionCaller caller, string id, string versionId, CancellationToken ct = default)
-    { await Ensure(caller, DecisionPermissions.Read, id, ct); return await VersionView(caller, await Version(caller, id, versionId, ct), ct); }
+    { await Ensure(caller, DecisionPermissions.Read, id, ct); _ = await Asset(caller, id, ct); return await VersionView(caller, await Version(caller, id, versionId, ct), ct); }
 
     public async ValueTask<DecisionAssetView> CloneAsync(DecisionCaller caller, string id, CloneDecisionRequest request, CancellationToken ct = default)
     {
@@ -89,6 +139,8 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
     public async ValueTask<DecisionEvaluation> EvaluateAsync(DecisionCaller caller, string id, EvaluateDecisionRequest request, CancellationToken ct = default)
     {
         await Ensure(caller, DecisionPermissions.Evaluate, id, ct);
+        var asset = await Asset(caller, id, ct);
+        if (asset.PublishedVersionId is null) throw Conflict();
         var version = await Version(caller, id, request.VersionId, ct);
         if (version.IsSensitive) await Ensure(caller, DecisionPermissions.SensitiveValues, version, ct);
         if (request.Inputs is null || request.Inputs.Count > 32 || Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(request.Inputs, Json)) > 256 * 1024)
@@ -99,6 +151,7 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
     public async ValueTask<string> ExportAsync(DecisionCaller caller, string id, string? versionId, CancellationToken ct = default)
     {
         await Ensure(caller, DecisionPermissions.Read, id, ct); await Ensure(caller, DecisionPermissions.Source, id, ct);
+        _ = await Asset(caller, id, ct);
         if (versionId is not null)
         { var version = await Version(caller, id, versionId, ct); if (version.IsSensitive) await Ensure(caller, DecisionPermissions.SensitiveValues, version, ct); return version.Xml; }
         var asset = await Asset(caller, id, ct); if (asset.IsSensitive) await Ensure(caller, DecisionPermissions.SensitiveValues, asset, ct); return asset.Xml;
@@ -144,7 +197,7 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
             return await ReceiptView(caller, prior, ct);
         }
         var evaluatedAt = DateTimeOffset.UtcNow;
-        DecisionArtifact artifact; bool sensitive; string candidateId;
+        DecisionArtifact? artifact = null; DecisionAsset? draft = null; bool sensitive; string candidateId;
         if (request.VersionId is { } versionId)
         {
             var version = await Version(caller, id, versionId, ct); Revision(version.SourceHash, request.CandidateHash);
@@ -152,10 +205,8 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
         }
         else
         {
-            var asset = await Asset(caller, id, ct); Revision(asset.Revision, request.CandidateRevision!); Revision(asset.SourceHash, request.CandidateHash);
-            var compilation = compiler.Compile(asset.Xml, ct);
-            artifact = compilation.Success && compilation.Artifact is not null ? compilation.Artifact : throw new DecisionDesignException("unsupported", "The exact candidate cannot be evaluated.");
-            sensitive = asset.IsSensitive; candidateId = asset.Revision;
+            draft = await Asset(caller, id, ct); Revision(draft.Revision, request.CandidateRevision!); Revision(draft.SourceHash, request.CandidateHash);
+            sensitive = draft.IsSensitive; candidateId = draft.Revision;
         }
         var frozenCases = new List<DecisionCase>();
         foreach (var selected in request.Cases)
@@ -164,6 +215,13 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
             Revision(item.Revision, selected.Revision); frozenCases.Add(item); sensitive |= item.IsSensitive;
         }
         if (sensitive) await Ensure(caller, DecisionPermissions.SensitiveValues, id, ct);
+        if (draft is not null)
+        {
+            var compilation = compiler.Compile(draft.Xml, ct);
+            if (!compilation.Success || compilation.Artifact is null)
+                throw new DecisionDesignException("unsupported", "The exact candidate cannot be evaluated.", diagnostics: compilation.Diagnostics);
+            artifact = compilation.Artifact;
+        }
         var identities = new List<DecisionCaseIdentity>(); var comparisons = new List<DecisionCaseComparison>();
         var remainingOperations = 1_000_000;
         foreach (var item in frozenCases)
@@ -171,7 +229,7 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
             ct.ThrowIfCancellationRequested();
             identities.Add(new(item.Id, item.Revision, Fingerprint(item)));
             if (remainingOperations <= 0) throw new DecisionDesignException("budget", "The complete test exceeds its operation budget; no completed receipt was recorded.");
-            var result = evaluator.Evaluate(artifact, item.Inputs, remainingOperations, ct);
+            var result = evaluator.Evaluate(artifact!, item.Inputs, remainingOperations, ct);
             remainingOperations -= result.Operations;
             if (result.Status == "BudgetExceeded") throw new DecisionDesignException("budget", "The complete test exceeds its operation budget; no completed receipt was recorded.");
             var path = item.ExpectedStatus == result.Status ? Difference(item.ExpectedResult, result.Result, "$") : "$.status";
@@ -193,21 +251,21 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
 
     public async ValueTask<IReadOnlyList<DecisionTestReceipt>> RunsAsync(DecisionCaller caller, string id, CancellationToken ct = default)
     {
-        await Ensure(caller, DecisionPermissions.History, id, ct); await Ensure(caller, DecisionPermissions.Read, id, ct);
+        await Ensure(caller, DecisionPermissions.History, id, ct); await Ensure(caller, DecisionPermissions.Read, id, ct); _ = await Asset(caller, id, ct);
         var result = new List<DecisionTestReceipt>();
         foreach (var run in await reader.ListRunsAsync(caller.TenantId, id, ct)) result.Add(await ReceiptView(caller, run, ct));
         return result.OrderByDescending(x => x.CompletedAt).ToArray();
     }
     public async ValueTask<DecisionTestReceipt> GetRunAsync(DecisionCaller caller, string id, string runId, CancellationToken ct = default)
-    { await Ensure(caller, DecisionPermissions.History, id, ct); await Ensure(caller, DecisionPermissions.Read, id, ct); return await ReceiptView(caller, await reader.FindRunAsync(caller.TenantId, id, runId, ct) ?? throw Missing(), ct); }
+    { await Ensure(caller, DecisionPermissions.History, id, ct); await Ensure(caller, DecisionPermissions.Read, id, ct); _ = await Asset(caller, id, ct); return await ReceiptView(caller, await reader.FindRunAsync(caller.TenantId, id, runId, ct) ?? throw Missing(), ct); }
     public async ValueTask DeleteRunAsync(DecisionCaller caller, string id, string runId, string operationId, CancellationToken ct = default)
-    { await Ensure(caller, DecisionPermissions.History, id, ct); await Ensure(caller, DecisionPermissions.Manage, id, ct); _ = await writer.DeleteRunAsync(Operation(caller, operationId), id, runId, ct); }
+    { await Ensure(caller, DecisionPermissions.History, id, ct); await Ensure(caller, DecisionPermissions.Manage, id, ct); _ = await Asset(caller, id, ct); _ = await writer.DeleteRunAsync(Operation(caller, operationId), id, runId, ct); }
 
     private async ValueTask<DecisionAssetView> View(DecisionCaller caller, DecisionAsset asset, CancellationToken ct)
     {
         var source = await Allowed(caller, DecisionPermissions.Source, asset, ct) && (!asset.IsSensitive || await Allowed(caller, DecisionPermissions.SensitiveValues, asset, ct));
         return new(asset.Id, asset.Name, asset.Description, asset.Revision, asset.SourceHash, source ? asset.Xml : null,
-            asset.IsSensitive, asset.PublishedVersionId, asset.CreatedAt, asset.UpdatedAt);
+            asset.IsSensitive, asset.PublishedVersionId, asset.CreatedAt, asset.UpdatedAt, asset.DeletedAt);
     }
     private async ValueTask<DecisionVersionView> VersionView(DecisionCaller caller, DecisionVersion version, CancellationToken ct)
     {
@@ -233,7 +291,25 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
         };
     }
     private static DecisionCaseComparison Summary(DecisionCaseComparison value) => value with { Expected = null, Actual = null };
-    private async ValueTask<DecisionAsset> Asset(DecisionCaller caller, string id, CancellationToken ct) => await reader.FindAssetAsync(caller.TenantId, id, ct) ?? throw Missing();
+    private async ValueTask<DecisionAsset> Asset(DecisionCaller caller, string id, CancellationToken ct)
+    {
+        var asset = await reader.FindAssetAsync(caller.TenantId, id, ct);
+        return asset is null || asset.DeletedAt is not null ? throw Missing() : asset;
+    }
+    private async ValueTask<DecisionAsset> DeletedAsset(DecisionCaller caller, string id, CancellationToken ct)
+    {
+        var asset = await reader.FindAssetAsync(caller.TenantId, id, ct);
+        if (asset is null) throw Missing();
+        if (asset.DeletedAt is null) throw Conflict();
+        return asset;
+    }
+    private async ValueTask<DecisionWriteConfirmation?> Replayed(DecisionOperation operation, string kind, DecisionAssetLifecycle command, CancellationToken ct)
+    {
+        var prior = await reader.FindOperationAsync(operation, ct);
+        if (prior is null) return null;
+        if (prior.Kind != kind || prior.Fingerprint != Fingerprint(new { kind, command })) throw Conflict();
+        return prior.Confirmation with { Replayed = true };
+    }
     private async ValueTask<DecisionVersion> Version(DecisionCaller caller, string id, string versionId, CancellationToken ct) => await reader.FindVersionAsync(caller.TenantId, id, versionId, ct) ?? throw Missing();
     private ValueTask<bool> Allowed(DecisionCaller caller, string permission, object? resource, CancellationToken ct) => policy.IsAllowedAsync(caller, permission, resource, ct);
     private async ValueTask Ensure(DecisionCaller caller, string permission, object? resource, CancellationToken ct)

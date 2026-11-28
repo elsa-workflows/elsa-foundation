@@ -43,7 +43,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class HostProvidedPackagesGuardTests
 {
     /// <summary>The hosts known to share assemblies; <see cref="Every_host_that_shares_assemblies_is_guarded"/> keeps this complete.</summary>
-    private static readonly string[] SharingHosts = ["Elsa.Foundation.Host", "Elsa.Workbench"];
+    private static readonly string[] SharingHosts = ["Elsa.Foundation.Host", "Elsa.Workbench.Host"];
 
     private const string WorkbenchSourceBuildVersion =
         "A source-built Workbench records its Elsa packages at their line's dev version (x.y.0-dev), which every Elsa feed " +
@@ -62,7 +62,7 @@ public sealed class HostProvidedPackagesGuardTests
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> Exemptions =
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
         {
-            ["Elsa.Workbench"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            ["Elsa.Workbench.Host"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Elsa.Activities.Design.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Activities.Runtime.Core"] = WorkbenchSourceBuildVersion,
@@ -97,8 +97,10 @@ public sealed class HostProvidedPackagesGuardTests
                 ["Elsa.Cluster.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Events.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Expressions.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Foundation.Identity.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Locking.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Mediator.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Modularity.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Persistence.EntityFramework"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Persistence.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Persistence.Schema"] = FoundationHostSourceBuildVersion,
@@ -106,7 +108,7 @@ public sealed class HostProvidedPackagesGuardTests
                 ["Elsa.Primitives"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Serialization.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Tasks.Core"] = FoundationHostSourceBuildVersion
-            }
+            },
         };
 
     /// <summary>The <c>Nuplane</c> keys a computed overlay may add to the committed one: the declaration and its comment.</summary>

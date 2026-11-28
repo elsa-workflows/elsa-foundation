@@ -4,6 +4,7 @@ using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Microsoft.AspNetCore.Http;
 using MinimalEndpoints;
+using Microsoft.Net.Http.Headers;
 
 namespace Elsa3.Activities.Design.Import.Endpoints.Collections.Upload;
 
@@ -21,12 +22,21 @@ public sealed class Endpoint(IReusableActivityImportOperationService service) : 
 
     public override async Task<ReusableActivityImportUploadResult> HandleAsync(CancellationToken cancellationToken)
     {
-        // The upload payload is the raw request stream (multipart envelopes included), read verbatim.
-        var result = await service.UploadAsync(
-            HttpContext.Request.Body,
-            HttpContext.Request.ContentLength,
-            ReusableActivityImportHttp.Scope(HttpContext.User),
-            cancellationToken);
+        var request = HttpContext.Request;
+        var scope = ReusableActivityImportHttp.Scope(HttpContext.User);
+        ReusableActivityImportUploadResult result;
+        // The host's typed headers can use a different copy of the header types than a feed-loaded feature.
+        if (MediaTypeHeaderValue.TryParse(request.ContentType, out var type)
+            && type.MediaType.Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+        {
+            if (service is not IReusableActivityExportFileUpload upload)
+                throw new RawCollectionOnlyException();
+            var boundary = HeaderUtilities.RemoveQuotes(type.Boundary).Value ?? "";
+            result = await upload.UploadExportFilesAsync(request.Body, boundary, request.ContentLength, scope, cancellationToken);
+        }
+        else
+            result = await service.UploadAsync(request.Body, request.ContentLength, scope, cancellationToken);
+
         HttpContext.Response.Headers.Location = $"/migration/elsa3/reusable-activities/collections/{Uri.EscapeDataString(result.CollectionHandle)}/analysis";
         return result;
     }

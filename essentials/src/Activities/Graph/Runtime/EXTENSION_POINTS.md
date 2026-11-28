@@ -6,8 +6,8 @@ This project owns the Runtime consumer for compiled reusable activity graphs. Th
 
 | Contribution | Stable identity | Registration | Status |
 |---|---|---|---|
-| Graph activity Runtime consumer | `elsa.graph-activity` | `IRuntimeActivityConsumerCapability` from `GraphActivitiesRuntimeFeature` | Implemented |
-| Transient graph activation | `elsa.graph-activity` / `1` | Scoped `IActivityActivationStrategy` from `GraphActivitiesRuntimeFeature` | Implemented |
+| Graph activity Runtime consumer | `elsa.graph-activity` | `IRuntimeActivityConsumerCapability` from `GraphActivitiesRuntimeHostingFeature` | Implemented |
+| Transient graph activation | `elsa.graph-activity` / `1` | Scoped `IActivityActivationStrategy` from `GraphActivitiesRuntimeHostingFeature` | Implemented |
 | Runtime descriptor schema | `1` | `GraphActivityDescriptor` parsed from the pinned executable node; optional `completeOutcomes` (spec 237) | Implemented |
 | Complete activity | `Elsa.Activities.Graph.Runtime.Activities.Complete` | CLR catalog activity (input `outcome`); stages the `elsa.graph.complete` ancestor notification to the nearest `elsa.graph-activity` boundary ([spec 237](../../../../../specs/237-graph-boundary-completion/contracts/complete-activity.md)) | Implemented |
 

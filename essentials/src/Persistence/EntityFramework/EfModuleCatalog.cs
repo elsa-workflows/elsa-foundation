@@ -18,13 +18,20 @@ public static class EfModuleCatalog
     /// <see cref="EfModuleAttribute.HistoryModule"/> that <see cref="EfMigrationsHistory.TableName"/> rejects,
     /// so a bad declaration fails here rather than as a malformed history table mid-migrate.
     /// </summary>
-    public static IReadOnlyList<EfModuleDescriptor> Discover(IEnumerable<Assembly> assemblies)
+    public static IReadOnlyList<EfModuleDescriptor> Discover(IEnumerable<Assembly> assemblies) =>
+        Discover(assemblies, null);
+
+    internal static IReadOnlyList<EfModuleDescriptor> Discover(IEnumerable<Assembly> assemblies, IReadOnlySet<string>? moduleNames)
     {
         ArgumentNullException.ThrowIfNull(assemblies);
+        if (moduleNames is { Count: 0 })
+            return [];
 
         var descriptors = assemblies
             .Distinct()
-            .SelectMany(assembly => assembly.GetCustomAttributes<EfModuleAttribute>().Select(attribute => Describe(assembly, attribute)))
+            .SelectMany(assembly => assembly.GetCustomAttributes<EfModuleAttribute>()
+                .Where(attribute => moduleNames is null || moduleNames.Contains(attribute.Name))
+                .Select(attribute => Describe(assembly, attribute)))
             .ToArray();
 
         var collision = descriptors

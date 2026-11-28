@@ -14,15 +14,18 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// <summary>
 /// The in-memory activation switch beside one EF store selected through its own extension: a mixed composition, which no
 /// switch can commit together (#2230). The switch refuses it when constructed, and shell start constructs it so that the
-/// shell fails to start rather than its first activation. The EF aggregate's own composition is covered by
-/// <see cref="RuntimeEntityFrameworkCoreStandaloneTests"/>.
+/// shell fails to start before its first activation.
 /// </summary>
 public sealed class WorkflowActivationSwitchCompositionTests : IDisposable
 {
     private readonly ServiceCollection _services = new();
     private ServiceProvider? _provider;
 
-    public WorkflowActivationSwitchCompositionTests() => _services.AddWorkflowRuntime().AddTriggerSpineStandIn();
+    public WorkflowActivationSwitchCompositionTests()
+    {
+        WorkflowPublicationDefaults.Add(_services);
+        _services.AddTriggerSpineStandIn();
+    }
 
     public static TheoryData<string, string> EfParticipants => new()
     {
@@ -48,7 +51,7 @@ public sealed class WorkflowActivationSwitchCompositionTests : IDisposable
     [Fact]
     public async Task The_in_memory_defaults_start()
     {
-        Assert.IsType<InMemoryWorkflowActivationSwitch>(ResolveSwitch());
+        Assert.Equal("PublicationActivationSwitch", ResolveSwitch().GetType().Name);
         await CheckAtShellStartAsync();
     }
 
@@ -65,7 +68,7 @@ public sealed class WorkflowActivationSwitchCompositionTests : IDisposable
     [Fact]
     public void The_check_runs_once_while_the_shell_prepares()
     {
-        _services.AddWorkflowActivationDefaults();
+        WorkflowPublicationDefaults.Add(_services);
 
         var registration = Assert.Single(
             Provider.GetServices<ShellInitializerRegistration>(),
@@ -79,12 +82,12 @@ public sealed class WorkflowActivationSwitchCompositionTests : IDisposable
 
     private void SelectOnEntityFramework(string participant)
     {
-        _services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        new RuntimeArtifactsEntityFrameworkCoreFeature
         {
             Provider = "Sqlite",
             ConnectionString = "Data Source=:memory:",
             RecoveryContinuationSigningKey = "switch-composition-recovery-signing-key-32"
-        });
+        }.ConfigureServices(_services);
         switch (participant)
         {
             case "slot authority": _services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore(); break;

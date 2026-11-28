@@ -15,7 +15,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 // The owner's selected read side. Registration, the actual native writer/observation/retention
 // binding, schema model and generated migrations are supplied together by that owner.
 internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access,
-    IRuntimeRecoveryContinuationCodec codec, EfSchemaChain chain) : IRuntimeHistoryDetailsStore, IRuntimeHistoryOccurrenceStore
+    IRuntimeRecoveryContinuationCodec codec, EfSchemaChain chain)
+    : IRuntimeHistoryDetailsStore, IRuntimeHistoryOccurrenceStore, IEfRuntimeHistorySourceOwner
 {
     private readonly Mapping mapping = new(chain);
     private RuntimeDbContext Context => context;
@@ -23,6 +24,9 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
 
     internal bool Uses(RuntimeDbContext ownerContext, IPersistenceAccessContextAccessor ownerAccess, EfSchemaChain ownerChain) =>
         ReferenceEquals(context, ownerContext) && ReferenceEquals(access, ownerAccess) && ReferenceEquals(chain, ownerChain);
+
+    bool IEfRuntimeHistorySourceOwner.UsesPhysicalHistory(RuntimeDbContext ownerContext, IPersistenceAccessContextAccessor ownerAccess) =>
+        Uses(ownerContext, ownerAccess, RuntimeHistoryEfModule.Chain);
 
     public ValueTask<RuntimeHistoryHead?> FindHeadAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
