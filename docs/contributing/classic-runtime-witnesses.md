@@ -47,6 +47,10 @@ dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Te
   -c Release -p:RestoreLockedMode=true
 ```
 
+Use `ec59d1b6728599c7fa44cf0b66eb55cfb2775ece` for the classic named Event
+checkpoint executor registration. In that checkout, run the activity test project
+above with `--filter FullyQualifiedName~PublishStimulusRegistrationTests`.
+
 Current source keeps the typed activity and state contracts, schedule metadata,
 Event wire and source-registration checks, and scope-name behavior. Actor
 Foundation qualifies the supported activity execution paths against its own

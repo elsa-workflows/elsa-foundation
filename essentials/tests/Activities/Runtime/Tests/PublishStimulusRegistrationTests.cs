@@ -1,5 +1,6 @@
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Primitives.Services;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -12,7 +13,7 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class PublishStimulusRegistrationTests
 {
     [Fact]
-    public void Repeated_feature_registration_resolves_one_workflow_capability_without_an_external_ingress()
+    public void Repeated_feature_registration_resolves_one_workflow_capability_without_classic_delivery_or_external_ingress()
     {
         var services = new ServiceCollection(); var feature = new ActivitiesPrimitivesFeature();
         feature.ConfigureServices(services); feature.ConfigureServices(services);
@@ -22,10 +23,8 @@ public sealed class PublishStimulusRegistrationTests
         Assert.Equal("event", capability.Descriptor.TypeKey);
         Assert.Equal(PublishStimulusConstants.PublishStimulusIntentKind, capability.WorkflowIntentKind);
         Assert.True(capability.SupportsResourceAuthorization);
-        var handler = Assert.Single(scope.ServiceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>());
-        Assert.True(handler.RequiresDurableSource);
-        Assert.Equal(StimulusDeliverySnapshot.CurrentVersion, handler.StimulusDeliveryProtocolVersion);
-        Assert.Equal(RuntimeSubscriptionDelivery.CurrentVersion, handler.SubscriptionDeliveryProtocolVersion);
+        Assert.Empty(scope.ServiceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>());
+        Assert.Null(scope.ServiceProvider.GetService<PublishStimulusExecutor>());
         Assert.Empty(scope.ServiceProvider.GetServices<StandaloneTriggerSourceDescriptor>());
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType.IsGenericType &&
             (descriptor.ServiceType.GetGenericTypeDefinition() == typeof(IStandaloneTriggerIngress<>) ||

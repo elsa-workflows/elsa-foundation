@@ -146,8 +146,13 @@ against its matching owned Workbench URL:
 pwsh -NoProfile -File e2e-tests/bpmn/Test-BpmnCallActivity.ps1 -BaseUrl "$classic_base_url"
 ```
 
+The classic composite registration and its duplicate-runtime initializer tests
+remain at `ec59d1b6728599c7fa44cf0b66eb55cfb2775ece`. In that checkout, run the
+BPMN test project above with `--filter FullyQualifiedName~ActivitiesBpmnFeatureTests`.
+
 Current source keeps BPMN structure, Design and XML interchange packages and
-their authoring tests. Its retained BPMN publication tests exercise provenance
+their authoring tests. Its composite feature registers publication trigger and
+schedule metadata. Its retained BPMN publication tests exercise provenance
 without starting a classic workflow.
 
 ## Classic executable import and HTTP response replay

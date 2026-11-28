@@ -46,10 +46,7 @@ public class ActivitiesPrimitivesFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunTriggerDriver, EventTestRunDriver>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunWaitDriver, EventTestRunWaitDriver>());
 
-        // The PublishEvent durable-first send surface. The invocation-keyed staging buffer mirrors the
-        // DispatchWorkflow stager's layering (registered as both the activity-facing stager and the engine-facing
-        // accessor the invoke handler drains); the post-commit handler routes the staged stimulus in StartAndResume
-        // mode. Registered additively per the AddRuntimePostCommitIntentHandler pattern (a distinct intent kind).
+        // Preserve the named Event wire and producer identity. Actor Hosting owns live delivery.
         services.TryAddSingleton<PublishStimulusStagingBuffer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStimulusDeliveryIntentAdapter, PublishStimulusIntentAdapter>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, PublishStimulusSchemaGuard>());
@@ -60,12 +57,6 @@ public class ActivitiesPrimitivesFeature : IShellFeature
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
         services.TryAddSingleton<IPublishStimulusStagingAccessor>(
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
-        services.TryAddScoped<PublishStimulusExecutor>(PublishStimulusExecutor.Create);
-        services.AddRuntimePostCommitIntentHandler<PublishStimulusExecutor>(
-            PublishStimulusConstants.PublishStimulusIntentKind,
-            new RuntimePostCommitRetryPolicy(maxAttempts: 4, delay: TimeSpan.FromSeconds(1)),
-            requiresDurableSource: true, stimulusDeliveryProtocolVersion: StimulusDeliverySnapshot.CurrentVersion,
-            subscriptionDeliveryProtocolVersion: RuntimeSubscriptionDelivery.CurrentVersion);
         if (!services.Any(item => item.ServiceType == typeof(WorkflowEventSourceRegistration)))
         {
             if (services.Any(item => item.ServiceType == typeof(StandaloneTriggerSourceDescriptor) && item.IsKeyedService &&
