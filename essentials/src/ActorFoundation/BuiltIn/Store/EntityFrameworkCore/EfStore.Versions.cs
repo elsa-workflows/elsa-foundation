@@ -104,6 +104,10 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
     internal static StoreFormat RootShipped => Current with { MessageProtocol = 38 };
 
+    // The Actor wait and receipt wire change together. Stock hosts keep the shipped marker
+    // until both provider qualifications and the task-ingress contract are complete.
+    internal static StoreFormat RootUserTaskWaitsQualification => RootShipped with { MessageProtocol = 39 };
+
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
 }
@@ -162,7 +166,8 @@ internal enum RootCapabilities : long
     HeldEphemeralHttpTestRuns = 1L << 46,
     RetainedRootResponse = 1L << 47,
     AuthoredStandaloneEvents = 1L << 48,
-    PreparedWaitDelivery = 1L << 49
+    PreparedWaitDelivery = 1L << 49,
+    UserTaskWaits = 1L << 50
 }
 
 internal static class RootProfiles
@@ -205,6 +210,7 @@ internal static class RootProfiles
     private const RootCapabilities Shipped38 =
         AuthoredStandaloneEventQualification | RootCapabilities.RetainedRootResponse | RootCapabilities.PreparedWaitDelivery;
     internal const RootCapabilities OptionalAuthoredStandaloneEventsQualification = Shipped38;
+    internal const RootCapabilities UserTaskWaitsQualification = Shipped38 | RootCapabilities.UserTaskWaits;
     internal const RootCapabilities PreparedWaitQualification = RetainedResponseQualification | RootCapabilities.PreparedWaitDelivery;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
@@ -303,6 +309,7 @@ internal static class RootProfiles
         [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
         [RootCapabilities.PagedPublicEvents] = RootCapabilities.PublicEventStarts,
         [RootCapabilities.PreparedWaitDelivery] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
+        [RootCapabilities.UserTaskWaits] = RootCapabilities.JobProtocol | RootCapabilities.ReplyProtocol | RootCapabilities.StableBody,
         [RootCapabilities.RetainedRootResponse] = RootCapabilities.PreparedStarts | RootCapabilities.StableBody,
         [RootCapabilities.AuthoredStandaloneEvents] = RootCapabilities.PagedPublicEvents | RootCapabilities.PublicEventHost,
         [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
@@ -597,6 +604,7 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootAuthoredStandaloneEventQualification =>
                     sqlite ? SqliteAuthoredStandaloneEventRevision : PostgreSqlAuthoredStandaloneEventRevision,
                 _ when db.RequiredFormat == StoreFormat.RootShipped ||
+                    db.RequiredFormat == StoreFormat.RootUserTaskWaitsQualification ||
                     db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification =>
                     sqlite ? SqliteOptionalAuthoredStandaloneEventsRevision : PostgreSqlOptionalAuthoredStandaloneEventsRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPreparedWaitQualification =>

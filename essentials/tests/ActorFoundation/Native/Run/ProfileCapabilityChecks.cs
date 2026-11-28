@@ -514,6 +514,13 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(pagedSqlite) is { StoreSchema: 2, MessageProtocol: 33, JournalCodec: 0 },
             "private paged Events carry an independent protocol and exact physical dispatch definitions");
         mapped |= pagedPostgres.Capabilities;
+        using var userTaskPostgres = KernelDb.ForPostgresUserTaskWaitsQualification(options);
+        Check(userTaskPostgres.RequiredFormat == StoreFormat.RootUserTaskWaitsQualification &&
+            !RootProfiles.Formats.ContainsKey(userTaskPostgres.RequiredFormat) &&
+            userTaskPostgres.Capabilities == (RootProfiles.Shipped | RootCapabilities.UserTaskWaits) &&
+            RootProfiles.MissingPrerequisites(userTaskPostgres.Capabilities) == RootCapabilities.None,
+            "Actor User Task waits add a separately qualified protocol to the shipped capability closure");
+        mapped |= userTaskPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -557,6 +564,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.RetainedRootResponse] = RootCapabilities.PreparedStarts | RootCapabilities.StableBody,
             [RootCapabilities.AuthoredStandaloneEvents] = RootCapabilities.PagedPublicEvents | RootCapabilities.PublicEventHost,
             [RootCapabilities.PreparedWaitDelivery] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
+            [RootCapabilities.UserTaskWaits] = RootCapabilities.JobProtocol | RootCapabilities.ReplyProtocol | RootCapabilities.StableBody,
             [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.HeldEphemeralHttpTestRuns] = RootCapabilities.DirectTestRuns | RootCapabilities.InlinePromotion |
                 RootCapabilities.ReplyProtocol | RootCapabilities.Children,

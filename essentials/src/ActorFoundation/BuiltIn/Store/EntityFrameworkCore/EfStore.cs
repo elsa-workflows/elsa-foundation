@@ -230,6 +230,8 @@ public class KernelDb : DbContext
 
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options, RootPublicEventHost? publicEventHost = null) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, publicEventHost: publicEventHost);
+    internal static KernelDb ForPostgresUserTaskWaitsQualification(DbContextOptions<KernelDb> options, RootPublicEventHost? publicEventHost = null) =>
+        new(options, StoreFormat.RootUserTaskWaitsQualification, RootProfiles.UserTaskWaitsQualification, publicEventHost: publicEventHost);
     internal static KernelDb ForPostgresRootSequencedJournalQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSequencedJournalQualification, RootProfiles.SequencedJournalQualification);
     internal static KernelDb ForPostgresRootPlaybackQualification(DbContextOptions<KernelDb> options) =>
@@ -340,6 +342,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootPreparedWaitQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PreparedWaitQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootUserTaskWaitsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.UserTaskWaitsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
         if (qualificationFormat == StoreFormat.RootRetainedResponseQualification)
             return new(options, qualificationFormat.Value, RootProfiles.RetainedResponseQualification,
