@@ -38,3 +38,5 @@ Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitIntentDispatcher.Di
 Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitIntentDispatcher.SupportsSourceKind(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceKind sourceKind) -> bool
 Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitIntentDispatcher.SupportsSubscriptionDelivery(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceKind sourceKind, string! deliveryKind, int protocolVersion) -> bool
 Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitIntentDispatcher.CanRecordHistory(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+Elsa.Workflows.Runtime.Services.Triggers.Management.TriggerAuthoringRegistration
+static Elsa.Workflows.Runtime.Services.Triggers.Management.TriggerAuthoringRegistration.AddServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

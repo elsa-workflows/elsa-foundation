@@ -616,6 +616,7 @@
   <Folder Name="/essentials/src/Workflows/Runtime/Api/">
     <Project Path="essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj" />
+    <Project Path="essentials/src/Workflows/Runtime/Api/StandaloneTriggers/Elsa.Workflows.Runtime.Api.StandaloneTriggers.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/Reconciliation/">
     <Project Path="essentials/src/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
