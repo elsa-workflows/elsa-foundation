@@ -49,7 +49,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         get
         {
             if (resources is not EfStandaloneTriggerStore resourceStore || !ReferenceEquals(resourceStore.Context, context) ||
-                outbox is not EfRuntimePostCommitOutboxStore sourceStore || slots is not EfWorkflowActivationAuthority authority ||
+                PhysicalOutbox is not { } sourceStore || slots is not EfWorkflowActivationAuthority authority ||
                 !ReferenceEquals(authority.Context, context) || executables.GetMaterialStore() is not EfWorkflowExecutableStore material ||
                 !ReferenceEquals(material.Context, context) || references is not EfWorkflowExecutableSourceReferenceStore sourceReferences ||
                 !ReferenceEquals(sourceReferences.Context, context) || !context.Database.IsRelational() ||
@@ -67,7 +67,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
             return sourceStore.PreparedStandaloneOnly
                 ? sourceStore.CanRetainPreparedExecutables(executables, references)
                 : legacy is not null &&
-                    ((IStimulusDeliveryStore)sourceStore).CanRetainExecutables(outbox, executables, references, legacy.Executions);
+                    outbox is IStimulusDeliveryStore stimulus && stimulus.CanRetainExecutables(outbox, executables, references, legacy.Executions);
         }
     }
 
@@ -216,7 +216,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
             throw new InvalidDataException("The accepted target material was removed.");
         RuntimeIngressAdmissionValidation.CheckMaterial(recipient, actual);
         var executionId = recipient.StartIdentity.WorkflowExecutionId;
-        await ((EfRuntimePostCommitOutboxStore)outbox).FenceExecutionDependencyAsync(scope.Value, executionId, token);
+        await PhysicalOutbox!.FenceExecutionDependencyAsync(scope.Value, executionId, token);
         // Any old row at this exact physical identity blocks prepared admission, even if its payload cannot be read.
         var used = PreparedStandaloneOnly
             ? await context.WorkflowExecutionStates.AnyAsync(row => row.Id == EfRuntimeOperationalStoreSupport.ExecutionStateRowId(scope.Value, executionId), token)
@@ -392,7 +392,9 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         return tracking ? query.SingleOrDefaultAsync(token) : query.AsNoTracking().SingleOrDefaultAsync(token);
     }
 
-    private bool PreparedStandaloneOnly => outbox is EfRuntimePostCommitOutboxStore { PreparedStandaloneOnly: true };
+    private EfRuntimePostCommitOutboxStorage? PhysicalOutbox => (outbox as IEfRuntimePostCommitOutboxOwner)?.Storage;
+
+    private bool PreparedStandaloneOnly => PhysicalOutbox?.PreparedStandaloneOnly == true;
 
     private IEfLegacyRuntimeIngress RequireLegacy() => !PreparedStandaloneOnly && legacy is not null
         ? legacy
