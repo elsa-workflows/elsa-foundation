@@ -18,7 +18,7 @@
     "blockedByDependency": 1,
     "notConverted": 1,
     "byCategory": {
-      "mustFix": 29,
+      "mustFix": 30,
       "reconsider": 2,
       "takeIntoAccount": 38
     },
@@ -60,9 +60,10 @@
       "name": "lookupCustomer",
       "definitions": [
         "customer-batch",
-        "customer-lookup"
+        "customer-lookup",
+        "welcome-customer"
       ],
-      "usages": 2
+      "usages": 3
     },
     {
       "kind": "storage-driver",
@@ -1305,6 +1306,19 @@
       "exportedTo": null,
       "wrapperExportedTo": null,
       "findings": [
+        {
+          "code": "ELS3-JS-HOST-FUNCTION-MISSING",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "build-component",
+          "componentKind": "javascript-function",
+          "componentName": "lookupCustomer",
+          "stage": "conversion",
+          "path": "$.root.activities[0].text.expression.value",
+          "nodeId": "Workflow1:Log",
+          "message": "JavaScript calls unknown or unapproved host function \u0027lookupCustomer\u0027.",
+          "guidance": "If the host rebuilt \u0027lookupCustomer\u0027 for Elsa 4, register a host function named \u0027\u003Cprefix\u003E.lookupCustomer\u0027 (for example \u0027acme.lookupCustomer\u0027) under one namespace only; the converter then rewrites the call. Otherwise compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import."
+        },
         {
           "code": "ELS3-ACTIVITY-UNMAPPED-TYPE",
           "severity": "error",
