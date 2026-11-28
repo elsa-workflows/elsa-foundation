@@ -242,17 +242,19 @@ internal sealed class Elsa3DefinitionConverter(
         var unresolved = inventory.Nodes.Select(node => node.ActivityNodeId).Where(nodeId => !resolved.Contains(nodeId)).ToHashSet(StringComparer.Ordinal);
         if (unresolved.Count == 0)
             return lowered;
-        var contractlessMemory = inventory.Occurrences
+        var contractless = inventory.Occurrences
             .Where(occurrence => occurrence.Direction == Elsa3PropertyDirection.Unknown && unresolved.Contains(occurrence.ActivityNodeId))
-            .Select(occurrence => occurrence.MemoryReferenceId)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToArray();
+        var contractlessMemory = contractless.Select(occurrence => occurrence.MemoryReferenceId).ToHashSet(StringComparer.Ordinal);
+        var contractlessKeys = contractless.Select(occurrence => Elsa3ValueFlowLowerer.ToStableKey(occurrence.StablePropertyKey)).ToHashSet(StringComparer.Ordinal);
         return lowered.Where(diagnostic => diagnostic.Code switch
         {
             Elsa3ImportDiagnosticCodes.UnsupportedShape =>
                 !diagnostic.Metadata.TryGetValue("ActivityNodeId", out var nodeId) || !unresolved.Contains(nodeId),
             Elsa3ImportDiagnosticCodes.DanglingReference =>
                 !(diagnostic.Metadata.TryGetValue("MemoryReferenceId", out var memoryId) && contractlessMemory.Contains(memoryId)) &&
-                !(diagnostic.Metadata.TryGetValue(Elsa3ValueFlowLowerer.AmbientKindKey, out var kind) && kind == nameof(Elsa3AmbientReferenceKind.ActivityResult)),
+                !(diagnostic.Metadata.TryGetValue(Elsa3ValueFlowLowerer.AmbientKindKey, out var kind) && kind == nameof(Elsa3AmbientReferenceKind.ActivityResult) &&
+                  diagnostic.Metadata.TryGetValue(Elsa3ValueFlowLowerer.AmbientKeyKey, out var key) && contractlessKeys.Contains(key)),
             _ => true
         });
     }

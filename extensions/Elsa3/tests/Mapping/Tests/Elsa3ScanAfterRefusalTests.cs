@@ -86,12 +86,15 @@ public sealed class Elsa3ScanAfterRefusalTests
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, error.Code);
     }
 
-    [Fact]
-    public async Task A_reference_no_unresolved_node_could_produce_is_still_dangling()
+    [Theory]
+    [InlineData("memory-reference")]
+    [InlineData("liquid")]
+    public async Task A_reference_no_unresolved_node_could_produce_is_still_dangling(string form)
     {
+        var text = form == "liquid" ? Expression("Liquid", "{{ Output.Nowhere }}") : Captured("nowhere", "String");
         var root = Sequence("root",
-            Activity("unmapped", "Acme.Unknown"),
-            Activity("node", "Elsa.WriteLine", ("text", Captured("nowhere", "String"))));
+            Activity("unmapped", "Acme.Unknown", ("result", Captured("result-memory"))),
+            Activity("node", "Elsa.WriteLine", ("text", text)));
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
 

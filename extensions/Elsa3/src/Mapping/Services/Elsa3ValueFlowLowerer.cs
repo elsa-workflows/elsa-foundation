@@ -1724,10 +1724,16 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             Elsa3ImportDiagnosticCodes.DanglingReference,
             $"Ambient {ambient.Kind} reference '{ambient.Name}' has no declaration or producer.",
             "Restore the missing declaration/producer or replace the read with an explicit portable parameter.",
-            new Dictionary<string, string>(StringComparer.Ordinal) { [AmbientKindKey] = ambient.Kind.ToString() }));
+            new Dictionary<string, string>(StringComparer.Ordinal) { [AmbientKindKey] = ambient.Kind.ToString(), [AmbientKeyKey] = ToStableKey(ambient.Name) }));
 
-    /// <summary>The metadata key naming the kind of ambient read a dangling-reference diagnostic is about.</summary>
+    /// <summary>
+    /// The metadata key naming the kind of ambient read a dangling-reference diagnostic is about; its AmbientKey
+    /// is the key the read looked for.
+    /// </summary>
     internal const string AmbientKindKey = "AmbientKind";
+
+    /// <summary>The metadata key holding the output key an ambient activity-result read looked for.</summary>
+    internal const string AmbientKeyKey = "AmbientKey";
 
     private static Elsa3ExpressionParameterResolution AmbiguousAmbient(Elsa3AmbientReference ambient) =>
         Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
@@ -2242,7 +2248,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             metadata);
     }
 
-    private static string ToStableKey(string name)
+    internal static string ToStableKey(string name)
     {
         var kebab = string.Concat(name.Select((character, index) =>
             index > 0 && char.IsUpper(character)
