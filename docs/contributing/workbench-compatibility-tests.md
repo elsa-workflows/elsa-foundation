@@ -122,6 +122,20 @@ git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-b
 )
 ```
 
+Use the last source before the shared classic BPMN fixture was retired for the
+linked Runtime EF called-workflow control, checkpoint upgrade and combined BPMN
+child outcome tests. The upgrade tests extract and verify the SQLite snapshots
+tracked in that checkout under `specs/1006-bpmn-library-adoption/evidence/legacy`.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-bpmn-ef" bc616099bd58d75e962ce6cb9f53c8f68c2e772e
+  cd "$compatibility_root/classic-bpmn-ef"
+  dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~BpmnCalledWorkflowControlEfTests|FullyQualifiedName~BpmnUpgradeRecoveryEfTests|FullyQualifiedName~Bpmn_combined_outcome'
+)
+```
+
 The main BPMN test project in this checkout also runs the archived classic
 checkpoint/child/compensation journeys. For the actual BPMN CallActivity REST
 witness, run the following script from the classic-default checkout above
