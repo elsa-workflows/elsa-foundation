@@ -9,12 +9,15 @@ using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.Capabilities;
-using Elsa.Api.Capabilities.Models;
+using Elsa.Api.Capabilities.Contracts;
 using Elsa.Events;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -175,8 +178,10 @@ public sealed class KernelRunListTests
 
     private static readonly PersistenceAccessContext HostTenant = PersistenceAccessContext.Scoped(new PersistenceScope(Tenant));
 
-    [Fact]
-    public async Task Retained_http_reads_activate_and_serve_without_legacy_execution_services()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retained_http_reads_activate_and_serve_without_legacy_execution_services(bool publishingPermissions)
     {
         const string scheme = "KernelExecuteFixture";
         var reads = new Reads(Views[0]);
@@ -186,6 +191,9 @@ public sealed class KernelRunListTests
             .AddScheme<AuthenticationSchemeOptions, KernelPublishedExecuteTests.FixtureAuthentication>(scheme, _ => { });
         builder.Services.AddAuthorization();
         builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string> { scheme });
+        new ApiCapabilitiesFeature().ConfigureServices(builder.Services);
+        if (publishingPermissions)
+            builder.Services.AddPermissionContributor<WorkflowPublishingPermissionContributor>();
         builder.Services.AddPersistenceCore();
         builder.Services.AddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         builder.Services.AddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
@@ -205,10 +213,15 @@ public sealed class KernelRunListTests
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
         Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowRunInspection>());
-        var links = Assert.Single(scope.ServiceProvider.GetServices<ApiCapabilityDeclaration>()).Links;
+        var permissions = scope.ServiceProvider.GetRequiredService<IPermissionCatalog>();
+        Assert.NotNull(permissions.Find(WorkflowRuntimePermissions.WorkflowRuntimeRead));
+        Assert.DoesNotContain(permissions.List(), permission => permission.Category == "User Tasks");
+        var declared = await scope.ServiceProvider.GetRequiredService<IApiCapabilityCatalog>().GetAsync();
+        var links = Assert.Single(declared.Capabilities, capability => capability.Id == "elsa.api.runtime").Links;
         Assert.Contains(links, link => link.Rel == "workflow-instances-page");
         Assert.Contains(links, link => link.Rel == "activity-executions");
         Assert.DoesNotContain(links, link => link.Rel is "runtime-diagnostics" or "workflow-dispatches" or "workflow-execute" or "workflow-instance-delete");
+        Assert.Equal(publishingPermissions, links.Any(link => link.Rel == "workflow-executable-input-sources"));
 
         var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
         using var client = new HttpClient { BaseAddress = new(address) };
@@ -227,6 +240,8 @@ public sealed class KernelRunListTests
         Assert.Equal(HttpStatusCode.NotFound, legacy.StatusCode);
         using var start = await client.PostAsync("/runtime/workflows/executables/missing/execute", content: null);
         Assert.Equal(HttpStatusCode.NotFound, start.StatusCode);
+        using var inputs = await client.GetAsync("/runtime/workflows/executables/missing/source-references/missing/input-sources");
+        Assert.Equal(publishingPermissions ? HttpStatusCode.Forbidden : HttpStatusCode.NotFound, inputs.StatusCode);
     }
 
     [Fact]
