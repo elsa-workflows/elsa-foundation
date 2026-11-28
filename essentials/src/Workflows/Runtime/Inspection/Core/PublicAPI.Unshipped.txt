@@ -7,3 +7,5 @@ Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.CanResolv
 Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.GetAuthorizationProfileAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string!>
 Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.RequestCorrelationId.get -> string!
 Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.TenantScope.get -> string!
+Elsa.Workflows.Runtime.Inspection.Core.IWorkflowRetainedRunSource
+Elsa.Workflows.Runtime.Inspection.Core.IWorkflowRetainedRunSource.ReadAsync(string! tenant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState?>!

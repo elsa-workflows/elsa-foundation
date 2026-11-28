@@ -179,6 +179,62 @@ public sealed class KernelRunListTests
 
     private static readonly PersistenceAccessContext HostTenant = PersistenceAccessContext.Scoped(new PersistenceScope(Tenant));
 
+    [Fact]
+    public async Task Retained_run_stream_includes_exact_actor_test_scope_and_counts_hidden_candidates()
+    {
+        var isolated = EmbeddedTenant.Isolate(Scope, "test-run");
+        var now = DateTimeOffset.UtcNow;
+        var testScope = new WorkflowTestScope("bound", now.AddMinutes(10), Tenant, new(WorkflowExecutionPartition.DefaultValue));
+        var scopeStore = new RetainedTestScopeStore(new WorkflowTestScopeRecord(testScope, WorkflowTestScopeState.Open, now)
+        {
+            IsolatedActor = new("run-bound", "issued")
+        });
+        var ordinary = new Reads(Views);
+        var tests = new Reads(TestRun("run-bound", "bound"), TestRun("run-unbound", "bound"), TestRun("run-unknown-scope", "missing"));
+        IWorkflowRetainedRunSource source = new KernelRunReader(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(ordinary)),
+            new InMemoryWorkflowExecutableStore(), new Access(HostTenant),
+            testRuns: new KernelTestRuns(new KernelRuns(isolated, _ => ValueTask.FromResult<IActorReads>(tests))),
+            testScopes: scopeStore);
+
+        var returned = new List<WorkflowExecutionState?>();
+        await foreach (var state in source.ReadAsync(Tenant)) returned.Add(state);
+        Assert.Equal(Views.Select(view => view.Header.Ref.Id).Append("run-bound"),
+            returned.OfType<WorkflowExecutionState>().Select(state => state.WorkflowExecutionId));
+        Assert.Equal(2, returned.Count(candidate => candidate is null));
+        Assert.Equal(WorkflowRunKind.TestRun, returned.OfType<WorkflowExecutionState>().Last().RunKind);
+        Assert.Equal(Views.Length / 2 + 1, ordinary.Queries.Count);
+        Assert.Equal(2, tests.Queries.Count);
+        await foreach (var _ in source.ReadAsync("foreign"))
+            throw new InvalidOperationException("A foreign request returned an Actor candidate.");
+
+        ActorView TestRun(string actor, string scopeId)
+        {
+            var view = Run(actor, ActorStatus.Running, "orders@1", "orders", 1_000);
+            var data = System.Text.Json.Nodes.JsonNode.Parse(view.Header.TypeData)!.AsObject();
+            data["TestStart"] = System.Text.Json.JsonSerializer.SerializeToNode(new Kernel.WorkflowActor.WorkflowTestStart(
+                scopeId, testScope.ExpiresAt, Tenant, testScope.Partition.Value, scopeId, "test", "draft", null, "1", "1", "digest", null));
+            return view with { Header = view.Header with { Tenant = isolated.Tenant, TypeData = data.ToJsonString() } };
+        }
+    }
+
+    private sealed class RetainedTestScopeStore(WorkflowTestScopeRecord scope) : IWorkflowTestScopeStore
+    {
+        public ValueTask<WorkflowTestScopeRecord?> FindAsync(string scopeId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(scope.Scope.ScopeId == scopeId ? scope : null);
+
+        public ValueTask<WorkflowTestScopeRecord> CreateAsync(WorkflowTestScope value, DateTimeOffset createdAt,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<WorkflowTestScopeCloseResult> CloseAsync(WorkflowTestScopeCloseRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<WorkflowTestScopeRecord> CompleteAsync(string scopeId, DateTimeOffset completedAt,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<WorkflowTestScopePage> QueryAsync(WorkflowTestScopePageQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(true, false, false)]

@@ -1,5 +1,7 @@
+using System.Runtime.CompilerServices;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
 using Kernel.WorkflowActor;
@@ -9,6 +11,7 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access,
     KernelTestRuns? testRuns = null, KernelPreviewRunReads? preview = null,
     IWorkflowTestScopeStore? testScopes = null, IWorkflowExecutionPartitionAccessor? partitions = null, TimeProvider? clock = null)
+    : IWorkflowRetainedRunSource
 {
     internal sealed record Run(WorkflowExecutionState State, WorkflowRunHeader? Header, WorkflowExecutable? Executable,
         ActorView? View = null, KernelRuns? IsolatedReads = null);
@@ -18,6 +21,29 @@ internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore 
             ? (run.IsolatedReads ?? runs).ReadTerminalOutputAsync(new ActorRef(run.State.WorkflowExecutionId),
                 ended.ToUnixTimeMilliseconds(), includeValues, cancellationToken)
             : ValueTask.FromResult<ActorTerminalOutput?>(null);
+
+    async IAsyncEnumerable<WorkflowExecutionState?> IWorkflowRetainedRunSource.ReadAsync(string tenant,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (tenant != runs.Tenant.Tenant || !KernelRunStates.CanReadTenant(access.Current, runs.Tenant)) yield break;
+
+        var identities = new Dictionary<string, WorkflowExecutableIdentity?>(StringComparer.Ordinal);
+        await foreach (var (view, run) in runs.ListAsync(definition: null, cancellationToken))
+            yield return await ProjectAsync(view, run);
+
+        if (testRuns is not { Reads: { } isolated } || testScopes is null) yield break;
+        await foreach (var (view, run) in isolated.ListTestRunsAsync(definition: null, cancellationToken))
+            yield return await HasTestScopeAsync(view.Header, run.TestStart, tenant, cancellationToken)
+                ? await ProjectAsync(view, run)
+                : null;
+
+        async ValueTask<WorkflowExecutionState> ProjectAsync(ActorView view, WorkflowRunHeader run)
+        {
+            if (!identities.TryGetValue(run.Workflow, out var identity))
+                identities[run.Workflow] = identity = (await executables.FindAsync(run.Workflow, cancellationToken))?.Identity;
+            return KernelRunStates.From(view, run, identity, tenant);
+        }
+    }
 
     internal async ValueTask<Run?> GetAsync(string id, CancellationToken cancellationToken)
     {
