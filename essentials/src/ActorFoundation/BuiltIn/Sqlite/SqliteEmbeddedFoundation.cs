@@ -43,6 +43,12 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         bool withTimers = false) =>
         new(databasePath, node, actorType, withTimers ? StoreFormat.RootS6TerminalOutputQualification : StoreFormat.RootTerminalOutputQualification);
 
+    internal static SqliteEmbeddedFoundation ForUserTaskWaitsQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync? protectRootStart = null, Contract.BoundScope? publisherScope = null) =>
+        publisherScope is null
+            ? new(databasePath, node, actorType, StoreFormat.RootUserTaskWaitsQualification, protectRootStart)
+            : ForStandaloneQualification(databasePath, node, actorType, publisherScope, StoreFormat.RootUserTaskWaitsQualification, protectRootStart);
+
     internal static SqliteEmbeddedFoundation ForChildQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.SqliteRootChildrenQualification);
 

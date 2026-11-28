@@ -64,6 +64,7 @@ if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, 
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["user-task-wait-format", var userTaskProvider] && userTaskProvider is "sqlite" or "postgres")
     return await UserTaskWaitFormatChecks.RunAsync(userTaskProvider);
+if (args is ["user-task-wait-opens"]) return await NativeUserTaskWaitChecks.RunAsync();
 if (args is ["direct-test-run-profile", var testRunProfileProvider and ("postgres" or "sqlite")])
     return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(testRunProfileProvider == "postgres");
 if (args is ["ephemeral-test-run-profile", var ephemeralTestRunProvider and ("postgres" or "sqlite")])

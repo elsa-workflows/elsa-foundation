@@ -16,7 +16,9 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     public const string ModelKey = "native";
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
-    public int StateVersion => 14;
+    private const int PreviousStateVersion = 14;
+    private const int UserTaskStateVersion = 15;
+    public int StateVersion => _options.UserTaskOpenJobs is null ? PreviousStateVersion : UserTaskStateVersion;
 
     /// <param name="workflow">The workflow to run (<see cref="Workflow.Id"/>).</param>
     /// <param name="definition">
@@ -38,7 +40,8 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     internal static NativeState NewState(string? input) =>
         new() { Mode = JsonSerializer.Deserialize<NativeStart>(input ?? "{}")!.Mode };
 
-    public object UpgradeState(string state, int fromVersion) => Upgrade(state, fromVersion);
+    public object UpgradeState(string state, int fromVersion) =>
+        Upgrade(state, fromVersion, permitsUserTaskWaits: _options.UserTaskOpenJobs is not null);
 
     public string? ValidateMigration(Models.InstanceInfo source, object state, string target)
         => ValidateMigration(source, state, target, out _);
@@ -60,13 +63,17 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         return null;
     }
 
-    internal static NativeState Upgrade(string state, int fromVersion)
+    internal static NativeState Upgrade(string state, int fromVersion, bool permitsUserTaskWaits = false)
     {
-        if (fromVersion is < 1 or > 13) throw new NotSupportedException($"native state has no version {fromVersion}");
+        var latestPreviousVersion = permitsUserTaskWaits ? PreviousStateVersion : PreviousStateVersion - 1;
+        if (fromVersion < 1 || fromVersion > latestPreviousVersion)
+            throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = System.Text.Json.JsonSerializer.Deserialize<NativeState>(state);
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
         if (fromVersion < 4 && LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
+        if (native.Waits.Values.Any(wait => wait.Kind == NativeUserTaskWaits.Kind))
+            throw new InvalidOperationException("Legacy native state contains unsupported user task waits.");
         if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
         if (fromVersion < 6 && NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
         if (fromVersion < 7 && native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");
@@ -156,6 +163,8 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
 
     public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
     {
+        if (NativeUserTaskWaits.TryGetOpenWait(job.Key, out var wait))
+            return await OpenUserTaskAsync(job, wait, cancellationToken);
         var args = JsonSerializer.Deserialize<BackgroundArgs>(job.Arguments!)!;
         if (args.ExecutableSelection is { } selection)
             return await ExecuteBackground(await SelectAsync(args.Workflow, selection, cancellationToken), job.Actor, args,
@@ -163,6 +172,17 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         if (Resolves(args.Workflow))
             await ResolveAsync(args.Workflow, cancellationToken);
         return await ExecuteBackground(registry.Get(args.Workflow), job.Actor, args, cancellationToken, _options.Http, job.Tenant);
+    }
+
+    private async ValueTask<NativeUserTaskWaits.Opened> OpenUserTaskAsync(Contract.IJob job, string wait, CancellationToken cancellationToken)
+    {
+        if (_options.UserTaskOpenJobs is not { } openJobs || job.Tenant is not { } tenant || string.IsNullOrWhiteSpace(tenant) ||
+            job.Arguments is not { } body || JsonSerializer.Deserialize<NativeUserTaskWaits.OpenArguments>(body) is not { } arguments ||
+            arguments.Recipient.Actor != job.Actor || arguments.Recipient.Wait != wait)
+            throw new InvalidOperationException("The job does not own this Actor user task wait.");
+
+        await openJobs.OpenAsync(tenant, arguments.Recipient, arguments.Request, cancellationToken);
+        return new(arguments.Recipient.TaskId);
     }
 
     internal static ValueTask<object?> ExecuteBackground(WorkflowRegistry registry, Contract.ActorRef actor,
@@ -205,6 +225,9 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
                     break;
                 case "job" when !queuedResumes.Contains(wait):
                     jobs.Add(entry.Job ?? throw new InvalidOperationException("The job checkpoint has no invocation recipe."));
+                    break;
+                case NativeUserTaskWaits.Kind when entry.Job is { } opening:
+                    jobs.Add(opening);
                     break;
                 case "event":
                     subscriptions.Add(new(entry.Key, wait, Keep: false));

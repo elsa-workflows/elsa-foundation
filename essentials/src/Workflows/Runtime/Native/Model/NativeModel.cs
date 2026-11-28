@@ -76,6 +76,9 @@ public class NativeExecutionOptions
     /// <summary>Attests the exact resolved HTTP template on waits created by a prepared-standalone host.</summary>
     public bool StampPreparedHttpWaits { get; init; }
 
+    /// <summary>Enables the private Actor user-task materialization protocol on a qualified host.</summary>
+    public INativeUserTaskOpenJobs? UserTaskOpenJobs { get; init; }
+
     /// <summary>
     /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
     /// <see cref="MaxActivitiesPerTurn"/> continues in the next turn. Without them a burst runs on to its next wait or end in
@@ -343,7 +346,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case Contract.Kinds.JobFinished:
             {
                 var finished = Read<Contract.JobFinished>(m);
-                Resume(finished.Key, Values.From(finished));
+                if (!HandleUserTaskOpen(finished)) Resume(finished.Key, Values.From(finished));
                 break;
             }
             case NativeKinds.Cancel:
@@ -646,6 +649,11 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             Exit(frame, exit);
             return;
         }
+        if (t.Kind == TransitionKind.Suspend && t.Triggers?.Any(trigger => trigger is UserTaskWaitTrigger) == true && !CanOpenUserTask(t))
+        {
+            Fail(frame, new ActivityFault("user-task.wait-unavailable", "This workflow run cannot open an Actor user task."));
+            return;
+        }
         foreach (var effect in t.Effects ?? []) Do(frame, effect, children);
         switch (t.Kind)
         {
@@ -666,6 +674,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         var id = NewId("w");
         switch (trigger)
         {
+            case UserTaskWaitTrigger task:
+                RegisterUserTask(frame, id, task.Request);
+                break;
             case EventTrigger e:
                 _s.Waits[id] = new WaitEntry(frame.Id, "event", "event:" + e.Name);
                 turn.Subscribe("event:" + e.Name, id);
@@ -768,6 +779,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         {
             case "event": turn.Unsubscribe(wait.Key, id); break;
             case "job" when cancel: turn.CancelJob(wait.Key); break;
+            case NativeUserTaskWaits.Kind when cancel && wait.Job is { } opening:
+                turn.CancelJob(opening.Key);
+                break;
             case "child" when cancel:
                 turn.CancelChild(wait);
                 break;

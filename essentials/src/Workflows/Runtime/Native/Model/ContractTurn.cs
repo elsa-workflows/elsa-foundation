@@ -52,6 +52,7 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
 
     public void CancelChild(WaitEntry child) => turn.Send(new Contract.ActorRef(child.Key), NativeKinds.Cancel);
     public void StartJob(string key, BackgroundArgs arguments, TimeSpan? timeout) => turn.StartJob(key, arguments, timeout);
+    public void StartUserTaskJob(string key, NativeUserTaskWaits.OpenArguments arguments, TimeSpan timeout) => turn.StartJob(key, arguments, timeout);
     public void CancelJob(string key) => turn.CancelJob(key);
     public void Subscribe(string key, string wait) => turn.Subscribe(key, wait);
     public void Unsubscribe(string key, string wait) => turn.Unsubscribe(key, wait);

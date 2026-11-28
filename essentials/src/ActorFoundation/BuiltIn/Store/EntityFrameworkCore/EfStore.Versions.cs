@@ -89,7 +89,8 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootPreparedWaitQualification => new(3, 141, 1);
     internal static StoreFormat RootOptionalAuthoredStandaloneEventsQualification => new(3, 144, 1);
     internal bool SupportsAuthoredStandaloneEventQualification =>
-        this == RootAuthoredStandaloneEventQualification || this == RootOptionalAuthoredStandaloneEventsQualification;
+        this == RootAuthoredStandaloneEventQualification || this == RootOptionalAuthoredStandaloneEventsQualification ||
+        this == RootUserTaskWaitsQualification;
     internal bool SupportsIsolatedInlineQualification =>
         this == RootEphemeralTestRunQualification || SupportsAttachedTestRunQualification;
     internal bool SupportsAttachedTestRunQualification =>
