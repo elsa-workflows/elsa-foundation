@@ -11,7 +11,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfRuntimeIngressDeliveryStore
 {
-    internal bool SupportsAuthoredEventAdmission => PreparedStandaloneOnly && SupportsAdmission;
+    internal bool SupportsAuthoredEventAdmission => PreparedStandaloneOnly && SupportsAdmission &&
+        RuntimeSchemaWriteVersion.SupportsAuthoredEventCohorts(context);
 
     internal async ValueTask<bool> AdmitAuthoredEventAsync(RuntimeAuthoredStandaloneEvent source,
         Func<CancellationToken, ValueTask<IReadOnlyList<TriggerAggregate>>> readMatching,

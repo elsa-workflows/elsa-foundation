@@ -4,6 +4,8 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Scheduling.StandaloneTriggers;
 using Elsa.Events;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Serialization.Core;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -378,6 +380,57 @@ public sealed partial class KernelStandalonePreparedStartTests
 
                 Task<int> SetStampAsync(string version, string id) => context.Database.ExecuteSqlInterpolatedAsync(
                     $"""UPDATE elsa_runtime_authored_event_cohort SET "SchemaVersion" = {version} WHERE "Id" = {id}""", token);
+
+                await AssertCohortGateAsync();
+
+                async Task AssertCohortGateAsync()
+                {
+                    const string familyName = "RuntimeAuthoredEventCohort";
+                    await using var gated = OpenHost(neutral: true, authoredOnly: true, relayScope: Persistence);
+                    await using var scope = await gated.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                    var gatedServices = scope.ServiceProvider;
+                    var db = gatedServices.GetRequiredService<RuntimeDbContext>();
+                    var declarations = EfSchemaModuleFamilies.ForContext(db.GetType())!;
+                    var registry = gatedServices.GetRequiredService<EfSchemaFinalizationGates>();
+                    var states = new EfSchemaFinalizationStore(db);
+                    var member = new SchemaFinalizationMember("authored-event-qualification", "isolated-host");
+                    foreach (var chain in declarations.Chains)
+                        await states.GetOrCreateAsync(chain.Family, chain.CurrentVersion, chain.ReadableVersions,
+                            SchemaFinalizationActor.Of(member), token);
+
+                    var predecessor = EfSchemaModuleFamilies.FromDeclarations(declarations.Module, declarations.Chains
+                        .Where(chain => chain.Family != familyName).Select(chain => declarations.DeclarationOf(chain.Family)));
+                    await AdmitAsync(predecessor);
+                    await AssertUnavailableAsync();
+
+                    var gate = await AdmitAsync(declarations);
+                    Assert.True(gatedServices.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>().SupportsAdmission);
+                    const string newer = "9.99.0";
+                    var record = Assert.IsType<SchemaFinalizationRecord>(await states.FindAsync(familyName, token));
+                    string[] newerBuildReads = [record.FinalizedVersion, newer];
+                    var intent = await states.RecordIntentAsync(familyName, record.Revision, newer, newerBuildReads, member, token);
+                    Assert.True(intent.Applied);
+                    Assert.True((await states.CommitIntentAsync(familyName, intent.Record.Revision, newerBuildReads, member, token)).Applied);
+                    await gate.RefreshAsync(db, token);
+                    await AssertUnavailableAsync();
+
+                    async Task<EfSchemaModuleGate> AdmitAsync(EfSchemaModuleFamilies families)
+                    {
+                        var configured = new EfSchemaModuleGate(families, null, new(), new());
+                        await configured.ActivateAsync(db, token);
+                        registry.Register(typeof(RuntimeDbContext), configured);
+                        return configured;
+                    }
+
+                    async Task AssertUnavailableAsync()
+                    {
+                        Assert.True(gatedServices.GetRequiredService<IRuntimeIngressDeliveryStore>().SupportsAdmission);
+                        var gatedIngress = gatedServices.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
+                        Assert.False(gatedIngress.SupportsAdmission);
+                        Assert.False(gatedServices.GetRequiredService<ITriggerManagementCommitter>().CanActivateType("event", 1));
+                        await Assert.ThrowsAsync<NotSupportedException>(() => gatedIngress.AdmitAsync(firstEvent, token).AsTask());
+                    }
+                }
 
                 async Task CommitAuthoredTriggerAsync(TriggerStoreWrite write)
                 {
