@@ -276,7 +276,9 @@ public static class NativeExecutableMapper
 
             foreach (var binding in source.InputBindings.Values)
             {
-                if (!IsPlainInputSource(binding, scope) || binding.EffectivePolicy.HidesValue() || binding.Literal?.Policy.HidesValue() == true)
+                var safeSource = binding.Source == RuntimeInputBindingSource.Literal ||
+                    scope.Graph is null && IsWorkflowRequest(binding);
+                if (!safeSource)
                     throw NativeMappingRefusedException.Binding(id, binding.InputKey,
                         "Use a plain literal or an unprotected workflow input for Evaluate Decision.");
             }
@@ -300,10 +302,6 @@ public static class NativeExecutableMapper
                         "Use a plain literal for a user task field.");
             }
         }
-
-        private static bool IsPlainInputSource(RuntimeInputBinding binding, Scope scope) =>
-            binding.Source == RuntimeInputBindingSource.Literal ||
-            scope.Graph is null && binding.Source is (RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember);
 
         private Native.TestRunChildSelection? ReadTestRunChild(ExecutableNode source)
         {
@@ -601,15 +599,32 @@ public static class NativeExecutableMapper
             policy.HidesValue() || policy.RedactionMode is not null || policy.RetentionPolicy is not null ||
             policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom;
 
+        private static bool RequiresProtectedValue(RuntimeInputBinding binding) =>
+            UnsupportedOutputPolicy(binding.EffectivePolicy) ||
+            binding.Literal is { } literal && UnsupportedOutputPolicy(literal.Policy);
+
+        private static bool IsWorkflowRequest(RuntimeInputBinding binding) =>
+            binding.Source is RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember;
+
         // ---- inputs, captures ------------------------------------------------------------------------------------
 
         private void MapInputs(ExecutableNode source, Native.Node node, IReadOnlySet<string> consumed, Scope scope)
         {
             var id = source.ExecutableNodeId;
             var shape = NativeActivityShape.For(node.Type);
+            var decision = node.Type == typeof(Native.EvaluateDecision);
+            var verifiedDecisionInputs = decision && source.InputBindings.Values.Any(IsWorkflowRequest) &&
+                !source.InputBindings.Values.Any(RequiresProtectedValue) &&
+                source.InputBindings.GetValueOrDefault(nameof(Native.EvaluateDecision.Decision))?.LiteralValue is
+                    { ValueKind: JsonValueKind.String } selector &&
+                ExecutableDecisionPinMetadata.HasVerifiedWorkflowInputs(source.Metadata, selector.GetString()!);
             foreach (var (key, binding) in source.InputBindings.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             {
                 if (consumed.Contains(key)) continue;
+                // An old publication can still be restored and republished. Its Decision runner refuses the
+                // invocation, and the Native model never hydrates these unchecked values or snapshots them.
+                if (decision && (RequiresProtectedValue(binding) || !verifiedDecisionInputs && IsWorkflowRequest(binding)))
+                    continue;
                 var mapped = MapBinding(binding, id, key, scope);
                 switch (shape.RuleFor(key))
                 {
