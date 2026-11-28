@@ -63,7 +63,7 @@ type OperationStatus = "idle" | "loading" | "ready" | "failed";
 
 function focusStep(heading: HTMLHeadingElement | null) {
   heading?.focus({ preventScroll: true });
-  heading?.scrollIntoView({ block: "start" });
+  heading?.scrollIntoView?.({ block: "start" });
 }
 
 export function Elsa3ReusableImportPage({
@@ -674,7 +674,7 @@ export function Elsa3ReusableImportPage({
           <dl className="elsa3-import-summary">
             <div><dt>Exact source versions</dt><dd>{summary.exactSourceVersions}</dd></div>
             <div><dt>Reusable activities</dt><dd>{summary.activityDefinitions}</dd></div>
-            <div><dt>Workflows</dt><dd>{summary.wrapperWorkflows + summary.ordinaryWorkflows}</dd></div>
+            <div><dt>Workflows</dt><dd>{newestSelectedVersions.size}</dd></div>
           </dl>
           <ul className="elsa3-import-review-outcomes">
             {selectedItems.map(item => (
@@ -853,6 +853,13 @@ function ImportReceipt({
   const outcomeLabel = importReceiptOutcomeLabel(receipt);
   const unpublished = importReceiptNeedsResume(receipt);
   const sourceVersions = new Map(selectedItems.map(item => [item.sourceVersionId, item.sourceVersion]));
+  const labelCounts = new Map<string, number>();
+  const labeledSources = receipt.sources.map(source => {
+    const version = sourceVersions.get(source.sourceVersionId);
+    const label = `${source.name || source.sourceDefinitionId} · ${version === undefined ? source.sourceVersionId : `v${version}`}`;
+    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+    return { source, label };
+  });
   return (
     <section
       className={unpublished ? "elsa3-import-partial-receipt" : "elsa3-import-receipt"}
@@ -866,10 +873,9 @@ function ImportReceipt({
       </header>
       <p role="status">{importReceiptApplyMessage(receipt)}</p>
       <div className="elsa3-import-receipt-sources">
-        {receipt.sources.map(source => {
+        {labeledSources.map(({ source, label }) => {
           const publication = publicationForSource(receipt.publications, source.sourceVersionId);
-          const version = sourceVersions.get(source.sourceVersionId);
-          const sourceLabel = `${source.name || source.sourceDefinitionId} · ${version === undefined ? source.sourceVersionId : `v${version}`}`;
+          const sourceLabel = (labelCounts.get(label) ?? 0) > 1 ? `${label} · ${source.sourceVersionId}` : label;
           return (
             <article key={source.sourceVersionId} className="elsa3-import-row" aria-label={sourceLabel}>
               <header className="elsa3-import-split">

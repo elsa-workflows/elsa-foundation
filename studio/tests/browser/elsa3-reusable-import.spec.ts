@@ -125,8 +125,13 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
         isComplete: true,
         nextOffset: null,
         items: [
-          sourceItem("owner", "owner-v1", true, { sourceName: "Owner" }),
-          sourceItem("owner", "owner-v2", true, { sourceName: "Owner", sourceVersion: 2, activityDefinitionVersionId: "activity-owner-v2" })
+          sourceItem("owner", "owner-v1", true, { sourceName: "Owner", workflowDefinitionId: "wrapper-owner" }),
+          sourceItem("owner", "owner-v2", true, {
+            sourceName: "Owner",
+            sourceVersion: 2,
+            workflowDefinitionId: "wrapper-owner",
+            activityDefinitionVersionId: "activity-owner-v2"
+          })
         ],
         diagnostics: []
       });
@@ -157,6 +162,8 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
   await page.getByRole("checkbox", { name: "Select owner exact source version 2" }).check();
   await page.getByRole("button", { name: "Review exact import" }).click();
+  const review = page.getByRole("heading", { name: "4. Confirm import" }).locator("xpath=ancestor::section[1]");
+  await expect(review).toContainText("Workflows1");
   await page.getByRole("button", { name: "Apply reviewed import" }).click();
 
   await expect(page.getByText("Already imported. The durable receipt is identical and no second mutation was made.")).toBeVisible();

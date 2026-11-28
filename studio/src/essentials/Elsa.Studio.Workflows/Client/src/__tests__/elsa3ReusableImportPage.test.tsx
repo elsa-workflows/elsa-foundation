@@ -99,8 +99,9 @@ describe("Elsa 3 reusable import workbench", () => {
     click(checkbox(container, "Select owner exact source version 1"));
     await waitFor(() => expect(container.textContent).toContain("Required dependency"));
     click(button(container, "Review exact import"));
-    expect(container.textContent).toContain("Activity Definitions2");
-    expect(container.textContent).toContain("Activity Definition versions2");
+    expect(container.textContent).toContain("Reusable activities2");
+    click(button(container, "Import plan details"));
+    expect(container.textContent).toContain("Activity definition versions2");
     expect(container.textContent).toContain("Exact reusable rewrites1");
     const publish = container.querySelector<HTMLInputElement>("#elsa3-publish-imported")!;
     expect(publish.checked).toBe(false);
