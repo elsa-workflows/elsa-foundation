@@ -65,7 +65,7 @@
 		<Content Update="shells.Production.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
-		<Content Update="shells.CorePreview*.json;shells.Actor.Production.json">
+		<Content Update="shells.CorePreview.Production.json;shells.Actor.Production.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>
