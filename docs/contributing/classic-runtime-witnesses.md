@@ -114,3 +114,26 @@ dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj \
   -c Release -p:RestoreLockedMode=true \
   --filter 'FullyQualifiedName~RuntimeAlteration|FullyQualifiedName~RuntimeCoreEngineShapeGuardTests|FullyQualifiedName~DomainManagementApiCompositionTests|FullyQualifiedName~DomainApiCapabilityRegistrationTests'
 ```
+
+## Classic Dashboard EF selector
+
+The `WorkflowsDashboardEntityFrameworkCore` shell selector composed the classic
+checkpoint-backed run-health projection and the workflow portfolio in one
+feature. Use `385008d6459580ecf0c4566f0e8412bf9b10cf8c` for its activation and
+full Runtime registration tests:
+
+```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" 385008d6459580ecf0c4566f0e8412bf9b10cf8c
+(
+  cd "$archive/source"
+  dotnet test essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true \
+    --filter 'FullyQualifiedName~WorkflowsDashboardEntityFrameworkCoreFeatureTests|FullyQualifiedName~Registration_requires_runtime_ef_context_and_replaces_source'
+)
+```
+
+Current shells select `WorkflowsDashboardPortfolioEntityFrameworkCore` for
+portfolio queries. The retained Dashboard reports Actor run-health statistics
+as unavailable. The EF package still exposes the guarded historical run-health
+reader over its original projection and keeps its physical provider tests.

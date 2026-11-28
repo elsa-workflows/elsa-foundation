@@ -268,7 +268,6 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
         var recoveryKey = (string)comprehensive["RecoveryContinuationSigningKey"]!;
         var hierarchyKey = (string)comprehensive["HierarchyCursorSigningKey"]!;
         features.Remove(RuntimePersistenceFeatures[0]);
-        features.Remove("WorkflowsDashboardEntityFrameworkCore"); // Its dependency would re-enable the comprehensive store.
         foreach (var feature in RuntimePersistenceFeatures.Skip(1))
         {
             var configuration = new JsonObject();
