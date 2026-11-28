@@ -6,7 +6,7 @@ A profile runs `Elsa.Foundation.Host.dll`. `packages.txt` selects the NuGet pack
 | --- | --- |
 | [Essentials](essentials/shells.json) | Design, publish and execute a workflow with a small activity set, local identity and SQLite. The runtime API works with HTTP, cron and timer triggers switched off. The shell keeps the recurring-schedule projection that publishing requires. |
 | [Curated Essentials](essentials-curated/README.md) | The published server Essentials composition, including the shared token store, package registry, standard Production overlays, and a writable add-on feed. |
-| [Elsa 3 import](elsa3-import/shells.json) | Analyze and import Elsa 3 reusable activity definitions through the migration API. Includes mapping, publishing, persistence and expressions used by the import path. The same image can [run already-converted Elsa 4 files](elsa3-import/migrated-files.md) from a read-only `migrated/` mount. |
+| [Elsa 3 import](elsa3-import/shells.json) | Analyze and import Elsa 3 reusable activity definitions through the migration API. Includes mapping, publishing, persistence and expressions used by the import path. Native and Flowchart consumers execute on the built-in Actor Foundation. The same image can [run already-converted Elsa 4 files](elsa3-import/migrated-files.md) from a read-only `migrated/` mount. |
 | [Full](full/shells.json) | Explore a broader server composition, including import, native BPMN runtime and design, decisions, diagnostics, connections and Studio backend services. XML interchange stays opt-in pending [published activity version support](https://github.com/elsa-workflows/elsa-foundation/issues/5809). The linked shell file is the exact selection. Run a separate compatible Studio for a browser UI. |
 
 ## Use a released profile
@@ -96,10 +96,16 @@ This example expects a TLS certificate in `elsa.pfx` readable by the container u
 | Feature setting (after prefix) | Value |
 | --- | --- |
 | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | Password for the initial `admin` user. |
-| `WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` and `WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey` | Separate persistent signing keys, each at least 32 UTF-8 bytes. |
-| `WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionActiveKeyId` | ID of the active payload protection key. |
+| `WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey` | Persistent signing key with at least 32 UTF-8 bytes for Elsa 3 import and Curated Essentials. |
+| `WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` and `WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey` | Separate persistent signing keys for Essentials and Full, each at least 32 UTF-8 bytes. |
+| `WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionActiveKeyId` | ID of the active payload protection key for Essentials and Full. |
 | `WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionKeys__<id>` | Base64-encoded 32-byte key for that ID. |
 | `Secrets__EncryptionKey` | Supply for shells that enable Secrets, such as Full. |
+
+The Elsa 3 import image keeps `elsa.db` and `elsa-kernel.db` separately under `/app/data`.
+Persist the directory so publication material, executable pins, and Actor state survive together.
+When mounting a complete shell, carry over the Actor and retained Runtime feature selections from
+the import profile.
 
 ## Build in GitHub Actions
 
