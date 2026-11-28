@@ -156,7 +156,8 @@ public sealed partial class KernelPublishedExecuteTests
         bool attachedTests = false, bool heldEphemeralTests = false, bool shippedTestRuns = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        var directory = postgres ? null : Directory.CreateTempSubdirectory("kernel-published-execute-");
+        var directory = postgres ? null : Directory.CreateDirectory(
+            Path.Combine(Directory.GetCurrentDirectory(), $"kernel-published-execute-{Guid.NewGuid():N}"));
         try
         {
             var foundation = postgres ? Environment.GetEnvironmentVariable(FoundationDatabase) : null;
@@ -267,7 +268,7 @@ public sealed partial class KernelPublishedExecuteTests
         var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
         {
             Provider = provider,
-            SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
+            SqlitePath = directory is null ? null : Path.GetRelativePath(Directory.GetCurrentDirectory(), Path.Combine(directory, "foundation.db")),
             PostgresConnectionString = foundation
         };
         if (shippedTestRuns)

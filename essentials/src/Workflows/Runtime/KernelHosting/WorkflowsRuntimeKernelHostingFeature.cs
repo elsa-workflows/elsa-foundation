@@ -48,7 +48,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
     [ManifestSetting(DisplayName = "Provider", Description = "Use SQLite or PostgreSQL.", Category = "Persistence", DefaultValue = "SQLite")]
     public string Provider { get; set; } = "SQLite";
 
-    [ManifestSetting(DisplayName = "SQLite file", Description = "Absolute path to a dedicated local SQLite kernel database; its directory must already exist.", Category = "Persistence")]
+    [ManifestSetting(DisplayName = "SQLite file", Description = "Path to a dedicated local SQLite kernel database. Relative paths are resolved against the process working directory, and the parent directory must already exist.", Category = "Persistence")]
     public string? SqlitePath { get; set; }
 
     [ManifestSetting(DisplayName = "PostgreSQL connection string", Description = "Connection string to a dedicated PostgreSQL kernel database.", Category = "Persistence", Secret = true)]
