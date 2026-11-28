@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Design.Tests;
 
-public sealed class ValueFlowValidatorTests
+public sealed partial class ValueFlowValidatorTests
 {
     [Theory]
     [InlineData(null, false)]

@@ -221,6 +221,8 @@ public sealed class Elsa3ActivityMapCoverageTests
             ["Elsa.WriteHttpResponse.StatusCode"] = "200",
             ["Elsa.PublishEvent.IsLocalEvent"] = "false",
             ["Elsa.DispatchWorkflow.WaitForCompletion"] = "false",
+            // Spec 1242 FR-014: a null collection dispatches no child in either.
+            ["Elsa.BulkDispatchWorkflows.Items"] = "null",
         };
         var catalog = RealActivityCatalog.Create();
         var unbound = Map.Entries
@@ -355,7 +357,10 @@ public sealed class Elsa3ActivityMapCoverageTests
             Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved,
             Elsa3ActivityDiagnosticCodes.NullTakesElsa4Default,
             Elsa3ActivityDiagnosticCodes.DispatchInputNames,
-            Elsa3ActivityDiagnosticCodes.ExecuteWorkflowDurable
+            Elsa3ActivityDiagnosticCodes.ExecuteWorkflowDurable,
+            // Spec 1242: the bulk dispatch rewrite raises the item-input warning, and lowering the outer-write warning.
+            Elsa3ActivityDiagnosticCodes.BulkDispatchItemInputs,
+            Elsa3ActivityDiagnosticCodes.BulkDispatchOuterWrite
         ];
 
         Assert.All(declared, code => Assert.Contains(code, codes));

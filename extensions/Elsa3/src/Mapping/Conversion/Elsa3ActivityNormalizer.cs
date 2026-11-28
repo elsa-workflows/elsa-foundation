@@ -256,12 +256,17 @@ internal sealed partial class Elsa3ActivityNormalizer(
         }
 
         var resolution = await resolver.ResolveAsync(node, plan.Request.Replacements, cancellationToken);
-        var descend = true;
         if (resolution.Failure is { } failure)
         {
-            // An unresolved node has no structure to route children into; its own error stands for them.
+            // An unresolved node has no structure to route children into, so the definition stays refused. The scan goes
+            // on (#6231): its listed children and the activities its properties embed are visited for their own findings.
             Error(plan, nodePlan, failure.Code, failure.Message, failure.Guidance, failure.Metadata);
-            descend = false;
+            LiftEmbeddedChildren(plan, nodePlan, childPaths);
+            // Without a contract the node's variables are read as Elsa 3 container variables, so its children's reads
+            // of them resolve and the variables' own findings are reported.
+            ReadContainerVariables(
+                new Elsa3RewriteContext(plan, nodePlan, resolver, ResolveType, (json, path) => ReadChild(plan, nodePlan, json, path, childPaths)),
+                unresolved: true);
         }
         else
         {
@@ -283,9 +288,6 @@ internal sealed partial class Elsa3ActivityNormalizer(
                     "Install the Elsa 4 module that provides the container, or restructure the workflow.",
                     "activities");
         }
-
-        if (!descend)
-            return;
 
         var children = node.Activities ?? [];
         var childLevel = level + ContainerLevels(nodePlan);
@@ -777,7 +779,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
             propertyName);
     }
 
-    private static void CheckRemoved(Elsa3RewriteContext context, Elsa3MemberRule rule, string propertyName, JsonElement value)
+    internal static void CheckRemoved(Elsa3RewriteContext context, Elsa3MemberRule rule, string propertyName, JsonElement value)
     {
         var expected = rule.Elsa3Default is { ValueKind: JsonValueKind.String } text ? text.GetString() : null;
         var matches = !Elsa3TypedValues.IsBound(value)
@@ -1004,7 +1006,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         return null;
     }
 
-    private static bool TryGetObjectExpression(JsonElement value, out string? json)
+    internal static bool TryGetObjectExpression(JsonElement value, out string? json)
     {
         json = null;
         if (!Elsa3TypedValues.TryGetExpression(value, out var type, out var expressionValue) ||
@@ -1089,9 +1091,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
     /// <summary>
     /// A container's own variables (Sequence, Flowchart) go into its native structure, scoped to the container (R7).
     /// </summary>
-    private void ReadContainerVariables(Elsa3RewriteContext context)
+    private void ReadContainerVariables(Elsa3RewriteContext context, bool unresolved = false)
     {
-        if (context.Node.Resolved?.Entry?.FindMember("Variables") is not { Rule: Elsa3MemberRuleKind.Structure } ||
+        if (!unresolved && context.Node.Resolved?.Entry?.FindMember("Variables") is not { Rule: Elsa3MemberRuleKind.Structure } ||
             !context.TryGetProperty("Variables", out var property, out var variables) ||
             variables.ValueKind != JsonValueKind.Array)
             return;
@@ -1213,6 +1215,59 @@ internal sealed partial class Elsa3ActivityNormalizer(
                StringComparer.Ordinal.Equals(literal, emitted);
     }
 
+    /// <summary>
+    /// Moves the activities an unresolved node's properties embed (an Elsa 3 port, or a list of cases holding one) into
+    /// its <c>activities</c>, each with its original JSON path, so the scan visits them. Without the node's contract the
+    /// ports are unknown, so an embedded activity is recognised by its shape: an object with a string <c>type</c>,
+    /// <c>id</c> and <c>nodeId</c> and a numeric <c>version</c>, outside any typed value. A property that embeds one is taken off the node, so its references are not read twice.
+    /// </summary>
+    private void LiftEmbeddedChildren(Elsa3ConversionPlan plan, Elsa3NodePlan nodePlan, Dictionary<Elsa3Activity, string> childPaths)
+    {
+        var node = nodePlan.Node;
+        foreach (var (propertyName, value) in node.AdditionalProperties.ToArray())
+        {
+            var found = new List<(JsonElement Json, string Path)>();
+            FindEmbedded(value, $"{nodePlan.JsonPath}.{propertyName}", found);
+            if (found.Count == 0)
+                continue;
+
+            node.AdditionalProperties.Remove(propertyName);
+            node.Activities ??= [];
+            foreach (var (json, path) in found)
+                if (ReadChild(plan, nodePlan, json, path, childPaths) is { } child)
+                    node.Activities.Add(child);
+        }
+
+        static void FindEmbedded(JsonElement value, string path, List<(JsonElement Json, string Path)> found)
+        {
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Object when IsActivity(value):
+                    found.Add((value, path));
+                    break;
+                // A typed value (a literal, an expression or a memory reference) holds data, never a child activity.
+                case JsonValueKind.Object when value.TryGetProperty("expression", out _) || value.TryGetProperty("memoryReference", out _):
+                    break;
+                case JsonValueKind.Object:
+                    foreach (var property in value.EnumerateObject())
+                        FindEmbedded(property.Value, $"{path}.{property.Name}", found);
+                    break;
+                case JsonValueKind.Array:
+                    var index = 0;
+                    foreach (var item in value.EnumerateArray())
+                        FindEmbedded(item, $"{path}[{index++}]", found);
+                    break;
+            }
+        }
+
+        // Elsa 3 writes a string type, id and nodeId and a numeric version on every serialized activity.
+        static bool IsActivity(JsonElement value) =>
+            value.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String &&
+            value.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String &&
+            value.TryGetProperty("nodeId", out var nodeId) && nodeId.ValueKind == JsonValueKind.String &&
+            value.TryGetProperty("version", out var version) && version.ValueKind == JsonValueKind.Number;
+    }
+
     private Elsa3Activity? ReadChild(
         Elsa3ConversionPlan plan,
         Elsa3NodePlan parent,
@@ -1245,7 +1300,13 @@ internal sealed partial class Elsa3ActivityNormalizer(
             wellKnownTypeRegistry.GetAliasOrDefault);
 
     private static void Warn(Elsa3RewriteContext context, string code, string? property) =>
-        context.Warning(code, WarningMessages.GetValueOrDefault(code, code), "Review the converted workflow's behaviour for this difference.", property);
+        context.Warning(code, WarningMessages.GetValueOrDefault(code, code),
+            WarningGuidance.GetValueOrDefault(code, "Review the converted workflow's behaviour for this difference."), property);
+
+    private static readonly IReadOnlyDictionary<string, string> WarningGuidance = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [BulkDispatchCapped] = "For more than 1,000 items, split them into batches and run one bulk dispatch per batch from a sequential ForEach over the batches.",
+    };
 
     private static void Error(Elsa3ConversionPlan plan, Elsa3NodePlan node, string code, string message, string guidance,
         IReadOnlyDictionary<string, string>? metadata = null)
@@ -1271,6 +1332,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         [ExecuteWorkflowDurable] = ExecuteWorkflowDurableMessage,
         [OutcomeUndeclared] = "The reusable workflow completes with an outcome its definition does not declare; it is declared in the converted contract.",
         [OutcomeUnreached] = "The reusable workflow declares an outcome that nothing completes with; it is left out of the converted contract.",
+        [BulkDispatchCapped] = "Elsa 4 faults a bulk dispatch of more than 1,000 items, and keeps at most 16 item passes open at once (a waiting pass ends when its child ends and its branch has run; a fire-and-forget pass ends once its child is dispatched), starting the next as one ends; Elsa 3 dispatched every child at once, with no cap.",
         [HttpResponseJsonVariant] = "Elsa 3 matched this JSON content type only by exact string and sent the object's type name; Elsa 4 sends the object as JSON.",
     };
 }

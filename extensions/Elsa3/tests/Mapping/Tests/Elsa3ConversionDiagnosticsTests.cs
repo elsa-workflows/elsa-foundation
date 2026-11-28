@@ -20,7 +20,6 @@ public sealed class Elsa3ConversionDiagnosticsTests
         { "no-counterpart:StateMachine", Elsa3ActivityDiagnosticCodes.NoCounterpart },
         { "no-counterpart:ParallelForEach", Elsa3ActivityDiagnosticCodes.NoCounterpart },
         { "no-counterpart:RunTask", Elsa3ActivityDiagnosticCodes.NoCounterpart },
-        { "no-counterpart:BulkDispatchWorkflows", Elsa3ActivityDiagnosticCodes.NoCounterpart },
         { "no-counterpart:DownloadHttpFile", Elsa3ActivityDiagnosticCodes.NoCounterpart },
         { "no-counterpart:WriteFileHttpResponse", Elsa3ActivityDiagnosticCodes.NoCounterpart },
         { "unmapped", Elsa3ActivityDiagnosticCodes.UnmappedType },

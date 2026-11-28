@@ -16,7 +16,7 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 |---|---|---|---|
 | `UnmappedType` | `ELS3-ACTIVITY-UNMAPPED-TYPE` | not in the map, not claimed by `ReplacesActivityType`, not a catalog key | FR-007 |
 | `AmbiguousAlias` | `ELS3-ACTIVITY-AMBIGUOUS-ALIAS` | two definitions' highest versions claim the same Elsa 3 type | FR-009 |
-| `NoCounterpart` | `ELS3-ACTIVITY-NO-COUNTERPART` | R6 activity (ParallelForEach, BulkDispatchWorkflows, …) or R6 use (mid-flow Timer/Cron, a SendHttpRequest port holding an activity) | FR-003 |
+| `NoCounterpart` | `ELS3-ACTIVITY-NO-COUNTERPART` | R6 activity (ParallelForEach, …; BulkDispatchWorkflows until spec 1242) or R6 use (mid-flow Timer/Cron, a SendHttpRequest port holding an activity) | FR-003 |
 | `VersionUnavailable` | `ELS3-ACTIVITY-VERSION-UNAVAILABLE` | the target key has no valid-SemVer version in the catalog | FR-008 |
 | `StructureUnreadable` | `ELS3-ACTIVITY-STRUCTURE-UNREADABLE` | the target version is in the catalog, but its structure facet cannot be read (added in review) | FR-008 |
 | `UnknownMember` | `ELS3-ACTIVITY-UNKNOWN-MEMBER` | a property neither in the map nor a declared Elsa 4 member | FR-010 |
@@ -30,6 +30,9 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `NestingTooDeep` | `ELS3-ACTIVITY-NESTING-TOO-DEEP` | deeper than `MaxNestingDepth` (formerly `ArgumentException`) | FR-012 |
 | `DuplicateInputBinding` | `ELS3-ACTIVITY-DUPLICATE-INPUT-BINDING` | two properties bind one input, or one property matches two (formerly `ArgumentException`) | FR-012 |
 | `DispatchInputUndeclared` | `ELS3-ACTIVITY-DISPATCH-INPUT-UNDECLARED` | a literal DispatchWorkflow/ExecuteWorkflow input map passes a name the target workflow in the same import does not declare: Elsa 3 ignored it, Elsa 4 refuses it. A key in another letter case is spelled as declared (`ELS3-LITERAL-KEY-REWRITTEN`, info) (#5808) | - |
+| `BulkDispatchTargetUnknown` | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` | a BulkDispatchWorkflows target is neither in the same import nor published in Elsa 4, so its declared inputs are unknown | spec 1242 FR-016 |
+| `BulkDispatchOutcomeRoute` | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` | a BulkDispatchWorkflows `Completed` or `Canceled` connection with no faithful Elsa 4 meaning, or one into a WaitAll join | spec 1242 FR-017 |
+| `BulkDispatchChildResultRead` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ` | a BulkDispatchWorkflows branch reads `ChildInstanceId`, `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | spec 1242 FR-019 |
 
 ## Warnings: the item converts (W)
 
@@ -45,6 +48,9 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `BreakStopsAtParallel` | `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` | Break inside Parallel/Fork branches |
 | `ForkWaitAnyCancellation` | `ELS3-BEHAVIOUR-FORK-WAIT-ANY-CANCELLATION` | Fork.JoinMode WaitAny |
 | `ExecuteWorkflowDurable` | `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` | ExecuteWorkflow |
+| `BulkDispatchItemInputs` | `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` | every BulkDispatchWorkflows: only declared inputs, no `ParentInstanceId`, `ChildFaulted` also for cancelled and undispatchable children, an inherited correlation id without a function, a per-item wait (spec 1242 FR-016) |
+| `BulkDispatchCapped` | `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` | every BulkDispatchWorkflows: more than 1,000 items fault, at most 16 passes open at once (spec 1242 FR-020) |
+| `BulkDispatchOuterWrite` | `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE` | a BulkDispatchWorkflows branch writes a variable declared outside the bulk node; branches now run concurrently (spec 1242 FR-020a) |
 | `ScriptOutcomeRouting` | `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING` | RunJavaScript.PossibleOutcomes. Removed by spec 1208 (S-3), 2026-11: RunJavaScript no longer routes by return value |
 | `OutcomeUndeclared` | `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED` | Complete in a reusable workflow names an outcome the definition's `Outcomes` does not declare; it is declared in the contract |
 | `OutcomeUnreached` | `ELS3-BEHAVIOUR-OUTCOME-UNREACHED` | a reusable workflow's declared outcome (other than `Done`) that no Complete reaches; dropped from the contract, so callers get no port for it |

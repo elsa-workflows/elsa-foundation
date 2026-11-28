@@ -1,0 +1,204 @@
+using System.Text.Json;
+using Elsa3.Mapping.Services;
+using Elsa3.Mapping.Tests.Support;
+using Elsa3.Models;
+using Xunit;
+using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
+
+namespace Elsa3.Mapping.Tests;
+
+/// <summary>
+/// An activity refusal refuses the definition but does not end the scan (#6231): the converter still analyses every
+/// script, variable type and other node, so one migration run reports every finding, and the spec 1237 inventory lists
+/// every component an engineer must port.
+/// </summary>
+public sealed class Elsa3ScanAfterRefusalTests
+{
+    [Fact]
+    public async Task An_unmapped_activity_does_not_hide_the_host_functions_another_nodes_script_calls()
+    {
+        var root = Sequence("root",
+            Activity("unmapped", "Acme.Unknown"),
+            Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "someFunction()"))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.False(result.Succeeded);
+        var unmapped = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.UnmappedType);
+        Assert.Equal("Acme.Unknown", unmapped.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("someFunction", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.Equal("$.root.activities[1].text.expression.value", missing.Path);
+    }
+
+    [Fact]
+    public async Task The_unmapped_activitys_own_scripts_and_the_workflows_variable_types_are_still_reported()
+    {
+        var root = Sequence("root",
+            Activity("unmapped", "Acme.Unknown", ("text", Expression("JavaScript", "otherFunction()"))));
+        var variables = new[] { new Elsa3Variable { Id = "order", Name = "Order", TypeName = "Acme.Order" } };
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: variables));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            [
+                (Elsa3ActivityDiagnosticCodes.UnmappedType, "Acme.Unknown"),
+                (Elsa3ImportDiagnosticCodes.HostFunctionMissing, "otherFunction"),
+                (Elsa3ImportDiagnosticCodes.VariableTypeUnregistered, "Acme.Order")
+            ],
+            result.Diagnostics
+                .Where(diagnostic => diagnostic.Metadata.ContainsKey(Elsa3MigrationDiagnosticMetadataKeys.ComponentName))
+                .Select(diagnostic => (diagnostic.Code, diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]))
+                .OrderBy(item => item.Code, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_output_the_unmapped_activity_captures_is_refused_once_for_that_activity()
+    {
+        var root = Sequence("root",
+            Activity("unmapped", "Acme.Unknown", ("result", Captured("order"))),
+            Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "someFunction()"))));
+        var variables = new[] { new Elsa3Variable { Id = "order", Name = "Order", TypeName = "Object" } };
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: variables));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            [Elsa3ActivityDiagnosticCodes.UnmappedType, Elsa3ImportDiagnosticCodes.HostFunctionMissing],
+            result.Diagnostics.Where(diagnostic => diagnostic.IsError).Select(diagnostic => diagnostic.Code).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("memory-reference")]
+    [InlineData("liquid")]
+    public async Task A_read_of_the_unmapped_activitys_output_is_not_reported_as_dangling(string form)
+    {
+        var text = form == "liquid" ? Expression("Liquid", "{{ Output.Result }}") : Captured("result-memory", "String");
+        var root = Sequence("root",
+            Activity("unmapped", "Acme.Unknown", ("result", Captured("result-memory"))),
+            Activity("node", "Elsa.WriteLine", ("text", text)));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.False(result.Succeeded);
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, error.Code);
+    }
+
+    [Theory]
+    [InlineData("memory-reference")]
+    [InlineData("liquid")]
+    public async Task A_reference_no_unresolved_node_could_produce_is_still_dangling(string form)
+    {
+        var text = form == "liquid" ? Expression("Liquid", "{{ Output.Nowhere }}") : Captured("nowhere", "String");
+        var root = Sequence("root",
+            Activity("unmapped", "Acme.Unknown", ("result", Captured("result-memory"))),
+            Activity("node", "Elsa.WriteLine", ("text", text)));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DanglingReference);
+    }
+
+    [Fact]
+    public async Task The_children_of_an_unmapped_container_are_scanned_in_its_list_and_its_ports()
+    {
+        var container = Activity("container", "Acme.Container",
+            ("body", Port(Activity("in-port", "Elsa.WriteLine", ("text", Expression("JavaScript", "portFunction()"))))));
+        container.Activities = [Activity("listed", "Acme.Nested", ("text", Expression("JavaScript", "listedFunction()")))];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", container)));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            [
+                (Elsa3ActivityDiagnosticCodes.UnmappedType, "Acme.Container"),
+                (Elsa3ActivityDiagnosticCodes.UnmappedType, "Acme.Nested"),
+                (Elsa3ImportDiagnosticCodes.HostFunctionMissing, "listedFunction"),
+                (Elsa3ImportDiagnosticCodes.HostFunctionMissing, "portFunction")
+            ],
+            result.Diagnostics
+                .Where(diagnostic => diagnostic.IsError)
+                .Select(diagnostic => (diagnostic.Code, diagnostic.Metadata.GetValueOrDefault(Elsa3MigrationDiagnosticMetadataKeys.ComponentName)))
+                .Order());
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Path == "$.root.activities[0].body.text.expression.value");
+    }
+
+    /// <summary>
+    /// The variables an unmapped container declares are read as an Elsa 3 container's are, so its children's reads of
+    /// them get the findings a mapped container's children get, and nothing more.
+    /// </summary>
+    [Theory]
+    [InlineData("memory-reference")]
+    [InlineData("liquid")]
+    [InlineData("javascript")]
+    public async Task A_child_reading_its_unmapped_containers_variable_is_reported_as_under_a_mapped_container(string form)
+    {
+        var unmapped = await ConvertContainerAsync("Acme.Container", form);
+        var mapped = await ConvertContainerAsync("Elsa.Sequence", form);
+
+        Assert.False(unmapped.Succeeded);
+        Assert.Equal(
+            ErrorCodes(mapped).Append(Elsa3ActivityDiagnosticCodes.UnmappedType).Order(StringComparer.Ordinal),
+            ErrorCodes(unmapped).Order(StringComparer.Ordinal));
+
+        static IEnumerable<string> ErrorCodes(Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition> result) =>
+            result.Diagnostics.Where(diagnostic => diagnostic.IsError).Select(diagnostic => diagnostic.Code);
+    }
+
+    [Fact]
+    public async Task An_unmapped_containers_variables_are_in_the_inventory()
+    {
+        var result = await ConvertContainerAsync("Acme.Container", "memory-reference", variableType: "Acme.Order");
+
+        var notice = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
+        Assert.Equal("Acme.Order", notice.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertContainerAsync(string type, string form, string variableType = "String")
+    {
+        var text = form switch
+        {
+            "liquid" => Expression("Liquid", "{{ Variables.Counter }}"),
+            "javascript" => Expression("JavaScript", "getCounter()"),
+            _ => Captured("counter", "String")
+        };
+        var container = Activity("container", type,
+            ("variables", JsonSerializer.SerializeToElement(new[] { new { id = "counter", name = "Counter", typeName = variableType } })));
+        container.Activities = [Activity("child", "Elsa.WriteLine", ("text", text))];
+        return ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", container)));
+    }
+
+    [Fact]
+    public async Task An_object_literal_shaped_like_an_activity_is_data_not_a_child()
+    {
+        var body = JsonSerializer.SerializeToElement(new
+        {
+            typeName = "Object",
+            expression = new { type = "Object", value = new { id = "42", nodeId = "42", type = "customer", version = 1 } }
+        });
+        var root = Sequence("root", Activity("unmapped", "Acme.Http", ("body", body)));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal("Acme.Http", error.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    [Fact]
+    public async Task A_switch_case_holding_an_unmapped_activity_is_refused_once_for_that_activity()
+    {
+        var @switch = Activity("switch", "Elsa.Switch", ("mode", Literal("MatchAny")));
+        @switch.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new object[]
+        {
+            new { label = "Case", condition = new { expression = new { type = "Literal", value = "true" } }, activity = Port(Activity("body", "Acme.Unknown")) }
+        });
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
+
+        Assert.False(result.Succeeded);
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, error.Code);
+    }
+}

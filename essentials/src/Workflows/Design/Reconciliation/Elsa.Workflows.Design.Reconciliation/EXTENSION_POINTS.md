@@ -65,6 +65,7 @@ Every `IEvent` type in the `Elsa.Workflows.Design.Core.Reconciliation` namespace
 **Expected handler audiences.** Independent subscribers reacting to completed reconciliation — publication, cache invalidation, telemetry. Not a fan-in contribution event: no contributor interface, no aggregating-handler constraint.
 
 **Known subscribers:**
+- `CloneDraftsOfReconciledWorkflows` *(this feature)* — gives each reconciled definition that has no draft one cloned from the newest version the pass reconciled, so Studio can open it (#6070). A saved draft is kept; an unsaved draft (working-copy revision 0) cloned from an older version is discarded and the newest version cloned instead. The clone and discard operation keys are per definition and version, so nodes converge on one draft and a draft discarded later is not cloned again from the same version. Per-definition failure isolation, never throws.
 - `PublishReconciledWorkflowVersions` *(cross-domain — `Elsa.Workflows.Publishing`)* — publishes the latest reconciled version of each definition whose claim has `PublishRequested = true` via the in-process `PublishWorkflow` request; idempotent (publication-slot pre-check + the publish handler's unchanged-artifact replay), per-definition failure isolation, never throws (spec 147).
 
 ---

@@ -46,7 +46,7 @@ describe("BPMN resource proposals", () => {
     const editor = nativeBlockEditorDocument(proposal.document, source.catalog);
     const persisted = nativeBlockPlannerContext({ ...source, document: editor }, { x: 0, y: 0 });
     const block = children(persisted.document.rootActivity).find(child => child.nodeId === request.nodeId)!;
-    expect(block.inputs).toContainEqual({ referenceKey: "CanStartWorkflow", value: { value: "false", expressionType: "Literal" } });
+    expect(block.inputs).toContainEqual({ referenceKey: "CanStartWorkflow", value: { value: false, expressionType: "Literal" } });
     const result = accepted(planUngroupBpmnBlock(persisted, proposal.selection[0]));
     expect(children(result.document.rootActivity).some(child => child.nodeId === request.nodeId)).toBe(false);
   });

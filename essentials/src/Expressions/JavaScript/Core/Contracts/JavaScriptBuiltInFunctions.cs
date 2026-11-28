@@ -17,6 +17,12 @@ public static class JavaScriptBuiltInFunctions
     public const string StringToBase64 = "stringToBase64";
     public const string StringFromBase64 = "stringFromBase64";
 
+    /// <summary>
+    /// <c>deepClone(value)</c>: an independent deep copy of a JSON value, so a script can change the copy without
+    /// changing the variable it read (issue #6215). Jint has no <c>structuredClone</c>.
+    /// </summary>
+    public const string DeepClone = "deepClone";
+
     /// <summary>The read roots a script reads engine-owned values through (ADR 0089, ADR 0045 §5 D-5).</summary>
     public static IReadOnlyList<string> ReadRoots { get; } = ["variables", "input", "activities", "workflow", "args"];
 
@@ -24,5 +30,6 @@ public static class JavaScriptBuiltInFunctions
     public static IReadOnlySet<string> Names { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         NewGuid, NewGuidString, GetGuidString, NewShortGuid, GetShortGuid, ParseGuid, StringToBase64, StringFromBase64,
+        DeepClone,
     };
 }

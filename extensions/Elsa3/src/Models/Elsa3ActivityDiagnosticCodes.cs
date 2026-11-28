@@ -120,6 +120,25 @@ public static class Elsa3ActivityDiagnosticCodes
     /// </summary>
     public const string DispatchInputUndeclared = "ELS3-ACTIVITY-DISPATCH-INPUT-UNDECLARED";
 
+    /// <summary>
+    /// A BulkDispatchWorkflows target is neither in the same import nor already published in Elsa 4, so the converter
+    /// cannot build the per-item inputs from its declared inputs (spec 1242 FR-016).
+    /// </summary>
+    public const string BulkDispatchTargetUnknown = "ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN";
+
+    /// <summary>
+    /// A BulkDispatchWorkflows <c>Completed</c> or <c>Canceled</c> connection has no faithful Elsa 4 meaning: the Elsa 4
+    /// activity completes with <c>Done</c> only (spec 1242 FR-017).
+    /// </summary>
+    public const string BulkDispatchOutcomeRoute = "ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE";
+
+    /// <summary>
+    /// A BulkDispatchWorkflows branch reads what Elsa 3 passed it about the child (the <c>ChildInstanceId</c> variable, or
+    /// the input <c>WorkflowOutput</c>, <c>WorkflowInstanceId</c>, <c>WorkflowStatus</c> or <c>WorkflowSubStatus</c>),
+    /// which an Elsa 4 branch does not get (spec 1242 FR-019).
+    /// </summary>
+    public const string BulkDispatchChildResultRead = "ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ";
+
     /// <summary>HttpEndpoint.ParsedContent: Elsa 4 does not parse form posts, and text becomes a string.</summary>
     public const string FormPostNotParsed = "ELS3-BEHAVIOUR-FORM-POST-NOT-PARSED";
 
@@ -176,4 +195,23 @@ public static class Elsa3ActivityDiagnosticCodes
 
     /// <summary>A connection Elsa 3 never follows (leaving Complete, End or Break, or a FlowFork port outside its branches) is removed.</summary>
     public const string DeadConnectionRemoved = "ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED";
+
+    /// <summary>
+    /// BulkDispatchWorkflows: only declared inputs are passed, a child-declared <c>ParentInstanceId</c> is no longer filled,
+    /// <c>ChildFaulted</c> also runs for cancelled and undispatchable children, a child without a correlation function
+    /// inherits the parent's correlation id, and an expression wait is evaluated once per pass (spec 1242 FR-016).
+    /// </summary>
+    public const string BulkDispatchItemInputs = "ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS";
+
+    /// <summary>
+    /// BulkDispatchWorkflows: more than 1,000 items fault in Elsa 4, and at most 16 passes are open at once, where Elsa 3
+    /// dispatched every child at once (spec 1242 FR-020).
+    /// </summary>
+    public const string BulkDispatchCapped = "ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED";
+
+    /// <summary>
+    /// BulkDispatchWorkflows: a converted branch writes a variable declared outside the bulk node. Elsa 3 ran the branches
+    /// one at a time; Elsa 4 runs them concurrently, so a shared value can lose updates (spec 1242 FR-020a).
+    /// </summary>
+    public const string BulkDispatchOuterWrite = "ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE";
 }

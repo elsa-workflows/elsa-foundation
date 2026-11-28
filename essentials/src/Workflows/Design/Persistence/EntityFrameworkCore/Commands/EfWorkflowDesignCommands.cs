@@ -202,6 +202,8 @@ public sealed class EfCreateDraftCommand(WorkflowsDesignDbContext db, IPersisten
 
 public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IIdentityGenerator identities, IPayloadSerializer serializer, IDistributedLockProvider? lockProvider = null, IInlineEventPublisher? inlineEvents = null, IDeferredEventPublisher? deferredEvents = null) : EfDesignCommand(db, access, atomic), ICloneDraftFromVersionCommand
 {
+    public const string OperationKind = "workflow.draft.clone-from-version.v1";
+
     public async Task<string> Execute(DesignOperationKey key, string sourceVersionId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceVersionId); Serializer = serializer;
@@ -211,7 +213,7 @@ public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, 
         string result;
         try
         {
-            var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.clone-from-version.v1", new CloneDraftRequestMaterial(sourceVersionId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
+            var outcome = await Atomic.ExecuteAsync(key, OperationKind, new CloneDraftRequestMaterial(sourceVersionId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
             {
                 // A transient atomic retry reruns the stage and allocates a fresh draft id.
                 // Dispose the previous attempt's handle before acquiring the next one.
@@ -222,18 +224,18 @@ public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, 
                 }
                 var source = await Scoped(Db.Versions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(sourceVersionId), token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), sourceVersionId);
                 EfDesignSupport.EnsureExactIdentity(sourceVersionId, source.Id, "workflow definition version clone lookup");
-                Tenant(source.TenantId); var state = EfDesignSupport.ReadState(serializer, source.StateSource, "workflow.draft.clone-from-version.v1");
+                Tenant(source.TenantId); var state = EfDesignSupport.ReadState(serializer, source.StateSource, OperationKind);
                 var layout = await Scoped(Db.VersionLayouts.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionVersionIdLookupHash == EfDesignSupport.LookupHash(sourceVersionId), token);
                 if (layout is not null)
                     EfDesignSupport.EnsureExactIdentity(sourceVersionId, layout.WorkflowDefinitionVersionId, "workflow version layout clone lookup");
                 var records = layout is null ? [] : EfDesignSupport.ReadLayout(layout.RecordsJson);
                 var presentation = layout is null ? [] : EfDesignSupport.ReadPresentation(layout.ActivityPresentationJson);
-                var id = identities.Generate(); var draft = Draft(id, source.DefinitionId, source.TenantId, state, sourceVersionId); SaveDraftState(draft, state, "workflow.draft.clone-from-version.v1");
+                var id = identities.Generate(); var draft = Draft(id, source.DefinitionId, source.TenantId, state, sourceVersionId); SaveDraftState(draft, state, OperationKind);
                 if (lockProvider is not null) draftLock = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(id), null, token);
                 if (inlineEvents is not null) errors = (await inlineEvents.DeriveValidationErrorsAsync(draft, token)).ToArray();
                 Db.Drafts.Add(draft); var sibling = WorkflowDefinitionDraftLayout.CreateFor(identities, id, records, presentation); sibling.TenantId = source.TenantId; EfDesignSupport.Stamp(sibling, Now); EfDesignSupport.SetLayout(Db, sibling, records, presentation); Db.DraftLayouts.Add(sibling); return DesignAtomicWriteStage<string>.Accepted(id);
             }, cancellationToken: ct);
-            result = RequireOutcome(outcome, "workflow.draft.clone-from-version.v1", key);
+            result = RequireOutcome(outcome, OperationKind, key);
             if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
             {
                 var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(result), CancellationToken.None);
@@ -373,11 +375,13 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
 
 public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IDistributedLockProvider? lockProvider = null, IDeferredEventPublisher? deferredEvents = null) : EfDesignCommand(db, access, atomic), IDiscardDraftCommand
 {
+    public const string OperationKind = "workflow.draft.discard.v1";
+
     public async Task Execute(DesignOperationKey key, string draftId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(draftId); if (lockProvider is null) throw new InvalidOperationException("Workflow draft discard requires a distributed lock provider."); await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draftId), null, ct); await ExecuteCore(key, draftId, ct); }
     private async Task ExecuteCore(DesignOperationKey key, string draftId, CancellationToken ct)
     {
         string? definitionId = null;
-        var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.discard.v1", new DiscardDraftRequestMaterial(draftId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
+        var outcome = await Atomic.ExecuteAsync(key, OperationKind, new DiscardDraftRequestMaterial(draftId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
         {
             var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(draftId), token);
             if (row is null)
@@ -387,7 +391,7 @@ public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersiste
             Db.Drafts.Remove(row);
             return DesignAtomicWriteStage<bool>.Accepted(true);
         }, cancellationToken: ct);
-        RequireOutcome(outcome, "workflow.draft.discard.v1", key);
+        RequireOutcome(outcome, OperationKind, key);
         // The result intentionally remains a bool for compatibility with markers written by the
         // original EF implementation. Legacy replay has no definition id after the draft is gone,
         // so it cannot publish a duplicate discard event.
@@ -405,8 +409,8 @@ public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesign
 
     /// <summary>
     /// Removes, in the delete's own transaction, every operation marker the workflow reconciler wrote for
-    /// <paramref name="row"/>: the materialization of the definition and of each version, each metadata write, and the
-    /// per-version metadata markers written before #2187. A source that still lists the definition imports it again
+    /// <paramref name="row"/>: the materialization of the definition and of each version, each metadata write, each
+    /// draft clone and draft discard (#6070), and the per-version metadata markers written before #2187. A source that still lists the definition imports it again
     /// under the same materialization keys, and a surviving marker would replay without writing a row, or conflict
     /// once the re-imported version carries a new id. Nothing looks the metadata markers up again, but they would be
     /// left behind for a definition that no longer exists.
@@ -421,6 +425,8 @@ public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesign
         await RetireAsync(EfMaterializeWorkflowDefinitionCommand.OperationKind, [WorkflowReconciliationOperationKeys.Definition(row.Id)]);
         await RetireAsync(EfMaterializeWorkflowDefinitionVersionCommand.OperationKind, versionSortKeys.Select(sortKey => WorkflowReconciliationOperationKeys.Version(row.Id, sortKey)));
         await RetireAsync(EfSaveWorkflowDefinitionCommand.OperationKind, versionSortKeys.Select(sortKey => WorkflowReconciliationOperationKeys.LegacyDefinitionMetadata(row.Id, sortKey)));
+        await RetireAsync(EfCloneDraftFromVersionCommand.OperationKind, versionSortKeys.Select(sortKey => WorkflowReconciliationOperationKeys.DraftClone(row.Id, sortKey)));
+        await RetireAsync(EfDiscardDraftCommand.OperationKind, versionSortKeys.Select(sortKey => WorkflowReconciliationOperationKeys.DraftDiscard(row.Id, sortKey)));
 
         // Every metadata write has a key of its own, so they are found by the start their keys share. A substring
         // compare rather than LIKE: a provider that does not escape the pattern would read characters of the

@@ -21,6 +21,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
     private const string Scheduling = "Elsa.Activities.Scheduling.Activities.";
     private const string Http = "Elsa.Activities.Http.Activities.";
     private const string DispatchWorkflow = "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow";
+    internal const string BulkDispatchWorkflows = "Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows";
     private const string RunJavaScript = "Elsa.Activities.Scripting.Activities.RunJavaScript";
 
     private static IEnumerable<Elsa3ActivityMapEntry> BuildEntries() =>
@@ -293,7 +294,24 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Catalog("ExecuteWorkflow", DispatchWorkflow, DispatchMembers(executeWorkflow: true),
             [Outcome("Done", "Completed", "Faulted")],
             Elsa3NodeRewriteKind.ExecuteWorkflowAsDispatch),
-        NoCounterpart("BulkDispatchWorkflows", "Elsa 4 has no bulk dispatch."),
+        // Spec 1242: a structural activity whose Dispatch slot holds a DispatchWorkflow the rewrite generates from the
+        // dispatch members, which are therefore structure here; the branches are ports the rewrite adds as slot children.
+        Catalog("BulkDispatchWorkflows", BulkDispatchWorkflows,
+            [
+                Carry("Items", "Items") with { OnNull = NullUnbound },
+                Structure("WorkflowDefinitionId", Elsa3MemberKind.Input),
+                Structure("DefaultItemInputKey", Elsa3MemberKind.Input),
+                Structure("CorrelationIdFunction", Elsa3MemberKind.Input),
+                Structure("Input", Elsa3MemberKind.Input),
+                Structure("WaitForCompletion", Elsa3MemberKind.Input),
+                Structure("StartNewTrace", Elsa3MemberKind.Input),
+                Structure("ChannelName", Elsa3MemberKind.Input),
+                Structure("ChildCompleted", Elsa3MemberKind.Port),
+                Structure("ChildFaulted", Elsa3MemberKind.Port)
+            ],
+            [],
+            Elsa3NodeRewriteKind.BulkDispatchChild,
+            BulkDispatchCapped),
         NoCounterpart("RunTask", "Elsa 4 has no run-task activity."),
     ];
 

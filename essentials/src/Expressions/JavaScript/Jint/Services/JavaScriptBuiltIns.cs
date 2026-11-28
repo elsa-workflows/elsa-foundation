@@ -6,7 +6,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 
 /// <summary>
 /// The built-in functions the Jint feature registers (spec 1223 FR-006, FR-007, FR-026). For the same GUID or input
-/// they return the text Elsa 3 (Elsa.JavaScript 3.5.3) produced. They return strings and read no variables.
+/// the GUID and Base64 functions return the text Elsa 3 (Elsa.JavaScript 3.5.3) produced. None of them reads variables.
 /// </summary>
 internal static class JavaScriptBuiltIns
 {
@@ -21,7 +21,16 @@ internal static class JavaScriptBuiltIns
         new(JavaScriptBuiltInFunctions.ParseGuid, call => Text(Guid.Parse(StringArgument(JavaScriptBuiltInFunctions.ParseGuid, call)).ToString())),
         new(JavaScriptBuiltInFunctions.StringToBase64, call => Text(Convert.ToBase64String(Encoding.UTF8.GetBytes(StringArgument(JavaScriptBuiltInFunctions.StringToBase64, call))))),
         new(JavaScriptBuiltInFunctions.StringFromBase64, call => Text(Encoding.UTF8.GetString(Convert.FromBase64String(StringArgument(JavaScriptBuiltInFunctions.StringFromBase64, call))))),
+        new(JavaScriptBuiltInFunctions.DeepClone, DeepClone),
     ];
+
+    /// <summary>
+    /// <c>deepClone(value)</c> (issue #6215): the argument already crossed as a JSON value (a Date became its ISO
+    /// text, <c>undefined</c> null), and the result enters the script as a new value, so the copy shares nothing with the
+    /// variable it came from. Called without an argument it returns <c>undefined</c>, as the web-standard <c>structuredClone</c> does.
+    /// </summary>
+    private static JsonElement DeepClone(JavaScriptHostFunctionCall call) =>
+        call.Arguments.Count == 0 ? default : call.Arguments[0];
 
     /// <summary>
     /// Elsa 3's short GUID: the standard Base64 of the GUID's 16 bytes in .NET byte order, with every <c>/</c>,

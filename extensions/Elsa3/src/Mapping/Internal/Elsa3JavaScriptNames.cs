@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Globalization;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 
 namespace Elsa3.Mapping.Internal;
 
@@ -30,4 +31,12 @@ internal static class Elsa3JavaScriptNames
         "getGuidString", "getShortGuid", "bytesToString", "bytesFromString", "bytesToBase64", "bytesFromBase64",
         "stringToBase64", "stringFromBase64", "streamToBytes", "streamToBase64", "getConfig",
     }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The Elsa 3 functions that are Elsa 4 built-ins returning the same text (spec 1223 FR-006, FR-007, FR-026). An
+    /// Elsa 4 built-in that Elsa 3 did not have (<c>deepClone</c>, #6215) is, in an Elsa 3 script, the host's own
+    /// global: it is matched against the host-function map like any other.
+    /// </summary>
+    public static FrozenSet<string> Elsa4BuiltIns { get; } =
+        JavaScriptBuiltInFunctions.Names.Where(BuiltIns.Contains).ToFrozenSet(StringComparer.Ordinal);
 }

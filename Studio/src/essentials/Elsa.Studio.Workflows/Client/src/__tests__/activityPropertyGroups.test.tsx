@@ -1964,9 +1964,9 @@ describe("activity property organization", () => {
       .toEqual({ ...definition, source: "args.response.code" });
   });
 
-  // Regression: ticking a checklist box saved fine, but autosave promoted the structured Literal to an
-  // "Object" expression on the wire and nothing reversed it, so the row reopened with the picker reading
-  // "Object" and the checklist replaced by the raw JSON summary.
+  // Regression: a checklist input stored as an "Object" expression with JSON text (as saves did before structured
+  // Literals stayed typed on the wire) reopened with the picker reading "Object" and the checklist replaced by the
+  // raw JSON summary.
   it("reopens a saved checklist input as Literal with its checklist intact, not the Object JSON summary", () => {
     const checklistEditor: StudioActivityPropertyEditorContribution = {
       id: "test.multiselect",
@@ -1978,7 +1978,7 @@ describe("activity property organization", () => {
     ], {
       editors: [checklistEditor],
       expressionEditors: [createObjectExpressionEditorContribution(() => [checklistEditor])],
-      // Exactly what a save round-trip leaves behind: expressionType "Object", value a JSON string.
+      // What a draft saved before typed structured Literals holds: expressionType "Object", value a JSON string.
       activity: activity({
         supportedMethods: { typeName: "", expression: { type: "Object", value: '["GET"]' } }
       })

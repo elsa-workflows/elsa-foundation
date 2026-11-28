@@ -313,6 +313,75 @@ public sealed class ExpressionCapabilityTests
         Assert.Equal(binding.GetString(), script.GetString());
     }
 
+    // ---- issue #6215: deepClone, a JSON-shaped deep copy ----
+
+    [Fact]
+    public async Task DeepClone_returns_a_deep_copy_that_shares_nothing_with_its_source_on_both_surfaces()
+    {
+        var (binding, script) = await BothAsync(
+            "(() => { const source = { items: [1, { n: 2 }], customer: { name: 'Ada' } }; const copy = deepClone(source); " +
+            "copy.items.push(3); copy.items[1].n = 5; copy.customer.name = 'Bob'; return { source, copy }; })()");
+
+        Assert.Equal("""{"source":{"items":[1,{"n":2}],"customer":{"name":"Ada"}},"copy":{"items":[1,{"n":5},3],"customer":{"name":"Bob"}}}""", binding.GetRawText());
+        Assert.Equal(binding.GetRawText(), script.GetRawText());
+    }
+
+    [Fact]
+    public async Task DeepClone_copies_JSON_values_only()
+    {
+        // A Date crosses as its ISO text and undefined as null, as every host function argument does (FR-011); a value
+        // with no JSON form is a TypeError, and below the top level is left out (an array item becomes null), as in
+        // JSON.stringify; no argument returns undefined, as the web-standard structuredClone does.
+        var (binding, script) = await BothAsync(
+            "[typeof deepClone(), deepClone(new Date(0)), deepClone(undefined), deepClone({ a: undefined, b: 1 }), " +
+            "(() => { try { deepClone(() => 1); return 'copied'; } catch (e) { return e.name; } })(), " +
+            "deepClone({ f: () => 1, k: 1 }), deepClone([() => 1, 2])]");
+
+        Assert.Equal("""["undefined","1970-01-01T00:00:00.000Z",null,{"b":1},"TypeError",{"k":1},[null,2]]""", binding.GetRawText());
+        Assert.Equal(binding.GetRawText(), script.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("const deepClone = o => 7; return deepClone(1);")]
+    [InlineData("function deepClone(o) { return 7; } return deepClone(1);")]
+    [InlineData("const newGuid = () => 7; return newGuid();")]
+    public async Task A_declaration_of_a_built_in_name_hides_it_on_both_surfaces(string source)
+    {
+        // Spec 1223 FR-027: declaring a built-in name gets a warning and the declaration wins, also at the top level of
+        // a statement-form input expression, which runs unwrapped (issue #6215: a script's own deepClone helper). A top-level
+        // var writes the read-only global, so it is not among these (see value-adapters.md).
+        await using var provider = Build();
+        await using var scope = provider.CreateAsyncScope();
+        var binding = await EvaluateBindingAsync(scope, source);
+        var script = (await scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>()
+            .EvaluateAsync(new JavaScriptScriptEvaluationRequest(source, JsonSerializer.SerializeToElement(new { }), CancellationToken.None))).Value!.Value;
+
+        Assert.Equal(7, binding.GetInt32());
+        Assert.Equal(7, script.GetInt32());
+    }
+
+    [Fact]
+    public async Task A_local_named_deepClone_hides_the_built_in_so_the_copy_needs_another_name()
+    {
+        // A local named deepClone hides the built-in: `const deepClone = deepClone(x)` reads the local before it is set
+        // (temporal dead zone), while `const copy = deepClone(x)` works (value-adapters.md: name the copy something else).
+        var (binding, script) = await BothAsync(
+            "[(() => { try { const deepClone = deepClone({ a: 1 }); return 'copied'; } catch (e) { return e.name; } })(), " +
+            "(() => { const copy = deepClone({ a: 1 }); return copy.a; })()]");
+
+        Assert.Equal("""["ReferenceError",1]""", binding.GetRawText());
+        Assert.Equal(binding.GetRawText(), script.GetRawText());
+    }
+
+    [Fact]
+    public async Task A_built_in_stays_read_only()
+    {
+        var (binding, script) = await BothAsync("(() => { try { deepClone = () => 7; return 'replaced'; } catch (e) { return e.name; } })()");
+
+        Assert.Equal("TypeError", binding.GetString());
+        Assert.Equal("TypeError", script.GetString());
+    }
+
     private static async Task<(JsonElement Binding, JsonElement Script)> BothAsync(string expression, Action<IServiceCollection>? configure = null)
     {
         await using var provider = Build(configure);

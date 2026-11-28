@@ -41,6 +41,14 @@
         {
           "name": "ChannelName",
           "kind": "input"
+        },
+        {
+          "name": "ChildCompleted",
+          "kind": "port"
+        },
+        {
+          "name": "ChildFaulted",
+          "kind": "port"
         }
       ]
     },

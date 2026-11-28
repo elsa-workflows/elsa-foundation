@@ -183,7 +183,7 @@ public sealed class ReusableActivityCollectionApplyTests
     private sealed class CapturingMaterializer : IReusableActivityImportMaterializer
     {
         public bool Called { get; private set; }
-        public ValueTask<ReusableActivityImportMutation> MaterializeAsync(ReusableActivityImportCollection collection, ReusableActivityImportPlan plan, IReadOnlyList<ReusableActivityImportItem> selection, CancellationToken cancellationToken = default)
+        public ValueTask<ReusableActivityImportMutation> MaterializeAsync(ReusableActivityImportCollection collection, ReusableActivityImportPlan plan, IReadOnlyList<ReusableActivityImportItem> selection, string? tenantId = null, CancellationToken cancellationToken = default)
         {
             Called = true;
             return ValueTask.FromResult(new ReusableActivityImportMutation(plan.PlanId, plan.CollectionId, selection.Select(x => x.SourceVersionId).ToArray(), [], []));

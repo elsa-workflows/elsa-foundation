@@ -102,6 +102,7 @@ public sealed class ReusableActivityImportRegistrationTests
             ReusableActivityImportCollection collection,
             ReusableActivityImportPlan plan,
             IReadOnlyList<ReusableActivityImportItem> selection,
+            string? tenantId = null,
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new ReusableActivityImportMutation(plan.PlanId, plan.CollectionId, [], [], []));
     }

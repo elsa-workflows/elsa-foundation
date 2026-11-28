@@ -42,8 +42,8 @@ interface WrappedInputValue {
 
 interface WireArgumentState {
   referenceKey: string;
-  // `value` is the backend ArgumentValue.Value (object?). Literals serialize to a string; references and
-  // other structured definitions keep their objects so stable identities survive the trip.
+  // `value` is the backend ArgumentValue.Value (object?). Scalar literals keep their JSON type (string, number,
+  // Boolean); references and other structured definitions keep their objects so stable identities survive the trip.
   value: { value: unknown; expressionType: string };
   conversion?: unknown;
   [key: string]: unknown;
@@ -334,36 +334,35 @@ function toOutputCaptureValue(argument: unknown): OutputCaptureValue | null {
   };
 }
 
-// Resolves an expression to the backend's ArgumentValue { value, expressionType }. Scalars serialize to a
-// string under their authored syntax. A structured value (an object or array) is an authored definition and
+// Resolves an expression to the backend's ArgumentValue { value, expressionType }. Scalars keep their JSON type
+// under their authored syntax. A structured value (an object or array) is an authored definition and
 // rides the wire as it is: a Variable, Input, Connection or ActivityResult reference, a portable expression
 // definition, and equally a definition this client does not know, such as a member read or a source kind
 // added later. Turning one into JSON text would change what the document means, so an unknown definition is
-// preserved rather than interpreted. Only the syntaxes in `textContractSyntaxes` carry structured values as
-// JSON text:
-//  - A Literal whose value is structured (e.g. a collection repeater's list) is sent as an "Object"
-//    expression. The backend's literal converter only handles scalars, so it can't turn the JSON-string
-//    form of a list into ICollection<T>; the Object handler JSON-deserializes it into the target type.
-//  - Object and Secret values keep the JSON-text form they have always been saved in.
+// preserved rather than interpreted. A structured Literal (a collection repeater's list, a dictionary) is JSON
+// data and rides as it is too: the backend reads a literal as strict JSON into the input's type (ADR 0091), so a
+// list stays a list instead of becoming JSON text. Only the syntaxes in `textContractSyntaxes` carry structured
+// values as JSON text: Object and Secret values keep the JSON-text form they have always been saved in.
 // isRecord covers both arrays and plain objects.
 function toWireArgument(expression: { type: string; value: unknown }): { value: unknown; expressionType: string } {
   const expressionType = expression.type || "Literal";
   if (isRecord(expression.value) && !textContractSyntaxes.has(expressionType.toLowerCase())) {
     return { value: expression.value, expressionType };
   }
-  if (expressionType === "Literal" && isRecord(expression.value)) {
-    return { value: toWireValue(expression.value), expressionType: "Object" };
-  }
   return { value: toWireValue(expression.value), expressionType };
 }
 
-const textContractSyntaxes = new Set(["literal", "object", "secret"]);
+const textContractSyntaxes = new Set(["object", "secret"]);
 
-// ArgumentValue.Value is a string on the backend, so non-string literals must be serialized.
-function toWireValue(value: unknown): string | null {
+// Scalars keep their JSON type. The backend reads a literal as strict JSON (ADR 0091 decision 2; spec 1207 refuses
+// `"true"` into Boolean and `"5"` into Int32 on every path), so a Boolean or number sent as text would not publish.
+// A string stays a string: for a text input the text is the value. A number JSON can't hold (NaN, Infinity) has no
+// literal form and is sent as null, the value JSON.stringify would give it anyway; the numeric editor refuses such
+// input, so this only keeps the wire type honest.
+function toWireValue(value: unknown): string | number | boolean | null {
   if (value == null) return null;
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
   return JSON.stringify(value);
 }
 

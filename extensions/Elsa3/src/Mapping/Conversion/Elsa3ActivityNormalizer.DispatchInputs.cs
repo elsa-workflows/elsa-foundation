@@ -123,7 +123,7 @@ internal sealed partial class Elsa3ActivityNormalizer
     }
 
     /// <summary>The object's properties in order, duplicates kept; false when the text is blank or not a JSON object.</summary>
-    private static bool TryReadObject(string? json, out List<(string Name, JsonElement Value)> properties)
+    internal static bool TryReadObject(string? json, out List<(string Name, JsonElement Value)> properties)
     {
         properties = [];
         if (string.IsNullOrWhiteSpace(json))
@@ -159,7 +159,7 @@ internal sealed partial class Elsa3ActivityNormalizer
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    private static string Describe(IEnumerable<string> names)
+    internal static string Describe(IEnumerable<string> names)
     {
         var list = names.Select(name => $"'{name}'").ToArray();
         return list.Length == 0 ? "no inputs" : string.Join(", ", list);

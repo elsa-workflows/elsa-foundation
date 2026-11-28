@@ -46,6 +46,12 @@ public sealed class FixtureRunTests
             .ToDictionary(component => (component.GetProperty("kind").GetString(), component.GetProperty("name").GetString()), component => component.GetProperty("usages").GetInt32());
         Assert.Equal(3, components[("activity", "Acme.NotifyCustomer")]);
         Assert.True(components.ContainsKey(("javascript-function", "lookupCustomer")));
+        // An unmapped activity refuses welcome-customer, but the function its script calls is still found (#6231).
+        Assert.Contains("ELS3-ACTIVITY-UNMAPPED-TYPE", Codes(definitions[("welcome-customer", 1)]));
+        Assert.Contains("ELS3-JS-HOST-FUNCTION-MISSING", Codes(definitions[("welcome-customer", 1)]));
+        Assert.Contains("welcome-customer", root.GetProperty("components").EnumerateArray()
+            .Single(component => component.GetProperty("name").GetString() == "lookupCustomer")
+            .GetProperty("definitions").EnumerateArray().Select(item => item.GetString()));
 
         var missing = Assert.Single(root.GetProperty("missingTargets").EnumerateArray());
         Assert.Equal("partner-onboarding", missing.GetProperty("definitionId").GetString());

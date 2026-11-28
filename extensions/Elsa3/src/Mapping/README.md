@@ -340,11 +340,47 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - To test-migrate a whole export and get a redacted report and a `migrated/` folder, run the migration CLI:
     [Elsa 3 workflows migration tooling](../Migration/Tooling/README.md).
 
+- **BulkDispatchWorkflows** (spec 1242). It becomes the Elsa 4 structural activity `BulkDispatchWorkflows` with the
+  same `Items` and branches. The conversion generates its `Dispatch` slot child, a `DispatchWorkflow` with id
+  `{elsa3NodeId}.dispatch`, from the Elsa 3 dispatch members:
+  - `WorkflowDefinitionId` must be a literal (it is pinned at publish); `StartNewTrace` and `ChannelName` must be unset,
+    false or empty (`ELS3-ACTIVITY-REMOVED-INPUT-BOUND`); `CancelChildOnParentCancellation` is `false`.
+  - `WaitForCompletion` goes to the Dispatch node: missing is `true` (Elsa 3's default), null or a valueless literal is
+    `false`, a literal is read in any letter case, an expression is carried and now evaluated once per item.
+  - `CorrelationIdFunction` becomes the Dispatch node's `CorrelationId`. `get{DefaultItemInputKey}()` (for example
+    `getItem()`) and `args.<camelKey>` read the item as the bulk node's `variables.currentItem`; a workflow input or
+    variable named like the accessor still wins, as in Elsa 3.
+  - `Inputs` is generated per item: the literal `Input` map's entries, then a map item's members that the target
+    declares (matched in any letter case, passed in the declared spelling), or any other item under the item key when
+    the target declares it. The item wins a clash. `ParentInstanceId` is not passed. The target's declared inputs come
+    from the same import or from a workflow already published in Elsa 4 (read by the reusable-activity materializer
+    from the newest live published executable, when the host registers the runtime's executable and source-reference
+    stores; a Design-only host knows same-import targets only); a target in neither is
+    `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`. A target declaring two inputs that differ only in letter case is
+    `ELS3-LITERAL-KEY-AMBIGUOUS`. A literal `Items`, an expression or blank `DefaultItemInputKey` and an
+    expression `Input` are `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+  - With a literal-false wait `Completed` is never emitted, and it is dropped with
+    `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, as is `Canceled` (never emitted), also where `Done` reaches the same
+    target. Otherwise `Completed` is dropped silently where `Done` already reaches its target (not a WaitAll join). Any other route, and any
+    connection Elsa 3 never followed into a WaitAll join, is `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`: connect the follow-up to `Done`. With a literal-false
+    wait the branches never ran in Elsa 3 and are dropped with the same warning.
+  - A branch reading what Elsa 3 passed it about the child (`ChildInstanceId`, `WorkflowOutput`, `WorkflowInstanceId`,
+    `WorkflowStatus`, `WorkflowSubStatus`) is `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`.
+  - Every conversion warns `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` (more than 1,000 items fault; at most 16 passes open at
+    once; batch with a sequential ForEach) and `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` (only declared inputs, no
+    `ParentInstanceId`, `ChildFaulted` also for cancelled and undispatchable children, an inherited correlation id
+    without a function, a per-item wait).
+  - Outer writes: Elsa 3 ran the branches one at a time, Elsa 4 runs them concurrently. A branch that writes a variable
+    declared outside the bulk node (a Set Variable, a captured output or a script) converts with
+    `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`, and publish adds Elsa 4's `ValueFlow/ConcurrentWrite` warning. Record
+    per-child results in the child workflow, or compute the total after the bulk dispatch.
+  - Elsa 3 silently dispatched nothing for an `Items` value that is not a collection; Elsa 4 faults, as ForEach does.
+
 ## Migrating Elsa 3 JavaScript
 
 Elsa 4 evaluates JavaScript in a sandbox. Each expression sees the parameters it declares (`args`) and the workflow
 variables it reads by name (`variables`, spec 1222). It has the native `Date`, `Temporal`, `Intl` and `Math` (including
-`Math.random`) on the host clock, in UTC with the invariant culture, and the built-in functions of spec 1223; its values
+`Math.random`) on the host clock, in UTC with the invariant culture, and the built-in functions of spec 1223 and `deepClone` (#6215); its values
 are JSON, so no live .NET object reaches a script. The converter therefore converts an Elsa 3 construct only when Elsa 4
 gives the same result. Anything else refuses the whole definition with a stable code. The guidance in each refusal says
 what to change in the Elsa 3 workflow so that it converts. Specs 236, 247 and 1223 hold the details (spec 247:
@@ -373,7 +409,7 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | `isNullOrEmpty(x)`, `isNullOrWhiteSpace(x)` | An inline function with .NET's semantics, including .NET's whitespace characters |
 | `newGuid()`, `newGuidString()`, `getGuidString()`, `newShortGuid()`, `getShortGuid()`, `parseGuid(s)` | The Elsa 4 built-ins of the same name, which return Elsa 3's text as a string: the canonical 36-character form, or Elsa 3's short form (Base64 of the GUID's bytes without `/`, `+`, `=`). A GUID used as text (`'id-' + newGuid()`, `newGuid().toString()`) gives the same text |
 | `stringToBase64(s)`, `stringFromBase64(s)` | The Elsa 4 built-ins of the same name: UTF-8 text and standard Base64, as in Elsa 3 |
-| A custom function `getSettings(…)` with a registered host function of the same name after its namespace prefix (`new JavaScriptHostFunctionDeclaration("acme.getSettings", …)`) | A call to that host function, `acme.getSettings(…)`, with its arguments converted as written. Elsa 4 host functions carry a namespace prefix (ADR 0045 §5 D-5); the migration plan records which prefix each function gets. No mapping is declared: the name after the prefix is the match. A name the converter converts itself (`toJson`, `getVariable`, `isNullOrEmpty`, the Elsa 4 built-ins such as `newGuid`), the setters (`setVariable`, `setOutput`, …), `getOutputFrom`, the outcome setters and instance-state helpers (`setOutcome`, `setCorrelationId`, `getWorkflowInstanceName`, …), the read roots (`variables`, `input`, `activities`, `workflow`, `args`), the CLR, lodash and moment globals, or a standard JavaScript global (`String`, `encodeURIComponent`, …) is never matched. Two namespaces carrying one name, a variable, input or activity output whose generated accessor has the same name, or a script that declares the namespace root are refused as ambiguous (`VF-IMP-002`) |
+| A custom function `getSettings(…)` with a registered host function of the same name after its namespace prefix (`new JavaScriptHostFunctionDeclaration("acme.getSettings", …)`) | A call to that host function, `acme.getSettings(…)`, with its arguments converted as written. Elsa 4 host functions carry a namespace prefix (ADR 0045 §5 D-5); the migration plan records which prefix each function gets. No mapping is declared: the name after the prefix is the match. A name the converter converts itself (`toJson`, `getVariable`, `isNullOrEmpty`, the Elsa 3 functions that are Elsa 4 built-ins, such as `newGuid`; `deepClone`, which Elsa 3 did not have, is matched like any custom function), the setters (`setVariable`, `setOutput`, …), `getOutputFrom`, the outcome setters and instance-state helpers (`setOutcome`, `setCorrelationId`, `getWorkflowInstanceName`, …), the read roots (`variables`, `input`, `activities`, `workflow`, `args`), the CLR, lodash and moment globals, or a standard JavaScript global (`String`, `encodeURIComponent`, …) is never matched. Two namespaces carrying one name, a variable, input or activity output whose generated accessor has the same name, or a script that declares the namespace root are refused as ambiguous (`VF-IMP-002`) |
 | `toJson(x)` | `JSON.stringify(x)`, with the warning `ELS3-BEHAVIOUR-TOJSON-STRINGIFY`: Elsa 3 escaped `<`, `>`, `&`, `'`, `+`, `` ` `` and characters outside the Basic Multilingual Plane, trimmed a `Date`'s fractional seconds, wrote `undefined` as `null` and failed on `NaN`. Elsa 4 has no `toJson` |
 | `Math.random()` | Native `Math.random()` |
 | `Date.now()`, `new Date()` as an instant, `getTime()`, epoch arithmetic, `new Date(number)`, `Date.UTC(…)`, `toISOString()`, the `getUTC*`/`setUTC*` methods, parsing text with `Z` or an offset, parsing a date-only text | Native `Date` on the host clock, under every date interpretation |
@@ -409,7 +445,8 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | `getConfig(…)`, `getConfiguration(…)`, definition readers, `getLastResult()` | `ELS3-JS-HOST-FUNCTION-MISSING` (`ComponentName`: the function) | Pass the value in as a workflow input, or capture the producing output into a variable. A host that rebuilt `getConfig`, `getConfiguration`, a definition reader or `getLastResult` registers it under the same name with a namespace prefix (`acme.getConfig`), and the call converts instead |
 | The instance-name readers (`getWorkflowInstanceName`) | `VF-IMP-005` | Pass the value in as a workflow input. They are never matched to a host function |
 | `set{Name}(…)` where `Name` is a standalone workflow's input and no variable has the name (Elsa 3 generated `set{Name}` for variables only; inputs are read-only, so a call that ran in Elsa 3 was a custom function) | `ELS3-JS-HOST-FUNCTION-MISSING` (`ComponentName`: `set{Name}`) | Copy the input into a declared variable and set that variable. If `set{Name}` was a custom function, register it under the same name with a namespace prefix (`acme.setStatus`), and the call converts instead; the converter's own setters (`setInput`, `setOutcome`, …) are never matched. In a standalone workflow where a variable has the name too, `set{Name}` writes the variable, as in Elsa 3, while `get{Name}` reads the input; in a reusable workflow `get{Name}` is ambiguous (`VF-IMP-002`), and `set{Name}` is refused as a write, since a reusable workflow's script cannot set variables yet |
-| `setVariable`, `set{Name}(…)`, mutating a value read from the workflow, in an input expression | `VF-IMP-005` | Move the assignment into a Set Variable activity, or into a RunJavaScript, whose script can set variables. Elsa 4 input expressions only read |
+| `setVariable`, `set{Name}(…)`, mutating a value read from the workflow, in an input expression | `VF-IMP-005` | Move the assignment into a Set Variable activity, or into a RunJavaScript, whose script can set variables. Elsa 4 input expressions only read. Only the target's object chain decides whether a change reaches the workflow, here and in a RunJavaScript body: a computed key only reads, so a change to a local object whose key reads a variable (`var r = {}; r[getOrder().id] = 1`) converts, while a change made inside the key is checked as it would be on its own: refused in an input expression, converted like any member change in a RunJavaScript body (#6222) |
+| In an input expression, a change to a value read from a variable through a local name or a member, where the value itself is not the assignment target: `var o = getOrder(); o.status = 'Paid'`, `delete o[key]`, `items.push(x)`, `getOrder().lines.sort()`, `Object.assign(getOrder(), …)` (#5894) | `ELS3-INPUT-CHANGES-VARIABLE` | Elsa 3 handed an object live, so the change reached the variable, and an array as a copy, so it did not. Both are usually declared `Object`, so the converter refuses either; Elsa 4 faults on either with `VF-BIND-001`. If later steps rely on the change, move it into a Run JavaScript step before the input; otherwise change a local copy (`items.slice()`, `Object.assign({}, order)`, `JSON.parse(JSON.stringify(value))` for a change to a nested member or an array element). Only a change the expression itself makes counts: a value passed to an unknown function, or a callback, is not refused (the run-time guard still applies), and the check runs only when the expression has no other refusal |
 | In a RunJavaScript body of a reusable workflow, `setVariable('<input>', v)` or `set{Input}(v)` for one of the reusable workflow's inputs (Elsa 3 held them as local variables) | `VF-IMP-005` | Declare a variable, initialize it from the input, and write that variable. A reusable workflow's script writes its own variables as a workflow's script does (spec 1241); its inputs are read-only |
 | `setVariable('x', v)` for a variable the workflow does not declare (Elsa 3 created it on its first write) | `ELS3-SETTER-UNDECLARED-VARIABLE` | Declare the variable in the Elsa 3 workflow |
 | `setVariable` or a setter for a loop's current value, a whole assignment `variables.x = v` or `getVariable('x')++` in a RunJavaScript body | `VF-IMP-005` | Use `setVariable('x', v)`; copy a loop's current value into another variable and set that |

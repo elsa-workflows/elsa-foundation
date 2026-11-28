@@ -121,6 +121,24 @@ public sealed class ExpressionToolingProviderContractTests
     }
 
     [Fact]
+    public async Task Every_built_in_function_completes_and_deepClone_hovers_with_its_signature()
+    {
+        // Spec 1223 FR-003, issue #6215: the function catalog offers every built-in, so none is missing from Studio.
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateScope("JavaScript", []);
+
+        foreach (var name in JavaScriptBuiltInFunctions.Names)
+        {
+            var completion = await provider.GetCompletionsAsync(new(scope, name, new(0, name.Length)), CancellationToken.None);
+            Assert.Contains(completion.Payload!.Items, item => item.Label == name);
+        }
+
+        var hover = await provider.GetHoverAsync(new(scope, "deepClone", new(0, "deepClone".Length)), CancellationToken.None);
+        Assert.Equal("deepClone(value)", hover.Payload!.Contents.Split(Environment.NewLine)[0]);
+        Assert.Contains("deep copy", hover.Payload.Contents, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Member_hover_keeps_its_name_when_the_type_name_starts_with_it()
     {
         var shape = new ExpressionValueShape("Order", ExpressionValueKind.Object,

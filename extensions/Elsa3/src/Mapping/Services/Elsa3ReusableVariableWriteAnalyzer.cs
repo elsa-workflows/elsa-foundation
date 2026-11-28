@@ -3,6 +3,7 @@ using System.Text.Json;
 using Acornima;
 using Acornima.Ast;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa3.Mapping.Internal;
 
 namespace Elsa3.Mapping.Services;
 
@@ -15,11 +16,19 @@ namespace Elsa3.Mapping.Services;
 /// Whether a global is an Elsa 3 function a registered host function replaces (#5664): like a built-in, it receives
 /// its arguments as JSON and cannot change them.
 /// </param>
+/// <param name="definiteWritesOnly">
+/// Counts only a change the script itself makes to a workflow-owned value (#5894): a member assignment, an update, a
+/// delete, an array method that changes its array, or <c>Object.assign</c>, <c>defineProperty</c> and their kin with that
+/// value as the target. A call whose effect is unknown (an opaque helper, a callback handed to it, dynamic code) is no
+/// write in this mode; a callback handed to a known iteration method (<c>forEach</c>, <c>map</c>, …) counts as run. An input expression is refused on a definite change only, so an unknown call never blocks a conversion; the
+/// default mode keeps counting both, as the reusable and capture checks need.
+/// </param>
 internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     Func<Node, HashSet<string>?> scopeOf,
     Func<Elsa3AmbientReferenceKind, string, bool> isSessionVariable,
     Func<string, string?> generatedAccessor,
-    Func<string, bool>? replacedGlobal = null)
+    Func<string, bool>? replacedGlobal = null,
+    bool definiteWritesOnly = false)
 {
     private readonly record struct Binding(HashSet<string> Scope, string Name);
     private sealed record Value(bool Session, ImmutableHashSet<Node> Objects, ImmutableHashSet<Node> Functions)
@@ -158,6 +167,12 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private bool _writes;
     private int _opaqueDepth;
     private readonly List<State?> _optionalChains = [];
+
+    /// <summary>An effect the analysis cannot see into, counted as a write unless only definite writes count.</summary>
+    private void Opaque(bool mayWrite)
+    {
+        if (mayWrite && !definiteWritesOnly) _writes = true;
+    }
 
     public bool MayWrite(Script script)
     {
@@ -438,7 +453,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         {
             case Identifier name:
                 if (Global(name.Name) && name.Name is "setVariable" or "eval" or "Function") { _writers.Add(node); result = Value.Function(node); break; }
-                if (Global(name.Name) && name.Name == "globalThis") { _writes = true; return Value.Local; }
+                if (Global(name.Name) && name.Name == "globalThis") { Opaque(true); return Value.Local; }
                 result = Global(name.Name) ? name.Name == "variables" ? Value.Owned : name.Name == "arguments" ? _arguments.LastOrDefault() ?? Value.Local : NativeNamespace(name.Name) ? Intrinsic(name) : Value.Local : Read(name.Name);
                 break;
             case ThisExpression: result = _receivers.Count > 0 ? _receivers[^1] : Value.Local; break;
@@ -467,7 +482,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 // Iterator suspension/resumption is not interpreted here. A called generator that can hand a
                 // workflow-owned value to that protocol is refused conservatively, rather than losing its ownership
                 // at next().value. Uncalled generators and independent local yielded values do not incur a refusal.
-                _writes |= OpaqueOwnership(Evaluate(yielded.Argument));
+                Opaque(OpaqueOwnership(Evaluate(yielded.Argument)));
                 result = Value.Local; break;
             case SequenceExpression sequence:
                 result = Value.Local;
@@ -636,7 +651,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 else
                 {
                     _unprovenConstructions.Add(node);
-                    _writes |= constructorArguments.Any(argument => OpaqueOwnership(argument));
+                    Opaque(constructorArguments.Any(argument => OpaqueOwnership(argument)));
                 }
                 break;
             default:
@@ -646,7 +661,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         }
         if (!result.Session && result.Objects.Count == 0 && result.Functions.Count == 0)
             result = result with { MayBePrimitive = true };
-        if (_opaqueDepth > 0 && result.Session) _writes = true;
+        Opaque(_opaqueDepth > 0 && result.Session);
         foreach (var exceptional in _exceptionStates) exceptional.Join(_state);
         return result;
     }
@@ -712,7 +727,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private void AssignMember(Value receiver, string name, Value value, Value? actualReceiver = null, Node? syntax = null)
     {
         if (receiver.Session || actualReceiver?.Session == true) _writes = true;
-        if (receiver.Objects.Any(item => _intrinsics.Values.Any(intrinsic => intrinsic.Objects.Contains(item)))) _writes = true;
+        Opaque(receiver.Objects.Any(item => _intrinsics.Values.Any(intrinsic => intrinsic.Objects.Contains(item))));
         foreach (var item in receiver.Objects)
         {
             var target = Value.Object(item);
@@ -1040,7 +1055,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private Value ConstructClass(Node node, ClassInfo type, IReadOnlyList<Value> arguments, Value receiver)
     {
         if (!_closures.TryGetValue(node, out var closure)) return Value.Local;
-        if (!_calls.Add(node)) { _writes |= arguments.Any(argument => OpaqueOwnership(argument)); return Value.Local; }
+        if (!_calls.Add(node)) { Opaque(arguments.Any(argument => OpaqueOwnership(argument))); return Value.Local; }
         var callerScopes = _scopes.ToArray();
         _scopes.Clear(); _scopes.AddRange(closure.Scopes);
         foreach (var (binding, value) in closure.Captured) _state.Bindings.TryAdd(binding, value);
@@ -1056,7 +1071,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             if (type.Derived && constructor is null)
             {
                 if (type.Super.Functions.Count > 0) frame.Result = Apply(type.Super, arguments, receiver);
-                else _writes |= OpaqueOwnership(type.Super) || arguments.Any(argument => OpaqueOwnership(argument));
+                else Opaque(OpaqueOwnership(type.Super) || arguments.Any(argument => OpaqueOwnership(argument)));
                 frame.Receiver = receiver.Union(frame.Result);
             }
             // Base fields initialize before its constructor. A derived explicit constructor initializes fields at
@@ -1095,14 +1110,14 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     {
         // The body setter remains an effectful callable through aliases, arguments, containers and callbacks.
         // Merely carrying the function as a value is not a write; only invocation activates the capability.
-        if (_writers.Contains(node)) { _writes = true; return Value.Local; }
+        if (_writers.Contains(node)) { Opaque(true); return Value.Local; }
         if (_classes.TryGetValue(node, out var type)) return ConstructClass(node, type, arguments, receiver ?? Value.Local);
         if (node is not IFunction function || !_closures.TryGetValue(node, out var closure)) return Value.Local;
         // A recursive/opaque cycle is not unrolled indefinitely. Refuse when it carries workflow ownership;
         // otherwise its unknown result cannot introduce workflow ownership into a later local mutation.
         if (!_calls.Add(node))
         {
-            _writes |= arguments.Any(argument => ContainsSession(argument)) || closure.Captured.Values.Any(value => ContainsSession(value));
+            Opaque(arguments.Any(argument => ContainsSession(argument)) || closure.Captured.Values.Any(value => ContainsSession(value)));
             return Value.Local;
         }
         var callerScopes = _scopes.ToArray();
@@ -1181,7 +1196,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     {
         if (function.Functions.Count == 0)
         {
-            _writes |= OpaqueOwnership(receiver) || arguments.Any(argument => OpaqueOwnership(argument));
+            Opaque(OpaqueOwnership(receiver) || arguments.Any(argument => OpaqueOwnership(argument)));
             return Value.Local;
         }
         var entry = _state.Copy(); State? exits = null; var result = Value.Local;
@@ -1196,6 +1211,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
 
     private bool OpaqueOwnership(Value value)
     {
+        // Only definite writes count: what unknown code might do with a callback it receives (run it or not) is no
+        // definite write, so the callbacks are not run as if it did (#5894).
+        if (definiteWritesOnly) return false;
         // Unknown native code can invoke callbacks nested in a wrapper/prototype and can repeat them in an
         // unknown order. Inspect that finite callable graph to an ownership fixed point, including callbacks
         // which acquire a workflow value themselves rather than receiving one as an argument.
@@ -1285,14 +1303,14 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         var method = Member(source, "@@iterator");
         if (method.Functions.Count == 0)
         {
-            if (!source.Session) _writes |= OpaqueOwnership(method);
+            if (!source.Session) Opaque(OpaqueOwnership(method));
             return includeStored ? Member(source, "*") : Value.Local;
         }
         iterator = Apply(method, [], source);
         var next = Member(iterator, "next");
         if (next.Functions.Count == 0)
         {
-            _writes |= OpaqueOwnership(iterator);
+            Opaque(OpaqueOwnership(iterator));
             return source.Session ? Value.Owned : Value.Local;
         }
         var result = source.Session ? Value.Owned : Value.Local;
@@ -1314,7 +1332,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         // workflow references even though next's yielded values do not. Ordinary exhausted spreads do not close.
         var close = Member(iterator, "return");
         if (close.Functions.Count > 0) Apply(close, [], iterator);
-        else _writes |= OpaqueOwnership(close);
+        else Opaque(OpaqueOwnership(close));
     }
 
     private Flow CloseLoop(Flow flow, Value iterator, Node loop)
@@ -1545,7 +1563,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 if (arguments.Length > 0) Serialize(arguments[0]);
                 return Value.Local;
             }
-            if (JavaScriptBuiltInFunctions.Names.Contains(host.Name) || replacedGlobal?.Invoke(host.Name) == true)
+            if (Elsa3JavaScriptNames.Elsa4BuiltIns.Contains(host.Name) || replacedGlobal?.Invoke(host.Name) == true)
             {
                 // Faithful host helpers materialize all arguments as JSON (JavaScriptHostFunctions.Argument),
                 // then parse string/number data in .NET. They do not invoke a JS toString/valueOf hook, but argument
@@ -1789,7 +1807,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         }
         // An opaque helper receiving a workflow-owned object (including inside a local wrapper or closure) could
         // change it. Unlike a known local helper, its read-only behavior cannot be established here.
-        _writes |= OpaqueOwnership(receiver) || arguments.Any(argument => OpaqueOwnership(argument));
+        Opaque(OpaqueOwnership(receiver) || arguments.Any(argument => OpaqueOwnership(argument)));
         return FreshContainer(call);
     }
 
