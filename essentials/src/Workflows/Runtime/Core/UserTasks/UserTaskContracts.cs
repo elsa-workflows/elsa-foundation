@@ -28,8 +28,8 @@ public interface IUserTaskStore
 /// <summary>The ordinary Actor journal, separate from historic task writers in the same persistence partition.</summary>
 public interface IActorUserTaskJournal : IUserTaskStore
 {
-    /// <summary>Fair bounded scan of unsettled Actor tasks in the exact ordinary tenant.</summary>
-    ValueTask<UserTaskPage> RecoverOwnedAsync(string tenantId, int limit, string? after, CancellationToken cancellationToken = default);
+    /// <summary>Fair bounded scan of accepted response work or open tasks in the exact ordinary tenant.</summary>
+    ValueTask<UserTaskPage> RecoverOwnedAsync(string tenantId, bool accepted, int limit, string? after, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Replacement current identity/eligibility authority. Unsupported hosts refuse; inputs never grant authority.</summary>

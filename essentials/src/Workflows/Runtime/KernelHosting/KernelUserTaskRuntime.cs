@@ -15,7 +15,7 @@ internal sealed class KernelUserTaskRuntime(KernelShellStorage storage, IService
     BoundScope tenant, TimeProvider clock, ILogger<KernelUserTaskRuntime> logger) : IActorUserTaskRuntime, INativeUserTaskJobs
 {
     private const int PageSize = 25;
-    private static readonly TimeSpan ScanDelay = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ScanDelay = TimeSpan.FromSeconds(1);
     private IIngress? _ingress;
 
     internal async Task BindAsync(IIngress ingress, CancellationToken cancellationToken)
@@ -36,7 +36,10 @@ internal sealed class KernelUserTaskRuntime(KernelShellStorage storage, IService
         NativeUserTaskRequest request, CancellationToken cancellationToken)
     {
         RequireTenant(tenantId);
-        if (!await HasWaitAsync(recipient, cancellationToken, nodeId: nodeId)) return false;
+        var checkpoint = await storage.ReadUserTaskCheckpointAsync(tenant, recipient.Actor, cancellationToken);
+        if (checkpoint is { Parked: true }) throw TemporarilyParked();
+        if (checkpoint is not { Status: ActorStatus.Running } ||
+            !NativeExecutionModel.InspectUserTask(checkpoint.State, recipient, nodeId).IsWaiting) return false;
 
         await using var scope = await scopes.CreateAsyncScopeAsync(persistence);
         var services = scope.ServiceProvider;
@@ -77,7 +80,11 @@ internal sealed class KernelUserTaskRuntime(KernelShellStorage storage, IService
         CancellationToken cancellationToken)
     {
         RequireTenant(tenantId);
-        if (!await HasWaitAsync(recipient, cancellationToken, completionId: completionId)) return null;
+        var checkpoint = await storage.ReadUserTaskCheckpointAsync(tenant, recipient.Actor, cancellationToken);
+        if (checkpoint is { Parked: true }) throw TemporarilyParked();
+        if (checkpoint is not { Status: ActorStatus.Running } ||
+            NativeExecutionModel.InspectUserTask(checkpoint.State, recipient).AcceptedCompletionId != completionId)
+            return null;
 
         await using var scope = await scopes.CreateAsyncScopeAsync(persistence);
         var journal = Journal(scope.ServiceProvider);
@@ -86,77 +93,115 @@ internal sealed class KernelUserTaskRuntime(KernelShellStorage storage, IService
             task.Decision?.Response is not { } response || response.CompletionId != completionId)
             return null;
 
-        if (task.Status == UserTaskStatus.CompletionPending &&
-            !await TransitionAsync(journal, task, UserTaskStatus.Completed, "completed", cancellationToken))
-        {
-            task = await journal.FindAsync(tenantId, recipient.TaskId, cancellationToken);
-            if (task is not { Status: UserTaskStatus.Completed } || !Matches(task, recipient) ||
-                task.Decision?.Response.CompletionId != completionId)
-                return null;
-        }
-
         return new(response.TaskId, response.CompletionId, response.Action,
             JsonObject.Create(response.Data) ?? throw new InvalidDataException("An accepted task response requires an object."));
     }
 
+    public async ValueTask<bool> CanReleaseCompletionAsync(string tenantId, NativeUserTaskRecipient recipient, string nodeId,
+        string completionId, CancellationToken cancellationToken)
+    {
+        RequireTenant(tenantId);
+        await using var scope = await scopes.CreateAsyncScopeAsync(persistence);
+        var journal = Journal(scope.ServiceProvider);
+        return await journal.FindAsync(tenantId, recipient.TaskId, cancellationToken) is
+            { Status: UserTaskStatus.Completed, Decision.Response: { } response } task &&
+            Matches(task, recipient) && task.ExecutableNodeId == nodeId && response.CompletionId == completionId;
+    }
+
     public async ValueTask ReconcileAsync(UserTaskRecord task, CancellationToken cancellationToken = default)
     {
-        if (!Owns(task) || UserTaskRules.Terminal(task)) return;
+        if (!Owns(task) || !NeedsWork(task)) return;
         await using var scope = await scopes.CreateAsyncScopeAsync(persistence);
         var journal = Journal(scope.ServiceProvider);
         var latest = await journal.FindAsync(tenant.Tenant, task.Id, cancellationToken);
-        if (latest is not null && Owns(latest) && !UserTaskRules.Terminal(latest))
+        if (latest is not null && Owns(latest) && NeedsWork(latest))
             await ReconcileAsync(journal, latest, cancellationToken);
     }
 
     internal async Task RunAsync(CancellationToken cancellationToken)
     {
-        string? after = null;
+        string? afterAccepted = null;
+        string? afterOpen = null;
         while (!cancellationToken.IsCancellationRequested)
         {
-            try
-            {
-                await using var scope = await scopes.CreateAsyncScopeAsync(persistence);
-                var journal = Journal(scope.ServiceProvider);
-                var page = await journal.RecoverOwnedAsync(tenant.Tenant, PageSize, after, cancellationToken);
-                foreach (var task in page.Items)
-                    await ReconcileAsync(journal, task, cancellationToken);
-                after = page.Next;
-            }
-            catch (Exception error) when (UserTaskAvailability.IsUnavailable(error, cancellationToken))
-            {
-                logger.LogWarning("Actor user task reconciliation is temporarily unavailable. The journal will retry.");
-            }
-
+            afterAccepted = await ScanAsync(accepted: true, afterAccepted, cancellationToken);
+            afterOpen = await ScanAsync(accepted: false, afterOpen, cancellationToken);
             await Task.Delay(ScanDelay, clock, cancellationToken);
+        }
+    }
+
+    private async Task<string?> ScanAsync(bool accepted, string? after, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var scope = await scopes.CreateAsyncScopeAsync(persistence);
+            var journal = Journal(scope.ServiceProvider);
+            var page = await journal.RecoverOwnedAsync(tenant.Tenant, accepted, PageSize, after, cancellationToken);
+            foreach (var task in page.Items)
+            {
+                try { await ReconcileAsync(journal, task, cancellationToken); }
+                catch (Exception error) when (UserTaskAvailability.IsUnavailable(error, cancellationToken))
+                {
+                    logger.LogDebug("Actor user task {TaskId} remains queued for reconciliation.", task.Id);
+                }
+            }
+            return page.Next;
+        }
+        catch (Exception error) when (UserTaskAvailability.IsUnavailable(error, cancellationToken))
+        {
+            logger.LogWarning("Actor user task reconciliation is temporarily unavailable. The journal will retry.");
+            return after;
         }
     }
 
     private async ValueTask ReconcileAsync(IActorUserTaskJournal journal, UserTaskRecord task, CancellationToken cancellationToken)
     {
-        if (!Owns(task) || task.ActorRecipient is not { } owner || UserTaskRules.Terminal(task)) return;
+        if (!Owns(task) || task.ActorRecipient is not { } owner || !NeedsWork(task)) return;
         var recipient = new NativeUserTaskRecipient(new ActorRef(owner.ActorId), owner.FrameId, owner.WaitId, task.Id);
-        if (!await HasWaitAsync(recipient, cancellationToken, nodeId: task.ExecutableNodeId))
+        var checkpoint = await storage.ReadUserTaskCheckpointAsync(tenant, recipient.Actor, cancellationToken);
+        var proof = NativeExecutionModel.InspectUserTask(checkpoint?.State, recipient, task.ExecutableNodeId);
+        if (task is { Status: UserTaskStatus.Completed, Decision: { } completed })
+        {
+            if (checkpoint is { Parked: true }) return;
+            if (checkpoint is { Status: ActorStatus.Running } && proof.ConsumedCompletionId == completed.Response.CompletionId)
+                await DeliverAsync(recipient, completed.Response.CompletionId, NativeKinds.UserTaskAcknowledged, cancellationToken);
+            else
+                await journal.TryWriteAsync(task with { Revision = task.Revision + 1, ActorAcknowledged = true },
+                    task.Revision, cancellationToken);
+            return;
+        }
+
+        if (task is { Status: UserTaskStatus.CompletionPending, Decision: { } accepted } &&
+            proof.ConsumedCompletionId == accepted.Response.CompletionId)
+        {
+            await TransitionAsync(journal, task, UserTaskStatus.Completed, "completed", cancellationToken);
+            return;
+        }
+
+        if (checkpoint is { Parked: true }) return;
+        if (checkpoint is not { Status: ActorStatus.Running } || !proof.IsWaiting)
         {
             await TransitionAsync(journal, task, UserTaskStatus.Cancelled, "cancelled", cancellationToken);
             return;
         }
 
         if (task.Status != UserTaskStatus.CompletionPending || task.Decision is not { } decision) return;
-        var ingress = Volatile.Read(ref _ingress) ?? throw new UserTaskException("unavailable", "The Actor task relay is unavailable.");
-        var accepted = new NativeUserTaskAccepted(recipient, decision.Response.CompletionId);
-        await ingress.SendAsync(tenant, new Target.Ref(recipient.Actor), $"user-task/{task.Id}/{accepted.CompletionId}",
-            NativeKinds.UserTaskAccepted, JsonSerializer.Serialize(accepted), cancellationToken: cancellationToken);
+        await DeliverAsync(recipient, decision.Response.CompletionId, NativeKinds.UserTaskAccepted, cancellationToken);
     }
 
-    private ValueTask<bool> HasWaitAsync(NativeUserTaskRecipient recipient, CancellationToken cancellationToken,
-        string? nodeId = null, string? completionId = null) =>
-        storage.HasUserTaskWaitAsync(tenant, recipient.Actor, state =>
-            JsonSerializer.Deserialize<NativeState>(state) is { } native &&
-            native.Waits.TryGetValue(recipient.Wait, out var wait) && wait.Kind == "user-task" &&
-            wait.Frame == recipient.Frame && wait.Key == recipient.TaskId &&
-            (nodeId is null || native.Frames.TryGetValue(wait.Frame, out var frame) && frame.Node == nodeId) &&
-            (completionId is null || wait.AcceptedTaskCompletionId == completionId), cancellationToken);
+    private async ValueTask DeliverAsync(NativeUserTaskRecipient recipient, string completionId, string kind, CancellationToken cancellationToken)
+    {
+        var ingress = Volatile.Read(ref _ingress) ?? throw new UserTaskException("unavailable", "The Actor task relay is unavailable.");
+        var payload = JsonSerializer.Serialize(new NativeUserTaskAccepted(recipient, completionId));
+        await ingress.SendAsync(tenant, new Target.Ref(recipient.Actor), $"{kind}/{recipient.TaskId}/{completionId}",
+            kind, payload, cancellationToken: cancellationToken);
+    }
+
+    private static bool NeedsWork(UserTaskRecord task) =>
+        !UserTaskRules.Terminal(task) || task is { Status: UserTaskStatus.Completed, ActorAcknowledged: false };
+
+    private static UserTaskException TemporarilyParked() =>
+        new("unavailable", "The owning Actor is parked. Its task remains pending recovery.");
 
     private bool Matches(UserTaskRecord task, NativeUserTaskRecipient recipient) =>
         Owns(task) && task.Id == recipient.TaskId && task.ActorRecipient == new UserTaskActorRecipient(recipient.Actor.Id, recipient.Frame, recipient.Wait);
@@ -185,6 +230,7 @@ internal sealed class KernelUserTaskRuntime(KernelShellStorage storage, IService
         UserTaskCreation request, CancellationToken cancellationToken)
     {
         UserTaskRules.ValidateCreation(request);
+        UserTaskRules.ValidateActorData(request.Prefill);
         UserTaskForm? form = null;
         if (request.FormId is not null)
         {

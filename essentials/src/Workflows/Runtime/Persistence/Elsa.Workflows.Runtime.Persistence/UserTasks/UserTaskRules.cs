@@ -43,6 +43,23 @@ internal static class UserTaskRules
             throw new UserTaskException("validation", "Select a published version for the task form.");
     }
 
+    internal static void ValidateActorData(JsonElement value)
+    {
+        var raw = value.GetRawText();
+        // A task response must fit the Actor's nested job result envelope.
+        const int maximumBytes = 64 * 1024;
+        if (Encoding.UTF8.GetByteCount(raw) > maximumBytes)
+            throw new UserTaskException("validation", "Task data must be 64 KiB or less.");
+        try
+        {
+            using var document = JsonDocument.Parse(raw, new() { AllowDuplicateProperties = false });
+        }
+        catch (JsonException)
+        {
+            throw new UserTaskException("validation", "Task data must use unique field names.");
+        }
+    }
+
     internal static T Copy<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value))!;
     internal static string? NormalizeAssignment(string? assignment) => string.IsNullOrWhiteSpace(assignment) ? null : assignment;
 }

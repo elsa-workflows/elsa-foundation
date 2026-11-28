@@ -31,7 +31,7 @@ internal abstract class KernelShellStorage
     internal abstract bool TakesRetainedHttpResponse { get; }
     internal abstract bool TakesAuthoredStandaloneEvents { get; }
     internal virtual bool TakesUserTaskWaits => false;
-    internal virtual ValueTask<bool> HasUserTaskWaitAsync(BoundScope scope, ActorRef actor, Func<string, bool> matches, CancellationToken token) =>
+    internal virtual ValueTask<CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(BoundScope scope, ActorRef actor, CancellationToken token) =>
         throw new InvalidOperationException("This store does not support Actor user task waits.");
     internal abstract IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(BoundScope scope);
     internal abstract bool TakesPreparedHttpWaits { get; }
@@ -185,8 +185,8 @@ internal abstract class KernelShellStorage
             profile == Profile.PreparedHttpWaits;
         internal override bool TakesAuthoredStandaloneEvents => UsesShippedStandaloneSources;
         internal override bool TakesUserTaskWaits => profile == Profile.UserTaskWaits;
-        internal override ValueTask<bool> HasUserTaskWaitAsync(BoundScope scope, ActorRef actor, Func<string, bool> matches, CancellationToken token) =>
-            Foundation.HasUserTaskWaitAsync(scope, actor, matches, token);
+        internal override ValueTask<CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(BoundScope scope, ActorRef actor, CancellationToken token) =>
+            Foundation.ReadUserTaskCheckpointAsync(scope, actor, token);
 
         internal override IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(BoundScope scope) =>
             Foundation.BindAuthoredStandaloneEvents(scope);
@@ -313,8 +313,8 @@ internal abstract class KernelShellStorage
             _profile == Profile.PreparedHttpWaits;
         internal override bool TakesAuthoredStandaloneEvents => UsesShippedStandaloneSources;
         internal override bool TakesUserTaskWaits => _profile == Profile.UserTaskWaits;
-        internal override ValueTask<bool> HasUserTaskWaitAsync(BoundScope scope, ActorRef actor, Func<string, bool> matches, CancellationToken token) =>
-            PostgresPreviewHosting.HasUserTaskWaitAsync(OpenDatabase, scope, actor, matches, token);
+        internal override ValueTask<CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(BoundScope scope, ActorRef actor, CancellationToken token) =>
+            PostgresPreviewHosting.ReadUserTaskCheckpointAsync(OpenDatabase, scope, actor, token);
 
         internal override IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(BoundScope scope) =>
             PostgresPreviewHosting.BindAuthoredStandaloneEvents(OpenDatabase, scope);

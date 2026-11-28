@@ -20,7 +20,7 @@ internal sealed class EfActorUserTaskJournal(RuntimeDbContext context, IPersiste
             throw new UserTaskException("unavailable", "This journal writes only its own Actor tasks.");
         if (record.Revision != (expectedRevision ?? 0) + 1)
             throw new ArgumentException("A task write must advance one revision.", nameof(record));
-        if (expectedRevision is null && record is not { Status: UserTaskStatus.Open, Decision: null })
+        if (expectedRevision is null && record is not { Status: UserTaskStatus.Open, Decision: null, ActorAcknowledged: false })
             throw new ArgumentException("An Actor task must open before it accepts a response.", nameof(record));
 
         EnsureClean();
@@ -57,19 +57,25 @@ internal sealed class EfActorUserTaskJournal(RuntimeDbContext context, IPersiste
     private static bool AdmitsTransition(UserTaskRecord prior, UserTaskRecord next) => prior.Status switch
     {
         UserTaskStatus.Open or UserTaskStatus.Claimed when next.Status == UserTaskStatus.CompletionPending =>
-            prior.Decision is null && next.Decision?.Response is { } response && response.TaskId == prior.Id &&
+            !next.ActorAcknowledged && prior.Decision is null && next.Decision?.Response is { } response && response.TaskId == prior.Id &&
                 prior.Actions.Contains(response.Action, StringComparer.Ordinal) && response.Data.ValueKind == JsonValueKind.Object,
-        UserTaskStatus.Open or UserTaskStatus.Claimed => next.Decision is null &&
+        UserTaskStatus.Open or UserTaskStatus.Claimed => !next.ActorAcknowledged && next.Decision is null &&
             next.Status is UserTaskStatus.Open or UserTaskStatus.Claimed or UserTaskStatus.Cancelled,
-        UserTaskStatus.CompletionPending => next.Status is UserTaskStatus.Completed or UserTaskStatus.Cancelled &&
-            prior.Decision is { } accepted && next.Decision is { } reply &&
-            accepted.RequestId == reply.RequestId && accepted.ActorId == reply.ActorId && accepted.AcceptedAt == reply.AcceptedAt &&
-            accepted.Response.TaskId == reply.Response.TaskId && accepted.Response.CompletionId == reply.Response.CompletionId &&
-            accepted.Response.Action == reply.Response.Action && JsonElement.DeepEquals(accepted.Response.Data, reply.Response.Data),
+        UserTaskStatus.CompletionPending => !next.ActorAcknowledged && next.Status is UserTaskStatus.Completed or UserTaskStatus.Cancelled &&
+            SameDecision(prior.Decision, next.Decision),
+        UserTaskStatus.Completed => !prior.ActorAcknowledged && next is { Status: UserTaskStatus.Completed, ActorAcknowledged: true } &&
+            SameDecision(prior.Decision, next.Decision),
         _ => false
     };
 
-    public async ValueTask<UserTaskPage> RecoverOwnedAsync(string tenantId, int limit, string? after, CancellationToken cancellationToken = default)
+    private static bool SameDecision(UserTaskDecision? prior, UserTaskDecision? next) =>
+        prior is { } accepted && next is { } reply &&
+        accepted.RequestId == reply.RequestId && accepted.ActorId == reply.ActorId && accepted.AcceptedAt == reply.AcceptedAt &&
+        accepted.Response.TaskId == reply.Response.TaskId && accepted.Response.CompletionId == reply.Response.CompletionId &&
+        accepted.Response.Action == reply.Response.Action && JsonElement.DeepEquals(accepted.Response.Data, reply.Response.Data);
+
+    public async ValueTask<UserTaskPage> RecoverOwnedAsync(string tenantId, bool accepted, int limit, string? after,
+        CancellationToken cancellationToken = default)
     {
         ValidateLimit(limit);
         access.Current.EnsureTenantScope(tenantId);
@@ -79,7 +85,10 @@ internal sealed class EfActorUserTaskJournal(RuntimeDbContext context, IPersiste
         var tenantKey = Encode(tenantId);
         var tenantHash = Hash(tenantId);
         var source = context.UserTasks.AsNoTracking().Where(row => row.ScopeHash == scopeHash && row.ScopeKey == scopeKey &&
-            row.TenantHash == tenantHash && row.TenantKey == tenantKey && row.Status < (int)UserTaskStatus.Completed);
+            row.TenantHash == tenantHash && row.TenantKey == tenantKey);
+        source = accepted
+            ? source.Where(row => row.Status == (int)UserTaskStatus.CompletionPending || row.Status == CompletionAwaitingAcknowledgement)
+            : source.Where(row => row.Status == (int)UserTaskStatus.Open || row.Status == (int)UserTaskStatus.Claimed);
         if (after is not null) source = source.Where(row => string.Compare(row.TaskId, after) > 0);
         var rows = await source.OrderBy(row => row.TaskId).Take(limit + 1).ToArrayAsync(cancellationToken);
         return new(rows.Take(limit).Select(row => Read(row, scope, actorJournal: true)).ToArray(),

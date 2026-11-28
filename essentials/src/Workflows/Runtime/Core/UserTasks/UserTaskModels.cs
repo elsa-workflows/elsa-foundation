@@ -67,6 +67,9 @@ public sealed record UserTaskRecord(string Id, string TenantId, string WorkflowE
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public UserTaskActorRecipient? ActorRecipient { get; init; }
+
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal bool ActorAcknowledged { get; init; }
 }
 
 /// <summary>The opaque actor, frame and wait that own an ordinary Actor task.</summary>

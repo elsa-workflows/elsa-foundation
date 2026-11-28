@@ -412,7 +412,12 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         var executable = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindAsync(artifactId, token);
         // A stored actor already passed admission. The runtime only rebuilds its execution model here. Published
         // routes still use their strict mapping and separate serving authority.
-        return executable is null ? null : NativeExecutableMapper.Map(executable, KernelHostCapabilities.All, definition: null,
+        var reconstruction = KernelHostCapabilities.All with
+        {
+            Decisions = serving.Capabilities.Decisions,
+            UserTaskWaits = serving.Capabilities.UserTaskWaits
+        };
+        return executable is null ? null : NativeExecutableMapper.Map(executable, reconstruction, definition: null,
             scopedHttpTransport: testTenant is not null);
     }
 

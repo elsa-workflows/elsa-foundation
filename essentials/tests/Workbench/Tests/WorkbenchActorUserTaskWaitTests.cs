@@ -34,6 +34,8 @@ public sealed class WorkbenchActorUserTaskWaitTests
             {
                 [Qualification] = "true",
                 ["ConnectionStrings:Elsa"] = platform!,
+                ["CShells:Shells:default:Features:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey"] =
+                    "workbench-task-fixture-recovery-signing-key",
                 ["ConnectionStrings:ElsaOpenTelemetry"] = platform!,
                 ["ConnectionStrings:ElsaElsa3Import"] = platform!,
                 ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:PostgresConnectionString"] = actor!,
@@ -62,6 +64,7 @@ public sealed class WorkbenchActorUserTaskWaitTests
         var flowchartVersion = await ActivityVersionAsync(client, "Elsa.Activities.Flowchart.Activities.Flowchart");
         var definition = await PostAsync(client, "/design/workflows/definitions/submit",
             new { name = "Actor purchase approval", state = PurchaseWorkflow(taskVersion, flowchartVersion, reviewer, title, formId) });
+        var definitionId = (string)definition["definition"]!["id"]!;
         var versionId = (string)definition["version"]!["id"]!;
         var publication = await PostAsync(client, $"/publishing/workflows/{versionId}/publish", new { });
         var artifactId = (string)publication["artifactId"]!;
@@ -86,6 +89,10 @@ public sealed class WorkbenchActorUserTaskWaitTests
         await PublishFormAsync(client, formRoute, formId, "reference", "Required replacement field");
         Assert.Equal("2", (string?)(await ReadAsync(client, $"{formRoute}/definition"))["latestPublished"]?["form"]?["version"]);
 
+        // A cold host cannot recover the pinned task through its active-publication registry.
+        using (var unpublish = await client.DeleteAsync($"/publishing/workflows/{definitionId}/slots/default"))
+            await ReadResponseAsync(unpublish);
+
         await using var reopened = await host.CrashAndRestartAsync();
         using var restartedClient = await SignInAsync(reopened);
         var pending = await ReadAsync(restartedClient, taskPath);
@@ -99,6 +106,10 @@ public sealed class WorkbenchActorUserTaskWaitTests
         using (var invalid = await restartedClient.PostAsJsonAsync($"{taskPath}/complete",
                    new { revision, requestId = "missing-note", action = "Approve", data = new { } }))
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        using (var oversized = await restartedClient.PostAsJsonAsync($"{taskPath}/complete",
+                   new { revision, requestId = "large-note", action = "Approve", data = new { note = new string('a', 65_536) } }))
+            Assert.Equal(HttpStatusCode.BadRequest, oversized.StatusCode);
 
         var response = new { revision, requestId = "review-response", action = "Approve", data = new { note } };
         var accepted = await PostAsync(restartedClient, $"{taskPath}/complete", response);

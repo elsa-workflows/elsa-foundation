@@ -276,9 +276,13 @@ internal class EfUserTaskArchiveStore(RuntimeDbContext context, IPersistenceAcce
 
     // A colon cannot appear in a legacy Base64 scope key. The extra framed key component also separates primary keys.
     protected static string ActorScopeKey(string scope) => ":" + Encode(scope);
-    protected static bool IsActorTaskId(string id) => id.Length == 64 && id[0] == 't';
+    protected static bool IsActorTaskId(string id) =>
+        id.Length == 64 && id[0] == 't' && id.AsSpan(1).IndexOfAnyExcept("0123456789abcdef") < 0;
     protected static string TaskRowId(string scope, string tenant, string task, bool actorJournal) =>
         actorJournal ? CompositeId(scope, tenant, task, "actor-user-task") : CompositeId(scope, tenant, task);
+
+    // Completed task rows still awaiting acknowledgement remain in the work index until the Actor receipt is cleared.
+    protected const int CompletionAwaitingAcknowledgement = (int)UserTaskStatus.Cancelled + 1;
 
     protected static UserTaskEntity ToRow(UserTaskRecord task, string scope, bool actorJournal = false) => new()
     {
@@ -286,14 +290,17 @@ internal class EfUserTaskArchiveStore(RuntimeDbContext context, IPersistenceAcce
         ScopeHash = Hash(actorJournal ? ActorScopeKey(scope) : scope), TenantKey = Encode(task.TenantId), TenantHash = Hash(task.TenantId),
         ClaimantHash = task.ClaimantId is null ? null : Hash(task.ClaimantId), TaskId = task.Id, ExecutionHash = Hash(task.WorkflowExecutionId), AssigneeHash = task.AssigneeId is null ? null : Hash(task.AssigneeId), GroupHash = task.GroupId is null ? null : Hash(task.GroupId), ExecutionKey = Encode(task.WorkflowExecutionId), AssigneeKey = task.AssigneeId is null ? null : Encode(task.AssigneeId),
         GroupKey = task.GroupId is null ? null : Encode(task.GroupId), ClaimantKey = task.ClaimantId is null ? null : Encode(task.ClaimantId),
-        SearchTitle = task.Title.ToUpperInvariant(), Status = (int)task.Status, Revision = task.Revision, ContentJson = JsonSerializer.Serialize(task)
+        SearchTitle = task.Title.ToUpperInvariant(), Revision = task.Revision, ContentJson = JsonSerializer.Serialize(task),
+        Status = actorJournal && task.Status == UserTaskStatus.Completed && !task.ActorAcknowledged
+            ? CompletionAwaitingAcknowledgement : (int)task.Status
     };
     protected static UserTaskRecord Read(UserTaskEntity row, string scope, bool actorJournal = false)
     {
         var content = UserTasksEfModule.Chain.Upcast<UserTaskEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
         var value = JsonSerializer.Deserialize<UserTaskRecord>(content) ?? throw new InvalidDataException("The task journal is invalid.");
         if (actorJournal && (!IsActorTaskId(value.Id) || value.ActorRecipient is not { } actor ||
-            actor.ActorId != value.WorkflowExecutionId || actor.FrameId != value.InvocationId || value.Recipient is not null))
+            actor.ActorId != value.WorkflowExecutionId || actor.FrameId != value.InvocationId ||
+            string.IsNullOrWhiteSpace(actor.WaitId) || value.OperationKey != value.Id || value.Recipient is not null))
             throw new InvalidDataException("The Actor task journal lacks its canonical wait identity.");
         var expected = ToRow(value, scope, actorJournal);
         if (row.Id != expected.Id || row.ScopeKey != expected.ScopeKey || row.ScopeHash != expected.ScopeHash ||

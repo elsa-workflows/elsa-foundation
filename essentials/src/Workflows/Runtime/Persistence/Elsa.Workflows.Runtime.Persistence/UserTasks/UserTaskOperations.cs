@@ -92,6 +92,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
             throw Failure("forbidden", "Claim the task or ask its assignee to complete it.");
         if (!task.Actions.Contains(request.Action, StringComparer.Ordinal)) throw Failure("validation", "Choose one of this task's actions.");
         if (request.Data.ValueKind != JsonValueKind.Object) throw Failure("validation", "The response must be an object.");
+        if (actorRuntime?.Owns(task) == true) UserTaskRules.ValidateActorData(request.Data);
         if (task.Form is { } form)
         {
             var errors = await Provider(form.Provider).ValidateResponseAsync(form, task.Prefill, request.Data,

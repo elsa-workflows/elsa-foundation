@@ -73,8 +73,27 @@ internal static class NativeUserTaskWaitChecks
             await ReplyAsync("duplicate-response", opened.Recipient);
             jobs.ReleaseOpen.TrySetResult();
             await jobs.Settled.Task.WaitAsync(token);
-            await ObserveAsync(store, tenant.Tenant, opened.Recipient.Actor, row => row.Status == InstanceStatus.Finished, token);
+            var final = await ObserveAsync(store, tenant.Tenant, opened.Recipient.Actor, row => row.Status == InstanceStatus.Finished, token);
             Require(jobs.SettleCalls == 2, "The exact accepted response must survive one uncertain settlement result.");
+            Require(NativeExecutionModel.InspectUserTask(final.State, opened.Recipient, "approval").ConsumedCompletionId == Receipt,
+                "The exact event receipt must be committed with activity completion.");
+
+            var operators = await foundation.OpenIngressWithOperatorsAsync((scope, target, kind) =>
+                scope.Tenant == tenant.Tenant && target == opened.Recipient.Actor && kind == Contract.Kinds.Delete, token);
+            Require(await DeleteAsync("before-journal-commit") is { Error: "protected" },
+                "The selected terminal checkpoint must survive while the task completion is unacknowledged.");
+            jobs.JournalAcknowledged = true;
+            Require(await DeleteAsync("after-journal-commit") is { Item: "deleted" },
+                "The original terminal selection can retire once the journal durably records the exact completion.");
+
+            async Task<Contract.Reply> DeleteAsync(string operation)
+            {
+                var view = await foundation.CreateReads().GetAsync(tenant, opened.Recipient.Actor, token);
+                Require(view?.Selection is not null, "The terminal checkpoint needs its committed selection.");
+                return await operators.RequestAsync(tenant, new Contract.Target.Ref(opened.Recipient.Actor), operation, Contract.Kinds.Delete,
+                    JsonSerializer.Serialize(new Contract.OperatorCommand(view!.Selection, ExpectedTarget: opened.Recipient.Actor)), null,
+                    new(null, await foundation.ReadClockAsync(token) + 10_000), token);
+            }
 
             await owner.StopAsync(token);
             Console.WriteLine("The committed Actor wait precedes task materialization, rejects ordinary resume and a mismatched frame, and settles an early response once.");
@@ -115,6 +134,7 @@ internal static class NativeUserTaskWaitChecks
     {
         private int _openCalls;
         private int _settleCalls;
+        internal bool JournalAcknowledged { get; set; }
         internal int OpenCalls => Volatile.Read(ref _openCalls);
         internal int SettleCalls => Volatile.Read(ref _settleCalls);
         internal TaskCompletionSource ReleaseOpen { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -134,6 +154,10 @@ internal static class NativeUserTaskWaitChecks
             Settled.TrySetResult();
             return new(recipient.TaskId, completionId, "Approve", []);
         }
+
+        public ValueTask<bool> CanReleaseCompletionAsync(string tenant, NativeUserTaskRecipient recipient, string nodeId,
+            string completionId, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(JournalAcknowledged && nodeId == "approval" && completionId == Receipt);
 
         public async ValueTask<bool> OpenAsync(string tenant, NativeUserTaskRecipient recipient, string nodeId, NativeUserTaskRequest request,
             CancellationToken cancellationToken)

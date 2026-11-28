@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
@@ -10,6 +11,9 @@ public sealed record NativeUserTaskRecipient(Contract.ActorRef Actor, string Fra
 
 /// <summary>Delivery of the accepted journal receipt to its exact Actor wait.</summary>
 public sealed record NativeUserTaskAccepted(NativeUserTaskRecipient Recipient, string CompletionId);
+
+/// <summary>The exact task ownership observed in one committed workflow checkpoint.</summary>
+public sealed record NativeUserTaskCheckpoint(bool IsWaiting, string? AcceptedCompletionId, string? ConsumedCompletionId);
 
 /// <summary>Runs the durable task journal effects of a qualified Actor wait.</summary>
 public interface INativeUserTaskJobs
@@ -23,6 +27,10 @@ public interface INativeUserTaskJobs
 
     /// <summary>Settles the exact accepted reply after Actor acceptance. A repeat returns the same frozen reply.</summary>
     ValueTask<NativeUserTaskResponse?> SettleAsync(string tenant, NativeUserTaskRecipient recipient, string completionId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Confirms the task journal has durably recorded this exact committed completion.</summary>
+    ValueTask<bool> CanReleaseCompletionAsync(string tenant, NativeUserTaskRecipient recipient, string nodeId, string completionId,
         CancellationToken cancellationToken);
 }
 
@@ -45,6 +53,8 @@ internal static class NativeUserTaskWaits
 
     internal static string OpenJobKey(string wait) => OpenJobPrefix + wait;
     internal static string SettleJobKey(string wait) => SettleJobPrefix + wait;
+
+    internal sealed record Consumption(string Frame, string Wait, string Node, string CompletionId);
 
     internal sealed record OpenArguments(NativeUserTaskRecipient Recipient, string NodeId, NativeUserTaskRequest Request);
     internal sealed record SettlementArguments(NativeUserTaskRecipient Recipient, string CompletionId);
@@ -99,6 +109,28 @@ internal sealed partial class Burst
         // while that job owns its slot, then start settlement from that exact committed wait.
         if (wait.Job is null && wait.TaskRetry is null && !_s.Agenda.Exists(work => work.Resume && !work.Gone && work.Wait == recipient.Wait))
             StartSettlement(recipient.Wait, wait);
+    }
+
+    private void RecordUserTaskConsumption(Frame frame, string id, WaitEntry wait, JsonNode? payload)
+    {
+        var response = Values.To<NativeUserTaskResponse>(payload);
+        if (response is null || response.TaskId != wait.Key || response.CompletionId != wait.AcceptedTaskCompletionId)
+            throw new InvalidOperationException("The completed activity does not own this task response.");
+        (_s.UserTaskConsumptions ??= new(StringComparer.Ordinal)).Add(wait.Key,
+            new(frame.Id, id, frame.Node, response.CompletionId));
+    }
+
+    private void AcknowledgeUserTask(string? payload)
+    {
+        if (NativeUserTaskWaits.Read<NativeUserTaskAccepted>(payload) is not { Recipient: { } recipient } acknowledged ||
+            recipient.Actor != turn.Actor || string.IsNullOrWhiteSpace(recipient.TaskId) ||
+            _s.UserTaskConsumptions is not { } consumptions ||
+            consumptions.GetValueOrDefault(recipient.TaskId) is not { } exact ||
+            exact.Frame != recipient.Frame || exact.Wait != recipient.Wait || exact.CompletionId != acknowledged.CompletionId)
+            return;
+
+        consumptions.Remove(recipient.TaskId);
+        if (consumptions.Count == 0) _s.UserTaskConsumptions = null;
     }
 
     private void StartSettlement(string id, WaitEntry wait)

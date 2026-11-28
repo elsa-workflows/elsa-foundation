@@ -50,14 +50,14 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
             ? new(databasePath, node, actorType, StoreFormat.RootUserTaskWaitsQualification, protectRootStart)
             : ForStandaloneQualification(databasePath, node, actorType, publisherScope, StoreFormat.RootUserTaskWaitsQualification, protectRootStart);
 
-    /// <summary>Evaluates the host's task wait predicate on the committed state of an exact ordinary Actor life.</summary>
-    public async ValueTask<bool> HasUserTaskWaitAsync(Contract.BoundScope scope, Contract.ActorRef actor, Func<string, bool> matches,
+    /// <summary>Reads the committed checkpoint of an exact ordinary Actor life for task reconciliation.</summary>
+    public ValueTask<Contract.CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         CancellationToken cancellationToken)
     {
-        if (scope.IsHostIsolated) return false;
+        if (scope.IsHostIsolated) return ValueTask.FromResult<Contract.CommittedActorCheckpoint?>(null);
         if (qualificationFormat != StoreFormat.RootUserTaskWaitsQualification)
             throw new InvalidOperationException("This store does not support Actor user task waits.");
-        return await SqliteEmbeddedHosting.HasUserTaskWaitAsync(InstalledPath, scope, actor, matches, publicEventHost, cancellationToken);
+        return SqliteEmbeddedHosting.ReadUserTaskCheckpointAsync(InstalledPath, scope, actor, publicEventHost, cancellationToken);
     }
 
     internal static SqliteEmbeddedFoundation ForChildQualification(string databasePath, string node, string actorType) =>

@@ -17,6 +17,7 @@ public static class NativeKinds
     public const string Timer = "native.timer";         // a Delay is due
     public const string Resume = "native.resume";       // an outsider resumes a wait by its stimulus, without the event tables
     public const string UserTaskAccepted = "native.user-task.accepted";
+    public const string UserTaskAcknowledged = "native.user-task.acknowledged";
     public const string Cancel = "native.cancel";
 }
 
@@ -183,6 +184,9 @@ public sealed partial class NativeState
     public Dictionary<string, Frame> Frames { get; set; } = new(StringComparer.Ordinal);
     public List<Work> Agenda { get; set; } = [];
     public Dictionary<string, WaitEntry> Waits { get; set; } = new(StringComparer.Ordinal);
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal Dictionary<string, NativeUserTaskWaits.Consumption>? UserTaskConsumptions { get; set; }
+
     public Dictionary<string, JsonNode?> Variables { get; set; } = new(StringComparer.Ordinal);
     /// <summary>The correlation id Set Correlation Id set, which an expression's instance parameter reads; the label holds it too.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -339,6 +343,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 break;
             case NativeKinds.UserTaskAccepted:
                 AcceptUserTask(m.Payload);
+                break;
+            case NativeKinds.UserTaskAcknowledged:
+                AcknowledgeUserTask(m.Payload);
                 break;
             case NativeUserTaskWaits.RetryKind:
                 RetryUserTaskJob(m);
@@ -560,7 +567,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         if (activity is null) return;
         var context = Context(frame);
         var state = frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State;
-        await ApplyAsync(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
+        var transition = await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload));
+        if (wait.Kind == NativeUserTaskWaits.Kind && transition.Kind == TransitionKind.Complete)
+            RecordUserTaskConsumption(frame, work.Wait!, wait, work.Payload);
+        await ApplyAsync(frame, transition);
     }
 
     private ActivityContext Context(Frame frame)

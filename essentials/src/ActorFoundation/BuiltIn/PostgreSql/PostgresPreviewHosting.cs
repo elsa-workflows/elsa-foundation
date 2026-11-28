@@ -56,17 +56,18 @@ public static partial class PostgresPreviewHosting
         Contract.BoundScope? publisherScope, CancellationToken cancellationToken) =>
         InstallPreviewFormatAsync(() => CreateUserTaskWaitsQualificationContext(options, actorType, publisherScope), cancellationToken);
 
-    /// <summary>Evaluates the host's task wait predicate on the committed state of an exact ordinary Actor life.</summary>
-    public static async ValueTask<bool> HasUserTaskWaitAsync(Func<KernelDb> open, Contract.BoundScope scope, Contract.ActorRef actor,
-        Func<string, bool> matches, CancellationToken cancellationToken)
+    /// <summary>Reads the committed checkpoint of an exact ordinary Actor life for task reconciliation.</summary>
+    public static async ValueTask<Contract.CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(Func<KernelDb> open, Contract.BoundScope scope,
+        Contract.ActorRef actor, CancellationToken cancellationToken)
     {
-        if (scope.IsHostIsolated) return false;
+        if (scope.IsHostIsolated) return null;
         await using var db = open();
         if (db.RequiredFormat != StoreFormat.RootUserTaskWaitsQualification)
             throw new InvalidOperationException("This store does not support Actor user task waits.");
         var store = new EfStore(open, postgres: true);
-        return await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken) is
-            { Status: InstanceStatus.Running, State: { } state } && matches(state);
+        return await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken) is { } checkpoint
+            ? new(checkpoint.State, (Contract.ActorStatus)checkpoint.Status, checkpoint.ParkAt is not null)
+            : null;
     }
 
     /// <summary>Selects the dedicated preview format for qualifying indexed playback.</summary>
