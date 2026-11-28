@@ -1504,19 +1504,17 @@ jobs:
         shell: bash
         run: git diff --exit-code -- ':(glob)**/packages.lock.json'
 
-      - name: Run the SQLite Workbench Core Preview journey
+      - name: Run stock Workbench execution and HTTP waits on SQLite
         if: runner.os == 'Linux'
         shell: bash
         run: |
           runner=essentials/tests/ActorFoundation/Native/Run
           dotnet restore "$runner" --locked-mode
           dotnet build "$runner" -c Debug --no-restore
-          dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" sqlite-workbench-core-preview \
-            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
           dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" workbench-http-waits sqlite \
-            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
+            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host" stock
 
-      - name: Run the PostgreSQL Workbench HTTP wait journey
+      - name: Run stock Workbench execution and HTTP waits on PostgreSQL
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -1529,10 +1527,13 @@ jobs:
             sleep 1
           done
           docker exec "$postgres" pg_isready -h 127.0.0.1 -U postgres -d kernel_http_waits >/dev/null
+          docker exec "$postgres" createdb -U postgres kernel_http_waits_runtime
           binding=$(docker port "$postgres" 5432/tcp)
-          KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=${binding##*:};Username=postgres;Password=kernel;Database=kernel_http_waits;SSL Mode=Disable;GSS Encryption Mode=Disable" \
+          connection="Host=127.0.0.1;Port=${binding##*:};Username=postgres;Password=kernel;SSL Mode=Disable;GSS Encryption Mode=Disable"
+          KERNEL_WORKBENCH_ACTOR_POSTGRES="$connection;Database=kernel_http_waits" \
+          KERNEL_WORKBENCH_RUNTIME_POSTGRES="$connection;Database=kernel_http_waits_runtime" \
             dotnet essentials/tests/ActorFoundation/Native/Run/bin/Debug/net10.0/Kernel.Native.Run.dll workbench-http-waits postgres \
-            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
+            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host" stock
 
       - name: Run the focused WriteLine bound-input test
         shell: bash

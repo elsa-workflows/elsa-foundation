@@ -749,14 +749,54 @@ internal static partial class WorkbenchPostgresPreview
         internal Task<string> WaitForKernelServingAsync(CancellationToken token) =>
             WaitForOutputAsync(output.KernelServing.Task, "serving its publications on the kernel", token);
 
+        internal static WorkbenchProcess StartStock(string executable, DirectoryInfo workspace, string? sqlitePath)
+        {
+            const string features = "CShells__Shells__default__Features__";
+            const string kernel = features + "WorkflowsRuntimeKernelHosting__";
+            var settings = new Dictionary<string, string>();
+            if (sqlitePath is not null)
+            {
+                settings[kernel + "SqlitePath"] = sqlitePath;
+            }
+            else
+            {
+                var actor = RequireDatabase("KERNEL_WORKBENCH_ACTOR_POSTGRES");
+                var runtime = RequireDatabase("KERNEL_WORKBENCH_RUNTIME_POSTGRES");
+                Require((actor.Host, actor.Port, actor.Database) != (runtime.Host, runtime.Port, runtime.Database),
+                    "the stock Workbench witness requires distinct disposable Actor and workflow-control databases");
+                settings[kernel + "Provider"] = "PostgreSql";
+                settings[kernel + "PostgresConnectionString"] = actor.ConnectionString;
+                foreach (var feature in new[]
+                {
+                    "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore",
+                    "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
+                })
+                {
+                    settings[features + feature + "__Provider"] = "PostgreSql";
+                    settings[features + feature + "__ConnectionString"] = runtime.ConnectionString;
+                }
+            }
+
+            return Start(executable, "", enabled: false, profile: null, releaseFile: null, retainedWorkspace: workspace, stockSettings: settings);
+
+            static NpgsqlConnectionStringBuilder RequireDatabase(string key)
+            {
+                var connection = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(key) ?? "");
+                if (string.IsNullOrWhiteSpace(connection.Host) || string.IsNullOrWhiteSpace(connection.Database))
+                    throw new InvalidOperationException($"{key} must name a disposable PostgreSQL database.");
+                return connection;
+            }
+        }
+
         internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile,
             string? sqlitePath = null, DirectoryInfo? retainedWorkspace = null, bool terminalOutputQualification = false, bool terminalOutputsWithTimers = false,
-            bool diagnosticHistoryDisabled = false, string? playbackQualification = null)
+            bool diagnosticHistoryDisabled = false, string? playbackQualification = null, IReadOnlyDictionary<string, string>? stockSettings = null)
         {
             var binary = Path.GetFullPath(executable);
             var workspace = retainedWorkspace ?? Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
             var source = Path.GetDirectoryName(binary)!;
-            foreach (var file in new[] { "appsettings.json", "appsettings.Development.json", "shells.json", "shells.Development.json" })
+            foreach (var file in new[] { "appsettings.json", "appsettings.Development.json", "shells.json", "shells.Development.json",
+                         "shells.CorePreview.json" })
                 if (File.Exists(Path.Combine(source, file)) && !File.Exists(Path.Combine(workspace.FullName, file)))
                     File.Copy(Path.Combine(source, file), Path.Combine(workspace.FullName, file));
             workspace.CreateSubdirectory("packages");
@@ -779,31 +819,39 @@ internal static partial class WorkbenchPostgresPreview
             start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
             start.Environment["Nuplane__Setup__StateFilePath"] = Path.Combine(workspace.FullName, ".nuplane", "store-state.json");
             start.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
-            if (enabled)
-                start.Environment["Elsa__CorePreview__Enabled"] = "true";
-            if (profile == "jobs")
-                start.Environment["Elsa__CorePreview__NativeJobs"] = "true";
-            if (profile == "publications")
+            if (stockSettings is null)
             {
-                start.Environment["Elsa__CorePreview__Publications"] = "true";
-                start.Environment["Elsa__CorePreview__HttpProbe"] = "true";
-                start.Environment["Elsa__CorePreview__Tenant"] = "default";
+                if (enabled)
+                    start.Environment["Elsa__CorePreview__Enabled"] = "true";
+                if (profile == "jobs")
+                    start.Environment["Elsa__CorePreview__NativeJobs"] = "true";
+                if (profile == "publications")
+                {
+                    start.Environment["Elsa__CorePreview__Publications"] = "true";
+                    start.Environment["Elsa__CorePreview__HttpProbe"] = "true";
+                    start.Environment["Elsa__CorePreview__Tenant"] = "default";
+                }
+                if (terminalOutputQualification)
+                    start.Environment["Elsa__CorePreview__TerminalOutputQualification"] = terminalOutputsWithTimers ? "s6" : "true";
+                if (playbackQualification is not null)
+                    start.Environment["Elsa__CorePreview__PlaybackQualification"] = playbackQualification;
+                if (terminalOutputQualification || diagnosticHistoryDisabled)
+                    start.Environment["CShells__Shells__default__Features__WorkflowsRuntimeHistory__Enabled"] = "false";
+                if (profile is "timed" or "timeout" or "takeover" or "takeover-complete")
+                    start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";
+                if (releaseFile is not null)
+                    start.Environment["Elsa__CorePreview__TimedJobReleaseFile"] = releaseFile;
+                if (sqlitePath is null) start.Environment["ConnectionStrings__KernelCorePreview"] = connection;
+                else
+                {
+                    start.Environment["Elsa__CorePreview__Provider"] = "SQLite";
+                    start.Environment["Elsa__CorePreview__SqlitePath"] = sqlitePath;
+                }
             }
-            if (terminalOutputQualification)
-                start.Environment["Elsa__CorePreview__TerminalOutputQualification"] = terminalOutputsWithTimers ? "s6" : "true";
-            if (playbackQualification is not null)
-                start.Environment["Elsa__CorePreview__PlaybackQualification"] = playbackQualification;
-            if (terminalOutputQualification || diagnosticHistoryDisabled)
-                start.Environment["CShells__Shells__default__Features__WorkflowsRuntimeHistory__Enabled"] = "false";
-            if (profile is "timed" or "timeout" or "takeover" or "takeover-complete")
-                start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";
-            if (releaseFile is not null)
-                start.Environment["Elsa__CorePreview__TimedJobReleaseFile"] = releaseFile;
-            if (sqlitePath is null) start.Environment["ConnectionStrings__KernelCorePreview"] = connection;
             else
             {
-                start.Environment["Elsa__CorePreview__Provider"] = "SQLite";
-                start.Environment["Elsa__CorePreview__SqlitePath"] = sqlitePath;
+                foreach (var (key, value) in stockSettings)
+                    start.Environment[key] = value;
             }
             var process = Process.Start(start) ?? throw new InvalidOperationException("Workbench did not start.");
             return new WorkbenchProcess(process, workspace, process.StandardError.ReadToEndAsync(), retainedWorkspace is null);

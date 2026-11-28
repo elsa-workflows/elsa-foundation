@@ -7,25 +7,28 @@ namespace Elsa.Workbench.Qualification;
 
 internal static partial class WorkbenchPostgresPreview
 {
-    internal static async Task RunHttpWaitsAsync(string executable, bool postgres, bool gated)
+    internal static async Task RunHttpWaitsAsync(string executable, bool postgres, bool gated, bool stock)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var token = deadline.Token;
         var workspace = Directory.CreateTempSubdirectory("elsa-workbench-http-waits-");
         var sqlite = postgres ? null : Path.Combine(workspace.FullName, "kernel.sqlite");
-        var connection = postgres
+        var connection = postgres && !stock
             ? Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ?? throw new InvalidOperationException("Supply a disposable PostgreSQL database.")
             : "";
         try
         {
-            using var host = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace);
+            using var host = stock ? WorkbenchProcess.StartStock(executable, workspace, sqlite)
+                : WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace);
             await host.WaitReadyAsync(token);
-            await host.WaitForKernelServingAsync(token);
+            if (!stock) await host.WaitForKernelServingAsync(token);
             var address = new Uri(await host.ListeningAsync(token));
             Require(address.IsLoopback && address.Port != 5095, "the Workbench uses a dedicated loopback listener");
             using var client = new HttpClient(new HttpClientHandler { CookieContainer = new(), AllowAutoRedirect = false }) { BaseAddress = address };
+            if (stock) await WaitForStockShellAsync();
             using (var login = await client.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" }, token))
                 Require(login.IsSuccessStatusCode, "the administrator signs in through the normal identity route");
+            if (stock) await CheckStockExecutionAsync();
 
             foreach (var (kind, flowchart) in new[] { ("native", false), ("chart", true) })
             {
@@ -77,6 +80,67 @@ internal static partial class WorkbenchPostgresPreview
             }
 
             await host.StopAsync();
+            if (stock && sqlite is not null)
+                Require(File.Exists(sqlite), "the stock SQLite owner persisted execution in its configured file.");
+
+            async Task WaitForStockShellAsync()
+            {
+                while (true)
+                {
+                    using var response = await client.GetAsync("/health/ready", token);
+                    if (response.IsSuccessStatusCode) return;
+                    var body = await response.Content.ReadAsStringAsync(token);
+                    Require(response.StatusCode == HttpStatusCode.ServiceUnavailable && !body.Contains("shell_activation_failed", StringComparison.Ordinal),
+                        $"the stock Workbench shell becomes ready ({(int)response.StatusCode}: {body}).");
+                    await Task.Delay(100, token);
+                }
+            }
+
+            async Task CheckStockExecutionAsync()
+            {
+                _ = await ReadAsync("/runtime/workflows/retention");
+                Console.WriteLine("ok the configured Actor owner answers the standard retention endpoint");
+                using var oldReads = await client.GetAsync("/runtime/core-preview/workflows/instances", token);
+                Require(oldReads.StatusCode == HttpStatusCode.NotFound, "the stock Workbench does not map the preview read edge.");
+
+                var body = await NodeAsync("write", "Elsa.Activities.Primitives.Activities.WriteLine", ("text", Literal("stock-workbench-execution")));
+                var published = await PublishAsync("Stock Workbench execution", [body], flowchart: false);
+                if (!published.Ok)
+                    throw new InvalidOperationException($"The stock Workbench refused the authored Sequence: {published.Body}");
+                using var receipt = JsonDocument.Parse(published.Body);
+                var artifact = Uri.EscapeDataString(receipt.RootElement.GetProperty("artifactId").GetString()!);
+                var sourceReferenceId = receipt.RootElement.GetProperty("sourceReferenceId").GetString();
+                var executed = await ReadAsync($"/runtime/workflows/executables/{artifact}/execute", new { sourceReferenceId });
+                var testRun = await ReadAsync($"/publishing/workflows/{published.Version}/test-runs",
+                    new { acknowledgeUnavailableExpressionValidation = true });
+                Require(executed.GetProperty("workflowExecutionId").GetString() != testRun.GetProperty("workflowExecutionId").GetString(),
+                    "published Execute and saved TestRun admit separate runs");
+                await ExpectCompletedRunAsync(executed, "PublishedRun");
+                await ExpectCompletedRunAsync(testRun, "TestRun");
+            }
+
+            async Task ExpectCompletedRunAsync(JsonElement receipt, string kind)
+            {
+                var actor = receipt.GetProperty("workflowExecutionId").GetString()!;
+                while (true)
+                {
+                    using var response = await client.GetAsync($"/runtime/workflows/instances/{Uri.EscapeDataString(actor)}", token);
+                    if (response.StatusCode != HttpStatusCode.NotFound)
+                    {
+                        var body = await response.Content.ReadAsStringAsync(token);
+                        if (!response.IsSuccessStatusCode)
+                            throw new InvalidOperationException($"The stock {kind} details answered {(int)response.StatusCode}: {body}");
+                        using var detail = JsonDocument.Parse(body);
+                        var instance = detail.RootElement.GetProperty("instance");
+                        var status = instance.GetProperty("status").GetString();
+                        Require(instance.GetProperty("workflowExecutionId").GetString() == actor && instance.GetProperty("runKind").GetString() == kind,
+                            $"the standard details show the exact admitted stock {kind}.");
+                        if (status == "Completed") return;
+                        Require(status == "Running", $"the stock {kind} completes (current status {status}).");
+                    }
+                    await Task.Delay(100, token);
+                }
+            }
 
             Task<HttpResponseMessage> PostAsync(string kind, string order, string action) =>
                 client.PostAsync($"/workflows/http/{kind}/orders/{Uri.EscapeDataString(order)}/{action}", null, token);
@@ -111,7 +175,7 @@ internal static partial class WorkbenchPostgresPreview
                 return NodeAsync(id, "Elsa.Activities.Http.Activities.HttpEndpoint", inputs.ToArray());
             }
 
-            async Task<(bool Ok, string Body)> PublishAsync(string name, object[] activities, bool flowchart)
+            async Task<(bool Ok, string Body, string Version)> PublishAsync(string name, object[] activities, bool flowchart)
             {
                 string type = flowchart ? "Elsa.Activities.Flowchart.Activities.Flowchart" : "Elsa.Activities.Sequence.Activities.Sequence";
                 string kind = flowchart ? "elsa.flowchart.structure" : "elsa.sequence.structure";
@@ -128,7 +192,7 @@ internal static partial class WorkbenchPostgresPreview
                 });
                 var version = submitted.GetProperty("version").GetProperty("id").GetString()!;
                 using var reply = await client.PostAsJsonAsync($"/publishing/workflows/{Uri.EscapeDataString(version)}/publish", new { }, token);
-                return (reply.IsSuccessStatusCode, await reply.Content.ReadAsStringAsync(token));
+                return (reply.IsSuccessStatusCode, await reply.Content.ReadAsStringAsync(token), version);
             }
 
             async Task<object> NodeAsync(string id, string type, params (string Key, object Value)[] bindings) => new

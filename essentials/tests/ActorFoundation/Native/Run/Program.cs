@@ -26,10 +26,10 @@ if (args is ["workbench-shipped-history", var historyProvider and ("sqlite" or "
     return 0;
 }
 if (args is ["workbench-http-waits", var waitsProvider and ("sqlite" or "postgres"), var waitsWorkbench, .. var waitsMode] &&
-    waitsMode is ([] or ["gated"]))
+    waitsMode is ([] or ["preview"] or ["gated"] or ["stock"]))
 {
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunHttpWaitsAsync(waitsWorkbench, waitsProvider == "postgres",
-        gated: waitsMode is ["gated"]);
+        gated: waitsMode is ["gated"], stock: waitsMode is ["stock"]);
     return 0;
 }
 if (args is ["workbench-shipped-children", var childrenProvider and ("sqlite" or "postgres"), var childrenWorkbench])
@@ -509,6 +509,7 @@ Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-varian
     "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | root-sequenced-journal <sqlite|postgres> <checked|in-batch> | " +
     "shipped-foreach-budget <sqlite|postgres> <balanced|durable> <100|1000> | " +
     "workbench-shipped-history <sqlite|postgres> <executable> [playback|descendants] | workbench-shipped-flowcharts <sqlite|postgres> <executable> | " +
+    "workbench-http-waits <sqlite|postgres> <executable> [stock|preview|gated] | " +
     "memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
