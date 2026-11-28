@@ -68,7 +68,7 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             reservation.OwnerRevision != trigger.Revision || reservation.ConfigurationRevision != trigger.ConfigurationRevision))
             throw new TriggerOperationException("conflict", "The matched source route changed before admission.");
         var subscriptions = aggregate.Subscriptions.Where(x => x.Enabled).OrderBy(x => x.Id, StringComparer.Ordinal).ToArray();
-        var policy = Policy(trigger);
+        var policy = RuntimeIngressAdmissionValidation.Policy(trigger);
         var responseMode = IsWorkflowResponse(trigger);
         if (responseMode && subscriptions.Length != 1)
             throw new StandaloneTriggerAdmissionRefusedException("http-response-owner-required", []);
@@ -159,16 +159,4 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
 
     private static bool IsWorkflowResponse(StandaloneTrigger trigger) => trigger.TypeKey == "http" &&
         trigger.Configuration.TryGetProperty("http", out var http) && http.TryGetProperty("mode", out var mode) && mode.GetString() == "WorkflowResponse";
-
-    internal static RuntimeIngressAdmissionPolicy Policy(StandaloneTrigger trigger)
-    {
-        if (trigger.TypeKey != "http") return RuntimeIngressAdmissionPolicy.Independent;
-        if (!trigger.Configuration.TryGetProperty("http", out var http) || !http.TryGetProperty("mode", out var mode))
-            throw new InvalidDataException("An HTTP trigger requires its canonical response mode.");
-        if (mode.GetString() == "WorkflowResponse") return RuntimeIngressAdmissionPolicy.RequireAll;
-        if (mode.GetString() != "AsyncFanOut") throw new NotSupportedException("The HTTP response mode is unsupported.");
-        if (!http.TryGetProperty("admissionPolicy", out var policy) || policy.GetString() == "RequireAll") return RuntimeIngressAdmissionPolicy.RequireAll;
-        if (policy.GetString() == "AcceptAvailable") return RuntimeIngressAdmissionPolicy.AcceptAvailable;
-        throw new NotSupportedException("The HTTP admission policy is unsupported.");
-    }
 }
