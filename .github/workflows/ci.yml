@@ -1460,7 +1460,7 @@ jobs:
         shell: bash
         run: |
           dotnet restore server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --locked-mode
-          dotnet restore essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
+          dotnet restore essentials/tests/Workflows/Runtime/KernelHost/Tests/Elsa.Workflows.Runtime.KernelHost.Tests.csproj --locked-mode
 
       - name: Build Workbench with the documented command
         shell: bash
@@ -1503,7 +1503,7 @@ jobs:
 
       - name: Run the focused WriteLine bound-input test
         shell: bash
-        run: dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
+        run: dotnet test essentials/tests/Workflows/Runtime/KernelHost/Tests/Elsa.Workflows.Runtime.KernelHost.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
 
       - name: Test strict result verdict and run the owned backend journey
         id: platform-journey

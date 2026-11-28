@@ -16,7 +16,7 @@ public sealed partial class StandaloneTriggerManagementTests
     [InlineData("resource", "GET", true)] [InlineData("legacy", null, false)]
     public async Task HTTP_review_uses_the_registered_semantic_owner_for_distinct_original_hashes_and_legacy_wildcards(string owner, string? method, bool allowed)
     {
-        IServiceCollection services = new ServiceCollection(); new WorkflowsRuntimeHttpFeature().ConfigureServices(services);
+        IServiceCollection services = new ServiceCollection(); new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider(); var reader = new ReservationReader(); var bindings = new InMemoryWorkflowTriggerBindingStore();
         var fixture = HttpPreviewFixture(reader, provider.GetServices<IIngressReservationPolicy>(), bindings, [new SemanticPlanner()]);
         var metadata = RouteMetadata("orders/{id}", method);
@@ -37,7 +37,7 @@ public sealed partial class StandaloneTriggerManagementTests
     [Fact]
     public async Task Semantic_route_review_walks_every_physical_page_before_declaring_availability()
     {
-        IServiceCollection services = new ServiceCollection(); new WorkflowsRuntimeHttpFeature().ConfigureServices(services);
+        IServiceCollection services = new ServiceCollection(); new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider(); var reader = new PagedSemanticReader();
         var fixture = HttpPreviewFixture(reader, provider.GetServices<IIngressReservationPolicy>(), new InMemoryWorkflowTriggerBindingStore(), [new SemanticPlanner()]);
         var preview = await fixture.Management.PreviewAsync("trigger-a", JsonSerializer.SerializeToElement(new

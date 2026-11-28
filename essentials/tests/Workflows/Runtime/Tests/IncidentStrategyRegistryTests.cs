@@ -148,8 +148,8 @@ public sealed class IncidentStrategyRegistryTests
     {
         var services = new ServiceCollection();
 
-        services.AddWorkflowRuntime();
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
+        WorkflowPublicationDefaults.Add(services);
 
         using var provider = services.BuildServiceProvider();
         var references = provider.GetRequiredService<IIncidentStrategyCatalog>().List()
@@ -167,11 +167,11 @@ public sealed class IncidentStrategyRegistryTests
         services.AddScoped<ContinueWithIncidentsIncidentStrategy>();
         services.AddScoped<ContinueWithIncidentsIncidentStrategy>();
 
-        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRuntime());
+        Assert.Throws<InvalidOperationException>(() => WorkflowPublicationDefaults.Add(services));
 
         services.RemoveAll<ContinueWithIncidentsIncidentStrategy>();
         services.AddScoped<ContinueWithIncidentsIncidentStrategy>();
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
 
         Assert.Single(services, descriptor =>
             descriptor.ServiceType == typeof(FaultIncidentStrategy));
