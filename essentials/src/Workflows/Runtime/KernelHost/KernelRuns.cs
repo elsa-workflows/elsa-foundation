@@ -113,7 +113,16 @@ public sealed class KernelRuns
         CancellationToken cancellationToken) => ListAsync(definition, isolated: true, cancellationToken);
 
     private async IAsyncEnumerable<(ActorView View, Kernel.WorkflowActor.WorkflowRunHeader Run)> ListAsync(string? definition, bool isolated,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var candidate in ListCandidatesAsync(definition, isolated, cancellationToken))
+            if (candidate is { } run)
+                yield return run;
+    }
+
+    // A bounded consumer must account for each row in the physical scan, including rows it cannot project.
+    internal async IAsyncEnumerable<(ActorView View, Kernel.WorkflowActor.WorkflowRunHeader Run)?> ListCandidatesAsync(
+        string? definition, bool isolated, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var reads = await _reads(cancellationToken);
         var query = new ActorQuery(Kernel.WorkflowActor.WorkflowActor.ActorType,
@@ -123,9 +132,8 @@ public sealed class KernelRuns
         {
             var page = await reads.ListAsync(Tenant, query, from, cancellationToken);
             foreach (var view in page.Items)
-                if (view.Header.Tenant == Tenant.Tenant && Kernel.WorkflowActor.WorkflowActor.DescribeRun(view.Header) is { } run &&
-                    (run.TestStart is not null) == isolated)
-                    yield return (view, run);
+                yield return view.Header.Tenant == Tenant.Tenant && Kernel.WorkflowActor.WorkflowActor.DescribeRun(view.Header) is { } run &&
+                    (run.TestStart is not null) == isolated ? (view, run) : null;
             from = page.Next;
         } while (from is not null);
     }
