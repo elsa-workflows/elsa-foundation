@@ -27,7 +27,6 @@ public sealed class WorkbenchShellActivationTests
         "ActorSecretsWorkflows",
         // Publishing and serving HTTP-triggered workflows.
         "KernelActivitiesHttp",
-        "WorkflowsRuntimeStandaloneHttp",
         "ActorHttpConnections",
         "WorkflowsPublishingApi",
         "WorkflowsPublishing",
@@ -48,6 +47,7 @@ public sealed class WorkbenchShellActivationTests
     private static readonly string[] CatalogedFeatures =
     [
         "ActivitiesBpmn",
+        "WorkflowsRuntimeStandaloneHttp",
         // File-based workflow deployment is opt-in: it needs a source and a path to register.
         "JsonWorkflowReconciliation"
     ];
@@ -135,6 +135,7 @@ public sealed class WorkbenchShellActivationTests
         {
             var active = await ReadEffectiveFeatureClosureAsync(workbench);
             Assert.Contains("ActorHttpConnections", active);
+            Assert.Contains("WorkflowsRuntimeStandaloneHttp", active);
             Assert.Contains("ActivitiesRuntimeHosting", active);
             Assert.Contains("ActivitiesGraphRuntimeHosting", active);
             Assert.Contains("ActorSecretsWorkflows", active);

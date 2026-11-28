@@ -142,7 +142,7 @@ public sealed class KernelFeatureTests
     [Fact]
     public void The_old_core_types_are_named_by_their_types()
     {
-        Assert.Equal(typeof(WorkflowActivationCoordinator).FullName, WorkflowsRuntimeKernelFeature.DefaultCoordinatorTypeName);
-        Assert.Equal(typeof(WorkflowTriggerBindingExtractor).FullName, WorkflowsRuntimeKernelFeature.DefaultExtractorTypeName);
+        Assert.Equal(WorkflowsRuntimeKernelFeature.DefaultCoordinatorTypeName, typeof(WorkflowActivationCoordinator).FullName);
+        Assert.Equal(WorkflowsRuntimeKernelFeature.DefaultExtractorTypeName, typeof(WorkflowTriggerBindingExtractor).FullName);
     }
 }
