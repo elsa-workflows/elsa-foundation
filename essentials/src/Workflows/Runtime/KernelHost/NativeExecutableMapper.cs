@@ -498,20 +498,10 @@ public static class NativeExecutableMapper
                     break;
                 case WorkflowIntrinsicKind.SetOutput:
                     var outputName = LiteralText(WorkflowIntrinsicInputKeys.Name);
-                    if (source.Descriptor.SchemaVersion == WorkflowIntrinsicDescriptorSchemas.ActivityOutput)
-                    {
-                        if (scope.Graph is null)
-                            throw NativeMappingRefusedException.Activity(id, "This Set Output requires an enclosing reusable activity.");
-                        // Published Graph outputs are addressed by the pinned reference key. The authored name is display text.
-                        if (source.DescriptorPayload.ValueKind != JsonValueKind.Object ||
-                            !source.DescriptorPayload.TryGetProperty("referenceKey", out var key) ||
-                            key.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(key.GetString()))
-                            throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Name,
-                                "This Set Output has no pinned output reference. Publish the reusable activity and workflow again.");
-                        outputName = Native.Binding.Literal(key.GetString());
-                    }
-                    node.Inputs["Name"] = outputName;
-                    node.Inputs["Value"] = Input(WorkflowIntrinsicInputKeys.Value);
+                    node.Inputs[nameof(Native.SetOutput.Name)] = source.Descriptor.SchemaVersion == WorkflowIntrinsicDescriptorSchemas.ActivityOutput
+                        ? MapScopedOutput(source, node, scope)
+                        : outputName;
+                    node.Inputs[nameof(Native.SetOutput.Value)] = Input(WorkflowIntrinsicInputKeys.Value);
                     break;
                 case WorkflowIntrinsicKind.SetCorrelationId or WorkflowIntrinsicKind.SetInstanceName:
                     node.Inputs["Value"] = Input(WorkflowIntrinsicInputKeys.Value);
@@ -521,6 +511,41 @@ public static class NativeExecutableMapper
                     break;
             }
         }
+
+        private static Native.Binding MapScopedOutput(ExecutableNode source, Native.Node node, Scope scope)
+        {
+            var id = source.ExecutableNodeId;
+            if (scope.Graph is null)
+                throw NativeMappingRefusedException.Activity(id, "This Set Output requires an enclosing reusable activity.");
+
+            // Published Graph outputs are addressed by the pinned reference key. The authored name is display text.
+            var descriptor = source.DescriptorPayload;
+            if (descriptor.ValueKind != JsonValueKind.Object ||
+                !descriptor.TryGetProperty("referenceKey", out var key) ||
+                key.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(key.GetString()))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Name,
+                    "This Set Output has no pinned output reference. Publish the reusable activity and workflow again.");
+            if (!descriptor.TryGetProperty("storageDriverKey", out var driver) ||
+                driver.ValueKind != JsonValueKind.String || !driver.ValueEquals(WellKnownRuntimeDurableValueStorageDrivers.Json))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
+                    $"This Set Output requires the '{WellKnownRuntimeDurableValueStorageDrivers.Json}' storage driver. Change the reusable output's storage driver.");
+            if (!descriptor.TryGetProperty("isNullable", out var nullable) || nullable.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
+                    "This Set Output has no pinned output nullability. Publish the reusable activity and workflow again.");
+
+            var value = source.InputBindings[WorkflowIntrinsicInputKeys.Value];
+            if (UnsupportedOutputPolicy(value.EffectivePolicy) || value.Literal is { } literal && UnsupportedOutputPolicy(literal.Policy))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
+                    "This Set Output cannot preserve its value's protection policy. Bind a value that can be stored inline.");
+
+            if (!nullable.GetBoolean())
+                node.Inputs[nameof(Native.SetOutput.RejectNull)] = Native.Binding.Literal(true);
+            return Native.Binding.Literal(key.GetString());
+        }
+
+        private static bool UnsupportedOutputPolicy(ValueProtectionPolicy policy) =>
+            policy.HidesValue() || policy.RedactionMode is not null || policy.RetentionPolicy is not null ||
+            policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom;
 
         // ---- inputs, captures ------------------------------------------------------------------------------------
 

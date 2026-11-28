@@ -207,8 +207,26 @@ public sealed class MappingStructureTests
         Assert.Contains("enclosing reusable activity", refusal.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("elsa.other", false, null, null, "storage driver")]
+    [InlineData(WellKnownRuntimeDurableValueStorageDrivers.Json, true, null, null, "protection policy")]
+    [InlineData(WellKnownRuntimeDurableValueStorageDrivers.Json, false, "hidden", null, "protection policy")]
+    [InlineData(WellKnownRuntimeDurableValueStorageDrivers.Json, false, null, "retained", "protection policy")]
+    public void A_scoped_set_output_refuses_unsupported_storage_or_protection(string driver, bool sensitive, string? redaction, string? retention, string reason)
+    {
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
+            isSensitive: sensitive, redactionMode: redaction, retentionPolicy: retention);
+        var executable = Executable(Sequence("root", Graph("approve", out _, outputDriver: driver, outputPolicy: policy)), Variable("v-out", "out"));
+
+        var refusal = Assert.Throws<NativeMappingRefusedException>(() => NativeExecutableMapper.Map(executable));
+
+        Assert.Equal("body-output", refusal.Node);
+        Assert.Contains(reason, refusal.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>A placed reusable activity: its boundary declares an input, a variable, two outputs and an outcome mapping.</summary>
-    internal static ExecutableNode Graph(string id, out string body, string? assignedOutputReference = "result")
+    internal static ExecutableNode Graph(string id, out string body, string? assignedOutputReference = "result", bool isNullable = false,
+        RuntimeInputBinding? amount = null, string outputDriver = WellKnownRuntimeDurableValueStorageDrivers.Json, ValueProtectionPolicy? outputPolicy = null)
     {
         body = "body";
         var descriptor = new
@@ -225,14 +243,15 @@ public sealed class MappingStructureTests
         };
         var bodyNode = Sequence("body",
             Set("body-set", "v-total", Request("value", "amount")),
-            ScopedSetOutput(assignedOutputReference, VariableRead("value", "v-total")));
-        return Node(id, "Acme.Approve", [Literal("amount", 7, "Int32")], slots: [Slot("activity-graph", bodyNode)],
+            ScopedSetOutput(assignedOutputReference, VariableRead("value", "v-total", policy: outputPolicy), isNullable, outputDriver));
+        return Node(id, "Acme.Approve", [amount ?? Literal("amount", 7, "Int32")], slots: [Slot("activity-graph", bodyNode)],
             captures: [Capture("result", "out")], descriptorType: "elsa.graph-activity", descriptor: descriptor);
     }
 
-    private static ExecutableNode ScopedSetOutput(string? referenceKey, RuntimeInputBinding value) =>
+    private static ExecutableNode ScopedSetOutput(string? referenceKey, RuntimeInputBinding value, bool isNullable = false,
+        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json) =>
         new("body-output", "body-output", "elsa.intrinsic.setoutput", "1.0.0", WellKnownRuntimeActivityConsumers.Intrinsic,
-            JsonSerializer.SerializeToElement(new { kind = "SetOutput", referenceKey }),
+            JsonSerializer.SerializeToElement(new { kind = "SetOutput", referenceKey, storageDriverKey, isNullable }),
             new Dictionary<string, RuntimeInputBinding>
             {
                 [WorkflowIntrinsicInputKeys.Name] = Literal(WorkflowIntrinsicInputKeys.Name, "Published Result", "String"),

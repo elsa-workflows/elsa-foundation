@@ -10,7 +10,7 @@ internal sealed partial class Burst
         switch (activity)
         {
             case SetOutput output:
-                Output(frame, output.Name, output.Value);
+                Output(frame, output.Name, output.Value, output.RejectNull);
                 return true;
             case SetCorrelationId correlation:
                 Label(frame, NativeLabels.CorrelationId, correlation.Value);
@@ -29,7 +29,7 @@ internal sealed partial class Burst
     }
 
     // A workflow output is a field of the workflow's output object; inside a GraphActivity's body, an output of the boundary.
-    private void Output(Frame frame, string name, JsonNode? value)
+    private void Output(Frame frame, string name, JsonNode? value, bool rejectNull)
     {
         if (Boundary(frame) is { } boundary)
         {
@@ -37,6 +37,11 @@ internal sealed partial class Burst
             if (graph.Outputs.FirstOrDefault(o => o.Name == name) is not { Value: null })
             {
                 Fail(frame, new ActivityFault("activity.graph.output-unassignable", $"Set Output '{frame.Node}' names '{name}', which GraphActivity '{boundary.Node}' does not declare as an output to assign."));
+                return;
+            }
+            if (rejectNull && value is null)
+            {
+                Fail(frame, new ActivityFault("activity.graph.output-null", $"Activity output '{name}' does not accept null."));
                 return;
             }
             var state = Values.To<GraphState>(boundary.State)!;

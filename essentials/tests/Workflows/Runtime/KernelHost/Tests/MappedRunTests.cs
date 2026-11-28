@@ -33,6 +33,34 @@ public sealed class MappedRunTests
         Assert.Equal("order-42", turn.Labels[Native.NativeLabels.CorrelationId]);
     }
 
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(false, 7)]
+    [InlineData(true, null)]
+    public async Task A_scoped_set_output_enforces_nullability_on_the_evaluated_value(bool isNullable, int? amount)
+    {
+        var graph = MappingStructureTests.Graph("approve", out _, isNullable: isNullable, amount: Request("amount", "amount"));
+        var root = Sequence("root", graph, SetOutput("approved", "approved", VariableRead("value", "v-out")),
+            SetOutput("legacy", "legacy", Literal("value", null)));
+        var workflow = NativeExecutableMapper.Map(Executable(root, Variable("v-out", "out")));
+
+        var turn = await NativeTurn.StartAsync(workflow, input: new JsonObject { ["amount"] = amount is { } value ? JsonValue.Create(value) : null });
+
+        if (!isNullable && amount is null)
+        {
+            Assert.Equal(Contract.ActorStatus.Faulted, turn.Status);
+            Assert.Equal("activity.graph.output-null", turn.Output?["Code"]?.GetValue<string>());
+            return;
+        }
+
+        Assert.Equal(Contract.ActorStatus.Finished, turn.Status);
+        var output = Assert.IsType<JsonObject>(turn.Output);
+        Assert.True(output.TryGetPropertyValue("approved", out var assigned));
+        Assert.Equal(amount, assigned?.GetValue<int>());
+        Assert.True(output.TryGetPropertyValue("legacy", out var legacy));
+        Assert.Null(legacy);
+    }
+
     [Fact]
     public async Task Console_activities_write_to_their_own_model_output()
     {

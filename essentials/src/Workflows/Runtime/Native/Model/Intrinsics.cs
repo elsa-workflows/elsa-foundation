@@ -20,6 +20,9 @@ public sealed class SetOutput : ActivityBase
 {
     [Input] public string Name { get; set; } = "";
     [Input] public JsonNode? Value { get; set; }
+
+    /// <summary>Whether the pinned reusable activity output disallows null.</summary>
+    [Input] public bool RejectNull { get; set; }
 }
 
 /// <summary>The old core's Set Correlation Id: the instance's correlation id, a string, or null to clear it.</summary>
