@@ -60,7 +60,7 @@ Elsa.Workflows.Runtime.KernelApi
 Elsa.Workflows.Runtime.KernelHost
 Elsa.Workflows.Runtime.KernelHosting
 Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore
-Elsa.Workflows.Runtime.Scheduling
+Elsa.Workflows.Runtime.Scheduling.Prepared
 
 # EF provider archives satisfy the curated modules’ runtime capability requests.
 @sqlite

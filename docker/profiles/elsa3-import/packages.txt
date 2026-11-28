@@ -45,7 +45,7 @@ Elsa.Workflows.Runtime.KernelApi
 Elsa.Workflows.Runtime.KernelHost
 Elsa.Workflows.Runtime.KernelHosting
 Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore
-Elsa.Workflows.Runtime.Scheduling
+Elsa.Workflows.Runtime.Scheduling.Prepared
 Elsa3.Activities.Design.Import
 Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore
 Elsa3.Activities.Design.Import.Publishing
