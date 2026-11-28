@@ -427,7 +427,8 @@ public sealed partial class StimulusDeliveryStoreTests
             var evidence = new NativeIngressTargetEvidence(queue, executions, Clock, executables: artifacts);
             IRuntimeIngressDeliveryStore ingress = Context is null
                 ? new InMemoryRuntimeIngressDeliveryStore(resources, outbox, authority, artifacts, references, executions, roots, access, Clock, evidence)
-                : new EfRuntimeIngressDeliveryStore(Context, resources, outbox, authority, artifacts, references, executions, roots, access, Clock, evidence);
+                : new EfRuntimeIngressDeliveryStore(Context, resources, outbox, authority, artifacts, references, roots, access, Clock,
+                    new EfLegacyRuntimeIngress(Context, resources, outbox, artifacts, executions, access, Clock, evidence));
             IWorkflowTriggerBindingStore bindings = Context is null ? managementBindings : new EfWorkflowTriggerBindingStore(Context, access);
             IWorkflowActivationSwitch activationSwitch = Context is null ? new InMemoryWorkflowActivationSwitch(authority, references, Clock, memory, access, bindings)
                 : new EfWorkflowActivationSwitch(authority, bindings, references, access, Clock);

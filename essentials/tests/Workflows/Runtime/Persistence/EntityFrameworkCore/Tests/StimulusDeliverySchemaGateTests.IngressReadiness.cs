@@ -70,8 +70,9 @@ public sealed partial class StimulusDeliverySchemaGateTests
         var resources = new EfStandaloneTriggerStore(context, access, clock);
         var queue = new EfSchedulerWorkQueueStore(context, access, new NoTokens());
         var evidence = new NativeIngressTargetEvidence(queue, executions, clock, executables: materials);
-        var ingress = new EfRuntimeIngressDeliveryStore(context, resources, outbox, slots, materials, references, executions,
-            roots, access, clock, evidence);
+        var legacy = new EfLegacyRuntimeIngress(context, resources, outbox, materials, executions, access, clock, evidence);
+        var ingress = new EfRuntimeIngressDeliveryStore(context, resources, outbox, slots, materials, references,
+            roots, access, clock, legacy);
         var material = new WorkflowExecutable(new("readiness-material", "material-owner", "material-version", "1", "hash"),
             new ExecutableNode("node", "authored", "test/activity", "1.0.0", new RuntimeActivityDescriptor("test", "1.0.0", JsonSerializer.SerializeToElement(new { })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
