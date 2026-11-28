@@ -262,6 +262,11 @@ internal sealed partial class Elsa3ActivityNormalizer(
             // on (#6231): its listed children and the activities its properties embed are visited for their own findings.
             Error(plan, nodePlan, failure.Code, failure.Message, failure.Guidance, failure.Metadata);
             LiftEmbeddedChildren(plan, nodePlan, childPaths);
+            // Without a contract the node's variables are read as Elsa 3 container variables, so its children's reads
+            // of them resolve and the variables' own findings are reported.
+            ReadContainerVariables(
+                new Elsa3RewriteContext(plan, nodePlan, resolver, ResolveType, (json, path) => ReadChild(plan, nodePlan, json, path, childPaths)),
+                unresolved: true);
         }
         else
         {
@@ -1086,9 +1091,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
     /// <summary>
     /// A container's own variables (Sequence, Flowchart) go into its native structure, scoped to the container (R7).
     /// </summary>
-    private void ReadContainerVariables(Elsa3RewriteContext context)
+    private void ReadContainerVariables(Elsa3RewriteContext context, bool unresolved = false)
     {
-        if (context.Node.Resolved?.Entry?.FindMember("Variables") is not { Rule: Elsa3MemberRuleKind.Structure } ||
+        if (!unresolved && context.Node.Resolved?.Entry?.FindMember("Variables") is not { Rule: Elsa3MemberRuleKind.Structure } ||
             !context.TryGetProperty("Variables", out var property, out var variables) ||
             variables.ValueKind != JsonValueKind.Array)
             return;

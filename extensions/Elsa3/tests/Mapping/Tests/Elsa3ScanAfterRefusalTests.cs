@@ -125,6 +125,51 @@ public sealed class Elsa3ScanAfterRefusalTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Path == "$.root.activities[0].body.text.expression.value");
     }
 
+    /// <summary>
+    /// The variables an unmapped container declares are read as an Elsa 3 container's are, so its children's reads of
+    /// them get the findings a mapped container's children get, and nothing more.
+    /// </summary>
+    [Theory]
+    [InlineData("memory-reference")]
+    [InlineData("liquid")]
+    [InlineData("javascript")]
+    public async Task A_child_reading_its_unmapped_containers_variable_is_reported_as_under_a_mapped_container(string form)
+    {
+        var unmapped = await ConvertContainerAsync("Acme.Container", form);
+        var mapped = await ConvertContainerAsync("Elsa.Sequence", form);
+
+        Assert.False(unmapped.Succeeded);
+        Assert.Equal(
+            ErrorCodes(mapped).Append(Elsa3ActivityDiagnosticCodes.UnmappedType).Order(StringComparer.Ordinal),
+            ErrorCodes(unmapped).Order(StringComparer.Ordinal));
+
+        static IEnumerable<string> ErrorCodes(Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition> result) =>
+            result.Diagnostics.Where(diagnostic => diagnostic.IsError).Select(diagnostic => diagnostic.Code);
+    }
+
+    [Fact]
+    public async Task An_unmapped_containers_variables_are_in_the_inventory()
+    {
+        var result = await ConvertContainerAsync("Acme.Container", "memory-reference", variableType: "Acme.Order");
+
+        var notice = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
+        Assert.Equal("Acme.Order", notice.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertContainerAsync(string type, string form, string variableType = "String")
+    {
+        var text = form switch
+        {
+            "liquid" => Expression("Liquid", "{{ Variables.Counter }}"),
+            "javascript" => Expression("JavaScript", "getCounter()"),
+            _ => Captured("counter", "String")
+        };
+        var container = Activity("container", type,
+            ("variables", JsonSerializer.SerializeToElement(new[] { new { id = "counter", name = "Counter", typeName = variableType } })));
+        container.Activities = [Activity("child", "Elsa.WriteLine", ("text", text))];
+        return ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", container)));
+    }
+
     [Fact]
     public async Task An_object_literal_shaped_like_an_activity_is_data_not_a_child()
     {
