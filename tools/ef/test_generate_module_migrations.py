@@ -18,10 +18,14 @@ class RetainedMigrationGeneratorTests(unittest.TestCase):
         shutil.copyfile(Path(__file__).with_name("generate-module-migrations.sh"), scripts / "generate-module-migrations.sh")
         (scripts / "strip-provider-calls.sh").write_text("#!/bin/bash\nexit 0\n")
         self.originals = {}
-        for module in ("Runtime", "WorkflowsDesign"):
-            assembly = {"Runtime": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-                        "WorkflowsDesign": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore"}[module]
-            base = self.root / "essentials/src" / module / "Persistence/EntityFrameworkCore"
+        self.owners = {
+            "Runtime": ("Workflows/Runtime/Persistence/Schema/EntityFrameworkCore",
+                        "Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore"),
+            "WorkflowsDesign": ("Workflows/Design/Persistence/EntityFrameworkCore",
+                                "Elsa.Workflows.Design.Persistence.EntityFrameworkCore"),
+        }
+        for module, (directory, assembly) in self.owners.items():
+            base = self.root / "essentials/src" / directory
             base.mkdir(parents=True)
             (base / (assembly + ".csproj")).write_text("<Project />")
             for provider in ("Sqlite", "SqlServer", "PostgreSql", "MySql"):
@@ -42,7 +46,7 @@ printf '%s\\n' "$*" >> "$ELSA_GENERATOR_TEST_LOG"
 if [[ "${1:-}" == "run" ]]; then
   for module in Runtime WorkflowsDesign; do
     case "$module" in
-      Runtime) assembly=Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;;
+      Runtime) assembly="$ELSA_GENERATOR_RUNTIME_OWNER";;
       *) assembly=Elsa.Workflows.Design.Persistence.EntityFrameworkCore;;
     esac
     for provider in Sqlite SqlServer PostgreSql MySql; do
@@ -54,6 +58,7 @@ fi
         dotnet.chmod(0o755)
         self.log = self.root / "calls.txt"
         self.environment = {**os.environ, "PATH": str(shim) + os.pathsep + os.environ["PATH"],
+                            "ELSA_GENERATOR_RUNTIME_OWNER": self.owners["Runtime"][1],
                             "ELSA_GENERATOR_TEST_LOG": str(self.log)}
 
     def run_generator(self, *arguments):
@@ -84,6 +89,8 @@ fi
         additions = [line for line in self.log.read_text().splitlines() if line.startswith("ef migrations add")]
         self.assertEqual(4, len(additions))
         self.assertTrue(all("migrations add NextAddition --context " + context in line for line in additions))
+        directory, assembly = self.owners[context]
+        self.assertTrue(all(f"--project essentials/src/{directory}/{assembly}.csproj" in line for line in additions))
         self.assertTrue(all("--startup-project tools/ef/Elsa.EntityFrameworkCore.Tooling/" in line for line in additions))
 
     def test_invalid_incremental_names_refuse_before_invoking_any_tool(self):
