@@ -127,6 +127,9 @@ internal static class EfRuntimeOperationalStoreSupport
     public static string Encode(string value) => EfRelationalIdentity.Encode(value);
     public static string Decode(string value) => EfRelationalIdentity.Decode(value);
     public static string Hash(string value) => EfRelationalIdentity.Hash(value);
+
+    internal static string ExecutionStateRowId(string scope, string executionId) =>
+        Hash($"workflow-execution:{scope.Length}:{scope}{executionId.Length}:{executionId}");
     public static string Order(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeOperationalStateEfModule.IdentityMaximumLength));
 
     /// <summary>

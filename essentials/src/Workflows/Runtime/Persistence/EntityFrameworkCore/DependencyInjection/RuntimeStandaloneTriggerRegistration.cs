@@ -49,13 +49,10 @@ internal static class RuntimeStandaloneTriggerRegistration
                 var context = provider.GetRequiredService<RuntimeDbContext>();
                 var access = provider.GetRequiredService<IPersistenceAccessContextAccessor>();
                 var time = provider.GetRequiredService<TimeProvider>();
-                // These reads preserve execution identity and material-retention fences in the shared database.
-                var executions = new EfWorkflowExecutionStateStore(context, access,
-                    provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>(), time);
                 return new EfRuntimeIngressDeliveryStore(context, provider.GetRequiredService<IStandaloneTriggerStore>(),
                     provider.GetRequiredService<IRuntimePostCommitOutboxStore>(), provider.GetRequiredService<IWorkflowActivationAuthority>(),
                     provider.GetRequiredService<IWorkflowExecutableStore>(), provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
-                    executions, provider.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>(), access, time,
+                    legacyExecutions: null, provider.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>(), access, time,
                     schedules: provider.GetService<IRecurringTriggerScheduleStore>(),
                     preparedStarts: provider.GetService<IRuntimePreparedStartAttemptProof>(),
                     preparedTarget: provider.GetService<IRuntimePreparedStandaloneRecipient>());

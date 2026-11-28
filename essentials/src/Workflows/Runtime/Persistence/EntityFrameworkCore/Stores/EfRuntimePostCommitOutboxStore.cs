@@ -102,20 +102,26 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
     }
 
     bool IStimulusDeliveryStore.CanRetainExecutables(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
-        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions)
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions) =>
+        ReferenceEquals(outbox, this) && executions is EfWorkflowExecutionStateStore states &&
+        ReferenceEquals(states.Context, context) && CanRetainExecutableFamily(executables, references, states);
+
+    internal bool CanRetainPreparedExecutables(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references) =>
+        PreparedStandaloneOnly && CanRetainExecutableFamily(executables, references);
+
+    private bool CanRetainExecutableFamily(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references,
+        EfWorkflowExecutionStateStore? legacyExecutions = null)
     {
-        if (!ReferenceEquals(outbox, this) || executables?.GetMaterialStore() is not EfWorkflowExecutableStore material ||
+        if (executables?.GetMaterialStore() is not EfWorkflowExecutableStore material ||
             references is not EfWorkflowExecutableSourceReferenceStore selectedReferences ||
-            executions is not EfWorkflowExecutionStateStore states ||
             retentionReferences is null || retentionLeases is null ||
-            !ReferenceEquals(material.Context, context) || !ReferenceEquals(selectedReferences.Context, context) ||
-            !ReferenceEquals(states.Context, context)) return false;
+            !ReferenceEquals(material.Context, context) || !ReferenceEquals(selectedReferences.Context, context)) return false;
         try
         {
             var scope = accessContextAccessor.Current.RequireScope();
             return material.AccessContext.RequireScope() == scope && selectedReferences.AccessContext.RequireScope() == scope &&
                    retentionReferences.AccessContext.RequireScope() == scope &&
-                   states.AccessContext.RequireScope() == scope;
+                   (legacyExecutions is null || legacyExecutions.AccessContext.RequireScope() == scope);
         }
         catch (InvalidOperationException) { return false; }
         catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))

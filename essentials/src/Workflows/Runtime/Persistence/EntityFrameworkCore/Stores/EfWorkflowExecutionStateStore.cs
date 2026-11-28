@@ -984,7 +984,7 @@ public sealed class EfWorkflowExecutionStateStore(
     // Length framing makes the composite identity unambiguous; EfRelationalIdentity hashes the
     // UTF-16 code units directly so distinct opaque values (including lone surrogates) remain distinct.
     // The checkpoint staging seam must use the same framed identity as direct workflow-execution persistence.
-    internal static string CreateId(string scope, string id) => Hash($"workflow-execution:{scope.Length}:{scope}{id.Length}:{id}");
+    internal static string CreateId(string scope, string id) => EfRuntimeOperationalStoreSupport.ExecutionStateRowId(scope, id);
     private static long NewRevision() { Span<byte> bytes = stackalloc byte[8]; RandomNumberGenerator.Fill(bytes); var result = BitConverter.ToInt64(bytes) & (long.MaxValue >> 1); return result == 0 ? 1 : result; }
     private static WorkflowExecutionStateEntityFrameworkPersistenceException Normalize(string action, string id, Exception exception) =>
         new(action, id, $"EF workflow execution state {action} failed for '{id}'.", exception);
