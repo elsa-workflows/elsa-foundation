@@ -82,7 +82,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         ("R26-R28", typeof(IWorkflowActivationSwitch), typeof(EfWorkflowActivationSwitch))
     ];
 
-    public static TheoryData<string> Compositions => ["aggregate only", "runtime root first", "runtime root after"];
+    public static TheoryData<string> Compositions => ["aggregate only", "runtime root first", "runtime root after", "publication first", "publication after"];
 
     [Theory]
     [MemberData(nameof(Compositions))]
@@ -421,9 +421,13 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         var services = new ServiceCollection();
         if (composition == "runtime root first")
             services.AddWorkflowRuntime();
+        if (composition == "publication first")
+            WorkflowPublicationDefaults.Add(services);
         services.AddRuntimeEntityFrameworkCore(Options());
         if (composition == "runtime root after")
             services.AddWorkflowRuntime();
+        if (composition == "publication after")
+            WorkflowPublicationDefaults.Add(services);
         return services;
     }
 

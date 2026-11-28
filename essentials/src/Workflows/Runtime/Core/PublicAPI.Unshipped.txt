@@ -13249,6 +13249,7 @@ static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator 
 static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator ==(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? left, Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? right) -> bool
 Elsa.Workflows.Runtime.Core.Constants.RuntimeIncidentFailureTypes
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeIncidentFailureTypes.SchedulerWorkPoisoned = "SchedulerWorkPoisoned" -> string!
+const Elsa.Workflows.Runtime.Core.Models.RuntimeOutputCapture.WorkflowVariableValueIdPrefix = "variable:" -> string!
 Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>
 Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>.FencedClaimLease(Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim!>! renew, System.TimeSpan visibilityTimeout, System.TimeProvider! timeProvider) -> void
 Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>.RunAsync<TResult>(TClaim! claim, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<TResult>>! sideEffect, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim!, TResult>!>
