@@ -85,6 +85,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootAttachedTestRunQualification => new(3, 136, 1);
     internal static StoreFormat RootHeldEphemeralHttpQualification => new(3, 138, 1);
     internal static StoreFormat RootRetainedResponseQualification => new(3, 139, 1);
+    internal static StoreFormat RootPreparedWaitQualification => new(3, 141, 1);
     internal bool SupportsIsolatedInlineQualification =>
         this == RootEphemeralTestRunQualification || SupportsAttachedTestRunQualification;
     internal bool SupportsAttachedTestRunQualification =>
@@ -155,7 +156,8 @@ internal enum RootCapabilities : long
     PublicEventHost = 1L << 44,
     PagedPublicEvents = 1L << 45,
     HeldEphemeralHttpTestRuns = 1L << 46,
-    RetainedRootResponse = 1L << 47
+    RetainedRootResponse = 1L << 47,
+    PreparedWaitDelivery = 1L << 49
 }
 
 internal static class RootProfiles
@@ -194,6 +196,7 @@ internal static class RootProfiles
         RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns;
     internal const RootCapabilities Shipped = Shipped37;
     internal const RootCapabilities RetainedResponseQualification = Shipped37 | RootCapabilities.RetainedRootResponse;
+    internal const RootCapabilities PreparedWaitQualification = RetainedResponseQualification | RootCapabilities.PreparedWaitDelivery;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
         RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
@@ -498,6 +501,8 @@ internal static class StoreDefinitionsRevision
     private const int PostgreSqlShippedRevision = 31;
     private const int SqliteShippedRevision = 34;
     private const int PostgreSqlRetainedResponseRevision = 32;
+    private const int PostgreSqlPreparedWaitRevision = 34;
+    private const int SqlitePreparedWaitRevision = 37;
     private const int SqliteRetainedResponseRevision = 35;
     private const int PostgreSqlDirectTestRunRevision = 20;
     private const int SqliteDirectTestRunRevision = 23;
@@ -577,6 +582,8 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootShipped => sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
                 _ when db.RequiredFormat == StoreFormat.RootRetainedResponseQualification =>
                     sqlite ? SqliteRetainedResponseRevision : PostgreSqlRetainedResponseRevision,
+                _ when db.RequiredFormat == StoreFormat.RootPreparedWaitQualification =>
+                    sqlite ? SqlitePreparedWaitRevision : PostgreSqlPreparedWaitRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPublicEventStartsQualification => sqlite ? 30 : 27,
                 // The private Test Run selector keeps the pre-activation provider definitions.
                 _ when db.RequiredFormat == StoreFormat.RootDirectTestRunQualification =>

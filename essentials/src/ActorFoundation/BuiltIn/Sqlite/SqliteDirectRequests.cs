@@ -109,6 +109,10 @@ public static partial class SqliteEmbeddedHosting
             string issuance, string key, CancellationToken token) =>
             admission.ReadRetainedRootResponseAsync(scope, actor, issuance, key, token);
 
+        internal Task<PreparedWaitReceipt> DeliverPreparedWaitsAsync(Contract.BoundScope scope, string operation, string sourceDigest,
+            IReadOnlyList<PreparedWaitDelivery> deliveries, bool allowNew, CancellationToken token) =>
+            admission.DeliverPreparedWaitsAsync(scope, operation, sourceDigest, deliveries, allowNew, token);
+
         internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
             CancellationToken token) => admission.HasAcceptedPreparedStartAsync(scope, actor, issuance, token);
 
@@ -282,6 +286,11 @@ public static partial class SqliteEmbeddedHosting
                 string issuance, string key, CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
                     (admission, ct) => admission.ReadRetainedRootResponseAsync(scope, actor, issuance, key, ct), token), token);
+
+            internal Task<PreparedWaitReceipt> DeliverPreparedWaitsAsync(Contract.BoundScope scope, string operation, string sourceDigest,
+                IReadOnlyList<PreparedWaitDelivery> deliveries, bool allowNew, CancellationToken token) =>
+                WriteAsync(scope.Tenant, RootAdmissionKind.Input, (admission, attempt, ct) =>
+                    admission.DeliverPreparedWaitsAsync(scope, operation, sourceDigest, deliveries, allowNew, attempt, ct), token);
 
             internal Task<bool> HasAcceptedPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
                 CancellationToken token) =>

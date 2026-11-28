@@ -474,6 +474,8 @@ public sealed partial class EfStore
             foreach (var playback in SqlitePlaybackDefinitions(db.UsesRootPlaybackDescendants)) yield return playback;
         if (db.UsesRootTerminalOutput) yield return SqliteRootTerminalOutputDefinition();
         if (db.UsesRetainedRootResponse) yield return SqliteRetainedRootResponseDefinition();
+        if (db.UsesPreparedWaitDelivery)
+            yield return Table(RootEventAdmission.PreparedWaitReceiptTable, RootEventAdmission.PreparedWaitReceiptColumns(sqlite: true));
         foreach (var outcome in SqliteRootOutcomes(db)) yield return outcome;
     }
 

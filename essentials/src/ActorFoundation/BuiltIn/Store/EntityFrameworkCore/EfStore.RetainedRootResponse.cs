@@ -50,7 +50,6 @@ public sealed partial class EfStore
 
     internal static async Task InstallRetainedRootResponsesAsync(KernelDb db, bool createAuthority, CancellationToken token)
     {
-        var transaction = db.Database.CurrentTransaction ?? throw new InvalidOperationException("Retained response definitions require the install transaction.");
         if (createAuthority)
             await db.Database.ExecuteSqlRawAsync(PostgresRetainedResponseTable("FoundationRootResponses"), token);
         var format = db.RequiredFormat;
@@ -61,14 +60,21 @@ public sealed partial class EfStore
             """, token);
         await RequirePostgresRetainedRootResponsesAsync(db, token);
 
-        const string savepoint = "kernel_retained_response_definition";
-        var twin = "FoundationRootResponses_" + Guid.NewGuid().ToString("N");
+        await RequirePostgresTableDefinitionsAsync(db, "FoundationRootResponses", PostgresRetainedResponseTable, token);
+    }
+
+    internal static async Task RequirePostgresTableDefinitionsAsync(KernelDb db, string installed,
+        Func<string, string> definition, CancellationToken token)
+    {
+        var transaction = db.Database.CurrentTransaction ?? throw new InvalidOperationException("Definition verification requires the install transaction.");
+        const string savepoint = "kernel_root_table_definition";
+        var twin = installed + "_" + Guid.NewGuid().ToString("N");
         await transaction.CreateSavepointAsync(savepoint, token);
-        await db.Database.ExecuteSqlRawAsync(PostgresRetainedResponseTable(twin), token);
+        await db.Database.ExecuteSqlRawAsync(definition(twin), token);
         var same = await db.Database.SqlQuery<bool>($"""
             WITH pair(expected, installed) AS (
                 VALUES (pg_catalog.to_regclass(pg_catalog.quote_ident({twin})),
-                        pg_catalog.to_regclass('"FoundationRootResponses"'))
+                        pg_catalog.to_regclass(pg_catalog.quote_ident({installed})))
             ), shape AS (
                 SELECT relation.oid, relation.relnamespace, relation.relhasrules,
                     array(SELECT ROW(a.attnum, a.attname, a.atttypid, a.attnotnull, a.attcollation, a.atttypmod, a.attidentity,
@@ -93,7 +99,7 @@ public sealed partial class EfStore
             AS "Value"
             """).SingleAsync(token);
         await transaction.RollbackToSavepointAsync(savepoint, token);
-        if (!same) throw new StoreFormatException("The installed PostgreSQL retained root response definitions differ from the selected profile.");
+        if (!same) throw new StoreFormatException($"The installed PostgreSQL {installed} definitions differ from the selected profile.");
     }
 
     private static async Task RequirePostgresRetainedRootResponsesAsync(KernelDb db, CancellationToken token)
