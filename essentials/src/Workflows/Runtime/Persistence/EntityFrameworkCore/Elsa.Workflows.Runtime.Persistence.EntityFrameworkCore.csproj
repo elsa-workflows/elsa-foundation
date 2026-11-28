@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHost.Tests" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
