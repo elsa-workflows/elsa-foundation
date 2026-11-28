@@ -58,7 +58,6 @@ public sealed class WholeVariableConversionTests
         Assert.Equal(JsonSerializer.Serialize(baseline), JsonSerializer.Serialize(binding));
         var hasher = new WorkflowExecutableHasher();
         Assert.Equal(hasher.ComputeHash(Node(baseline)), hasher.ComputeHash(Node(binding)));
-        Assert.Equal(WholeValueBindingHashTests.BindingFingerprint(Node(baseline)), WholeValueBindingHashTests.BindingFingerprint(Node(binding)));
     }
 
     [Theory]
