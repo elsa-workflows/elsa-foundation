@@ -313,13 +313,15 @@ export function readWrappedInputValue(value: unknown, descriptor: StudioActivity
     };
   }
 
+  // An unset input presents its descriptor default the way a stored value is presented, so a structured default on a
+  // scalar input (Run JavaScript Arguments, a JsonElement defaulting to `{}`) shows as Object JSON, not `[object Object]`.
   const fallback = {
     type: descriptor.defaultSyntax || "Literal",
     value: value ?? descriptor.defaultValue ?? ""
   };
   return {
     typeName: descriptor.typeName,
-    expression: secretOnly ? secretOnlyExpression(fallback) : fallback
+    expression: secretOnly ? secretOnlyExpression(fallback) : resolveAuthoredExpression(fallback, descriptor)
   };
 }
 

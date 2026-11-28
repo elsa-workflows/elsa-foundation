@@ -701,6 +701,44 @@ describe("structured Literal on a scalar input on read", () => {
   });
 });
 
+// An unset input reads its descriptor default. Run JavaScript Arguments is a JsonElement defaulting to `{}`, which the
+// scalar text field showed as "[object Object]" (#5373); it is presented as Object JSON like a stored Literal object.
+describe("structured default on an unset scalar input", () => {
+  const argumentsInput: StudioActivityInputDescriptor = {
+    name: "Arguments",
+    referenceKey: "Arguments",
+    typeName: "System.Text.Json.JsonElement",
+    isWrapped: true,
+    defaultSyntax: "Literal",
+    defaultValue: {}
+  };
+
+  it("presents an empty object default as Object JSON text", () => {
+    expect(readWrappedInput(activity("script"), argumentsInput).expression).toEqual({ type: "Object", value: "{}" });
+  });
+
+  it("presents an object default with members as readable JSON keeping value types", () => {
+    const input = { ...argumentsInput, defaultValue: { name: "Ada", count: 2, active: true, tags: ["a"], none: null } };
+    const expression = readWrappedInput(activity("script"), input).expression;
+    expect(expression.type).toBe("Object");
+    expect(JSON.parse(expression.value as string)).toEqual({ name: "Ada", count: 2, active: true, tags: ["a"], none: null });
+  });
+
+  it("stays Object after an edit in the Object editor, holding the parsed JSON", () => {
+    const edited = withLiteralValue(readWrappedInput(activity("script"), argumentsInput), { customer: { id: 7 } });
+    expect(edited.expression).toEqual({ type: "Object", value: { customer: { id: 7 } } });
+  });
+
+  it("leaves scalar, list and dictionary defaults alone", () => {
+    expect(readWrappedInput(activity("script"), { ...argumentsInput, typeName: "System.String", defaultValue: "hi" }).expression)
+      .toEqual({ type: "Literal", value: "hi" });
+    expect(readWrappedInput(activity("script"), { ...argumentsInput, typeName: "System.String", collectionKind: "List", defaultValue: ["GET"] } as StudioActivityInputDescriptor).expression)
+      .toEqual({ type: "Literal", value: ["GET"] });
+    expect(readWrappedInput(activity("script"), { ...argumentsInput, typeName: "System.String", collectionKind: "Dictionary", defaultValue: { a: "1" } } as StudioActivityInputDescriptor).expression)
+      .toEqual({ type: "Literal", value: { a: "1" } });
+  });
+});
+
 describe("secret-only input values", () => {
   const secretOnly: StudioActivityInputDescriptor = {
     name: "Authorization",
