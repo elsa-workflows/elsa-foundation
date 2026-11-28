@@ -38,7 +38,7 @@ namespace Elsa.Workflows.Runtime.Services.Incidents;
 public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDrainObserver
 {
     /// <summary>The <see cref="IncidentState.FailureType"/> of incidents projected from poison records.</summary>
-    public const string IncidentFailureType = "SchedulerWorkPoisoned";
+    public const string IncidentFailureType = RuntimeIncidentFailureTypes.SchedulerWorkPoisoned;
 
     private readonly IWorkflowSchedulerPoisonStore _poisonStore;
     private readonly IIncidentStateStore _incidentStateStore;
