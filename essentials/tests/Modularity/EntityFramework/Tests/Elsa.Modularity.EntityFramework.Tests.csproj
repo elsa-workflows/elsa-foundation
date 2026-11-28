@@ -30,7 +30,7 @@
          migrations it is evaluated through (FR-065). -->
     <ProjectReference Include="..\..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\Artifacts\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
 </Project>

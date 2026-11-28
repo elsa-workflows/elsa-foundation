@@ -19,7 +19,7 @@ namespace Elsa.Modularity.EntityFramework.Tests;
 
 public sealed class EfPersistenceActivationContextPreparerTests
 {
-    private const string FeatureId = "WorkflowsRuntimeEntityFrameworkCore";
+    private const string FeatureId = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
     private static readonly JsonElement Empty = Json("{}");
 
     [Fact]
@@ -67,11 +67,11 @@ public sealed class EfPersistenceActivationContextPreparerTests
         var preparer = new EfPersistenceActivationContextPreparer(
             SelectedResource(),
             new FakeRuntimeFeatureCatalog(
-                new ShellFeatureDescriptor("WorkflowsRuntimeResumption"),
+                new ShellFeatureDescriptor("Tasks"),
                 new ShellFeatureDescriptor(FeatureId)
                 {
-                    StartupType = typeof(RuntimeEntityFrameworkCoreFeature),
-                    Dependencies = ["WorkflowsRuntimeResumption"]
+                    StartupType = typeof(RuntimeArtifactsEntityFrameworkCoreFeature),
+                    Dependencies = ["Tasks"]
                 },
                 new ShellFeatureDescriptor("AppFeature") { Dependencies = [FeatureId] },
                 new ShellFeatureDescriptor(nameof(EffectProbeFeature))
@@ -298,11 +298,11 @@ public sealed class EfPersistenceActivationContextPreparerTests
     private static EfPersistenceActivationContextPreparer Preparer(
         IConfiguration root, IEfToolingShellDefaults? defaults = null) =>
         new(root, new FakeRuntimeFeatureCatalog(
-                new ShellFeatureDescriptor("WorkflowsRuntimeResumption"),
+                new ShellFeatureDescriptor("Tasks"),
                 new ShellFeatureDescriptor(FeatureId)
                 {
-                    StartupType = typeof(RuntimeEntityFrameworkCoreFeature),
-                    Dependencies = ["WorkflowsRuntimeResumption"]
+                    StartupType = typeof(RuntimeArtifactsEntityFrameworkCoreFeature),
+                    Dependencies = ["Tasks"]
                 },
                 new ShellFeatureDescriptor("AppFeature") { Dependencies = [FeatureId] }),
             defaults ?? new NoHostDefaults());
@@ -382,7 +382,7 @@ public sealed class EfPersistenceActivationContextPreparerTests
     private sealed class OpaqueRuntimeHostDefaults : IEfToolingShellDefaults
     {
         public void Configure(ShellBuilder builder, IConfiguration configuration) =>
-            builder.WithFeature<RuntimeEntityFrameworkCoreFeature>(_ => throw new InvalidOperationException(
+            builder.WithFeature<RuntimeArtifactsEntityFrameworkCoreFeature>(_ => throw new InvalidOperationException(
                 "Feature configurators must not run during preflight."));
     }
 

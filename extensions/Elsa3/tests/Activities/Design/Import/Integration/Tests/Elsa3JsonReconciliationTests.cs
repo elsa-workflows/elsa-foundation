@@ -2,6 +2,7 @@
 using System.Text;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.KernelHost;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
 using Elsa3.Activities.Design.Import.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -161,16 +162,10 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
     [Fact]
     public async Task Imported_http_endpoint_answers()
     {
-        using var response = await Host.Client.PostAsync("workflows/http/elsa3/hello", new StringContent("{}", Encoding.UTF8, "application/json"));
+        using var response = await PostAsync("workflows/http/elsa3/hello");
 
-        var body = await response.Content.ReadAsStringAsync();
-        if (response.StatusCode != HttpStatusCode.OK)
-        {
-            var started = System.Text.Json.Nodes.JsonNode.Parse(body)?["started"]?.AsArray().FirstOrDefault()?.GetValue<string>();
-            var run = started is null ? null : await Host.WaitForSettledAsync(started);
-            Assert.Fail($"{(int)response.StatusCode}: {body}\n{run?.Describe()}");
-        }
-        Assert.Equal("Hello from Elsa 3", body);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Hello from Elsa 3", await response.Content.ReadAsStringAsync());
     }
 
     /// <summary>#3202: Elsa 3 saves an empty response header map; it publishes, and the response is what Elsa 3 sent.</summary>
@@ -198,12 +193,15 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
     private async Task<HttpResponseMessage> PostAsync(string path)
     {
         var response = await Host.Client.PostAsync(path, new StringContent("{}", Encoding.UTF8, "application/json"));
-        if ((int)response.StatusCode < 400)
+        if (response.IsSuccessStatusCode)
             return response;
-        var body = await response.Content.ReadAsStringAsync();
-        var started = System.Text.Json.Nodes.JsonNode.Parse(body)?["started"]?.AsArray().FirstOrDefault()?.GetValue<string>();
-        var run = started is null ? null : await Host.WaitForSettledAsync(started);
-        Assert.Fail($"{(int)response.StatusCode}: {body}\n{run?.Describe()}");
-        return response;
+        using (response)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            var run = response.Headers.TryGetValues(KernelHttpEdge.WorkflowInstanceIdHeader, out var actors)
+                ? await Host.WaitForSettledAsync(Assert.Single(actors))
+                : null;
+            throw new Xunit.Sdk.XunitException($"{(int)response.StatusCode}: {body}\n{run?.Describe()}");
+        }
     }
 }

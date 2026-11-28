@@ -211,7 +211,9 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
         KernelToolbox.Register(services);
 
         services.AddShellInitializer<PrepareKernelShell>(LifecyclePhase.Prepare, order: -100);
-        // Task startup populates the activity catalog and makes the publishing stores ready first.
+        // Prepare-phase migrations make committed slots readable before the startup tasks reconcile new publications.
+        services.AddShellInitializer<PrepareKernelPublications>(LifecyclePhase.Start, order: -1);
+        // Start the owner after the task initializer has completed.
         services.AddShellInitializer<StartKernelShell>(LifecyclePhase.Start, order: 100);
         services.AddShellTerminator<StopKernelShell>(LifecyclePhase.Start, order: 100);
     }

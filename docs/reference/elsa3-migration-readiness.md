@@ -96,7 +96,8 @@ with **Dispatch Workflow** or **Execute Workflow** instead; otherwise that calle
 
 - The import keeps the Elsa 3 definition id as the Elsa 4 workflow definition id, so the dispatching activity's
   definition id stays as it is.
-- Publish the called workflow before the caller.
+- Publish the called workflow before the caller. On the Actor host, turn on **Cancel child on parent cancellation**
+  in the imported caller before publishing. The imported classic setting leaves it off and the Actor host refuses it.
 - Execute Workflow becomes a durable dispatch in Elsa 4 rather than an in-process call
   (`ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE`); review whether the caller depends on in-process behaviour.
 - **Outputs do not carry over.** A captured Execute Workflow result is refused (`ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`),

@@ -78,7 +78,7 @@ public sealed class StandaloneTriggerRouteObserverTests
         {
             Routes = new RouteTable(cache, NullLogger<RouteTable>.Instance);
             var services = new ServiceCollection().AddLogging();
-            new WorkflowsRuntimeHttpFeature().ConfigureServices(services);
+            new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(services);
             services.AddSingleton(Routes);
             services.AddSingleton<IHttpEndpointRoutesResolver>(Resolver);
             provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

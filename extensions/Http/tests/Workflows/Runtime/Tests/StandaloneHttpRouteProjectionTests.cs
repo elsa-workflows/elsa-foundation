@@ -64,7 +64,6 @@ public sealed class StandaloneHttpRouteProjectionTests
 
         var feature = new WorkflowsRuntimeStandaloneHttpFeature();
         feature.ConfigureServices(services);
-        feature.PostConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
@@ -80,17 +79,6 @@ public sealed class StandaloneHttpRouteProjectionTests
         Assert.Null(provider.GetService<IWorkflowTriggerBindingStore>());
         Assert.Null(provider.GetService<IGlobalBookmarkStimulusLookup>());
         Assert.Equal("physical-partition", reader.Scope!.Value);
-    }
-
-    [Fact]
-    public void Kernel_http_feature_rejects_a_second_route_table_owner()
-    {
-        var services = new ServiceCollection();
-        var feature = new WorkflowsRuntimeStandaloneHttpFeature();
-        feature.ConfigureServices(services);
-        new WorkflowsRuntimeHttpFeature().ConfigureServices(services);
-
-        Assert.Throws<InvalidOperationException>(() => feature.PostConfigureServices(services));
     }
 
     private static RuntimeIngressReservation Reservation(long revision, bool authorize) => new("reservation", new(new("physical-partition"), "separate-tenant-identity"),

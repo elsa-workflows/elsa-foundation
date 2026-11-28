@@ -27,7 +27,6 @@ public sealed class UsesEfModuleGuardTests
     private static readonly Assembly[] FeatureAssemblies =
     [
         .. ModuleContextCatalog.Modules,
-        typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
@@ -59,16 +58,10 @@ public sealed class UsesEfModuleGuardTests
         ("WorkflowsDashboardPortfolioEntityFrameworkCore", ["Workflows.Design", "Workflows.Runtime"], false),
         ("WorkflowsDesignEntityFrameworkCore", ["Workflows.Design"], true),
         ("WorkflowsPublishingEntityFrameworkCore", ["Workflows.Publishing"], true),
-        ("WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
-        ("WorkflowsRuntimeAlterationEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
-        ("WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
-        ("WorkflowsRuntimeEntityFrameworkCore", ["Workflows.Runtime"], true),
-        ("WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence", ["Workflows.Runtime"], false),
         ("WorkflowsRuntimePublicationEntityFrameworkCorePersistence", ["Workflows.Runtime"], false),
-        ("WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
-        ("WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence", ["Workflows.Runtime"], true)
+        ("WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", ["Workflows.Runtime"], true)
     ];
 
     [Fact]
@@ -100,17 +93,18 @@ public sealed class UsesEfModuleGuardTests
         $"{feature} -> {string.Join(", ", modules)} (declares Provider: {declaresProvider})";
 
     /// <summary>
-    /// Eight features, one module, each with its own <c>Provider</c>: the exact shape a per-module check
-    /// would collapse into one answer and so let one feature mask another.
+    /// Two retained configurable features share one module. Provider agreement checks each feature.
     /// </summary>
     [Fact]
-    public void Workflows_runtime_is_backed_by_eight_separately_configured_features()
+    public void Workflows_runtime_is_backed_by_two_separately_configured_features()
     {
         var runtime = EfProviderAgreement.Discover(FeatureAssemblies)
             .Where(usage => usage.Modules.Contains("Workflows.Runtime") && usage.DeclaresProvider)
             .ToArray();
 
-        Assert.Equal(8, runtime.Length);
+        Assert.Equal(
+            ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"],
+            runtime.Select(usage => usage.Feature));
     }
 
     /// <summary>

@@ -7,29 +7,18 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Activities.Http.Capabilities;
 
 /// <summary>Advertises the workflow HTTP endpoint base path configured for the active shell.</summary>
-internal class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySource
+internal sealed class HttpWorkflowEndpointsCapabilitySource(
+    IOptions<HttpEndpointOptions> options,
+    ILogger<HttpWorkflowEndpointsCapabilitySource> logger) : IApiCapabilitySource
 {
     private const string CapabilityId = "elsa.http.workflow-endpoints";
-    private readonly string _sourceFeatureId;
-    private readonly IOptions<HttpEndpointOptions> _options;
-    private readonly ILogger<HttpWorkflowEndpointsCapabilitySource> _logger;
-
-    public HttpWorkflowEndpointsCapabilitySource(
-        IOptions<HttpEndpointOptions> options,
-        ILogger<HttpWorkflowEndpointsCapabilitySource> logger,
-        string sourceFeatureId = "ActivitiesHttp")
-    {
-        _options = options;
-        _logger = logger;
-        _sourceFeatureId = sourceFeatureId;
-    }
 
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
     {
-        if (!TryGetRelativeBasePath(_options.Value.BasePath, out var href))
+        if (!TryGetRelativeBasePath(options.Value.BasePath, out var href))
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 "Omitting the workflow HTTP base-path capability because HttpEndpointOptions.BasePath is not a usable origin-form path.");
             return ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>([]);
         }
@@ -40,7 +29,7 @@ internal class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySource
                 CapabilityId,
                 1,
                 [new ApiCapabilityLink("workflow-http-base", href)],
-                _sourceFeatureId)];
+                KernelActivitiesHttpFeature.FeatureName)];
 
         return ValueTask.FromResult(declarations);
     }
@@ -88,9 +77,3 @@ internal class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySource
         return !Uri.TryCreate(href, UriKind.Absolute, out _);
     }
 }
-
-
-internal sealed class KernelHttpWorkflowEndpointsCapabilitySource(
-    IOptions<HttpEndpointOptions> options,
-    ILogger<HttpWorkflowEndpointsCapabilitySource> logger)
-    : HttpWorkflowEndpointsCapabilitySource(options, logger, KernelActivitiesHttpFeature.FeatureName);
