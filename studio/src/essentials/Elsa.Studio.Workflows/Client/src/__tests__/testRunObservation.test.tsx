@@ -97,6 +97,14 @@ it("reports a missing execution after the initial visibility window", async () =
   expect(current.details).toBeNull();
 });
 
+it("does not use the Runtime execution route when the scoped Test Run receipt is missing", async () => {
+  api.run.mockRejectedValue(Object.assign(new Error("Test Run not found"), { status: 404 }));
+  render(); await settle();
+  expect(current.status).toBe("disconnected");
+  expect(api.instance).not.toHaveBeenCalled();
+  expect(api.waits).not.toHaveBeenCalled();
+});
+
 it("stops automatic observation at a confirmed terminal state and refreshes without dispatch", async () => {
   api.instance.mockResolvedValue(details("Completed")); render(); await settle();
   await vi.advanceTimersByTimeAsync(10000); expect(api.instance).toHaveBeenCalledTimes(1);

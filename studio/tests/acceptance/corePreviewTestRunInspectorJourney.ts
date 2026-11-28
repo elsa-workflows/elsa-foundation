@@ -39,10 +39,10 @@ export async function corePreviewTestRunInspectorJourney(page: Page, info: TestI
   const run = await (await started).json() as WorkflowTestRunView;
   expect(run.workflowExecutionId).toBeTruthy();
   const summary = page.getByRole("region", { name: "Test run summary", exact: true });
-  await expect(summary.locator(".wf-status-badge").first()).toHaveText(/^(Accepted|Running|Waiting|Pending)$/);
+  await expect(summary.getByText(/^(Accepted|Running|Waiting|Pending)$/)).toBeVisible();
   await expect(page.getByText(/Execution status is unavailable|Request failed with 404|Live updates disconnected/)).toHaveCount(0);
   await capture(page, info, "test-run-started");
-  await expect(summary.locator(".wf-status-badge").first()).toHaveText("Completed", { timeout: 25_000 });
+  await expect(summary.getByText("Workflow execution completed.", { exact: true })).toBeVisible({ timeout: 25_000 });
   await expect(page.getByRole("button", { name: "Open run", exact: true })).toHaveCount(1);
   await expect(summary.getByRole("button", { name: "Open run", exact: true })).toBeEnabled();
   await capture(page, info, "test-run-completed");
