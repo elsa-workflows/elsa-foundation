@@ -11848,6 +11848,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Decisions.Workflows.Actor",
+          "path": "extensions/Decisions/src/Workflows/Actor/Elsa.Decisions.Workflows.Actor.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Diagnostics.OpenTelemetry",
           "path": "extensions/Diagnostics.OpenTelemetry/src/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj"
         },
@@ -22295,6 +22300,70 @@
       ]
     },
     {
+      "path": "extensions/Decisions/src/Workflows/Actor/Elsa.Decisions.Workflows.Actor.csproj",
+      "name": "Elsa.Decisions.Workflows.Actor",
+      "kind": "source",
+      "domain": "Elsa.Decisions",
+      "sub_domain": "Workflows.Actor",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Decisions.Workflows.Actor",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime.Core",
+          "path": "essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Persistence.Core",
+          "path": "essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Core",
+          "path": "essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.Activities",
+          "path": "essentials/src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Decisions.Core",
+          "path": "extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Decisions.Persistence.Core",
+          "path": "extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        }
+      ]
+    },
+    {
       "path": "extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj",
       "name": "Elsa.Decisions.Api.Tests",
       "kind": "test",
@@ -31332,6 +31401,11 @@
           "type": "internal",
           "id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
           "path": "extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Decisions.Workflows.Actor",
+          "path": "extensions/Decisions/src/Workflows/Actor/Elsa.Decisions.Workflows.Actor.csproj"
         },
         {
           "type": "internal",
