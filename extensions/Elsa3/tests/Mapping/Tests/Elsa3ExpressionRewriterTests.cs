@@ -189,7 +189,9 @@ public sealed class Elsa3ExpressionRewriterTests
     /// <summary>
     /// #6230: a workflow instance value read with an Elsa 3 built-in is read-only in Elsa 4, so a change through it is
     /// refused (VF-IMP-005) wherever the script runs: on the value itself or a member chain below it, by assignment,
-    /// update or compound assignment, and through a destructuring target. A computed key on the way only reads.
+    /// update or compound assignment, through a destructuring target, and through an object that can hand the value back
+    /// (either branch of a conditional, either side of a logical expression, a sequence's last expression, an awaited
+    /// value, the value of an = or ??= assignment). A computed key on the way only reads.
     /// </summary>
     [Theory]
     [InlineData("getCorrelationId().x++", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
@@ -221,8 +223,9 @@ public sealed class Elsa3ExpressionRewriterTests
         Assert.False(result.Succeeded, result.Definition?.Source);
         var issue = Assert.Single(result.Issues);
         Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, issue.Code);
-        Assert.Equal($"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.", issue.Message);
+        Assert.StartsWith($"JavaScript changes the workflow instance value '{reader}()' reads, or a member of it.", issue.Message, StringComparison.Ordinal);
         Assert.Contains($"let value = {reader}();", issue.Guidance, StringComparison.Ordinal);
+        Assert.StartsWith("Remove a change of a member, which had no effect in Elsa 3.", issue.Guidance, StringComparison.Ordinal);
         if (reader == "getWorkflowInstanceId")
             Assert.DoesNotContain("call set", issue.Guidance, StringComparison.Ordinal);
     }
@@ -244,7 +247,7 @@ public sealed class Elsa3ExpressionRewriterTests
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Issues, issue => issue.Message == "JavaScript changes the workflow instance value 'getCorrelationId()' reads. Elsa 4 hands it to scripts read-only.");
+        Assert.Contains(result.Issues, issue => issue.Message.StartsWith("JavaScript changes the workflow instance value 'getCorrelationId()' reads", StringComparison.Ordinal));
         Assert.Contains(result.Issues, issue => issue.Message == otherMessage);
     }
 
@@ -286,9 +289,10 @@ public sealed class Elsa3ExpressionRewriterTests
     }
 
     /// <summary>
-    /// #6230: reading a workflow instance value, changing a local copy of it, using it as a computed key (#6222) and
-    /// passing it to a call whose result is changed all still convert, as does, in a Run JavaScript body, writing it
-    /// into a variable (spec 1231 FR-032).
+    /// #6230: what only reads a workflow instance value still converts: a plain read, a local copy, a computed key
+    /// (#6222), a call's argument, a conditional's test, an array or object literal's element, a sequence's earlier
+    /// expression and the operand of a += or -= assignment, which makes a new value; as does, in a Run JavaScript body,
+    /// writing it into a variable (spec 1231 FR-032).
     /// </summary>
     [Theory]
     [InlineData("return getCorrelationId() + '-acme';", Elsa3JavaScriptMode.Expression, false)]

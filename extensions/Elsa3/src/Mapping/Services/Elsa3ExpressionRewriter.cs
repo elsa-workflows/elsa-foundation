@@ -2121,9 +2121,10 @@ public sealed class Elsa3ExpressionRewriter(
                 _ => null,
             };
 
-            // #6230: a workflow instance value is read-only in Elsa 4. The change is otherwise visited as usual, so the
-            // target's other checks still report: an ambient value it also reaches, an undeclared name, a custom global.
-            // In a with statement's body a call may read the with object, which the with statement's refusal covers.
+            // #6230: a change through a workflow instance value (read-only text) fails in Elsa 4. It is otherwise visited
+            // as usual, so the target's other checks still report: an ambient value it also reaches, an undeclared name,
+            // a custom global. In a with statement's body a call may read the with object, which the with statement's
+            // refusal covers.
             if (changeTarget is not null && _withBodyDepth == 0 && InstanceReaderOf(changeTarget) is { } instanceReader)
                 Issues.Add(InstanceValueChange(instanceReader));
 
@@ -3500,12 +3501,13 @@ public sealed class Elsa3ExpressionRewriter(
 
         private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader) => new(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-            $"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.",
-            $"Copy the value into a local first (let value = {reader}();) and give the local its new value, in the Elsa 3 workflow before import; " +
-            "the value is text or empty, so it has no members to set." +
-            (!ConvertsWorkflowState ? string.Empty
-                : reader == "getCorrelationId" ? " To change the instance's correlation ID, call setCorrelationId(value)."
-                : reader == "getWorkflowInstanceName" ? " To change the instance's name, call setWorkflowInstanceName(value)."
+            $"JavaScript changes the workflow instance value '{reader}()' reads, or a member of it. Elsa 4 hands the value to scripts " +
+            "read-only, and it is text or empty: a member change had no effect in Elsa 3 and fails in Elsa 4's strict mode.",
+            "Remove a change of a member, which had no effect in Elsa 3. To work with a new value, copy the value into a local first " +
+            $"(let value = {reader}();) and give the local its new value, in the Elsa 3 workflow before import." +
+            (reader == "getCorrelationId"
+                ? ConvertsWorkflowState ? " To change the instance's correlation ID, call setCorrelationId(value)." : " To change the instance's correlation ID, use a Correlate activity."
+                : reader == "getWorkflowInstanceName" && ConvertsWorkflowState ? " To change the instance's name, call setWorkflowInstanceName(value)."
                 : string.Empty));
 
         /// <summary>
