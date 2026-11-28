@@ -112,6 +112,7 @@
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingEntityFrameworkCore": {},
           "WorkflowsRuntimeKernelHosting": {
+            "Foundation": "BuiltIn",
             "Provider": "SQLite",
             "SqlitePath": "/app/data/elsa-kernel.db",
             "Tenant": "default",
