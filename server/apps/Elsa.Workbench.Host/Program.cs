@@ -82,8 +82,6 @@ using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Distributed;
-using Elsa.Workflows.Runtime.Distributed.Placement;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
@@ -298,7 +296,6 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
 
             // The persistence modules the shells select are discovered from this host's project
             // references by WithHostAssemblies(); only assemblies with no reference edge are listed here.
-            typeof(WorkflowsRuntimeDistributedFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 

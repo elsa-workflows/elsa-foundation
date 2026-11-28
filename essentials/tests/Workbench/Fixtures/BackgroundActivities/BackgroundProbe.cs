@@ -7,21 +7,16 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
-using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workbench.Tests.BackgroundActivities;
 
 [ShellFeature("BackgroundActivityWitness", DependsOn = new object[] { "BackgroundActivities", "WorkflowsRuntimeEntityFrameworkCore" })]
-public class BackgroundActivityWitnessFeature : IShellFeature, IPostConfigureShellServices
+public class BackgroundActivityWitnessFeature : IShellFeature
 {
     public string? JournalDirectory { get; set; }
     public string Role { get; set; } = "standalone";
-    public bool NativeHostingObservation { get; set; }
-    public bool NativeStaleWriteObservation { get; set; }
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
@@ -31,10 +26,6 @@ public class BackgroundActivityWitnessFeature : IShellFeature, IPostConfigureShe
         if (string.IsNullOrWhiteSpace(Role) || Role.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-'))
             throw new InvalidOperationException("The witness role may contain only ASCII letters, digits, and hyphens.");
         services.AddScoped<IActivityReconciliationSource, BackgroundProbeCatalog>();
-        services.AddSingleton<IBackgroundTask>(new NativeHostingShutdownGate(journal, Role));
-        services.AddSingleton<ActivationTokenCancellationWitness>(serviceProvider =>
-            new ActivationTokenCancellationWitness(journal, Role, serviceProvider.GetRequiredService<IHostApplicationLifetime>()));
-        services.AddShellInitializer<ActivationTokenCancellationInitializer>(LifecyclePhase.Start, int.MaxValue);
         var providers = services.Where(service => service.ServiceType == typeof(IBackgroundActivityWorkStore) && !service.IsKeyedService).ToArray();
         if (providers.Length != 1)
             throw new InvalidOperationException($"The witness requires exactly one background work store, found {providers.Length}.");
@@ -44,50 +35,6 @@ public class BackgroundActivityWitnessFeature : IShellFeature, IPostConfigureShe
             (IBackgroundActivityWorkStore)(provider.ImplementationInstance ?? provider.ImplementationFactory?.Invoke(scope) ??
                 ActivatorUtilities.CreateInstance(scope, provider.ImplementationType!)), journal, Role,
             ownsInner: provider.ImplementationInstance is null), provider.Lifetime));
-    }
-
-    public virtual void PostConfigureServices(IServiceCollection services)
-    {
-        if (NativeHostingObservation)
-            NativeHostingWitnessRegistration.Register(services, JournalDirectory!, Role, NativeStaleWriteObservation);
-        else if (NativeStaleWriteObservation)
-            throw new InvalidOperationException("Native stale-write observation requires NativeHostingObservation.");
-    }
-}
-
-/// <summary>Records when the shell activation token passed to task startup is later cancelled.</summary>
-internal sealed class ActivationTokenCancellationWitness(
-    string journal,
-    string role,
-    IHostApplicationLifetime applicationLifetime) : IDisposable
-{
-    private CancellationTokenRegistration _registration;
-
-    public void Register(CancellationToken cancellationToken) =>
-        _registration = cancellationToken.Register(static state => ((ActivationTokenCancellationWitness)state!).RecordCancellation(), this);
-
-    public void Dispose() => _registration.Dispose();
-
-    private void RecordCancellation()
-    {
-        var path = Path.Combine(journal, $"activation-token-cancelled.{role}.{Guid.NewGuid():N}.json");
-        BackgroundWitnessJournal.TryWriteJsonAtomically(path, new
-        {
-            ProcessId = Environment.ProcessId,
-            RecordedAt = DateTimeOffset.UtcNow,
-            Role = role,
-            ApplicationStopping = applicationLifetime.ApplicationStopping.IsCancellationRequested
-        });
-    }
-}
-
-/// <summary>Non-disposable adapter so the temporary initializer scope cannot unregister the witness.</summary>
-internal sealed class ActivationTokenCancellationInitializer(ActivationTokenCancellationWitness witness) : IShellInitializer
-{
-    public Task InitializeAsync(CancellationToken cancellationToken)
-    {
-        witness.Register(cancellationToken);
-        return Task.CompletedTask;
     }
 }
 

@@ -128,13 +128,11 @@
       "outputPath": "Elsa.Server.Workbench.slnf",
       "includeProjectNames": [
         "Elsa.Workbench.Host",
-        "Elsa.Workbench.Tests",
-        "Elsa.Workbench.BackgroundActivities.Tests"
+        "Elsa.Workbench.Tests"
       ],
       "requiredRootPaths": [
         "server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj",
-        "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
-        "essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj"
+        "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj"
       ]
     }
   ]

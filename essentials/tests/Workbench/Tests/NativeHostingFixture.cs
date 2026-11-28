@@ -3,63 +3,33 @@ using System.Text.Json.Nodes;
 
 namespace Elsa.Workbench.Tests;
 
-public enum NativeHostingProfile
-{
-    InProcess,
-    Clustered
-}
-
 /// <summary>
 /// Owns the shared durable state and Workbench processes used by native-hosting recovery tests.
 /// </summary>
 internal sealed class NativeHostingFixture : IAsyncDisposable
 {
-    private const string DistributedRuntimeFeature = "WorkflowsRuntimeDistributed";
-    private const string DistributedPersistenceFeature = "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence";
-    private const string DistributedTransportFeature = "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence";
-
     private readonly string _root;
     private readonly string _packagePath;
-    private readonly bool _observeNativeHosting;
-    private readonly bool _observeStaleWrite;
     private readonly List<WorkbenchProcess> _hosts = [];
     private readonly HashSet<WorkbenchProcess> _currentHosts = [];
     private readonly HashSet<string> _roles = new(StringComparer.Ordinal);
     private bool _disposed;
-    private bool _preserveScenarioRootForDiagnostics;
 
-    private NativeHostingFixture(NativeHostingProfile profile, string root, string packagePath, string packageSha256,
-        bool observeNativeHosting, bool observeStaleWrite)
+    private NativeHostingFixture(string root, string packagePath, string packageSha256)
     {
-        Profile = profile;
         _root = root;
         _packagePath = packagePath;
-        _observeNativeHosting = observeNativeHosting;
-        _observeStaleWrite = observeStaleWrite;
         PackageSha256 = packageSha256;
-        ScenarioId = $"native-hosting-{Guid.NewGuid():N}"[..29];
         JournalDirectory = Path.Combine(root, "journal");
         Directory.CreateDirectory(JournalDirectory);
         Directory.CreateDirectory(Path.Combine(root, "locks"));
     }
 
-    internal NativeHostingProfile Profile { get; }
-    internal string ScenarioId { get; }
     internal string JournalDirectory { get; }
-    internal string PackagePath => _packagePath;
     internal string PackageSha256 { get; }
-    internal string SharedRoot => _root;
 
-    internal void PreserveScenarioRootForDiagnostics() => _preserveScenarioRootForDiagnostics = true;
-
-    internal static NativeHostingFixture Create(NativeHostingProfile profile, bool observeNativeHosting = false,
-        bool observeStaleWrite = false)
+    internal static NativeHostingFixture Create()
     {
-        if (!Enum.IsDefined(profile))
-            throw new ArgumentOutOfRangeException(nameof(profile), profile, "Select an explicit native hosting profile.");
-        observeNativeHosting |= observeStaleWrite;
-        if (observeNativeHosting && profile != NativeHostingProfile.Clustered)
-            throw new ArgumentException("The transport observation requires the clustered profile.", nameof(profile));
         var root = Directory.CreateTempSubdirectory("elsa-native-hosting-").FullName;
 
         try
@@ -67,7 +37,7 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
             Directory.CreateDirectory(Path.Combine(root, "packages"));
             var packagePath = NativeHostingScenario.CreatePackage(root);
             var packageSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(packagePath)));
-            return new NativeHostingFixture(profile, root, packagePath, packageSha256, observeNativeHosting, observeStaleWrite);
+            return new NativeHostingFixture(root, packagePath, packageSha256);
         }
         catch
         {
@@ -94,14 +64,6 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
             ["Elsa:DataProtection:EntityFrameworkCore:ConnectionString"] = $"Data Source={Path.Combine(_root, "keys.db")};Pooling=False"
         };
 
-        if (Profile == NativeHostingProfile.Clustered)
-        {
-            settings["Elsa:Cluster:Membership:HostId"] = $"{ScenarioId}-{role}";
-            settings["Elsa:Cluster:Membership:EntityFrameworkCore:Enabled"] = "true";
-            settings["Elsa:Cluster:Membership:EntityFrameworkCore:Provider"] = "Sqlite";
-            settings["Elsa:Cluster:Membership:EntityFrameworkCore:ConnectionString"] = $"Data Source={Path.Combine(_root, "membership.db")};Pooling=False";
-        }
-
         try
         {
             var host = await WorkbenchProcess.StartAsync(
@@ -118,15 +80,6 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
         }
     }
 
-    /// <summary>Starts hosts one at a time so the first host finishes startup migrations before the next starts.</summary>
-    internal async Task<IReadOnlyList<WorkbenchProcess>> SerialStartAsync(params (string Role, bool RunWorkers)[] hosts)
-    {
-        var started = new List<WorkbenchProcess>(hosts.Length);
-        foreach (var (role, runWorkers) in hosts)
-            started.Add(await StartAsync(role, runWorkers));
-        return started;
-    }
-
     /// <summary>Restarts a fixture-owned host while retaining both process wrappers until fixture cleanup.</summary>
     internal async Task<WorkbenchProcess> RestartAsync(WorkbenchProcess host, Action<string>? prepareRestart = null)
     {
@@ -138,20 +91,6 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
         _hosts.Add(replacement);
         _currentHosts.Add(replacement);
         return replacement;
-    }
-
-    internal void HoldWorkerClaims(string role)
-    {
-        ThrowIfDisposed();
-        ValidateRole(role);
-        File.WriteAllText(Path.Combine(JournalDirectory, $"hold-workers-{role}"), role);
-    }
-
-    internal void ReleaseWorkerClaims(string role)
-    {
-        ThrowIfDisposed();
-        ValidateRole(role);
-        File.Delete(Path.Combine(JournalDirectory, $"hold-workers-{role}"));
     }
 
     private void ConfigureContentRoot(string directory, string role, bool runWorkers)
@@ -174,26 +113,8 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
         features["BackgroundActivityWitness"] = new JsonObject
         {
             ["JournalDirectory"] = JournalDirectory,
-            ["Role"] = role,
-            ["NativeHostingObservation"] = _observeNativeHosting,
-            ["NativeStaleWriteObservation"] = _observeStaleWrite
+            ["Role"] = role
         };
-
-        if (Profile == NativeHostingProfile.InProcess)
-        {
-            features.Remove(DistributedRuntimeFeature);
-            features.Remove(DistributedPersistenceFeature);
-            features.Remove(DistributedTransportFeature);
-        }
-        else
-        {
-            features[DistributedRuntimeFeature] = _observeNativeHosting
-                // Departure must reclaim a still-live routing lease; waiting for its expiry would prove less.
-                ? new JsonObject { ["LeaseDurationSeconds"] = 120 }
-                : new JsonObject();
-            features[DistributedPersistenceFeature] = new JsonObject();
-            features[DistributedTransportFeature] = new JsonObject();
-        }
 
         File.WriteAllText(shellsPath, shells.ToJsonString());
     }
@@ -229,8 +150,7 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
         if (failures.Count > 0)
             throw new AggregateException("One or more fixture-owned Workbench hosts failed to stop; the shared scenario root was preserved.", failures);
 
-        if (!_preserveScenarioRootForDiagnostics)
-            Directory.Delete(_root, recursive: true);
+        Directory.Delete(_root, recursive: true);
     }
 
     private void ThrowIfDisposed()

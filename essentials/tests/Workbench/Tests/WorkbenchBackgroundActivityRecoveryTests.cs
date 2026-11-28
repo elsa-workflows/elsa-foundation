@@ -18,14 +18,12 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
     public const string Name = nameof(WorkbenchBackgroundActivityRecoveryTests);
 
     [Theory]
-    [InlineData(NativeHostingProfile.InProcess, "left", "right")]
-    [InlineData(NativeHostingProfile.InProcess, "right", "left")]
-    [InlineData(NativeHostingProfile.Clustered, "left", "right")]
-    [InlineData(NativeHostingProfile.Clustered, "right", "left")]
+    [InlineData("left", "right")]
+    [InlineData("right", "left")]
     public async Task Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(
-        NativeHostingProfile profile, string first, string second)
+        string first, string second)
     {
-        await using var fixture = NativeHostingFixture.Create(profile);
+        await using var fixture = NativeHostingFixture.Create();
         var original = await fixture.StartAsync("original");
         await LoginAsync(original);
         var journal = fixture.JournalDirectory;
@@ -80,12 +78,10 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
         Assert.Equal(completedBodyCount, StartedCount(journal, first));
     }
 
-    [Theory]
-    [InlineData(NativeHostingProfile.InProcess)]
-    [InlineData(NativeHostingProfile.Clustered)]
-    public async Task Explicit_cancellation_stops_held_bodies_and_survives_process_restart(NativeHostingProfile profile)
+    [Fact]
+    public async Task Explicit_cancellation_stops_held_bodies_and_survives_process_restart()
     {
-        await using var fixture = NativeHostingFixture.Create(profile);
+        await using var fixture = NativeHostingFixture.Create();
         var host = await fixture.StartAsync("cancellation", runWorkers: true);
         await LoginAsync(host);
         var journal = fixture.JournalDirectory;

@@ -113,62 +113,10 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   the row; both hold by review until #2606 restores compiled checks. A column that restates
   part of a row's content and is compared with it, such as a bookmark's payload or a checkpoint marker's id sets, is
   content, so both sides of the comparison are in one format.
-- **A golden-fixture gate freezes the wire format for the Distributed leaf only.** The
-  `Elsa.Workflows.Runtime.Distributed.Tests` suite re-serializes a canonical instance of the placement and
-  transport payloads and compares each semantically against a committed `Fixtures/v1/*.json` expectation,
-  so a field add/rename/remove/retype on those two payloads cannot land without an explicit, versioned
-  decision (see [`GoldenFixtureTestSupport`](../essentials/tests/Workflows/Runtime/Distributed/Tests/GoldenFixtureTestSupport.cs)).
-  The rest of the Runtime EF Core module (bookmarks, executables, execution/scheduler/operational/
-  control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox, the durable
-  scheduler work queue, workflow trigger bindings) has no such fixture today; its state-record shapes are
-  covered by the migration and read-enforcement rules above, not by a round-trip payload comparison.
-
-### How to change a persisted runtime state record
-
-Until 4.0 ships as a stable release, migrations are regenerated and every family stays at its baseline version
-([ADR 0078](adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md),
-Consequences): alter the entity and its model configuration, regenerate the module's migration for every provider
-it ships, update the payload expectation, and treat installations carrying the older generation as
-reset-and-republish upgrades.
-
-From 4.0 on, a change to what a family stores is a new version of that family ([spec 180](../specs/180-schema-upcaster-chain/spec.md)):
-
-1. Bump the family's `SchemaVersion` constant, and add one upcaster from the previous version to the end of its
-   declared chain, beside the family's store code. It is a pure function of the row it receives (FR-019) and preserves
-   every identity the row carries (FR-020). It receives every content column the family declares for the row's table
-   and returns the same columns, changing the ones it has a change for and returning the rest as it received them,
-   including a column a later version added, which is null on the rows it reads. A new document column is declared with
-   `[EfSchemaContent]`, or `[EfSchemaIntegrity]` with its reason, and every store read of that table names it.
-2. Keep the change expand-only, for content as for migrations: a renamed, retyped or restructured member is split
-   across two versions (FR-027), and an executable's identity-hashed format never changes in place (FR-028).
-3. Gate every integrity clause for a projection the version introduces on the row's stamp
-   (`<Module>.Chain.IsAtOrAfter(row.SchemaVersion, "<version>")`), since an older writer left it unset (FR-008).
-4. Commit the upcaster's fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in the module's
-   test project - one row per table, `<table>.source.json` and `<table>.expected.json`, each a JSON object of the row's
-   content columns, the table named by its entity type - record it in
-   `essentials/tests/Architecture/Tests/Baselines/schema-upcaster-fixtures.sha256`, and prove the
-   upcast, the old-format round trip and the store's read of the source fixture (FR-022) with a test class deriving
-   directly from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, compiled in from
-   `EfSchemaUpcasterFixtureSupport.cs`. The base class holds all three proofs; the module supplies only the store's
-   half, as `SyntheticOrders.cs` does for the synthetic family. Every upcaster needs a pair and such a class, every
-   committed pair needs a class that proves it, and a recorded fixture is never edited or deleted; these hold by
-   review until #2606 restores a compiled check.
-5. When the upcaster reaches a column the stores edit in place, as Identity's coordinators edit a user's registries,
-   the write upgrades the whole row first, upcasting every content column and restamping it, so a stamped row is never
-   partly in an older format (FR-014). An in-place content write restamps its row, directly or through a helper that
-   does, and a restamp assigns every declared content column of its row from upcast values (#2144); both hold by
-   review until #2606 restores a compiled check.
-
-## Related runtime formats
-
-The sections below are not about the serializer rule itself. They document persisted runtime formats that must evolve under the same rules, and are kept here until they move to the runtime docs.
-
-### Stimulus routing indexes
-
-The trigger + stimulus-routing feature (`WorkflowsRuntimeTriggersFeature`) adds one new persisted document
-kind and two cross-cutting (across-execution / across-artifact) indexes. Both route through the same bridge
-serializer and versioning as every other runtime kind.
-
+- **Historical clustered runner wire format.** The previous engine's placement and transport payloads were
+  checked against committed `Fixtures/v1/*.json` expectations. Use the installed version and its matching wire
+  fixtures when inspecting or draining an old installation.
+  [Previous distributed workflow suite](https://github.com/elsa-workflows/elsa-foundation/tree/18a16dee878106ac525aa9a861d851a200e43c55/essentials/tests/Workflows/Runtime/Distributed/Tests)
 - **Document kind `workflowTriggerBinding` (current/minimum version 2).** A durable index entry written at **publish
   time** mapping an external stimulus identity `(stimulusType, stimulusHash)` to a start-trigger activity
   inside a *pinned, published* executable — the piece Elsa 4 was missing that made "start a workflow from

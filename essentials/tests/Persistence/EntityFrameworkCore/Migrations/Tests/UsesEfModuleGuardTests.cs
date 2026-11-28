@@ -21,9 +21,9 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 public sealed class UsesEfModuleGuardTests
 {
     /// <summary>
-    /// Every assembly that can carry a mapped feature: the eleven module assemblies, plus the two projects
+    /// Every assembly that can carry a mapped feature: the module assemblies and the two projects
     /// that hold a feature for a module declared elsewhere — the cross-project
-    /// <see cref="AspNetCoreIdentityEntityFrameworkCoreFeature"/> and the two-module dashboard feature.
+    /// <see cref="AspNetCoreIdentityEntityFrameworkCoreFeature"/> and the two-module dashboard features.
     /// </summary>
     private static readonly Assembly[] FeatureAssemblies =
     [
@@ -54,16 +54,16 @@ public sealed class UsesEfModuleGuardTests
         ("StudioPreferencesEntityFrameworkCore", ["Studio.Preferences"], true),
         ("WeaverEntityFrameworkCore", ["Weaver"], true),
         ("WorkflowsDashboardEntityFrameworkCore", ["Workflows.Design", "Workflows.Runtime"], false),
+        ("WorkflowsDashboardPortfolioEntityFrameworkCore", ["Workflows.Design", "Workflows.Runtime"], false),
         ("WorkflowsDesignEntityFrameworkCore", ["Workflows.Design"], true),
         ("WorkflowsPublishingEntityFrameworkCore", ["Workflows.Publishing"], true),
         ("WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimeAlterationEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
-        ("WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence", ["Workflows.Runtime.Distributed.CommandTransport"], true),
-        ("WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", ["Workflows.Runtime.Distributed.Placement"], true),
         ("WorkflowsRuntimeEntityFrameworkCore", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
+        ("WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence", ["Workflows.Runtime"], false),
         ("WorkflowsRuntimePublicationEntityFrameworkCorePersistence", ["Workflows.Runtime"], false),
         ("WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", ["Workflows.Runtime"], true),
         ("WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence", ["Workflows.Runtime"], true)
