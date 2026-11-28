@@ -1,4 +1,5 @@
 using Elsa.Activities.Flowchart.Internal;
+using Elsa.Activities.Flowchart.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -15,49 +16,49 @@ public sealed class FlowchartStartEntryProviderTests
     private readonly FlowchartStartEntryProvider _provider = new();
 
     [Fact]
-    public async Task DirectChildWithoutInboundConnection_IsItsOwnEntry()
+    public void DirectChildWithoutInboundConnection_IsItsOwnEntry()
     {
-        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([]);
-        var flowchart = fixture.NewExecutable(
-            [fixture.NewProbeNode("node-a"), fixture.NewProbeNode("node-a2"), fixture.NewProbeNode("node-b")],
-            [fixture.NewConnection("node-a", "node-a2")],
-            startNodeId: "node-a").RootActivity;
+        var flowchart = FlowchartExecutableNodes.Create(
+            "entry",
+            ["node-a", "node-a2", "node-b"],
+            [Connection("node-a", "node-a2")],
+            startNodeId: "node-a");
 
         Assert.Equal("node-b", _provider.SelectStartChild(flowchart, "node-b")?.ExecutableNodeId);
     }
 
     [Fact]
-    public async Task StartNodeWithInboundLoopBack_IsItsOwnEntry()
+    public void StartNodeWithInboundLoopBack_IsItsOwnEntry()
     {
-        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([]);
-        var flowchart = fixture.NewExecutable(
-            [fixture.NewProbeNode("node-a"), fixture.NewProbeNode("node-b")],
-            [fixture.NewConnection("node-a", "node-b"), fixture.NewConnection("node-b", "node-a")],
-            startNodeId: "node-a").RootActivity;
+        var flowchart = FlowchartExecutableNodes.Create(
+            "entry",
+            ["node-a", "node-b"],
+            [Connection("node-a", "node-b"), Connection("node-b", "node-a")],
+            startNodeId: "node-a");
 
         Assert.Equal("node-a", _provider.SelectStartChild(flowchart, "node-a")?.ExecutableNodeId);
     }
 
     [Fact]
-    public async Task DirectChildWithInboundConnection_ThatIsNotTheStartNode_HasNoEntry()
+    public void DirectChildWithInboundConnection_ThatIsNotTheStartNode_HasNoEntry()
     {
-        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([]);
-        var flowchart = fixture.NewExecutable(
-            [fixture.NewProbeNode("node-a"), fixture.NewProbeNode("node-b")],
-            [fixture.NewConnection("node-a", "node-b")],
-            startNodeId: "node-a").RootActivity;
+        var flowchart = FlowchartExecutableNodes.Create(
+            "entry",
+            ["node-a", "node-b"],
+            [Connection("node-a", "node-b")],
+            startNodeId: "node-a");
 
         Assert.Null(_provider.SelectStartChild(flowchart, "node-b"));
     }
 
     [Fact]
-    public async Task TriggerDeeperThanADirectChild_EntersThroughTheStartNode()
+    public void TriggerDeeperThanADirectChild_EntersThroughTheStartNode()
     {
-        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([]);
-        var flowchart = fixture.NewExecutable(
-            [fixture.NewProbeNode("node-a"), fixture.NewProbeNode("node-b")],
-            [fixture.NewConnection("node-a", "node-b")],
-            startNodeId: "node-a").RootActivity;
+        var flowchart = FlowchartExecutableNodes.Create(
+            "entry",
+            ["node-a", "node-b"],
+            [Connection("node-a", "node-b")],
+            startNodeId: "node-a");
 
         Assert.Equal("node-a", _provider.SelectStartChild(flowchart, "node-nested")?.ExecutableNodeId);
     }
@@ -73,16 +74,18 @@ public sealed class FlowchartStartEntryProviderTests
     }
 
     [Fact]
-    public async Task NoAuthoredStartNode_UsesTheSameFallbackAsTheRuntime()
+    public void NoAuthoredStartNode_UsesTheSameFallbackAsTheRuntime()
     {
-        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([]);
-        var flowchart = fixture.NewExecutable(
-            [fixture.NewProbeNode("node-a"), fixture.NewProbeNode("node-b")],
-            [fixture.NewConnection("node-b", "node-a")]).RootActivity;
+        var flowchart = FlowchartExecutableNodes.Create(
+            "entry",
+            ["node-a", "node-b"],
+            [Connection("node-b", "node-a")]);
 
         // Without a startNodeId the start node is the first child with no inbound connection: node-b.
         Assert.Equal("node-b", _provider.SelectStartChild(flowchart, "node-nested")?.ExecutableNodeId);
         Assert.Equal("node-b", _provider.SelectStartChild(flowchart, "node-b")?.ExecutableNodeId);
         Assert.Null(_provider.SelectStartChild(flowchart, "node-a"));
     }
+
+    private static FlowchartConnection Connection(string source, string target) => new(new(source), new(target));
 }

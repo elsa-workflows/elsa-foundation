@@ -37,3 +37,18 @@ dotnet test essentials/tests/Activities/Scripting/Tests/Elsa.Activities.Scriptin
 Current source keeps the control-flow authoring and executable structure contracts,
 including the compiled and remapped loop bytes. It also keeps the typed RunJavaScript
 activity and real script evaluator assertions using the shared Activity execution context.
+
+## Classic Flowchart execution
+
+The same pinned checkout retains the classic Flowchart scheduler, checkpoint
+and join-policy fixtures, including both historical join policy inputs.
+
+```sh
+dotnet test essentials/tests/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
+
+Current Flowchart tests keep the authoring, routing, start-entry, policy and
+serialized state contracts. The Behavioral suite keeps the reusable Graph
+boundary outcome case. The Actor Foundation Workbench checks exercise retained
+authored Flowcharts on SQLite and PostgreSQL.
