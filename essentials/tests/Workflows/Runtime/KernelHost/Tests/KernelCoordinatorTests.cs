@@ -516,6 +516,29 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
+    public async Task A_peer_refreshes_an_occupied_slot_before_checking_its_replacement()
+    {
+        using var host = new Host();
+        var serving = new KernelServing();
+        var peer = host.NewCoordinator(host.Switch, new RuntimeManagedScheduleActors(), serving);
+        var original = Orders("orders@1");
+        var originalShipment = ExecutableOf("ship@1", "ship", HttpWorkflow("ship", "first"));
+        Assert.True((await host.ActivateAsync(original, "orders-1")).Succeeded);
+        Assert.True((await host.ActivateAsync(originalShipment, "ship-1")).Succeeded);
+        Assert.True(await peer.RefreshPeerPublicationsAsync(CancellationToken.None));
+
+        Assert.True((await host.DeactivateAsync(original)).Succeeded);
+        var moved = ExecutableOf("ship@2", "ship", HttpWorkflow("orders", "moved"));
+        Assert.True((await host.ActivateAsync(moved, "ship-2")).Succeeded);
+        Assert.Equal("orders@1", serving.MatchHttp("POST", "orders")!.Value.Slot!.Workflow.Id);
+
+        var later = ExecutableOf("ship@3", "ship", HttpWorkflow("ship", "final"));
+        Assert.True((await host.ActivateAsync(later, "ship-3", coordinator: peer)).Succeeded);
+        Assert.Equal("ship@3", serving.MatchHttp("POST", "ship")!.Value.Slot!.Workflow.Id);
+        Assert.Null(serving.MatchHttp("POST", "orders"));
+    }
+
+    [Fact]
     public async Task Startup_adopts_a_published_schedule_before_serving_its_existing_slot()
     {
         using var host = new Host();

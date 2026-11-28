@@ -102,7 +102,15 @@ public sealed class KernelActivationCoordinator(
         var slotId = WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName);
         // A same-artifact request is answered from the slot once its activation serves; a slot that serves an activation
         // this host does not serve yet (after a restart) is served first.
-        if (await authority.FindAsync(definitionId, command.SlotName, cancellationToken) is { ActiveActivationId: not null } occupied)
+        var occupied = await authority.FindAsync(definitionId, command.SlotName, cancellationToken);
+        if (occupied is { ActiveActivationId: { } occupiedId } && CanRefreshPeerPublications &&
+            authority is IWorkflowActivationSnapshot snapshot &&
+            (serving.Find(slotId) is not { } local || local.Revision != occupied.Revision || local.ActivationId != occupiedId))
+        {
+            await RefreshPeerPublicationsUnderLockAsync(snapshot, cancellationToken, retryMoves: true);
+            occupied = await authority.FindAsync(definitionId, command.SlotName, cancellationToken);
+        }
+        if (occupied is { ActiveActivationId: not null })
         {
             var (current, unserved) = await CheckServingAsync(occupied, cancellationToken);
             if (unserved is not null) return unserved;
@@ -169,7 +177,7 @@ public sealed class KernelActivationCoordinator(
         catch (HttpRouteConflictException) when (CanRefreshPeerPublications && authority is IWorkflowActivationSnapshot snapshot)
         {
             // A peer may have removed the conflicting slot since this node last refreshed.
-            await RefreshPeerPublicationsUnderLockAsync(snapshot, token);
+            await RefreshPeerPublicationsUnderLockAsync(snapshot, token, retryMoves: true);
             return serving.Plan(candidate.SlotId, candidate);
         }
     }
@@ -597,32 +605,38 @@ public sealed class KernelActivationCoordinator(
         return local.Count == active.Count && active.All(slot => KernelPeerRouteGuard.Matches(local.GetValueOrDefault(slot.SlotId), slot));
     }
 
-    private async ValueTask<bool> RefreshPeerPublicationsUnderLockAsync(IWorkflowActivationSnapshot snapshot, CancellationToken token)
+    private async ValueTask<bool> RefreshPeerPublicationsUnderLockAsync(IWorkflowActivationSnapshot snapshot, CancellationToken token,
+        bool retryMoves = false)
     {
-        var active = await snapshot.ListActiveAsync(token);
-        if (ServesSnapshot(active)) return false;
-
         var material = new KernelPeerRouteGuard(sourceReferenceStore, executableStore, serving);
-        var publications = new List<KernelServedSlot>(active.Count);
-        foreach (var slot in active)
+        for (var remaining = retryMoves ? 3 : 1; remaining > 0; remaining--)
         {
-            var served = serving.Find(slot.SlotId);
-            if (KernelPeerRouteGuard.Matches(served, slot))
-                publications.Add(served!);
-            else if (await ReadPeerPublicationAsync(slot, material, token) is { } refreshed)
-                publications.Add(refreshed);
+            var active = await snapshot.ListActiveAsync(token);
+            if (ServesSnapshot(active)) return false;
+
+            var publications = new List<KernelServedSlot>(active.Count);
+            foreach (var slot in active)
+            {
+                var served = serving.Find(slot.SlotId);
+                if (KernelPeerRouteGuard.Matches(served, slot))
+                    publications.Add(served!);
+                else if (await ReadPeerPublicationAsync(slot, material, token) is { } refreshed)
+                    publications.Add(refreshed);
+            }
+
+            var confirmed = await snapshot.ListActiveAsync(token);
+            if (!active.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)
+                .SequenceEqual(confirmed.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)))
+                continue;
+
+            // Build from the confirmed result. Departed routes no longer conflict with their replacements.
+            serving.ApplyPeerPublications(serving.PlanPeerPublications(publications));
+            return true;
         }
 
-        // Build the final route set as one snapshot. Remove departed slots before checking conflicts
-        // with their replacements, including changes that moved a route from one slot to another.
-        var next = serving.PlanPeerPublications(publications);
-        var confirmed = await snapshot.ListActiveAsync(token);
-        if (!active.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)
-            .SequenceEqual(confirmed.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)))
-            return false;
-
-        serving.ApplyPeerPublications(next);
-        return true;
+        if (retryMoves)
+            throw new TimeoutException("The active publications changed during route validation. Retry the publication.");
+        return false;
     }
 
     private async ValueTask<KernelServedSlot?> ReadPeerPublicationAsync(WorkflowActivationStamp slot, KernelPeerRouteGuard material,
