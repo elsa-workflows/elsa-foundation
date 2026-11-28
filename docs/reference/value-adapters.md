@@ -83,18 +83,23 @@ A spread (`{ ...variables.order }`) is a shallow copy: nested objects and arrays
 them changes the variable.
 
 - **What it copies.** The copy has a JSON shape, like a host function's argument and result (spec 1223 FR-011): a
-  `Date` becomes its ISO text, `undefined` becomes `null` (a member that is `undefined` is left out), and a
-  function or symbol is refused with a `TypeError`. Called with no argument it returns `undefined`. Under the .NET
+  `Date` becomes its ISO text, `undefined` becomes `null`, and a function or symbol is refused with a `TypeError`. Below
+  the top level, as in `JSON.stringify`, a member that is `undefined`, a function or a symbol is left out, and such an
+  array item becomes `null`. Called with no argument it returns `undefined`. Under the .NET
   interop opt-in (#4103) a .NET object crosses the same JSON boundary as any host function argument: the copy holds
   its JSON form, never the live object, or the call fails when it has none.
 - **Publish.** A value passed to `structuredClone` does not escape (spec 1231 FR-019), so
   `structuredClone(variables.order)` alone does not put `order` among the variables the step may write. A script that
   declares its own `structuredClone`, or whose source names `toJSON` (making the copy runs it, and it can change the
-  value), loses this.
+  value), loses this. Like the analyzer's other cases of code a script installs on a prototype (a `toString` override
+  read by `'' + variables.o`), a `toJSON` installed without naming it is not seen; the run-time `VF-WRITE-001`
+  still reports the change.
 - **Numbers.** A lossy number stays lossy in the copy: passing it raises `VF-PREC-002` like any host function
   argument, and writing it is refused (`VF-PREC-001`). Hold such numbers as strings.
 - **Name.** Built-in names are reserved and unprefixed (ADR 0045 §5 D-5): a script or expression that declares one
-  gets the `ShadowedFunction` warning. The web-standard name was chosen over `clone`, which scripts commonly use for
+  gets the `ShadowedFunction` warning, and a `let`, `const`, `class` or function declaration hides the built-in. A
+  top-level `var` of a built-in name fails in a statement-form input expression, since it would write the read-only
+  global; it works in Run JavaScript, whose body runs inside a function. The web-standard name was chosen over `clone`, which scripts commonly use for
   their own locals (`const clone = …`), so reserving it would warn on ordinary code.
 
 The precision policy is one replaceable host-wide component (`IJavaScriptPrecisionPolicy`, D-17). Elsa ships only

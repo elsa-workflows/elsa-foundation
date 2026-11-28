@@ -171,13 +171,15 @@ public sealed class ScriptVariableReadAnalyzerTests
     [Theory]
     // The script's own function of that name hides the built-in and can change its argument.
     [InlineData("function structuredClone(o) { o.items.push(3); return o; } structuredClone(variables.order); return 1;")]
-    // Copying the argument runs the script's toJSON, which can change it.
-    [InlineData("Object.prototype.toJSON = function () { this.items.push(3); return null; }; structuredClone(variables.order); return 1;")]
+    // Copying the argument runs the script's toJSON, which can change it (here: pop the variable's array).
+    [InlineData("Array.prototype.toJSON = Array.prototype.pop; structuredClone(variables.order); return 1;")]
     public void A_value_passed_to_structuredClone_escapes_when_the_script_can_run_code_on_it(string source)
     {
         var analysis = _javaScript.Analyze(source, scriptBody: true)!;
 
         Assert.Equal(["order"], analysis.Escapes);
+        // Nothing else marks the script opaque: the escape alone puts the variable in the may-write set.
+        Assert.False(analysis.HasComputedWrite);
     }
 
     [Theory]
