@@ -18,8 +18,8 @@ namespace Elsa3.Mapping.Services;
 /// <param name="definiteWritesOnly">
 /// Counts only a change the script itself makes to a workflow-owned value (#5894): a member assignment, an update, a
 /// delete, an array method that changes its array, or <c>Object.assign</c>, <c>defineProperty</c> and their kin with that
-/// value as the target. A call whose effect is unknown (an opaque helper, a callback, dynamic code) is no write in this
-/// mode. An input expression is refused on a definite change only, so an unknown call never blocks a conversion; the
+/// value as the target. A call whose effect is unknown (an opaque helper, a callback handed to it, dynamic code) is no
+/// write in this mode; a callback handed to a known iteration method (<c>forEach</c>, <c>map</c>, …) counts as run. An input expression is refused on a definite change only, so an unknown call never blocks a conversion; the
 /// default mode keeps counting both, as the reusable and capture checks need.
 /// </param>
 internal sealed class Elsa3ReusableVariableWriteAnalyzer(
@@ -1210,6 +1210,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
 
     private bool OpaqueOwnership(Value value)
     {
+        // Only definite writes count: what unknown code might do with a callback it receives (run it or not) is no
+        // definite write, so the callbacks are not run as if it did (#5894).
+        if (definiteWritesOnly) return false;
         // Unknown native code can invoke callbacks nested in a wrapper/prototype and can repeat them in an
         // unknown order. Inspect that finite callable graph to an ownership fixed point, including callbacks
         // which acquire a workflow value themselves rather than receiving one as an argument.

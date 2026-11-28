@@ -221,10 +221,6 @@ public sealed class Elsa3ExpressionRewriter(
         "Move the assignment into a Set Variable activity in the Elsa 3 workflow. In a reusable workflow, Elsa 4 has no Set Variable yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED); a Run JavaScript script can set its variables.";
 
     /// <summary>
-    /// What to change when an input expression writes a variable (spec 1231 FR-033): Elsa 4 input expressions only read,
-    /// and a Run JavaScript script is where a step writes variables (its setters convert there).
-    /// </summary>
-    /// <summary>
     /// #5894: an input expression changes a value it read from a variable. Elsa 3 handed scripts an object variable live,
     /// so the change reached the variable, and an array variable as a copy, so it did not; both are usually declared
     /// <c>Object</c>, so the converter cannot tell them apart, and Elsa 4 faults on either (VF-BIND-001). The guidance
@@ -239,8 +235,13 @@ public sealed class Elsa3ExpressionRewriter(
         "as a copy, so the variable stayed as it was. Both are usually declared as Object, so the converter refuses either. " +
         "In the Elsa 3 workflow, if later steps rely on the change, move it into a Run JavaScript step before this input, which can " +
         "set variables. Otherwise change a local copy and leave the variable as it is: 'items.slice()' for an array, " +
-        "'Object.assign({}, order)' for an object, or 'JSON.parse(JSON.stringify(order))' when the change reaches a nested member.");
+        "'Object.assign({}, order)' for an object, or 'JSON.parse(JSON.stringify(value))' for either when the change reaches " +
+        "a nested member or an array element.");
 
+    /// <summary>
+    /// What to change when an input expression writes a variable (spec 1231 FR-033): Elsa 4 input expressions only read,
+    /// and a Run JavaScript script is where a step writes variables (its setters convert there).
+    /// </summary>
     private const string VariableWriteGuidance =
         "Move the assignment into a Set Variable activity, or into a Run JavaScript activity, whose script can set variables, in the Elsa 3 workflow. " +
         "In a reusable workflow, Elsa 4 has no Set Variable activity yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED); use the Run JavaScript activity there.";

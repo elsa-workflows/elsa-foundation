@@ -74,9 +74,9 @@ public sealed class Elsa3ExpressionRewriterTests
     /// are the JTest corpus patterns (array-methods, object-methods, logging-workflow, composition-execute-workflow-root).
     /// </summary>
     [Theory]
-    [InlineData("const array = getArrayVariable();\r\nconst itemToAdd = getHttpRequestBody().unshift.itemToAdd\r\nconst newLength = array.unshift(itemToAdd);\r\nreturn { unshiftedArray: array, newLength: newLength, arrayVariable: getArrayVariable() }")]
-    [InlineData("var obj = getObjectVariable();\r\nconst propertyName = getHttpRequestBody().deleteProperty.name;\r\ndelete obj[propertyName];\r\nreturn { result: obj, objectVariable: getObjectVariable() }")]
-    [InlineData("let responseBody = getHttpResponseBody();\r\nresponseBody.queryArguments = getQueryArguments();\r\nreturn responseBody;")]
+    [InlineData("const array = getArrayVariable();\r\nconst itemToAdd = getHttpRequestBody().unshift.itemToAdd\r\nconst newLength = array.unshift(itemToAdd);\r\n\r\nreturn {\r\n    unshiftedArray: array,\r\n    newLength: newLength,\r\n    arrayVariable: getArrayVariable(), correlationId: getCorrelationId()\r\n}\r\n")]
+    [InlineData("var obj = getObjectVariable();\r\nconst propertyName = getHttpRequestBody().deleteProperty.name;\r\ndelete obj[propertyName];\r\n\r\nreturn {\r\n    result: obj,\r\n    objectVariable: getObjectVariable(), correlationId: getCorrelationId()\r\n}")]
+    [InlineData("let responseBody = getHttpResponseBody();\r\nresponseBody.queryArguments = getQueryArguments();\r\nresponseBody.correlationId = getCorrelationId();\r\nreturn responseBody;")]
     [InlineData("var result = getHttpRequestBody().subworkflowInput;\r\nresult.MillisecondsToDelaySubworkflowExecutionTime = getHttpRequestBody().millisecondsToDelaySubworkflowExecutionTime;\r\nreturn result;")]
     [InlineData("getOrder().lines.push(1)")]
     [InlineData("delete getOrder().status")]
@@ -108,6 +108,7 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("const name = getHttpRequestBody().name; var result = {}; result[name] = getHttpRequestBody().value; return result;", Elsa3JavaScriptMode.Expression)]
     [InlineData("getArrayVariable().map(item => item * 2)", Elsa3JavaScriptMode.Expression)]
     [InlineData("getOrder().total.toFixed(2)", Elsa3JavaScriptMode.Expression)]
+    [InlineData("var order = getOrder(); getHttpRequestBody().hooks.register(function () { order.touched = true; }); return order.status;", Elsa3JavaScriptMode.Expression)]
     [InlineData("var order = getOrder(); return { status: order.status, lines: order.lines.length };", Elsa3JavaScriptMode.Expression)]
     [InlineData("var order = getOrder(); order.status = 'Paid'; return order;", Elsa3JavaScriptMode.Script)]
     public void Input_expression_that_changes_no_value_it_read_converts(string source, Elsa3JavaScriptMode mode)
@@ -118,9 +119,14 @@ public sealed class Elsa3ExpressionRewriterTests
         Assert.True(result.Succeeded, string.Join(Environment.NewLine, result.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
     }
 
-    /// <summary>Every name a test script reads, through getVariable or a generated getter, is a workflow variable.</summary>
+    /// <summary>
+    /// Every name a test script reads, through getVariable or a generated getter, is a workflow variable, except the
+    /// workflow instance's correlation id, which no variable shadows.
+    /// </summary>
     private static Elsa3ExpressionParameterResolution ResolveVariables(Elsa3AmbientReference reference) => reference.Kind switch
     {
+        Elsa3AmbientReferenceKind.GeneratedAccessor when reference.Name == "CorrelationId" => Elsa3ExpressionParameterResolution.Failure(
+            new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.DanglingReference, "No variable.", "None.")),
         Elsa3AmbientReferenceKind.Variable or Elsa3AmbientReferenceKind.GeneratedAccessor => Elsa3ExpressionParameterResolution.SuccessVariable(
             new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, $"variable-{reference.Name}"), reference.Name),
         _ => Resolve(reference),
