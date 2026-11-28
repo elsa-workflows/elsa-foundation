@@ -6,7 +6,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 internal sealed class WorkbenchHostProcess : IAsyncDisposable
 {
     private const string Host = "Elsa.Workbench.Host";
-    private static readonly string SourceDirectory = Path.Join(ChildHostProcess.RepoRoot, "apps", Host);
+    private static readonly string SourceDirectory = Path.Join(ChildHostProcess.RepoRoot, "server/apps", Host);
     private readonly ChildHostProcess _process;
 
     /// <summary>The management-key header used by Workbench's module and shell-management endpoints.</summary>

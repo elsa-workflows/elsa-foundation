@@ -44,7 +44,7 @@ public sealed partial class CatalogLinkGuardTests
     {
         var files = Tracked
             .Where(path => Path.GetFileName(path) == Catalog ||
-                           Path.GetFileName(path) == "README.md" && (path.StartsWith("Essentials/", StringComparison.Ordinal) || path.StartsWith("extensions/", StringComparison.Ordinal)))
+                           Path.GetFileName(path) == "README.md" && (path.StartsWith("essentials/", StringComparison.Ordinal) || path.StartsWith("extensions/", StringComparison.Ordinal)))
             .Order(StringComparer.Ordinal)
             .ToArray();
         var links = files.SelectMany(file => RelativeLinks(file).Select(link => (File: file, link.Line, link.Target, Resolved: Resolve(file, link.Target)))).ToArray();

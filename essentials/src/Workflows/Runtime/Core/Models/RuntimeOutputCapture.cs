@@ -7,6 +7,9 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class RuntimeOutputCapture
 {
+    /// <summary>Identifies a compiled capture into a workflow variable.</summary>
+    public const string WorkflowVariableValueIdPrefix = "variable:";
+
     public RuntimeOutputCapture(
         string outputName,
         string valueId,

@@ -13,6 +13,41 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["workbench-shipped-flowcharts", var graphProvider and ("sqlite" or "postgres"), var graphWorkbench])
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedFlowchartsAsync(graphWorkbench, graphProvider == "postgres");
+    return 0;
+}
+if (args is ["workbench-shipped-history", var historyProvider and ("sqlite" or "postgres"), var historyWorkbench, .. var historyMode] &&
+    historyMode is ([] or ["playback"] or ["descendants"]))
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedHistoryAsync(historyWorkbench, historyProvider == "postgres",
+        historyMode.SingleOrDefault());
+    return 0;
+}
+if (args is ["workbench-http-waits", var waitsProvider and ("sqlite" or "postgres"), var waitsWorkbench, .. var waitsMode] &&
+    waitsMode is ([] or ["preview"] or ["gated"] or ["stock"]))
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunHttpWaitsAsync(waitsWorkbench, waitsProvider == "postgres",
+        gated: waitsMode is ["gated"], stock: waitsMode is ["stock"]);
+    return 0;
+}
+if (args is ["workbench-shipped-children", var childrenProvider and ("sqlite" or "postgres"), var childrenWorkbench, .. var childrenMode] &&
+    childrenMode is [] or ["stock"])
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedChildrenAsync(
+        childrenWorkbench, childrenProvider == "postgres", stock: childrenMode is ["stock"]);
+    return 0;
+}
+if (args is ["workbench-terminal-output", var outputsProvider and ("sqlite" or "postgres"), var outputsWorkbench, .. var outputMode] &&
+    outputMode is ([] or ["s6"] or ["shared"]))
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunTerminalOutputAsync(outputsWorkbench,
+        outputsProvider == "postgres", withTimers: outputMode is ["s6"] or ["shared"], shared: outputMode is ["shared"]);
+    return 0;
+}
+if (args is ["sqlite-workbench-core-preview", var workbench])
+    return await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunSqliteAsync(workbench);
 if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
 {
     var workbenchExecutable = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_WORKBENCH");
@@ -27,6 +62,99 @@ if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
 if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, .. var readsProfile] && readsProfile is ([] or ["timed"]))
     return await PostgresCorePreviewReadSeed.RunAsync(originalRoot, seedFile, timed: readsProfile.Length != 0);
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
+if (args is ["direct-test-run-profile", var testRunProfileProvider and ("postgres" or "sqlite")])
+    return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(testRunProfileProvider == "postgres");
+if (args is ["ephemeral-test-run-profile", var ephemeralTestRunProvider and ("postgres" or "sqlite")])
+    return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(ephemeralTestRunProvider == "postgres", ProfileCapabilityChecks.TestRunProfile.Ephemeral);
+if (args is ["attached-test-run-profile", var attachedTestRunProvider and ("postgres" or "sqlite")])
+    return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(attachedTestRunProvider == "postgres", ProfileCapabilityChecks.TestRunProfile.Attached);
+if (args is ["held-ephemeral-http-profile", var heldEphemeralProvider and ("postgres" or "sqlite")])
+    return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(heldEphemeralProvider == "postgres", ProfileCapabilityChecks.TestRunProfile.HeldEphemeralHttp);
+if (args is ["qualified-inline-root-core"]) return await QualifiedInlineRootCoreChecks.RunAsync();
+if (args is ["inline-root-promotion", var inlineProvider and ("postgres" or "sqlite"), var inlineFence and ("checked" or "in-batch")])
+    return await InlineRootPromotionChecks.RunAsync(inlineProvider == "postgres", inlineFence == "in-batch");
+if (args is ["inline-root-promotion", var lateInlineProvider and ("postgres" or "sqlite"), var lateInlineFence and ("checked" or "in-batch"), "125"])
+    return await InlineRootPromotionChecks.RunAsync(lateInlineProvider == "postgres", lateInlineFence == "in-batch", laterRevision: true);
+if (args is ["shipped-schedule-owner-mode", var modeProvider and ("postgres" or "sqlite"), var mode and ("standalone" or "managed")])
+    return await ShippedScheduleOwnerModeChecks.RunAsync(modeProvider == "postgres", mode == "managed");
+if (args is ["root-auxiliary-owner", var auxiliaryProvider and ("postgres" or "sqlite"), var auxiliaryFence and ("checked" or "in-batch")])
+    return await RootAuxiliaryOwnerChecks.RunAsync(auxiliaryProvider == "postgres", auxiliaryFence == "in-batch");
+if (args is ["root-schedule-controls", var controlsProvider and ("postgres" or "sqlite"), var controlsFence and ("checked" or "in-batch")])
+    return await RootScheduleControlChecks.RunAsync(controlsProvider == "postgres", controlsFence == "in-batch");
+if (args is ["root-managed-schedules", var managedProvider and ("postgres" or "sqlite"), var managedFence and ("checked" or "in-batch")])
+    return await RootScheduleControlChecks.RunAsync(managedProvider == "postgres", managedFence == "in-batch", managedProfile: true);
+if (args is ["root-schedule-inventory", var scheduleProvider and ("postgres" or "sqlite")])
+    return await RootScheduleInventoryChecks.RunAsync(scheduleProvider == "postgres");
+if (args is ["root-schedule-occurrence", var occurrenceProvider and ("postgres" or "sqlite")])
+    return await RootScheduleInventoryChecks.RunAsync(occurrenceProvider == "postgres", settleOccurrences: true);
+if (args is ["root-schedule-occurrence", var occurrenceLifecycleProvider and ("postgres" or "sqlite"), var occurrenceFence and ("checked" or "in-batch")])
+    return await RootScheduleInventoryChecks.RunAsync(occurrenceLifecycleProvider == "postgres", settleOccurrences: true, fenceInBatch: occurrenceFence == "in-batch");
+if (args is ["root-schedule-lineage", var lineageProvider and ("postgres" or "sqlite"), var lineageFence and ("checked" or "in-batch")])
+    return await RootScheduleInventoryChecks.RunAsync(lineageProvider == "postgres", settleOccurrences: true,
+        fenceInBatch: lineageFence == "in-batch", trackLineage: true);
+if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
+if (args is ["kernel-event-starts", var eventStartProvider and ("postgres" or "sqlite"), var eventStartFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunStartsAsync(eventStartProvider, eventStartFence == "in-batch");
+if (args is ["kernel-event-receipts", var receiptProvider and ("postgres" or "sqlite"), var receiptFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunStartsAsync(receiptProvider, receiptFence == "in-batch", retainReceipts: true);
+if (args is ["kernel-event-scan", var scanProvider and ("postgres" or "sqlite"), var scanFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunStartsAsync(scanProvider, scanFence == "in-batch", retainReceipts: true, orderedScan: true);
+if (args is ["kernel-public-event-replies", var replyEventProvider and ("postgres" or "sqlite"), var replyEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPublicEventRepliesAsync(replyEventProvider, replyEventFence == "in-batch");
+if (args is ["kernel-public-event-remote-reply", var remoteEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunRemotePublicEventReplyAsync(remoteEventFence == "in-batch");
+if (args is ["kernel-protected-event-remote-observer"])
+    return await KernelAuthoredEventChecks.RunRemotePublicEventReplyAsync(inBatch: true, protectedObserver: true);
+if (args is ["kernel-public-event-starts", var publicEventProvider and ("postgres" or "sqlite"), var publicEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPublicStartsAsync(publicEventProvider, publicEventFence == "in-batch");
+if (args is ["kernel-public-event-host", var eventHostProvider and ("postgres" or "sqlite"),
+    var eventHostFence and ("checked" or "in-batch"), var eventHostMode and ("generic" or "protected")])
+    return await KernelAuthoredEventChecks.RunPublicEventHostAsync(eventHostProvider, eventHostFence == "in-batch", eventHostMode == "protected");
+if (args is ["kernel-shipped-event-host", var shippedEventProvider and ("postgres" or "sqlite"),
+    var shippedEventFence and ("checked" or "in-batch"), var shippedEventMode and ("generic" or "protected")])
+    return await KernelAuthoredEventChecks.RunPublicEventHostAsync(shippedEventProvider, shippedEventFence == "in-batch", shippedEventMode == "protected", shipped: true);
+if (args is ["kernel-protected-event-observer"])
+    return await KernelAuthoredEventChecks.RunPublicEventHostAsync("postgres", inBatch: true, protectedStarts: true, observeReplies: true);
+if (args is ["kernel-sb7-broadcast", var sb7Provider and ("postgres" or "sqlite"), var sb7Fence and ("checked" or "in-batch"),
+    var sb7Source and ("outside" or "authored")])
+    return await KernelAuthoredEventChecks.RunSb7BroadcastAsync(sb7Provider, sb7Fence == "in-batch", sb7Source == "authored");
+if (args is ["kernel-paged-event-publication", var pagedEventProvider and ("postgres" or "sqlite"), var pagedEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedEventProvider, pagedEventFence == "in-batch");
+if (args is ["kernel-paged-event-owner-replacement", var replacementProvider and ("postgres" or "sqlite"),
+    var replacementFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(replacementProvider, replacementFence == "in-batch", replaceOwner: true);
+if (args is ["kernel-paged-event-paused-owner", var pausedProvider and ("postgres" or "sqlite"),
+    var pausedFence and ("checked" or "in-batch"), var pausedPath, var pausedBoundary and ("first-page" or "producer")])
+    return await KernelAuthoredEventChecks.RunPausedPagedEventOwnerAsync(pausedProvider, pausedFence == "in-batch", pausedPath,
+        afterProducer: pausedBoundary == "producer");
+if (args is ["kernel-paged-protected-authority-snapshot", var snapshotProvider and ("postgres" or "sqlite"),
+    var snapshotFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunProtectedSnapshotAsync(snapshotProvider, snapshotFence == "in-batch");
+if (args is ["kernel-paged-event-cleanup", var cleanupProvider and ("postgres" or "sqlite")])
+    return await KernelAuthoredEventChecks.RunPagedEventCleanupAsync(cleanupProvider);
+if (args is ["kernel-paged-authored-event", var pagedAuthoredProvider and ("postgres" or "sqlite"), var pagedAuthoredFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedAuthoredProvider, pagedAuthoredFence == "in-batch", authored: true);
+if (args is ["kernel-paged-authored-park", var pagedParkProvider and ("postgres" or "sqlite"), var pagedParkFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedParkProvider, pagedParkFence == "in-batch", parkPublication: true);
+if (args is ["kernel-paged-authored-dead-letter", var deadLetterProvider and ("postgres" or "sqlite"), var deadLetterFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedAuthoredDeadLettersAsync(deadLetterProvider, deadLetterFence == "in-batch");
+if (args is ["kernel-physical-event-pages", var eventPageProvider and ("postgres" or "sqlite"), var eventPageFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(eventPageProvider, eventPageFence == "in-batch", physicalPages: true);
+if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunAsync(authoredEventProvider, authoredEventFence == "in-batch");
+if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
+if (args is ["kernel-http-waits", var httpWaitProvider and ("postgres" or "sqlite"), var httpWaitFence and ("checked" or "in-batch")])
+    return await KernelHttpWaitChecks.RunAsync(httpWaitProvider, httpWaitFence == "in-batch");
+if (args is ["kernel-http-waits", var shippedHttpProvider and ("postgres" or "sqlite"), var shippedHttpFence and ("checked" or "in-batch"), "shipped"])
+    return await KernelHttpWaitChecks.RunAsync(shippedHttpProvider, shippedHttpFence == "in-batch", shipped: true);
+if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"), var backlogFence and ("checked" or "in-batch")])
+    return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
+if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or "sqlite"), var pressureFence and ("checked" or "in-batch")])
+    return await RootAdmissionPressureChecks.RunAsync(pressureProvider == "postgres", pressureFence == "in-batch");
+if (args is ["shipped-delay-recovery", var delayProvider and ("postgres" or "sqlite"), var delayFence and ("checked" or "in-batch")])
+    return await ShippedDelayRecoveryChecks.RunAsync(delayProvider == "postgres", delayFence == "in-batch");
+if (args is ["root-sequenced-journal", var journalProvider and ("postgres" or "sqlite"), var journalFence and ("checked" or "in-batch")])
+    return await ShippedDelayRecoveryChecks.RunAsync(journalProvider == "postgres", journalFence == "in-batch", sequencedJournal: true);
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])
@@ -38,10 +166,107 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
         return await PostgresRootOperatorChecks.RunAsync([a, b, c], operatorWriter == "owned", operatorFence == "in-batch", operatorPhase == "resume");
 }
 if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
+if (args is ["kernel-public-event-recover", var recoverEventProvider and ("postgres" or "sqlite"), var recoverEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPublicEventRecoverAsync(recoverEventProvider, recoverEventFence == "in-batch");
+if (args is ["keyed-root", var keyedProvider and ("postgres" or "sqlite"), var keyedFence and ("checked" or "in-batch")])
+    return await KeyedRootChecks.RunAsync(keyedProvider == "postgres", keyedFence == "in-batch");
+if (args is ["pg-k12-ownership", .. var k12Args])
+{
+    if (k12Args is [var run, var scenario and ("crash" or "wedge"), var role and ("survivor" or "victim" or "revive"),
+        var topology and ("network" or "local")] && Guid.TryParse(run, out var runId))
+        return await PostgresNetworkOwnershipChecks.RunAsync(runId, scenario, role, local: topology == "local");
+
+    Console.Error.WriteLine("Usage: pg-k12-ownership <run-uuid> <crash|wedge> <survivor|victim|revive> <network|local>");
+    Console.Error.WriteLine("Use the same Release binaries, run UUID and fresh dedicated KERNEL_PREVIEW_POSTGRES database for all roles.");
+    Console.Error.WriteLine("Start survivor first. Launch victim when survivor logs start-victim and revive on that same host when it logs revive.");
+    return 2;
+}
+if (args is ["sqlite-shipped-install"]) return await SqliteShippedInstallChecks.RunAsync();
+if (args is ["sqlite-root-terminal-envelope", var sqliteTerminalFence and ("checked" or "in-batch")])
+    return await ShippedNativeTerminalEnvelopeChecks.RunAsync(postgres: false, inBatch: sqliteTerminalFence == "in-batch");
+if (args is ["pg-root-terminal-envelope", "owned", var pgTerminalFence and ("checked" or "in-batch")])
+    return await ShippedNativeTerminalEnvelopeChecks.RunAsync(postgres: true, inBatch: pgTerminalFence == "in-batch");
+if (args is ["sqlite-root-ingress"]) return await SqliteRootIngressChecks.RunAsync();
+if (args is ["root-self-timed-union", var unionProvider and ("postgres" or "sqlite"), var unionFence and ("checked" or "in-batch")])
+    return await RootSelfTimedUnionChecks.RunAsync(unionProvider == "postgres", unionFence == "in-batch");
+if (args is ["root-self-timed-park", var parkUnionProvider and ("postgres" or "sqlite"), var parkUnionFence and ("checked" or "in-batch")])
+    return await RootSelfTimedParkChecks.RunAsync(parkUnionProvider == "postgres", parkUnionFence == "in-batch");
+if (args is ["root-timer-rearm", var rearmProvider and ("postgres" or "sqlite"), var rearmFence and ("checked" or "in-batch")])
+    return await RootSelfTimedParkChecks.RunAsync(rearmProvider == "postgres", rearmFence == "in-batch", rearm: true);
+if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
+if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunHeldRepliesAsync(sqliteReplyFence == "in-batch");
+if (args is ["root-authored-standalone-events", var bridgeProvider and ("postgres" or "sqlite"), var bridgeFence and ("checked" or "in-batch")])
+    return await AuthoredStandaloneEventOutboxChecks.RunAsync(bridgeProvider == "postgres", bridgeFence == "in-batch");
+if (args is ["root-authored-standalone-events", var optionalBridgeProvider and ("postgres" or "sqlite"),
+        var optionalBridgeFence and ("checked" or "in-batch"), var optionalRelay and ("enabled" or "disabled")])
+    return await AuthoredStandaloneEventOutboxChecks.RunAsync(optionalBridgeProvider == "postgres",
+        optionalBridgeFence == "in-batch", relayEnabled: optionalRelay == "enabled");
+if (args is ["sqlite-prepared-starts", var preparedFence and ("checked" or "in-batch")])
+    return await SqlitePreparedStartChecks.RunAsync(preparedFence == "in-batch");
+if (args is ["sqlite-prepared-starts", var shippedPreparedFence and ("checked" or "in-batch"), "shipped"])
+    return await SqlitePreparedStartChecks.RunAsync(shippedPreparedFence == "in-batch", shipped: true);
+if (args is ["sqlite-held-reply-peer", var sqliteReplyPath, var sqlitePeerFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunHeldReplyPeerAsync(sqliteReplyPath, sqlitePeerFence == "in-batch");
+if (args is ["sqlite-root-terminate", var sqliteTerminateFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunTerminateAsync(sqliteTerminateFence == "in-batch");
+if (args is ["sqlite-root-retirement", var sqliteRetireFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunRetirementAsync(sqliteRetireFence == "in-batch");
+if (args is ["sqlite-root-held-operators", var sqliteOperatorFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunHeldOperatorsAsync(sqliteOperatorFence == "in-batch");
+if (args is ["sqlite-root-park-opening", var sqliteParkFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkOpeningAsync(sqliteParkFence == "in-batch");
+if (args is ["sqlite-root-park-arrivals", var sqliteParkArrivalFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkArrivalsAsync(sqliteParkArrivalFence == "in-batch");
+if (args is ["sqlite-root-park-shipped", var sqliteParkShippedFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkArrivalsAsync(sqliteParkShippedFence == "in-batch", recovery: true, shipped: true);
+if (args is ["sqlite-root-park-recovery", var sqliteParkRecoverFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkArrivalsAsync(sqliteParkRecoverFence == "in-batch", recovery: true);
+if (args is ["sqlite-root-park-cohort", var sqliteParkCohortFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkArrivalsAsync(sqliteParkCohortFence == "in-batch", recovery: true, authored: true);
+if (args is ["sqlite-root-park-inspection", var sqliteInspectFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkInspectionAsync(sqliteInspectFence == "in-batch");
+if (args is ["sqlite-root-parked-operators", var sqliteParkedOperatorFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkedOperatorsAsync(sqliteParkedOperatorFence == "in-batch");
+if (args is ["sqlite-root-actor-reads", var sqliteReadsFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunActorReadsAsync(sqliteReadsFence == "in-batch");
+if (args is ["sqlite-root-workflow-history", var sqliteHistoryFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunWorkflowHistoryAsync(sqliteHistoryFence == "in-batch");
 if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"), var loss and ("before" or "before-late" or "after")])
     return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])
     return await PostgresHttpOwnerLoss.RunOwnerAsync(workerFence, pause, new(ownerRef));
+if (args is ["pg-http-event-owner-loss", var eventOwnerFence and ("checked" or "in-batch")])
+    return await PostgresHttpOwnerLoss.RunAsync(eventOwnerFence, "before", heldEvent: true);
+if (args is ["pg-http-event-owner-process", var eventWorkerFence and ("checked" or "in-batch"), var eventPause and ("before" or "resume"), var eventOwnerRef])
+    return await PostgresHttpOwnerLoss.RunOwnerAsync(eventWorkerFence, eventPause, new(eventOwnerRef), heldEvent: true);
+if (args is ["root-prepared-waits", var waitProvider and ("postgres" or "sqlite"), var waitFence and ("checked" or "in-batch")])
+    return await PreparedWaitChecks.RunAsync(waitProvider == "postgres", waitFence == "in-batch");
+if (args is ["root-retained-response", var responseProvider and ("postgres" or "sqlite"), var responseFence and ("checked" or "in-batch")])
+    return await RetainedRootResponseChecks.RunAsync(responseProvider == "postgres", responseFence == "in-batch");
+if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
+if (args is ["pg-protected-held-start"]) return await PostgresHeldStartChecks.RunAsync(protectedStarts: true);
+if (args is ["pg-protected-held-start", "shipped"]) return await PostgresHeldStartChecks.RunAsync(protectedStarts: true, shipped: true);
+if (args is ["pg-child-workflows"]) return await PostgresChildWorkflowChecks.RunAsync();
+if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch")])
+    return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");
+if (args is ["sqlite-child-workflows", var sqliteChildFence and ("checked" or "in-batch")])
+    return await SqliteChildWorkflowChecks.RunAsync(sqliteChildFence == "in-batch");
+if (args is [var childRun and ("shipped-child-workflows" or "protected-child-workflows"),
+        var childProvider and ("postgres" or "sqlite"), var childFence and ("checked" or "in-batch" or "default")])
+    return childProvider == "postgres"
+        ? await PostgresChildWorkflowChecks.RunAsync(childFence == "default" ? null : childFence == "in-batch",
+            shipped: true, protectBirths: childRun == "protected-child-workflows")
+        : await SqliteChildWorkflowChecks.RunAsync(childFence != "checked",
+            shipped: true, protectBirths: childRun == "protected-child-workflows");
+if (args is ["pg-shipped-format"]) return await PostgresShippedFormatChecks.RunAsync();
+if (args is ["pg-shipped-format", var shippedFence and ("checked" or "in-batch")])
+    return await PostgresShippedFormatChecks.RunAsync(shippedFence == "in-batch");
+if (args is ["pg-held-callers"]) return await PostgresHeldCallerChecks.RunAsync();
+if (args is ["pg-held-reply-order", var orderCallers, var orderStarts] && int.TryParse(orderCallers, out var callerCount) &&
+    int.TryParse(orderStarts, out var startCount))
+    return await PostgresHeldStartChecks.RunOrderAsync(callerCount, startCount);
 if (args is ["pg-http-preview", var httpFence and ("checked" or "in-batch"), var httpSchedule and ("timely" or "late" or "disconnect" or "slow-body" or "blocked" or "clock-delay")])
     return await PostgresHttpPreview.RunAsync(httpFence == "in-batch", httpSchedule);
 if (args is ["pg-root-held-direct", var replyFence and ("checked" or "in-batch")])
@@ -54,6 +279,13 @@ if (args is [var chartMode and ("pg-cluster-statechart" or "pg-cluster-statechar
 if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
     return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
 if (args is ["pg-preview-host-lifetime"]) return await PostgresPreviewLifetimeChecks.RunAsync();
+if (args is ["sqlite-host-lifetime", var sqliteFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunAsync(sqliteFence == "in-batch");
+if (args is ["sqlite-host-lifetime", var shippedSqliteFence and ("checked" or "in-batch"), "shipped"])
+    return await SqliteHostLifetimeChecks.RunFoundationAsync(shippedSqliteFence == "in-batch");
+if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault" or "stuck" or "recover" or "foundation-stuck" or "foundation-recover"), var sqlitePath,
+    var peerFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunPeerAsync(sqliteMode, sqlitePath, peerFence == "in-batch");
 if (args is ["pg-preview-host-watchdog"]) return await PostgresPreviewHostChecks.RunAsync();
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
     return await PostgresClusterChecks.RunAsync(clusterPartitions, clusterMode == "pg-cluster-peer", clusterMode == "pg-cluster-crash");
@@ -82,6 +314,19 @@ if (args is ["pg-write-budget", var budgetWriter and ("owned" or "ef"), var budg
     budgetOptions is [] or ["--require-budget"])
     return await PostgresWriteBudget.RunAsync(budgetWriter == "owned" ? CommitSql.Owned : CommitSql.EntityFramework,
         budgetFence == "in-batch", budgetOptions.Length != 0);
+if (args is ["pg-tenant-start-load", var loadMode and ("limited" or "control"), .. var loadOptions] && loadOptions.Length <= 1)
+    return loadOptions is [var count]
+        ? await PostgresTenantStartLoadChecks.RunAsync(loadMode == "limited", int.Parse(count, System.Globalization.CultureInfo.InvariantCulture))
+        : await PostgresTenantStartLoadChecks.RunAsync(loadMode == "limited");
+if (args is ["shipped-write-budget", var shippedBudgetProvider and ("postgres" or "sqlite"),
+    var shippedBudgetFence and ("checked" or "in-batch"), .. var shippedBudgetOptions] &&
+    shippedBudgetOptions is [] or ["--require-budget"])
+    return await ShippedWriteBudget.RunAsync(shippedBudgetProvider == "postgres", shippedBudgetFence == "in-batch",
+        requireBudget: shippedBudgetOptions.Length != 0);
+if (args is ["shipped-foreach-budget", var forEachProvider and ("postgres" or "sqlite"), var forEachMode and ("balanced" or "durable"),
+    var forEachSize] && int.TryParse(forEachSize, out var forEachCount) && forEachCount is 100 or 1_000)
+    return await ShippedWriteBudget.RunAsync(forEachProvider == "postgres", inBatch: true, requireBudget: false,
+        forEach: new(forEachMode == "balanced" ? Modes.Balanced : Modes.Durable, forEachCount));
 if (args is ["pg-root-value-check", var valueFence and ("checked" or "in-batch"), "birth"])
     return await PostgresRootValueChecks.RunAsync(valueFence == "in-batch", null);
 if (args is ["pg-root-value-check", var valueRestartFence and ("checked" or "in-batch"), "restart", var valueActor, var valueEpoch] &&
@@ -163,12 +408,20 @@ if (args is ["pg-root-park-inspection", var parkReadWriter and ("owned" or "ef")
     return await PostgresRootParkOpeningChecks.RunAsync(parkReadWriter == "owned", parkReadFence == "in-batch", inspection: true);
 if (args is ["pg-root-composition", var compositionWriter and ("owned" or "ef"), var compositionFence and ("checked" or "in-batch")])
     return await PostgresRootCompositionChecks.RunAsync(compositionWriter == "owned", compositionFence == "in-batch");
+if (args is ["pg-root-composition", var compositionWriterShipped and ("owned" or "ef"), var compositionFenceShipped and ("checked" or "in-batch"), "shipped"])
+    return await PostgresRootCompositionChecks.RunAsync(compositionWriterShipped == "owned", compositionFenceShipped == "in-batch", shippedSet: true);
 if (args is ["pg-root-composed-install", var installWriter and ("owned" or "ef"), var installFence and ("checked" or "in-batch")])
     return await PostgresRootComposedInstallChecks.RunAsync(installWriter == "owned", installFence == "in-batch");
+if (args is ["pg-root-composed-install", var installWriterShipped and ("owned" or "ef"), var installFenceShipped and ("checked" or "in-batch"), "shipped"])
+    return await PostgresRootComposedInstallChecks.RunAsync(installWriterShipped == "owned", installFenceShipped == "in-batch", shippedSet: true);
 if (args is ["pg-root-parked-operators", var parkedWriter and ("owned" or "ef"), var parkedFence and ("checked" or "in-batch")])
     return await PostgresRootParkedOperatorChecks.RunAsync(parkedWriter == "owned", parkedFence == "in-batch");
+if (args is ["pg-root-parked-operators", var parkedWriterShipped and ("owned" or "ef"), var parkedFenceShipped and ("checked" or "in-batch"), "shipped"])
+    return await PostgresRootParkedOperatorChecks.RunAsync(parkedWriterShipped == "owned", parkedFenceShipped == "in-batch", shippedSet: true);
 if (args is ["pg-root-state-family", var familyWriter and ("owned" or "ef"), var familyFence and ("checked" or "in-batch")])
     return await PostgresRootStateFamilyChecks.RunAsync(familyWriter == "owned", familyFence == "in-batch");
+if (args is ["pg-root-state-family", var familyWriterShipped and ("owned" or "ef"), var familyFenceShipped and ("checked" or "in-batch"), "shipped"])
+    return await PostgresRootStateFamilyChecks.RunAsync(familyWriterShipped == "owned", familyFenceShipped == "in-batch", shippedSet: true);
 if (args is ["pg-root-retention", var policyWriter and ("owned" or "ef"), var policyFence and ("in-batch" or "checked")])
     return await PostgresRootRetentionChecks.RunAsync(policyWriter == "owned", policyFence == "in-batch");
 if (args is ["pg-root-plan-selection", var planWriter and ("owned" or "ef"), var planFence and ("in-batch" or "checked")])
@@ -254,7 +507,12 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | memory [runs] | pg-runtime-cluster [partitions] [wake]");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | " +
+    "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | root-sequenced-journal <sqlite|postgres> <checked|in-batch> | " +
+    "shipped-foreach-budget <sqlite|postgres> <balanced|durable> <100|1000> | " +
+    "workbench-shipped-history <sqlite|postgres> <executable> [playback|descendants] | workbench-shipped-flowcharts <sqlite|postgres> <executable> | " +
+    "workbench-http-waits <sqlite|postgres> <executable> [stock|preview|gated] | " +
+    "memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
 internal static class Cost

@@ -3,7 +3,7 @@
 set -euo pipefail
 old=${1:?Supply the absolute path to the predecessor Kernel.Native.Run.dll}
 runner=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$runner/../../../../../" && pwd)
+root=$(git -C "$runner" rev-parse --show-toplevel)
 new="$root/essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll"
 upgrade="$runner/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
 [[ -f "$old" && -f "$new" && -f "$upgrade" ]]

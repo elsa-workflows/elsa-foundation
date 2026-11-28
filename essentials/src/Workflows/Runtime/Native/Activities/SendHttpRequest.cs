@@ -54,7 +54,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
 
     [Input] public string Url { get; set; } = "";
     [Input] public string Method { get; set; } = "POST";
-    /// <summary>The body: a JSON value sent as application/json, or a string sent as <see cref="ContentType"/> text.</summary>
+    /// <summary>The body: a string is sent as its text (text/plain unless <see cref="ContentType"/> says otherwise), any other JSON value as JSON (application/json unless it says otherwise). An empty string sends no content.</summary>
     [Input] public JsonNode? Body { get; set; }
     /// <summary>The body's media type, parameters allowed (<c>text/plain; charset=utf-8</c>).</summary>
     [Input] public string? ContentType { get; set; }
@@ -79,17 +79,20 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             return Fault("http.request.invalid", $"The expected status codes '{ExpectedStatusCodes?.ToJsonString()}' are not status codes.");
         using var request = Request(context, out var refused);
         if (request is null) return Fault("http.request.invalid", refused!);
-        if (Connection is { Length: > 0 } connection)
+        var usesScopedConnection = Connection is { Length: > 0 } && context.Http.ApplyConnection is not null;
+        if (Connection is { Length: > 0 } connection && !usesScopedConnection)
         {
             if (context.Http.Connection is not { } resolve) return Fault("http.connection.unavailable", $"The host resolves no Connection, so '{connection}' cannot be used.");
             foreach (var (name, value) in await resolve(connection, context.CancellationToken))
                 if (!request.Headers.TryAddWithoutValidation(name, value)) request.Content?.Headers.TryAddWithoutValidation(name, value);
         }
-        var sent = request.RequestUri;     // a client that follows a redirect rewrites the request it sends
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
         deadline.CancelAfter(timeout ?? TimeSpan.FromMilliseconds(DefaultTimeoutMilliseconds));
         try
         {
+            using var mask = await ApplyConnectionAsync(request, context, deadline.Token);
+            deadline.Token.ThrowIfCancellationRequested();
+            var sent = request.RequestUri;     // a client that follows a redirect rewrites the request it sends
             // Headers first, so that the body is read only as far as the cap: an HttpClient would buffer all of it.
             using var response = client is HttpClient http
                 ? await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
@@ -97,13 +100,19 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             // The response answers the URI sent, unless the client followed a redirect, which carried this request's headers
             // to the URI it landed on. This only reports the leak; NativeHttpOptions.CreateClient's client prevents it.
             if (response.RequestMessage?.RequestUri is { } answered && answered != sent)
-                return Fault("http.client.redirects", $"The host's HTTP client followed a redirect to {answered.GetLeftPart(UriPartial.Authority)}; it must not (NativeHttpOptions.CreateClient).");
-            var headers = ResponseHeaders(response);
+                return Fault("http.client.redirects", mask is null
+                    ? $"The host's HTTP client followed a redirect to {answered.GetLeftPart(UriPartial.Authority)}; it must not (NativeHttpOptions.CreateClient)."
+                    : "The bound HTTP client followed a redirect. Use a client that keeps redirects disabled.");
+            var headers = ResponseHeaders(response, mask);
             var status = (int)response.StatusCode;
-            var (body, tooLarge) = await ReadAsync(response, context.Http.MaxResponseBytes, deadline.Token);
+            var (body, tooLarge) = await ReadAsync(response, context.Http.MaxResponseBytes, mask is not null, deadline.Token);
             return tooLarge
                 ? Complete(new HttpResponseResult(status, headers, null), TooLargeOutcome)
-                : Complete(new HttpResponseResult(status, headers, body), OutcomeOf(status, expected));
+                : Complete(new HttpResponseResult(status, headers, mask is null ? body : MaskBody(body, mask)), OutcomeOf(status, expected));
+        }
+        catch (BoundConnectionUnavailableException)
+        {
+            return Fault("http.connection.unavailable", "The job could not apply its bound HTTP Connection.");
         }
         catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
         {
@@ -113,7 +122,47 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         {
             return Complete(null, FailedOutcome);     // a refused connection, a reset mid-body, a broken encoding
         }
+        catch (Exception) when (usesScopedConnection)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            return Fault("http.connection.response.invalid", "The job could not read a safe bound HTTP response.");
+        }
     }
+
+    private async ValueTask<INativeHttpConnectionMask?> ApplyConnectionAsync(HttpRequestMessage request, ActivityContext context,
+        CancellationToken cancellationToken)
+    {
+        if (Connection is not { Length: > 0 } name || context.Http?.ApplyConnection is not { } apply)
+            return null;
+
+        var selectedKey = request.Headers.NonValidated[IdempotencyKeyHeader].ToArray();
+        INativeHttpConnectionMask? mask;
+        try
+        {
+            mask = await apply(request, name, context.JobTenant, context.EffectKey, cancellationToken);
+        }
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
+        {
+            // The resolver can hold credential values even when it fails. Never expose its exception to the job.
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (Exception)
+        {
+            throw new BoundConnectionUnavailableException();
+        }
+
+        if (mask is null)
+            throw new BoundConnectionUnavailableException();
+        if (!request.Headers.NonValidated.TryGetValues(IdempotencyKeyHeader, out var appliedKey) ||
+            !selectedKey.SequenceEqual(appliedKey, StringComparer.Ordinal))
+        {
+            mask.Dispose();
+            throw new BoundConnectionUnavailableException();
+        }
+        return mask;
+    }
+
+    private sealed class BoundConnectionUnavailableException : Exception;
 
     private static bool TryStatusCodes(JsonNode? value, out int[] codes)
     {
@@ -162,16 +211,19 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             request.Dispose();
             return null;
         }
-        if (Body is not null)
+        // An empty string sends no content, as the old core's empty Content does.
+        if (Body is not null && !(Body is JsonValue empty && empty.TryGetValue<string>(out var none) && none.Length == 0))
         {
-            var json = mediaType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) != false;
-            mediaType ??= new MediaTypeHeaderValue("application/json");
+            // A string is sent as its text, whatever the media type says; any other value as JSON. Without a content type a
+            // string goes as text/plain and anything else as application/json.
+            var text = Body is JsonValue value && value.TryGetValue<string>(out var plain) ? plain : null;
+            mediaType ??= new MediaTypeHeaderValue(text is null ? "application/json" : "text/plain");
             var encoding = Encoding.UTF8;
             if (mediaType.CharSet is { Length: > 0 } charset)
                 try { encoding = Encoding.GetEncoding(charset.Trim('"')); }
                 catch (Exception unknown) when (unknown is ArgumentException or NotSupportedException) { refused = $"'{charset}' is not a charset this host encodes."; request.Dispose(); return null; }
             else mediaType.CharSet = "utf-8";
-            request.Content = new StringContent(!json && Body is JsonValue text && text.TryGetValue<string>(out var plain) ? plain : Body.ToJsonString(), encoding);
+            request.Content = new StringContent(text ?? Body.ToJsonString(), encoding);
             request.Content.Headers.ContentType = mediaType;
         }
         var keyed = false;
@@ -208,17 +260,48 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         return request;
     }
 
-    private static Dictionary<string, string> ResponseHeaders(HttpResponseMessage response)
+    private static Dictionary<string, string> ResponseHeaders(HttpResponseMessage response, INativeHttpConnectionMask? mask)
     {
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, values) in response.Headers.Concat(response.Content.Headers))
-            if (!ReturnedCredentials.Contains(name))
-                headers[name.ToLowerInvariant()] = headers.TryGetValue(name, out var earlier) ? earlier + ", " + string.Join(", ", values) : string.Join(", ", values);
+        {
+            var key = name.ToLowerInvariant();
+            if (ReturnedCredentials.Contains(name) || mask is not null && (mask.Mask(name) != name || mask.Mask(key) != key))
+                continue;
+
+            var joined = string.Join(", ", values);
+            var value = mask?.Mask(joined) ?? joined;
+            headers[key] = headers.TryGetValue(key, out var earlier) ? earlier + ", " + value : value;
+        }
         return headers;
     }
 
+    private static JsonNode? MaskBody(JsonNode? body, INativeHttpConnectionMask mask)
+    {
+        switch (body)
+        {
+            case JsonObject obj:
+                var masked = new JsonObject();
+                foreach (var (name, value) in obj)
+                    if (mask.Mask(name) == name)
+                        masked.Add(name, MaskBody(value, mask));
+                return masked;
+            case JsonArray array:
+                return new JsonArray(array.Select(item => MaskBody(item, mask)).ToArray());
+            case JsonValue scalar when scalar.TryGetValue<string>(out var text):
+                return JsonValue.Create(mask.Mask(text));
+            case JsonValue scalar:
+                var raw = scalar.ToJsonString();
+                var safe = mask.Mask(raw);
+                return safe == raw ? scalar.DeepClone() : JsonValue.Create(safe);
+            default:
+                return null;
+        }
+    }
+
     // The body up to the host's cap: past it, nothing is kept. JSON is parsed when the content type says so; else text.
-    private static async Task<(JsonNode? Body, bool TooLarge)> ReadAsync(HttpResponseMessage response, int maxBytes, CancellationToken cancellationToken)
+    private static async Task<(JsonNode? Body, bool TooLarge)> ReadAsync(HttpResponseMessage response, int maxBytes,
+        bool strictJson, CancellationToken cancellationToken)
     {
         if (response.Content.Headers.ContentLength is { } length && length > maxBytes) return (null, true);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -237,7 +320,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             catch (Exception unknown) when (unknown is ArgumentException or NotSupportedException) { }     // a charset this host lacks reads as UTF-8
         var text = encoding.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
         if (response.Content.Headers.ContentType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
-            try { return (JsonNode.Parse(text), false); }
+            try { return (JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { AllowDuplicateProperties = !strictJson }), false); }
             catch (JsonException) { }
         return (JsonValue.Create(text), false);
     }

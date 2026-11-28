@@ -10,6 +10,10 @@ public static class RuntimeMetadataKeys
     /// <summary>Lookup hint only; a called root must still validate the complete committed dispatch boundary.</summary>
     public const string ChildControlDispatchId = "runtime.childControlDispatchId";
     public const string WorkflowExecutionOrigin = "runtime.workflowExecutionOrigin";
+    /// <summary>Saved stimulus start provenance on the command and envelope.</summary>
+    public const string SavedStimulusStartOrigin = "runtime.savedStimulusStart";
+    /// <summary>Standalone ingress start provenance on the command and envelope.</summary>
+    public const string StandaloneIngressOrigin = "runtime.ingress.origin.v1";
     public const string WorkflowStartedAt = "runtime.workflowStartedAt";
     /// <summary>Monotonic workflow marker indicating that native background work was admitted for this execution.</summary>
     public const string WorkflowHasBackgroundActivityWork = "runtime.hasBackgroundActivityWork";
@@ -396,6 +400,8 @@ public static class RuntimeMetadataKeys
     public const string SchedulerPoisonFailureCount = "runtime.poison.failureCount";
     public const string StartReason = "runtime.startReason";
     public const string StartSchedulerWorkItemId = "runtime.startSchedulerWorkItemId";
+    /// <summary>The exact relative path of a detached standalone HTTP request when the transport can verify its encoding.</summary>
+    public const string StandaloneHttpExactPath = "runtime.standaloneHttpExactPath";
     public const string StimulusHash = "runtime.stimulusHash";
     public const string StimulusType = "runtime.stimulusType";
     public const string SuspendReason = "runtime.suspendReason";

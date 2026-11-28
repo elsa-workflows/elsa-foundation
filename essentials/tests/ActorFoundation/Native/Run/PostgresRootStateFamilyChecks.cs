@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Kernel.EntityFramework;
 using Kernel.Foundation.InMemory;
+using Kernel.Foundation.Postgres;
 using Kernel.Native;
 using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
@@ -39,15 +40,16 @@ internal static class PostgresRootStateFamilyChecks
     private sealed record PhysicalJobRow(long Revision, int Status, string State, string Header, byte[] Wire, string? Jobs);
     private sealed record Header(string Model, string Definition, string TypeData, KeyValuePair<string, string>[] Labels, bool EscapedState);
 
-    internal static async Task<int> RunAsync(bool owned, bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(240));
         var ct = timeout.Token;
-        var withoutPark = RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootTimedJobPreview] |
-            RootCapabilities.ReplyProtocol | RootCapabilities.OperatorReplies;
+        var withoutPark = shippedSet ? RootProfiles.ParkCompositionBase & ~RootProfiles.Formats[StoreFormat.RootParkInspection]
+            : RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootTimedJobPreview] |
+                RootCapabilities.ReplyProtocol | RootCapabilities.OperatorReplies;
         var withPark = withoutPark | RootProfiles.Formats[StoreFormat.RootParkInspection];
         await using (var db = KernelDb.ForUnshippedComposition(options, ParkComposed, withPark))
             Check(await PostgresFixtureDatabase.IsEmptyAsync(db, ct), "the state-family fixture uses an empty PostgreSQL database");
@@ -98,17 +100,20 @@ internal static class PostgresRootStateFamilyChecks
         var family = db.RootStateFamily;
         Check(family == new RootStateFamily(FamilyPrefix, true, true),
             $"the {set} writes one family that names timed jobs, stable body and replies: {family.Prefix}");
-        var shipped = RootProfiles.Formats.Values.Select(shippedSet => RootStateFamily.Of(shippedSet).Prefix).Distinct().ToArray();
-        Check(shipped.Length == 6 && shipped.All(prefix => !family.Prefix.StartsWith(prefix, StringComparison.Ordinal) &&
+        // S7: the shipped format writes this family; no qualification profile's prefix matches it in either direction.
+        Check(RootStateFamily.Of(RootProfiles.Shipped) == family, $"the shipped format writes the {set} family");
+        var qualification = RootProfiles.Formats.Where(entry => entry.Key != StoreFormat.RootShipped)
+            .Select(entry => RootStateFamily.Of(entry.Value).Prefix).Distinct().ToArray();
+        Check(qualification.Length == 6 && qualification.All(prefix => !family.Prefix.StartsWith(prefix, StringComparison.Ordinal) &&
                 !prefix.StartsWith(family.Prefix, StringComparison.Ordinal)),
-            $"no shipped family prefix matches the {set} prefix in either direction");
+            $"no qualification profile's family prefix matches the {set} prefix in either direction");
 
         await store.CreateAsync(1);
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await admission.InstallAsync(ct);
         await admission.InstallAsync(ct);
         foreach (var other in new[] { KernelDb.ForPostgresRootTimedJobPreview(options), KernelDb.ForPostgresRootOperatorReplies(options),
-                     KernelDb.ForPostgresRootReplies(options) })
+                     KernelDb.ForPostgresRootReplies(options), KernelDb.ForPostgresRootShipped(options) })
             await using (other)
             {
                 try
@@ -225,6 +230,7 @@ internal static class PostgresRootStateFamilyChecks
         Check(started.Outcome == Contract.AdmissionOutcome.Accepted, "the Park-less set admits a public workflow start");
         var reference = started.Actor!.Value.Id;
         await store.EnableRootJobsAsync(ct);
+        await store.EnableRootChildrenAsync(ct);
         var (roots, count) = await store.BindWorkerPartitionAsync(0, ct);
         var worker = new Worker("family-writer", 0, store, PostgresNativeRootOwner.Adapter(store, roots, registry), new WorkerOptions { Partitions = count });
         var host = new DurableHost([worker]);
@@ -298,6 +304,7 @@ internal static class PostgresRootStateFamilyChecks
         var pads = new Dictionary<string, int>();
         var padded = new HashSet<string>();
         await store.EnableRootJobsAsync(ct);
+        await store.EnableRootChildrenAsync(ct);
         var (roots, count) = await store.BindWorkerPartitionAsync(0, ct);
         var worker = new Worker("family-jobs", 0, store, PostgresNativeRootOwner.Adapter(store, roots, registry),
             new WorkerOptions { Partitions = count, OnPreparedCheckpoint = (turn, _, _) => Pad(turn) });

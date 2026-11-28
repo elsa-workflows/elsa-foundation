@@ -6,6 +6,43 @@ using Kernel.Model.Contracts;
 
 namespace Kernel.WorkflowActor;
 
+/// <summary>What a workflow actor's header says about its run (<see cref="WorkflowActor.DescribeRun"/>).</summary>
+public sealed record WorkflowRunHeader(string Workflow, string Definition, bool Suspended, string? SubStatus, DateTimeOffset? StartedAt)
+{
+    /// <summary>The execution model of the committed run.</summary>
+    public string? Model { get; init; }
+
+    /// <summary>The journal history retained for the committed run.</summary>
+    public History History { get; init; } = History.Full;
+
+    /// <summary>Whether the actor was started in Ephemeral mode.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool Ephemeral { get; init; }
+
+    /// <summary>The exact publication selection and any caller attribution retained by a published start.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public WorkflowPublishedStart? PublishedStart { get; init; }
+
+    /// <summary>The exact authoring selection and Runtime authority of a scoped Test Run.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public WorkflowTestStart? TestStart { get; init; }
+}
+
+/// <summary>Publication selection retained independently of the executable material selected to run.</summary>
+public sealed record WorkflowPublishedStart(string SourceReferenceId, string SourceKind, string SourceId, string? SourceVersion,
+    string DefinitionVersionId, string ArtifactVersion, string ActivationId, string SlotId, string SlotName, long SlotRevision,
+    string SourceDigest, string? SubjectId);
+
+/// <summary>Test scope and authoring source retained independently of the executable material selected to run.</summary>
+public sealed record WorkflowTestStart(string ScopeId, DateTimeOffset ExpiresAt, string? Tenant, string Partition,
+    string SourceReferenceId, string SourceKind, string SourceId, string? SourceVersion, string DefinitionVersionId,
+    string ArtifactVersion, string SourceDigest, string? SubjectId)
+{
+    /// <summary>The isolated root proved by the child's provider-owned attached birth.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? RootActor { get; init; }
+}
+
 /// <summary>Runs workflow models through the public actor contract.</summary>
 public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
 {
@@ -15,10 +52,22 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     public string Type => ActorType;
 
-    public static StartSpec Start(WorkflowStart start) =>
+    public static StartSpec Start(WorkflowStart start) => Start(start, null);
+
+    internal static StartSpec Start(WorkflowStart start, WorkflowPublishedStart? publishedStart, WorkflowTestStart? testStart = null,
+        string? retainedResponseKey = null) =>
         new(ActorType, JsonSerializer.Serialize(new WorkflowHeader(start.Model, start.Workflow, null,
-            Ephemeral: start.Ephemeral, History: start.History, Definition: start.Definition == start.Workflow ? null : start.Definition)),
+            Ephemeral: start.Ephemeral, History: start.History, Definition: start.Definition == start.Workflow ? null : start.Definition,
+            ExecutableSelection: start.ExecutableSelection, PublishedStart: publishedStart, TestStart: testStart,
+            RetainedResponseKey: retainedResponseKey)),
             start.Input, start.Ephemeral, start.History);
+
+    internal static (string Model, string Workflow, string Definition, string? ExecutableSelection,
+        WorkflowPublishedStart? PublishedStart, WorkflowTestStart? TestStart)? DescribeStart(string type, string typeData)
+    {
+        if (type != ActorType || JsonSerializer.Deserialize<WorkflowHeader>(typeData) is not { } header) return null;
+        return (header.Model, header.Workflow, header.Definition ?? header.Workflow, header.ExecutableSelection, header.PublishedStart, header.TestStart);
+    }
 
     public bool Withholds(ActorHeader header)
     {
@@ -31,6 +80,12 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     {
         var header = turn.Header;
         var workflow = ReadHeader(header);
+        if (header.Status == ActorStatus.Running && workflow.TestStart is { } test &&
+            DateTimeOffset.FromUnixTimeMilliseconds(turn.Now) >= test.ExpiresAt)
+        {
+            turn.End(ActorStatus.Cancelled);
+            return;
+        }
         if (workflow.Model == MigrationPlanModel.ModelKey && turn.StartSettings is { } settings &&
             settings is not { History: History.Full, Ephemeral: false })
         {
@@ -55,7 +110,11 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
                 turn.State = JsonSerializer.Serialize(state, terminatingModel.StateType);
                 WriteHeader(turn, workflow, workflow with { Version = terminatingModel.StateVersion });
             }
-            if (header.Status == ActorStatus.Running) turn.End(ActorStatus.Cancelled);
+            if (header.Status == ActorStatus.Running)
+            {
+                RetainResponse(turn, workflow.RetainedResponseKey, null);
+                turn.End(ActorStatus.Cancelled);
+            }
             return;
         }
 
@@ -84,9 +143,14 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
             await reader!.MetadataAsync(modelTurn, header.Status, header.EndedAt, cancellationToken);
 
         turn.State = JsonSerializer.Serialize(modelTurn.State, model.StateType);
-        WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion }, modelLabels: modelTurn.LabelsChanged ? modelTurn.Labels : null);
+        // The turn that creates the state is the run's start: its time is kept in the header, which reads list runs by.
+        WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion, StartedAt = modelTurn.Workflow.StartedAt ?? turn.Now },
+            modelLabels: modelTurn.LabelsChanged ? modelTurn.Labels : null);
         if (header.Status == ActorStatus.Running && modelTurn.Status != ActorStatus.Running)
+        {
+            RetainResponse(turn, workflow.RetainedResponseKey, null);
             turn.End(modelTurn.Status, modelTurn.Output);
+        }
     }
 
     public ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
@@ -161,7 +225,10 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         {
             var start = inbox.FirstOrDefault(message => message.Kind == Kinds.Start) ??
                 throw new InvalidOperationException("A workflow without state needs its start message.");
-            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Workflow, start.Payload, workflow.Ephemeral, workflow.History, workflow.Definition));
+            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Workflow, start.Payload, workflow.Ephemeral, workflow.History, workflow.Definition)
+            {
+                ExecutableSelection = workflow.ExecutableSelection
+            });
         }
         if (workflow.Version is not { } version || version > model.StateVersion)
             throw new InvalidOperationException("This model cannot read the stored state version.");
@@ -193,7 +260,20 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     }
 
     private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow) =>
-        new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent);
+        new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent)
+        {
+            Definition = workflow.Definition,
+            ExecutableSelection = workflow.ExecutableSelection,
+            TestScopeId = workflow.TestStart?.ScopeId
+        };
+
+    private static void RetainResponse(IActorTurn turn, string? key, object? value)
+    {
+        if (key is null) return;
+        if (turn is not IRetainedRootResponseTurn retained)
+            throw new NotSupportedException("This workflow start requires the qualified retained response provider.");
+        retained.RetainFirstResponse(key, SerializeValue(value));
+    }
 
     private static string? SerializeValue(object? value) => value is null ? null : JsonSerializer.Serialize(value, value.GetType());
 
@@ -201,15 +281,43 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     /// <param name="Workflow">The workflow the model runs; a migration rebinds it.</param>
     /// <param name="Definition">The definition it is a version of, when not itself: the <c>definition</c> label.</param>
+    /// <param name="StartedAt">When the run started, in Unix milliseconds: the time of the turn that created its state.</param>
     private sealed record WorkflowHeader(string Model, string Workflow, int? Version, bool Suspended = false,
         string? SubStatus = null, bool Ephemeral = false, History History = History.Full,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Definition = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Definition = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? StartedAt = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        string? ExecutableSelection = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        WorkflowPublishedStart? PublishedStart = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        WorkflowTestStart? TestStart = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        string? RetainedResponseKey = null);
+
+    /// <summary>
+    /// What a workflow actor's header says about its run, for reads that list runs: the workflow it runs (an artifact on a
+    /// publishing host), the definition that is a version of, whether it is suspended, its sub-status (a fault's code), and
+    /// when it started; or null when <paramref name="header"/> is not a workflow actor's.
+    /// </summary>
+    public static WorkflowRunHeader? DescribeRun(ActorHeader header)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        if (header.Type != ActorType) return null;
+        WorkflowHeader? workflow;
+        try { workflow = JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData); }
+        catch (JsonException) { return null; }
+        return workflow is null ? null : new(workflow.Workflow, workflow.Definition ?? workflow.Workflow,
+            workflow.Suspended, workflow.SubStatus, workflow.StartedAt is { } started ? DateTimeOffset.FromUnixTimeMilliseconds(started) : null)
+            { Model = workflow.Model, History = workflow.History, Ephemeral = workflow.Ephemeral, PublishedStart = workflow.PublishedStart, TestStart = workflow.TestStart };
+    }
 
     private sealed record WorkflowJobArguments(string Model, string? Arguments);
 
     private sealed class WorkflowJob(IJob original, string? arguments) : IJob
     {
         public ActorRef Actor => original.Actor;
+        public string? Tenant => original.Tenant;
         public string Key => original.Key;
         public string? Arguments => arguments;
         public string AttemptId => original.AttemptId;
@@ -229,11 +337,21 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         public object State { get; set; } = state;
         public object? Ambient => turn.Ambient;
 
-        public void Emit(string channel, object? item) => turn.Emit(channel, item);
+        public void Emit(string channel, object? item)
+        {
+            if (channel == "response" && item is not null)
+                RetainResponse(turn, Workflow.RetainedResponseKey, item);
+            turn.Emit(channel, item);
+        }
         public void Reply(Message message, string channel, object? item) => turn.Reply(message, channel, item);
         public string Send(ActorRef target, string kind, object? payload, long? dueAt) => turn.Send(target, kind, SerializeValue(payload), dueAt);
         public void Recall(string id) => turn.Recall(id);
-        public ActorRef Start(WorkflowStart spec, Placement placement, bool detached) => turn.Start(WorkflowActor.Start(spec), placement, detached);
+        public ActorRef Start(WorkflowStart spec, Placement placement, bool detached)
+        {
+            if (Workflow.TestStart is not { } test) return turn.Start(WorkflowActor.Start(spec), placement, detached);
+            if (detached) throw new InvalidOperationException("A Test Run may start only attached child workflows.");
+            return turn.Start(WorkflowActor.Start(spec, null, test with { RootActor = test.RootActor ?? Instance.Ref.Id }), placement);
+        }
         public void StartJob(string key, object? arguments, TimeSpan? timeout) => turn.StartJob(key, JobArguments(Instance.Model, SerializeValue(arguments)), timeout);
         public void CancelJob(string key) => turn.CancelJob(key);
         public void Hold(Message message) => turn.Hold(message);

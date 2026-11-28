@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Kernel.EntityFramework;
 using Kernel.Foundation.InMemory;
+using Kernel.Foundation.Postgres;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;

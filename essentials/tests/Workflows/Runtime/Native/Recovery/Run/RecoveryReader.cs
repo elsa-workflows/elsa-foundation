@@ -29,7 +29,7 @@ internal static class RecoveryReader
             ("changed-operation", s => s.Agenda[0].OperationKey = "different", "Invalid native successor work provenance."),
             ("changed-input", s => s.Agenda[0].RecoveryInputs!["value"] = 99, "Invalid native successor work provenance."),
             ("changed-material", s => s.Agenda[0].RecoveryMaterial!["different"] = true, "Invalid native successor work provenance."),
-            ("changed-iteration", s => s.Agenda[0].Scope!["CurrentItem"] = 99, "Invalid native successor work provenance."),
+            ("changed-iteration", s => s.Agenda[0].Scope!["currentItem"] = 99, "Invalid native successor work provenance."),
             ("dropped-lexical", s => s.Agenda[0].LexicalScope = null, "Invalid native successor work provenance."),
             ("changed-lexical", s => s.Agenda[0].LexicalScope = "other", "Invalid native successor work provenance."),
             ("copied-attempt", s => s.Agenda[0].Attempt = 2, "Invalid native successor work provenance.")
@@ -39,7 +39,7 @@ internal static class RecoveryReader
             yield return ("frame-" + change, () =>
             {
                 var state = Materialized(); var frame = state.Frames["fresh"];
-                if (change == "iteration") frame.Scope!["CurrentItem"] = 99;
+                if (change == "iteration") frame.Scope!["currentItem"] = 99;
                 else frame.LexicalScope = change == "drop-lexical" ? null : "other";
                 LexicalScopes.Validate(state);
                 Refuse(() => NativeInterventions.Validate(state), "Invalid native successor frame provenance.");
@@ -56,7 +56,7 @@ internal static class RecoveryReader
         foreach (var retired in new[] { false, true }) yield return ("cancelled-drift,retired=" + retired, () =>
         {
             var state = Staged();
-            if (retired) { LexicalScopes.Terminate(state); state.Agenda[0].Scope!["CurrentItem"] = 99; }
+            if (retired) { LexicalScopes.Terminate(state); state.Agenda[0].Scope!["currentItem"] = 99; }
             else state.Agenda[0].LexicalScope = null;
             Refuse(() => NativeInterventions.Validate(state, cancelled: true), "Invalid native successor work provenance.");
         });
@@ -84,10 +84,10 @@ internal static class RecoveryReader
     internal static NativeState Staged()
     {
         var state = Valid(); var source = state.Frames["f"]; source.RecoveryMaterial = new(); state.Frames.Remove("f");
-        source.Scope = new() { ["CurrentItem"] = Values.From(7) }; source.LexicalScope = "borrowed";
+        source.Scope = new() { ["currentItem"] = Values.From(7) }; source.LexicalScope = "borrowed";
         state.LexicalScopes = new() { ["borrowed"] = new("p", null, new()), ["other"] = new("p", null, new()) };
         state.Retries = new() { ["operator"] = new(new("operator", "f", "incident", "repaired"), source, "fresh") };
-        state.Agenda.Add(new() { Frame = "fresh", Node = "leaf", Parent = "p", RetrySource = "f", OperationKey = source.OperationKey, LexicalScope = "borrowed", Scope = new() { ["CurrentItem"] = Values.From(7) },
+        state.Agenda.Add(new() { Frame = "fresh", Node = "leaf", Parent = "p", RetrySource = "f", OperationKey = source.OperationKey, LexicalScope = "borrowed", Scope = new() { ["currentItem"] = Values.From(7) },
             RecoveryInputs = (JsonObject)source.RecoveryInputs!.DeepClone(), RecoveryMaterial = new() });
         return state;
     }

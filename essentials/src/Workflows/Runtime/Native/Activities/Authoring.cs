@@ -87,7 +87,10 @@ public abstract record Trigger;
 public sealed record EventTrigger(string Name) : Trigger;                                 // a subscription
 public sealed record TimerTrigger(long Milliseconds) : Trigger;                           // a message to self with a due time
 public sealed record ChildTrigger(string Workflow, JsonNode? Input, string Mode) : Trigger;  // a child start and its child-finished
-public sealed record HttpTrigger(string Method, string Path, bool Resolved = false) : Trigger;                   // a subscription on the route
+public sealed record HttpTrigger(string Method, string Path, bool Resolved = false) : Trigger
+{
+    internal string? CanonicalTemplate { get; init; }
+}
 
 /// <summary>What an activity does to the world besides its result. The model turns each into a kernel call.</summary>
 public abstract record Effect;
@@ -146,8 +149,10 @@ public class ActivityContext
         => (Instance, FrameId, NodeId, Attempt, CancellationToken, OperationKey, RecoverySource, IterationPath, EffectKey) =
             (instance, frame, node, attempt, cancellationToken, operationKey ?? frame, recoverySource, iterationPath, effectKey);
 
+    internal string? JobTenant { get; init; }
     internal string OperationKey { get; }
     internal string? RecoverySource { get; }
+    internal TextWriter? ConsoleOutput { get; init; }
     public ActorRef Instance { get; }
     public string FrameId { get; }
     public string NodeId { get; }
@@ -214,6 +219,15 @@ public sealed class NativeHttpOptions
 
     /// <summary>The credential headers for a Connection name, resolved when the job runs.</summary>
     public Func<string, CancellationToken, ValueTask<IReadOnlyDictionary<string, string>>>? Connection { get; init; }
+
+    /// <summary>Applies a bound Connection to the outgoing request in the current job's admitted tenant.</summary>
+    public Func<HttpRequestMessage, string, string?, string, CancellationToken, ValueTask<INativeHttpConnectionMask?>>? ApplyConnection { get; init; }
+}
+
+/// <summary>Masks credential material from the resulting durable activity data for one HTTP attempt.</summary>
+public interface INativeHttpConnectionMask : IDisposable
+{
+    string Mask(string value);
 }
 
 public sealed class StartContext<TTrigger> : ActivityContext

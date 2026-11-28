@@ -8,6 +8,10 @@ public sealed partial class InMemoryStore
     private const int KeepingRestoreAllowance = 9728;
     private const int CatchUpTicketAllowance = 90_112;
 
+    internal static long SubscriptionRestoreBytes(int count, int keeping) =>
+        (long)(count - keeping) * SubscriptionRestoreAllowance + (long)keeping * KeepingRestoreAllowance +
+        (keeping == 0 ? 0 : CatchUpTicketAllowance);
+
     internal IReadOnlyList<SubscriptionRow>? PlanFoundationSubscriptions(InstanceRow row, string tenant,
         IReadOnlyList<ParkSubscriptionRecipe> recipes, long bytes)
     {

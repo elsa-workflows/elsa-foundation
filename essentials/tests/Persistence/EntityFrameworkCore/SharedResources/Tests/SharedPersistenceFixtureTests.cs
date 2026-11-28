@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json.Nodes;
 using Elsa.Workbench.Tests;
 using Npgsql;
 using Xunit;
@@ -10,18 +9,6 @@ namespace Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests;
 [Collection(PostgreSqlTargetFixture.CollectionName)]
 public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture targets)
 {
-    private static readonly string[] RuntimePersistenceFeatures =
-    [
-        "WorkflowsRuntimeEntityFrameworkCore",
-        "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeAlterationEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"
-    ];
-
     [SkippableFact]
     public async Task Targets_are_separate_databases_and_writes_do_not_cross()
     {
@@ -171,7 +158,11 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
         var shell = WorkbenchShell.Development with { Settings = settings };
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            WorkbenchProcess.StartAsync(shell, SharedPersistenceHostFixture.RemoveLegacyDiagnosticsTargets));
+            WorkbenchProcess.StartAsync(shell, contentRoot =>
+            {
+                SharedPersistenceHostFixture.ConfigureNamedRuntimeTargets(contentRoot);
+                SharedPersistenceHostFixture.RemoveLegacyDiagnosticsTargets(contentRoot);
+            }));
         Assert.Contains("resource-context-conflict", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(primary, failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(diagnostics, failure.Message, StringComparison.Ordinal);
@@ -235,18 +226,35 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
     private static byte[] Join(params byte[][] parts) => parts.SelectMany(part => part).ToArray();
 
     [SkippableFact]
-    public async Task Partial_opt_in_runtime_stores_activate_without_the_comprehensive_execution_profile()
+    public async Task Retained_runtime_stores_and_portfolio_activate_on_the_shared_resource()
     {
         Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
 
-        await using var host = new SharedPersistenceHostFixture(targets,
-            SharedPersistenceHostFixture.PrimaryResourceSettings(), ConfigureOptInRuntimeShell);
+        const string artifacts = SharedPersistenceHostFixture.RuntimeArtifacts;
+        const string testScope = SharedPersistenceHostFixture.RuntimeTestScope;
+        const string preparedStandalone = "WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence";
+        var settings = new Dictionary<string, string>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            [$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{artifacts}"] = "primary",
+            [$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{testScope}"] = "primary"
+        };
+        await using var host = new SharedPersistenceHostFixture(targets, settings,
+            contentRoot => SharedPersistenceHostFixture.ConfigureNamedRuntimeTargets(contentRoot, preparedStandalone));
         await host.StartAsync();
 
         var catalog = (await host.Process.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
-        Assert.False(catalog.TryGetValue(RuntimePersistenceFeatures[0], out var comprehensive) && comprehensive.Runs,
-            "The comprehensive Runtime feature would mask an opt-in activation failure.");
-        foreach (var feature in RuntimePersistenceFeatures.Skip(1))
+        Assert.False(catalog.TryGetValue("WorkflowsRuntimeEntityFrameworkCore", out var comprehensive) && comprehensive.Runs);
+        foreach (var feature in new[]
+        {
+            "WorkflowsRuntimeKernelHosting",
+            artifacts,
+            "WorkflowsRuntimePublicationEntityFrameworkCorePersistence",
+            testScope,
+            preparedStandalone,
+            "WorkflowsDashboardPortfolioEntityFrameworkCore"
+        })
         {
             Assert.True(catalog.TryGetValue(feature, out var entry) && entry.Runs,
                 $"{feature} did not activate in the shared-resource host.");
@@ -255,29 +263,19 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
         await using var connection = new NpgsqlConnection(targets.PrimaryConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM \"__EFMigrationsHistory_ElsaRuntime\"";
-        Assert.True((long)(await command.ExecuteScalarAsync())! > 0);
-    }
+        command.CommandText = """
+            SELECT
+                (SELECT count(*) > 0 FROM "__EFMigrationsHistory_ElsaRuntime"),
+                to_regclass('public.elsa_runtime_workflow_executable') IS NOT NULL,
+                to_regclass('public.elsa_runtime_workflow_test_scope') IS NOT NULL,
+                to_regclass('public.elsa_runtime_standalone_triggers') IS NOT NULL
+            """;
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.True(reader.GetBoolean(0), "Runtime migrations did not run on the shared target.");
+        Assert.True(reader.GetBoolean(1), "The executable table is missing from the shared target.");
+        Assert.True(reader.GetBoolean(2), "The test-scope table is missing from the shared target.");
+        Assert.True(reader.GetBoolean(3), "The standalone trigger table is missing from the shared target.");
 
-    private static void ConfigureOptInRuntimeShell(string contentRoot)
-    {
-        var path = Path.Combine(contentRoot, "shells.json");
-        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
-        var features = root["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
-        var comprehensive = features[RuntimePersistenceFeatures[0]]!;
-        var recoveryKey = (string)comprehensive["RecoveryContinuationSigningKey"]!;
-        var hierarchyKey = (string)comprehensive["HierarchyCursorSigningKey"]!;
-        features.Remove(RuntimePersistenceFeatures[0]);
-        features.Remove("WorkflowsDashboardEntityFrameworkCore"); // Its dependency would re-enable the comprehensive store.
-        foreach (var feature in RuntimePersistenceFeatures.Skip(1))
-        {
-            var configuration = new JsonObject();
-            if (feature is not "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence")
-                configuration["RecoveryContinuationSigningKey"] = recoveryKey;
-            if (feature is "WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence")
-                configuration["HierarchyCursorSigningKey"] = hierarchyKey;
-            features[feature] = configuration;
-        }
-        File.WriteAllText(path, root.ToJsonString());
     }
 }

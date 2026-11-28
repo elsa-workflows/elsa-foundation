@@ -6,13 +6,17 @@ case "$configuration" in
   *) echo "Choose Debug or Release." >&2; exit 2 ;;
 esac
 case "${PG_PREVIEW_PROFILE:-}" in
-  "") profiles=(ordinary jobs timed timeout takeover takeover-complete) ;;
-  ordinary|jobs|timed|timeout|takeover|takeover-complete) profiles=("$PG_PREVIEW_PROFILE") ;;
-  *) echo "Choose ordinary, jobs, timed, timeout, takeover or takeover-complete." >&2; exit 2 ;;
+  "") profiles=(ordinary jobs timed timeout takeover takeover-complete publications) ;;
+  ordinary|jobs|timed|timeout|takeover|takeover-complete|publications) profiles=("$PG_PREVIEW_PROFILE") ;;
+  *) echo "Choose ordinary, jobs, timed, timeout, takeover, takeover-complete or publications." >&2; exit 2 ;;
 esac
-root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
+root=$(cd "${2:-.}" && git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
-app=apps/Elsa.Workbench.Host
+app=server/apps/Elsa.Workbench.Host
+if [[ ! -f "$app/CorePreview/WorkbenchCorePreview.cs" ]]; then
+  echo "Supply the historical Workbench checkout as the second argument. See docs/docker.md." >&2
+  exit 2
+fi
 runner=essentials/tests/ActorFoundation/Native/Run
 dotnet restore --locked-mode "$app"
 dotnet restore --locked-mode "$runner"
@@ -45,6 +49,15 @@ sentinel="$scratch/caller-identity.sqlite"
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__IsDevelopmentOrDemo=false
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString="Data Source=$sentinel"
 for profile in "${profiles[@]}"; do
+  if [[ "$profile" == publications ]]; then
+    # The release profile installs its own format in an empty database and over a cut-short first install, and refuses one
+    # that holds something else.
+    for install in empty partial foreign; do
+      docker exec "$container" createdb -U postgres "workbench_core_preview_install_$install"
+      KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=workbench_core_preview_install_$install;SSL Mode=Disable;GSS Encryption Mode=Disable" \
+        "$client" pg-workbench-core-preview "install-$install" "$scratch/install-$install.json" publications
+    done
+  fi
   database="workbench_core_preview_${profile//-/_}"
   docker exec "$container" createdb -U postgres "$database"
   export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=$database;SSL Mode=Disable;GSS Encryption Mode=Disable"

@@ -1,0 +1,5 @@
+*
+!global.json
+!NuGet.config
+!docker/profiles/prepare.py
+!docker/profiles/packs/*.txt

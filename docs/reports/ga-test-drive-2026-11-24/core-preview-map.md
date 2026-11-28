@@ -12,7 +12,7 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
 
 - **None of the seven workflows can run on the Core Preview today.** The Workbench preview registers only
   `direct-approval` workflows built in C#: one by default, up to five with the job settings
-  ([WorkbenchCorePreview.cs](../../../apps/Elsa.Workbench.Host/CorePreview/WorkbenchCorePreview.cs)). Its only HTTP route
+  ([historical WorkbenchCorePreview.cs](https://github.com/elsa-workflows/elsa-foundation/blob/1980bbe7e6b7d1b37e14f6374b1c3bbc2cf3a5e6/apps/Elsa.Workbench/CorePreview/WorkbenchCorePreview.cs)). Its only HTTP route
   is a read-only instance list. The kernel README says: "Existing workflow and Studio endpoints still use their
   current runtime."
 - **The Native model is further along than the preview shows.** `Elsa.Workflows.Runtime.Native.Model` already has
@@ -133,7 +133,7 @@ design in [the design cards](design-cards.md)): route templates by resolved wait
 
 ## Sources
 
-- [apps/Elsa.Workbench.Host/CorePreview/](../../../apps/Elsa.Workbench.Host/CorePreview/)
+- [server/apps/Elsa.Workbench.Host/CorePreview/](../../../server/apps/Elsa.Workbench.Host/CorePreview/)
 - [essentials/src/Workflows/Runtime/Native/Model/Activities.cs](../../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs),
   [HttpRoutes.cs](../../../essentials/src/Workflows/Runtime/Native/Model/HttpRoutes.cs),
   [Expression.cs](../../../essentials/src/Workflows/Runtime/Native/Model/Expression.cs),

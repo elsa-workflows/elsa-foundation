@@ -51,14 +51,14 @@ internal sealed class LegacyTurn : INativeTurn
     public string SendToSelf(string kind, object? payload = null, long? dueAt = null) =>
         _turn.Send(_turn.Instance.Ref, kind, payload, dueAt is null ? null : new SendOptions(DueAt: dueAt));
 
-    public WaitEntry StartChild(string frame, string workflow, string mode, JsonObject? input)
+    public WaitEntry StartChild(string frame, ChildWorkflowTarget workflow, string mode, JsonObject? input)
     {
-        var child = _turn.Start(NativeModel.Spec(workflow, mode, input));
+        var child = _turn.Start(NativeModel.Spec(workflow.Id, mode, input));
         return new(frame, "child", child.Id, _turn.ChildAddress(child).Creation);
     }
 
-    public Contract.ActorRef StartDetached(string workflow, string mode, JsonObject? input) =>
-        new(_turn.Start(NativeModel.Spec(workflow, mode, input), detached: true).Id);
+    public Contract.ActorRef StartDetached(ChildWorkflowTarget workflow, string mode, JsonObject? input) =>
+        new(_turn.Start(NativeModel.Spec(workflow.Id, mode, input), detached: true).Id);
 
     public void CancelChild(WaitEntry child) =>
         _turn.Send(new InstanceRef(child.Key), NativeKinds.Cancel, options: new SendOptions(TargetCreation: child.Creation > 0 ? child.Creation : null));

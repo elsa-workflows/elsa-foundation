@@ -6,6 +6,8 @@ The module contributes navigation and routes for `/etl/definitions` and `/etl/ru
 feature-area API. It uses Studio's authenticated HTTP transport and the backend capability document; it does
 not require a server runtime assembly in the browser host.
 
+The `RunEtl` editor and occurrence link are compatibility contributions for the [pinned classic workflow adapter](../../../../docs/contributing/workbench-compatibility-tests.md#classic-reviews-decisions-etl-and-rules-in-workflows).
+
 The property editor registered for `etl-published-selection` handles `RunEtl.Pipeline`. It loads bounded pages
 of published definitions and versions and stores the exact canonical `EtlPublishedSelection`, including its
 full content hash. It preserves an existing selection outside the currently loaded page. General Workflows
@@ -50,6 +52,6 @@ for their respective verified source checkpoints.
 
 `Elsa.Studio.Etl` contributes to Studio-owned surfaces only through the public SDK: the `etl-published-selection`
 property editor for `RunEtl.Pipeline`, and `etl-native-run` in the
-[workflow run related-links slot](../../../../Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md#workflow-run-related-links-sdk--elsastudiohosting).
+[workflow run related-links slot](../../../../studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md#workflow-run-related-links-sdk--elsastudiohosting).
 Neither adds an ETL branch to Workflows Studio. Both are offered only when the selected backend advertises the
 required ETL capabilities.

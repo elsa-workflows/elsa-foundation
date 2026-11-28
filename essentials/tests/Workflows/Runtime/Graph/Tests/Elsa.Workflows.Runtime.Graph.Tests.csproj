@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Main's Flowchart conformance corpus and join tests (Essentials/tests/Activities/Flowchart/Tests), run against
+  <!-- Main's Flowchart conformance corpus and join tests (essentials/tests/Activities/Flowchart/Tests), run against
        the graph engine through GraphHarness instead of Elsa's workflow execution harness. -->
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>

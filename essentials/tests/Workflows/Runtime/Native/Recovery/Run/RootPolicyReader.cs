@@ -92,8 +92,8 @@ internal static class RootPolicyReader
             var definition = Wf.ForEach("loop", Binding.Literal(new[] { 7, 9 }), Wf.Node<RootLeaf>("leaf"));
             var progress = new ForEachState { Items = new JsonArray(7, 9), Index = kind == "finished" ? 2 : 0 };
             if (kind == "null-items") progress.Items = null!;
-            var scope = new Dictionary<string, JsonNode?> { ["CurrentIndex"] = Values.From(kind == "index" ? 1 : 0), ["CurrentItem"] = Values.From(kind == "item" ? 9 : 7) };
-            if (kind == "missing-index") scope.Remove("CurrentIndex"); if (kind == "missing-item") scope.Remove("CurrentItem");
+            var scope = new Dictionary<string, JsonNode?> { ["currentIndex"] = Values.From(kind == "index" ? 1 : 0), ["currentItem"] = Values.From(kind == "item" ? 9 : 7) };
+            if (kind == "missing-index") scope.Remove("currentIndex"); if (kind == "missing-item") scope.Remove("currentItem");
             var child = new RetryChild("old", "fresh", kind == "node" ? "foreign" : "leaf", kind == "tag" ? "foreign" : null, scope);
             var input = Values.From(progress); JsonNode? Prepare() => ((IInterventionParent)new ForEach()).PrepareRetry(definition, input, child);
             if (kind == "valid") Check(JsonNode.DeepEquals(Prepare(), input) && progress.Index == 0, "pure iteration preparation changed its obligation");

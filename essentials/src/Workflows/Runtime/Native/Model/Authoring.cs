@@ -99,6 +99,9 @@ public sealed record GraphVariable(string Name, Binding? Value = null);
 /// </summary>
 public sealed record GraphOutput(string Name, Binding? Value = null, bool Required = false);
 
+/// <summary>The value contract pinned on a Set Output assignment in a placed reusable activity.</summary>
+public sealed record GraphOutputAssignment(string TypeAlias, string CollectionKind, bool IsNullable);
+
 /// <summary>A flowchart connection from a source's outcome to a target.</summary>
 public sealed record Connection(string Source, string Target, string Outcome = "Done");
 
@@ -116,14 +119,21 @@ public sealed class Node(string id, Type type)
     public List<SwitchCase> Cases { get; } = [];
     /// <summary>For a GraphActivity: what it declares.</summary>
     public GraphBoundary? Graph { get; set; }
+    /// <summary>The pinned contract on an authored reusable activity's Set Output node.</summary>
+    public GraphOutputAssignment? OutputAssignment { get; set; }
     /// <summary>Output captures: variable name to a path in the result ("" is the whole result).</summary>
     public Dictionary<string, string> Captures { get; } = new(StringComparer.Ordinal);
     /// <summary>The named child slot this node fills in its parent, where the parent has slots (If: Then, Else).</summary>
     public string? Slot { get; set; }
     /// <summary>The time allowed for a background activity's job.</summary>
     public TimeSpan? JobTimeout { get; init; }
+    /// <summary>The exact immutable dependency selected at compilation for this Dispatch Workflow in a Test Run.</summary>
+    public TestRunChildSelection? TestRunChild { get; init; }
     internal bool External, Background;
 }
+
+/// <summary>Identifies the compiled executable that one isolated Dispatch Workflow may start.</summary>
+public sealed record TestRunChildSelection(string ArtifactId, string Definition, string ExecutableSelection);
 
 public sealed class Workflow
 {
@@ -134,7 +144,15 @@ public sealed class Workflow
         (Id, Root, Variables, Definition) = (id, root, variables ?? new Dictionary<string, JsonNode?>(), definition ?? id);
         void Index(Node node, Node? parent)
         {
-            if (!Nodes.TryAdd(node.Id, node)) throw new InvalidOperationException($"Node id '{node.Id}' is used twice in '{id}'.");
+            if (!Nodes.TryAdd(node.Id, node)) throw new NativeDefinitionException(node.Id, $"Node id '{node.Id}' is used twice in '{id}'.");
+            try { Validate(node, parent); }
+            catch (InvalidOperationException invalid) when (invalid is not NativeDefinitionException) { throw new NativeDefinitionException(node.Id, invalid.Message); }
+            if (parent is not null) Parents[node.Id] = parent;
+            foreach (var child in node.Children) Index(child, node);
+        }
+
+        void Validate(Node node, Node? parent)
+        {
             node.External = node.Type.IsDefined(typeof(ExternalAttribute));
             node.Background = node.Type.IsDefined(typeof(BackgroundAttribute));
             if (node.JobTimeout is { } timeout && (!node.Background || timeout < TimeSpan.Zero))
@@ -144,11 +162,17 @@ public sealed class Workflow
             if (node.Type == typeof(GraphActivity)) GraphActivity.Validate(node, id);
             else if (node.Graph is not null) throw new InvalidOperationException($"Node '{node.Id}' in '{id}' declares a boundary and is no GraphActivity.");
             if (node.Type == typeof(Complete)) GraphActivity.ValidateExit(node, Boundary(parent), id);
-            if (node.Type == typeof(SetOutput)) GraphActivity.ValidateOutput(node, Boundary(parent), id);
+            if (node.Type == typeof(SetOutput))
+            {
+                var boundary = Boundary(parent);
+                GraphActivity.ValidateOutput(node, boundary, id);
+                if (node.OutputAssignment is not null && boundary is null)
+                    throw new InvalidOperationException($"Set Output '{node.Id}' in '{id}' needs an enclosing GraphActivity to assign a pinned output.");
+            }
+            else if (node.OutputAssignment is not null)
+                throw new InvalidOperationException($"Node '{node.Id}' in '{id}' declares an output assignment and is no Set Output.");
             if (node.Type == typeof(Finish) && !(node.Inputs.GetValueOrDefault("Outcome") is LiteralBinding { Value: JsonValue outcome } && outcome.TryGetValue<string>(out var named) && !string.IsNullOrWhiteSpace(named)))
                 throw new InvalidOperationException($"Finish '{node.Id}' in '{id}' needs a literal outcome.");
-            if (parent is not null) Parents[node.Id] = parent;
-            foreach (var child in node.Children) Index(child, node);
         }
         Index(root, null);
 
@@ -172,21 +196,57 @@ public sealed class Workflow
     /// </summary>
     public string Definition { get; }
 
+    /// <summary>Opaque identity of the exact executable this compiled workflow represents, when supplied by a publishing host.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutableSelection { get; init; }
+
     public Node Root { get; }
     public IReadOnlyDictionary<string, JsonNode?> Variables { get; }
     public Dictionary<string, Node> Nodes { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, Node> Parents { get; } = new(StringComparer.Ordinal);
 }
 
+/// <summary>A definition the Native model's own rules refuse when it is built, naming the node that breaks one.</summary>
+public sealed class NativeDefinitionException(string node, string message) : InvalidOperationException(message)
+{
+    public string Node { get; } = node;
+}
+
+/// <summary>
+/// The workflows a model runs, by id, in the order they were added. A publishing host adds to it while turns read it, so
+/// every read and write takes its lock, and <see cref="All"/> is a snapshot.
+/// </summary>
 public sealed class WorkflowRegistry
 {
     private readonly Dictionary<string, Workflow> _workflows = new(StringComparer.Ordinal);
-    public WorkflowRegistry Add(Workflow workflow) { _workflows[workflow.Id] = workflow; return this; }
-    public Workflow Get(string id) => _workflows.TryGetValue(id, out var w) ? w : throw new InvalidOperationException($"No workflow '{id}'.");
-    internal bool TryGet(string id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Workflow? workflow) =>
-        _workflows.TryGetValue(id, out workflow);
-    public bool Remove(string id) => _workflows.Remove(id);
-    public IEnumerable<Workflow> All => _workflows.Values;
+    private readonly Lock _lock = new();
+
+    public WorkflowRegistry Add(Workflow workflow)
+    {
+        lock (_lock) _workflows[workflow.Id] = workflow;
+        return this;
+    }
+
+    public Workflow Get(string id) => TryGet(id, out var w) ? w : throw new InvalidOperationException($"No workflow '{id}'.");
+
+    /// <summary>The workflow with this id, read once, or false when none is registered.</summary>
+    public bool TryGet(string id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Workflow? workflow)
+    {
+        lock (_lock) return _workflows.TryGetValue(id, out workflow);
+    }
+
+    /// <summary>Whether a workflow with this id is registered.</summary>
+    public bool Contains(string id) => TryGet(id, out _);
+
+    public bool Remove(string id)
+    {
+        lock (_lock) return _workflows.Remove(id);
+    }
+
+    public IEnumerable<Workflow> All
+    {
+        get { lock (_lock) return [.. _workflows.Values]; }
+    }
 }
 
 public sealed record ChildCompleted(string Frame, string Node, string Outcome, JsonNode? Result, string? Tag);

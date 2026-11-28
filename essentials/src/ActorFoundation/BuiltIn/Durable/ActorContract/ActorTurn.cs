@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Text;
+using System.Text.Json.Nodes;
 using Kernel.Runtime;
 using Contract = Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
@@ -8,13 +9,16 @@ namespace Kernel.Durable;
 
 internal sealed partial class ActorAdapter
 {
-    private sealed class ActorTurn : Contract.IActorTurn, IRootValueTurn
+    private sealed class ActorTurn : Contract.IActorTurn, IRootValueTurn, Contract.IRetainedRootResponseTurn
     {
         private readonly Durable.InMemoryStore? _inMemory;
+        private readonly IRootDispatchHeaders? _roots;
         private readonly Durable.FoundationSelfIssuer? _issueSelf;
         private readonly Func<string, string>? _rootJobHandle;
         private readonly bool _rootTimedJobIssuance;
         private readonly RootValueReader? _readRootValue;
+        private readonly int _terminalOutputLimit;
+        private readonly string? _primaryChildType;
         private List<Durable.FoundationValue>? _values;
         private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
@@ -28,17 +32,22 @@ internal sealed partial class ActorAdapter
         private Durable.FoundationHeaderChange? _header;
         private Contract.ActorStatus _status;
         private object? _output;
+        private RetainedRootResponse? _retainedResponse;
         private bool _emitted;
         private bool _migrated;
 
-        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
-            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance, RootValueReader? readRootValue)
+        public ActorTurn(Durable.InMemoryStore? store, IRootDispatchHeaders? roots, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
+            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance, RootValueReader? readRootValue,
+            int terminalOutputLimit, string? primaryChildType)
         {
             _inMemory = store;
+            _roots = roots;
             _issueSelf = issueSelf;
             _rootJobHandle = rootJobHandle;
             _rootTimedJobIssuance = rootTimedJobIssuance;
             _readRootValue = readRootValue;
+            _terminalOutputLimit = terminalOutputLimit;
+            _primaryChildType = primaryChildType;
             _input = input;
             Now = input.Services.Now;
             _turn = new(input, foundation: true);
@@ -83,6 +92,18 @@ internal sealed partial class ActorAdapter
             return _readRootValue(header, new(_row.Id, _row.Creation), reference, cancellationToken);
         }
 
+        void Contract.IRetainedRootResponseTurn.RetainFirstResponse(string key, string? payload)
+        {
+            if (_roots is null || _row is not { Parent: null, FoundationInlineBirth: null })
+                throw new NotSupportedException("Retained responses require a persisted root.");
+            if (key is not { Length: 64 } || !key.All(char.IsAsciiHexDigitLower))
+                throw new ArgumentException("A retained response key must be a canonical SHA-256 digest.", nameof(key));
+            if (_retainedResponse is not null) return;
+            var present = payload is not null;
+            var bytes = present && FoundationMetadataLimits.FitsContent(payload) ? Encoding.UTF8.GetBytes(payload!) : null;
+            _retainedResponse = new(key, Now, present, bytes);
+        }
+
         public void Emit(string channel, object? item)
         {
             _emitted = true;
@@ -102,33 +123,50 @@ internal sealed partial class ActorAdapter
             HeaderLimits.RequireKind(kind, nameof(kind));
             HeaderLimits.RequireContent(payload, nameof(payload));
             var address = target == Header.Ref ? new Durable.CreationAddress(_row.Id, _row.Creation)
-                : _stagedChildren.GetValueOrDefault(target) ?? Store.FoundationTarget(Header.Tenant, target.Id) ??
+                : _stagedChildren.GetValueOrDefault(target) ?? KnownTarget(target) ??
                   throw new ArgumentException("The actor reference was not found.", nameof(target));
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
             if (_issueSelf is not null && _issueSelf.Allows(dueAt) && target == Header.Ref)
-                return _turn.SendToSelf(_issueSelf.Handle, kind, payload, dueAt);
+                return _turn.SendToSelf(_issueSelf.Handle, kind, payload, dueAt, recordOrdinal: true);
+            if (target != Header.Ref && _roots?.ChildMessageHandle is { } issue)
+            {
+                if (!_children.Contains(address) || dueAt is not null ||
+                    !(Durable.FoundationMetadataLimits.IsOrdinaryKind(kind) || kind == Contract.Kinds.Terminate && payload is null))
+                    throw new NotSupportedException("This profile sends only immediate ordinary inputs or Terminate to an attached child.");
+                return _turn.SendFromActor(issue, new(address.Id), address.Creation, kind, payload, dueAt, rootChild: true);
+            }
             return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
         }
+
+        private Durable.CreationAddress? KnownTarget(Contract.ActorRef target) =>
+            _roots?.SupportsChildren == true
+                ? _children.FirstOrDefault(child => _roots.ChildReference(Header.Tenant, child) == target.Id)
+                : Store.FoundationTarget(Header.Tenant, target.Id);
 
         public void Recall(string id)
         {
             if (id.Length != 65 || id[0] != '~' || id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0)
                 throw new ArgumentException("Recall requires an issued message id.", nameof(id));
-            if (_issueSelf is not null) _turn.RecallPersistedSelfInput(id);
+            if (_issueSelf is not null) _turn.RecallSelfInput(id);
             else _turn.RecallFromActor(Store, id);
         }
 
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
         {
             HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
+            if (_primaryChildType is { } primary && (Header.Type != primary || spec.Type != primary))
+                throw new NotSupportedException("Only the primary root type can start children of its own type on this owner.");
+            if (_roots?.SupportsChildren == true && placement != Contract.Placement.WithParent)
+                throw new NotSupportedException("This PostgreSQL profile places children in their parent's partition.");
             var destination = placement == Contract.Placement.Spread
                 ? InstanceRef.Spread(FormattableString.Invariant($"{Header.Ref.Id}/{_turn.Revision}/{_turn.Ordinal}"), _input.Services.Partitions)
                 : _turn.Actor.Partition;
             var creator = new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input, detached ? null : _row.Id, spec.Ephemeral,
                 (Durable.History)spec.History, ParentCreation: detached ? 0 : _row.Creation);
             var child = new Durable.CreationAddress(_turn.StartFoundationChild(creator, destination).Id, 1);
-            var reference = new Contract.ActorRef(Store.ReferenceFor(Header.Tenant, child));
+            var reference = new Contract.ActorRef(_roots?.ChildReference(Header.Tenant, child) ??
+                Store.ReferenceFor(Header.Tenant, child));
             _stagedChildren.Add(reference, child);
             if (!detached) _children.Add(child);
             return reference;
@@ -151,6 +189,14 @@ internal sealed partial class ActorAdapter
         public void CancelJob(string key)
         {
             if (_turn.JobGeneration(key) is not { } generation) return;
+            if (_inMemory is null)
+            {
+                // A root provider: a job this turn started goes with its ticket and deadline, which were never sent. An earlier
+                // one stays registered: the root's end settles it in its terminal commit, or its result lands where nothing
+                // waits for it any more.
+                if (_turn.StartedThisTurn(key)) _turn.CancelJob(key, null, null);
+                return;
+            }
             var ticketKey = Durable.InboxKey.Ticket(_row.Id, key, _row.Creation, generation);
             var ticket = Store.FoundationJob(_row.Id, _row.Creation, key, generation).Ticket;
             if (ticket is null && _input.VolatileMessage(ticketKey) is { Kind: Durable.Kinds.Job } local)
@@ -172,16 +218,36 @@ internal sealed partial class ActorAdapter
         {
             HeaderLimits.RequireName(key, nameof(key));
             HeaderLimits.RequireName(wait, nameof(wait));
+            RequireLiveWait(key, wait, keep);
             _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         }
 
-        public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait, Header.Tenant);
+        public void Unsubscribe(string key, string wait)
+        {
+            RequireLiveWait(key, wait, keep: false);
+            _turn.Unsubscribe(Qualify(key), wait, Header.Tenant);
+        }
+
+        private void RequireLiveWait(string key, string wait, bool keep)
+        {
+            if (_roots?.TakesLiveEventWaits != true) return;
+            if (keep && _roots.KeepsEventWaits != true)
+                throw new InvalidOperationException("This root profile supports live waits without keeping unreceived events.");
+            if (!Durable.FoundationMetadataLimits.FitsLiveWaitName(key) || !Durable.FoundationMetadataLimits.FitsLiveWaitName(wait))
+                throw new ArgumentException("The live event key and wait name must fit the relational text encoding.");
+        }
 
         public string Publish(string key, string? payload, TimeSpan keepFor)
         {
             HeaderLimits.RequireName(key, nameof(key));
             HeaderLimits.RequireContent(payload, nameof(payload), Durable.FoundationMetadataLimits.EventContentBytes);
-            return _turn.Publish(Qualify(key), payload, keepFor, Store, Header.Tenant);
+            if (_roots?.PublishesAuthoredEvents == true && _issueSelf is { } issuer)
+            {
+                if (!Durable.FoundationMetadataLimits.FitsLiveWaitName(key))
+                    throw new ArgumentException("The event key must fit the relational text encoding.", nameof(key));
+                return _turn.Publish(Qualify(key), payload, keepFor, issuer.Handle, Header.Tenant);
+            }
+            return _turn.Publish(Qualify(key), payload, keepFor, Store.MessageHandle, Header.Tenant);
         }
 
         public void Record(object entry)
@@ -222,8 +288,13 @@ internal sealed partial class ActorAdapter
             var ended = wasRunning && _status != Contract.ActorStatus.Running;
             var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
             outcome.FoundationValues = _values;
+            outcome.FoundationRetainedResponse = _retainedResponse;
             var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
                 ended && _status == Contract.ActorStatus.Cancelled;
+            // A root provider settles the jobs still registered at the model's own end (Finished or Faulted; a cancelled job
+            // stays registered until then) in a cascade of those jobs alone, which its terminal commit discharges. Its
+            // children are untouched, as at an end with no job.
+            var settlesJobs = !cascades && ended && _inMemory is null && _turn.Jobs() is not null;
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)
@@ -234,13 +305,16 @@ internal sealed partial class ActorAdapter
                 if (message.Read<Durable.FoundationChildNotice>().Final) _children.Remove(new(message.Sender!, message.SenderCreation));
             }
 
-            var cascade = cascades ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), [.. _children]) : null;
+            var cascade = cascades ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), [.. _children])
+                : settlesJobs ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), []) : null;
             var row = _row.WithFoundationState(State) with { Revision = _turn.Revision, Status = (Durable.InstanceStatus)_status, Jobs = _turn.Jobs(),
                 Children = cascades ? null : Durable.ChildRegistry.Write(_children) };
             if (ended)
             {
                 if (row.Parent is not null) _turn.AddTerminalNotice(Notice(row, _output is null ? null : Durable.Json.Write(_output), final: true));
                 outcome.Unsubscribe = true;
+                if (_terminalOutputLimit > 0 && _status == Contract.ActorStatus.Finished && _output is JsonObject outputs)
+                    outcome.FoundationTerminalOutput = TerminalOutputEncoding.Capture(outputs, _terminalOutputLimit);
             }
             if (_input.Row is null) _entries.Insert(0, "start");
             if (ended) _entries.Add("end");
@@ -252,12 +326,14 @@ internal sealed partial class ActorAdapter
             if (row.FoundationInlineBirth is not null)
             {
                 var until = _input.Unwritten ? _input.Until : InlineUntil();
-                if (ended && cascade is null or { Count: 0 } && (_input.Row is null || _input.CheckpointTime < until) &&
+                if (ended && _roots?.AllowsWriteFreeInlineCompletion(Header.Tenant, _status) != false &&
+                    cascade is null or { Count: 0 } && (_input.Row is null || _input.CheckpointTime < until) &&
                     _turn.SentCount == 0 && _turn.SubscribedCount == 0 &&
                     outcome.Held.Count == 0 && outcome.Consumed.TrueForAll(item => !item.Durable))
                     return outcome;
 
-                if (!ended && outcome.Held.Count == 0 && _turn.CanWaitInMemory(until))
+                if (!ended && outcome.Held.Count == 0 && _turn.CanWaitInMemory(until) &&
+                    (_roots?.SupportsInlineStarts != true || _turn.CanKeepInlineMailbox()))
                 {
                     _turn.WaitInMemory();
                     outcome.InMemory = true;
@@ -267,14 +343,19 @@ internal sealed partial class ActorAdapter
                 }
             }
             var sealedTurn = _turn.Seal(outcome, row, State, journal);
-            return cascade is null ? sealedTurn : Durable.CascadeProtocol.Open(sealedTurn, cascade);
+            if (cascade is null) return sealedTurn;
+            var opened = Durable.CascadeProtocol.Open(sealedTurn, cascade);
+            // Opening a cascade clears the row's registries; a jobs-only one leaves its children where they were.
+            if (settlesJobs && opened.Row is { } settled) opened.Row = settled with { Children = row.Children };
+            return opened;
         }
 
         private long InlineUntil()
         {
-            var configured = (long)_input.Services.ShortWait.TotalMilliseconds;
-            var deadline = Durable.ReplyTo.Parse(_input.Taken[_input.From].Message.ReplyTo!).Deadline;
-            return Math.Min(checked(Now + configured), deadline);
+            var configured = checked(Now + (long)_input.Services.ShortWait.TotalMilliseconds);
+            return _input.Taken[_input.From].Message.ReplyTo is { } reply
+                ? Math.Min(configured, Durable.ReplyTo.Parse(reply).Deadline)
+                : configured;
         }
 
         private Durable.Message Received(Contract.Message message) =>
@@ -283,13 +364,22 @@ internal sealed partial class ActorAdapter
 
         private string Qualify(string key) => Header.Tenant + "_" + key;
 
+        private string? SenderReference(string sender, long creation) =>
+            _roots is null ? Store.FoundationReferenceOf(Header.Tenant, sender, creation) :
+                _roots.ChildReference(Header.Tenant, new(sender, creation));
+
         private Contract.Message Project(Durable.Message message)
         {
+            if (_roots?.RecoversInlineInitialRoots == true && _issueSelf is { } issuer &&
+                Durable.FoundationInlineRetry.Matches(issuer, _row, message))
+                return new(message.Id, Contract.Kinds.Start, message.Payload);
             var sender = message.Sender == _row.Id && message.SenderCreation == _row.Creation ? Header.Ref
-                : message.Sender is not null && Store.FoundationReferenceOf(Header.Tenant, message.Sender, message.SenderCreation) is { } reference
+                : message.Sender is { } source && SenderReference(source, message.SenderCreation) is { } reference
                     ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;
             var logicalId = message.Kind == Contract.Kinds.JobFinished && !message.FoundationJobResult ? message.Id + "/result" : message.Id;
-            var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
+            var id = _roots?.SupportsChildren == true && (message.BindFoundationChild || message.FoundationRootChildNotice)
+                ? "~" + Durable.FoundationRootCreator.OperationDigest(message.Id)
+                : (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
                 ? message.Kind == Contract.Kinds.JobFinished && _rootJobHandle is { } handle
                     ? handle("inbox:" + logicalId) : Store.MessageHandle("inbox:" + logicalId)
                 : message.Id;

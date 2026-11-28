@@ -1,3 +1,6 @@
+using System.Data;
+using System.Runtime.CompilerServices;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -42,17 +45,58 @@ public sealed partial class EfStore
         await using var db = create();
         if (root is not null) await CheckRootBeforeWriteAsync(root, db, cancellationToken);
         db.Database.AutoSavepointsEnabled = false;
+        // An already-open connection can have a caller's active reader, which prevents unregistering a temporary function.
+        var formatFunction = db.Database.IsSqlite() && !db.UsesSqliteShippedInstall &&
+            db.RequiredFormat == StoreFormat.Current &&
+            db.Database.GetDbConnection() is SqliteConnection { State: ConnectionState.Closed } connection
+            ? SqliteOwnedFormat.NameFor(connection) : null;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
-            await PinRootNamespaceForCommitAsync(db, cancellationToken);
+        if (formatFunction is null) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
+        long? checkedMarkTime = null;
+        uint? marker = null;
+        if (root is PostgresMarkPreparation marks)
+        {
+            // The ordered pin prepares the exact mark binding and can check an unchanged fence in checked mode.
+            // Only the later fenced checkpoint binder writes Seen and Trial, in their own durable commit.
+            try
+            {
+                var (checkpoints, fenceChecked, fenceTime) = await marks.PrepareAsync(db, cancellationToken);
+                if (fenceChecked && fenceTime is null) return new Committed(false, 0, []);
+                (root, checkedMarkTime) = (checkpoints, fenceTime);
+            }
+            catch (Exception error) { throw new RootMarkPreparationFailure(error); }
+        }
+        else if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
+            marker = await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
+        if (db.UsesRootScheduleInventory && root is RootCheckpoints qualifiedRoots) root = qualifiedRoots.BindRefusalSource(marker);
+        (batch, root, var retentionRefusals) = await BindRetentionPoliciesAsync(db, batch, root, marker, cancellationToken);
+        var publications = (root as RootCheckpoints)?.Publications;
+        var keeping = db.UsesRootPublicEventStarts && root is RootCheckpoints
+            ? batch.Turns.Where(turn => !turn.Unsubscribe).SelectMany(turn => turn.Subscribed)
+                .DistinctBy(wait => (wait.Key, wait.Instance, wait.Wait))
+                .Where(wait => wait.FoundationKeepsEvents && waits[(wait.Key, wait.Instance, wait.Wait)]).ToArray()
+            : [];
+        Func<FormattableString, FormattableString>? bindEventSource = null;
+        if (postgres && (publications is { Count: > 0 } || keeping.Length != 0))
+            bindEventSource = await PostgresRootAdmission.PinAuthoredEventSourceAsync(db, marker, cancellationToken);
+        if (postgres && db.UsesRootLiveEventWaits && (waits.Count != 0 || publications is { Count: > 0 }))
+        {
+            var keys = waits.Keys.Select(wait => wait.Key);
+            if (publications is { Count: > 0 }) keys = keys.Concat(publications.Select(publication => publication.Event.Key));
+            await RootEventAdmission.LockPostgresKeysAsync(db, keys.Distinct(StringComparer.Ordinal).ToArray(), cancellationToken);
+        }
+        IReadOnlyList<SubscriptionRow> newKeeping = keeping.Length == 0 ? [] :
+            await RootPublicEventLiveWaits.NewAsync(db, keeping, bindEventSource, cancellationToken);
+        if (root is RootPublicationCheckpoint eventCheckpoint)
+            await eventCheckpoint.PrepareAsync(db, marker, cancellationToken);
         var commands = new List<OwnedCommand>();
-        var c = new OwnedCommand(dialect) { HasFence = true };
+        var c = new OwnedCommand(dialect) { HasFence = checkedMarkTime is null };
+        if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);
         var window = batch.Window;
-        // Statement 1: the fence, before any other row is touched (E9: the partition rows are locked first, k of them in
-        // ascending partition id). Checked, it is a round trip of its own and nothing else is sent until it held; in the
-        // batch, it is the first statement of the one command.
+        // The fence is the first write (E9: the partition rows are locked first, k of them in ascending partition id).
+        // The checked mode sends other writes after the fence holds. The in-batch mode sends them with the fence.
         var fences = Fenced(batch);
-        dialect.Fence(c, fences, window, Unfenced, FenceIgnoresCount);
+        if (c.HasFence) dialect.Fence(c, fences, window, Unfenced, FenceIgnoresCount);
         // An owned batch, one fence or several: each turn writes its own partition's rows and journal, each mark takes the
         // epoch of its message's partition, and a mark, consume or done may touch only the fenced partitions' messages
         // (InboxKey does not name its partition, so the statements carry the bound and their counts check it).
@@ -61,7 +105,7 @@ public sealed partial class EfStore
         var bound = owned ? $""" AND "Partition" IN ({string.Join(", ", epochs.Keys.Order())})""" : "";
         var markEpoch = epochs.Count == 1 ? Lit(batch.Epoch) : $"""CASE "Partition" {string.Join(" ", epochs.Select(e => $"WHEN {e.Key} THEN {Lit(e.Value)}"))} END""";
         int Home(string instance) => owned ? StoreBatchRules.AddressPartition(instance) ?? batch.Partition : batch.Partition;
-        if (!FenceInBatch) { commands.Add(c); c = new OwnedCommand(dialect); }
+        if (!FenceInBatch && c.HasFence) { commands.Add(c); c = new OwnedCommand(dialect); }
 
         var exact = Engine is SqlServerEngine or MySqlEngine;      // keys carry IssuedWire
         var instances = db.Model.FindEntityType(typeof(InstanceEntity))!;
@@ -165,10 +209,12 @@ public sealed partial class EfStore
         rows.Flush(c);
         if (c.Text.Length > 0) commands.Add(c);
 
-        var (now, seqs) = (0L, new List<long>());
+        var (now, seqs) = (checkedMarkTime ?? 0L, new List<long>());
         foreach (var command in commands)
         {
-            var result = await RunAsync(db, dialect, command, cancellationToken);
+            Ran result;
+            using (var sqliteFormat = formatFunction is not null && command.HasFence ? new SqliteOwnedFormat(db, formatFunction) : null)
+                result = await RunAsync(db, dialect, command, cancellationToken, sqliteFormat);
             if (!result.Landed)
             {
                 // A count that did not match while every fence held, in an owned batch with bound keys: a key outside the
@@ -184,9 +230,38 @@ public sealed partial class EfStore
         if (batch.ClearJobTrials.Count != 0 && !await ClearJobTrialsAsync(db, batch, cancellationToken))
             return new Committed(false, 0, []);
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
+        if (newKeeping.Count != 0)
+            await RootPublicEventLiveWaits.CaptureAsync(db, newKeeping, now, bindEventSource, cancellationToken);
+        if (publications is { Count: > 0 })
+        {
+            if (db.UsesRootPagedPublicEvents)
+            {
+                var bridgeTenant = db.UsesAuthoredStandaloneEvents
+                    ? await RootAuthoredStandaloneEvents.ReadTenantAsync(db, bindEventSource, cancellationToken)
+                    : null;
+                var authorities = FoundationMetadataLimits.MaxTurnSends;
+                long authorityBytes = FoundationMetadataLimits.MessageContentBytes;
+                foreach (var publication in publications)
+                {
+                    var ticket = RootPublicEventTicket.Authored(publication.Event, publication.Ticket, now);
+                    var staged = await RootEventStarts.StageMatchesAsync(db, ticket, authorities, authorityBytes, bindEventSource, cancellationToken);
+                    authorities -= staged.Count;
+                    authorityBytes -= staged.Bytes;
+                    await ticket.EnqueueAsync(db, bindEventSource, cancellationToken);
+                    if (bridgeTenant is not null)
+                        await RootAuthoredStandaloneEvents.CaptureAsync(db, publication.Root, ticket, bridgeTenant, bindEventSource, cancellationToken);
+                }
+            }
+            else
+                await RootEventAdmission.PublishAuthoredAsync(db, publications.Select(publication => publication.Event).ToArray(),
+                    now, bindEventSource, cancellationToken);
+        }
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
-        return new Committed(true, now, seqs) { RetiredOperatorReplies = db.RetiredOperatorReplies ?? [] };
+        return new Committed(true, now, seqs)
+        {
+            RetiredReplies = db.RetiredReplies ?? [], RetentionRefusals = retentionRefusals
+        };
     }
 
     /// <summary>
@@ -200,6 +275,7 @@ public sealed partial class EfStore
         var dialect = RequireDialect();
         await using var db = create();
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var c = new OwnedCommand(dialect) { HasFence = true };
         dialect.Fence(c, rows.OrderBy(r => r.Id).ToArray(), null, Unfenced, FenceIgnoresCount);
         var result = await RunAsync(db, dialect, c, cancellationToken);
@@ -216,7 +292,10 @@ public sealed partial class EfStore
     {
         var moves = batch.Turns.Where(t => t.Journal is not null).GroupBy(batch.PartitionOf).ToDictionary(g => g.Key, g => g.Count());
         var order = UnorderedFenceLocks && batch.Fences is { } listed ? listed : batch.Fenced;
-        return [.. order.Select(f => new FenceRow(f.Partition, f.Epoch, f.Position, f.Position + moves.GetValueOrDefault(f.Partition)))];
+        return [.. order.Select(f => new FenceRow(f.Partition, f.Epoch, f.Position, f.Position + moves.GetValueOrDefault(f.Partition))
+        {
+            Backlog = batch.DueBacklog?.TryGetValue(f.Partition, out var estimate) == true ? estimate : null
+        })];
     }
 
     /// <summary>After a refused owned batch: whether one of its bound keys names a message row outside the fenced partitions (rows never change partition).</summary>
@@ -243,7 +322,8 @@ public sealed partial class EfStore
     private readonly record struct Ran(bool Landed, bool FenceHeld, long Now, List<long> Seqs);
 
     /// <summary>Runs one command and reads its result sets in order. Not landed when a count did not match.</summary>
-    private async Task<Ran> RunAsync(KernelDb db, CommitDialect dialect, OwnedCommand command, CancellationToken cancellationToken)
+    private async Task<Ran> RunAsync(KernelDb db, CommitDialect dialect, OwnedCommand command, CancellationToken cancellationToken,
+        SqliteOwnedFormat? sqliteFormat = null)
     {
         var builder = db.GetService<IRelationalCommandBuilderFactory>().Create().Append(dialect.Prelude).Append(command.Text.ToString());
         var values = new Dictionary<string, object?>();
@@ -272,6 +352,16 @@ public sealed partial class EfStore
             }
             if (landed) while (await data.NextResultAsync(cancellationToken)) { }
         }
+        catch (SqliteException) when (sqliteFormat?.Refusal is not null)
+        {
+            landed = false;
+            throw sqliteFormat.Refusal;
+        }
+        catch (SqliteException error) when (sqliteFormat is not null && MissingVersionTable(error))
+        {
+            landed = false;
+            throw new StoreFormatException("The kernel store version marker table is missing.", error);
+        }
         catch (Exception e) when (dialect.NotLanded(e)) { (landed, held) = (false, dialect.FenceHeldAfter(e) ?? held); }
         finally
         {
@@ -282,6 +372,48 @@ public sealed partial class EfStore
                 catch (System.Data.Common.DbException) when (!landed) { }
         }
         return new(landed, held, now, seqs);
+    }
+
+    private sealed class SqliteOwnedFormat : IDisposable
+    {
+        // Microsoft.Data.Sqlite keeps a registration entry even after removing a function. Reuse one private name per connection.
+        private static readonly ConditionalWeakTable<SqliteConnection, string> Names = new();
+
+        internal static string NameFor(SqliteConnection connection) =>
+            Names.GetValue(connection, static _ => $"kernel_require_owned_format_{Guid.NewGuid():N}");
+
+        internal static string Check(string function) => $"""
+            SELECT {function}(COUNT(*), MIN("StoreSchema"), MIN("MessageProtocol"), MIN("JournalCodec"))
+            FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
+            """;
+
+        private readonly SqliteConnection connection;
+        private readonly string function;
+        internal Exception? Refusal { get; private set; }
+
+        internal SqliteOwnedFormat(KernelDb db, string function)
+        {
+            this.function = function;
+            connection = (SqliteConnection)db.Database.GetDbConnection();
+            // The in-batch check aborts inside SQLite before the driver can step the fence or a later write.
+            connection.CreateFunction<long, int?, int?, int?, int>(function, (count, schema, protocol, codec) =>
+            {
+                if (count > 1)
+                {
+                    Refusal = new InvalidOperationException("The kernel store contains more than one version marker.");
+                    throw Refusal;
+                }
+                try { RequireSnapshotFormat(db, schema, protocol, codec, definitionStamp: null); }
+                catch (StoreFormatException refusal)
+                {
+                    Refusal = refusal;
+                    throw;
+                }
+                return 1;
+            });
+        }
+
+        public void Dispose() => connection.CreateFunction<long, int?, int?, int?, int>(function, null);
     }
 
     // ---- K1: the set operations over an owned set of virtual partitions, each one statement (PARTITIONS.md) --------------
@@ -348,8 +480,16 @@ public sealed partial class EfStore
         };
         var rows = await db.Database.SqlQueryRaw<SetRow>(sql, parameters).ToListAsync(cancellationToken);
         // Taken from another owner, so its lease had expired: one more attempt for what it had on trial in that partition.
-        if (rows.Where(r => r.Died).Select(r => FormattableString.Invariant($"""("Partition" = {r.Id} AND "Trial" = {r.Epoch - 1})""")).ToList() is { Count: > 0 } dead)
-            await db.Database.ExecuteSqlRawAsync(Q($"""UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Done" = {False} AND ({string.Join(" OR ", dead)})"""), cancellationToken);
+        var dead = rows.Where(row => row.Died).ToArray();
+        if (dead.Length > 0)
+        {
+            // A restored SQLite host can take the full set at once. Use pairs to stay within the expression depth limit.
+            var trials = db.Database.IsSqlite()
+                ? $"""("Partition", "Trial") IN (VALUES {string.Join(", ", dead.Select(row => FormattableString.Invariant($"({row.Id}, {row.Epoch - 1})")))})"""
+                : string.Join(" OR ", dead.Select(row => FormattableString.Invariant($"""("Partition" = {row.Id} AND "Trial" = {row.Epoch - 1})""")));
+            await db.Database.ExecuteSqlRawAsync(Q($"""UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Done" = {False} AND ({trials})"""),
+                cancellationToken);
+        }
         await transaction.CommitAsync(cancellationToken);
         return new([.. rows.OrderBy(r => r.Id).Select(r => new PartitionFence(r.Id, r.Epoch, r.Position))], rows.Count > 0 ? rows.Min(r => r.Now) : 0);
     }
@@ -375,6 +515,7 @@ public sealed partial class EfStore
         {
             var pairs = string.Join(", ", owned.Select(f => FormattableString.Invariant($"({f.Partition}, {f.Epoch})")));
             await using var sqlite = create();
+            await RequireSqliteOperationalFormatAsync(sqlite, cancellationToken);
             await sqlite.Database.ExecuteSqlRawAsync($"""UPDATE "Partitions" SET "Owner" = NULL WHERE ("Id", "Epoch") IN (VALUES {pairs})""", cancellationToken);
             return;
         }
@@ -397,14 +538,31 @@ public sealed partial class EfStore
             var fence = owned.Single();
             return await PollAsync(fence.Partition, fence.Epoch, horizon, limit, cancellationToken);
         }
-        var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
+        return await PollOwnedAsync(db, owned, horizon, limit, cancellationToken);
+    }
+
+    private async ValueTask<Polled> PollOwnedAsync(KernelDb db, IReadOnlyCollection<PartitionFence> owned,
+        TimeSpan horizon, int limit, CancellationToken cancellationToken)
+    {
+        var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         var poll = PollSql(db);
         if (!poll.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
-        var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal), 0, 0, (long)horizon.TotalMilliseconds, limit);
-        if (_ordinaryRoots is { } root) return ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql).ToListAsync(cancellationToken), root, db);
+        object[] args = [];
+        if (SamplesAuthoredCohortWithholding(db))
+        {
+            var (actors, revisions) = await ReadWithheldCohortsAsync(db, owned, limit, cancellationToken);
+            args = db.UsesSqliteRootRuntime ? [SqliteCohortDecisions(actors, revisions)] : [actors, revisions];
+        }
+        var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal),
+            0, 0, (long)horizon.TotalMilliseconds, limit, "{0}", "{1}");
+        if (_ordinaryRoots is { } root)
+        {
+            var result = ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, args).ToListAsync(cancellationToken), root, db);
+            return await WithRootParkFactsAsync(db, result, cancellationToken);
+        }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql).ToListAsync(cancellationToken));
     }
 }

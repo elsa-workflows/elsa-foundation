@@ -27,7 +27,7 @@ Built, in `prototypes/kernel-model` at main `433c79341`:
 | Forced termination of a tree | `WorkflowInstance` (terminate) | A terminate goes to every child the instance started that has not finished; it recurses. |
 | Native `Parallel` with a threshold join and fault counting | [Activities.cs](../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs) | The join and fault rules a combiner reuses. |
 | Native `ForEach`, sequential only; it copies its items into its state | [Activities.cs](../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs), NATIVE.md | No parallel ForEach exists in the prototype. Elsa 4 on main has none either (Elsa 3's `ParallelForEach` maps to "no counterpart", `extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs`). |
-| Effect keys `{instance origin}/{node}/{iteration path}/{attempt}`; ForEach's iteration is the body's `CurrentIndex` | [EffectKey.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs), `ForEach.IterationOf`, [ownership and fencing](ownership-and-fencing.md#side-effects) | The key every leaf effect carries. |
+| Effect keys `{instance origin}/{node}/{iteration path}/{attempt}`; ForEach's iteration is the body's `currentIndex` | [EffectKey.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs), `ForEach.IterationOf`, [ownership and fencing](ownership-and-fencing.md#side-effects) | The key every leaf effect carries. |
 | **The ETL fan-out spike:** a combiner tree with fanout 64 and credit 8, children spread over 4 partitions, against a direct baseline with the same credit | `models/Etl/EtlModel.cs`, `models/Etl.Run`, [ETL.md](../../prototypes/kernel-model/models/Etl/ETL.md) | The measured evidence below. In-memory store, real `Worker` and `WorkflowInstance`. |
 
 ## What one parent costs without the pattern
@@ -241,7 +241,7 @@ revision, so they need no effect keys.
 | Combiner tree (after release 1) | `{leaf origin}/{node}/{iteration path in the leaf}/{attempt}` | Yes: a leaf's id is issued in its combiner's turn and published only by that turn's fenced commit | Yes: each leaf has its own origin |
 
 The parallel form reuses the rule that is built for the sequential ForEach (`ForEach.IterationOf` returns the body's
-`CurrentIndex`); several bodies at once each carry their own index, so the frame number stays out of the key as
+`currentIndex`); several bodies at once each carry their own index, so the frame number stays out of the key as
 decided. The parallel activity itself is not built, so this row is **proposed**. In the tree, the key does not name the
 tree path: the leaf's origin is unique, and the item a leaf handles is in its start spec and journal.
 

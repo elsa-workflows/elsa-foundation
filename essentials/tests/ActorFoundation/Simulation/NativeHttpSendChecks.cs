@@ -57,6 +57,9 @@ internal static partial class NativeHttpEdgeChecks
             .Add(Sends("connection", Wf.Http("send", "https://partner.example/ok", connection: "partner")))
             .Add(Sends("credential", Wf.Http("send", "https://partner.example/ok", headers: Binding.Literal(new JsonObject { ["Authorization"] = "Bearer secret" }))))
             .Add(Sends("charset", Input(Wf.Http("send", "https://partner.example/ok", "plain words"), "ContentType", "text/plain; charset=utf-8")))
+            .Add(Sends("json-text", Input(Wf.Http("send", "https://partner.example/ok", "{\"raw\":1}"), "ContentType", "application/json")))
+            .Add(Sends("untyped-text", Wf.Http("send", "https://partner.example/ok", "as typed")))
+            .Add(Sends("empty-text", Wf.Http("send", "https://partner.example/ok", "")))
             .Add(Sends("streamed", Wf.Http("send", "https://partner.example/stream")))
             .Add(Sends("reset", Wf.Http("send", "https://partner.example/reset")))
             .Add(Sends("iso-timeout", Input(Wf.Http("send", "https://partner.example/slow"), "Timeout", "PT0.2S")))
@@ -119,6 +122,16 @@ internal static partial class NativeHttpEdgeChecks
                 Check(charset.Outcome == SendHttpRequest.DoneOutcome && plain.Body == "plain words" &&
                       plain.Headers.GetValueOrDefault("Content-Type")?.Contains("charset=utf-8", StringComparison.OrdinalIgnoreCase) == true,
                     $"{mode}: a ContentType with parameters sends a text body as that type ({charset.Outcome})");
+                await host.RunAsync("json-text", mode);
+                var jsonText = handler.Sent.Last();
+                await host.RunAsync("untyped-text", mode);
+                var untyped = handler.Sent.Last();
+                var empty = await host.RunAsync("empty-text", mode);
+                var none = handler.Sent.Last();
+                Check(jsonText.Body == """{"raw":1}""" && jsonText.Headers.GetValueOrDefault("Content-Type")?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true &&
+                      untyped.Body == "as typed" && untyped.Headers.GetValueOrDefault("Content-Type")?.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase) == true &&
+                      empty.Outcome == SendHttpRequest.DoneOutcome && none.Body is null,
+                    $"{mode}: a string body is sent as its text under any media type, text/plain without one, and an empty one sends no content ({jsonText.Body}, {untyped.Body}, {none.Body ?? "none"})");
                 Volatile.Write(ref _pulled, 0);
                 var streamed = await host.RunAsync("streamed", mode);
                 Check(streamed.Outcome == SendHttpRequest.TooLargeOutcome && Volatile.Read(ref _pulled) < 64 * 1_024,

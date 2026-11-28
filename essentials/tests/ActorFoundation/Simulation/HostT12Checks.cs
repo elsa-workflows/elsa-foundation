@@ -19,6 +19,7 @@ internal static class HostT12Checks
     public static async Task<int> RunAsync(Flaw flaws = Flaw.None)
     {
         await PassingReleaseAsync();
+        await FailedStoreReleaseAsync();
         const int partitions = 2;
         const long startTime = 1_701_000_000_000;
         const long readyAt = startTime + 60_000;     // past every clock step before the last, so no input runs early
@@ -288,6 +289,34 @@ internal static class HostT12Checks
             is { Done: true, Attempts: 0 };
         List<string>? State(Contract.ActorRef actor) =>
             store.ReadFoundationActor(Tenant(actor).Tenant, actor.Id).Actor?.Row is { } row ? Json.Read<List<string>>(row.State) : null;
+    }
+
+    // A node-set host (a store with owned sets): the Worker drops the partitions and then the store release fails. The
+    // release reports only what the store released, nothing here, while the fences still name the node; the next heartbeat
+    // answer frees them, the node takes them back, and a release whose store call succeeds reports them.
+    private static async Task FailedStoreReleaseAsync()
+    {
+        const int partitions = 2;
+        var store = new InMemoryStore(partitions, static () => 1_701_000_000_000);
+        var failing = 0;
+        var host = new CountingStore(store, static () => { },
+            beforeRelease: () => { if (Volatile.Read(ref failing) == 1) throw new StoreException(Failure.Transient, "injected release failure"); });
+        await using var node = new RuntimeNode("set", store, partitions, Loop);
+        await node.StartAsync(DurableHost.ForNode("set", host, new ActorAdapter(store, new Probe(static _ => { })), partitions,
+            new WorkerOptions { Partitions = partitions, Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.Zero, Monotonic = static () => 0 }));
+        var admin = new HostOwnershipAdministration(node, static () => true);
+        foreach (var listed in new[] { new[] { 0, 1 }, new[] { 0 } })
+        {
+            await WaitFor(() => node.Runtime.Owns(0) && node.Runtime.Owns(1), "the node-set node holds both partitions");
+            Volatile.Write(ref failing, 1);
+            var failed = await Within(admin.ReleaseAsync(listed).AsTask());
+            var owners = store.Partitions.Select(row => row.Owner).ToArray();
+            Volatile.Write(ref failing, 0);
+            Check(failed is { Authorized: true, Released: [] } && owners.All(owner => owner == "set"),
+                $"a release of [{string.Join(", ", listed)}] whose store call fails reports none given up while the fences still name the node (released [{string.Join(", ", failed?.Released ?? [])}], owners {string.Join(", ", owners)})");
+        }
+        await WaitFor(() => node.Runtime.Owns(0) && node.Runtime.Owns(1), "the next heartbeat answer freed the fences and the node took both back");
+        Check(await Within(admin.ReleaseAsync([0, 1]).AsTask()) is { Released: [0, 1] }, "a release whose store call succeeds reports both partitions");
     }
 
     // A call that must return while the test still holds a store call or a commit; a hang counts as a failure.

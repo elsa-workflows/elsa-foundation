@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Triggers;
@@ -240,8 +241,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             }
         }
 
-        var inputs = ApplyInputContract(executable, request.Inputs);
-        await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
+        var inputs = WorkflowStartAdmission.ApplyInputContract(executable, request.Inputs, _inputValidator);
+        await WorkflowStartAdmission.EnforceStartPolicyAsync(request, resolved.Identity, partition, _startPolicy, cancellationToken);
         if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
@@ -476,32 +477,6 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         return mismatches.Count == 0 ? "none (multiple candidates)" : string.Join(", ", mismatches);
     }
 
-    private async ValueTask EnforceStartPolicyAsync(
-        WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutableIdentity executable,
-        WorkflowExecutionPartition partition,
-        CancellationToken cancellationToken)
-    {
-        var context = new WorkflowExecutableStartPolicyContext(
-            executable,
-            request.StartAuthority?.Kind ?? WorkflowExecutableStartAuthorityKind.LiveReference,
-            request.RequestedBy,
-            request.Authority,
-            request.RunKind,
-            request.TenantId,
-            partition,
-            request.DispatchNestingDepth);
-        var decision = await _startPolicy.EvaluateAsync(context, cancellationToken)
-            ?? throw new InvalidOperationException($"{nameof(IWorkflowExecutableStartPolicy)} returned no decision.");
-        if (!decision.IsAllowed)
-        {
-            throw new WorkflowExecutableStartRejectedException(
-                WorkflowExecutableStartRejectionCategory.Policy,
-                decision.ReasonCode!,
-                decision.Message!);
-        }
-    }
-
     private static WorkflowExecutableStartRejectedException AuthorityRejected(string reasonCode, string message) =>
         new(WorkflowExecutableStartRejectionCategory.Authority, reasonCode, message);
 
@@ -510,27 +485,6 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutableReferenceScope requiredScope, CancellationToken cancellationToken) =>
         new(executable.Identity, await _startSourceResolver.ResolveAsync(request.ArtifactId, request.SourceSelection,
             request.ProvenanceRequirement, requiredScope, cancellationToken), null);
-
-    // Every start applies its executable's input contract before the command is enqueued (#3728): declared defaults fill
-    // omitted inputs, and a blank, unknown, duplicate or mistyped input or a missing required one refuses the start. A
-    // legacy artifact without a contract, or a dispatcher composed without a validator, keeps the supplied inputs.
-    private IReadOnlyDictionary<string, JsonElement> ApplyInputContract(WorkflowExecutable executable, IReadOnlyDictionary<string, object?> inputs)
-    {
-        var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(inputs);
-        if (executable.InputContract is not { } contract || _inputValidator is null)
-            return supplied;
-
-        var validation = _inputValidator.Validate(contract, supplied);
-        if (!validation.IsValid)
-        {
-            throw new WorkflowExecutableStartRejectedException(
-                WorkflowExecutableStartRejectionCategory.Input,
-                validation.Findings.First().ReasonCode,
-                string.Join(" ", validation.Findings.Select(finding => finding.Message)));
-        }
-
-        return validation.NormalizedInputs;
-    }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,

@@ -40,7 +40,7 @@ public sealed class VersionLineOwnershipGuardTests
 
         Assert.True(scanned.Count > 0, "The version-line ownership guard scanned no files under backend roots; its roots are wrong.");
 
-        var expectedRoots = new[] { "essentials/src", "apps", "essentials/tests", "extensions" };
+        var expectedRoots = new[] { "essentials/src", "server/apps", "essentials/tests", "extensions" };
         var missingRoots = expectedRoots
             .Where(root => !scanned.Any(path => RelativePath(path).StartsWith($"{root}/", StringComparison.Ordinal)))
             .ToArray();

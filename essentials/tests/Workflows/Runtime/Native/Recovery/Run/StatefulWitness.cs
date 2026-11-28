@@ -20,7 +20,7 @@ internal static class StatefulWitness
         StatefulProbe.Calls.Clear(); StatefulProbe.StartFault = startFault; StatefulProbe.Faults = 2;
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true }; var target = InstanceRef.In(0, "stateful-proof"); var owner = 0;
         Actor Actor() => world.Of(owner, 0);
-        var leaf = Wf.Node<StatefulProbe>("leaf", ("Value", Binding.Var(parent == "foreach" ? "CurrentItem" : "value")), ("Data", Binding.Literal(new JsonObject { ["kept"] = 9 })));
+        var leaf = Wf.Node<StatefulProbe>("leaf", ("Value", Binding.Var(parent == "foreach" ? "currentItem" : "value")), ("Data", Binding.Literal(new JsonObject { ["kept"] = 9 })));
         var body = parent == "foreach" ? Wf.ForEach("parent", Binding.Literal(new[] { 17, 19 }), leaf) : parent == "parallel"
             ? Wf.Parallel("parent", null, leaf, Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("changed", "value", -1)))
             : Wf.Sequence("parent", leaf, Wf.Set("after", "after", 1));

@@ -43,6 +43,8 @@ public sealed class ReusableActivityCollectionImporter(
     ReusableActivityImportPublishPhase? publishPhase = null,
     bool requirePublishing = false) : IReusableActivityCollectionImporter
 {
+    public bool SupportsDraftImport => command is IReusableActivityDraftImportCommand;
+
     public ValueTask<ReusableActivityImportPlan> AnalyzeAsync(
         ReusableActivityImportCollection collection,
         CancellationToken cancellationToken = default) =>
@@ -129,6 +131,9 @@ public sealed class ReusableActivityCollectionImporter(
         }
 
         var mutation = await materializer.MaterializeAsync(request.Collection, plan, selection, cancellationToken);
+        if (request.PublishImportedActivities.HasValue && command is not IReusableActivityDraftImportCommand)
+            throw new ReusableActivityDraftImportUnavailableException("The configured import command does not support current drafts.");
+        mutation = mutation with { PublishImportedActivities = request.PublishImportedActivities };
         await AdmitAsync(mutation, cancellationToken);
         // After the conversion and admission findings, which the engineer must see first; before anything is written.
         if (requirePublishing && publishPhase is null && mutation.Activities.Count > 0)
@@ -177,7 +182,7 @@ public sealed class ReusableActivityCollectionImporter(
         var committed = await command.CommitAsync(mutation, cancellationToken);
         var receipt = committed.Receipt;
         IReadOnlyList<ReusableActivityPublicationState>? publications = null;
-        if (publishPhase is not null && mutation.Activities.Count > 0)
+        if (request.PublishImportedActivities != false && publishPhase is not null && mutation.Activities.Count > 0)
         {
             // Publishing follows the commit and is resumable: a replayed commit publishes what is still missing.
             var operationKey = receipt?.ReceiptId ?? (request.AccessScope is null ? request.OperationKey : null) ?? mutation.PlanId;

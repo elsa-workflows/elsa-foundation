@@ -49,6 +49,12 @@ public sealed class Watchdog
         var entry = new Call(what, _monotonic(), close);
         lock (_calls) _calls.Add(entry);
         try { return await call(close.Token); }
+        // The link is this watchdog's own: a cancellation of its caller reached the call through it, so it is reported on
+        // the caller's token, and the caller can tell its own cancellation by token (RuntimeNode tells a kill so).
+        catch (OperationCanceledException error) when (cancellationToken.IsCancellationRequested && error.CancellationToken != cancellationToken)
+        {
+            throw new OperationCanceledException(error.Message, error, cancellationToken);
+        }
         finally
         {
             lock (_calls) _calls.Remove(entry);
@@ -111,7 +117,7 @@ public sealed class Watchdog
 /// heartbeats. Every member of <see cref="IKernelStore"/> is its own, so no default of the interface stands in for the
 /// inner store's (a reflection check in the runtime conformance's <c>WatchdogChecks</c>, run by <c>semantic</c>, holds it to that).
 /// </summary>
-public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
+public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore, IOwnerPollLookups
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
@@ -128,9 +134,13 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
 
     bool IDueBacklogStore.MeasuresDueBacklog => inner is IDueBacklogStore { MeasuresDueBacklog: true };
-    int IDueBacklogStore.PublishedDueBacklog(int partition) => ((IDueBacklogStore)inner).PublishedDueBacklog(partition);
+    ValueTask<int> IDueBacklogStore.ReadPublishedDueBacklogAsync(int partition, CancellationToken cancellationToken) =>
+        watchdog.RunAsync("published backlog", cancellationToken, token => ((IDueBacklogStore)inner).ReadPublishedDueBacklogAsync(partition, token));
     ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken) =>
         watchdog.RunAsync("backlog", cancellationToken, token => ((IDueBacklogStore)inner).CountDueBacklogAsync(partition, cap, token));
+    ValueTask<IReadOnlyList<DueBacklogSample>> IDueBacklogStore.SampleDueBacklogAsync(IReadOnlyList<DueBacklogRead> reads, int cap,
+        CancellationToken cancellationToken) =>
+        watchdog.RunAsync("backlog sample", cancellationToken, token => ((IDueBacklogStore)inner).SampleDueBacklogAsync(reads, cap, token));
 
     // The owner path, watched.
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
@@ -147,6 +157,11 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
         watchdog.RunAsync("poll", cancellationToken, token => inner.PollAsync(partition, epoch, horizon, limit, token));
     public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>
         watchdog.RunAsync("poll", cancellationToken, token => inner.PollAsync(owned, horizon, limit, token));
+    bool IOwnerPollLookups.CanPollLookups => inner is IOwnerPollLookups { CanPollLookups: true };
+    ValueTask<(Polled Poll, IReadOnlyList<ActorLookup>? Lookups)> IOwnerPollLookups.PollLookupsAsync(IReadOnlyCollection<PartitionFence> fences,
+        TimeSpan horizon, int limit, Func<Polled, string[]> selectLookups, CancellationToken cancellationToken) =>
+        watchdog.RunAsync("poll and load", cancellationToken,
+            token => ((IOwnerPollLookups)inner).PollLookupsAsync(fences, horizon, limit, selectLookups, token));
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
         watchdog.RunAsync("load", cancellationToken, token => inner.LoadAsync(ids, token));
     public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>

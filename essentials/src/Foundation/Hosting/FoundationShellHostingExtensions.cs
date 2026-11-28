@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using CShells.Nuplane;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Nuplane;
 using Nuplane.Loading.Hosting.Builder;
+using Nuplane.PackageArchives;
 using Nuplane.Reconciliation;
 using Nuplane.Sources.Directory.Configuration;
 
@@ -52,11 +54,14 @@ public static class FoundationShellHostingExtensions
         var services = builder.Services;
         services.AddCShellsAspNetCore(shells =>
         {
-            shells.WithNuplaneFeatureDiscovery().ShareSingletonWithShells<IReconciliationTriggerIngress>();
+            shells.WithNuplaneFeatureDiscovery()
+                .ShareSingletonWithShells<IReconciliationTriggerIngress>()
+                .ShareSingletonWithShells<IPackageArchiveReader>();
             configure?.Invoke(shells);
             shells.WithConfigurationProvider(builder.Configuration);
         });
 
+        RestartRequiredShellSettingsPreparer.Register(services);
         services.AddShellActivationRunner();
         var tracker = new ShellActivationTracker();
         services.AddSingleton(tracker);

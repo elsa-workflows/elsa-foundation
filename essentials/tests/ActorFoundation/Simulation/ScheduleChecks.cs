@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using static Kernel.Native.Wf;
@@ -222,6 +225,347 @@ internal static class ScheduleChecks
         await Step(2 * 61_000);
         check((await Runs("flow-tick")).Finished == flowBefore, $"without its run registered, an occurrence starts nothing ({flowBefore}, {(await Runs("flow-tick")).Finished})");
         check((await Runs("tick")).Running == 0 && (await Runs("flow-tick")).Running == 0 && (await Runs("cron-tick")).Running == 0 && (await Runs("deep-start")).Running == 0, "every scheduled run finished");
+        await ManagedOccurrences(check);
+        await RecoverManagedOffer(check);
+        await RepublishManagedSchedule(check);
+    }
+
+    private static async Task ManagedOccurrences(Action<bool, string> check)
+    {
+        var acceptor = new ManagedAcceptor();
+        var actor = new ObservedSchedule(new ScheduleActor(new Calendar(), acceptor));
+        // Bind a legacy run at the same key so an accidental Publish would create a visible workflow.
+        var workflow = new PublicWorkflow([new NativeExecutionModel(Registry())]);
+        await using var driver = new ContractWorkload.InMemoryDriver(4, Flaw.None, workflow,
+            authorizeOperator: (_, _) => true, alsoTypes: [actor]);
+        var scope = ContractScopes.Bind("managed-schedules");
+        await driver.TakeAll();
+        await ScheduleActor.RegisterRunAsync(driver.Ingress, scope, "legacy-start", new NativeSchedules(Registry(), CronError).All.Single(x => x.Workflow == "tick").Start());
+        var first = new ScheduleHeader(new(RecurringSchedule.Interval, "PT1S"), "legacy-start", 10) { Authority = "blue" };
+        var born = await driver.Ingress.SendAsync(scope, new Contract.Target.Key("managed", new(ScheduleActor.ActorType,
+            JsonSerializer.Serialize(first), History: Contract.History.Minimal)), "managed-start", ScheduleActor.SetKind);
+        var reference = born.Actor ?? throw new InvalidOperationException("The managed schedule was not admitted.");
+        var target = new Contract.Target.Ref(reference);
+        await driver.PassAll(4);
+
+        var timer = actor.Plans.Last().Timers.Single();
+        // Ordinary ingress can match the due payload and kind, but cannot present the authenticated timer's identity.
+        await driver.Ingress.SendAsync(scope, target, "forged-fire", timer.Kind, timer.Payload);
+        await driver.PassAll(4);
+        check(acceptor.Offered.IsEmpty && actor.Plans.Last().Timers.Single() == timer,
+            "managed schedule ignores a caller-supplied Fire with the exact due payload");
+
+        driver.Advance(timer.Due - driver.Now);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        var original = acceptor.Offered.Single();
+        var recipe = actor.Plans.SelectMany(plan => plan.Jobs).Single();
+        check(original is { ArmGeneration: 1, Authority: "blue" } && original.Tenant == scope.Tenant &&
+              original.Schedule == reference && original.TimerDeliveryId == timer.Id && original.DueAtUnixMilliseconds == timer.Due &&
+              JsonSerializer.Deserialize<ScheduleOccurrence>(recipe.Arguments!) == original &&
+              recipe.Deadline == original.OfferUntilUnixMilliseconds &&
+              original.OfferUntilUnixMilliseconds > timer.Due && original.OfferUntilUnixMilliseconds - timer.Due <= 60_100 &&
+              actor.Plans.All(plan => plan.Jobs.Count + plan.Timers.Count <= 1),
+            "authentic Fire binds tenant, actor, arm, timer and deadline in one durable job and in its Park restoration recipe");
+        await CheckForeignJob(actor, recipe, original, acceptor, check);
+
+        var retry = actor.Plans.Last().Timers.Single();
+        await driver.TakeOver();
+        await driver.PassAll(4);
+        check(acceptor.Offered.Count == 1 && retry.Due < original.OfferUntilUnixMilliseconds,
+            "the replacement owner preserves the retry timer after an unknown acknowledgement");
+        driver.Advance(retry.Due - driver.Now);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        check(acceptor.Offered.SequenceEqual([original, original]) && acceptor.Accepted.Count == 1 &&
+              actor.Plans.SelectMany(plan => plan.Jobs).Last() == recipe,
+            "replay uses the identical offer and original deadline and observes the single committed acceptance");
+
+        var second = actor.Plans.Last().Timers.Single();
+        driver.Advance(second.Due - driver.Now);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        check(acceptor.Offered.Count == 3 && acceptor.Offered.Last() is { ArmGeneration: 2, Authority: "blue" },
+            "a subsequent occurrence owns its own generation");
+        var moved = first with { Revision = 11, Authority = "green" };
+        await driver.Ingress.SendAsync(scope, target, "managed-move", ScheduleActor.SetKind, JsonSerializer.Serialize(moved));
+        await driver.Ingress.SendAsync(scope, target, "unlate-blue", ScheduleActor.StopKind, JsonSerializer.Serialize(new ScheduleStop(10)));
+        await driver.PassAll(4);
+        check(actor.Plans.Last() is { Timers.Count: 0, Jobs.Count: 1 } &&
+              (await driver.Reads.GetAsync(scope, reference))?.Header.TypeData == JsonSerializer.Serialize(moved),
+            "a newer Set supersedes the in-flight arm without occupying a second job slot and an older Stop leaves it armed");
+
+        // Losing this callback's acknowledgement would normally retry, but the arm has been superseded.
+        acceptor.ReleaseSecond.SetException(new IOException("the old acknowledgement was lost"));
+        var waitUntil = Environment.TickCount64 + 5_000;
+        while (Environment.TickCount64 < waitUntil)
+        {
+            await driver.PassAll(1);
+            if (actor.Plans.Last().Timers.Count != 0) break;
+            await Task.Delay(1);
+        }
+        var newTimer = actor.Plans.Last().Timers.Single();
+        driver.Advance(newTimer.Due - driver.Now);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        check(acceptor.Offered.Count == 4 && acceptor.Offered.Last() is { ArmGeneration: 3, Authority: "green" } green &&
+              green.TimerDeliveryId == newTimer.Id && green.TimerDeliveryId != second.Id &&
+              acceptor.Accepted.Count == 1 && actor.Plans.Last().Timers.Single().Kind == ScheduleActor.FireKind,
+            "the displaced callback does not retry, and a definitive refusal of the new arm continues the schedule");
+
+        await driver.Ingress.SendAsync(scope, target, "managed-stop", ScheduleActor.StopKind, JsonSerializer.Serialize(new ScheduleStop(11)));
+        await driver.Ingress.SendAsync(scope, target, "late-green", ScheduleActor.SetKind, JsonSerializer.Serialize(moved));
+        await driver.PassAll(4);
+        driver.Advance(80_000);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        var workflows = await driver.Reads.ListAsync(scope, new Contract.ActorQuery(Type: PublicWorkflow.ActorType));
+        check(acceptor.Offered.Count == 4 && actor.Plans.Last() is { Timers.Count: 0, Jobs.Count: 0 } && workflows.Items.Count == 0,
+            "an equal-revision Set cannot undo Stop, and neither acceptance nor refusal calls the legacy publication path");
+
+        await driver.Ingress.SendAsync(scope, target, "managed-after-stop", ScheduleActor.SetKind,
+            JsonSerializer.Serialize(moved with { Revision = 12, Authority = "expiry" }));
+        await driver.PassAll(4);
+        var afterStop = actor.Plans.Last().Timers.Single();
+        driver.Advance(afterStop.Due - driver.Now);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        var expiring = acceptor.Offered.Last();
+        check(expiring is { ArmGeneration: 5, Authority: "expiry" } &&
+              actor.Plans.Last().Jobs.Single().Deadline == expiring.OfferUntilUnixMilliseconds,
+            "a higher revision re-arms a stopped schedule and offers one unsettled timed job");
+        driver.Advance(expiring.OfferUntilUnixMilliseconds - driver.Now);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        var recovery = actor.Plans.Last().Timers.Single();
+        check(recovery.Kind != ScheduleActor.FireKind && recovery.Due > expiring.OfferUntilUnixMilliseconds,
+            "an expired acceptance releases its job slot and keeps the original due occurrence queued for retry");
+        driver.Advance(recovery.Due - driver.Now);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        var renewed = actor.Plans.SelectMany(plan => plan.Jobs).Last();
+        check(acceptor.Offered.TakeLast(2).SequenceEqual([expiring, expiring]) &&
+              acceptor.Accepted.Keys.Count(offer => offer == expiring) == 1 && acceptor.Offered.Count == 6 &&
+              renewed.Deadline - recovery.Due is >= 60_000 and <= 60_100 &&
+              actor.Plans.Last().Timers.Single() is { Kind: ScheduleActor.FireKind } next && next.Due > recovery.Due,
+            "the new owner accepts the exact due occurrence once in a fresh bounded attempt, then skips intervening due times");
+
+        await driver.Ingress.SendAsync(scope, target, "managed-terminate", Contract.Kinds.Terminate);
+        await driver.PassAll(4);
+        driver.Advance(80_000);
+        await driver.TakeOver();
+        await driver.PassAll(6);
+        check(acceptor.Offered.Count == 6 && (await driver.Reads.GetAsync(scope, reference))?.Header.Status == Contract.ActorStatus.Cancelled,
+            "Terminate ends a managed actor with a future arm and the timer cannot offer afterward");
+    }
+
+    private static async Task RepublishManagedSchedule(Action<bool, string> check)
+    {
+        var acceptor = new RepublishAcceptor();
+        var actor = new ObservedSchedule(new ScheduleActor(null, acceptor));
+        await using var driver = new ContractWorkload.InMemoryDriver(4, Flaw.None,
+            new PublicWorkflow([new NativeExecutionModel(Registry())]), alsoTypes: [actor]);
+        var scope = ContractScopes.Bind("republished-schedule");
+        await driver.TakeAll();
+        var initial = new ScheduleHeader(new(RecurringSchedule.Interval, "PT10S"), "unused", 1)
+        {
+            Authority = "initial", Continuity = "compatible", Cutover = driver.Now
+        };
+        var born = await driver.Ingress.SendAsync(scope, new Contract.Target.Key("republished", new(actor.Type,
+            JsonSerializer.Serialize(initial))), "republished-birth", ScheduleActor.SetKind);
+        var target = new Contract.Target.Ref(born.Actor!.Value);
+        await driver.PassAll(4);
+        var pending = actor.Plans.Last().Timers.Single();
+
+        await Publish(initial with { Authority = "compatible-replacement", Revision = 2, Cutover = pending.Due });
+        check(actor.Plans.Last().Timers.Single() == pending,
+            "a compatible publication at the recorded due time keeps the original authenticated timer and recovery recipe");
+        driver.Advance(pending.Due - driver.Now + 40_000);
+        await driver.TakeOver();
+        await driver.PassAll(8);
+        var offer = acceptor.Offered.Single();
+        var next = actor.Plans.Last().Timers.Single();
+        check(offer is { ArmGeneration: 1, Authority: "initial" } && offer.TimerDeliveryId == pending.Id &&
+              offer.DueAtUnixMilliseconds == pending.Due && next.Due > driver.Now + 9_000,
+            "the original timer is offered once after takeover, and no intervening occurrence is replayed");
+
+        var futureCutover = driver.Now;
+        await Publish(initial with { Authority = "early-replacement", Revision = 3, Cutover = futureCutover });
+        var reset = actor.Plans.Last().Timers.Single();
+        check(reset.Id != next.Id && reset.Due == futureCutover + 10_000,
+            "a compatible republish before the old timer was due computes its own first due time from cutover");
+
+        await Publish(initial with { Schedule = new(RecurringSchedule.Interval, "PT20S"), Authority = "changed", Revision = 4,
+            Continuity = "changed-trigger", Cutover = reset.Due });
+        var changed = actor.Plans.Last().Timers.Single();
+        check(changed.Id != reset.Id && changed.Due == reset.Due + 20_000,
+            "a changed trigger disarms the old timer even when it was due at cutover");
+        await driver.Ingress.SendAsync(scope, target, "republished-stop", ScheduleActor.StopKind, JsonSerializer.Serialize(new ScheduleStop(5)));
+        await driver.PassAll(4);
+        driver.Advance(changed.Due - driver.Now + 10_000);
+        await driver.TakeOver();
+        await driver.PassAll(8);
+        check(acceptor.Offered.Count == 1 && actor.Plans.Last().Timers.Count == 0, "Stop revokes the active timer and leaves no recurring redelivery");
+
+        async Task Publish(ScheduleHeader header)
+        {
+            await driver.Ingress.SendAsync(scope, target, "republish-" + header.Revision, ScheduleActor.SetKind, JsonSerializer.Serialize(header));
+            await driver.PassAll(4);
+        }
+    }
+
+    private sealed class RepublishAcceptor : IScheduleOccurrenceAcceptor
+    {
+        public ConcurrentQueue<ScheduleOccurrence> Offered { get; } = new();
+
+        public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken)
+        {
+            Offered.Enqueue(occurrence);
+            return ValueTask.FromResult(true);
+        }
+    }
+
+    private static async Task CheckForeignJob(ObservedSchedule actor, Contract.JobSpec recipe, ScheduleOccurrence offer, ManagedAcceptor acceptor, Action<bool, string> check)
+    {
+        try
+        {
+            await actor.ExecuteJobAsync(new TestedJob(new("wrong-schedule"), recipe.Key, recipe.Arguments, recipe.Deadline), CancellationToken.None);
+            check(false, "a callback carrying another actor's offer is refused");
+        }
+        catch (InvalidOperationException)
+        {
+            check(acceptor.Offered.SequenceEqual([offer]), "a callback carrying another actor's offer is refused before consulting the host");
+        }
+    }
+
+    private static async Task RecoverManagedOffer(Action<bool, string> check)
+    {
+        const long initial = 1_703_010_000_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = ContractScopes.Bind("parked-schedule");
+        var acceptor = new ParkedAcceptor();
+        var actor = new ObservedSchedule(new ScheduleActor(null, acceptor))
+        {
+            ObserveJob = job => acceptor.Deadlines.Enqueue(job.Deadline)
+        };
+        var edge = new InMemoryIngress(store, new Requests("schedule-park"), "schedule-park", (_, kind) => kind == Contract.Kinds.Recover);
+        var reads = new ActorList(store, 7);
+        Worker NewWorker(string node) => new(node, 0, store, new ActorAdapter(store, actor),
+            new WorkerOptions { Monotonic = () => now - initial, MaxAttempts = 2 });
+        var first = NewWorker("before-schedule-Park");
+        await using var original = (await new DurableHost([first]).ActivateAsync(0))!;
+        var header = new ScheduleHeader(new(RecurringSchedule.Interval, "PT1S"), "unused", 1) { Authority = "pinned" };
+        var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, JsonSerializer.Serialize(header))),
+            "schedule-birth", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(original);
+        now = actor.Plans.Last().Timers.Single().Due;
+        await Pump(original);
+        var offer = acceptor.Offered.Single();
+        var job = actor.Plans.Last().Jobs.Single();
+
+        await edge.SendAsync(scope, target, "schedule-fault", ObservedSchedule.ParkKind);
+        await Pump(original);
+        var parked = await reads.GetAsync(scope, target.Actor);
+        check(parked is { Park: not null, Selection: not null } && acceptor.Offered.Count == 1,
+            "the schedule Parks after committing its offer while the callback is in flight");
+        if (parked is not { Park: not null, Selection: { } selected }) return;
+        await original.DisposeAsync();
+
+        var next = NewWorker("after-schedule-Park");
+        await using var replacement = (await new DurableHost([next]).ActivateAsync(0))!;
+        await Pump(replacement);
+        var admitted = await edge.SendAsync(scope, target, "recover-schedule", Contract.Kinds.Recover,
+            JsonSerializer.Serialize(new Contract.OperatorCommand(selected)));
+        await Pump(replacement);
+        check(admitted.Outcome == Contract.AdmissionOutcome.Accepted &&
+              (await reads.GetAsync(scope, target.Actor)) is { Header.Status: Contract.ActorStatus.Running, Park: null } &&
+              acceptor.Offered.SequenceEqual([offer, offer]) && acceptor.Deadlines.SequenceEqual([job.Deadline, job.Deadline]),
+            "Recover restarts the exact parked offer with the original timed-job deadline on the replacement owner");
+
+        static async Task Pump(IScopeActivation owner)
+        {
+            for (var i = 0; i < 12; i++)
+            {
+                await owner.WokenAsync(null);
+                await owner.RunAsync();
+                await Task.Yield();
+            }
+        }
+    }
+
+    private sealed record TestedJob(Contract.ActorRef Actor, string Key, string? Arguments, long? Deadline) : Contract.IJob
+    {
+        public string AttemptId => "fixture-attempt";
+        public int AttemptNumber => 1;
+    }
+
+    private sealed class ManagedAcceptor : IScheduleOccurrenceAcceptor
+    {
+        private readonly TaskCompletionSource<bool> _untilDeadline = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ConcurrentQueue<ScheduleOccurrence> Offered { get; } = new();
+        public ConcurrentDictionary<ScheduleOccurrence, byte> Accepted { get; } = new();
+        public TaskCompletionSource<bool> ReleaseSecond { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken) =>
+            TryAcceptAttemptAsync(occurrence, occurrence.OfferUntilUnixMilliseconds, cancellationToken);
+
+        public ValueTask<bool> TryAcceptAttemptAsync(ScheduleOccurrence occurrence, long attemptDeadline, CancellationToken cancellationToken)
+        {
+            Offered.Enqueue(occurrence);
+            if (occurrence is { ArmGeneration: 1, Authority: "blue" })
+            {
+                if (Accepted.TryAdd(occurrence, 0)) throw new IOException("the committed acceptance acknowledgement was lost");
+                return ValueTask.FromResult(true);
+            }
+            if (occurrence is { ArmGeneration: 2, Authority: "blue" }) return new(ReleaseSecond.Task.WaitAsync(cancellationToken));
+            if (occurrence.Authority == "expiry")
+            {
+                if (attemptDeadline == occurrence.OfferUntilUnixMilliseconds) return new(_untilDeadline.Task.WaitAsync(cancellationToken));
+                Accepted.TryAdd(occurrence, 0);
+                return ValueTask.FromResult(true);
+            }
+            return ValueTask.FromResult(false);
+        }
+    }
+
+    private sealed class ParkedAcceptor : IScheduleOccurrenceAcceptor
+    {
+        private readonly TaskCompletionSource<bool> _pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ConcurrentQueue<ScheduleOccurrence> Offered { get; } = new();
+        public ConcurrentQueue<long?> Deadlines { get; } = new();
+
+        public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken)
+        {
+            Offered.Enqueue(occurrence);
+            return new(_pending.Task.WaitAsync(cancellationToken));
+        }
+    }
+
+    private sealed class ObservedSchedule(ScheduleActor actor) : Contract.IActorType
+    {
+        internal const string ParkKind = "fixture.schedule.park";
+        public List<Contract.RestorePlan> Plans { get; } = [];
+        public Action<Contract.IJob>? ObserveJob { get; init; }
+        public string Type => actor.Type;
+        public bool Withholds(Contract.ActorHeader header) => actor.Withholds(header);
+
+        public async ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (turn.Inbox.Any(message => message.Kind == ParkKind)) throw new InvalidOperationException("park the managed schedule");
+            await actor.TurnAsync(turn, cancellationToken);
+            if (turn.State is { } state) Plans.Add(actor.RestoreWaits(turn.Header, state));
+        }
+
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            ObserveJob?.Invoke(job);
+            return actor.ExecuteJobAsync(job, cancellationToken);
+        }
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => actor.RestoreWaits(header, state);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => actor.TerminalGrowth(header, state);
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => actor.ProtectsDeletion(header, state, now);
     }
 
     private static bool Argument(Func<ValueTask<Contract.Admission>> set)

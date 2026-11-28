@@ -9,13 +9,14 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
-using Elsa.Workflows.Runtime.Services.Dispatch;
+using Elsa.Workflows.Runtime.Persistence.TestScopes;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.Time.Testing;
@@ -326,11 +327,11 @@ public sealed partial class ActivityDraftTestRunServiceTests
             new WorkflowExecutableHasher(),
             artifacts,
             dispatcher,
-            new InMemoryWorkflowTestScopeStore(),
+            WorkflowTestScopeStoreFactory.CreateInMemory(),
             new FixedPartitionAccessor(),
             receipts,
-            new InMemoryWorkflowExecutionStateStore(),
-            new InMemoryActivityExecutionStateStore(),
+            new UnobservedTestRunStore(),
+            null!,
             new DefaultActivityDraftTestRunCancellationPolicy(),
             null!,
             null!,

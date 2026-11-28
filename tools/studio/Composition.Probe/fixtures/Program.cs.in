@@ -55,7 +55,7 @@ studio.AddElsaStudioNuplane(options => options.DirectoryFeedName = "composition-
         nuplane.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(builder.Environment.ContentRootPath, "native-store", "installs"));
         nuplane.Services.Configure<LockFileOptions>(options => options.Path = Path.Combine(builder.Environment.ContentRootPath, "native-store", "nuplane.lock.json"));
         nuplane.Services.Configure<ReconciliationOptions>(options => options.EnableAutomaticReconciliation = false);
-        nuplane.AddDirectoryFeed("composition-runtime", "runtime-feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+        nuplane.AddDirectoryFeed("composition-runtime", "runtime-feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); });
     });
 builder.Services.PostConfigure<NuplaneIntegrationOptions>(options =>
     options.AutoReload = !builder.Configuration.GetValue("Qualification:DisableAutomaticReload", false));

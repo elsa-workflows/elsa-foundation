@@ -3,7 +3,9 @@ name: Docker Images
 # Builds and pushes three Elsa 4 host images to Docker Hub:
 #   - elsaworkflows/elsa-workbench       — development and demo host
 #   - elsaworkflows/elsa-foundation-host — minimal Nuplane + CShells server host
-#   - elsaworkflows/elsa-essentials-host — Nuplane + CShells host with the curated workflow essentials compiled in
+#   - elsaworkflows/elsa-essentials-host — curated workflow profile built from Elsa Foundation
+# A manual profile build produces the matching Foundation host, SDK builder and three package-based
+# server profiles. See docker/profiles/README.md for artifact and publication options.
 # The workbench is a development and demo host, not the shipped product; the
 # elsaworkflows/elsa-server name is reserved for the clean host once it exists.
 # The Elsa major version (4) is encoded in the image tags:
@@ -72,14 +74,25 @@ on:
           comment above).
         required: true
         type: string
+      build_profiles:
+        description: Export the profile builder and three verified Dockerfile-based server profiles.
+        required: false
+        type: boolean
+        default: false
+      publish_profiles:
+        description: Publish a matching Foundation host, profile builder and three verified multi-platform profiles.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  # A noneligible completed workflow must not cancel an admitted build on the same branch.
-  group: docker-image-${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion != 'success' || (github.event.workflow_run.event != 'push' && github.event.workflow_run.event != 'workflow_dispatch')) && format('ineligible-{0}', github.run_id) || github.ref }}
+  # Isolate manual profile releases so a newer main build cannot cancel a partially published release.
+  # These runs only publish release-specific tags. Ineligible events also have their own group.
+  group: docker-image-${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion != 'success' || (github.event.workflow_run.event != 'push' && github.event.workflow_run.event != 'workflow_dispatch')) && format('ineligible-{0}', github.run_id) || (inputs.build_profiles || inputs.publish_profiles) && format('profiles-{0}', github.run_id) || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -114,6 +127,10 @@ jobs:
     timeout-minutes: 15
     outputs:
       package-versions: ${{ steps.encode.outputs.package-versions }}
+      profiles: ${{ steps.profile-mode.outputs.profiles }}
+      profile-stage: ${{ steps.profile-mode.outputs.stage }}
+      # Retain this release identity when only failed downstream jobs are re-run.
+      profile-version: 4.0.0-preview.${{ github.run_number }}.${{ github.run_attempt }}
     steps:
       - name: Checkout workflow guards for manual run selection
         if: github.event_name == 'workflow_dispatch'
@@ -181,13 +198,34 @@ jobs:
         id: encode
         run: echo "package-versions=$(gzip -9n < "$RUNNER_TEMP/versions/package-versions.props" | base64 -w0)" >> "$GITHUB_OUTPUT"
 
+      - name: Select the server profile build and publication matrix
+        id: profile-mode
+        env:
+          RELEASE_ALL_PROFILES: ${{ inputs.build_profiles || inputs.publish_profiles }}
+        run: |
+          curated='{"image":"elsa-server-essentials-curated","destination":"elsaworkflows/elsa-essentials-host:profile-"}'
+          profiles='["essentials-curated"]'
+          stage=$(jq -cn --argjson curated "$curated" '[$curated]')
+          if [ "$RELEASE_ALL_PROFILES" = true ]; then
+            profiles='["essentials","elsa3-import","essentials-curated"]'
+            stage=$(jq -cn --argjson curated "$curated" '[
+              {"image":"elsa-profile-builder","destination":"elsaworkflows/elsa-foundation-host:builder-"},
+              {"image":"elsa-server-essentials","destination":"elsaworkflows/elsa-foundation-host:essentials-"},
+              {"image":"elsa-server-elsa3-import","destination":"elsaworkflows/elsa-foundation-host:elsa3-import-"},
+              $curated
+            ]')
+          fi
+          echo "profiles=$profiles" >> "$GITHUB_OUTPUT"
+          echo "stage=$stage" >> "$GITHUB_OUTPUT"
+
   build-and-push:
     name: Build & push elsa-workbench
+    if: github.event_name != 'workflow_dispatch' || !(inputs.build_profiles || inputs.publish_profiles)
     needs: versions
     # Pinned to an exact release, not the floating @v1. This workflow pins the
     # BuildKit and Buildx versions the build runs on, and a frontend older than
     # that BuildKit fails the build outright -- see the `# syntax=` pin in
-    # apps/Elsa.Workbench.Host/Dockerfile. On the floating tag an upstream
+    # server/apps/Elsa.Workbench.Host/Dockerfile. On the floating tag an upstream
     # release moves BuildKit under us and breaks main with no change of ours;
     # pinned, that becomes a deliberate bump where both pins move together.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
@@ -198,7 +236,7 @@ jobs:
       output: image
       push: true
       context: .
-      file: apps/Elsa.Workbench.Host/Dockerfile
+      file: server/apps/Elsa.Workbench.Host/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
       build-args: |
         ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
@@ -225,7 +263,7 @@ jobs:
     needs: versions
     # Same pinned reusable builder as the workbench job above (see the pinning note there):
     # the BuildKit/Buildx versions must match the `# syntax=` pin in
-    # apps/Elsa.Foundation.Host/Dockerfile.
+    # server/apps/Elsa.Foundation.Host/Dockerfile.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
     permissions:
       contents: read
@@ -234,7 +272,7 @@ jobs:
       output: image
       push: true
       context: .
-      file: apps/Elsa.Foundation.Host/Dockerfile
+      file: server/apps/Elsa.Foundation.Host/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
       build-args: |
         ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
@@ -244,8 +282,8 @@ jobs:
       cache-scope: elsa-foundation-host
       meta-images: elsaworkflows/elsa-foundation-host
       meta-tags: |
-        type=sha
-        type=raw,value=latest
+        type=sha,enable=${{ !(inputs.build_profiles || inputs.publish_profiles) }}
+        type=raw,value=latest,enable=${{ !(inputs.build_profiles || inputs.publish_profiles) }}
         type=raw,value=4.0.0-preview.${{ github.run_number }}
       labels: |
         org.opencontainers.image.title=Elsa Foundation Host
@@ -256,38 +294,305 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-  build-and-push-essentials-host:
-    name: Build & push elsa-essentials-host
-    needs: versions
-    # Same pinned reusable builder as the workbench job above (see the pinning note there):
-    # the BuildKit/Buildx versions must match the `# syntax=` pin in
-    # apps/Elsa.Essentials.Host/Dockerfile.
-    uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      output: image
-      push: true
-      context: .
-      file: apps/Elsa.Essentials.Host/Dockerfile
-      # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
-      build-args: |
-        ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
-      platforms: linux/amd64,linux/arm64
-      cache: true
-      cache-mode: max
-      cache-scope: elsa-essentials-host
-      meta-images: elsaworkflows/elsa-essentials-host
-      meta-tags: |
-        type=sha
-        type=raw,value=latest
-        type=raw,value=4.0.0-preview.${{ github.run_number }}
-      labels: |
-        org.opencontainers.image.title=Elsa Essentials Host
-        org.opencontainers.image.description=Elsa 4 server host with the curated workflow essentials compiled in
-    secrets:
-      registry-auths: |
-        - registry: docker.io
+  profile-builder:
+    name: Build profile tooling (${{ matrix.arch }})
+    needs: [versions, build-and-push-foundation-host]
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      PLATFORM: linux/${{ matrix.arch }}
+      FOUNDATION_IMAGE: elsaworkflows/elsa-foundation-host@${{ needs.build-and-push-foundation-host.outputs.digest }}
+      PROFILE_BUILDER_IMAGE: elsa-profile-builder:4.0.0-preview.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the release-matched profile builder
+        shell: bash
+        env:
+          PACKAGE_VERSIONS: ${{ needs.versions.outputs.package-versions }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/versions"
+          printf '%s' "$PACKAGE_VERSIONS" | base64 -d | gunzip > "$RUNNER_TEMP/versions/package-versions.props"
+          docker build --platform "$PLATFORM" --build-arg FOUNDATION_IMAGE \
+            --build-context versions="$RUNNER_TEMP/versions" -f docker/profiles/builder.Dockerfile \
+            -t "$PROFILE_BUILDER_IMAGE" .
+      - name: Resolve one pair of release locks per profile
+        if: matrix.arch == 'amd64'
+        shell: bash
+        env:
+          SERVER_PROFILES: ${{ needs.versions.outputs.profiles }}
+        run: |
+          for profile in $(jq -r '.[]' <<< "$SERVER_PROFILES"); do
+            docker build --platform "$PLATFORM" --build-arg FOUNDATION_IMAGE --build-arg PROFILE_BUILDER_IMAGE \
+              --target locks --output "type=local,dest=$RUNNER_TEMP/locks/$profile" "docker/profiles/$profile"
+          done
+      - uses: actions/upload-artifact@v4
+        if: matrix.arch == 'amd64'
+        with:
+          name: elsa-profile-locks-${{ github.run_number }}
+          path: ${{ runner.temp }}/locks/
+          overwrite: true
+          retention-days: 7
+      - name: Export the native builder
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/builder"
+          docker save "$PROFILE_BUILDER_IMAGE" | gzip -1 > "$RUNNER_TEMP/builder/image.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elsa-profile-builder-${{ matrix.arch }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/builder/
+          compression-level: 0
+          overwrite: true
+          retention-days: 7
+
+  package-profiles:
+    name: Verify and export ${{ matrix.profile }} (${{ matrix.arch }})
+    needs: [versions, build-and-push-foundation-host, profile-builder]
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(needs.versions.outputs.profiles) }}
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      PROFILE: ${{ matrix.profile }}
+      PLATFORM: linux/${{ matrix.arch }}
+      FOUNDATION_IMAGE: elsaworkflows/elsa-foundation-host@${{ needs.build-and-push-foundation-host.outputs.digest }}
+      PROFILE_BUILDER_IMAGE: elsa-profile-builder:4.0.0-preview.${{ github.run_number }}
+      IMAGE: elsa-server-${{ matrix.profile }}:4.0.0-preview.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: elsa-profile-builder-${{ matrix.arch }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/builder
+      - uses: actions/download-artifact@v4
+        with:
+          name: elsa-profile-locks-${{ github.run_number }}
+          path: ${{ runner.temp }}/locks
+      - name: Build the locked profile and verify offline startup
+        run: |
+          docker load -i "$RUNNER_TEMP/builder/image.tar.gz"
+          cp "$RUNNER_TEMP/locks/$PROFILE/"*.lock.json "docker/profiles/$PROFILE/"
+          docker build --platform "$PLATFORM" --build-arg FOUNDATION_IMAGE --build-arg PROFILE_BUILDER_IMAGE \
+            -t "$IMAGE" "docker/profiles/$PROFILE"
+          python3 tools/docker-profiles/smoke.py "$IMAGE" --variant "$PROFILE" --timeout 300 > "$RUNNER_TEMP/profile-smoke.jsonl"
+          cat "$RUNNER_TEMP/profile-smoke.jsonl"
+      - name: Export the tested image and its build inputs
+        shell: bash
+        env:
+          PACKAGE_VERSIONS: ${{ needs.versions.outputs.package-versions }}
+        run: |
+          bundle="$RUNNER_TEMP/profile-image"
+          mkdir "$bundle"
+          image_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
+          cp "$RUNNER_TEMP/profile-smoke.jsonl" "$bundle/smoke.jsonl"
+          jq -se --arg id "$image_id" 'length > 0 and all(.[]; .imageId == $id)' "$bundle/smoke.jsonl" > /dev/null
+          docker save "$IMAGE" | gzip -1 > "$bundle/image.tar.gz"
+          archive_digest=$(sha256sum "$bundle/image.tar.gz" | cut -d ' ' -f 1)
+          cp "docker/profiles/$PROFILE/"{Dockerfile,packages.txt,packages.lock.json,nuplane.lock.json,shells.json} "$bundle/"
+          if [ "$PROFILE" = essentials-curated ]; then
+            cp -r "docker/profiles/$PROFILE/settings" "$bundle/"
+            cp "docker/profiles/$PROFILE/shells.Production.json" "$bundle/"
+          fi
+          printf '%s' "$PACKAGE_VERSIONS" | base64 -d | gunzip > "$bundle/package-versions.props"
+          builder_id=$(docker image inspect --format '{{.Id}}' "$PROFILE_BUILDER_IMAGE")
+          jq -n --arg profile "$PROFILE" --arg image "$IMAGE" --arg base "$FOUNDATION_IMAGE" \
+            --arg builder "$PROFILE_BUILDER_IMAGE" --arg builderId "$builder_id" \
+            --arg platform "$PLATFORM" --arg commit "$GITHUB_SHA" --arg imageId "$image_id" \
+            --arg archiveSha256 "$archive_digest" \
+            '{profile: $profile, image: $image, imageId: $imageId, archiveSha256: $archiveSha256, foundationImage: $base, builderImage: $builder, builderId: $builderId, platform: $platform, commit: $commit}' \
+            > "$bundle/build.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elsa-server-${{ matrix.profile }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/profile-image/
+          compression-level: 0
+          overwrite: true
+          retention-days: 7
+
+  stage-profile-images:
+    name: Stage tested ${{ matrix.image }} images
+    needs: [versions, package-profiles, build-and-push-foundation-host]
+    if: github.ref == 'refs/heads/main' && (inputs.publish_profiles || !inputs.build_profiles)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.versions.outputs.profile-stage) }}
+    env:
+      ARTIFACT: ${{ matrix.image }}
+      IMAGE: ${{ matrix.image }}:4.0.0-preview.${{ github.run_number }}
+      TARGET: ${{ matrix.destination }}${{ needs.versions.outputs.profile-version }}
+      VERSION: ${{ needs.versions.outputs.profile-version }}
+      RECORD_ESSENTIALS_RECEIPT: ${{ matrix.image == 'elsa-server-essentials-curated' && !(inputs.build_profiles || inputs.publish_profiles) }}
+      FOUNDATION_IMAGE: elsaworkflows/elsa-foundation-host@${{ needs.build-and-push-foundation-host.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.image }}-amd64-${{ github.run_number }}
+          path: ${{ runner.temp }}/artifacts/amd64
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.image }}-arm64-${{ github.run_number }}
+          path: ${{ runner.temp }}/artifacts/arm64
+      - uses: docker/login-action@v3
+        with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Push the tested native images under architecture-specific tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          foundation_label='org.opencontainers.image.base.name'
+          if [ "$ARTIFACT" = elsa-profile-builder ]; then foundation_label='io.elsaworkflows.profile.foundation-image'; fi
+          native_digests='{}'
+          for arch in amd64 arm64; do
+            bundle="$RUNNER_TEMP/artifacts/$arch"
+            archive="$bundle/image.tar.gz"
+            if [ "$ARTIFACT" != elsa-profile-builder ]; then
+              archive_digest=$(sha256sum "$archive" | cut -d ' ' -f 1)
+              image_id=$(jq -er --arg image "$IMAGE" --arg base "$FOUNDATION_IMAGE" --arg platform "linux/$arch" \
+                --arg commit "$GITHUB_SHA" --arg archiveSha256 "$archive_digest" '
+                select(.image == $image and .foundationImage == $base and .platform == $platform and
+                       .commit == $commit and .archiveSha256 == $archiveSha256) |
+                .imageId | select(test("^sha256:[0-9a-f]{64}$"))' "$bundle/build.json")
+              jq -se --arg id "$image_id" 'length > 0 and all(.[]; .imageId == $id)' "$bundle/smoke.jsonl" > /dev/null
+            fi
+            docker load -i "$archive"
+            test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE")" = "linux/$arch"
+            test "$(docker image inspect "$IMAGE" | jq -r --arg label "$foundation_label" '.[0].Config.Labels[$label]')" = "$FOUNDATION_IMAGE"
+            loaded_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
+            if [ "$ARTIFACT" != elsa-profile-builder ]; then
+              python3 tools/docker-profiles/archive_identity.py "$archive" "$IMAGE" "$image_id" "$loaded_id"
+            fi
+            staged_tag="$TARGET-$arch"
+            docker tag "$loaded_id" "$staged_tag"
+            if [ "$RECORD_ESSENTIALS_RECEIPT" = true ]; then
+              push_log="$RUNNER_TEMP/essentials-$arch-push.log"
+              docker push "$staged_tag" 2>&1 | tee "$push_log"
+              pushed_digest=$(awk '$2 == "digest:" {print $3}' "$push_log")
+              [[ "$pushed_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              staged_digest=$(docker buildx imagetools inspect "$staged_tag" --format '{{json .Manifest}}' | jq -er .digest)
+              test "$staged_digest" = "$pushed_digest"
+              native_digests=$(jq -c --arg arch "$arch" --arg digest "$pushed_digest" '. + {($arch): $digest}' <<< "$native_digests")
+            else
+              docker push "$staged_tag"
+            fi
+            docker image rm "$IMAGE"
+          done
+          if [ "$RECORD_ESSENTIALS_RECEIPT" = true ]; then
+            mkdir -p "$RUNNER_TEMP/essentials-native-receipt"
+            jq -n --arg repository "${TARGET%:*}" --arg version "$VERSION" --arg commit "$GITHUB_SHA" \
+              --argjson nativeDigests "$native_digests" '{repository: $repository, version: $version, commit: $commit, nativeDigests: $nativeDigests}' \
+              > "$RUNNER_TEMP/essentials-native-receipt/staged.json"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: env.RECORD_ESSENTIALS_RECEIPT == 'true'
+        with:
+          name: elsa-essentials-native-receipt-${{ needs.versions.outputs.profile-version }}
+          path: ${{ runner.temp }}/essentials-native-receipt/staged.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
+  publish-profile-release:
+    name: Publish the matched profile release
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_profiles
+    needs: [versions, stage-profile-images, build-and-push-foundation-host]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      FOUNDATION: elsaworkflows/elsa-foundation-host
+      DIGEST: ${{ needs.build-and-push-foundation-host.outputs.digest }}
+      VERSION: ${{ needs.versions.outputs.profile-version }}
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Publish Foundation and its builder before exposing profile tags
+        shell: bash
+        run: |
+          docker buildx imagetools create -t "$FOUNDATION:$VERSION" "$FOUNDATION@$DIGEST"
+          actual=$(docker buildx imagetools inspect "$FOUNDATION:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          test "$actual" = "$DIGEST"
+          for target in "$FOUNDATION:builder-$VERSION" \
+            "$FOUNDATION:essentials-$VERSION" "$FOUNDATION:elsa3-import-$VERSION" \
+            "elsaworkflows/elsa-essentials-host:profile-$VERSION"; do
+            docker buildx imagetools create -t "$target" "$target-amd64" "$target-arm64"
+            manifest=$(docker buildx imagetools inspect "$target" --format '{{json .Manifest}}')
+            jq -e '([.manifests[].platform | select(.os=="linux") | .architecture] | sort) == ["amd64","arm64"]' <<< "$manifest"
+            printf '%s@%s\n' "$target" "$(jq -r .digest <<< "$manifest")" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+
+  build-and-push-essentials-host:
+    name: Publish the qualified Elsa Essentials profile to the existing tags
+    if: github.ref == 'refs/heads/main' && !(inputs.build_profiles || inputs.publish_profiles)
+    needs: [versions, stage-profile-images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: elsaworkflows/elsa-essentials-host
+      VERSION: ${{ needs.versions.outputs.profile-version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: elsa-essentials-native-receipt-${{ needs.versions.outputs.profile-version }}
+          path: ${{ runner.temp }}/essentials-native-receipt
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Verify the native image pair and publish the existing release tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          native_digests=$(jq -ser --arg repository "$REPOSITORY" --arg version "$VERSION" --arg commit "$GITHUB_SHA" '
+            select(length == 1) | .[0] |
+            select(.repository == $repository and .version == $version and .commit == $commit) |
+            [.nativeDigests.amd64, .nativeDigests.arm64] |
+            select(all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$")) and .[0] != .[1]) | @tsv' \
+            "$RUNNER_TEMP/essentials-native-receipt/staged.json")
+          read -r amd64_digest arm64_digest <<< "$native_digests"
+          staged="$REPOSITORY:profile-$VERSION"
+          metadata="$RUNNER_TEMP/essentials-index.json"
+          docker buildx imagetools create --metadata-file "$metadata" -t "$staged" \
+            "$REPOSITORY@$amd64_digest" "$REPOSITORY@$arm64_digest"
+          digest=$(jq -er '."containerimage.descriptor".digest | select(test("^sha256:[0-9a-f]{64}$"))' "$metadata")
+          manifest=$(docker buildx imagetools inspect "$staged" --format '{{json .Manifest}}')
+          test "$(jq -er .digest <<< "$manifest")" = "$digest"
+          jq -e '([.manifests[] | select(.annotations["vnd.docker.reference.type"] != "attestation-manifest") | (.platform.os + "/" + .platform.architecture)] | sort) == ["linux/amd64","linux/arm64"]' <<< "$manifest"
+          source="$REPOSITORY@$digest"
+          docker buildx imagetools create \
+            -t "$REPOSITORY:4.0.0-preview.$GITHUB_RUN_NUMBER" \
+            -t "$REPOSITORY:sha-${GITHUB_SHA:0:7}" "$source"
+          previous=$(docker buildx imagetools inspect "$REPOSITORY:latest" --format '{{json .Manifest}}' | jq -er .digest)
+          current=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            printf 'Versioned Essentials image retained for %s. Main is %s.\n' "$GITHUB_SHA" "$current" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          printf 'Previous latest %s@%s\n' "$REPOSITORY" "$previous" >> "$GITHUB_STEP_SUMMARY"
+          docker buildx imagetools create -t "$REPOSITORY:latest" "$source"
+          actual=$(docker buildx imagetools inspect "$REPOSITORY:latest" --format '{{json .Manifest}}' | jq -er .digest)
+          test "$actual" = "$digest"
+          printf 'Published %s from %s\n' "$source" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

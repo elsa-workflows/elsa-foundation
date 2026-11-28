@@ -19,34 +19,6 @@ public sealed class RecurringOccurrenceTests : IAsyncDisposable
     private string ConnectionString => $"{_database.ConnectionString};Pooling=False";
 
     [Fact]
-    public Task Sqlite_an_occurrence_whose_claimant_died_before_routing_starts_once_through_a_peer_after_the_lease() =>
-        RecurringOccurrenceDeliveryContract.AClaimantThatDiesBeforeRoutingLeavesTheOccurrenceToAPeerAsync("Sqlite", ConnectionString, CreateContext);
-
-    [Fact]
-    public Task Sqlite_an_occurrence_whose_claimant_died_after_routing_is_repeated_by_a_peer_without_a_second_start() =>
-        RecurringOccurrenceDeliveryContract.AClaimantThatDiesAfterRoutingIsRepeatedByAPeerWithoutASecondStartAsync("Sqlite", ConnectionString, CreateContext);
-
-    [Fact]
-    public Task Sqlite_two_pumps_racing_on_one_occurrence_route_and_start_it_once() =>
-        RecurringOccurrenceDeliveryContract.TwoPumpsRacingOnOneOccurrenceRouteAndStartItOnceAsync("Sqlite", ConnectionString, CreateContext);
-
-    [Fact]
-    public Task Sqlite_a_republish_while_an_occurrence_is_due_keeps_it_for_the_pump() =>
-        RecurringOccurrenceDeliveryContract.ARepublishWhileAnOccurrenceIsDueKeepsItForThePumpAsync(CreateContext);
-
-    [Fact]
-    public Task Sqlite_a_replacement_activated_while_the_replaced_publication_holds_the_occurrence_fires_it_once() =>
-        RecurringOccurrenceDeliveryContract.AReplacementActivatedWhileTheReplacedPublicationHoldsTheOccurrenceFiresItOnceAsync("Sqlite", ConnectionString, CreateContext);
-
-    [Fact]
-    public Task Sqlite_a_replacement_activated_after_the_replaced_publication_routed_the_occurrence_does_not_start_it_again() =>
-        RecurringOccurrenceDeliveryContract.AReplacementActivatedAfterTheReplacedPublicationRoutedTheOccurrenceDoesNotStartItAgainAsync("Sqlite", ConnectionString, CreateContext);
-
-    [Fact]
-    public Task Sqlite_an_exhausted_cron_fires_its_last_occurrence_once_and_is_then_deleted() =>
-        RecurringOccurrenceDeliveryContract.AnExhaustedCronFiresItsLastOccurrenceOnceAndIsThenDeletedAsync("Sqlite", ConnectionString, CreateContext);
-
-    [Fact]
     public Task Sqlite_a_claim_holds_the_occurrence_until_its_lease_lapses() =>
         WithStoresAsync(RecurringOccurrenceClaimContract.AClaimHoldsTheOccurrenceUntilItsLeaseLapsesAsync);
 

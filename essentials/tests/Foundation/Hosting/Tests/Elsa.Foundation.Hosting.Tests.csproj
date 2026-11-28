@@ -20,7 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj" />
     <ProjectReference Include="../../../../src/Modularity/Api/Elsa.Modularity.Api.csproj" />
-    <ProjectReference Include="../../../../../apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
+    <ProjectReference Include="../../../../../server/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
   </ItemGroup>
 
   <ItemGroup>

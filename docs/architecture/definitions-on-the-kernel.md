@@ -160,6 +160,10 @@ workflow's variables. Container-scoped variables are refused until the mapper sl
 - **Conversions.** A binding's conversion plan is applied by the mapper when it is identity or numeric widening; any
   other plan refuses the binding, because Native has no conversions and its hydrator throws on a type mismatch.
 - **Captures and input.** Output captures become `Node.Captures`, and the input contract becomes the run's input.
+- **Dispatch.** A Dispatch Workflow names a definition, and the Native child start takes a workflow id. The mapper keeps
+  the definition id as given. When the child starts, the Native model asks the host's
+  `NativeExecutionOptions.ServedWorkflow` for the artifact that serves the definition, and starts the id itself when
+  the host has none.
 
 ## Expressions (decision 2)
 
@@ -186,9 +190,10 @@ workflow's variables. Container-scoped variables are refused until the mapper sl
 
 The mapper, the coordinator and the kernel trigger extractor read `Elsa.Workflows.Runtime.Core` models, the executable and the
 activation commands, which layer 3 does not reference. So they live in a host-side project,
-`Elsa.Workflows.Runtime.KernelHost`, which references those contracts, the Native model and WorkflowActor. The
-Workbench composes them on a kernel host: its Core Preview, with publications enabled, replaces the default shell's
-coordinator and preflight, and shares the kernel's registry between the root host and the shell.
+`Elsa.Workflows.Runtime.KernelHost`, which references those contracts, the Native model and WorkflowActor.
+The original Workbench Core Preview shared the kernel registry between the root host and the default shell.
+Current Workbench uses the shell-owned Actor runtime and serving registry. See the
+[workflow execution architecture](../how-a-workflow-executes.md).
 
 ## Slices
 

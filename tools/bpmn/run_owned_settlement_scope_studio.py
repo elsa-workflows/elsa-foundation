@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Own a BPMN-enabled Studio/Workbench pair and run spec 1184 FR-012/FR-014 live journeys.
+"""Own a BPMN-enabled studio/Workbench pair and run spec 1184 FR-012/FR-014 live journeys.
 
 Test-only. Copies host configuration into disposable roots, enables ActivitiesBpmnHosting on
 that copy, seeds a second administrator, and points Playwright at the pair. Production
@@ -144,12 +144,12 @@ def run(output, skip_build=False):
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()
     receipt = {"sourceSha": sha, "dirty": bool(dirty), "status": "failed", "stage": "build"}
     try:
-        backend_project = ROOT / "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
-        studio_project = ROOT / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"
+        backend_project = ROOT / "server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
+        studio_project = ROOT / "studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj"
         if not skip_build:
             command(["dotnet", "build", str(backend_project), "-p:RestoreLockedMode=true", "-v:q", "-nologo", "-m:1", "/nr:false"],
                     output / "backend-build.log")
-            command(["pnpm", "build"], output / "frontend-build.log", cwd=ROOT / "Studio")
+            command(["pnpm", "build"], output / "frontend-build.log", cwd=ROOT / "studio")
             command(["dotnet", "build", str(studio_project), "-p:RestoreLockedMode=true", "-v:q", "-nologo", "-m:1", "/nr:false"],
                     output / "studio-build.log")
         elif not (backend_project.parent / "bin/Debug/net10.0/Elsa.Workbench.Host.dll").is_file():
@@ -172,14 +172,14 @@ def run(output, skip_build=False):
                 pass
             seed_operator(backend)
             with host(backend, "Elsa.Workbench.Host.dll", backend_url, "/health/ready", output / "backend.log", env):
-                with host(studio, "Elsa.Studio.Web.dll", studio_url, "/studio-runtime.js", output / "studio.log",
+                with host(studio, "Elsa.Studio.Workbench.Host.dll", studio_url, "/studio-runtime.js", output / "studio.log",
                           dict(env, Studio__BackendBaseUrl=backend_url)):
                     receipt["stage"] = "journeys"
                     browser_env = dict(os.environ, ELSA_BPMN_SETTLEMENT_LIVE="1", ELSA_STUDIO_URL=studio_url,
                                        ELSA_WORKBENCH_URL=backend_url, ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME=str(hold_path))
                     command(["pnpm", "exec", "playwright", "test", "--config", "tests/live/playwright.live.config.ts",
                              "tests/live/bpmn-settlement-scope-journey.spec.ts", "--reporter", "line"],
-                            output / "journeys.log", cwd=ROOT / "Studio", env=browser_env)
+                            output / "journeys.log", cwd=ROOT / "studio", env=browser_env)
         receipt.update(status="passed", stage="complete")
     except Exception as error:
         receipt["error"] = str(error)

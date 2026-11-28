@@ -1,4 +1,5 @@
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
 using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;

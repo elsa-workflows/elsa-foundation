@@ -37,15 +37,13 @@ public sealed class CliAcceptanceLegTests
         "Studio.Preferences",
         "Workflows.Design",
         "Workflows.Publishing",
-        "Workflows.Runtime",
-        "Workflows.Runtime.Distributed.CommandTransport",
-        "Workflows.Runtime.Distributed.Placement"
+        "Workflows.Runtime"
     ];
 
     /// <summary>
     /// The Workbench shell feature keys that back <see cref="Modules"/> above, read from
-    /// <c>apps/Elsa.Workbench.Host/shells.json</c>: every enabled feature there whose name contains
-    /// <c>EntityFrameworkCore</c> except <c>WorkflowsDashboardEntityFrameworkCore</c>, which declares no
+    /// <c>server/apps/Elsa.Workbench.Host/shells.json</c>: every enabled feature there whose name contains
+    /// <c>EntityFrameworkCore</c> except <c>WorkflowsDashboardPortfolioEntityFrameworkCore</c>, which declares no
     /// <c>Provider</c> setting of its own and is skipped by the provider-agreement comparison the same way.
     /// Two keys -- <c>FoundationIdentityAspNetCoreIdentityEntityFrameworkCore</c>
     /// and <c>IdentityIamEntityFrameworkCore</c> -- back the same <c>Identity.Iam</c> module and context, so
@@ -67,9 +65,8 @@ public sealed class CliAcceptanceLegTests
         "StudioPreferencesEntityFrameworkCore",
         "WorkflowsDesignEntityFrameworkCore",
         "WorkflowsPublishingEntityFrameworkCore",
-        "WorkflowsRuntimeEntityFrameworkCore",
-        "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
-        "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence"
+        "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
     ];
 
     [SkippableFact]

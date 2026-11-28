@@ -55,8 +55,7 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
     }
 
     internal static RuntimeIngressCommandOrigin Origin(RuntimePostCommitOutboxItem source, RuntimeSubscriptionRecipient recipient) =>
-        new(source.OutboxItemId, source.SourceFingerprint, source.SubscriptionDelivery?.SelectionFingerprint ?? throw Invalid(),
-            recipient.StartIdentity.Scope, recipient.RecipientId);
+        RuntimeIngressNativeDeliveryEvidence.Origin(source, recipient);
 
     internal static RuntimeIngressCommandOrigin? Origin(WorkflowExecutionCommandEnvelope envelope)
     {
@@ -84,12 +83,9 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
         if (!actual.Seal.IsEquivalentTo(expected)) throw Invalid();
         ValidateEnvelope(actual, ReadEnvelope(actual.Seal));
     }
-    internal static WorkflowExecutionCommandEnvelope ReadEnvelope(RuntimeDispatchSeal seal)
-    {
-        if (seal.CommandProtocol != NativeStandaloneTriggerRuntimeTarget.Protocol || seal.CommandProtocolVersion != 1) throw Unsupported();
-        try { return seal.Command.Deserialize<WorkflowExecutionCommandEnvelope>() ?? throw Invalid(); }
-        catch (JsonException exception) { throw new TriggerOperationException("conflict", "The sealed native command is invalid.", innerException: exception); }
-    }
+    internal static WorkflowExecutionCommandEnvelope ReadEnvelope(RuntimeDispatchSeal seal) =>
+        RuntimeIngressNativeDeliveryEvidence.ReadEnvelope(seal);
+
     internal static void ValidateEnvelope(RuntimeCommittedRecipient committed, WorkflowExecutionCommandEnvelope envelope)
     {
         var recipient = committed.Recipient; var seal = committed.Seal; var id = recipient.StartIdentity;
@@ -151,22 +147,12 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
         var expected = NativeIngressStartLineage.Build(original, start, executable.RootActivity.ExecutableNodeId);
         if (!Equal(item, expected)) throw Invalid();
     }
-    internal static void ValidateState(RuntimeCommittedRecipient committed, WorkflowExecutionState state)
-    {
-        var recipient = committed.Recipient;
-        var start = ReadEnvelope(committed.Seal).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
-        if (state.WorkflowExecutionId != recipient.StartIdentity.WorkflowExecutionId ||
-            state.HistoryCaptureEnabledAtAdmission != start.HistoryCaptureEnabledAtAdmission ||
-            !(start.HistoryCapturePolicy?.IsEquivalentTo(state.HistoryCapturePolicy) ?? state.HistoryCapturePolicy is null) ||
-            state.IngressOrigin?.IsEquivalentTo(Origin(committed.Item, recipient)) != true ||
-            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(state.PinnedExecutable, recipient.Material) ||
-            !Equal(state.PinnedSource, recipient.SourceProvenance) || !Equal(state.Authority, recipient.Authority) ||
-            state.TenantId != recipient.TenantId || state.Partition != recipient.Partition || state.ParentWorkflowExecutionId is not null ||
-            state.RunKind != WorkflowRunKind.PublishedRun || state.TestScope is not null) throw Invalid();
-    }
-    internal static bool Equal<T>(T left, T right) => JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left), JsonSerializer.SerializeToElement(right));
-    private static TriggerOperationException Invalid() => new("conflict", "Native ingress responsibility differs from its exact committed origin.");
-    private static TriggerOperationException Unsupported() => new("unavailable", "The selected native target evidence boundary is unsupported.");
+    internal static void ValidateState(RuntimeCommittedRecipient committed, WorkflowExecutionState state) =>
+        RuntimeIngressNativeDeliveryEvidence.ValidateState(committed, state);
+
+    internal static bool Equal<T>(T left, T right) => RuntimeIngressNativeDeliveryEvidence.Equal(left, right);
+    private static TriggerOperationException Invalid() => RuntimeIngressNativeDeliveryEvidence.Invalid();
+    private static TriggerOperationException Unsupported() => RuntimeIngressNativeDeliveryEvidence.Unsupported();
 }
 
 /// <summary>Mailbox-internal exact witness; absence never turns an in-memory memo into an accepted duplicate.</summary>

@@ -20,6 +20,10 @@ internal static class FoundationKeyIngressChecks
         var edge = new OrdinaryIngress(store);
         var options = new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(40));
         var spec = new Contract.StartSpec("key-ingress", "one", "input");
+        var wrongKind = await edge.SendAsync(scope, new Contract.Target.Key("Invoice", spec), "op-1", "note", options: options);
+        var extraPayload = await edge.SendAsync(scope, new Contract.Target.Key("Invoice", spec), "op-1", Contract.Kinds.Start, "extra", options);
+        check(wrongKind.Outcome == Contract.AdmissionOutcome.Refused && extraPayload.Outcome == Contract.AdmissionOutcome.Refused &&
+            store.Messages.Count == 0, "a keyed root requires the ordinary Start shape and leaves no provisional creator");
         var first = await edge.SendAsync(scope, new Contract.Target.Key("Invoice", spec), "op-1", Contract.Kinds.Start, options: options);
         var retry = await edge.SendAsync(scope, new Contract.Target.Key("INVOICE", spec), "op-1", Contract.Kinds.Start, options: options);
         var foreign = await edge.SendAsync(other, new Contract.Target.Key("invoice", spec), "op-1", Contract.Kinds.Start, options: options);
@@ -72,6 +76,10 @@ internal static class FoundationKeyIngressChecks
         now += 41;
         await store.SweepAsync();
         var recreated = await edge.SendAsync(scope, new Contract.Target.Key("iNvOiCe", spec), "op-2", Contract.Kinds.Start, options: options);
+        now += 41;
+        var pending = await edge.SendAsync(scope, new Contract.Target.Key("INVOICE", spec), "op-3", Contract.Kinds.Start, options: options);
+        check(pending is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.Repeat },
+            "a pending successor keeps the binding after its reuse window even while the previous retirement is still visible");
         await Pump(owner);
         var replay = await edge.SendAsync(scope, new Contract.Target.Key("INVOICE"), "cmd-1", "note", "one");
         check(recreated is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } next } && next != reference &&

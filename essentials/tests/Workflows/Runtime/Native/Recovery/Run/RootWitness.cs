@@ -20,7 +20,7 @@ internal static class RootWitness
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
         var target = InstanceRef.In(0, "root-next"); var owner = 0; Actor Actor() => world.Of(owner, 0);
         var leaf = new Node("leaf", external ? typeof(ExternalRootLeaf) : typeof(RootLeaf));
-        leaf.Inputs.Add("Value", root ? Binding.Literal(7) : Binding.Var("CurrentItem")); leaf.Inputs.Add("Index", root ? Binding.Literal(0) : Binding.Var("CurrentIndex"));
+        leaf.Inputs.Add("Value", root ? Binding.Literal(7) : Binding.Var("currentItem")); leaf.Inputs.Add("Index", root ? Binding.Literal(0) : Binding.Var("currentIndex"));
         var workflow = Wf.Workflow("root-next", root ? leaf : Wf.Node<AbsorbRecoveryFault>("outer").With(Wf.ForEach("loop", Binding.Literal(new[] { 7, 9 }), leaf)));
         workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
         void Check(bool ok, string why) { if (!ok) throw new InvalidOperationException(why); }
@@ -83,7 +83,7 @@ internal static class RootWitness
             var source = current.Retries![request.Id].Source;
             Check(work is not null && work.Frame != source.Id && work.Parent == source.Parent && work.Attempt == 0 && RootLeaf.Calls.Count == calls,
                 "R24: root/iteration retry did not commit its exact fresh obligation before execution");
-            if (!root) Check(Values.To<ForEachState>(current.Frames[source.Parent!].State)!.Index == 0 && work!.Scope is { } scheduling && scheduling.GetValueOrDefault("CurrentItem")?.ToString() == "7" && scheduling.GetValueOrDefault("CurrentIndex")?.ToString() == "0",
+            if (!root) Check(Values.To<ForEachState>(current.Frames[source.Parent!].State)!.Index == 0 && work!.Scope is { } scheduling && scheduling.GetValueOrDefault("currentItem")?.ToString() == "7" && scheduling.GetValueOrDefault("currentIndex")?.ToString() == "0",
                 "R25: retry advanced or changed the failed iteration before success");
         }
         void Cancel(bool staged)

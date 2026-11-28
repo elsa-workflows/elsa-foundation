@@ -20,7 +20,7 @@ public static class ReplayVariantChecks
                     Parallel("par", null,
                         Sequence("b1", Event("e1", "v-1"),
                             ForEach("each", Expr("[1, 2]"), Sequence("fb", Set("z", "j", 0),
-                                While("loop", Expr("j < 2"), Sequence("body", Set("inc", "j", Expr("j + 1")), Post("h", "https://partner.example/n", Expr("'i=' + CurrentIndex + ',j=' + j"))))))),
+                                While("loop", Expr("j < 2"), Sequence("body", Set("inc", "j", Expr("j + 1")), Post("h", "https://partner.example/n", Expr("'i=' + currentIndex + ',j=' + j"))))))),
                         Sequence("b2", Event("e2", "v-2"), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3))),
                     Set("out", "output", "done")),
                 ("j", 0), ("tag", 0), ("output", null)), ["v-1"], ["v-2"], ["v-1", "v-2"], expectA: 4, expectB: 4);
@@ -28,7 +28,7 @@ public static class ReplayVariantChecks
             // V2 ForEach over a collection a sibling changes (owner: same logical activation, same key, first content wins).
             await Shape(mode, "V2 ForEach over a changing collection", Workflow("v", Sequence("root",
                     Parallel("par", null,
-                        Sequence("b1", Event("e1", "v-1"), ForEach("each", Expr("items"), Post("h", "https://partner.example/n", Expr("'v=' + CurrentItem")))),
+                        Sequence("b1", Event("e1", "v-1"), ForEach("each", Expr("items"), Post("h", "https://partner.example/n", Expr("'v=' + currentItem")))),
                         Sequence("b2", Event("e2", "v-2"), Set("grow", "items", Expr("[9, 8, 7]")))),
                     Set("out", "output", "done")),
                 ("items", new JsonArray(1, 2)), ("output", null)), ["v-1"], ["v-2"], ["v-2", "v-1"], expectA: 2, expectB: 3, contentMayDiffer: true);

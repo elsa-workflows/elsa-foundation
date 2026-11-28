@@ -115,7 +115,7 @@ internal sealed partial class Burst
         CloseInbox(frame.Id, "faulted");
         frame.Intervention = new(NewId("i"), fault);
         _s.Frames.Add(frame.Id, frame);
-        turn.Record($"f:{frame.Id}:{frame.Node}");
+        turn.RecordFrameOutcome(NativeJournalKind.Faulted, frame);
         turn.Record($"intervention:{frame.Id}:{frame.Intervention.Id}");
         return true;
     }

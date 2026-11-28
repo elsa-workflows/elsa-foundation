@@ -15,6 +15,7 @@ public sealed class PartitionEntity
     public long? WindowEnd { get; set; }
     public long Position { get; set; }
     public bool Died { get; set; }          // the last take found another owner's lease expired
+    internal int Backlog { get; set; }
 }
 
 public sealed class NodeEntity
@@ -120,18 +121,24 @@ public class KernelDb : DbContext
     // same creation transaction as the schema. An existing database keeps its original marker.
     public KernelDb(DbContextOptions<KernelDb> options) : this(options, StoreFormat.Current, RootCapabilities.None) { }
 
-    private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) : base(options)
+    private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities,
+        bool sqliteShippedInstall = false, SqliteAdmissionDefinitions? sqliteRuntimeDefinitions = null,
+        RootPublicEventHost? publicEventHost = null) : base(options)
     {
         RequiredFormat = format;
         Capabilities = capabilities;
+        SqliteShippedInstall = sqliteShippedInstall;
+        SqliteRuntimeDefinitions = sqliteRuntimeDefinitions;
         RootStateFamily = RootStateFamily.Of(capabilities);
+        PublicEventHost = publicEventHost;
     }
 
     private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
         new(options, format, RootProfiles.CapabilitiesOf(format));
 
-    // A capability set that no shipped format carries, for database-backed composition guards only. Its format must be unshipped,
-    // so that its marker is refused by every shipped profile, and the set must hold every prerequisite of its members.
+    // A capability set under a format number no profile ships, for database-backed composition guards only: a qualification
+    // set, or the shipped capability set under a guard's own number. Its format must be unshipped, so that its marker is
+    // refused by every shipped profile, and the set must hold every prerequisite of its members.
     internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
         RootProfiles.Formats.ContainsKey(format)
             ? throw new ArgumentOutOfRangeException(nameof(format), format, "A shipped format carries its own capabilities.")
@@ -139,6 +146,10 @@ public class KernelDb : DbContext
                 ? throw new ArgumentException($"The capability set lacks the prerequisites {missing}.", nameof(capabilities))
                 : new(options, format, capabilities);
 
+    internal bool SqliteShippedInstall { get; }
+    internal bool UsesSqliteShippedInstall => SqliteShippedInstall && Database.IsSqlite();
+    internal SqliteAdmissionDefinitions? SqliteRuntimeDefinitions { get; }
+    internal bool UsesSqliteRootRuntime => SqliteRuntimeDefinitions is not null && UsesSqliteShippedInstall;
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
     // The one state family this set writes and reads, with its terminal statuses.
@@ -157,14 +168,249 @@ public class KernelDb : DbContext
     internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
+    internal bool UsesRootChildren => Has(RootCapabilities.Children);
+    internal bool UsesRootDueBacklog => Has(RootCapabilities.DueBacklog);
+    internal bool UsesRootPrivateParkInputs => UsesRootSelfProtocol && UsesRootParkArrivals && UsesRootComposedParkRecovery;
+    internal bool UsesRootTimerRearm => UsesRootPrivateParkInputs && Has(RootCapabilities.TimerRearm);
+    internal bool UsesRootTerminalOutput => Has(RootCapabilities.TerminalOutput);
+    internal bool UsesRetainedRootResponse => Has(RootCapabilities.RetainedRootResponse);
+    internal bool UsesPreparedWaitDelivery => Has(RootCapabilities.PreparedWaitDelivery);
+    internal bool UsesRootSequencedJournal => Has(RootCapabilities.SequencedJournal);
+    internal bool UsesRootLiveEventWaits => Has(RootCapabilities.LiveEventWaits);
+    internal bool UsesRootAuthoredEvents => Has(RootCapabilities.AuthoredEvents);
+    internal bool UsesRootEventStarts => Has(RootCapabilities.EventStarts);
+    internal bool UsesRootEventStartReceipts => Has(RootCapabilities.EventStartReceipts);
+    internal bool UsesRootEventStartScan => Has(RootCapabilities.EventStartScan);
+    internal bool UsesRootPublicEventStarts => Has(RootCapabilities.PublicEventStarts);
+    internal bool UsesRootPublicEventHost => Has(RootCapabilities.PublicEventHost);
+    internal RootPublicEventHost? PublicEventHost { get; }
+    internal bool UsesRootPagedPublicEvents => Has(RootCapabilities.PagedPublicEvents);
+    internal bool UsesAuthoredStandaloneEvents => Has(RootCapabilities.AuthoredStandaloneEvents);
+    // The original standalone Event qualification retains its mandatory publisher and physical schema.
+    internal bool AllowsDisabledAuthoredStandaloneEvents => UsesAuthoredStandaloneEvents &&
+        RequiredFormat != StoreFormat.RootAuthoredStandaloneEventQualification;
+    internal bool UsesRootKeyedStarts => Has(RootCapabilities.KeyedStarts);
+    internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
+    internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
+    internal bool UsesRootPlaybackDescendants => Has(RootCapabilities.PlaybackDescendants);
+    internal bool UsesRootScheduleInventory => Has(RootCapabilities.ScheduleInventory);
+    internal bool UsesRootScheduleSettlement => Has(RootCapabilities.ScheduleSettlement);
+    internal bool UsesRootScheduleControls => Has(RootCapabilities.ScheduleControls);
+    internal bool UsesRootScheduleLineage => Has(RootCapabilities.ScheduleLineage);
+    internal bool UsesRootPreparedStarts => Has(RootCapabilities.PreparedStarts);
+    internal bool UsesRootDirectTestRuns => Has(RootCapabilities.DirectTestRuns);
+    internal bool UsesRootEphemeralTestRuns => RequiredFormat.SupportsIsolatedInlineQualification || UsesRootHeldEphemeralHttpTestRuns;
+    internal bool UsesRootAttachedTestRuns => RequiredFormat.SupportsAttachedTestRunQualification || UsesRootHeldEphemeralHttpTestRuns;
+    internal bool UsesRootHeldEphemeralHttpTestRuns => RequiredFormat == StoreFormat.RootHeldEphemeralHttpQualification ||
+        Has(RootCapabilities.HeldEphemeralHttpTestRuns);
+    internal bool UsesRootInlinePromotion => Has(RootCapabilities.InlinePromotion);
+    internal uint? RootCommitMarker { get; set; }
+    internal bool SeparateRootFormatLock =>
+        RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
+    internal bool UsesRootComposedParkRecovery =>
+        UsesRootParkRecovery && (Capabilities & RootProfiles.ParkCompositionBase) == RootProfiles.ParkCompositionBase;
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
-    // inputs and is refused there with a journalled reason. No shipped format carries both capabilities.
+    // inputs and is refused there with a journalled reason. The shipped root format carries both;
+    // the qualification profiles 5, 11-17 and 19-22 carry one at most and keep their paths.
     internal bool UsesRootParkedOperators => UsesRootParkOpening && UsesRootTermination;
     // S5b: a Park records its opening revision with Park arrivals and in every parked-operator set, so its Park selection
     // names the revision and time. The actor list projects that revision where Park selections are sealed.
     internal bool RecordsRootParkRevision => UsesRootParkArrivals || UsesRootParkedOperators;
     internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
+    internal static KernelDb ForPostgresRootChildrenQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification, RootProfiles.ChildQualification);
+    internal static KernelDb ForPostgresAuthoredStandaloneEventQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootAuthoredStandaloneEventQualification, RootProfiles.AuthoredStandaloneEventQualification,
+            publicEventHost: host);
+
+    internal static KernelDb ForPostgresOptionalAuthoredStandaloneEventsQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootOptionalAuthoredStandaloneEventsQualification, RootProfiles.OptionalAuthoredStandaloneEventsQualification,
+            publicEventHost: host);
+
+    internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options, RootPublicEventHost? publicEventHost = null) =>
+        new(options, StoreFormat.RootShipped, RootProfiles.Shipped, publicEventHost: publicEventHost);
+    internal static KernelDb ForPostgresRootSequencedJournalQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootSequencedJournalQualification, RootProfiles.SequencedJournalQualification);
+    internal static KernelDb ForPostgresRootPlaybackQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPlaybackQualification, RootProfiles.PlaybackQualification);
+    internal static KernelDb ForPostgresRootPlaybackDescendantsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPlaybackDescendantsQualification, RootProfiles.PlaybackDescendantsQualification);
+    internal static KernelDb ForPostgresRootEventStartsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootEventStartsQualification, RootProfiles.EventStartsQualification);
+    internal static KernelDb ForPostgresRootEventStartReceiptsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootEventStartReceiptsQualification, RootProfiles.EventStartReceiptsQualification);
+    internal static KernelDb ForPostgresRootEventStartScanQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootEventStartScanQualification, RootProfiles.EventStartScanQualification);
+    internal static KernelDb ForPostgresRootSharedActivationQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootSharedActivationQualification, RootProfiles.SharedActivationQualification);
+    internal static KernelDb ForPostgresRootPublicEventStartsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPublicEventStartsQualification, RootProfiles.PublicEventStartsQualification);
+    internal static KernelDb ForPostgresRootPublicEventHostQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootPublicEventHostQualification, RootProfiles.PublicEventHostQualification, publicEventHost: host);
+    internal static KernelDb ForPostgresRootPagedPublicEventsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPagedPublicEventsQualification, RootProfiles.PagedPublicEventsQualification);
+    internal static KernelDb ForPostgresRootKeyedStartsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootKeyedStartsQualification, RootProfiles.KeyedStartsQualification);
+    internal static KernelDb ForPostgresRootAuthoredEventsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootAuthoredEventsQualification, RootProfiles.AuthoredEventsQualification);
+    internal static KernelDb ForPostgresRootLiveEventQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootLiveEventQualification, RootProfiles.LiveEventQualification);
+    internal static KernelDb ForPostgresRootScheduleInventoryQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootScheduleInventoryQualification, RootProfiles.ScheduleInventoryQualification);
+    internal static KernelDb ForPostgresRootScheduleSettlementQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootScheduleSettlementQualification, RootProfiles.ScheduleSettlementQualification);
+
+    internal static KernelDb ForPostgresRootScheduleControlsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootScheduleControlsQualification, RootProfiles.ScheduleControlsQualification);
+    internal static KernelDb ForPostgresRootScheduleLineageQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootScheduleLineageQualification, RootProfiles.ScheduleLineageQualification);
+    internal static KernelDb ForPostgresRootPreparedStartsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPreparedStartsQualification, RootProfiles.PreparedStartsQualification);
+    internal static KernelDb ForPostgresRootDirectTestRunQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootDirectTestRunQualification, RootProfiles.DirectTestRunQualification);
+    internal static KernelDb ForPostgresRootEphemeralTestRunQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootEphemeralTestRunQualification, RootProfiles.EphemeralTestRunQualification);
+    internal static KernelDb ForPostgresRootAttachedTestRunQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootAttachedTestRunQualification, RootProfiles.EphemeralTestRunQualification);
+    internal static KernelDb ForPostgresRootHeldEphemeralHttpQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootHeldEphemeralHttpQualification, RootProfiles.EphemeralTestRunQualification);
+    internal static KernelDb ForPostgresRetainedRootResponseQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootRetainedResponseQualification, RootProfiles.RetainedResponseQualification, publicEventHost: host);
+    internal static KernelDb ForPostgresPreparedWaitQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootPreparedWaitQualification, RootProfiles.PreparedWaitQualification, publicEventHost: host);
+    internal static KernelDb ForPostgresRootInlinePromotionQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootInlinePromotionQualification, RootProfiles.InlinePromotionQualification);
+    internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootManagedSchedulesQualification, RootProfiles.ManagedSchedulesQualification);
+    internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
+    internal static KernelDb ForSqliteRootSelfTimedQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
+        new(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification, sqliteShippedInstall: true,
+            sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForPostgresRootSelfTimedParkQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootSelfTimedParkQualification, RootProfiles.SelfTimedParkQualification);
+    internal static KernelDb ForSqliteRootSelfTimedParkQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
+        new(options, StoreFormat.RootSelfTimedParkQualification, RootProfiles.SelfTimedParkQualification, sqliteShippedInstall: true,
+            sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForPostgresRootTimerRearmQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootTimerRearmQualification, RootProfiles.TimerRearmQualification);
+    internal static KernelDb ForSqliteRootTimerRearmQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
+        new(options, StoreFormat.RootTimerRearmQualification, RootProfiles.TimerRearmQualification, sqliteShippedInstall: true,
+            sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options, StoreFormat? qualificationFormat = null,
+        RootPublicEventHost? publicEventHost = null) => ForSqliteRootFormat(options, qualificationFormat, definitions: null, publicEventHost);
+    internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions,
+        StoreFormat? qualificationFormat = null, RootPublicEventHost? publicEventHost = null) =>
+        ForSqliteRootFormat(options, qualificationFormat, definitions, publicEventHost);
+    private static KernelDb ForSqliteRootFormat(DbContextOptions<KernelDb> options, StoreFormat? qualificationFormat,
+        SqliteAdmissionDefinitions? definitions, RootPublicEventHost? publicEventHost)
+    {
+        if (qualificationFormat == StoreFormat.SqliteRootChildrenQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ChildQualification, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootSequencedJournalQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.SequencedJournalQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPlaybackQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PlaybackQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PlaybackDescendantsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootEventStartsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.EventStartsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootEventStartReceiptsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.EventStartReceiptsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootEventStartScanQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.EventStartScanQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootSharedActivationQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.SharedActivationQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootAuthoredStandaloneEventQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.AuthoredStandaloneEventQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.OptionalAuthoredStandaloneEventsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootPagedPublicEventsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PagedPublicEventsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPreparedWaitQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PreparedWaitQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootRetainedResponseQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.RetainedResponseQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootPublicEventStartsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PublicEventStartsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPublicEventHostQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PublicEventHostQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+        if (qualificationFormat == StoreFormat.RootKeyedStartsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.KeyedStartsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootAuthoredEventsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.AuthoredEventsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootLiveEventQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.LiveEventQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootScheduleInventoryQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ScheduleInventoryQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootScheduleSettlementQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ScheduleSettlementQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootScheduleControlsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ScheduleControlsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootScheduleLineageQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ScheduleLineageQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPreparedStartsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PreparedStartsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootDirectTestRunQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.DirectTestRunQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat is { SupportsIsolatedInlineQualification: true })
+            return new(options, qualificationFormat.Value, RootProfiles.EphemeralTestRunQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootInlinePromotionQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.InlinePromotionQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootManagedSchedulesQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ManagedSchedulesQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        return qualificationFormat is { } format
+            ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)
+            : new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true,
+                sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
+    }
+
+    internal static KernelDb ForRootTerminalOutputQualification(DbContextOptions<KernelDb> options,
+        bool sqliteShippedInstall = false, SqliteAdmissionDefinitions? definitions = null, StoreFormat? format = null)
+    {
+        var required = format ?? StoreFormat.RootTerminalOutputQualification;
+        var capabilities = required == StoreFormat.RootTerminalOutputQualification ? RootProfiles.TerminalOutputQualification
+            : required == StoreFormat.RootS6TerminalOutputQualification ? RootProfiles.S6TerminalOutputQualification
+            : throw new ArgumentOutOfRangeException(nameof(format), format, "Use a terminal output qualification profile.");
+        return new(options, required, capabilities, sqliteShippedInstall: sqliteShippedInstall, sqliteRuntimeDefinitions: definitions);
+    }
+
+    internal static KernelDb ForRootDueBacklogQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
+        new(options, StoreFormat.RootDueBacklogQualification, RootProfiles.ParkRecoveryComposition | RootCapabilities.DueBacklog,
+            sqliteShippedInstall: definitions is not null, sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForSqliteParkArrivalsQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
+        new(options, StoreFormat.SqliteParkArrivalsQualification, RootProfiles.ParkCompositionBase | RootCapabilities.ParkArrivals,
+            sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForSqliteParkRecoveryQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
+        new(options, StoreFormat.SqliteParkRecoveryQualification, RootProfiles.ParkCompositionBase | RootProfiles.Formats[StoreFormat.RootParkRecovery],
+            sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
@@ -203,7 +449,7 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimers);
     internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootSelf);
 
-    internal List<RetiredOperatorReply>? RetiredOperatorReplies { get; set; }
+    internal List<RetiredReply>? RetiredReplies { get; set; }
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
@@ -234,17 +480,18 @@ public class KernelDb : DbContext
 
     protected override void OnModelCreating(ModelBuilder model)
     {
-        if (UsesRootSelfProtocol && !Database.IsNpgsql())
-            throw new NotSupportedException("The continuation profile requires PostgreSQL.");
-        if (UsesRootJobProtocol && !Database.IsNpgsql())
+        var sqliteShippedInstall = UsesSqliteShippedInstall;
+        if (UsesRootSelfProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
+            throw new NotSupportedException("The continuation profile requires PostgreSQL or a qualified SQLite root store.");
+        if (UsesRootJobProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The generated-root job profile requires PostgreSQL.");
-        if (UsesRootReplyProtocol && !Database.IsNpgsql())
+        if (UsesRootReplyProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The generated-root held reply profile requires PostgreSQL.");
         if (UsesRootValueProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The generated-root value qualification requires PostgreSQL.");
-        if (UsesRootParkOpening && !Database.IsNpgsql())
+        if (UsesRootParkOpening && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The Park opening qualification requires PostgreSQL.");
-        if (UsesRootOperatorProtocol && !Database.IsNpgsql())
+        if (UsesRootOperatorProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The operator command profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
         {
@@ -257,13 +504,16 @@ public class KernelDb : DbContext
                 MessageProtocol = RequiredFormat.MessageProtocol,
                 JournalCodec = StoreVersionEntity.JournalCodecVersion
             });
+            if (StoreDefinitionsRevision.Seed(this) is { } definitions) entity.HasData(definitions);
         });
+        if (RootScheduleOwnerMode.Applies(this)) RootScheduleOwnerMode.ConfigureModel(model, sqliteShippedInstall);
         model.Entity<PartitionEntity>(e =>
         {
             e.ToTable("Partitions");
             e.Property(p => p.Id).ValueGeneratedNever();
             e.Property(p => p.Epoch).IsConcurrencyToken();      // the fence, when it rides in the batch
             e.Property(p => p.Position).IsConcurrencyToken();
+            if (UsesRootDueBacklog) e.Property(p => p.Backlog).HasDefaultValue(0).ValueGeneratedNever();
         });
         model.Entity<NodeEntity>(e =>
         {
@@ -306,6 +556,8 @@ public class KernelDb : DbContext
             if (Database.ProviderName == "MySql.EntityFrameworkCore") e.Property(m => m.Id).HasMaxLength(255);
             e.Property(m => m.InboxScope).ValueGeneratedNever();
             e.HasIndex(m => new { m.Partition, m.Seq });
+            if (UsesRootDueBacklog)
+                e.HasIndex(m => new { m.Partition, m.Due }).HasFilter(Database.IsNpgsql() ? "\"Done\" = false" : "\"Done\" = 0");
             e.Property(m => m.EventMatch).IsConcurrencyToken();
             e.Property(m => m.Done).IsConcurrencyToken();       // a consumed row must still be there and not done: the count check
             // seq: an identity column on PostgreSQL. SQLite has one writer, so the store assigns max + 1 under the write lock.
@@ -356,7 +608,7 @@ public class KernelDb : DbContext
 /// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
 /// (<see cref="FenceInBatch"/>).
 /// </summary>
-public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
+public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore, IDueBacklogStore, IOwnerPollLookups
 {
     public Func<long>? FoundationClock => null;
 
@@ -392,6 +644,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         public string? BirthTenant { get; set; }
         public string? BirthReference { get; set; }
         public string? BirthFingerprint { get; set; }
+        public long? BirthTableOid { get; set; }
     }
 
     private class PollRow
@@ -418,7 +671,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     // Database time in milliseconds.
-    private string Now => Engine is not null ? Engine.Now : postgres ? "(extract(epoch from clock_timestamp()) * 1000)::bigint" : "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+    private string Now => Engine is not null ? Engine.Now : postgres ? "(extract(epoch from clock_timestamp()) * 1000)::bigint" : SqliteCommitDialect.MillisecondClock;
     private string False => postgres && Engine is null ? "false" : "0";
     private string Q(string sql) => Engine?.Sql(sql) ?? sql;
 
@@ -427,7 +680,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
-        if (pinned is null) await RequireStoreVersionsAsync(db, cancellationToken);
+        if (pinned is null && !db.Database.IsSqlite()) await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Partitions.CountAsync(cancellationToken);
     }
 
@@ -440,6 +693,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);
         await using var db = create();
+        RefuseSqliteShippedRuntime(db);
         await db.Database.EnsureCreatedAsync();
         await RequireStoreVersionsAsync(db, CancellationToken.None);
         await PhysicalRetirement.InstallAsync(db, Engine, postgres);
@@ -520,6 +774,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (batch.PublicationReservation is not null || batch.Turns.Any(turn => turn.FoundationPublicationSequence is not null && !turn.OpensPark))
+            return CommitRootPublicationAsync(batch, sentAt, cancellationToken);
         return _ordinaryRoots is { } roots ? CommitWorkerRootAsync(roots, batch, sentAt, cancellationToken)
             : CommitAsync(batch, null, sentAt, cancellationToken);
     }
@@ -532,13 +788,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey is { Match: null } key &&
                 (key.Scope == InboxKey.FoundationOccurrenceScope || root is null && (key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
+        if (batch.Turns.Any(turn => turn.FoundationRootPublications is not null))
+            throw new StoreException(Failure.Definite, "Generated-root event publication requires its qualified writer.");
         if (root is null && batch.Turns.Any(turn => turn.FoundationRootJobCompletion is not null))
             throw new StoreException(Failure.Definite, "Generated-root job completions require the qualified writer.");
         // The ordinary Done mark remains eligible for sweeping. It cannot preserve a Park's kept inputs.
         if (batch.Turns.Any(turn => turn.FoundationKept is not null || turn.FoundationRootParkInputs is not null))
             throw new StoreException(Failure.Definite, "This store does not support retaining Park inputs.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
-            supportsJobTrialClear:SupportsJobTrialClear);
+            supportsJobTrialClear:SupportsJobTrialClear, supportsDueBacklog:SupportsDueBacklog);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
         // authorized separately by the database-column predicate in AliasUpdateGuard.
         var qualification=batch.Turns.Any(t=>t.Row is {} r && t.Instance!=r.Id)
@@ -562,6 +820,18 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             {
                 if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
                 throw error.StoreFailure;
+            }
+            catch (RootMarkPreparationFailure error)
+            {
+                var cause = error.InnerException!;
+                if (cause is not (OperationCanceledException or NotSupportedException) &&
+                    Classify(cause) is { Failure: Failure.Definite or Failure.Transient } failure)
+                {
+                    if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
+                    if (!ReferenceEquals(cause, failure)) throw failure;
+                }
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(cause);
+                throw;
             }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
@@ -635,8 +905,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
         db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
-            await PinRootNamespaceForCommitAsync(db, cancellationToken);
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
+        var marker = db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
+            ? await PinRootNamespaceForCommitAsync(db, batch, cancellationToken) : null;
+        (batch, root, var retentionRefusals) = await BindRetentionPoliciesAsync(db, batch, root, marker, cancellationToken);
         var now = 0L;
         if (FenceInBatch)
         {
@@ -752,7 +1024,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
-        return new Committed(true, now, sent.Select(m => m.Seq).ToList()) { RetiredOperatorReplies = db.RetiredOperatorReplies ?? [] };
+        return new Committed(true, now, sent.Select(m => m.Seq).ToList())
+        {
+            RetiredReplies = db.RetiredReplies ?? [], RetentionRefusals = retentionRefusals
+        };
     }
 
     // The careful path's statements on PostgreSQL and SQLite ({0} key, {1} instance, {2} wait, {3} partition). Only the
@@ -765,6 +1040,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         internal StoreException StoreFailure { get; } = failure;
     }
 
+    private sealed class RootMarkPreparationFailure(Exception cause) : Exception(cause.Message, cause);
+
     private async ValueTask CheckRootBeforeWriteAsync(QualifiedRootCheckpoint root, KernelDb db, CancellationToken cancellationToken)
     {
         try { await root.CheckBeforeWriteAsync(db, cancellationToken); }
@@ -776,9 +1053,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
     }
 
-    private async Task PinRootNamespaceForCommitAsync(KernelDb db, CancellationToken cancellationToken)
+    private async Task<uint?> PinRootNamespaceForCommitAsync(KernelDb db, CommitBatch batch, CancellationToken cancellationToken)
     {
-        try { await PostgresRootAdmission.PinRootNamespaceAsync(db, cancellationToken); }
+        try
+        {
+            var marker = await PostgresRootAdmission.PinRootCommitNamespaceAsync(db,
+                writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null), cancellationToken);
+            db.RootCommitMarker = marker;
+            return marker;
+        }
         catch (Exception error) when (error is not OperationCanceledException &&
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
         {
@@ -807,6 +1090,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
+        return await PollOneAsync(db, partition, epoch, horizon, limit, cancellationToken);
+    }
+
+    private async ValueTask<Polled> PollOneAsync(KernelDb db, int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken)
+    {
         // A plain read. The left join returns database time even when no message does.
         var sql = PollSql(db);
         if (_ordinaryRoots is { } root)
@@ -814,8 +1102,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (!root.Includes(partition)) throw new InvalidOperationException("The root belongs to another partition.");
             if (root.Discover)
             {
-                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return await WithRootParkFactsAsync(db, ToGeneratedPoll(page, root, db), cancellationToken);
+                object[] args = [partition, epoch, (long)horizon.TotalMilliseconds, limit];
+                if (SamplesAuthoredCohortWithholding(db))
+                {
+                    var (actors, revisions) = await ReadWithheldCohortsAsync(db, [new(partition, epoch, 0)], limit, cancellationToken);
+                    args = db.UsesSqliteRootRuntime ? [.. args, SqliteCohortDecisions(actors, revisions)] : [.. args, actors, revisions];
+                }
+                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, args).ToListAsync(cancellationToken);
+                var result = ToGeneratedPoll(page, root, db);
+                return await WithRootParkFactsAsync(db, result, cancellationToken);
             }
             return await WithRootParkFactsAsync(db, ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db), cancellationToken);
         }
@@ -826,57 +1121,144 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
         (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
     private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
+        db.UsesSqliteRootRuntime ? SqlitePollFilter(db) :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
-             {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
-                 : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : RootOperatorPollFilter : "")}
+             {(db.UsesRootOperatorProtocol ? PostgresOperatorPollFilter(db) : "")}
+             {(db.UsesRootChildren && _ordinaryRoots.Discover ? RootChildCascadePollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"
                    {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')"""
-                       : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")}
-                   {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
+                       : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL"""
+                       : ClearsParkInPages(db) ? RootClearingInputFilter : "")}
+                   {(db.UsesRootComposedParkRecovery ? $"""
+                     AND (i."FoundationParkAt" IS NULL OR m."InboxScope" IN ({ParkInputScopes(db)}) AND (m."ReplyTo" IS NULL OR m."Id" LIKE 'operator/%'))
+                     """ : "")}
+                   {(db.UsesRootChildren ? "AND " + RootChildParkInputs("m", "i") : "")}
+                   {RootPollCohortFilter(db)})))
             """;
+    private string PostgresOperatorPollFilter(KernelDb db)
+    {
+        var filter = db.UsesRootComposedParkRecovery ? WithReleasedCohort(RootClearingOperatorPollFilter)
+            .Replace("/*held-park-predecessor*/", """
+                AND (target."FoundationParkAt" IS NULL OR prior."ReplyTo" IS NULL OR prior."Id" LIKE 'operator/%')
+                /*root-child-prior*/
+                """, StringComparison.Ordinal)
+            .Replace("/*root-child-prior*/", db.UsesRootChildren
+                ? "AND " + RootChildParkInputs("prior", "target") : "", StringComparison.Ordinal)
+            : db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
+            : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
+            : RootOperatorPollFilter;
+        filter = filter.Replace("/*root-child-cascade*/", db.UsesRootChildren ? RootChildPriorityPoll : "", StringComparison.Ordinal);
+        // A running actor can withhold even when the physical suspension flag is clear. Offer the first due operator
+        // beside earlier ordinary inputs so the owner can choose from its committed header.
+        filter = filter.Replace("/*root-self-predecessor*/",
+            db.UsesRootPrivateParkInputs ? $", {RootSelfScope}" : "", StringComparison.Ordinal);
+        return _ordinaryRoots?.AuthoredWithholds is null ? filter : filter.Replace("/*authored-withholding*/",
+            $"""AND (target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
+    }
+
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
-    private static readonly string RootOperatorPollFilter = $"""
-         AND (m."InboxScope" = 0 OR EXISTS (
+    private static readonly string RootOperatorPollTemplate = $"""
+         AND (m."InboxScope" = 0 OR /*root-child-cascade*/ EXISTS (
              SELECT 1 FROM "Instances" target
              WHERE target."Id" = m."Target" AND target."Partition" = m."Partition"
                AND (CASE WHEN m."Id" LIKE 'operator/%' THEN
                    m."Due" <= t.now AND NOT EXISTS (
                        SELECT 1 FROM "Messages" prior
                        WHERE prior."Partition" = m."Partition" AND prior."Target" = m."Target" AND prior."Seq" < m."Seq"
-                         AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
+                         AND prior."InboxScope" IN ({InboxKey.FoundationOccurrenceScope}/*root-self-predecessor*/) AND prior."EventMatch" IS NULL
                          AND NOT prior."Done" AND prior."Due" <= t.now
-                         AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')
-                         /*withheld-prior*/)
+                         /*earlier-command-input*/
+                         /*authored-withholding*/
+                         /*withheld-prior*/
+                         /*held-park-predecessor*/)
                    ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND (/*released-cohort*/ NOT EXISTS (
                        SELECT 1 FROM "Messages" op
                        WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
                          AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
-                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now))
+                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now /*supported-operator*/))
                    END)))
         """;
+    private static readonly string RootOperatorPollFilter = RootOperatorPollTemplate
+        .Replace("/*earlier-command-input*/",
+            $"""AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')""",
+            StringComparison.Ordinal)
+        .Replace(" /*supported-operator*/", "", StringComparison.Ordinal);
+
+    // SQLite exposes due controls alongside ready ordinary inputs so the actor's withholding rule can decide.
+    // The owned transaction still checks the appropriate FIFO before it consumes the command.
+    private static readonly string SqliteRootPollFilter = SqliteRootPoll(includeParkArrivals: false, recovery: false);
+    private static readonly string SqliteParkArrivalsPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: false);
+    private static readonly string SqliteParkRecoveryPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: true);
+    private static readonly string SqliteAuthoredParkRecoveryPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: true, authoredCohort: true);
+
+    private string SqlitePollFilter(KernelDb db) => WithParkInputScopes(db,
+        (SamplesAuthoredCohortWithholding(db) ? SqliteAuthoredParkRecoveryPollFilter
+            : db.UsesRootParkRecovery ? SqliteParkRecoveryPollFilter
+            : db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter)
+        .Replace("/*root-self-scope*/", RootSelfIssuer is not null ? $", {RootSelfScope}" : "", StringComparison.Ordinal)
+        .Replace("/*root-self-predecessor*/", db.UsesRootPrivateParkInputs ? $", {RootSelfScope}" : "", StringComparison.Ordinal)
+        .Replace("/*root-child-cascade*/", db.UsesRootChildren ? RootChildPriorityPoll : "", StringComparison.Ordinal)
+        .Replace("/*root-child-visible*/", db.UsesRootChildren ? $"AND {RootChildParkInputs("m", "i")}" : "", StringComparison.Ordinal)
+        .Replace("/*root-child-ledger*/", db.UsesRootChildren ? RootChildCascadePollFilter : "", StringComparison.Ordinal)
+        .Replace("/*root-child-prior*/", db.UsesRootChildren ? $"AND {RootChildParkInputs("prior", "target")}" : "", StringComparison.Ordinal));
+
+    private static string SqliteRootPoll(bool includeParkArrivals, bool recovery, bool authoredCohort = false) =>
+        (recovery ? WithReleasedCohort(RootOperatorPollTemplate) : RootOperatorPollTemplate)
+        .Replace("LIKE 'operator/%'", "GLOB 'operator/*'", StringComparison.Ordinal)
+        .Replace("/*earlier-command-input*/", includeParkArrivals
+            ? $"""
+              AND (target."FoundationParkAt" IS NOT NULL AND target."FoundationParkClearing" IS NULL AND prior."ReplyTo" IS NULL
+                  AND prior."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("prior.", recovery)}))
+              /*root-child-prior*/
+              """
+            : "AND " + SqliteSupportedOperator("prior."), StringComparison.Ordinal)
+        .Replace("/*supported-operator*/", "AND " + SqliteSupportedOperator("op.", recovery), StringComparison.Ordinal) +
+        SqliteRootPollScope(includeParkArrivals, recovery, authoredCohort);
     // A parked root without Park arrivals withholds its ordinary inputs, so only an earlier operator row holds a command back.
     // A held command admitted before the Park opened passes too: the owner refuses it there and answers its caller.
     private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
     private static readonly string RootParkedOperatorPollFilter = RootOperatorPollFilter.Replace("/*withheld-prior*/",
         """AND (target."FoundationParkAt" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
+    // S5b-2: while a parked root's Park is being cleared it receives only operator rows (its clearing's controls among them),
+    // so nothing is kept mid-clearing; every other input stays pending in Seq order and, after the end, settles as Ended.
+    // Without Park arrivals a parked root already withholds them. The standalone recovery profile admits only Recover.
+    private static bool ClearsParkInPages(KernelDb db) => db.UsesRootParkedOperators && db.UsesRootParkArrivals &&
+        (!db.UsesRootParkRecovery || db.UsesRootComposedParkRecovery);
+    private const string RootClearingInputFilter = """AND (i."FoundationParkClearing" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')""";
+    private static readonly string RootClearingOperatorPollFilter = RootOperatorPollFilter.Replace("/*withheld-prior*/",
+        """AND (target."FoundationParkClearing" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
     // A released row of the root's current generation goes before every control: an earlier operator row waits for the cohort.
-    private static readonly string RootRecoveryOperatorPollFilter = RootOperatorPollFilter.Replace("/*released-cohort*/",
+    private static readonly string RootRecoveryOperatorPollFilter = WithReleasedCohort(RootOperatorPollFilter);
+    private static string WithReleasedCohort(string filter) => filter.Replace("/*released-cohort*/",
         """m."FoundationReleasedBy" = target."FoundationParkGeneration" OR """, StringComparison.Ordinal);
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
-        ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
-    private string PollMessages => _ordinaryRoots is { Discover: true }
+        ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """
+            + (postgres ? """, b.tableoid::bigint AS "BirthTableOid" """ : """, NULL AS "BirthTableOid" """)
+        : "";
+    private string PollMessages(KernelDb db) => _ordinaryRoots is { Discover: true }
         ? $"""
-           ({RootInboxSource} m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
+           ({RootInboxSource} m {(db.UsesRootPagedPublicEvents ? "LEFT " : "")}JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
               AND b."Creation" = 1 AND m."EventMatch" IS NULL
               AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" IN ({RootInputScopes})))
            """
         : RootInboxSource + " m";
+
+    private string PollQualifiedInputs(KernelDb db)
+    {
+        var rootInputs = RootPollFilter(db);
+        return db.UsesRootPagedPublicEvents && _ordinaryRoots is { Discover: true }
+            ? $"""
+                AND ((m."InboxScope" = {RootPublicEventTicket.Scope} AND m."Kind" = '{Kinds.Publish}' AND m."EventMatch" IS NULL)
+                     OR (b."Actor" IS NOT NULL {rootInputs}))
+                """
+            : rootInputs;
+    }
     private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
     // Only PostgreSQL profiles with the private body column can have split historical event payloads.
     // CASE avoids inspecting row content except for the single shared numeric event slot.
@@ -886,23 +1268,37 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string PollSql(KernelDb db) => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
-         FROM (SELECT {(db.UsesRootOperatorProtocol || RootTimedJobSettlementEnabled || RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
-         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter(db)}
+         FROM (SELECT {(postgres && (db.UsesRootOperatorProtocol || RootTimedJobSettlementEnabled || RootSelfIssuer is { SupportsTimers: true }) ? RootClockMilliseconds : Now)} AS now) t
+         LEFT JOIN {PollMessages(db)} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {PollQualifiedInputs(db)}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
     private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, KernelDb db)
     {
-        var found = page.Where(r => r.Target is not null).Select(r =>
+        var found = page.Where(r => r.Target is not null && !IsRootPublicationPollRow(db, r)).Select(r =>
             new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, r.BirthPartition!.Value, r.BirthFingerprint!)).Distinct().ToArray();
         return ToPolled(page, new(scope.FixedPartition, found), db);
     }
+
+    private static bool IsRootPublicationPollRow(KernelDb? db, PollRow row) => db?.UsesRootPagedPublicEvents == true &&
+        row.InboxScope is { } scope && RootPublicEventTicket.IsStored(scope, row.Kind);
 
     private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, KernelDb? db = null)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
             if (r.SplitEventPayload) throw SplitEventPayload();
+            if (bindings is not null && IsRootPublicationPollRow(db, r))
+            {
+                var address = new InstanceRef(r.Target!);
+                var ticket = RootPublicEventTicket.Decode(new MessageEntity
+                {
+                    Id = r.Id!, InboxScope = r.InboxScope!.Value, Target = address.Id, Partition = address.Partition,
+                    Kind = r.Kind!, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value,
+                    ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil, JobGeneration = r.JobGeneration!.Value
+                });
+                return new Stored(ticket.ToMessage(), r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
+            }
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
@@ -915,17 +1311,22 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
-                var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
+                var message = key.Scope == 0 ? (db?.UsesSqliteRootRuntime == true ? DecodeSqliteCreator(entity, db.UsesRootChildren) : PostgresRootAdmission.DecodeCreator(entity, db?.UsesRootChildren == true))
+                    with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
                     : DecodeRootInput(db!, entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)
                 {
-                    ReplyTenant = message.Start is null && message.ReplyTo is not null ? root.Tenant : null
+                    RootCreator = key.Scope == 0 && db?.UsesRootParkOpening == true &&
+                        r is GeneratedPollRow { BirthTableOid: > 0 and var birthTableOid, Seq: > 0 and var creatorSeq }
+                        ? new PostgresCreatorWitness(_creatorWitnessIssuer, root, message, birthTableOid, creatorSeq) : null,
+                    // A held start's caller is the root's tenant's, as a held direct input's is.
+                    ReplyTenant = message.ReplyTo is not null ? root.Tenant : null
                 };
             }
             if (key.Match is null &&
                 (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) ||
-                    PostgresRootAdmission.IsStoredOperator(r.Start) || key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))
+                    PostgresRootAdmission.IsStoredOperator(r.Start) || IsStoredRootChildNotice(r.Start) || IsStoredRootChildInput(r.Start) || r.Start == RootChildCascadeWire || key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
@@ -943,6 +1344,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         CreationProtocol.RejectUnsupported(delivery.Message);
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         return await EventInsert.Run(db, Engine, postgres, ToEntity(delivery.Message, 0, 0), cancellationToken);
     }
 
@@ -950,6 +1352,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         CreationProtocol.RejectUnsupported(message);
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var m = ToEntity(message, 0, 0);
         if (Engine is not null) return await Engine.AddAsync(db, m, cancellationToken);
         var seq = postgres ? ("", "") : (""", "Seq" """, """, (SELECT COALESCE(MAX("Seq"), 0) + 1 FROM "Messages")""");
@@ -965,8 +1368,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        if (db.UsesSqliteRootRuntime && _ordinaryRoots is { Discover: true } sqliteRoots)
+            return await LoadSqliteWorkerRootsAsync(db, sqliteRoots, ids, cancellationToken);
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (_ordinaryRoots is { } root)
         {
+            if (postgres && root.Discover && db.RequiresPinnedRootNamespace)
+                return await LoadPostgresWorkerRootsAsync(db, root, ids, cancellationToken);
             root = await ResolveWorkerRootsAsync(root, ids, [], cancellationToken);
             var found = new List<InstanceRow>();
             foreach (var binding in ids.Distinct().Select(root.ForActor))
@@ -1018,6 +1426,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (Engine is not null) { await Engine.PublishAsync(db, @event, cancellationToken); return; }
         await db.Database.ExecuteSqlRawAsync(
             """INSERT INTO "Events" ("Key", "Id", "Payload", "KeepUntil") VALUES ({0}, {1}, CAST({2} AS TEXT), {3}) ON CONFLICT DO NOTHING""",
@@ -1027,6 +1436,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var rows = await db.Subscriptions.AsNoTracking().Where(s => s.Key == key).ToListAsync(cancellationToken);
         return rows.Select(s => new SubscriptionRow(s.Key, s.Instance, s.Wait, s.Start is null ? null : Json.Read<StartSpec>(s.Start))).ToList();
     }
@@ -1035,6 +1445,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         CreationProtocol.RejectUnsupported(subscription);
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (Engine is not null) { await Engine.SubscribeAsync(db, subscription, cancellationToken); return; }
         await db.Database.ExecuteSqlRawAsync(
             """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition", "Start") VALUES ({0}, {1}, {2}, 0, CAST({3} AS TEXT)) ON CONFLICT DO NOTHING""",
@@ -1044,6 +1455,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var rows = await (from e in db.Events.AsNoTracking()
             join s in db.Subscriptions.AsNoTracking() on e.Key equals s.Key
             where e.Key == published.Key && e.Id == published.Id
@@ -1058,6 +1470,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         var unqualified = waits.Where(w => !CreationProtocol.Qualified(w)).ToArray();
         if (unqualified.Length == 0) return [];
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         // One parameter carries the whole ticket, avoiding per-wait SQL parameters and expression-depth limits.
         var unpack = Engine switch
         {
@@ -1083,6 +1496,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var rows = await db.Events.FromSqlRaw(Q($"""SELECT * FROM "Events" WHERE "KeepUntil" >= {Now}""")).AsNoTracking().Where(e => keys.Contains(e.Key)).ToListAsync(cancellationToken);
         return rows.Select(e => new EventRow(e.Key, e.Id, e.Payload, e.KeepUntil)).ToList();
     }

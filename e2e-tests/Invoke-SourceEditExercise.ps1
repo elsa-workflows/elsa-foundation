@@ -12,12 +12,12 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/_SourceEditTrxVerdict.ps1"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$testRelative = 'essentials/tests/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs'
-$sourceRelative = 'essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activities/WriteLine.cs'
+$testRelative = 'essentials/tests/Workflows/Runtime/KernelHost/Tests/WriteLineBoundInputExecutionTests.cs'
+$sourceRelative = 'essentials/src/Workflows/Runtime/Native/Activities/Activities.cs'
 $testPath = Join-Path $repoRoot ($testRelative -replace '/', [IO.Path]::DirectorySeparatorChar)
 $sourcePath = Join-Path $repoRoot ($sourceRelative -replace '/', [IO.Path]::DirectorySeparatorChar)
-$testProject = 'essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj'
-$workbenchProject = 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
+$testProject = 'essentials/tests/Workflows/Runtime/KernelHost/Tests/Elsa.Workflows.Runtime.KernelHost.Tests.csproj'
+$workbenchProject = 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
 $testFilter = 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
 $diagnosticsParent = if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
 $runId = if ($env:GITHUB_RUN_ID) { $env:GITHUB_RUN_ID } else { 'local' }
@@ -83,7 +83,7 @@ function Set-ExactUtf8Replacement {
 }
 
 function Assert-ExerciseFilesClean {
-    $status = @(& git -C $repoRoot status --porcelain -- $testRelative $sourceRelative 2>&1)
+    $status = @(& git -c core.fsmonitor=false -C $repoRoot status --porcelain -- $testRelative $sourceRelative 2>&1)
     if ($LASTEXITCODE -ne 0) { throw 'Could not verify the exercise files are clean before editing.' }
     if ($status.Count -gt 0) { throw "Exercise files already have changes; refusing to edit them: $($status -join '; ')" }
 }
@@ -189,9 +189,9 @@ function Invoke-SequenceSourceSmoke {
 }
 
 function Assert-NoTrackedLockChanges {
-    $lockDiff = @(& git -C $repoRoot diff --exit-code -- ':(glob)**/packages.lock.json' 2>&1)
+    $lockDiff = @(& git -c core.fsmonitor=false -C $repoRoot diff --exit-code -- ':(glob)**/packages.lock.json' 2>&1)
     if ($LASTEXITCODE -ne 0) { throw 'A tracked packages.lock.json changed during the source-edit exercise.' }
-    $cachedLockDiff = @(& git -C $repoRoot diff --cached --exit-code -- ':(glob)**/packages.lock.json' 2>&1)
+    $cachedLockDiff = @(& git -c core.fsmonitor=false -C $repoRoot diff --cached --exit-code -- ':(glob)**/packages.lock.json' 2>&1)
     if ($LASTEXITCODE -ne 0) { throw 'A staged packages.lock.json change is present after the source-edit exercise.' }
 }
 
@@ -223,7 +223,7 @@ try {
     Write-Host "[phase:expected-red-test] verdict=$expectedRedVerdict"
     $phaseResults += 'Expected-red focused test: PASSED (only the intended assertion failed)'
 
-    Set-ExactUtf8Replacement -Path $sourcePath -Before '        Console.WriteLine(Text);' -After '        Console.WriteLine($"Onboarding: {Text}");'
+    Set-ExactUtf8Replacement -Path $sourcePath -Before '        (context.ConsoleOutput ?? Out)?.WriteLine(Text);' -After '        (context.ConsoleOutput ?? Out)?.WriteLine($"Onboarding: {Text}");'
     $green = Invoke-SourceEditTest -Phase 'fixed-test'
     if ($green.ExitCode -ne 0) { throw "Fixed focused test failed with exit code $($green.ExitCode); see $($green.LogPath)." }
     Assert-SourceEditTestPassed -TrxPath $green.TrxPath

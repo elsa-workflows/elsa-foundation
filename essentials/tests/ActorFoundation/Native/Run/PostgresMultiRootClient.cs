@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
 using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;

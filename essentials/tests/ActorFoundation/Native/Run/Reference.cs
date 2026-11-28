@@ -4,7 +4,7 @@ using static Kernel.Native.Wf;
 namespace Kernel.Native.Run;
 
 /// <summary>
-/// The reference workflows of the current core's cost measurement (Essentials/tests/Activities/Http/IntegrationTests/
+/// The reference workflows of the current core's cost measurement (essentials/tests/Activities/Http/IntegrationTests/
 /// CommandBudgets/ReferenceWorkflows.cs), rebuilt as native definitions, and the workflows of the HTTP cases.
 /// </summary>
 public static class Reference

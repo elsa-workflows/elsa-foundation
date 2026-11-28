@@ -79,7 +79,7 @@ public sealed class DependencyMapTests
                 .Select(group => $"{group.Key} holds {group.Count()} projects"))
             .ToArray();
 
-        Assert.All((string[])["essentials/src/", "apps/", "essentials/tests/", "extensions/", "tools/"],
+        Assert.All((string[])["essentials/src/", "server/apps/", "essentials/tests/", "extensions/", "tools/"],
             root => Assert.Contains(directories, directory => directory.StartsWith(root, StringComparison.Ordinal)));
         Assert.True(nested.Length == 0,
             "Move the outer project into a sub-folder named after it instead of excluding the inner one from its globs:" +
@@ -173,7 +173,7 @@ public sealed class DependencyMapTests
 
     private static IReadOnlyList<string> BackendFileRoots()
     {
-        var roots = new List<string> { "essentials/src", "apps", "essentials/tests" };
+        var roots = new List<string> { "essentials/src", "server/apps", "essentials/tests" };
         var extensionsRoot = Path.Join(RepoRoot, "extensions");
         if (Directory.Exists(extensionsRoot))
         {

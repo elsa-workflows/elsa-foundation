@@ -9,10 +9,14 @@ public sealed partial class EfStore
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, byte[]? Wire, long Growth, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
         bool? OperatorSuspension, bool OperatorTermination, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
-        IReadOnlyList<FoundationValue>? Values) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        IReadOnlyList<FoundationValue>? Values, string[]? SettledJobs = null, bool WithheldInputs = false)
+        : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
+        internal RootChildEffects? ChildEffects { get; init; }
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
+            if (db.UsesSqliteRootRuntime) return await BindSqliteRootTurnAsync(db, this, cancellationToken);
             var family = RootStatePrefix(db);
             var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
             var terminalHeader = db.UsesRootTermination && Status == InstanceStatus.Running
@@ -63,17 +67,22 @@ public sealed partial class EfStore
                     !await ConsumeRootJobAsync(db, Current.Actor, completed.Original, cancellationToken)) return false;
             }
             else if (!await SettleRootInputsAsync(db, Reference, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, Issue,
-                         Current.Suspended, cancellationToken)) return false;
+                         Current.Suspended || WithheldInputs, cancellationToken)) return false;
             if (Recalls is { Length: > 0 })
             {
                 // A recall is idempotent. Only an existing private row addressed by this creation changes.
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope} AND "Id" = ANY({Recalls})
                         AND "Target" = {Current.Actor.Id} AND "Sender" = {Current.Actor.Id} AND "Partition" = {home}
-                        AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
+                        AND ("Kind" = {RootSelfWire} OR {db.UsesRootPrivateParkInputs} AND "Kind" = {RootSelfTimerWire})
+                        AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
                     """, cancellationToken);
             }
+            if (SettledJobs is { Length: > 0 } && !await DeleteRootTimedRowsAsync(db, Current.Actor, SettledJobs, cancellationToken))
+                return false;
             var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled;
+            if (ended && !await ClearTerminalRootSelfAsync(db, Current.Actor, home, Current.Revision, Issue, includeImmediate: false, cancellationToken))
+                return false;
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.
@@ -83,6 +92,7 @@ public sealed partial class EfStore
                     "Status" = {(int)Status}, "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Suspended" = {OperatorSuspension ?? Current.Suspended},
                     "Jobs" = {jobs}, "NextJobGeneration" = {nextJobGeneration},
+                    "Children" = CASE WHEN {ChildEffects is not null} THEN {ChildEffects?.Children} ELSE "Children" END,
                     "FoundationTerminalRevision" = CASE WHEN {ended} THEN {JournalRevision} ELSE NULL END,
                     "FoundationTerminalAt" = CASE WHEN {ended} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE NULL END
                 WHERE "Id" = {Current.Actor.Id} AND "Partition" = {home} AND "FoundationTenant" = {Tenant}
@@ -90,28 +100,47 @@ public sealed partial class EfStore
                     AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
                         WHERE "Instance" = {Current.Actor.Id}))
                 """, Wire), cancellationToken);
-            return updated == 1 && (Values is not { Count: > 0 } values ||
+            return updated == 1 && (ChildEffects is null || await ChildEffects.BindAsync(db, Tenant, cancellationToken)) &&
+                (Values is not { Count: > 0 } values ||
                 await WriteRootValuesAsync(db, Current.Actor, values, cancellationToken));
         }
     }
 
     // Both a model turn and a terminal no-turn disposition settle the same due FIFO prefix.
     private static async Task<bool> SettleRootInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
-        Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, bool suspended, CancellationToken cancellationToken)
+        Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, bool suspended, CancellationToken cancellationToken,
+        bool includePrivateInputs = true, bool parked = false, long? retentionMarker = null)
     {
+        if (db.UsesSqliteRootRuntime)
+            return await SettleSqliteRootInputsAsync(db, reference, actor, expected,
+                expectedEnvelopes, suspended, cancellationToken, parked, includePrivateInputs ? issue : null);
+
         var home = new InstanceRef(actor.Id).Partition;
-        var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
-        var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
+        var source = issue is null ? "\"Messages\"" : PostgresPrivateInboxView;
+        var includePrivate = includePrivateInputs || db.UsesRootPrivateParkInputs && parked && !suspended;
+        var cascadeOnly = db.UsesRootChildren && expected.Any(key => key.Id.StartsWith(ChildCascadePrefix(reference), StringComparison.Ordinal))
+            ? "AND " + RootChildCascadeRow : "";
+        var operatorOnly = !suspended ? "" : db.UsesRootChildren && !parked ? $"""
+            AND (m."Id" LIKE 'operator/%' OR EXISTS (SELECT 1 FROM "Instances" i
+                WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND {RootChildTerminatePredicate("m", "i")}))
+            """ : """AND "Id" LIKE 'operator/%'""";
+        var parkArrivals = parked && db.UsesRootComposedParkRecovery ? """AND ("ReplyTo" IS NULL OR "Id" LIKE 'operator/%')""" : "";
+        var childPark = parked && db.UsesRootChildren ? $"""
+            AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
+                AND {RootChildParkInputs("m", "i")})
+            """ : "";
         // The settled prefix follows the poll's order, which puts a pending released cohort first.
-        var cohort = db.UsesRootParkRecovery
-            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})""" : "";
+        var cohort = db.UsesRootParkRecovery && !(db.UsesRootComposedParkRecovery && (parked || suspended))
+            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter(db)})""" : "";
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
-                AND "InboxScope" IN ({2}, {3}) AND "EventMatch" IS NULL
-                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{cohort}}
+                AND ("InboxScope" = {2} OR {5} AND "InboxScope" = {3}) AND "EventMatch" IS NULL
+                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{parkArrivals}} {{childPark}} {{cohort}} {{cascadeOnly}}
             ORDER BY "Seq" LIMIT {4} FOR UPDATE OF m
-            """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
+            """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count, includePrivate).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))
+            return false;
+        if (issue is null && rows.Any(row => row.InboxScope == RootSelfScope))
             return false;
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
@@ -122,12 +151,20 @@ public sealed partial class EfStore
             DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope} AND "Id" = ANY({consumed})
                  AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
             """, cancellationToken) != consumed.Length) return false;
-        var ids = expected.Where(k => k.Scope == InboxKey.FoundationOccurrenceScope).Select(k => k.Id).ToArray();
+        var notices = messages.Where(message => message.FoundationRootChildNotice || message.FoundationRootChildInput || message.Kind == Kinds.Cascade).Select(message => message.InboxKey.Id).ToArray();
+        if (notices.Length > 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "Messages" WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({notices})
+                AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
+            """, cancellationToken) != notices.Length) return false;
+        var ids = expected.Where(k => k.Scope == InboxKey.FoundationOccurrenceScope && !notices.Contains(k.Id)).Select(k => k.Id).ToArray();
         if (ids.Length == 0) return true;
         var settled = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
             WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({ids}) AND "EventMatch" IS NULL
                 AND NOT "Done" AND "Target" = {actor.Id} AND "Partition" = {home} AND "KeepUntil" IS NOT NULL
+                AND ({retentionMarker}::bigint IS NULL OR EXISTS (SELECT 1 FROM pg_catalog.pg_class marker
+                    JOIN pg_catalog.pg_class source ON source.oid = "Messages".tableoid AND source.relnamespace = marker.relnamespace
+                    WHERE marker.oid::bigint = {retentionMarker} AND marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')))
             """, cancellationToken);
         return settled == ids.Length;
     }
@@ -138,8 +175,20 @@ public sealed partial class EfStore
             RootJobScope => jobs ? DecodeRootJob(row) : throw RootShape(),
             RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
+            InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && IsStoredRootChildNotice(row.Start) =>
+                DecodeRootChildNotice(row, reference, sqlite: db.UsesSqliteRootRuntime),
+            InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && IsStoredRootChildInput(row.Start) =>
+                DecodeRootChildInput(row, reference),
+            InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && row.Start == RootChildCascadeWire =>
+                DecodeChildCascadeControl(row, reference),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
-                ? PostgresRootAdmission.DecodeOperator(db, row, reference) : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)
+                ? db.UsesSqliteRootRuntime
+                    ? PostgresRootAdmission.DecodeOperator(row, reference, terminations: true, retirements: true,
+                        terminateThenDelete: true, retentionDeletes: true, operatorReplies: true, parkedTerminate: true,
+                        parkRecovery: db.UsesRootParkRecovery, composedRecovery: db.UsesRootComposedParkRecovery)
+                    : PostgresRootAdmission.DecodeOperator(db, row, reference)
+                : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol, db.UsesRootLiveEventWaits, db.UsesRootScheduleControls,
+                    authoredEvents: db.UsesRootAuthoredEvents, publicEvents: db.UsesRootPublicEventStarts, keyedStarts: db.UsesRootKeyedStarts)
         };
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
@@ -151,12 +200,16 @@ public sealed partial class EfStore
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
         string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null,
         RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false,
-        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0)
+        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0, string[]? settledJobs = null,
+        bool withheldInputs = false)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
+        RequireQualifiedRootWriter();
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
-            status is not (InstanceStatus.Running or InstanceStatus.Finished) && !(timedJob && status == InstanceStatus.Faulted) && !(operatorTermination && status == InstanceStatus.Cancelled))
+            status is not (InstanceStatus.Running or InstanceStatus.Finished) &&
+                !((timedJob || RootTimedJobSettlementEnabled) && status == InstanceStatus.Faulted) &&
+                !(status == InstanceStatus.Cancelled && (operatorTermination ||
+                    _rootChildReference is not null && inputs is [{ FoundationRootChildInput: true }])))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
         if (status != InstanceStatus.Running && journal is null)
             throw new ArgumentException("A terminal public root requires its journal entry.", nameof(journal));
@@ -173,7 +226,8 @@ public sealed partial class EfStore
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, StoredState.Encode(image),
-            header, wire, terminalGrowth, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values);
+            header, wire, terminalGrowth, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values,
+            settledJobs, withheldInputs);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 

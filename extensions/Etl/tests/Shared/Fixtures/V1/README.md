@@ -6,12 +6,12 @@ The capture test uses the existing persisted ETL design/publication fixture, nat
 
 After crashing the worker and stopping the host, capture reopens the stopped runtime database through the normal store and records the durable partition expiry, bindings, and prepared-run identities before copying the database. Replay sets its test clock to that persisted expiry, so successor claim behavior does not depend on the machine's clock when the fixture is replayed.
 
-The runtime database stores path-derived host-binding handles but no plaintext host paths. The capture scans every retained payload before and after writing the manifest, rejecting `/Users/`, `/private/var/`, `/tmp/`, and the runtime/publication temp roots. The fixture retains original host-binding handles unchanged; portable replay copies its database and content-addressed objects to a temporary directory and exercises store migration/accounting from copied snapshots and output objects. It does not retarget the pins or run the file worker against new host paths. The separate [frozen native upgrade runner](../../test-v1-native-upgrade.py) now proves successor-worker/native resume by running the frozen predecessor and current consumer in the same owned root. This static fixture retains its narrower portable artifact/store scope.
+The runtime database stores path-derived host-binding handles but no plaintext host paths. The capture scans every retained payload before and after writing the manifest, rejecting `/Users/`, `/private/var/`, `/tmp/`, and the runtime/publication temp roots. The fixture retains original host-binding handles unchanged; portable replay copies its database and content-addressed objects to a temporary directory and exercises store migration/accounting from copied snapshots and output objects. It does not retarget the pins or run the file worker against new host paths. The [archived frozen native upgrade runner](../../../../../../docs/contributing/workbench-compatibility-tests.md#classic-reviews-decisions-etl-and-rules-in-workflows) proves successor-worker/native resume with the matching classic consumer. This static fixture retains its narrower portable artifact/store scope.
 
-To capture to the checked fixture location, run:
+To recapture, run from the archived checkout linked above:
 
 ```bash
-bash Extensions/Etl/tests/Shared/capture-v1-compat-fixtures.sh
+bash extensions/Etl/tests/Shared/capture-v1-compat-fixtures.sh
 ```
 
 The script refuses to overwrite an existing capture. To produce a candidate elsewhere, pass an empty destination directory as its only argument. Compare its manifest and payloads before replacing retained evidence.

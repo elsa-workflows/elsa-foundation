@@ -38,6 +38,9 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private Task? _stopping;      // starts wait for this: it ends when the run is released or abandoned
     private Task? _stopJoined;    // joined stops wait for this: an abandoned run's in-flight operation has also returned
     private bool _abandoned;
+    /// <summary>The operation the stop's deadline interrupted (the host's job drain, a release), once a stop was abandoned
+    /// while it was in flight; null otherwise. Its late fault, or a cancellation of its own, is the stopping host's to record.</summary>
+    internal Task? Interrupted { get; private set; }
     private volatile bool _closing;    // a stop has begun: no new pass or activation starts, and the stop joins those under way
     private int _working;              // passes and activations under way
     private TaskCompletionSource? _idle;
@@ -115,7 +118,15 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// after the host's off-turn work has ended and before the first scope is given up. Its host stops renewing there.
     /// A call that joins a shutdown already under way waits for it and does not call its own <paramref name="beforeRelease"/>.
     /// </summary>
-    public ValueTask StopAsync(CancellationToken cancellationToken, Func<Task>? beforeRelease)
+    public ValueTask StopAsync(CancellationToken cancellationToken, Func<Task>? beforeRelease) =>
+        StopAsync(cancellationToken, beforeRelease, drainLost: null);
+
+    /// <summary>
+    /// As <see cref="StopAsync(CancellationToken, Func{Task})"/>; <paramref name="drainLost"/> is told at once of a fence the
+    /// host's drain lost before the deadline, which the stop reports only after its release: a later kill, or a fault
+    /// before the release, would end the stop without it.
+    /// </summary>
+    internal ValueTask StopAsync(CancellationToken cancellationToken, Func<Task>? beforeRelease, Action<ScopeOwnershipLostException>? drainLost)
     {
         if (cancellationToken.IsCancellationRequested) return default;
         IScopeHostRun? hostRun;
@@ -132,7 +143,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             _stopping = stopped.Task;
             _stopJoined = joined.Task;
         }
-        _ = StopRunAsync(hostRun, beforeRelease, stopped, joined, cancellationToken);
+        _ = StopRunAsync(hostRun, beforeRelease, drainLost, stopped, joined, cancellationToken);
         return AwaitOwnStopAsync(stopped.Task, cancellationToken);
     }
 
@@ -149,8 +160,8 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
 
-    private async Task StopRunAsync(IScopeHostRun? hostRun, Func<Task>? beforeRelease, TaskCompletionSource stopped,
-        TaskCompletionSource joined, CancellationToken cancellationToken)
+    private async Task StopRunAsync(IScopeHostRun? hostRun, Func<Task>? beforeRelease, Action<ScopeOwnershipLostException>? drainLost,
+        TaskCompletionSource stopped, TaskCompletionSource joined, CancellationToken cancellationToken)
     {
         // The first caller sets the stop deadline. Other callers can give up their own wait.
         // What is not given up yet runs out by its lease, as after a crash.
@@ -171,7 +182,14 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 // A drain that lost a fence still ends its jobs first. Release what is still held, then report the loss.
                 // A loss that arrives with the deadline is the deadline's: the run is abandoned, as on any cancellation.
                 try { await operation.WaitAsync(cancellationToken); }
-                catch (ScopeOwnershipLostException error) when (!cancellationToken.IsCancellationRequested) { drainFailure = error; }
+                catch (ScopeOwnershipLostException error) when (!cancellationToken.IsCancellationRequested)
+                {
+                    drainFailure = error;
+                    // Judged before the deadline: told now, since a kill in the release or a fault before it ends the stop
+                    // without it. A loss that arrives with the deadline stays the deadline's (below).
+                    try { drainLost?.Invoke(error); }
+                    catch (Exception) { }     // a failing report must not end the stop
+                }
                 catch (ScopeOwnershipLostException) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
             }
             if (beforeRelease is not null)
@@ -188,6 +206,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             {
                 operation = ReleaseSetAsync((IScopeSetRelease)_host!, held, cancellationToken).AsTask();
                 await operation.WaitAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
             }
             else
                 for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++)
@@ -235,6 +254,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 {
                     // The first caller and queued starts see the abandonment at once. A joined stop also waits for the
                     // operation the deadline interrupted, so it never returns while that commit or release is in flight.
+                    Interrupted = abandoned;
                     stopped.SetCanceled(cancellationToken);
                     _ = CancelJoinedAsync(abandoned, joined, cancellationToken);
                 }
@@ -322,10 +342,13 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// balancing round gives up its surplus, through a set host in one release and through any other host one at a time.
     /// A scope not held, or one being activated, released or passed, is skipped, as the balancing round skips it. Each
     /// scope given up is free at its epoch, and placement decides who takes it next, this node included; that take finds
-    /// no death. Returns the scopes actually given up; none once a stop has begun, since the stop gives up every scope.
-    /// One at a time, each scope is checked again just before its give-up, since a pass may start while an earlier one
-    /// awaits the store. A cancellation stops before the next scope and returns those already given up; a set release
-    /// that the cancellation interrupts returns those its one store call freed.
+    /// no death. Returns the scopes given up; none once a stop has begun, since the stop gives up every scope. Through a set
+    /// host that is the scopes whose fence the store released: one given up whose store release failed, or was cancelled,
+    /// is left out, and its fence names this node until the next heartbeat answer frees it or its lease runs out. Through
+    /// any other host a scope is listed once given up, also when its store release failed. One at a time, each scope is
+    /// checked again just before its give-up, since a pass may start while an earlier one awaits the store. A cancellation
+    /// stops before the next scope and returns those already given up. The result does not say why a listed scope is
+    /// missing: not held, busy (taken, given up or passed), or not reached before the cancellation.
     /// </summary>
     internal async Task<IReadOnlyList<int>> ReleaseAsync(IReadOnlyCollection<int> scopes, CancellationToken cancellationToken = default)
     {
@@ -335,13 +358,12 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         {
             var held = scopes.Where(scope => (uint)scope < (uint)partitions).Distinct().Order()
                 .Where(scope => Owns(scope) && !_activating[scope] && !_releasing[scope] && !_passing[scope]).ToArray();
-            if (held.Length > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
+            if (held.Length > 0 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
             {
                 // The set is marked releasing before its one store call, so no pass starts on it meanwhile.
                 IScopeActivation[] activations = [.. held.Select(Activation).OfType<IScopeActivation>()];
-                try { await ReleaseSetAsync(setHost, activations, cancellationToken); }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-                return [.. activations.Where(activation => !activation.Active).Select(activation => activation.Scope)];
+                try { return await ReleaseSetAsync(setHost, activations, cancellationToken); }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return []; }     // before the host's release
             }
             var released = new List<int>();
             foreach (var scope in held)
@@ -406,6 +428,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             var activations = release.Select(Activation).OfType<IScopeActivation>().ToArray();
             if (activations.Length > 0) await ReleaseSetAsync(setHost, activations, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         else
         {
@@ -438,16 +461,17 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         else await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
     }
 
-    private async ValueTask ReleaseSetAsync(IScopeSetRelease host, IScopeActivation[] activations,
+    // Returns the scopes whose fence the store released. A cancellation after the host's release is the caller's to act on.
+    private async ValueTask<IReadOnlyList<int>> ReleaseSetAsync(IScopeSetRelease host, IScopeActivation[] activations,
         CancellationToken cancellationToken)
     {
         foreach (var activation in activations) _releasing[activation.Scope] = true;
         try
         {
-            await host.ReleaseAsync(activations, cancellationToken);
+            var freed = await host.ReleaseAsync(activations, cancellationToken);
             foreach (var activation in activations)
                 if (!activation.Active && ReferenceEquals(_active[activation.Scope], activation)) _active[activation.Scope] = null;
-            cancellationToken.ThrowIfCancellationRequested();
+            return freed;
         }
         finally
         {

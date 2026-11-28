@@ -120,6 +120,13 @@ public static class PublicationFailureCodes
     /// <summary>Publication trigger preflight found one or more authoritative conflicts.</summary>
     public const string TriggerConflict = "trigger_conflict";
 
+    /// <summary>
+    /// The host does not run the definition: a kernel host could not map an activity or a binding onto its execution model.
+    /// The diagnostic starts with the refusal's own code (<c>activity-unsupported</c> or <c>binding-unsupported</c>) and
+    /// names the node and input.
+    /// </summary>
+    public const string DefinitionUnsupported = "definition_unsupported";
+
     /// <summary>The optimistic publication policy write lost its revision race.</summary>
     public const string PolicyRevisionConflict = "policy_revision_conflict";
 }

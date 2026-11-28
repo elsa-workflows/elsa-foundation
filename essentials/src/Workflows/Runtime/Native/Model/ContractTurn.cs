@@ -7,7 +7,7 @@ using Models = Kernel.Model.Contracts;
 namespace Kernel.Native;
 
 internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? outbound, long? endedAt = null,
-    Func<string, string?>? definitionOf = null) : INativeTurn
+    bool structuralJournal = false) : INativeTurn
 {
     private HashSet<string>? _timerHandles;
 
@@ -16,6 +16,7 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
     public bool HasExactIdentity => true;
     public bool SavesWaitRecipes => true;
     public string OperationOrigin => Actor.Id;
+    public string? TestScopeId => turn.Instance.TestScopeId;
     public long Now => turn.Now;
     public NativeState State => (NativeState)turn.State;
     public object? Ambient => turn.Ambient;
@@ -43,11 +44,11 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
     public string SendToSelf(string kind, object? payload = null, long? dueAt = null) =>
         turn.Send(Actor, kind, payload, dueAt);
 
-    public WaitEntry StartChild(string frame, string workflow, string mode, JsonObject? input) =>
-        new(frame, "child", turn.Start(NativeExecutionModel.Start(workflow, mode, input, definition: definitionOf?.Invoke(workflow))).Id);
+    public WaitEntry StartChild(string frame, ChildWorkflowTarget workflow, string mode, JsonObject? input) =>
+        new(frame, "child", turn.Start(workflow.Start(mode, input)).Id);
 
-    public Contract.ActorRef StartDetached(string workflow, string mode, JsonObject? input) =>
-        turn.Start(NativeExecutionModel.Start(workflow, mode, input, definition: definitionOf?.Invoke(workflow)), detached: true);
+    public Contract.ActorRef StartDetached(ChildWorkflowTarget workflow, string mode, JsonObject? input) =>
+        turn.Start(workflow.Start(mode, input), detached: true);
 
     public void CancelChild(WaitEntry child) => turn.Send(new Contract.ActorRef(child.Key), NativeKinds.Cancel);
     public void StartJob(string key, BackgroundArgs arguments, TimeSpan? timeout) => turn.StartJob(key, arguments, timeout);
@@ -58,6 +59,26 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
     public void Publish(string key, string? payload, TimeSpan keep) => turn.Publish(key, payload, keep);
     public void Emit(string channel, object? item) => turn.Emit(channel, item);
     public void Record(string entry) => turn.Record(entry);
+    internal void RecordClock()
+    {
+        if (structuralJournal) turn.Record(NativeStructuralJournal.Create(NativeJournalKind.Turn, Now));
+        else Record(FormattableString.Invariant($"t:{Now}"));
+    }
+    public void RecordFrameScheduled(string frame, int attempt)
+    {
+        if (structuralJournal) turn.Record(NativeStructuralJournal.Create(NativeJournalKind.Scheduled, Now, frame));
+        else Record($"a:{frame}:{attempt}");
+    }
+    public void RecordFrameStart(Frame frame)
+    {
+        if (structuralJournal) turn.Record(NativeStructuralJournal.Create(NativeJournalKind.Started, Now, frame.Id, frame.Node, frame.Parent));
+        else Record($"b:{frame.Id}:{frame.Node}:{frame.Parent}");
+    }
+    public void RecordFrameOutcome(NativeJournalKind kind, Frame frame)
+    {
+        if (structuralJournal) turn.Record(NativeStructuralJournal.Create(kind, Now, frame.Id, frame.Node, frame.Parent));
+        else Record($"{INativeTurn.OutcomeCode(kind)}:{frame.Id}:{frame.Node}");
+    }
     public void SetStatus(Contract.ActorStatus status, string? subStatus, JsonNode? output) => turn.SetStatus(status, subStatus, output);
     public void SetLabel(string name, string? value) => turn.SetLabel(name, value);
     public string EffectKey(string node, string iteration, int attempt) => Models.EffectKey.For(Actor.Id, node, iteration, attempt);

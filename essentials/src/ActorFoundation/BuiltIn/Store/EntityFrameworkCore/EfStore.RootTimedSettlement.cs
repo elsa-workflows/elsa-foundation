@@ -7,12 +7,16 @@ public sealed partial class EfStore
 {
     internal const string TimedJobPublicationClockQuery = "root-timed-job-publication-clock";
 
+    private static string TimedJobClock(KernelDb db) =>
+        db.UsesSqliteRootRuntime ? SqliteCommitDialect.MillisecondClock : RootClockMilliseconds;
+
     internal async ValueTask<long> ReadRootTimedJobPublicationTimeAsync(CancellationToken token)
     {
         await using var db = create();
         if (!RootTimedJobSettlementEnabled || !db.UsesRootTimedJobSettlement) throw RootShape();
+        await RequireSqliteOperationalFormatAsync(db, token);
         return await db.Database.SqlQueryRaw<long>($"""
-            SELECT {RootClockMilliseconds} AS "Value" /* {TimedJobPublicationClockQuery} */
+            SELECT {TimedJobClock(db)} AS "Value" /* {TimedJobPublicationClockQuery} */
             """).SingleAsync(token);
     }
 
@@ -45,16 +49,18 @@ public sealed partial class EfStore
         return row.Id == StoredJobId(message.InboxKey) && row.Payload == message.Payload ? message : throw RootShape();
     }
 
-    private static void RequireRootTimedIssuance(TurnCommit turn, InstanceRow row)
+    private void RequireRootTimedIssuance(TurnCommit turn, InstanceRow row)
     {
-        if (row.Status == InstanceStatus.Faulted || turn.Sent.Count != 0 && !RootJobTicket.StartsTimedPair(turn.Sent, row.Id, row.Model))
+        // A root that ends Faulted issues no job; one that runs issues only a timed pair.
+        var sent = RootSelfIssuer is null ? turn.Sent : turn.Sent.Where(RootJobTicket.IsTimedSend).ToArray();
+        if (sent.Count != 0 && (row.Status == InstanceStatus.Faulted || !RootJobTicket.StartsTimedPair(sent, row.Id, row.Model)))
             throw RootShape();
     }
 
     private async Task<PreparedRoot?> PrepareRootTimedTurnAsync(WorkerRoot root, TurnCommit turn, InstanceRow row, string? state,
         RootImage current, PartitionFence fence, Message[] wires, CancellationToken token)
     {
-        if (turn.Done.Count != 0 || turn.FoundationSelfRecalls is not null || turn.FoundationRootOperator is not null ||
+        if (turn.Done.Count != 0 || turn.FoundationRootOperator is not null ||
             row.Suspended || current.Suspended || turn.Consumed.Count is < 1 or > 2 ||
             turn.Consumed.Distinct().Count() != turn.Consumed.Count ||
             JobRegistry.Read(current.Jobs) is not [var job]) throw RootShape();
@@ -69,8 +75,8 @@ public sealed partial class EfStore
         if (inputs is [var recorded])
         {
             if (!recorded.FoundationJobResult || recorded.JobGeneration != job.Generation ||
-                recorded.Read<JobFinished>() is not { } result || result.Key != job.Key ||
-                row.Status == InstanceStatus.Faulted && result is not { Error: "timeout", Result: null } || completion is not null)
+                // The applied result may end the root Faulted, whatever it was: the family ends Faulted roots.
+                recorded.Read<JobFinished>() is not { } result || result.Key != job.Key || completion is not null)
                 throw RootShape();
             if (RootTimedJobPreviewEnabled && turn.Sent.Count != 0)
             {
@@ -87,6 +93,7 @@ public sealed partial class EfStore
                 original.JobGeneration != job.Generation || ticket.Key != job.Key || deadline != RootJobTicket.Deadline(row.Id, ticket) ||
                 row.Status != InstanceStatus.Running || state != current.State || row.StateVersion != current.StateVersion ||
                 row.Jobs != current.Jobs || row.NextJobGeneration != current.NextJobGeneration || turn.FoundationHeader is not null || turn.Journal is not null ||
+                turn.FoundationSelfRecalls is not null ||
                 turn.Sent is not [var emitted]) throw RootShape();
             var payload = Json.Write(new JobFinished(ticket.Key, null, "timeout"));
             if (completion is not null)
@@ -101,7 +108,8 @@ public sealed partial class EfStore
 
         var header = row.FoundationDispatchHeader!.Header;
         var prepared = PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state, row.StateVersion,
-            header.TypeData, header.Labels, turn.Journal, jobState: new(row.Jobs, row.NextJobGeneration), jobCompletion: completion, timedJob: true);
+            header.TypeData, header.Labels, turn.Journal, recalls: turn.FoundationSelfRecalls?.Select(key => key.Id).ToArray(),
+            jobState: new(row.Jobs, row.NextJobGeneration), jobCompletion: completion, timedJob: true);
         return prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };
     }
 
@@ -111,18 +119,37 @@ public sealed partial class EfStore
         if (!db.UsesRootTimedJobSettlement) return false;
         var ids = expected.Select(message => StoredJobId(message.InboxKey)).ToArray();
         var home = new InstanceRef(actor.Id).Partition;
-        var rows = await db.Messages.FromSqlInterpolated($"""
+        var pending = db.UsesSqliteRootRuntime ? SqlitePendingRootTimedInputs(db, actor, ids) : null;
+        var rows = pending is not null ? await pending.AsNoTracking().OrderBy(message => message.Seq).ToListAsync(token)
+            : await db.Messages.FromSqlInterpolated($"""
             SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {RootTimedJobScope} AND "Id" = ANY({ids}) AND NOT "Done"
             ORDER BY "Seq" FOR UPDATE
             """).AsNoTracking().ToListAsync(token);
         if (!rows.Select(DecodeRootTimedRow).SequenceEqual(expected)) return false;
         if (expected is [{ Due: { } deadline }, _] && completion is null &&
-            !await db.Database.SqlQueryRaw<bool>($"""SELECT {RootClockMilliseconds} >= {"{0}"} AS "Value" """, deadline).SingleAsync(token))
+            !await db.Database.SqlQueryRaw<bool>($"""SELECT {TimedJobClock(db)} >= {"{0}"} AS "Value" """, deadline).SingleAsync(token))
             return false;
-        return await db.Database.ExecuteSqlInterpolatedAsync($"""
+        return await DeleteRootTimedRowsAsync(db, actor, ids, token);
+    }
+
+    private static async Task<bool> DeleteRootTimedRowsAsync(KernelDb db, CreationAddress actor, string[] ids, CancellationToken token)
+    {
+        var home = new InstanceRef(actor.Id).Partition;
+        var removed = db.UsesSqliteRootRuntime ? await SqlitePendingRootTimedInputs(db, actor, ids).ExecuteDeleteAsync(token)
+            : await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {RootTimedJobScope} AND "Id" = ANY({ids}) AND NOT "Done"
-            """, token) == expected.Length;
+            """, token);
+        if (removed != ids.Length) return false;
+        await ReleaseProtectedTimedJobsAsync(db, actor.Id, ids, token);
+        return true;
+    }
+
+    private static IQueryable<MessageEntity> SqlitePendingRootTimedInputs(KernelDb db, CreationAddress actor, string[] ids)
+    {
+        var home = new InstanceRef(actor.Id).Partition;
+        return db.Messages.Where(message => message.Target == actor.Id && message.Partition == home &&
+            message.InboxScope == RootTimedJobScope && !message.Done && ids.Contains(message.Id));
     }
 }

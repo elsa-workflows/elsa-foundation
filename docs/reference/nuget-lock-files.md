@@ -87,7 +87,7 @@ exclusion or the installed SDK's pruning catalog.
   implies it), or because the command carries `-p:RestoreLockedMode=true` itself: `dotnet run --project
   tools/maps/Elsa.Maps.Generator` and `dotnet build tools/versioning/Elsa.Versioning.Publisher`, the tool projects a
   workflow builds and runs with no separate restore step, restore themselves locked against their own committed lock
-  file this way. `WorkflowRestoreLockTests` (`Essentials/tests/Architecture`) scans every workflow for one of these
+  file this way. `WorkflowRestoreLockTests` (`essentials/tests/Architecture`) scans every workflow for one of these
   four markers on the same command and fails on a new step that restores unlocked.
 - Local restores are not locked, so the restore after a change is what updates the lock files.
 - **The one place CI does not restore locked**: Elsa.Workbench's Dockerfile restores its RID-specific ReadyToRun

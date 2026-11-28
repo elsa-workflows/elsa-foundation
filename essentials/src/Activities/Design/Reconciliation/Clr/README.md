@@ -25,10 +25,9 @@ Runtime implementation dependency.
   the 4-part assembly version's `Major.Minor.Build` → `MAJOR.MINOR.PATCH`. Invalid attribute semver /
   unresolvable assembly version raise domain-scoped exceptions carrying the activity type + offending
   value (§2.23.5).
-- **`ActivityTypeCategoryResolver`** (`IActivityTypeCategoryResolver`) — pure category decision: the
-  last dot-separated segment of the declaring assembly's simple name (e.g.
-  `Elsa.Runtime.Activities.Primitives` → `Primitives`), so every activity an author ships in one
-  assembly shares one catalog bucket.
+- **`ActivityTypeCategoryResolver`** (`IActivityTypeCategoryResolver`) uses a nonblank `CategoryAttribute`
+  declared directly on the activity. Without it, the declaring assembly's last name segment supplies
+  the shared category, such as `Primitives` for `Elsa.Runtime.Activities.Primitives`.
 - **`ClrActivityReconciliationFeature`** — `IShellFeature` that registers the options plus the two
   resolvers, the scanner, and the source — each against its contract so an inheriting feature can
   replace one in isolation (§2.5). `ConfigureServices` is `virtual`; options and the default activated
@@ -46,8 +45,9 @@ No alias is installed or resolved through Runtime. The caller retains resource a
 Type admission alone does not establish serialized member names for a Workflow input, variable or current
 item. Request seeding preserves caller JsonElement keys and uses default System.Text.Json for CLR values
 (`RuntimeWorkflowStateSeed.Serialize`); expression materialization also uses default JSON options. Those
-keys can differ from the activity completion profile. For a single admitted type with readable members
-this contribution returns `Declared` (`activity.shape.declared-type`): advisory member names for
+keys can differ from the activity completion profile. For an admitted type with readable members, or a
+List, Array, HashSet or Dictionary of one (members on the item or map value), this contribution returns
+`Declared` (`activity.shape.declared-type`): advisory member names for
 expression completion, which validation and the Activity Data picker treat as Unknown. Otherwise it
 returns Unknown with `activity.shape.serialization-profile-unbound`, retaining an admitted whole type but
 no selected type for a nonempty member path. Literal exact-key reads remain available with deferred fit; no source is

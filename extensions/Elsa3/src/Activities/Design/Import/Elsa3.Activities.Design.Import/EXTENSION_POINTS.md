@@ -94,7 +94,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 
 `Elsa3ImportActivitiesFeature` exposes these permission-guarded routes:
 
-- `POST migration/elsa3/reusable-activities/collections` — bounded authored-definition array upload.
+- `POST migration/elsa3/reusable-activities/collections` — upload a raw authored-definition JSON array or a multipart selection of JSON and ZIP files as one collection. Each JSON document can contain a single definition or an array.
 - `GET .../collections/{collectionHandle}/analysis` — deterministic, side-effect-free, offset-paged analysis.
 - `POST .../collections/{collectionHandle}/selection` — authoritative dependency-closure expansion and readiness.
 - `POST .../collections/{collectionHandle}/apply` — exact Plan ID, selection, tenant-plus-user
@@ -102,8 +102,14 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
   `elsa3-import:manage` and `workflows/publishing:manage`, because it publishes the imported reusable activities.
 - `GET .../imports/{idempotencyKey}` — durable lost-response reconciliation.
 
-Uploads default to 16 MiB, 20,000 source versions, a 24-hour lifetime, and analysis pages of at
-most 500 rows. Hosts may lower or raise these finite bounds through `ReusableActivityImportOptions`.
+The default `ReusableActivityImportOperationService` implements `IReusableActivityExportFileUpload`.
+Hosts that replace `IReusableActivityImportOperationService` can implement that optional interface on
+the same instance to accept multipart uploads. A raw-only service returns HTTP 415 with
+`elsa3.import.raw-collection-only` before reading the files. Studio can then submit a single JSON
+file to that service using its original JSON-array contract.
+
+A selection allows 16 MiB of uploaded file data, 32 MiB of expanded JSON, 2,000 ZIP entries
+and 20,000 source versions by default. Collections expire after 24 hours and analysis pages contain at most 500 rows. Hosts may lower or raise these finite bounds through `ReusableActivityImportOptions`.
 Apply never falls back to `ExecuteWorkflow`; recursive reusable composition remains a blocking
 diagnostic with a complete typed cycle.
 
@@ -190,3 +196,9 @@ states (spec 188 credential-literal contract, Known gaps).
 - Activity catalog reconciliation that consumes the imported data: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../../../../../../../essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1.
+
+## Draft-first collection Apply
+
+Studio posts the reviewed collection to `collections/{collectionHandle}/apply-drafts`. The published activity choice is bound to its idempotency key. The existing `apply` operation keeps its original request type and publication behavior. Publication choices belong to `apply-drafts`. Both routes require import and publication management permission. A composed activity publisher is required for reusable selections so deferred publication can resolve reserved identities.
+
+Custom operation services implement `IReusableActivityDraftImport` to offer draft Apply. The commit command must implement `IReusableActivityDraftImportCommand` and write current workflow drafts, reusable drafts and their reservations atomically. The operation store implements `IImportedActivityDraftReservations` for tenant-scoped lookup of the reserved version ID and SemVer. Missing draft support returns HTTP 501 before mutation.

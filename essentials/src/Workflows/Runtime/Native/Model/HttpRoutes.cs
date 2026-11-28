@@ -7,7 +7,8 @@ namespace Kernel.Native;
 /// upper case and its path as a <see cref="HttpRouteTemplate"/>: trimmed of white space and slashes, literals and
 /// parameter names in lower case, as the old core canonicalizes a template.
 /// <list type="bullet">
-/// <item>A start route is an HttpEndpoint with a literal path where a run begins (<see cref="StartsOf"/>). A wait route is
+/// <item>A start route is an HttpEndpoint with a literal path where a run begins (<see cref="StartsOf"/>) that may start one
+/// (<see cref="NativeStartTriggers"/>). A wait route is
 /// any other HttpEndpoint with a literal path; it subscribes on its template resolved with its route values, so a
 /// request on <c>orders/42/cancel</c> resumes only the instance that waits for order 42.</item>
 /// <item>One route shape starts one workflow at one endpoint: a second start with the same method and shape
@@ -54,6 +55,12 @@ public sealed class HttpRoutes
             ? ResolvedKey(method, template.Resolve(values))
             : Key(method, template.Text);
 
+    /// <summary>The opaque wait identity suffix attesting the canonical parameter names of a resolved route.</summary>
+    public static string PreparedWaitSuffix(string canonicalTemplate) => "/http-route/" + Digest(canonicalTemplate);
+
+    private static string Digest(string value) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+
     private static string Readable(string method, string path) => Readable(method, ':', path);
 
     private static string Readable(string method, char separator, string path)
@@ -62,7 +69,7 @@ public sealed class HttpRoutes
         var key = $"http:{verb}{separator}{path}";
         return System.Text.Encoding.UTF8.GetByteCount(key) <= MaxReadableKeyBytes
             ? key
-            : $"http:{verb}{separator}#{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path)))}";
+            : $"http:{verb}{separator}#{Digest(path)}";
     }
 
     private static string Normalize(string path) => path.Trim().Trim('/').ToLowerInvariant();
@@ -73,9 +80,11 @@ public sealed class HttpRoutes
     public HttpRoutes(WorkflowRegistry registry)
     {
         var shapes = new Dictionary<string, HttpRoute>(StringComparer.Ordinal);
+        var definitions = registry.All.ToDictionary(workflow => workflow.Id, workflow => workflow.Definition, StringComparer.Ordinal);
         foreach (var workflow in registry.All)
         {
-            var starts = StartsOf(workflow.Root).ToHashSet();
+            // An endpoint that may not start a run is a wait wherever it is (NativeStartTriggers).
+            var starts = StartsOf(workflow.Root).Where(NativeStartTriggers.CanStart).ToHashSet();
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(HttpEndpoint)))
             {
                 if (node.Inputs.GetValueOrDefault("Path") is not LiteralBinding { Value: { } literal })
@@ -83,17 +92,17 @@ public sealed class HttpRoutes
                     // A path an expression computes is a literal route known only at run time: the edge cannot match a
                     // template it never sees, so it takes no route values.
                     if (BindsRouteValues(node))
-                        throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': RouteValues need a literal route template, and this path is computed.");
+                        throw new HttpRouteTemplateException($"Definition '{workflow.Definition}', endpoint '{node.Id}': RouteValues need a literal route template, and this path is computed.");
                     continue;
                 }
                 HttpRouteTemplate template;
                 try { template = HttpRouteTemplate.Parse(literal.GetValue<string>()); }
-                catch (HttpRouteTemplateException refused) { throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': {refused.Message}"); }
+                catch (HttpRouteTemplateException refused) { throw new HttpRouteTemplateException($"Definition '{workflow.Definition}', endpoint '{node.Id}': {refused.Message}"); }
                 var start = starts.Contains(node);
                 if (!start && !template.FullyBound)
-                    throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': the wait's route '{template.Text}' has an optional or catch-all parameter; a wait's route is fully bound.");
+                    throw new HttpRouteTemplateException($"Definition '{workflow.Definition}', endpoint '{node.Id}': the wait's route '{template.Text}' has an optional or catch-all parameter; a wait's route is fully bound.");
                 if (!start && template.Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal) && !BindsRouteValues(node))
-                    throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': the wait's route '{template.Text}' has parameters and no RouteValues to resolve them.");
+                    throw new HttpRouteTemplateException($"Definition '{workflow.Definition}', endpoint '{node.Id}': the wait's route '{template.Text}' has parameters and no RouteValues to resolve them.");
                 // Its opt-out of the release rule (the owner's default of 12 November is to release a response after the
                 // commit of the turn that wrote it).
                 var early = node.Inputs.GetValueOrDefault("RespondBeforeCommit") is LiteralBinding { Value: { } flag } && flag.GetValue<bool>();
@@ -103,12 +112,14 @@ public sealed class HttpRoutes
                 if (shapes.TryGetValue($"{route.Method} {template.Shape}", out var claimed) &&
                     (claimed.Start || start || claimed.Template.Text != template.Text || claimed.RespondBeforeCommit != early))
                     throw new HttpRouteConflictException(route.Method, template.Text, (claimed.Workflow, claimed.Node), (workflow.Id, node.Id),
-                        claimed.Start && start ? HttpRouteConflict.TwoStarts : claimed.Start || start ? HttpRouteConflict.StartAndWait : HttpRouteConflict.TwoWaits);
+                        claimed.Start && start ? HttpRouteConflict.TwoStarts : claimed.Start || start ? HttpRouteConflict.StartAndWait : HttpRouteConflict.TwoWaits)
+                    { Definitions = (definitions[claimed.Workflow], workflow.Definition) };
                 // Waits of different shapes can still match one path (orders/special/cancel and orders/{id}/cancel): the edge
                 // takes the more specific, so they must read alike too.
                 if (!start && _routes.FirstOrDefault(other => !other.Start && other.Method == route.Method && Overlap(other.Template, template) &&
                         (other.Template.Text != template.Text || other.RespondBeforeCommit != early)) is { } overlapping)
-                    throw new HttpRouteConflictException(route.Method, template.Text, (overlapping.Workflow, overlapping.Node), (workflow.Id, node.Id), HttpRouteConflict.TwoWaits);
+                    throw new HttpRouteConflictException(route.Method, template.Text, (overlapping.Workflow, overlapping.Node), (workflow.Id, node.Id), HttpRouteConflict.TwoWaits)
+                    { Definitions = (definitions[overlapping.Workflow], workflow.Definition) };
                 if (start || !shapes.ContainsKey($"{route.Method} {template.Shape}")) shapes[$"{route.Method} {template.Shape}"] = route;
                 _routes.Add(route);
                 if (start) _starts[Key(route.Method, template.Text)] = (workflow.Id, node.Id);
@@ -132,14 +143,15 @@ public sealed class HttpRoutes
     // loop that comes back to it would wait there on the start route's own key, and no request could reach that wait.
     // A graph the engine refuses has no entry; its run faults on its own.
     /// <summary>Where a run begins: the root, the first child of a root Sequence, or an entry of a root Flowchart (<see cref="Flowchart.IsEntry"/>).</summary>
-    internal static IEnumerable<Node> StartsOf(Node root)
+    internal static IEnumerable<Node> StartsOf(Node root, Func<Node, Node, bool>? flowchartEntry = null)
     {
         if (root.Children.Count == 0) return [root];
         if (root.Type == typeof(Sequence)) return [root.Children[0]];
         if (root.Type != typeof(Flowchart)) return [root];
         try { _ = Flowchart.GraphOf(root); }
         catch (Exception refused) when (refused is FlowchartExecutionException or ArgumentException) { return []; }
-        return root.Children.Where(child => Flowchart.IsEntry(root, child));
+        flowchartEntry ??= Flowchart.IsEntry;
+        return root.Children.Where(child => flowchartEntry(root, child));
     }
 
     private static string Method(Node node) => node.Inputs.GetValueOrDefault("Method") is LiteralBinding { Value: { } m } ? m.GetValue<string>() : "POST";
@@ -171,8 +183,17 @@ public enum HttpRouteConflict
 /// </summary>
 public sealed class HttpRouteConflictException(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second,
     HttpRouteConflict kind = HttpRouteConflict.TwoStarts)
-    : InvalidOperationException(Describe(method, path, first, second, kind))
+    : InvalidOperationException
 {
+    /// <summary>
+    /// The definitions of <see cref="First"/> and <see cref="Second"/>, which the message names: a published version's
+    /// definition, or the workflow itself for one built in code. Unset, the message names the workflows.
+    /// </summary>
+    public (string First, string Second)? Definitions { get; init; }
+
+    public override string Message => Describe(Method, Path, Definitions is { } named ? (named.First, First.Node) : First,
+        Definitions is { } again ? (again.Second, Second.Node) : Second, Kind);
+
     /// <summary>The method both claim, in upper case.</summary>
     public string Method { get; } = method;
 
@@ -190,10 +211,10 @@ public sealed class HttpRouteConflictException(string method, string path, (stri
 
     private static string Describe(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second, HttpRouteConflict kind) =>
         kind == HttpRouteConflict.TwoWaits
-            ? $"Endpoints '{first.Node}' of '{first.Workflow}' and '{second.Node}' of '{second.Workflow}' wait on {method} /{path}'s shape with other parameter names or another release rule; a request matches the shape once. Name the parameters alike or change one route."
+            ? $"Endpoints '{first.Node}' of definition '{first.Workflow}' and '{second.Node}' of definition '{second.Workflow}' wait on {method} /{path}'s shape with other parameter names or another release rule; a request matches the shape once. Name the parameters alike or change one route."
             : kind == HttpRouteConflict.StartAndWait
-            ? $"Endpoint '{first.Node}' of '{first.Workflow}' and endpoint '{second.Node}' of '{second.Workflow}' are a start and a wait on {method} /{path}'s shape; a request reaches one of them. Change the method or path of one of them."
+            ? $"Endpoint '{first.Node}' of definition '{first.Workflow}' and endpoint '{second.Node}' of definition '{second.Workflow}' are a start and a wait on {method} /{path}'s shape; a request reaches one of them. Change the method or path of one of them."
             : first.Workflow == second.Workflow
-                ? $"Workflow '{first.Workflow}' starts on {method} /{path} at two endpoints, '{first.Node}' and '{second.Node}'; a route starts one workflow at one endpoint. Change the method or path of one of them."
-                : $"Workflows '{first.Workflow}' and '{second.Workflow}' both start on {method} /{path}; a route starts one workflow. Change the method or path of one of them.";
+                ? $"Definition '{first.Workflow}' starts on {method} /{path} at two endpoints, '{first.Node}' and '{second.Node}'; a route starts one workflow at one endpoint. Change the method or path of one of them."
+                : $"Definitions '{first.Workflow}' and '{second.Workflow}' both start on {method} /{path}; a route starts one workflow. Change the method or path of one of them.";
 }

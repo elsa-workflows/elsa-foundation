@@ -31,7 +31,7 @@ unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` a
 
 ## Development / demo defaults
 
-The checked-in `apps/Elsa.Workbench.Host/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
+The checked-in `server/apps/Elsa.Workbench.Host/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
 intended **only** for local development and demos:
 
 ```jsonc
@@ -107,6 +107,10 @@ EF Core, and the former `configureDbContext` parameter on `AddFoundationIdentity
 Hosts must register an OpenIddict vendor store explicitly before composing the feature. The opt-in
 `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` package is Elsa's EF Core store, built on `OpenIddict.EntityFrameworkCore`; a
 host composes it once on its root container with `services.AddOpenIddictEntityFrameworkCoreStore(configuration)`, as Workbench does.
+In `Elsa.Foundation.Host`, set `Elsa:Identity:OpenIddict:EntityFrameworkCore:Enabled` to `true` to register the store
+before shell activation. Set `Elsa:Authentication:Enabled` to `true` to use the active shell's authentication and
+authorization providers for requests. The curated server Essentials profile enables both settings.
+
 Another host may select a different vendor provider instead.
 
 #### Where the token store lives
@@ -236,7 +240,7 @@ deployment still read each other's payloads when they share a key ring, wherever
   every user signs in again, and a form open across the upgrade is posted again. Changing `ApplicationName` later has
   the same effect.
 
-`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
+`essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
 are covered in [Docker: Data Protection keys](../docker.md#data-protection-keys).
 
 ### No API kill-switch
@@ -317,8 +321,8 @@ a throwaway local demo, run the container with `ASPNETCORE_ENVIRONMENT=Developme
 ## Optional managed external connections
 
 For deployment-baseline/explicit-override connection settings, Secrets references and programmable provisioning,
-use the [managed Identity module](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/README.md).
-Its optional [HTTP API](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md) documents the
+use the [managed Identity module](../../extensions/Identity/src/Elsa.Foundation.Identity.ExternalAuthentication/README.md).
+Its optional [HTTP API](../../extensions/Identity/src/Api/README.md) documents the
 feature composition, trusted public callback base, existing themed chooser, correlation/antiforgery protocol and
 administrator preview. Its artifact store and Data Protection keys must be shared for the corresponding deployment
 mode. The reference Workbench registers the optional `FoundationIdentityExternalAuthentication`,
@@ -329,7 +333,7 @@ by the owning API; registration alone does not enable managed sign-in.
 
 Durable selected-session and exact-link validation applies across ordinary cookies, access and refresh tokens.
 The [qualification runners](../../tools/identity/ExternalAuthentication.Probe/README.md) distinguish controlled
-provider, Keycloak, full Studio/reference Workbench and separate-process native SQLite/PostgreSQL evidence.
+provider, Keycloak, full studio/reference Workbench and separate-process native SQLite/PostgreSQL evidence.
 Managed and deployment-only backend modes share their configured Data Protection ring/application name and
 first-party signing key across nodes; the SQLite profile runs on one machine. See the
 [profile evidence](../../specs/1212-external-authentication/evidence.md) for historical modes and limits; the prepared split has no current-source qualification.

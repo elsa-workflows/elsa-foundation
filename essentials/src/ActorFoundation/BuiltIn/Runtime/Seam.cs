@@ -63,8 +63,9 @@ public interface IScopeSetRelease
 {
     bool SupportsSetRelease { get; }
 
-    /// <summary>Cancellation stops further handover operations. A store call already entered may have landed.</summary>
-    ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default);
+    /// <summary>Cancellation stops further handover operations. A store call already entered may have landed. Returns the
+    /// scopes whose fence the store released: a scope given up whose store release failed or was cancelled is left out.</summary>
+    ValueTask<IReadOnlyList<int>> ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

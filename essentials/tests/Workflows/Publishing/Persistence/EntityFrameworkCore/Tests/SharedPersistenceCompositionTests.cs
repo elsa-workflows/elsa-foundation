@@ -11,7 +11,7 @@ using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -133,7 +133,7 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
             .WithAssemblies(
                 typeof(EventsFeature).Assembly,
                 typeof(ApiCapabilitiesFeature).Assembly,
-                typeof(WorkflowsRuntimeTriggersFeature).Assembly,
+                typeof(RuntimePublicationEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsPublishingFeature).Assembly,
                 typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
                 typeof(PublishingEntityFrameworkCoreFeature).Assembly,

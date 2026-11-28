@@ -5,7 +5,7 @@ Main's Elsa 4 Flowchart engine, lifted out of the Elsa runtime (owner decision, 
 gateway kinds as policies, dead paths, and the dead-path join as the default (`FlowchartOptions.JoinPolicyKind`),
 with the reachability join kept beside it. No runtime or NuGet dependency.
 
-Copied from `Essentials/src/Activities/Flowchart` at `a3eb06e851`. Type names, file layout, messages and state shapes
+Copied from `essentials/src/Activities/Flowchart` at `a3eb06e851`. Type names, file layout, messages and state shapes
 are main's, so that the two can be compared file by file (the first commit of the PR that added this folder is the
 verbatim copy). Main's product Flowchart is unchanged.
 

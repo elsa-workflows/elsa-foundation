@@ -20,6 +20,7 @@ public interface IActorType
     internal bool AcceptsFoundationOperator(InstanceRow? row, Message message) => SupportsFoundationOperator(row);
 
     internal bool SupportsFoundationInlineStart(string type) => false;
+    internal bool AcceptsQualifiedInlineStart(StartSpec spec, object material, object? issuer) => false;
 
     /// <summary>Whether this actor type can verify the operator or parent authority of a terminate.</summary>
     internal bool SupportsTrialWithdrawal => false;
@@ -105,6 +106,7 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
+    internal RootCreatorWitness? RootCreator { get; init; }
     internal string? ReplyTenant;
     internal LiveReplyRoute? ReplyRoute => Message.ReplyTo is { } address ? new(address, ReplyTenant) : null;
     internal object? StarterAmbient;    // belongs to this local creator; never written
@@ -231,6 +233,7 @@ public sealed class TurnInput
     internal bool RecoveryHandedOff(InboxKey key) => _worker.RecoveryHandedOff(key);
 
     internal Message? VolatileMessage(InboxKey id) => _volatile?.GetValueOrDefault(id);
+    internal IEnumerable<Message> VolatileMessages => _volatile?.Values ?? Enumerable.Empty<Message>();
 
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
     public long CheckpointTime => _worker.Now;
@@ -248,11 +251,15 @@ public sealed class TurnOutcome(string instance)
     internal bool FoundationWithholds;
     internal FoundationHeaderChange? FoundationHeader;
     internal bool OpensPark;
+    internal bool ClearsPrivateTimersOnEnd;
     internal ParkKeepReason? FoundationKeep;
     internal ParkPageClear? FoundationParkClear;
+    internal InlineJobWinner? FoundationInlineJob;
     internal ParkRecoveryPage? FoundationRecoveryPage;
     internal ParkRetryOpen? FoundationRetry;
     internal ParkTimerOpen? FoundationRecoveryTimers;
+    internal ParkTimerRecipe[]? FoundationRootTimerRearms;
+    internal Func<CancellationToken, ValueTask<TurnOutcome>>? PrepareCommand;
     internal ParkJobOpen? FoundationRecoveryJobs;
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions;
     internal InboxKey? FoundationCatchUpStep;
@@ -272,6 +279,7 @@ public sealed class TurnOutcome(string instance)
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
     internal bool CreationRefused;
+    internal Message? FoundationRootRefusedInput;
     internal CommitWindow? Window;
     public List<RequestReply> Replied = [];
 
@@ -291,6 +299,10 @@ public sealed class TurnOutcome(string instance)
     public List<InboxKey> Cancelled = [];
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls;
     internal IReadOnlyList<FoundationValue>? FoundationValues;
+    internal IReadOnlyList<Message>? FoundationRootChildSends;
+    internal IReadOnlyList<Message>? FoundationRootPublications;
+    internal TerminalOutput? FoundationTerminalOutput;
+    internal RetainedRootResponse? FoundationRetainedResponse;
     public List<Message> Sent = [];
     public HashSet<InboxKey> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];
@@ -448,23 +460,30 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
-    internal string SendToSelf(Func<string, string> issue, string kind, string? payload, long? dueAt)
+    internal string SendToSelf(Func<string, string> issue, string kind, string? payload, long? dueAt, bool recordOrdinal = false)
     {
         Kinds.RequireApplicationSend(kind);
-        var id = FoundationSelfSend.Issue(issue, Origin, Revision, _ordinal++, dueAt);
-        _sent.Add(FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt));
+        var ordinal = _ordinal++;
+        var id = FoundationSelfSend.Issue(issue, Origin, Revision, ordinal, dueAt);
+        var message = FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt);
+        if (recordOrdinal) FoundationSelfSend.RememberIssuance(message, Revision, ordinal);
+        _sent.Add(message);
         return id;
     }
 
-    internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
+    internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt) =>
+        SendFromActor(store.MessageHandle, target, targetCreation, kind, payload, dueAt, rootChild: false);
+
+    internal string SendFromActor(Func<string, string> issue, InstanceRef target, long targetCreation, string kind, string? payload,
+        long? dueAt, bool rootChild)
     {
         Kinds.RequireApplicationSend(kind);
         if (target == Actor && targetCreation == _input.Creation)
-            return SendToSelf(store.MessageHandle, kind, payload, dueAt);
+            return SendToSelf(issue, kind, payload, dueAt);
         var issued = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal++:D4}");
-        var id = store.MessageHandle("send:" + issued);
+        var id = issue("send:" + issued);
         _sent.Add(new Message(id, target, kind, payload, Id, Due: dueAt, TargetCreation: targetCreation, SenderCreation: _input.Creation)
-            { ActorAuthored = true, StorageId = Origin + "#" + id }.AsIssued());
+            { ActorAuthored = true, StorageId = Origin + "#" + id, FoundationRootChildInput = rootChild }.AsIssued());
         return id;
     }
 
@@ -545,13 +564,7 @@ public sealed class DurableTurn
         Services.Cancelling(key);
     }
 
-    internal void RecallPersistedSelfInput(string id)
-    {
-        var key = InboxKey.Issued(Origin + "#" + id);
-        if (_sent.Any(message => message.InboxKey == key))
-            throw new NotSupportedException("The scoped root writer supports recall of an already persisted self input.");
-        Recall(key.Id);
-    }
+    internal void RecallSelfInput(string id) => Recall(Origin + "#" + id);
 
     internal void RecallFromActor(InMemoryStore store, string id)
     {
@@ -615,6 +628,9 @@ public sealed class DurableTurn
     public void CancelJob(string key) =>
         CancelJob(key, InboxKey.Ticket(Id, key, _input.Creation, JobGeneration(key) ?? 0), null);
 
+    /// <summary>Whether this turn started the job <paramref name="key"/>, whose ticket it has not sent yet.</summary>
+    internal bool StartedThisTurn(string key) => _started.ContainsKey(key);
+
     internal void CancelJob(string key, InboxKey? pending, string? deadline)
     {
         if (JobGeneration(key) is not { } generation) return; // never started, done, or its result is in this turn's inbox
@@ -667,10 +683,10 @@ public sealed class DurableTurn
     // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
     public string Publish(string key, string? payload, TimeSpan keep) => Publish(key, payload, keep, null, null);
 
-    internal string Publish(string key, string? payload, TimeSpan keep, InMemoryStore? store, string? tenant)
+    internal string Publish(string key, string? payload, TimeSpan keep, Func<string, string>? issue, string? tenant)
     {
-        var wire = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}");
-        var id = store?.MessageHandle("event:" + wire) ?? wire;
+        var id = issue is null ? FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}") :
+            FoundationEventTicket.Issue(issue, Origin, Revision, _ordinal);
         if (tenant is null)
             SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)));
         else
@@ -681,7 +697,9 @@ public sealed class DurableTurn
             var ticket = new Message(id[1..], Actor, Kinds.Publish, FoundationEventTicket.Encode(key, id, payload, duration), Id,
                 TargetCreation: _input.Creation, SenderCreation: _input.Creation)
                 { FoundationPublish = new(key, id, Guid.Empty, Authored: new(tenant, duration)) };
-            _sent.Add(ticket.AsIssued().AsKernelTicket());
+            var authored = ticket.AsIssued().AsKernelTicket();
+            if (issue is not null) FoundationSelfSend.RememberIssuance(authored, Revision, _ordinal);
+            _sent.Add(authored);
             _ordinal++;
         }
         return id;
@@ -700,6 +718,17 @@ public sealed class DurableTurn
             (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable) &&
             _sent.TrueForAll(m => m.Target == Actor && !m.ActorControl && m.Kind is not (Kinds.Publish or Kinds.Meet) &&
                 (m.Kind == Kinds.Job || (m.Due ?? now) <= until));
+    }
+
+    internal bool CanKeepInlineMailbox()
+    {
+        var consumed = _input.Taken.Select(item => item.Message.InboxKey).ToHashSet();
+        var mailbox = _input.VolatileMessages.Where(message =>
+            !consumed.Contains(message.InboxKey) && !_cancelled.Contains(message.InboxKey)).Concat(_sent).ToArray();
+        // With a job and independent local inputs, those inputs may open a Park while the job is active.
+        // Commit the mixed mailbox first so ordinary recovery can keep the job's durable registration.
+        return (!mailbox.Any(RootJobTicket.IsTimedSend) || mailbox.All(RootJobTicket.IsTimedSend)) &&
+            ParkRecoveryCredit.FitsInlineMailbox(mailbox);
     }
 
     /// <summary>Everything this turn sends stays in memory: none of it is a row.</summary>

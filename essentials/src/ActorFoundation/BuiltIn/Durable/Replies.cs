@@ -1,3 +1,4 @@
+using System.Globalization;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -13,7 +14,8 @@ public sealed record Reply(string Request, string Key, string? Channel, object? 
 }
 
 internal readonly record struct LiveReplyRoute(string Address, string? Tenant);
-internal readonly record struct RetiredOperatorReply(string Occurrence, LiveReplyRoute Route);
+// A held caller whose command or direct input was still pending when its root was retired (#5756): answered "missing".
+internal readonly record struct RetiredReply(string Occurrence, LiveReplyRoute Route);
 
 /// <summary>
 /// The runtime's transport between nodes for live output. Not durable: a reply may be dropped, delayed or delivered
@@ -55,6 +57,7 @@ public static class ReplyTo
 /// </summary>
 public sealed class Request(string id, long deadline)
 {
+    internal const char EventRecipientSeparator = '~';
     public const string Response = "response";      // the channel whose first item answers the request
 
     public string Id { get; } = id;
@@ -74,20 +77,54 @@ public sealed class Request(string id, long deadline)
     internal bool AnyOutput { get; init; }
     internal string? Tenant { get; init; }
     internal object? Ambient { get; init; }
-    internal HashSet<InboxKey> AmbientGiven { get; } = [];
+    private readonly HashSet<InboxKey> _ambientDeliveries = [];
+    private HashSet<int>? _ambientEventRecipients;
     private TaskCompletionSource<Reply>? _completion;
+    private int _eventRecipientCount;
+    private HashSet<int>? _endedEventRecipients;
+    private Reply? _firstEventEnd;
+
+    internal int EventRecipientCount => Volatile.Read(ref _eventRecipientCount);
+
+    // Event admission binds the exact count before its transaction makes any of the aliases deliverable.
+    internal void ExpectEventRecipients(int count) => Volatile.Write(ref _eventRecipientCount, count);
+
+    // All of an Event recipient's turns share one local Ambient claim.
+    internal bool ClaimAmbient(InboxKey delivery, int? eventRecipient) => eventRecipient is { } index
+        ? (_ambientEventRecipients ??= []).Add(index)
+        : _ambientDeliveries.Add(delivery);
+
+    internal string EventRegistration(int recipient) =>
+        FormattableString.Invariant($"{Registration}{EventRecipientSeparator}{recipient}");
+
+    internal static int EventRecipientSeparatorIndex(string registration, out int recipient)
+    {
+        var separator = registration.LastIndexOf(EventRecipientSeparator);
+        recipient = -1;
+        return separator > 0 &&
+            int.TryParse(registration.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out recipient)
+            ? separator : -1;
+    }
 
     internal Task<Reply> Completion() => Done
         ? Task.FromResult(AcceptedResponse ?? new Reply(Registration, Key: "", Channel: null, Item: null, Status: Status, Error: Error))
         : (_completion ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
 
-    internal void Receive(Reply reply, bool again)
+    internal void Receive(Reply reply, bool again, int? eventRecipient = null)
     {
         if (Done && !again) return;
         if (reply.Channel == Response || AnyOutput && reply.Channel is not null)
             (AcceptedResponse, Responses, Done) = (reply, Responses + 1, true);
         else if (reply.Channel is null)
+        {
+            if (eventRecipient is { } recipient)
+            {
+                _firstEventEnd ??= reply;
+                if (!(_endedEventRecipients ??= []).Add(recipient) || _endedEventRecipients.Count < EventRecipientCount) return;
+                reply = _firstEventEnd;
+            }
             (Status, Error, Ends, Done) = (reply.Status, reply.Error, Ends + 1, true);
+        }
         else return;
         _completion?.TrySetResult(reply);
     }
@@ -119,6 +156,22 @@ public sealed class Requests
 
     public IReadOnlyCollection<Request> All { get { lock (_gate) return _open.Values.ToArray(); } }
 
+    internal bool HasRegistration(string registration)
+    {
+        lock (_gate) return FindReplyRecipient(registration, out _) is not null;
+    }
+
+    private Request? FindReplyRecipient(string registration, out int? eventRecipient)
+    {
+        eventRecipient = null;
+        if (_open.TryGetValue(registration, out var single)) return single.EventRecipientCount == 0 ? single : null;
+        var separator = Request.EventRecipientSeparatorIndex(registration, out var recipient);
+        if (separator < 0 || !_open.TryGetValue(registration[..separator], out var group) || recipient >= group.EventRecipientCount)
+            return null;
+        eventRecipient = recipient;
+        return group;
+    }
+
     public Request Open(string id, long deadline) => Open(id, deadline, false);
 
     internal Request OpenBound(string id, long deadline, string tenant, object? ambient) => Open(id, deadline, true, tenant, ambient);
@@ -142,8 +195,12 @@ public sealed class Requests
         var route = ReplyTo.Parse(address);
         if (route.Node != node || route.Deadline <= now) return null;
         lock (_gate)
-            return _open.GetValueOrDefault(route.Request) is { Done: false, Ambient: { } ambient } request &&
-                request.Tenant == tenant && request.Deadline == route.Deadline && request.AmbientGiven.Add(delivery) ? ambient : null;
+        {
+            if (FindReplyRecipient(route.Request, out var recipient) is not { Done: false, Ambient: { } ambient } request ||
+                request.Tenant != tenant || request.Deadline != route.Deadline)
+                return null;
+            return request.ClaimAmbient(delivery, recipient) ? ambient : null;
+        }
     }
 
     internal Task<Reply> CompletionOf(Request request)
@@ -166,7 +223,7 @@ public sealed class Requests
     {
         lock (_gate)
         {
-            if (!_open.TryGetValue(reply.Request, out var request)) return false;
+            if (FindReplyRecipient(reply.Request, out var eventRecipient) is not { } request) return false;
             if (!string.Equals(request.Tenant, reply.Tenant, StringComparison.Ordinal))
             {
                 Interlocked.Increment(ref _rejectedTenantReplies);
@@ -181,7 +238,7 @@ public sealed class Requests
 
             var wasOpen = !request.Done;
             var again = (_flaws & Flaw.ReplyTwice) != 0;
-            request.Receive(reply, again);
+            request.Receive(reply, again, eventRecipient);
             if (request.Done && !again) _open.Remove(request.Registration);
             return wasOpen && request.Done;
         }

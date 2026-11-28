@@ -1,12 +1,12 @@
 # BPMN host qualification tools
 
-`qualify-hosting.py` captures and verifies actual legacy-writer inputs and resumes six legacy upgrade families for [spec1017](../../specs/1017-direct-bpmn-hosting/quickstart.md). Individual commands prove only their declared family. Direct-model/native/ETL journeys use the separate hosting tests and `e2e-tests/bpmn/qualify_*.py` controllers indexed by their receipts.
+`qualify-hosting.py` verifies actual legacy-writer inputs and upgrade receipts for [spec1017](../../specs/1017-direct-bpmn-hosting/quickstart.md). The [classic Workbench replay commands](../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-delivery-inspection-and-recovery-probes) pin host capture, upgrade, checked snapshot readers, and the direct-model controllers to their matching source. Run any command below that builds a reader or starts, stops or upgrades a host from the indicated classic checkout. The current source can verify an existing receipt offline.
 
 The first capture family parks eight normally published/executed partial parallel forks: legacy BpmnProcess root and Sequence/Flowchart/CompensationScope parents, each in Balanced and Durable mode. It completes branch A through the ordinary Event stimulus and retains branch B. It then verifies the explicitly owned host/controller/PID/start/executable/root identity, stops only that host for consistent whole Runtime/Design backups, resumes it even when backup fails, and compares the held API observations again. The frozen authoring verifier reads the closed Design snapshot.
 
 The supplied controller must be `e2e-tests/bpmn/run_owned_broadcast_probe.py`. Capture is currently qualified only for this POSIX/SQLite cut. Credentials come from `ELSA_CAPTURE_USERNAME`/`ELSA_CAPTURE_PASSWORD`, defaulting to the existing isolated-test account; they are not written to evidence. Use an isolated owned content root, never user stores. The runner must be committed without local edits before capture, so its source and content hash can be retained.
 
-Build `DeliveryRecoveryRead/DeliveryRecoveryRead.csproj` through the normal build-slot wrapper. Its metadata-only `--inspect-host-products <actual-workbench-dll>` mode reads the actual nine host/writer product versions and hashes plus three released BPMN library binaries. It executes no target assembly. Supply that JSON to `--product-versions`; the runner verifies every listed binary against the actual host directory.
+For classic capture, build `DeliveryRecoveryRead/DeliveryRecoveryRead.csproj` in the classic-default checkout. Its metadata-only `--inspect-host-products <actual-workbench-dll>` mode reads the actual nine host/writer product versions and hashes plus three released BPMN library binaries. It executes no target assembly. Supply that JSON to `--product-versions`; the runner verifies every listed binary against the actual host directory.
 
 ```sh
 python3 tools/bpmn/qualify-hosting.py capture-baseline \
@@ -28,7 +28,7 @@ Output must be a new directory. A failed preparation retains its case journal/fa
 
 The partial-fork capture's `allWriterCaptureFamiliesComplete=false` is deliberately local to that producer. The frozen [complete baseline manifest](../../specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json) accounts for all original captures. `resume-upgrade --family` selects `partial-forks`, `native-parents`, `called-ack`, `broadcast`, `controls` or `multi-instance`; `verify-upgrade --manifest` checks the matching retained receipt without starting a host. The [final affected-source qualification](../../specs/1017-direct-bpmn-hosting/evidence/final-compatibility/README.md) retains all six families and the separate actual Studio repeat. There is no generic `qualify` phase.
 
-For Studio, build the browser workspace before Studio.Web and use `run_owned_studio_upgrade.py` over the `original` or `layout` captured pair. The browser performs actual export/edit/save/publish/run/inspect steps; controller `restart`/`finish` commands retain coupled provider-backed snapshots and stop only its own children. `verify_studio_upgrade.py` checks the source-bound receipt. Existing embedded Studio compatibility does not establish first-class direct-model Studio support.
+For classic Studio replay, use source `18a16dee878106ac525aa9a861d851a200e43c55`. Build its browser workspace before Elsa.Studio.Workbench.Host and use its `run_owned_studio_upgrade.py` over the `original` or `layout` captured pair. The browser performs actual export/edit/save/publish/run/inspect steps; controller `restart`/`finish` commands retain coupled provider-backed snapshots and stop only its own children. `verify_studio_upgrade.py` checks the source-bound receipt. Existing embedded Studio compatibility does not establish first-class direct-model Studio support.
 # Predecessor queue-reader witness
 
 `DeliveryRecoveryRead --check-predecessor-queue-reader <built-old-Workbench.dll> <new-fixture.sqlite>` writes the
@@ -39,6 +39,29 @@ The native control's v1 stamp is deliberately constructed; this witness proves p
 separate tests for the actual held-v1 write gate. It does not prove host admission, worker placement or recovery.
 
 ## Native RunBpmn recovery
+
+The classic BPMN/ETL native-work dispatcher runs with the Workbench, reader and controller
+from its pinned source checkout. The archived Workbench defaults to the same classic runtime
+as this controller. Build all three programs there and give the controller a fresh output directory.
+
+```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" 18a16dee878106ac525aa9a861d851a200e43c55
+cd "$archive/source"
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release -p:RestoreLockedMode=true
+dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj -c Release -p:RestoreLockedMode=true
+dotnet build tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj -c Release -p:RestoreLockedMode=true
+python3 e2e-tests/etl/qualify_http_recovery.py --parent BpmnModel \
+  --model-cancel-before-admission --queued-native-stage start \
+  --workbench-assembly "$PWD/server/apps/Elsa.Workbench.Host/bin/Release/net10.0/Elsa.Workbench.Host.dll" \
+  --reader-assembly "$PWD/tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll" \
+  --dispatcher-assembly "$PWD/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/NativeWorkDispatch.dll" \
+  --output "$archive/queued-start"
+```
+
+Use `checkpoint` with a different output path to capture that queue boundary.
+The [archived dispatcher guide](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/tools/bpmn/NativeWorkDispatch/README.md)
+records the other owned recovery commands. Its snapshots remain with their matching prior runtime.
 
 `verify_runbpmn_recovery.py` checks the [actual human-work embedding captures](../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/README.md) without starting hosts or changing stores. Eight real native/model journeys cover root, Sequence, Flowchart and CompensationScope completion/whole-parent cancellation after a real process loss. Four same-process direct counterparts compare released-interpreter states. The verifier checks all32 closed stores and exact native/model settlement receipts; `test_verify_runbpmn_recovery.py` supplies seven rehashed corrupt-copy controls. The receipt explicitly leaves ETL embedding, additional crash/race cuts and final upgrade/Studio acceptance open.
 

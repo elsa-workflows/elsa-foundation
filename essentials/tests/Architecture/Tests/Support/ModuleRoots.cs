@@ -5,7 +5,7 @@ namespace Elsa.Architecture.Tests;
 /// a directory to sweep.
 /// </summary>
 /// <remarks>
-/// Required modules and hosts live under <c>Essentials/</c>. Backend extension modules and their tests live under
+/// Required modules live under <c>essentials/</c> and hosts under <c>server/apps/</c>. Backend extension modules and their tests live under
 /// <c>extensions/&lt;capability&gt;/{src,tests}</c>; Studio projects under the sibling <c>studio/</c> roots are
 /// deliberately outside this backend guard inventory. A guard pinned to a single root
 /// keeps compiling and keeps passing once a module moves out of it; it simply stops looking at that module.
@@ -16,12 +16,12 @@ internal static class ModuleRoots
     /// <summary>Every root holding project files, production and test alike.</summary>
     internal static readonly string[] All =
     [
-        "essentials/src", "apps", "essentials/tests",
+        "essentials/src", "server/apps", "essentials/tests",
         "extensions/*/src", "extensions/*/tests"
     ];
 
     /// <summary>The roots holding shipping backend module and host code; extension tests are separate sibling roots.</summary>
-    internal static readonly string[] Production = ["essentials/src", "apps", "extensions/*/src"];
+    internal static readonly string[] Production = ["essentials/src", "server/apps", "extensions/*/src"];
 
     /// <summary>The roots holding backend test projects.</summary>
     internal static readonly string[] Tests = ["essentials/tests", "extensions/*/tests"];

@@ -45,7 +45,7 @@ public sealed partial class ArchitectureGuardTests
     [Fact]
     public void Project_enumeration_covers_every_module_root()
     {
-        var roots = new[] { "essentials/src", "apps", "essentials/tests" }
+        var roots = new[] { "essentials/src", "server/apps", "essentials/tests" }
             .Concat(Directory.Exists(Path.Join(RepoRoot, "extensions"))
                 ? Directory.EnumerateDirectories(Path.Join(RepoRoot, "extensions"))
                     .SelectMany(extension => new[] { "src", "tests" }
@@ -66,7 +66,7 @@ public sealed partial class ArchitectureGuardTests
                 .Where(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/').Contains("/studio/", StringComparison.Ordinal))
                 .ToArray()
             : [];
-        var rootCoverage = new[] { "essentials/src/", "apps/", "essentials/tests/", "extensions/" }
+        var rootCoverage = new[] { "essentials/src/", "server/apps/", "essentials/tests/", "extensions/" }
             .Where(root => !projects.Any(project => project.RelativePath.StartsWith(root, StringComparison.Ordinal)))
             .ToArray();
 
@@ -281,16 +281,16 @@ public sealed partial class ArchitectureGuardTests
 
         foreach (var feature in new[]
                  {
-                     "WorkflowsRuntimeEntityFrameworkCore",
+                     "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
+                     "WorkflowsRuntimePublicationEntityFrameworkCorePersistence",
+                     "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence",
                      "ActivitiesDesignEntityFrameworkCore",
                      "WorkflowsDesignEntityFrameworkCore",
-                     "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence",
-                     "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
                      "WorkflowsPublishingEntityFrameworkCore",
                      "DiagnosticsOpenTelemetryEntityFrameworkCore",
                      "DiagnosticsStructuredLogsEntityFrameworkCore",
                      "SecretsEntityFrameworkCore",
-                     "WorkflowsDashboardEntityFrameworkCore"
+                     "WorkflowsDashboardPortfolioEntityFrameworkCore"
                  })
         {
             Assert.True(features.ContainsKey(feature), $"Docker shell must explicitly enable {feature}.");
@@ -300,13 +300,13 @@ public sealed partial class ArchitectureGuardTests
         // and resolves ConnectionStrings:Elsa, which docker-compose.yml supplies.
         Assert.Equal(
             "PostgreSql",
-            Assert.IsType<JsonObject>(features["WorkflowsRuntimeEntityFrameworkCore"])["Provider"]?.GetValue<string>());
+            Assert.IsType<JsonObject>(features["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"])["Provider"]?.GetValue<string>());
     }
 
     [Fact]
     public void Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish()
     {
-        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "apps", "Elsa.Workbench.Host", "Dockerfile"));
+        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "server/apps", "Elsa.Workbench.Host", "Dockerfile"));
         var restoreStart = dockerfile.IndexOf("    && dotnet restore ", StringComparison.Ordinal);
         var publishStart = dockerfile.IndexOf("    && dotnet publish ", StringComparison.Ordinal);
 
@@ -468,7 +468,7 @@ public sealed partial class ArchitectureGuardTests
         packageName.EndsWith(".Abstractions", StringComparison.Ordinal);
 
     /// <summary>
-    /// Every repository root that holds first-party code. Required modules and hosts live under <c>Essentials/</c>;
+    /// Every repository root that holds first-party code. Required modules and hosts live under <c>essentials/</c>;
     /// optional backend modules and their tests live under <c>extensions/</c> (#1815).
     /// </summary>
     /// <remarks>
@@ -549,7 +549,7 @@ public sealed partial class ArchitectureGuardTests
 
     /// <summary>
     /// Project-name prefixes that belong to an optional module, and the <c>extensions/</c> bucket owning
-    /// each (#1815). Order matters only if one prefix is a prefix of another, which none are today.
+    /// each (#1815). The more specific Diagnostics prefixes precede the shared Diagnostics prefix.
     /// </summary>
     private static readonly (string Prefix, string Bucket)[] ExtensionBuckets =
     [
@@ -561,14 +561,39 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Decisions.", "Decisions"),
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
         ("Elsa.Integrations.", "Integrations"),
+        ("Elsa.Connections.", "Connections"),
+        ("Elsa.Git.", "Git"),
+        ("Elsa.Http.", "Http"),
+        ("Elsa.Secrets.", "Secrets"),
+        ("Elsa.Studio.Dashboard.", "Dashboard"),
+        ("Elsa.Activities.Bpmn.", "Bpmn"),
+        ("Elsa.Foundation.Identity.ExternalAuthentication.", "Identity"),
+        ("Elsa.Diagnostics.ConsoleLogStreaming.", "ConsoleStream"),
+        ("Elsa.Diagnostics.OpenTelemetry.", "Diagnostics.OpenTelemetry"),
+        ("Elsa.Diagnostics.StructuredLogs.", "Diagnostics.StructuredLogs"),
+        ("Elsa.Diagnostics.", "Diagnostics"),
     ];
 
     /// <summary>
-    /// Test fixtures that sit beside the test project they serve, under its area's <c>Fixtures/</c> folder, rather than
-    /// inside it (#2577). Their names stay what the tests load them by, so the names no longer spell the path.
+    /// Projects that retain their assembly names when grouped with the capability or test they serve.
     /// </summary>
-    private static readonly Dictionary<string, string> RelocatedTestProjects = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> RelocatedProjects = new(StringComparer.Ordinal)
     {
+        // Attention API and task execution move independently of their Essentials contracts.
+        ["Elsa.Attention.Api"] = "extensions/Attention/src/Api/Elsa.Attention.Api.csproj",
+        ["Elsa.Attention.Api.Tests"] = "extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj",
+        ["Elsa.Tasks"] = "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj",
+        ["Elsa.Tasks.Execution.Tests"] = "extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj",
+        // The Workflow dataset adapter and its tests live beside saved Dashboards rather than the Home widgets.
+        ["Elsa.Workflows.Dashboard.Queries"] = "extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj",
+        ["Elsa.Workflows.Dashboard.QueryTests"] = "extensions/Dashboard/tests/Workflows/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+        // Keep the Git-specific reconciliation source beside the shared Git client.
+        ["Elsa.Workflows.Design.Reconciliation.Git"] = "extensions/Git/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.Git.csproj",
+        // Workflow activities and endpoint routing share the HTTP capability.
+        ["Elsa.Activities.Http"] = "extensions/Http/src/Activities/Elsa.Activities.Http.csproj",
+        ["Elsa.Activities.Http.Tests"] = "extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj",
+        ["Elsa.Workflows.Runtime.Http"] = "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj",
+        ["Elsa.Workflows.Runtime.Http.Tests"] = "extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj",
         // The CLR scanner tests read this assembly's name ("Elsa.Activities.Design.Tests.ClrFixture") and its activities' type names.
         ["Elsa.Activities.Design.Tests.ClrFixture"] = "essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
         // Icon fixtures live in their own assembly so CLR reconciliation still counts the original eighteen.
@@ -597,19 +622,15 @@ public sealed partial class ArchitectureGuardTests
     private static string ExpectedProjectPath(ProjectInfo project, IReadOnlySet<string> projectDirectories)
     {
         if (project.Name == "Elsa.Workbench.Host")
-            return "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj";
+            return "server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj";
 
-        // Deployable host app, like Elsa.Workbench: it lives under apps/, not the essentials/src/<domain>/
+        // Deployable host app, like Elsa.Workbench: it lives under server/apps/, not the essentials/src/<domain>/
         // tree, so its name (which collides with the Elsa.Foundation identity domain) does not dictate its
         // path.
         if (project.Name == "Elsa.Foundation.Host")
-            return "apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
+            return "server/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
 
-        // The workflow-essentials host, beside Elsa.Foundation.Host for the same reason.
-        if (project.Name == "Elsa.Essentials.Host")
-            return "apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj";
-
-        if (RelocatedTestProjects.TryGetValue(project.Name, out var relocated))
+        if (RelocatedProjects.TryGetValue(project.Name, out var relocated))
             return relocated;
 
         if (project.Name == "Elsa.Primitives")
@@ -633,6 +654,13 @@ public sealed partial class ArchitectureGuardTests
                 ? project.Name : string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
             var root = project.RelativePath.Contains("/tests/", StringComparison.Ordinal) ? "tests" : "src";
             return NameDerivedPath(project, $"extensions/{owner.Bucket}/{root}/{subPath}", projectDirectories);
+        }
+
+        if (project.Name.StartsWith("Elsa.Studio.Preferences.", StringComparison.Ordinal))
+        {
+            var root = ModuleRoots.IsTestPath(project.RelativePath) ? "tests" : "src";
+            var subPath = string.Join('/', project.Name.Split('.')[2..]);
+            return NameDerivedPath(project, $"essentials/{root}/{subPath}", projectDirectories);
         }
 
         // Matched against essentials/src and essentials/tests specifically, not a broad root prefix: an unregistered bucket
@@ -662,12 +690,12 @@ public sealed partial class ArchitectureGuardTests
     private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
     {
         if (project.Name == "Elsa.Workbench.Host")
-            return "/apps/";
+            return "/server/apps/";
 
-        // Deployable host app under apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
+        // Deployable host app under server/apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
         // solution folder, alongside Elsa.Workbench.
-        if (project.Name is "Elsa.Foundation.Host" or "Elsa.Essentials.Host")
-            return "/apps/";
+        if (project.Name == "Elsa.Foundation.Host")
+            return "/server/apps/";
 
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');
         var lastProjectSegment = project.Name.Split('.')[^1];
@@ -714,8 +742,7 @@ internal static class PersistenceProviderNeutralityBoundary
         "Elsa.Foundation.Identity.Core",
         "Elsa.Foundation.Identity",
         "Elsa.Secrets.Core",
-        "Elsa.Connections.Core",
-        "Elsa.Workflows.Runtime.Distributed"
+        "Elsa.Connections.Core"
     ];
 
     public static bool IsConcreteProviderPackage(string packageName) =>

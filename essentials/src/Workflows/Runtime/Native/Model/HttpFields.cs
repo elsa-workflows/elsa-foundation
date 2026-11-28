@@ -84,11 +84,15 @@ public static class HttpFields
     }
 
     /// <summary>A JSON object's scalar values as strings: route values or headers a workflow binds.</summary>
-    internal static List<KeyValuePair<string, string>> Scalars(JsonObject input, string what)
+    internal static List<KeyValuePair<string, string>> Scalars(JsonObject input, string what, bool allowSingleStringArrays = false)
     {
         var fields = new List<KeyValuePair<string, string>>(input.Count);
-        foreach (var (name, value) in input)
+        foreach (var (name, field) in input)
         {
+            var value = allowSingleStringArrays && field is JsonArray { Count: 1 } array &&
+                array[0] is JsonValue item && item.GetValueKind() == JsonValueKind.String
+                ? item
+                : field;
             var text = value is JsonValue scalar ? scalar.GetValueKind() switch
             {
                 JsonValueKind.String => scalar.TryGetValue<string>(out var s) ? s : JsonSerializer.Deserialize<string>(scalar.ToJsonString()),
@@ -110,6 +114,9 @@ public static class HttpFields
     {
         return input is null ? None : ResponseHeaders(Scalars(input, "response header"));
     }
+
+    internal static IReadOnlyDictionary<string, string> AuthoredResponseHeaders(JsonObject? input) =>
+        input is null ? None : ResponseHeaders(Scalars(input, "response header", allowSingleStringArrays: true));
 
     private static IReadOnlyDictionary<string, string> Headers(IEnumerable<KeyValuePair<string, string>>? fields, string side, bool joinRepeats)
     {

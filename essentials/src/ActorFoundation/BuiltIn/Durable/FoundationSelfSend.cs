@@ -1,14 +1,29 @@
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
 namespace Kernel.Durable;
 
-internal sealed record FoundationSelfIssuer(Func<string, string> Handle, bool SupportsTimers)
+internal sealed record FoundationSelfIssuer(Func<string, string> Handle, bool SupportsTimers, bool DistinguishesTimers = false,
+    Func<string, int, IReadOnlyList<ParkTimerRecipe>, CancellationToken, ValueTask<bool>>? CheckTimerRearms = null)
 {
+    internal bool RearmsTimers => CheckTimerRearms is not null;
     internal bool Allows(long? due) => due is null || SupportsTimers;
 }
 
 internal static class FoundationSelfSend
 {
+    private sealed record AuthoredSend(long Revision, int Ordinal);
+    private static readonly ConditionalWeakTable<Message, AuthoredSend> AuthoredSends = new();
+
+    internal static void RememberIssuance(Message message, long revision, int ordinal) => AuthoredSends.Add(message, new(revision, ordinal));
+
+    // Issuance belongs to the original turn output. It does not change the delivery envelope or its equality.
+    internal static int? AuthoredOrdinal(Message message) =>
+        AuthoredSends.TryGetValue(message, out var authored) ? authored.Ordinal : null;
+
+    internal static long? AuthoredRevision(Message message) =>
+        AuthoredSends.TryGetValue(message, out var authored) ? authored.Revision : null;
+
     internal static string Handle(byte[] issuer, string seed) =>
         "~" + Convert.ToHexString(HMACSHA256.HashData(issuer, DurableKeyJson.CodeUnits(seed)));
 
@@ -23,6 +38,10 @@ internal static class FoundationSelfSend
     // The tag lets recovery verify a timer belongs to this creation even after the input has been consumed.
     internal static string TimerTag(Func<string, string> handle, string origin, string nonce) =>
         handle(origin + "#timer:" + nonce)[1..33];
+
+    internal static bool HasTimerTag(Func<string, string> handle, string origin, string id) =>
+        IsHandle(id) && CryptographicOperations.FixedTimeEquals(Convert.FromHexString(id.AsSpan(33)),
+            Convert.FromHexString(TimerTag(handle, origin, id[1..33])));
 
     internal static bool IsHandle(string id) => id.Length == 65 && id[0] == '~' && id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") < 0;
 

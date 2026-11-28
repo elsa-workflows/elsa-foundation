@@ -110,7 +110,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
               kernel=true
-            elif grep -Eq '^(prototypes/kernel-model/|apps/Elsa\.Workbench\.Host/CorePreview/|tools/ci/actor-foundation/WorkbenchPostgresPreview\.cs$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            elif grep -Eq '^(prototypes/kernel-model/|server/apps/Elsa\.Workbench\.Host/CorePreview/|tools/ci/actor-foundation/(WorkbenchPostgresPreview\.cs|check-sqlite-shipped\.sh)$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
               kernel=true
             fi
           fi
@@ -309,8 +309,8 @@ jobs:
           if not isinstance(runs, list):
               raise RuntimeError("Expected the shard's recorded run list")
           projects = {
-              "essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
-              "essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+              "extensions/Bpmn/tests/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
+              "extensions/Bpmn/tests/Tests/Elsa.Activities.Bpmn.Tests.csproj",
               "essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
           }
           seen = set()
@@ -1162,20 +1162,20 @@ jobs:
 
       - name: Lint
         run: pnpm lint
-        working-directory: Studio
+        working-directory: studio
 
       - name: Typecheck
         run: pnpm typecheck
-        working-directory: Studio
+        working-directory: studio
 
       - name: Unit tests
         # Run one workspace at a time so these tests stay deterministic under the hosted runner.
         run: pnpm --recursive --workspace-concurrency=1 test
-        working-directory: Studio
+        working-directory: studio
 
       - name: Check Workflows bundle budget
         run: pnpm check:bundle:workflows
-        working-directory: Studio
+        working-directory: studio
 
   # The heavy suites below run in the nightly schedule and on a manual run that selects them (suite input), never on a
   # pull request or a push (lean CI). `alert` files one issue per failing suite.
@@ -1202,12 +1202,12 @@ jobs:
       - name: Install Chromium
         uses: ./.github/actions/install-chromium
         with:
-          working-directory: Studio
+          working-directory: studio
 
       - name: Run browser tests
         id: browser-tests
         run: pnpm test:browser --shard=${{ matrix.shard }}/4
-        working-directory: Studio
+        working-directory: studio
 
       # Playwright retains a trace and error context only for failed cases; specs also write their own screenshots there.
       # Without this step the job discards the folder. Scoped to the test step so setup failures upload nothing, and
@@ -1219,39 +1219,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: browser-failures-${{ matrix.shard }}
-          path: Studio/test-results/**
+          path: studio/test-results/**
           if-no-files-found: ignore
           retention-days: 7
 
   studio-ux-acceptance:
-    name: UX acceptance (composed Studio, ${{ matrix.proof }})
+    name: UX acceptance (composed Studio)
     needs: plan-scope
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.studio-ux == 'true'
     runs-on: ubuntu-latest
-    # Allow time for the full composed journeys, Decision runtime qualification and artifact upload.
+    # Allow time for the stock composed journeys, managed sign-in and artifact upload.
     # Standard composed proof has an 80-minute owned envelope; subsequent qualified probes retain their own caps.
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        include:
-          - proof: existing
-            journey: ''
-          - proof: trigger-management
-            journey: standalone trigger management
-          - proof: trigger-associations
-            journey: standalone trigger associations and inputs
-          - proof: trigger-event-schedule
-            journey: standalone event and schedule starts
-          - proof: trigger-http
-            journey: standalone HTTP modes
-          - proof: trigger-lifecycle
-            journey: standalone delivery lifecycle and recovery
-          - proof: trigger-bpmn
-            journey: standalone genuine BPMN inputs
-          - proof: trigger-access
-            journey: standalone access and availability
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1263,32 +1242,19 @@ jobs:
       - name: Install Chromium
         uses: ./.github/actions/install-chromium
         with:
-          working-directory: Studio
+          working-directory: studio
       - name: Verify acceptance tooling and gate failure controls
         run: |
           python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
           node --test tools/ux-acceptance/*.test.mjs
       - name: Exercise real composed hosts with disposable stores
         id: composed-ux
-        if: matrix.proof == 'existing'
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs pin --output "$RUNNER_TEMP/external-auth-ui-toolchain.json"
           node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs studio --root "$RUNNER_TEMP/external-auth-ui-build" --standard-output "$RUNNER_TEMP/ux-acceptance" --toolchain "$RUNNER_TEMP/external-auth-ui-toolchain.json"
-      - name: Exercise the selected standalone trigger journey
-        id: trigger-ux
-        if: matrix.proof != 'existing'
-        env:
-          UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          TRIGGER_JOURNEY: ${{ matrix.journey }}
-          STUDIO_SHAPE: ${{ matrix.proof == 'trigger-access' && 'coordinated-sdk' || 'application' }}
-        run: python3 tools/ux-acceptance/standalone.py --output "$RUNNER_TEMP/ux-acceptance" --journey "$TRIGGER_JOURNEY" --studio-shape "$STUDIO_SHAPE"
-      - name: Qualify shared decision execution and runtime-only restart
-        if: matrix.proof == 'existing'
-        run: python3 tools/decisions/qualify-execution.py --output "$RUNNER_TEMP/ux-acceptance/decision-execution"
       - name: Exercise managed external sign-in on the full Studio host
-        if: matrix.proof == 'existing'
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           TMPDIR: ${{ runner.temp }}
@@ -1301,7 +1267,7 @@ jobs:
             node tools/identity/ExternalAuthentication.Probe/qualify-studio.mjs "$profile"
           done
       - name: Retain external sign-in screenshots and source-bound receipts
-        if: ${{ !cancelled() && matrix.proof == 'existing' }}
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: external-auth-ux-${{ github.sha }}-${{ github.run_attempt }}
@@ -1318,10 +1284,10 @@ jobs:
       # Job timeouts are cancelled outcomes too; retain their partial evidence without accepting it.
       # Restrict uploads to an attempted producer, so setup failures do not create empty artifacts.
       - name: Retain reviewable success and failure evidence
-        if: ${{ always() && (contains(fromJSON('["success","failure","cancelled"]'), steps.composed-ux.outcome) || contains(fromJSON('["success","failure","cancelled"]'), steps.trigger-ux.outcome)) }}
+        if: ${{ always() && contains(fromJSON('["success","failure","cancelled"]'), steps.composed-ux.outcome) }}
         uses: actions/upload-artifact@v4
         with:
-          name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.proof }}
+          name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}-existing
           path: ${{ runner.temp }}/ux-acceptance
           if-no-files-found: error
           retention-days: 14
@@ -1340,7 +1306,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.studio == 'true'
     name: Studio .NET build & test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       # Local CI artifacts share one prerelease version, including their Modularity project dependencies.
       STUDIO_PACKAGE_VERSION: 4.0.0-studio-ci.${{ github.run_id }}.${{ github.run_attempt }}
@@ -1355,11 +1321,11 @@ jobs:
 
       - name: Build Studio host and RCL frontend assets
         run: pnpm build
-        working-directory: Studio
+        working-directory: studio
 
       - name: Verify generated Studio host and RCL assets
         run: python3 ../tools/ci/verify-studio-assets.py --root ..
-        working-directory: Studio
+        working-directory: studio
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -1369,21 +1335,21 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-studio-nuget-${{ hashFiles('Studio/Directory.Packages.props', 'extensions/**/studio/**/Directory.Packages.props', '**/*.csproj') }}
+          key: ${{ runner.os }}-studio-nuget-${{ hashFiles('studio/Directory.Packages.props', 'extensions/**/studio/**/Directory.Packages.props', '**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-studio-nuget-
 
       - name: Restore
         run: dotnet restore Elsa.Studio.slnx --locked-mode -p:WarningsNotAsErrors=NU1603
-        working-directory: Studio
+        working-directory: studio
 
       - name: Build
         run: dotnet build Elsa.Studio.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603 "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
-        working-directory: Studio
+        working-directory: studio
 
       - name: Test
         run: dotnet test Elsa.Studio.slnx -c Release --no-build -p:WarningsNotAsErrors=NU1603 "-p:Version=$STUDIO_PACKAGE_VERSION"
-        working-directory: Studio
+        working-directory: studio
 
       - name: Pack Studio NuGet projects without publishing
         run: >-
@@ -1392,7 +1358,7 @@ jobs:
           "-p:Version=$STUDIO_PACKAGE_VERSION"
           "-p:SourceRevisionId=$GITHUB_SHA"
           "-p:PackageOutputPath=$RUNNER_TEMP/studio-nuget"
-        working-directory: Studio
+        working-directory: studio
 
       - name: Verify complete Studio NuGet artifact
         run: |
@@ -1406,14 +1372,14 @@ jobs:
 
       - name: Publish the matching actual reference Studio
         run: >-
-          dotnet publish Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj -c Release --no-build --no-restore
+          dotnet publish studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj -c Release --no-build --no-restore
           "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
           -o "$RUNNER_TEMP/studio-reference-web"
 
       - name: Install Chromium for package consumer qualification
         uses: ./.github/actions/install-chromium
         with:
-          working-directory: Studio
+          working-directory: studio
 
       - name: Qualify actual Studio packages and causal controls
         run: |
@@ -1442,8 +1408,16 @@ jobs:
             ${{ runner.temp }}/studio-consumer-qualification/archive-controls/*.json
             ${{ runner.temp }}/studio-consumer-qualification/evidence/**
 
-      - name: Build standalone Studio image without publishing
-        run: docker build --file Studio/src/apps/Elsa.Studio.Web/Dockerfile --build-arg "STUDIO_VERSION=$STUDIO_PACKAGE_VERSION" --tag "elsa-studio:ci-${{ github.sha }}" .
+      - name: Build the Studio host images without publishing
+        # Each host Dockerfile copies its project closure. The Essentials profile is qualified as a derived image
+        # by the Studio Docker workflow.
+        run: |
+          set -euo pipefail
+          for app in Workbench Foundation; do
+            flavor=$(tr '[:upper:]' '[:lower:]' <<< "$app")
+            docker build --file "studio/src/apps/Elsa.Studio.$app.Host/Dockerfile" --build-arg "STUDIO_VERSION=$STUDIO_PACKAGE_VERSION" \
+              --tag "elsa-studio-$flavor:ci-${{ github.sha }}" .
+          done
 
   backend-source:
     needs: plan-scope
@@ -1485,20 +1459,51 @@ jobs:
       - name: Restore Workbench and the focused test project from committed public feeds
         shell: bash
         run: |
-          dotnet restore apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --locked-mode
-          dotnet restore essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
+          dotnet restore server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --locked-mode
+          dotnet restore essentials/tests/Workflows/Runtime/KernelHost/Tests/Elsa.Workflows.Runtime.KernelHost.Tests.csproj --locked-mode
 
       - name: Build Workbench with the documented command
         shell: bash
-        run: dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
+        run: dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 
       - name: Verify the documented build left tracked lock files unchanged
         shell: bash
         run: git diff --exit-code -- ':(glob)**/packages.lock.json'
 
+      - name: Run stock Workbench execution and HTTP waits on SQLite
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          runner=essentials/tests/ActorFoundation/Native/Run
+          dotnet restore "$runner" --locked-mode
+          dotnet build "$runner" -c Debug --no-restore
+          dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" workbench-http-waits sqlite \
+            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host" stock
+
+      - name: Run stock Workbench execution and HTTP waits on PostgreSQL
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          postgres=$(docker run --rm --detach --env POSTGRES_PASSWORD=kernel --env POSTGRES_DB=kernel_http_waits \
+            --publish 127.0.0.1::5432 postgres:17)
+          trap 'docker stop --time 3 "$postgres" >/dev/null' EXIT
+          for ((attempt = 0; attempt < 60; attempt++)); do
+            if docker exec "$postgres" pg_isready -h 127.0.0.1 -U postgres -d kernel_http_waits >/dev/null; then break; fi
+            sleep 1
+          done
+          docker exec "$postgres" pg_isready -h 127.0.0.1 -U postgres -d kernel_http_waits >/dev/null
+          docker exec "$postgres" createdb -U postgres kernel_http_waits_runtime
+          binding=$(docker port "$postgres" 5432/tcp)
+          connection="Host=127.0.0.1;Port=${binding##*:};Username=postgres;Password=kernel;SSL Mode=Disable;GSS Encryption Mode=Disable"
+          KERNEL_WORKBENCH_ACTOR_POSTGRES="$connection;Database=kernel_http_waits" \
+          KERNEL_WORKBENCH_RUNTIME_POSTGRES="$connection;Database=kernel_http_waits_runtime" \
+            dotnet essentials/tests/ActorFoundation/Native/Run/bin/Debug/net10.0/Kernel.Native.Run.dll workbench-http-waits postgres \
+            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host" stock
+
       - name: Run the focused WriteLine bound-input test
         shell: bash
-        run: dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
+        run: dotnet test essentials/tests/Workflows/Runtime/KernelHost/Tests/Elsa.Workflows.Runtime.KernelHost.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
 
       - name: Test strict result verdict and run the owned backend journey
         id: platform-journey
@@ -1643,7 +1648,7 @@ jobs:
       - name: Install driver browser tooling
         uses: ./.github/actions/install-chromium
         with:
-          working-directory: Studio
+          working-directory: studio
 
       - name: Verify driver refusal controls
         run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*.py'
@@ -1754,7 +1759,7 @@ jobs:
         uses: ./.github/actions/setup-studio
 
       - name: Unit tests (Workflows, shuffled)
-        working-directory: Studio/src/essentials/Elsa.Studio.Workflows/Client
+        working-directory: studio/src/essentials/Elsa.Studio.Workflows/Client
         env:
           SHUFFLE_SEEDS: '1 11 29'
         run: |
@@ -1812,7 +1817,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Native/Migration/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Native/Migration/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1914,6 +1919,9 @@ jobs:
       # K1b slice 5b: `semantic` runs the loop-yield, fixed-host and watchdog checks first; the filter keeps two cases.
       - name: Runtime checks and placement
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic placement
+
+      - name: SQLite shipped foundation
+        run: bash ../../tools/ci/actor-foundation/check-sqlite-shipped.sh "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
 
       - name: Graph engine corpus
         run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
@@ -2067,7 +2075,11 @@ jobs:
           NAT="dotnet ../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
           $NAT smoke
           $NAT profile-capabilities
+          $NAT kernel-http-waits
           $NAT cost sqlite
+          $NAT sqlite-host-lifetime checked
+          $NAT sqlite-host-lifetime in-batch
+          bash ../../tools/ci/actor-foundation/check-sqlite-shipped.sh "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
 
       - name: Graph engine corpus
         run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
@@ -2325,6 +2337,7 @@ jobs:
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
       # The S2 and S3 composition guards (#4229): each lane on its own new database; a failed lane fails the step at the end.
+      # S7: each lane also runs against the shipped format's capability set ("shipped").
       - name: Root state family, all lanes
         if: ${{ !cancelled() }}
         env:
@@ -2332,17 +2345,20 @@ jobs:
           PG_ID: ${{ job.services.postgres.id }}
         run: |
           failed=()
-          for writer in owned ef; do
-            for fence in checked in-batch; do
-              db="state_family_${writer}_${fence//-/_}"
-              echo "::group::$writer $fence"
-              docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
-              export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
-              if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-state-family "$writer" "$fence"; then
-                echo "::error::Root state family failed: $writer $fence"
-                failed+=("$writer $fence")
-              fi
-              echo "::endgroup::"
+          for set in composed shipped; do
+            for writer in owned ef; do
+              for fence in checked in-batch; do
+                db="state_family_${set}_${writer}_${fence//-/_}"
+                echo "::group::$set $writer $fence"
+                docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+                export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+                extra=(); [ "$set" = shipped ] && extra=(shipped)
+                if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-state-family "$writer" "$fence" "${extra[@]}"; then
+                  echo "::error::Root state family failed: $set $writer $fence"
+                  failed+=("$set $writer $fence")
+                fi
+                echo "::endgroup::"
+              done
             done
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
@@ -2355,20 +2371,48 @@ jobs:
           PG_ID: ${{ job.services.postgres.id }}
         run: |
           failed=()
-          for check in composition composed-install; do
-            for writer in owned ef; do
-              for fence in checked in-batch; do
-                db="${check//-/_}_${writer}_${fence//-/_}"
-                echo "::group::$check $writer $fence"
-                docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
-                export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
-                if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence"; then
-                  echo "::error::Root $check failed: $writer $fence"
-                  failed+=("$check $writer $fence")
-                fi
-                echo "::endgroup::"
+          for set in composed shipped; do
+            for check in composition composed-install; do
+              for writer in owned ef; do
+                for fence in checked in-batch; do
+                  db="${check//-/_}_${set}_${writer}_${fence//-/_}"
+                  echo "::group::$check $set $writer $fence"
+                  docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+                  export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+                  extra=(); [ "$set" = shipped ] && extra=(shipped)
+                  if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence" "${extra[@]}"; then
+                    echo "::error::Root $check failed: $set $writer $fence"
+                    failed+=("$check $set $writer $fence")
+                  fi
+                  echo "::endgroup::"
+                done
               done
             done
+          done
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
+
+      # S7: the shipped format hosted as a host runs it, and the S5a parked-operator guard on its capability set.
+      # S9: the shipped HTTP wait runs under both fences, with one owner-transfer case for the held response.
+      - name: Shipped format
+        if: ${{ !cancelled() }}
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG_ID: ${{ job.services.postgres.id }}
+        run: |
+          failed=()
+          for run in "pg-shipped-format" "shipped-child-workflows postgres in-batch" "shipped-delay-recovery postgres checked" "shipped-delay-recovery postgres in-batch" \
+              "pg-root-parked-operators owned checked shipped" "pg-root-parked-operators owned in-batch shipped" "pg-root-parked-operators ef checked shipped" \
+              "kernel-http-waits postgres checked shipped" "kernel-http-waits postgres in-batch shipped" "pg-http-event-owner-loss in-batch"; do
+            db="shipped_$(tr -c 'a-z0-9' '_' <<<"$run")"
+            echo "::group::$run"
+            docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE ${db:0:60}"
+            export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=${db:0:60};SSL Mode=Disable;GSS Encryption Mode=Disable"
+            read -ra arguments <<<"$run"
+            if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "${arguments[@]}"; then
+              echo "::error::Shipped format run failed: $run"
+              failed+=("$run")
+            fi
+            echo "::endgroup::"
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 

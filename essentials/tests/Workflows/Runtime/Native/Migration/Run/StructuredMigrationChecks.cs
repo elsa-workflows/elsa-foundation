@@ -33,6 +33,39 @@ internal static class StructuredMigrationChecks
                 "an outstanding background job refuses migration even to the same definition");
         }
         await CheckQueuedWork(check);
+        await CheckScopedOutputContract(check);
+    }
+
+    private static async Task CheckScopedOutputContract(Action<bool, string> check)
+    {
+        var original = new GraphOutputAssignment("Double", "Single", IsNullable: false);
+        var changed = original with { IsNullable = true };
+        var source = GraphWithOutput(original);
+        var target = GraphWithOutput(changed);
+        var legacy = GraphWithOutput(null);
+        var oldDescription = NativeRecoveryMaterial.Describe(legacy)["nodes"]!.AsArray()[1]!.AsObject();
+        var sourceDescription = NativeRecoveryMaterial.Describe(source)["nodes"]!.AsArray()[1]!.AsObject();
+        var targetDescription = NativeRecoveryMaterial.Describe(target)["nodes"]!.AsArray()[1]!.AsObject();
+        check(oldDescription["Id"]!.GetValue<string>() == "output" && !oldDescription.ContainsKey("OutputAssignment"),
+            "a legacy output has no assignment metadata in recovery material");
+        check(sourceDescription["OutputAssignment"] is not null && !JsonNode.DeepEquals(sourceDescription, targetDescription),
+            "a changed scoped output contract changes its exact recovery material");
+
+        await using var actor = await WaitingActor.StartAsync(source, Modes.Durable, singleTurn: true);
+        var state = Json.Read<NativeState>(actor.Checkpoint());
+        check(state.Agenda.Any(work => work.Node == "output"), "the scoped output is queued at the migration checkpoint");
+        check(StructuredMigration.Validate(source, source, state) == StructuredMigrationFinding.UnsupportedCheckpoint,
+            "an unchanged scoped Graph still requires its own migration support");
+        check(StructuredMigration.Validate(source, target, state) == StructuredMigrationFinding.AuthoredNode,
+            "migration detects a different assignment contract on a live scoped output");
+
+        static Workflow GraphWithOutput(GraphOutputAssignment? assignment)
+        {
+            var output = Wf.SetOutput("output", "total", 1);
+            output.OutputAssignment = assignment;
+            return Wf.Workflow("scoped-output", Wf.GraphActivity("graph",
+                new GraphBoundary { Outputs = [new GraphOutput("total")] }, output));
+        }
     }
 
     private static async Task CheckLoopAndGraph(string mode, Action<bool, string> check)

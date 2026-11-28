@@ -184,29 +184,28 @@ public sealed class WorkbenchConfigurationTests
 
     [Theory]
     [InlineData("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword")]
-    [InlineData("WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey")]
-    [InlineData("WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey")]
+    [InlineData("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey")]
     [InlineData("Secrets:EncryptionKey")]
-    public void Production_shell_overlay_clears_a_committed_development_secret(string featureSetting)
+    public void Production_shell_overlays_clear_their_committed_development_secrets(string featureSetting)
     {
         var path = $"CShells:Shells:default:Features:{featureSetting}";
 
-        Assert.False(string.IsNullOrEmpty(BuildShellConfiguration()[path]), "shells.json must carry the development value.");
-        Assert.True(string.IsNullOrEmpty(BuildShellConfiguration("shells.Production.json")[path]));
+        Assert.False(string.IsNullOrEmpty(BuildShellConfiguration(production: false)[path]));
+        Assert.True(string.IsNullOrEmpty(BuildShellConfiguration(production: true)[path]));
         Assert.Equal(
             "environment-override",
-            BuildShellConfiguration("shells.Production.json", new() { [path] = "environment-override" })[path]);
+            BuildShellConfiguration(production: true, new() { [path] = "environment-override" })[path]);
     }
 
     private static IConfiguration BuildShellConfiguration(
-        string? overlay = null,
+        bool production,
         Dictionary<string, string?>? environment = null)
     {
         var builder = new ConfigurationBuilder()
-            .SetBasePath(Path.Join(RepoRoot, "apps", "Elsa.Workbench.Host"))
+            .SetBasePath(Path.Join(RepoRoot, "server/apps", "Elsa.Workbench.Host"))
             .AddJsonFile("shells.json");
-        if (overlay is not null)
-            builder.AddJsonFile(overlay);
+        if (production)
+            builder.AddJsonFile("shells.Production.json").AddJsonFile("shells.Actor.Production.json");
         return builder.AddInMemoryCollection(environment ?? []).Build();
     }
 
@@ -214,7 +213,7 @@ public sealed class WorkbenchConfigurationTests
     // compose environment can supply what the overlay blanks or requires, so resolve the same layering here.
     [Theory]
     [InlineData("docker-compose.yml", "docker/compose/elsa-workbench.shells.json")]
-    [InlineData("docker-compose.images.yml", "apps/Elsa.Workbench.Host/shells.json")]
+    [InlineData("docker-compose.images.yml", "server/apps/Elsa.Workbench.Host/shells.json")]
     public void Production_compose_stacks_supply_the_secrets_the_overlay_requires(string composeFile, string shellsJson)
     {
         var environment = ReadWorkbenchEnvironment(Path.Join(RepoRoot, "docker", "compose", composeFile));
@@ -222,7 +221,8 @@ public sealed class WorkbenchConfigurationTests
 
         var features = new ConfigurationBuilder()
             .AddJsonFile(Path.Join(RepoRoot, shellsJson))
-            .AddJsonFile(Path.Join(RepoRoot, "apps", "Elsa.Workbench.Host", "shells.Production.json"))
+            .AddJsonFile(Path.Join(RepoRoot, "server/apps", "Elsa.Workbench.Host", "shells.Production.json"))
+            .AddJsonFile(Path.Join(RepoRoot, "server/apps", "Elsa.Workbench.Host", "shells.Actor.Production.json"))
             .AddInMemoryCollection(environment.Select(x => KeyValuePair.Create(x.Key.Replace("__", ":"), (string?)x.Value)))
             .Build()
             .GetSection("CShells:Shells:default:Features");
@@ -236,7 +236,7 @@ public sealed class WorkbenchConfigurationTests
         rsa.ImportPkcs8PrivateKey(Convert.FromBase64String(signingKey), out _);
         Assert.True(rsa.KeySize >= 2048, $"The OpenIddict signing key is {rsa.KeySize} bits; shell activation requires at least 2048.");
 
-        var recoveryKey = features["WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] ?? "";
+        var recoveryKey = features["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey"] ?? "";
         Assert.True(Encoding.UTF8.GetByteCount(recoveryKey) >= 32, "The recovery continuation signing key needs at least 32 UTF-8 bytes.");
 
         // Not required for activation, but without it the stack cannot store an encrypted secret.

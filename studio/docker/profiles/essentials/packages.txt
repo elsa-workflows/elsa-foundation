@@ -1,0 +1,6 @@
+Elsa.Studio.Attention
+Elsa.Studio.ExpressionEditors.JavaScript
+Elsa.Studio.ExpressionEditors.Liquid
+Elsa.Studio.Secrets
+Elsa.Studio.Workflows
+Elsa.Studio.Workflows.Dashboard

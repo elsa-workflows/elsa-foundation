@@ -1,5 +1,9 @@
 # User Tasks
 
+This guide describes User Tasks on the classic workflow runtime. Use the
+[pinned qualification source](https://github.com/elsa-workflows/elsa-foundation/blob/aea76c0b38f18e8037050ea53cef20995ec69a03/specs/1196-user-tasks/quickstart.md)
+to compose that workflow execution path.
+
 User Tasks let a workflow wait for a person to choose an action and optionally submit form data. The task is Runtime-owned human work; `Elsa.Tasks` continues to schedule host startup/background/recurring work.
 
 ## Author a purchase approval
@@ -59,7 +63,7 @@ The journal commits revision, history, accepted response and delivery responsibi
 
 The recovery worker checks up to 50 records per partition per sweep, advances a fair continuation and uses fresh partition/operation scopes. Its normal interval is two seconds and failure backoff is capped at 30 seconds. Temporary journal outages preserve owed responses, including after bookmark claim. Persisted input policies requiring encryption or withholding are refused before writing task content to this journal. Do not use task inputs as a secret store.
 
-Apply the Runtime module's incremental migrations on existing supported relational stores. The User Tasks migration adds its tables; it does not require deleting an existing development database. See [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) for ownership/lifetime seams and the [qualification guide](../specs/1196-user-tasks/quickstart.md) for acceptance evidence.
+Apply the Runtime module's incremental migrations on existing supported relational stores. The User Tasks migration adds its tables; it does not require deleting an existing development database. See [classic Runtime extension points](https://github.com/elsa-workflows/elsa-foundation/blob/aea76c0b38f18e8037050ea53cef20995ec69a03/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) for ownership/lifetime seams and the [qualification guide](../specs/1196-user-tasks/quickstart.md) for acceptance evidence.
 
 
 To qualify a custom form integration, run the durable external-form journey and matching mounted renderer test, then use `e2e-tests/user-tasks/qualify_integration.py --help` to compile an external consumer against the public Runtime Core binary and actual Studio package. `Test-UserTasks.ps1` exercises the same authorized HTTP contract through publication and every action path. The live Studio journey covers activity configuration, visual connections, reusable form authoring, save/reload and participant completion on owned hosts.

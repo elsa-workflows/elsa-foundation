@@ -26,7 +26,8 @@ public static class CreationProtocol
     public static string Origin(string actor, long creation) => creation > 0 ? FormattableString.Invariant($"c{actor.Length}_{actor}_{creation}") : actor;
 
     public static bool HasTerminalNoticeId(Message message, string child, long creation) =>
-        !string.IsNullOrEmpty(child) && creation > 0 && message.InboxKey == InboxKey.Issued(message.Id) &&
+        !string.IsNullOrEmpty(child) && creation > 0 &&
+        (message.InboxKey == InboxKey.Issued(message.Id) || message.FoundationRootChildNotice) &&
         IsCompatibleTerminalHandle(message.Id, Origin(child, creation));
 
     internal static bool IsTerminalHandle(string id, string origin)

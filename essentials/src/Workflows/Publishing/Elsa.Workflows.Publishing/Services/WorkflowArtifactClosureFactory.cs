@@ -257,7 +257,7 @@ public sealed class WorkflowArtifactClosureFactory(
                 definitionVersionId,
                 $"read the trigger bindings of artifact '{artifactId}'",
                 async () => await triggerBindingStore.ListAllByArtifactAsync(artifactId, cancellationToken));
-            bindings.AddRange(artifactBindings);
+            bindings.AddRange(artifactBindings.Where(binding => binding.Cardinality != TriggerCardinality.ReservationOnly));
         }
 
         return bindings

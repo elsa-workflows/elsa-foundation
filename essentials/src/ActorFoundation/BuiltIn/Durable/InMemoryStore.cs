@@ -740,9 +740,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         }
     }
 
-    int IDueBacklogStore.PublishedDueBacklog(int partition)
+    ValueTask<int> IDueBacklogStore.ReadPublishedDueBacklogAsync(int partition, CancellationToken cancellationToken)
     {
-        lock (_gate) return Partitions[partition].DueBacklog;
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate) return ValueTask.FromResult(Partitions[partition].DueBacklog);
     }
 
     ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken)

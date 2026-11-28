@@ -320,6 +320,19 @@ the table adds no obligation beyond issue [#4859](https://github.com/elsa-workfl
 | Native FR-015, the admission-off twin | K11's admission, and the two-tenant stress test with admission on and off before release |
 | Cancel-admission equivalence (unknown on the old core) | FC-9 (commands, for every actor type) and FC-16 (the exemption of the load-shedding commands from `InboxFull`), applied to the native model and StateMachine at K6 and K7 |
 
+The Native model's waited `DispatchWorkflow` resumes the exact child wait on its final `ChildFinished` notice.
+The parent receives the child's terminal status and model output as `DispatchResult.Status` and `DispatchResult.Output`.
+
+| Native child outcome | Status | Parent activity route | Output |
+|---|---|---|---|
+| Success | `Finished` | `Completed` | The child's authored outputs |
+| Business error | `Finished` | `Completed` | The child's authored outcome and code, using the output contract agreed with its parent |
+| Technical fault | `Faulted` | `Faulted` | The child's fault data when present |
+| Cancellation | `Cancelled` | `Cancelled` | No output |
+
+A parent reads the business outcome from the output it agreed with the child. A nonfinal Park notice leaves the parent waiting.
+The Elsa authoring mapper currently refuses reads of the legacy `DispatchWorkflow.Result` shape. The Native model contract uses `DispatchResult`.
+
 Accepted as recorded, with no further work: B3, L-Gb1 and L-Gb2 (BPMN, after release 1); D3 (release 1's only
 alteration is migration); #4126 (parked until after release 1, noted in the K10 row); #4094 (publication rules kept);
 and the cleanup pass (K14's retirement inventory covers it).
@@ -390,8 +403,85 @@ owner's node row is live. Record the floor this produces.
 
 The [PostgreSQL prototype rehearsal](../../prototypes/kernel-model/README.md#postgresql-different-version-rehearsal)
 uses separate runtime builds and checks the physical rows after each refusal. Its tested rollback floor
-is `6f38d98648` for the ordinary relational format (3, 2, 1). Shipped provider profiles and the published
-release floor remain K12 qualification items.
+is `6f38d98648` for the ordinary relational format (3, 2, 1).
+
+The [PostgreSQL shipped compatibility rehearsal](../../essentials/tests/ActorFoundation/Native/Run/check-postgres-shipped-compatibility.sh)
+builds the shipped format 27 runtime at `fad467643e` and the shipped format 28 runtime at `8b97c31d01`.
+The test creates disposable databases on PostgreSQL 17 and runs both fence modes using the shipped partition count.
+While each owner is live, the other runtime refuses install, startup, take, sweep, projection, Foundation open
+and journal access. The existing owner commits again at the same epoch. Schema and persisted-row fingerprints
+match after each refusal, with live heartbeat timestamps excluded.
+
+The fixture stops the old owner and creates an empty protocol 28 database under the pre-GA recreation policy.
+The compatible floor runs in a new process at the next ownership epoch. It resumes the same actor without
+changing its prior journal rows and confirms compatible projection, sweep and reads.
+This is a tested PostgreSQL floor at `3/28/1` and definitions `1/7/0`.
+
+```sh
+bash essentials/tests/ActorFoundation/Native/Run/check-postgres-shipped-compatibility.sh
+```
+
+The [SQLite shipped compatibility rehearsal](../../essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibility.sh)
+builds the actual format 26 runtime at `92c54ac879` and the format 27 runtime at `fad467643e` from pinned archives.
+It uses disposable files and runs the checked and in-batch fences. The candidate installer refuses while the old
+process holds the file. The old owner then commits again at the same epoch. Once the old owner stops, the candidate
+refuses its file on the stored marker. The rehearsal installs a separate empty candidate file under the pre-GA recreation
+policy.
+
+The prior startup, installer, sweeper, projected actor-list read and journal read refuse the closed candidate file.
+SQLite maintains its shipped actor-list projection in the owner’s transaction, so the rehearsal exercises the projected
+read instead of starting a separate projector. Fingerprints cover the schema and persisted rows after each refusal.
+After the candidate owner stops, a separate process runs the pinned format 27 build as the compatibility floor. It reopens
+the file and advances the same actor with the earlier physical journal rows intact. The script prints source revisions,
+provider assembly hashes and the retained receipt directory.
+
+Run the pinned 26 to 27 rehearsal from a checkout that includes the fixture:
+
+```sh
+bash essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibility.sh
+```
+
+This is a tested SQLite floor for family versions 3/27/1 and definitions 2/10/0.
+
+### Shipped protocol 30 to 31 rehearsal
+
+The archive launchers also accept an explicit `--pair`, with a full local Git commit and both stored marker rows for each
+side. Invoking either script without `--pair` still selects its historical pair. Each receipt records the selected
+commits and markers and the provider and store assembly hashes compiled from each archive.
+
+| Provider | Prior `d12556dd3e` | Candidate `1735303b8c` | Tested compatible reopen |
+|---|---|---|---|
+| PostgreSQL 17.12 | `3/30/1`, definitions `1/10/0` | `3/31/1`, definitions `1/11/0` | `1735303b8c`, both fences, epoch 2 |
+| SQLite | `3/30/1`, definitions `2/13/0` | `3/31/1`, definitions `2/14/0` | `1735303b8c`, both fences, epoch 2 |
+
+On PostgreSQL, the shipped installers created 1,024 virtual partitions in each disposable database. The incompatible
+installer, startup, take, sweep, projector, Foundation edge and journal refused while the other owner was live. After
+stop, the installer, startup and take also refused in both directions. Schema, table contents and sequence state matched
+after each refusal, with live heartbeat timestamps excluded. On SQLite, the process lock refused the live cross-version
+attachment in both directions. After stop, the candidate installer and startup refused the prior marker, and the prior
+installer, startup, sweeper, projected read and journal read refused the candidate marker. Schema and persisted rows
+matched across those checks, with live heartbeat timestamps excluded. Each live owner committed again at the same epoch.
+
+The protocol 31 owner started on a separate empty store under pre-GA recreation. The same protocol 31 build reopened it
+in a separate process, continued the exact actor and preserved the earlier physical journal prefix. The tested rollback
+floor for those protocol 31 stores is the candidate build in the table. To run protocol 30 again, use the retained
+protocol 30 store or restore its pre-recreation backup before opening it with the matching build. The evidence covers
+this exact pair and the recreation and reopen paths. The final release's published floor remains a release qualification
+item.
+
+```sh
+bash essentials/tests/ActorFoundation/Native/Run/check-postgres-shipped-compatibility.sh --pair \
+  d12556dd3ecce63ede740692a786a4c92312c6e3 '1=3/30/1 2=1/10/0' \
+  1735303b8c164d09d9ae4bb91a3776bc1dc070e9 '1=3/31/1 2=1/11/0'
+bash essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibility.sh --pair \
+  d12556dd3ecce63ede740692a786a4c92312c6e3 '1=3/30/1 2=2/13/0' \
+  1735303b8c164d09d9ae4bb91a3776bc1dc070e9 '1=3/31/1 2=2/14/0'
+```
+
+The existing `pg-runtime-cluster 1024 wake` fixture also passed on the candidate product tree using its ordinary relational
+profile on PostgreSQL 17.12. Two local processes owned 512 partitions each, continued the actor through an orderly handoff,
+and released all 1,024 partitions. This is single-host topology evidence. Networked-machine takeover latency remains a
+separate gate.
 
 ## Gate 2 review: counterexamples and answers
 

@@ -17,13 +17,15 @@ internal static class PostgresRootCompositionChecks
     // The shape of the store's root header, so that the store decodes the seeded rows as its own.
     private sealed record Header(string Model, string Definition, string TypeData, KeyValuePair<string, string>[] Labels, bool EscapedState);
 
-    internal static async Task<int> RunAsync(bool owned, bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         var capabilities = RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootParkInspection];
-        KernelDb Open() => KernelDb.ForUnshippedComposition(options, Composed, capabilities);
+        KernelDb Open() => shippedSet
+            ? KernelDb.ForPostgresRootShipped(options, new(Model, false))
+            : KernelDb.ForUnshippedComposition(options, Composed, capabilities);
         var store = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var ct = timeout.Token;
@@ -38,10 +40,8 @@ internal static class PostgresRootCompositionChecks
 
         await store.CreateAsync(1);
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
-        await admission.InstallAsync(ct);
-        await admission.InstallAsync(ct);
-        await store.InstallRootWorkflowHistoryAsync(ct);
-        await store.InstallRootWorkflowHistoryAsync(ct);
+        await ShippedComposition.InstallHistoryAsync(store, admission, shippedSet, ct);
+        await ShippedComposition.InstallHistoryAsync(store, admission, shippedSet, ct);
         await using (var shipped = KernelDb.ForPostgresRootTerminalSelection(options))
         {
             try
@@ -115,8 +115,7 @@ internal static class PostgresRootCompositionChecks
             "both reads recover once the projectors are enabled again");
 
         // A second install over the seeded rows resyncs the projector and the Park backfill without losing either mark.
-        await admission.InstallAsync(ct);
-        await store.InstallRootWorkflowHistoryAsync(ct);
+        await ShippedComposition.InstallHistoryAsync(store, admission, shippedSet, ct);
         Check(await List(store, parked: null, ct) is [{ Reference: Ended, TerminalRevision: 2, ParkAt: null },
                 { Reference: Parked, TerminalRevision: null, ParkAt: > 0, ParkFault: "parked on purpose" }] &&
             (await History(store, ct)).Items.Count == 2,

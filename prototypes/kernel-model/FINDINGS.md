@@ -1510,7 +1510,7 @@ items of the same round.)
 
 ### The engine: extracted, and the same as main's
 
-`models/Graph` is main's Elsa 4 Flowchart engine (`Essentials/src/Activities/Flowchart` at `a3eb06e851`) lifted out
+`models/Graph` is main's Elsa 4 Flowchart engine (`essentials/src/Activities/Flowchart` at `a3eb06e851`) lifted out
 of the runtime: execution paths with iteration keys, scopes (root, loop iteration, first-wins race), arrivals at joins,
 the gateway policies, dead paths, the dead-path join as the default and the reachability join beside it, pruning
 (#382). No reference to the kernel, to Elsa or to any package. The first commit of its PR is the verbatim copy; the

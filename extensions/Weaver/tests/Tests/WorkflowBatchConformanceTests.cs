@@ -56,7 +56,7 @@ public sealed class WorkflowBatchConformanceTests
     private static JsonObject Fixture([CallerFilePath] string source = "")
     {
         var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source)!, "..", "..", "..", ".."));
-        var path = Path.Combine(root, "Studio", "src", "essentials", "Elsa.Studio.Workflows", "Client", "src", "__tests__", "workflowBatchConformance.json");
+        var path = Path.Combine(root, "studio", "src", "essentials", "Elsa.Studio.Workflows", "Client", "src", "__tests__", "workflowBatchConformance.json");
         return JsonNode.Parse(File.ReadAllText(path))!.AsObject();
     }
 

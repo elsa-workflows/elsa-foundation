@@ -1,12 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CShells.Features;
 using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Expressions.Liquid;
-using Elsa.Workbench.CorePreview;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -39,12 +40,18 @@ public sealed class PortableNativeExpressionsTests
     }
 
     [Fact]
-    public void Only_the_variables_a_source_names_are_passed_and_a_computed_access_passes_all()
+    public async Task Only_the_variables_a_source_names_are_passed_and_a_computed_access_passes_all()
     {
         var visible = new Dictionary<string, JsonNode?> { ["count"] = 5, ["keepGoing"] = true, ["unrelated"] = new string('x', 100_000) };
-        Assert.Equal(["count", "keepGoing"], AmbientVariables.Referenced("variables.count > 0 && getKeepGoing()", visible)!.Keys.Order());
-        Assert.Null(AmbientVariables.Referenced("1 + 1", visible));
-        Assert.Equal(3, AmbientVariables.Referenced("variables[name]", visible)!.Count);
+        var evaluator = new RecordingEvaluator();
+        await using var provider = new ServiceCollection().AddSingleton<IPortableExpressionEvaluator>(evaluator).BuildServiceProvider();
+        await using var session = new PortableNativeExpressions(() => (provider, new Lifetime())).Open(CancellationToken.None);
+        session.Evaluate(new HostExpression("JavaScript", "variables.count > 0 && getKeepGoing()", "Object", null), None, visible);
+        Assert.Equal(["count", "keepGoing"], evaluator.AmbientVariables!.Keys.Order());
+        session.Evaluate(new HostExpression("JavaScript", "1 + 1", "Object", null), None, visible);
+        Assert.Empty(evaluator.AmbientVariables!);
+        session.Evaluate(new HostExpression("JavaScript", "variables[name]", "Object", null), None, visible);
+        Assert.Equal(3, evaluator.AmbientVariables!.Count);
     }
 
     [Fact]
@@ -90,81 +97,26 @@ public sealed class PortableNativeExpressionsTests
         Assert.Contains("did not complete synchronously", refused.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task The_gate_holds_the_service_until_it_opens_and_a_stop_before_then_starts_nothing()
-    {
-        var gate = new TaskCompletionSource();
-        var inner = new Recording();
-        var gated = new ShellGatedHostedService(inner, token => gate.Task.WaitAsync(token), _ => throw new InvalidOperationException("ended"));
-        await gated.StartAsync(CancellationToken.None);
-        await Task.Delay(50);
-        Assert.False(inner.Started);
-        gate.SetResult();
-        await WaitUntil(() => inner.Started);
-        await gated.StopAsync(CancellationToken.None);
-        Assert.True(inner.Stopped);
-
-        var closed = new Recording();
-        var never = new ShellGatedHostedService(closed, token => Task.Delay(Timeout.Infinite, token), _ => throw new InvalidOperationException("ended"));
-        await never.StartAsync(CancellationToken.None);
-        await never.StopAsync(CancellationToken.None);
-        Assert.False(closed.Started);
-        Assert.False(closed.Stopped);
-    }
-
-    [Fact]
-    public async Task A_stop_while_the_service_is_still_starting_stops_it()
-    {
-        var inner = new Recording { BlockStart = true };
-        var gated = new ShellGatedHostedService(inner, _ => Task.CompletedTask, _ => { });
-        await gated.StartAsync(CancellationToken.None);
-        await WaitUntil(() => inner.Started);
-        await gated.StopAsync(CancellationToken.None);
-        Assert.True(inner.Stopped);
-    }
-
-    [Fact]
-    public async Task A_gate_that_fails_ends_the_process()
-    {
-        string? ended = null;
-        var gated = new ShellGatedHostedService(new Recording(), _ => Task.FromException(new InvalidOperationException("no shell")), reason => ended = reason);
-        await gated.StartAsync(CancellationToken.None);
-        await WaitUntil(() => ended is not null);
-        Assert.Contains("no shell", ended, StringComparison.Ordinal);
-    }
-
-    private static async Task WaitUntil(Func<bool> condition)
-    {
-        for (var i = 0; i < 200 && !condition(); i++) await Task.Delay(10);
-        Assert.True(condition());
-    }
-
-    private sealed class Recording : Microsoft.Extensions.Hosting.IHostedService
-    {
-        public bool Started { get; private set; }
-        public bool Stopped { get; private set; }
-        public bool BlockStart { get; init; }
-
-        public Task StartAsync(CancellationToken cancellationToken)
-        {
-            Started = true;
-            return BlockStart ? Task.Delay(Timeout.Infinite, cancellationToken) : Task.CompletedTask;
-        }
-
-        public Task StopAsync(CancellationToken cancellationToken) { Stopped = true; return Task.CompletedTask; }
-    }
-
     private static INativeExpressionSession Open(out Lifetime lifetime)
     {
         var services = new ServiceCollection();
-        new ExpressionsFeature().ConfigureServices(services);
-        new JavaScriptFeature().ConfigureServices(services);
-        new JintFeature().ConfigureServices(services);
-        new LiquidExpressionsFeature().ConfigureServices(services);
+        new ExpressionProbeFeature().ConfigureServices(services);
         var provider = services.BuildServiceProvider();
         var scope = provider.CreateAsyncScope();
         var tracked = lifetime = new Lifetime(scope);
         return new PortableNativeExpressions(() => (scope.ServiceProvider, tracked)).Open(CancellationToken.None);
+    }
+
+    [ShellFeature("WorkbenchExpressionProbe")]
+    public sealed class ExpressionProbeFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            new ExpressionsFeature().ConfigureServices(services);
+            new JavaScriptFeature().ConfigureServices(services);
+            new JintFeature().ConfigureServices(services);
+            new LiquidExpressionsFeature().ConfigureServices(services);
+        }
     }
 
     private sealed class Lifetime(IAsyncDisposable? inner = null) : IAsyncDisposable
@@ -178,6 +130,17 @@ public sealed class PortableNativeExpressionsTests
         }
     }
 
+    private sealed class RecordingEvaluator : IPortableExpressionEvaluator
+    {
+        public IReadOnlyDictionary<string, JsonElement>? AmbientVariables { get; private set; }
+
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
+        {
+            AmbientVariables = request.AmbientVariables;
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement<object?>(null));
+        }
+    }
+
     private sealed class PendingEvaluator : IPortableExpressionEvaluator
     {
         public async ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
@@ -186,4 +149,5 @@ public sealed class PortableNativeExpressionsTests
             return JsonSerializer.SerializeToElement(1);
         }
     }
+
 }

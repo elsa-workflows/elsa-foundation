@@ -13,7 +13,7 @@ internal static class HostExpressionChecks
 {
     private sealed class Evaluator : INativeExpressions
     {
-        public int Opened, Closed, Named;
+        public int Opened, Closed, Named, Collections;
 
         public INativeExpressionSession Open(CancellationToken cancellationToken)
         {
@@ -34,6 +34,7 @@ internal static class HostExpressionChecks
                     "pair" => JsonValue.Create($"{parameters["id"]}|{parameters["corr"]}"),
                     "typed" => JsonValue.Create($"{expression.Language}:{expression.ResultType}"),
                     "below-two" => JsonValue.Create(Number(variables["i"]) < 2),
+                    "loop-items" => ++owner.Collections == 1 ? new JsonArray(3, 5) : throw new InvalidOperationException("collection rebound"),
                     "fail-second" => ++_counts < 2 ? JsonValue.Create(true) : throw new InvalidOperationException("second read"),
                     "name-then-fail" => ++owner.Named < 2 ? JsonValue.Create("hx-go") : throw new InvalidOperationException("read at resume"),
                     "fail" => throw new InvalidOperationException("the expression threw"),
@@ -82,6 +83,10 @@ internal static class HostExpressionChecks
                 While("loop", Host("JavaScript", "below-two"), Set("inc", "i", Expr("i + 1"))),
                 Set("out", "output", Expr("'' + i")), Hold()),
             ("i", 0), ("output", null));
+        yield return Workflow("hx-foreach", Sequence("root",
+                ForEach("each", Host("JavaScript", "loop-items"), Sequence("body",
+                    Delay("wait", 5), Set("step", "sum", Expr("sum + currentItem + currentIndex")))),
+                Set("out", "output", Expr("'' + sum")), Hold()), ("sum", 0), ("output", null));
         yield return Workflow("hx-fail", Set("s", "a", Host("JavaScript", "fail")), ("a", null));
         // A composite reads its inputs again at every callback: a condition that fails the second time faults the loop.
         yield return Workflow("hx-fail-callback", While("loop", Host("JavaScript", "fail-second"), Set("inc", "i", Expr("i + 1"))), ("i", 0));
@@ -129,6 +134,12 @@ internal static class HostExpressionChecks
             check(closed == "absent", $"{mode}: inside a GraphActivity's body a host expression sees nothing of the workflow's variables ('{closed}')");
             var loop = Output(await Run(owner, "hx-loop"));
             check(loop == "2", $"{mode}: a composite's host-expression condition is read again at each pass ('{loop}')");
+            await Run(owner, "hx-foreach");
+            var each = $"0/hx-foreach-{mode}";
+            await owner.PumpAsync(poll: true, keepPolling: true, until: () => Output(owner.State(each)) is not null ||
+                owner.Status(each) == InstanceStatus.Faulted, timeoutMs: 5000);
+            check(evaluator.Collections == 1 && Output(owner.State(each)) == "9",
+                $"{mode}: ForEach pins its collection once across both waiting iterations");
 
             var failed = Fault(await Run(owner, "hx-parent-hx-fail"));
             check(failed is { Code: "expression.failed" } && failed.Message.Contains("Node 's', input 'Value'", StringComparison.Ordinal) && failed.Message.Contains("the expression threw", StringComparison.Ordinal),

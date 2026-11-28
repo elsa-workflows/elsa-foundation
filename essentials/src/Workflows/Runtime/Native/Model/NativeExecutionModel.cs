@@ -31,7 +31,7 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
 
     /// <summary>A start of a registered workflow, under its definition.</summary>
     public static Models.WorkflowStart Start(Workflow workflow, string mode = Modes.Balanced, JsonObject? input = null) =>
-        Start(workflow.Id, mode, input, definition: workflow.Definition);
+        Start(workflow.Id, mode, input, definition: workflow.Definition) with { ExecutableSelection = workflow.ExecutableSelection };
 
     public object CreateState(Models.WorkflowStart start) => NewState(start.Input);
 
@@ -41,14 +41,23 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     public object UpgradeState(string state, int fromVersion) => Upgrade(state, fromVersion);
 
     public string? ValidateMigration(Models.InstanceInfo source, object state, string target)
+        => ValidateMigration(source, state, target, out _);
+
+    public string? ValidateMigration(Models.InstanceInfo source, object state, string target, out string? targetExecutableSelection)
     {
-        if (!registry.TryGet(source.Workflow, out var before) || !registry.TryGet(target, out var after))
+        targetExecutableSelection = null;
+        if (!registry.TryGet(source.Workflow, out var before) || !registry.TryGet(target, out var after) ||
+            source.ExecutableSelection is { } expected && !MatchesSelection(before, expected))
             return "DefinitionUnavailable";
         // A migration moves an instance between versions of its definition, and its definition label stays: a published
         // version does not move to another definition's.
-        if (before.Definition != after.Definition && (before.Definition != before.Id || after.Definition != after.Id))
+        var definition = source.ExecutableSelection is null ? before.Definition : source.Definition ?? before.Definition;
+        if (definition != after.Definition && (definition != before.Id || after.Definition != after.Id))
             return "DefinitionChanged";
-        return StructuredMigration.Validate(before, after, (NativeState)state)?.ToString();
+        if (StructuredMigration.Validate(before, after, (NativeState)state) is { } finding)
+            return finding.ToString();
+        if (source.ExecutableSelection is not null) targetExecutableSelection = after.ExecutableSelection;
+        return null;
     }
 
     internal static NativeState Upgrade(string state, int fromVersion)
@@ -68,24 +77,113 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         return native;
     }
 
-    public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken) =>
-        new Burst(registry, _options, new ContractTurn(turn, outbound, definitionOf: DefinitionOf), cancellationToken).RunAsync();
+    private sealed record InlineMaterial(NativeExecutionModel Owner, Workflow Workflow);
 
-    private string? DefinitionOf(string workflow) => registry.TryGet(workflow, out var found) ? found.Definition : null;
+    /// <summary>Captures the already-authorized exact executable for a trusted owner-local start.</summary>
+    /// <remarks>The returned token is process-local and belongs to this model instance. The turn must select the same executable identity.</remarks>
+    public object CaptureInlineMaterial(Workflow executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        if (string.IsNullOrWhiteSpace(executable.ExecutableSelection))
+            throw new ArgumentException("Inline material requires an exact executable identity.", nameof(executable));
+        return new InlineMaterial(this, executable);
+    }
 
-    public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
-        ExecuteBackground(registry, job.Actor, job.Arguments, cancellationToken, _options.Http);
+    /// <summary>Checks an opaque local capture against the exact executable and definition in an admitted start.</summary>
+    public bool MatchesInlineMaterial(object material, string workflow, string definition, string? selection) =>
+        material is InlineMaterial local && ReferenceEquals(this, local.Owner) &&
+        selection is not null && MatchesSelection(local.Workflow, selection) &&
+        local.Workflow.Id == workflow && local.Workflow.Definition == definition;
 
-    internal static async ValueTask<object?> ExecuteBackground(WorkflowRegistry registry, Contract.ActorRef actor,
+    public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
+    {
+        if (turn.Ambient is InlineMaterial local)
+        {
+            var instance = turn.Instance;
+            if (!MatchesInlineMaterial(local, instance.Workflow, instance.Definition ?? instance.Workflow, instance.ExecutableSelection))
+                throw SelectionUnavailable();
+            return RunTurnAsync(turn, cancellationToken, local.Workflow);
+        }
+        return turn.Instance.ExecutableSelection is { } selection
+            ? SelectedTurnAsync(turn, selection, cancellationToken)
+            : Resolves(turn.Instance.Workflow) ? ResolvedTurnAsync(turn, cancellationToken) : RunTurnAsync(turn, cancellationToken);
+    }
+
+    private async ValueTask SelectedTurnAsync(Models.ITurn turn, string selection, CancellationToken cancellationToken)
+    {
+        var executable = await SelectAsync(turn.Instance.Workflow, selection, cancellationToken);
+        await RunTurnAsync(turn, cancellationToken, executable);
+    }
+
+    private async ValueTask ResolvedTurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
+    {
+        await ResolveAsync(turn.Instance.Workflow, cancellationToken);
+        await RunTurnAsync(turn, cancellationToken);
+    }
+
+    private ValueTask RunTurnAsync(Models.ITurn turn, CancellationToken cancellationToken, Workflow? executable = null)
+    {
+        var bridge = new ContractTurn(turn, outbound, structuralJournal: _options.UseStructuralJournal);
+        bridge.RecordClock();
+        return new Burst(registry, _options, bridge, cancellationToken, executable: executable).RunAsync();
+    }
+
+    /// <summary>Whether <paramref name="workflow"/> is one the registry lacks and the host may load (<see cref="NativeExecutionOptions.ResolveWorkflow"/>).</summary>
+    private bool Resolves(string workflow) => _options.ResolveWorkflow is not null && !registry.Contains(workflow);
+
+    private async ValueTask<Workflow?> ResolveAsync(string workflow, CancellationToken cancellationToken, string? selection = null)
+    {
+        if (_options.ResolveWorkflow is not { } resolve || await resolve(workflow, cancellationToken) is not { } found)
+            return null;
+        if (!StringComparer.Ordinal.Equals(found.Id, workflow))
+            throw new InvalidOperationException($"The host resolved workflow '{workflow}' to '{found.Id}'.");
+        if (selection is not null && !MatchesSelection(found, selection)) return null;
+        registry.Add(found);
+        return found;
+    }
+
+    private async ValueTask<Workflow> SelectAsync(string workflow, string selection, CancellationToken cancellationToken)
+    {
+        if (registry.TryGet(workflow, out var cached) && MatchesSelection(cached, selection)) return cached;
+        return await ResolveAsync(workflow, cancellationToken, selection) ?? throw SelectionUnavailable();
+    }
+
+    private static bool MatchesSelection(Workflow workflow, string selection) =>
+        StringComparer.Ordinal.Equals(workflow.ExecutableSelection, selection);
+
+    private static InvalidOperationException SelectionUnavailable() =>
+        new("The exact executable selected for this workflow is unavailable.");
+
+    public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+    {
+        var args = JsonSerializer.Deserialize<BackgroundArgs>(job.Arguments!)!;
+        if (args.ExecutableSelection is { } selection)
+            return await ExecuteBackground(await SelectAsync(args.Workflow, selection, cancellationToken), job.Actor, args,
+                cancellationToken, _options.Http, job.Tenant);
+        if (Resolves(args.Workflow))
+            await ResolveAsync(args.Workflow, cancellationToken);
+        return await ExecuteBackground(registry.Get(args.Workflow), job.Actor, args, cancellationToken, _options.Http, job.Tenant);
+    }
+
+    internal static ValueTask<object?> ExecuteBackground(WorkflowRegistry registry, Contract.ActorRef actor,
         string? arguments, CancellationToken cancellationToken, NativeHttpOptions? http = null)
     {
         var args = JsonSerializer.Deserialize<BackgroundArgs>(arguments!)!;
-        var node = registry.Get(args.Workflow).Nodes[args.Node];
+        var executable = registry.Get(args.Workflow);
+        if (args.ExecutableSelection is { } selection && !MatchesSelection(executable, selection))
+            throw SelectionUnavailable();
+        return ExecuteBackground(executable, actor, args, cancellationToken, http);
+    }
+
+    private static async ValueTask<object?> ExecuteBackground(Workflow executable, Contract.ActorRef actor,
+        BackgroundArgs args, CancellationToken cancellationToken, NativeHttpOptions? http, string? jobTenant = null)
+    {
+        var node = executable.Nodes[args.Node];
         var activity = (ILeaf)Hydrator.Create(node, args.Inputs);
         var path = args.IterationPath ?? throw new InvalidOperationException("A background job needs an iteration path.");
         var key = args.EffectKey ?? throw new InvalidOperationException("A background job needs an effect key.");
         var result = await activity.ExecuteAsync(new ActivityContext(actor, args.Frame, node.Id, 0,
-            cancellationToken, path, key) { Http = http });
+            cancellationToken, path, key) { Http = http, JobTenant = jobTenant });
         return new BackgroundResult(result.Kind, result.Result, result.Outcome, result.Fault);
     }
 
@@ -123,7 +221,8 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     public bool HandlesMetadata(Contract.Message message) => Burst.HandlesMetadata(message.Kind);
     public ValueTask MetadataAsync(Models.ITurn turn, Contract.ActorStatus status, long? endedAt, CancellationToken cancellationToken)
     {
-        var bridge = new ContractTurn(turn, outbound, endedAt);
+        var bridge = new ContractTurn(turn, outbound, endedAt, structuralJournal: _options.UseStructuralJournal);
+        if (_options.UseStructuralJournal) bridge.RecordClock();
         return turn.State is NativeState
             ? new Burst(registry, _options, bridge, cancellationToken, status).MetadataAsync()
             : InvocationLifetime.Missing(bridge);

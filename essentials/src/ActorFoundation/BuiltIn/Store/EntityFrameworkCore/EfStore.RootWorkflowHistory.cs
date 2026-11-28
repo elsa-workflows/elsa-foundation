@@ -5,12 +5,12 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private const int WorkflowHistoryVersion = 1;
+    private static int WorkflowHistoryVersion(KernelDb db) => db.UsesRootInlinePromotion ? 2 : 1;
 
     internal sealed record RootWorkflowHistoryItem(string Reference, InstanceStatus Status, string? Definition, long UpdatedAt);
     internal sealed record RootWorkflowHistoryPage(IReadOnlyList<RootWorkflowHistoryItem> Items, long AsOf);
     private sealed record RootWorkflowHistoryRow(string? Reference, int? Status, string? Header, long? UpdatedAt,
-        int? Version, bool TriggerEnabled, int? StoreSchema, int? MessageProtocol, int? JournalCodec, long AsOf);
+        int? Version, bool TriggerEnabled, int? StoreSchema, int? MessageProtocol, int? JournalCodec, string? DefinitionStamp, long AsOf);
 
     internal async Task InstallRootWorkflowHistoryAsync(CancellationToken token = default)
     {
@@ -30,8 +30,15 @@ public sealed partial class EfStore
         var versions = await db.Database.SqlQueryRaw<int>("""
             SELECT "Version" AS "Value" FROM "FoundationWorkflowHistoryFormat" WHERE "Singleton"
             """).ToListAsync(token);
+        var projectionVersion = WorkflowHistoryVersion(db);
         var installed = versions.Count == 1;
-        if (installed) RequireHistoryVersion(versions[0]);
+        if (installed)
+        {
+            RequireHistoryVersion(versions[0], projectionVersion);
+            if (db.UsesRootTerminalOutput) await RequirePostgresRootTerminalOutputSchemaAsync(db, token);
+            if (db.UsesRootSequencedJournal) await RequirePostgresSequencedJournalAsync(db, token);
+            if (db.UsesRootPlayback) await RequirePostgresPlaybackAsync(db, token);
+        }
         // History reads the actor's own list row, so it requires the projector of this profile and not the Park metadata.
         var projection = ActorListProjection.Of(db);
         var required = installed ? projection.WorkflowHistoryTriggers : projection.SourceTriggers;
@@ -53,6 +60,7 @@ public sealed partial class EfStore
         {
             // Hold the same root installation lock and publish the format, table and trigger together.
             // Legacy roots have no update time until a qualified checkpoint is observed.
+            var firstRevision = db.UsesRootInlinePromotion ? """birth."FirstRevision" """ : "1 ";
             await db.Database.ExecuteSqlRawAsync("""
                 CREATE TABLE "FoundationWorkflowHistory" (
                     "Tenant" text COLLATE "C" NOT NULL, "Reference" text COLLATE "C" NOT NULL,
@@ -62,7 +70,7 @@ public sealed partial class EfStore
                     ON "FoundationWorkflowHistory" ("Tenant", "UpdatedAt" DESC, "Reference");
                 CREATE FUNCTION kernel_project_root_workflow_history_v1() RETURNS trigger LANGUAGE plpgsql AS $fn$
                 BEGIN
-                    PERFORM 1 FROM "FoundationWorkflowHistoryFormat" WHERE "Singleton" AND "Version" = 1 FOR SHARE;
+                    PERFORM 1 FROM "FoundationWorkflowHistoryFormat" WHERE "Singleton" AND "Version" = /*version*/ FOR SHARE;
                     IF NOT FOUND THEN
                         RAISE EXCEPTION 'Unsupported workflow history projection version' USING ERRCODE = '55000';
                     END IF;
@@ -73,7 +81,7 @@ public sealed partial class EfStore
                     FROM "FoundationRootBirths" birth
                     WHERE birth."Tenant" = NEW."FoundationTenant" AND birth."Reference" = NEW."FoundationReference"
                         AND birth."Actor" = NEW."Id" AND birth."Partition" = NEW."Partition" AND birth."Creation" = 1
-                        AND (OLD."FoundationReference" IS NULL AND NEW."Revision" = 1 OR
+                        AND (OLD."FoundationReference" IS NULL AND NEW."Revision" = /*first-revision*/OR
                             OLD."FoundationReference" = NEW."FoundationReference" AND NEW."Revision" = OLD."Revision" + 1
                             AND NEW."FoundationWriteRevision" = NEW."Revision")
                     ON CONFLICT ("Tenant", "Reference") DO UPDATE SET "Revision" = excluded."Revision", "UpdatedAt" = excluded."UpdatedAt"
@@ -90,8 +98,15 @@ public sealed partial class EfStore
                     OLD."FoundationReference" IS DISTINCT FROM NEW."FoundationReference" OR
                     OLD."Revision" IS DISTINCT FROM NEW."Revision"))
                 EXECUTE FUNCTION kernel_project_root_workflow_history_v1();
-                INSERT INTO "FoundationWorkflowHistoryFormat" ("Singleton", "Version") VALUES (true, 1);
-                """, token);
+                INSERT INTO "FoundationWorkflowHistoryFormat" ("Singleton", "Version") VALUES (true, /*version*/);
+                """.Replace("/*version*/", projectionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+                .Replace("/*first-revision*/", firstRevision, StringComparison.Ordinal), token);
+            if (db.UsesRootTerminalOutput)
+                await db.Database.ExecuteSqlRawAsync(PostgresRootTerminalOutputDefinition, token);
+            if (db.UsesRootSequencedJournal)
+                await db.Database.ExecuteSqlRawAsync(PostgresSequencedJournal, token);
+            if (db.UsesRootPlayback)
+                await db.Database.ExecuteSqlRawAsync(PostgresPlaybackDefinitions(db.UsesRootPlaybackDescendants), token);
         }
         await transaction.CommitAsync(token);
     }
@@ -99,11 +114,16 @@ public sealed partial class EfStore
     internal async Task<RootWorkflowHistoryPage> ReadRootWorkflowHistoryAsync(string tenant, string type, string? definition,
         int? status, long? from, long? to, long? afterTime, string? afterRef, int limit, CancellationToken token)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified workflow history requires PostgreSQL.");
+        if (Engine is not null) throw new NotSupportedException("Qualified workflow history requires the local store.");
+        ArgumentOutOfRangeException.ThrowIfNegative(limit);
         await using var db = create();
+        if (!postgres && db.UsesSqliteRootRuntime)
+            return await ReadSqliteRootWorkflowHistoryAsync(db, tenant, type, definition, status, from, to, afterTime, afterRef, limit, token);
+        if (!postgres) throw new NotSupportedException("Qualified workflow history requires PostgreSQL or a shipped SQLite root store.");
         if (!db.SupportsRootWorkflowHistory)
             throw new StoreFormatException("This store profile does not carry workflow history.");
         var expected = db.RequiredFormat;
+        var projectionVersion = WorkflowHistoryVersion(db);
         var projection = ActorListProjection.Of(db);
         var triggers = projection.WorkflowHistoryTriggers;
         // On a qualified list the reader binds the list, the marker and the history format to the history table's schema,
@@ -115,7 +135,7 @@ public sealed partial class EfStore
         List<RootWorkflowHistoryRow> rows;
         try
         {
-            rows = await db.Database.SqlQuery<RootWorkflowHistoryRow>($"""
+            rows = await db.Database.SqlQuery<RootWorkflowHistoryRow>(StoreDefinitionsRevision.AddPostgresStamp($"""
                 WITH kernel AS (
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
                 ), format AS (
@@ -142,7 +162,7 @@ public sealed partial class EfStore
                     SELECT l."Reference", l."Status", l."Header", h."UpdatedAt"
                     FROM "FoundationWorkflowHistory" h JOIN "FoundationActorList" l USING ("Tenant", "Reference")
                     WHERE h."Tenant" = {tenant} AND (SELECT "TriggerEnabled" FROM readiness)
-                        AND EXISTS (SELECT 1 FROM format WHERE "Version" = {WorkflowHistoryVersion})
+                        AND EXISTS (SELECT 1 FROM format WHERE "Version" = {projectionVersion})
                         AND EXISTS (SELECT 1 FROM kernel WHERE "StoreSchema" = {expected.StoreSchema}
                             AND "MessageProtocol" = {expected.MessageProtocol} AND "JournalCodec" = {expected.JournalCodec})
                         AND l."Type" = {encodedType}::jsonb
@@ -155,23 +175,20 @@ public sealed partial class EfStore
                             h."UpdatedAt" = {afterTime} AND h."Reference" > {afterRef})
                     ORDER BY h."UpdatedAt" DESC, h."Reference" LIMIT {limit}
                 )
-                SELECT page.*, kernel.*, (SELECT "Version" FROM format) AS "Version",
+                SELECT page.*, kernel.*, /*definitions-stamp*/ AS "DefinitionStamp", (SELECT "Version" FROM format) AS "Version",
                     (SELECT "TriggerEnabled" FROM readiness) AS "TriggerEnabled",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN kernel ON true
                 ORDER BY page."UpdatedAt" DESC, page."Reference" COLLATE "C"
-                """).ToListAsync(token);
+                """)).ToListAsync(token);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedFunction)
         {
             throw new StoreFormatException("The qualified workflow history projection is missing.", error);
         }
         var first = rows[0];
-        if (first.StoreSchema is not { } schema || first.MessageProtocol is not { } protocol || first.JournalCodec is not { } codec)
-            throw new StoreFormatException("The kernel store version marker is missing.");
-        var stored = new StoreFormat(schema, protocol, codec);
-        if (stored != expected) throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {expected}.");
-        RequireHistoryVersion(first.Version);
+        RequireSnapshotFormat(db, first.StoreSchema, first.MessageProtocol, first.JournalCodec, first.DefinitionStamp);
+        RequireHistoryVersion(first.Version, projectionVersion);
         if (!first.TriggerEnabled) throw new StoreFormatException("The workflow history source or one of its projection triggers is missing or disabled.");
         var items = rows.Where(row => row.Reference is not null).Select(row =>
         {
@@ -181,9 +198,9 @@ public sealed partial class EfStore
         return new(items, first.AsOf);
     }
 
-    private static void RequireHistoryVersion(int? version)
+    private static void RequireHistoryVersion(int? version, int expected)
     {
-        if (version != WorkflowHistoryVersion)
-            throw new StoreFormatException($"Unsupported workflow history projection version. Stored {version?.ToString() ?? "missing"}. This build reads {WorkflowHistoryVersion}.");
+        if (version != expected)
+            throw new StoreFormatException($"Unsupported workflow history projection version. Stored {version?.ToString() ?? "missing"}. This build reads {expected}.");
     }
 }

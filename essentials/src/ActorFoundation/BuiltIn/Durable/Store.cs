@@ -54,7 +54,16 @@ public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, 
     internal ParkRelease? ReleasedBy { get; init; }
     internal int PayloadLength { get; init; }
     internal string? ReplyTenant { get; init; }
+    internal RootCreatorWitness? RootCreator { get; init; }
 }
+
+// A provider can carry exact creator evidence from its poll to its own first-checkpoint writer.
+internal abstract record RootCreatorWitness(Message Envelope);
+internal sealed record InlineRootCreatorWitness(object Issuer, Message Creator, Func<TimeSpan> LeaseRemaining)
+    : RootCreatorWitness(Creator);
+internal sealed record InlineParkInput(Message Envelope, bool Failed);
+internal sealed record InlineParkWitness(InstanceRow? Checkpoint, IReadOnlyList<InlineParkInput> Inputs);
+internal sealed record InlineJobWinner(InstanceRow Checkpoint, Message Ticket, Message Deadline, Message Result, RootJobCompletion? Callback);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
 public sealed record SubscriptionRow(
@@ -139,6 +148,16 @@ public sealed record OwnedLease(IReadOnlyList<PartitionFence> Taken, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 
+// An optional owner read can project bounded ordinal lookups with the inbox page. A null
+// projection leaves the regular load path responsible for resolving the actual requests.
+internal interface IOwnerPollLookups
+{
+    const int MaximumActors = 8;
+    bool CanPollLookups { get; }
+    ValueTask<(Polled Poll, IReadOnlyList<ActorLookup>? Lookups)> PollLookupsAsync(IReadOnlyCollection<PartitionFence> fences,
+        TimeSpan horizon, int limit, Func<Polled, string[]> selectLookups, CancellationToken cancellationToken);
+}
+
 /// <summary>A partition the node heartbeat found owned by its node, at the epoch the store has for it.</summary>
 public sealed record OwnedEpoch(int Partition, long Epoch);
 
@@ -167,8 +186,12 @@ public sealed record TurnCommit(
     IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false)
 {
     internal FoundationHeaderChange? FoundationHeader { get; init; }
+    internal RootCreatorWitness? RootCreator { get; init; }
+    internal InlineParkWitness? FoundationInlinePark { get; init; }
+    internal InlineJobWinner? FoundationInlineJob { get; init; }
     // The qualified writer compares the exact envelope the owner dispatched with the locked occurrence.
     internal Message? FoundationRootOperator { get; init; }
+    internal Message? FoundationRootRefusedInput { get; init; }
     internal RootJobCompletion? FoundationRootJobCompletion { get; init; }
     internal IReadOnlyList<Message>? FoundationRootParkInputs { get; init; }
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls { get; init; }
@@ -180,6 +203,7 @@ public sealed record TurnCommit(
     internal ParkRecoveryPage? FoundationRecoveryPage { get; init; }
     internal ParkRetryOpen? FoundationRetry { get; init; }
     internal ParkTimerOpen? FoundationRecoveryTimers { get; init; }
+    internal ParkTimerRecipe[]? FoundationRootTimerRearms { get; init; }
     internal ParkJobOpen? FoundationRecoveryJobs { get; init; }
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions { get; init; }
     internal InboxKey? FoundationCatchUpStep { get; init; }
@@ -189,7 +213,14 @@ public sealed record TurnCommit(
     internal long? FoundationPublicationSequence { get; init; }
     internal CascadeCommit? FoundationCascade { get; init; }
     internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
+    internal IReadOnlyList<Message>? FoundationRootChildSends { get; init; }
+    internal IReadOnlyList<Message>? FoundationRootPublications { get; init; }
+    internal TerminalOutput? FoundationTerminalOutput { get; init; }
+    internal RetainedRootResponse? FoundationRetainedResponse { get; init; }
 }
+
+internal sealed record TerminalOutput(string Names, byte[]? Value);
+internal sealed record RetainedRootResponse(string Key, long CapturedAt, bool Present, byte[]? Payload);
 
 internal sealed record FoundationDispatchHeader(string Tenant, string Reference, FoundationHeaderChange Header, long TerminalGrowth = 0)
 {
@@ -217,6 +248,13 @@ public sealed record CommitBatch(
     /// fenced partition's; in the owned-set form each partition moves by <see cref="PositionsIn"/>.
     /// </summary>
     public int Positions => Turns.Count(s => s.Journal is not null);
+
+    internal CommitBatch WithoutActorJournals(IReadOnlySet<string>? refused) => refused is { Count: > 0 }
+        ? this with
+        {
+            Turns = [.. Turns.Select(turn => refused.Contains(turn.Instance) ? turn with { Journal = null } : turn)]
+        }
+        : this;
 
     /// <summary>Optional closed-open authority interval required by this transaction's guarded turns.</summary>
     public CommitWindow? Window { get; init; }
@@ -255,7 +293,9 @@ public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs)
 {
     // Timers minted by the commit clock rather than supplied in TurnCommit.Sent.
     internal IReadOnlyList<Stored> ParkExpiries { get; init; } = [];
-    internal IReadOnlyList<RetiredOperatorReply> RetiredOperatorReplies { get; init; } = [];
+    internal IReadOnlyList<RetiredReply> RetiredReplies { get; init; } = [];
+    internal IReadOnlySet<string>? RetentionRefusals { get; init; }
+    internal IReadOnlyDictionary<string, InlineRootResult>? InlineRefusals { get; init; }
     internal IReadOnlyDictionary<string, IReadOnlyList<InboxKey>>? CascadeRemovals { get; init; }
 }
 
@@ -289,13 +329,36 @@ internal interface IFoundationSchedulingStore
     ParkDrainSample? SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere);
 }
 
+internal readonly record struct DueBacklogRead(int Partition, bool ReadPublished);
+internal sealed record DueBacklogSample(int Partition, int? Published, int Estimate);
+
 internal interface IDueBacklogStore
 {
     bool MeasuresDueBacklog => true;
-    int PublishedDueBacklog(int partition);
+    ValueTask<int> ReadPublishedDueBacklogAsync(int partition, CancellationToken cancellationToken);
 
     // Count pending due rows using the store's clock, stopping at a positive cap.
     ValueTask<int> CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken = default);
+
+    async ValueTask<IReadOnlyList<DueBacklogSample>> SampleDueBacklogAsync(IReadOnlyList<DueBacklogRead> reads, int cap,
+        CancellationToken cancellationToken)
+    {
+        var samples = new List<DueBacklogSample>(reads.Count);
+        foreach (var read in reads)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            try
+            {
+                int? published = read.ReadPublished ? await ReadPublishedDueBacklogAsync(read.Partition, cancellationToken) : null;
+                samples.Add(new(read.Partition, published, await CountDueBacklogAsync(read.Partition, cap, cancellationToken)));
+            }
+            catch (Exception)
+            {
+                // Observations are independent. Leave the last estimate in place until the next interval.
+            }
+        }
+        return samples;
+    }
 }
 
 /// <summary>
@@ -584,8 +647,9 @@ public static class Events
 {
     internal static EventMatch? MatchFor(Message message)
     {
-        if (message.Kind != Kinds.Event || message.EventMatch is not { } match) return null;
+        if (message.Kind != Kinds.Event) return null;
         if (message.ProjectedEvent is { } projected) return projected;
+        if (message.EventMatch is not { } match) return null;
         return FoundationEventDelivery.HasDigest(message)
             ? FoundationEventDelivery.ReadHeader(message, out _)
             : EventMatch.Decode(match);

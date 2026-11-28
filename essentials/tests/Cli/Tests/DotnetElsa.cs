@@ -38,7 +38,7 @@ internal static class DotnetElsa
     /// <summary>The actual Workbench build output used by the public candidate-inspection acceptance path.</summary>
     public static string Workbench()
     {
-        var directory = Path.Join(RepoRoot, "apps", "Elsa.Workbench.Host", "bin", Configuration, "net10.0");
+        var directory = Path.Join(RepoRoot, "server/apps", "Elsa.Workbench.Host", "bin", Configuration, "net10.0");
         Assert.True(Directory.Exists(directory), $"The actual Workbench output directory is missing: {directory}");
         foreach (var file in new[] { "Elsa.Workbench.Host.dll", "Elsa.Workbench.Host.deps.json", "Elsa.Workbench.Host.runtimeconfig.json" })
             Assert.True(File.Exists(Path.Join(directory, file)), $"The actual Workbench output is missing {file}: {directory}");
@@ -48,7 +48,7 @@ internal static class DotnetElsa
     /// <summary>The actual Foundation Host build output used as an unenrolled-host control.</summary>
     public static string FoundationHost()
     {
-        var directory = Path.Join(RepoRoot, "apps", "Elsa.Foundation.Host", "bin", Configuration, "net10.0");
+        var directory = Path.Join(RepoRoot, "server/apps", "Elsa.Foundation.Host", "bin", Configuration, "net10.0");
         Assert.True(Directory.Exists(directory), $"The actual Foundation Host output directory is missing: {directory}");
         foreach (var file in new[] { "Elsa.Foundation.Host.dll", "Elsa.Foundation.Host.deps.json", "Elsa.Foundation.Host.runtimeconfig.json" })
             Assert.True(File.Exists(Path.Join(directory, file)), $"The actual Foundation Host output is missing {file}: {directory}");
@@ -56,7 +56,7 @@ internal static class DotnetElsa
     }
 
     /// <summary>The checked-in Workbench source files copied into a disposable inspection source directory.</summary>
-    public static string WorkbenchSource() => Path.Join(RepoRoot, "apps", "Elsa.Workbench.Host");
+    public static string WorkbenchSource() => Path.Join(RepoRoot, "server/apps", "Elsa.Workbench.Host");
 
     public static CliRun Run(params string[] arguments) => Run(environment: null, arguments);
 

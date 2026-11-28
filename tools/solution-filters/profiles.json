@@ -65,6 +65,7 @@
         "Elsa.Serialization.Tests",
         "Elsa.Tasks",
         "Elsa.Tasks.Core",
+        "Elsa.Tasks.Execution.Tests",
         "Elsa.Tasks.Schedules",
         "Elsa.Tasks.Tests",
         "Elsa.Testing",
@@ -81,8 +82,6 @@
         "Elsa.Workflows.Runtime.Api",
         "Elsa.Workflows.Runtime.Api.Tests",
         "Elsa.Workflows.Runtime.Core",
-        "Elsa.Workflows.Runtime.Reconciliation",
-        "Elsa.Workflows.Runtime.Reconciliation.Core",
         "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
         "Elsa.Workflows.Runtime.Resumption",
         "Elsa.Workflows.Runtime.Resumption.Tests",
@@ -115,8 +114,8 @@
       "requiredRootPaths": [
         "essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
         "essentials/tests/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
-        "essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
-        "essentials/tests/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
         "essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"
       ],
       "requirePackageReferencePrefixes": [
@@ -127,13 +126,11 @@
       "outputPath": "Elsa.Server.Workbench.slnf",
       "includeProjectNames": [
         "Elsa.Workbench.Host",
-        "Elsa.Workbench.Tests",
-        "Elsa.Workbench.BackgroundActivities.Tests"
+        "Elsa.Workbench.Tests"
       ],
       "requiredRootPaths": [
-        "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj",
-        "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
-        "essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj"
+        "server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj",
+        "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj"
       ]
     }
   ]

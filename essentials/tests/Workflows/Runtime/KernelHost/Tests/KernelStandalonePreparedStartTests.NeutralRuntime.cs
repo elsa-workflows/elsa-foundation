@@ -1,0 +1,579 @@
+using System.Text.Json;
+using Elsa.ActorFoundation.Hosting;
+using Elsa.Activities.Primitives;
+using Elsa.Activities.Scheduling.StandaloneTriggers;
+using Elsa.Events;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
+using Elsa.Serialization.Core;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.KernelHost;
+using Elsa.Workflows.Runtime.KernelHosting;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Scheduling;
+using Elsa.Workflows.Runtime.Scheduling.Options;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Kernel.Foundation.Hosting;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Npgsql;
+using Xunit;
+using Contract = Kernel.Foundation.Contracts;
+using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
+
+namespace Elsa.Workflows.Runtime.KernelHost.Tests;
+
+public sealed partial class KernelStandalonePreparedStartTests
+{
+    private const string WaitSourceFamily = EventFamily + ".UnqualifiedWait";
+
+    [Fact]
+    public Task Sqlite_neutral_runtime_admits_and_drains_only_prepared_standalone_sources() => RunNeutralAsync(false);
+
+    [SkippableFact]
+    public Task PostgreSql_neutral_runtime_admits_and_drains_only_prepared_standalone_sources()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)),
+            "Requires dedicated Foundation and Runtime PostgreSQL databases.");
+        return RunNeutralAsync(true);
+    }
+
+    private static async Task RunNeutralAsync(bool postgres)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var token = deadline.Token;
+        var directory = postgres ? null : Directory.CreateTempSubdirectory("kernel-standalone-neutral");
+        try
+        {
+            var provider = postgres ? "PostgreSql" : "Sqlite";
+            var path = directory is null ? null : Path.Combine(directory.FullName, "foundation.db");
+            var foundation = postgres ? Environment.GetEnvironmentVariable(FoundationDatabase)! : null;
+            var runtime = postgres ? Environment.GetEnvironmentVariable(RuntimeDatabase)!
+                : new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory!.FullName, "runtime.db"), Pooling = false }.ToString();
+            if (postgres)
+                Assert.NotEqual(new NpgsqlConnectionStringBuilder(foundation).Database, new NpgsqlConnectionStringBuilder(runtime).Database);
+            var clock = new TestClock(DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+            var model = ExecutableOf("standalone-neutral-native", Definition, SetOutput("set-result", "result", Literal("value", "runner-free")));
+            var material = new WorkflowExecutable(model.Identity, model.RootActivity, model.ResumeTargets, model.CreatedAt,
+                model.CompatibilityMetadata, new(WorkflowExecutableInputContract.CurrentVersion, []), model.Dependencies, model.IncidentStrategy);
+            var nextModel = ExecutableOf("standalone-neutral-replacement", Definition,
+                SetOutput("set-result", "result", Literal("value", "replacement")));
+            var current = new WorkflowExecutable(nextModel.Identity with { ArtifactVersion = "2", DefinitionVersionId = "version-2" },
+                nextModel.RootActivity, nextModel.ResumeTargets, nextModel.CreatedAt, nextModel.CompatibilityMetadata,
+                material.InputContract!, nextModel.Dependencies, nextModel.IncidentStrategy);
+            var signal = Signal("neutral-prepared-event");
+            var waitsSignal = Signal("unqualified-waits");
+            string sourceId;
+
+            await using (var host = OpenHost())
+            {
+                await using var operation = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                var services = operation.ServiceProvider;
+                Assert.Null(services.GetService<IWorkflowExecutionStateStore>());
+                Assert.Null(services.GetService<IWorkflowSchedulerWorkQueue>());
+                Assert.Null(services.GetService<IRuntimeCheckpointCommitStore>());
+                var directTests = Assert.IsType<KernelDirectTestRunDispatcher>(services.GetRequiredService<IWorkflowDirectTestRunDispatcher>());
+                Assert.Same(directTests, services.GetRequiredService<IWorkflowStartDispatcher>());
+                Assert.Null(services.GetService<IRuntimeIngressWaitTarget>());
+                Assert.Null(services.GetService<IStimulusRouter>());
+                var outbox = Assert.IsType<EfRuntimePostCommitOutboxStorage>(services.GetRequiredService<IRuntimePostCommitOutboxStore>());
+                Assert.Same(outbox, services.GetRequiredService<IPostCommitOutboxLookupStore>());
+                await services.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
+                var activation = await PublishAsync(services, material, 0, clock.GetUtcNow(), token);
+                var ingress = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
+                Assert.True(ingress.SupportsAdmission);
+                var resource = services.GetRequiredService<ITriggerSourceResourceCommitStore>();
+                Assert.True(resource.SupportsActivatedType("event"));
+                await WriteTriggerAsync(resource, activation, EventId, "event", new { eventName = EventId });
+                await AssertHistoricalIdentityFenceAsync(services, ingress);
+                var accepted = await Source(services).AdmitAsync(signal, token);
+                sourceId = accepted.AdmissionId;
+                Assert.False(accepted.Replayed);
+                var item = await ReadAsync(services, sourceId, token);
+                Assert.Equal(material.Identity, Assert.Single(item.SubscriptionDelivery!.Recipients).Material);
+                Assert.Equal(RuntimeRecipientPhase.Pending, Progress(item).Phase);
+                Assert.Contains(material.Identity.ArtifactId, await outbox.ListPinnedExecutableArtifactIdsAsync(token));
+                Assert.True((await Source(services).AdmitAsync(signal, token)).Replayed);
+
+                await Assert.ThrowsAsync<NotSupportedException>(() => services.GetRequiredService<IStandaloneTriggerIngress<UnqualifiedWaitEvent>>()
+                    .AdmitAsync(waitsSignal, token).AsTask());
+                Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, SourceId(waitsSignal), token));
+                var processor = services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+                Assert.False(processor.SupportsSourceKind(RuntimeDeliverySourceKind.WorkflowCheckpoint));
+                await Assert.ThrowsAsync<NotSupportedException>(() => processor.ProcessAsync(new(1, intentKind: "other"), token).AsTask());
+                var replacement = await PublishAsync(services, current, activation.Revision, clock.GetUtcNow(), token);
+                Assert.NotEqual(activation.ActiveActivationId, replacement.ActiveActivationId);
+            }
+
+            await using (var host = OpenHost())
+            {
+                var shell = host.GetRequiredService<KernelShellRuntime>();
+                await shell.StartAsync(token);
+                try
+                {
+                    await using var operation = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                    var services = operation.ServiceProvider;
+                    var replay = await Source(services).AdmitAsync(signal, token);
+                    Assert.True(replay.Replayed);
+                    Assert.Equal(sourceId, replay.AdmissionId);
+                    var tasks = host.GetServices<IRecurringTask>().ToArray();
+                    var pump = Assert.Single(tasks, task => task is not RecurringTriggerPumpTask);
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pump.ExecuteAsync(new(canceled: true)));
+                    Assert.Equal(RuntimeRecipientPhase.Pending, Progress(await ReadAsync(services, sourceId, token)).Phase);
+                    await RunScheduledSweepAsync(pump, token);
+                    var accepted = Assert.IsType<RuntimePostCommitOutboxItem>(await services.GetRequiredService<IRuntimeIngressDeliveryStore>()
+                        .FindDeliveryAsync(DeliveryScope, sourceId, token));
+                    var receipt = Assert.IsType<RuntimeTargetAcceptanceReceipt>(Progress(accepted).Receipt);
+                    Assert.Equal(RuntimeTargetAcceptanceKind.PreparedActorBirth, receipt.Kind);
+                    Assert.Equal(material.Identity, receipt.Material);
+                    Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, accepted.Status);
+                    Assert.DoesNotContain(material.Identity.ArtifactId, await services.GetRequiredService<EfRuntimePostCommitOutboxStorage>()
+                        .ListPinnedExecutableArtifactIdsAsync(token));
+                    Assert.Contains(material.Identity.ArtifactId, await services.GetRequiredService<IRuntimeKernelExecutablePinStore>()
+                        .ListPinnedExecutableArtifactIdsAsync(token));
+                    var reads = await shell.ReadAsync(token);
+                    var owner = EmbeddedTenant.Bind(Persistence.Value);
+                    var finished = await WaitForAsync(reads, owner, new(receipt.EvidenceId),
+                        actor => actor.Header.Status == Contract.ActorStatus.Finished, token);
+                    var result = await Assert.IsAssignableFrom<Contract.IActorTerminalOutputReads>(reads)
+                        .ReadTerminalOutputAsync(owner, finished.Header.Ref, Assert.IsType<long>(finished.Header.EndedAt), includeValues: true, cancellationToken: token);
+                    using var output = JsonDocument.Parse(Assert.IsType<byte[]>(result?.Values));
+                    Assert.Equal("runner-free", output.RootElement.GetProperty("result").GetString());
+                    Assert.Equal(0, (await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(1), token)).AttemptedCount);
+                    Assert.Equal(finished.Header.Ref, Assert.Single((await reads.ListAsync(owner, new(), cancellationToken: token)).Items).Header.Ref);
+                    var recurrence = Assert.Single(tasks.OfType<RecurringTriggerPumpTask>());
+                    await AssertResourceRecurrenceAsync(services, reads, owner, recurrence, pump);
+                    await AssertAuthoredEventCohortAsync(host, services, pump);
+                }
+                finally { await StopAsync(shell); }
+            }
+
+            async Task AssertHistoricalIdentityFenceAsync(IServiceProvider prepared, IRuntimeIngressDeliveryStore ingress)
+            {
+                var historicalSignal = Signal("historical-execution-conflict");
+                var source = RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, EventId,
+                    EventFamily, historicalSignal.SourceKey);
+                var trigger = Assert.IsType<TriggerAggregate>(await prepared.GetRequiredService<IStandaloneTriggerStore>()
+                    .FindAsync(DeliveryScope, EventId, token));
+                var subscription = Assert.Single(trigger.Subscriptions);
+                var executionId = new RuntimeSubscriptionStartIdentity(RuntimeSubscriptionStartIdentity.CurrentVersion,
+                    Persistence, source, subscription.Id).WorkflowExecutionId;
+
+                var context = prepared.GetRequiredService<RuntimeDbContext>();
+                var scope = Persistence.Value;
+                var now = clock.GetUtcNow();
+                var historical = new WorkflowExecutionState(executionId, material.Identity, WorkflowExecutionStatus.Completed, null,
+                    now, null, null, now, null, null, scope, new Dictionary<string, string>());
+                var row = new WorkflowExecutionStateEntity
+                {
+                    Id = EfRelationalIdentity.Hash($"workflow-execution:{scope.Length}:{scope}{executionId.Length}:{executionId}"),
+                    ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope),
+                    WorkflowExecutionId = EfRelationalIdentity.Encode(executionId), WorkflowExecutionIdHash = EfRelationalIdentity.Hash(executionId),
+                    WorkflowExecutionIdOrderKey = LegacyExecutionOrderKey(executionId),
+                    TenantId = EfRelationalIdentity.Encode(scope), TenantIdHash = EfRelationalIdentity.Hash(scope),
+                    DefinitionId = EfRelationalIdentity.Encode(Definition), DefinitionIdHash = EfRelationalIdentity.Hash(Definition),
+                    ArtifactId = EfRelationalIdentity.Encode(material.Identity.ArtifactId), ArtifactIdHash = EfRelationalIdentity.Hash(material.Identity.ArtifactId),
+                    ArtifactIdOrderKey = LegacyExecutionOrderKey(material.Identity.ArtifactId),
+                    Status = (int)historical.Status, RunKind = (int)historical.RunKind, SortTimestampUtcTicks = now.UtcTicks,
+                    ContentJson = JsonSerializer.Serialize(historical, WebJson), SchemaVersion = RuntimeWorkflowExecutionEfModule.SchemaVersion, Revision = 1
+                };
+                context.WorkflowExecutionStates.Add(row);
+                await context.SaveChangesAsync(token);
+                await AssertConflictAsync("The deterministic target identity was already used before admission.");
+                Assert.True(await KernelRuntimeFixture.HasClassicExecutionAsync(prepared, executionId, token));
+
+                context.WorkflowExecutionStates.Remove(row);
+                var tombstone = new ExecutionLivenessState(RuntimeExecutionOwnershipStateId.For(executionId), executionId,
+                    null, null, null, null, [], new Dictionary<string, string>
+                    {
+                        [RuntimeMetadataKeys.OwnershipFencingToken] = "0",
+                        [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
+                    });
+                var physicalTombstone = EfRuntimeExecutionLivenessRow.ToEntity(context, tombstone, scope, 1);
+                context.ExecutionLivenessStates.Add(physicalTombstone);
+                await context.SaveChangesAsync(token);
+                Assert.False(await KernelRuntimeFixture.HasClassicExecutionAsync(prepared, executionId, token));
+                Assert.True(await EfRuntimeExecutionLivenessRow.IsWorkflowExecutionDeletionTombstonedAsync(context, scope, executionId, token));
+                await AssertConflictAsync("A saved cohort execution dependency was retired before acceptance.");
+
+                static string LegacyExecutionOrderKey(string identity) => Convert.ToHexString(
+                    EfRelationalIdentity.CreateOrderKey(identity, RuntimeWorkflowExecutionEfModule.IdentityMaximumLength));
+
+                async Task AssertConflictAsync(string reason)
+                {
+                    var failure = await Assert.ThrowsAsync<TriggerOperationException>(() => Source(prepared).AdmitAsync(historicalSignal, token).AsTask());
+                    Assert.Equal("conflict", failure.Code);
+                    Assert.Equal(reason, Assert.IsType<InvalidDataException>(failure.InnerException).Message);
+                    Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, source, token));
+                }
+            }
+
+            ServiceProvider OpenHost(bool authoredOnly = false, PersistenceScope? relayScope = null)
+            {
+                var services = new ServiceCollection();
+                services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+                services.AddLogging(builder => builder.AddSimpleConsole().SetMinimumLevel(LogLevel.Warning));
+                services.AddSingleton<TimeProvider>(clock);
+                services.AddSingleton<IWellKnownTypeRegistry, KernelPublishedExecuteTests.FixtureTypes>();
+                new EventsFeature().ConfigureServices(services);
+                new ActivitiesPrimitivesFeature().ConfigureServices(services);
+                WorkflowPublicationDefaults.Add(services);
+                new RuntimeArtifactsEntityFrameworkCoreFeature
+                {
+                    Provider = provider, ConnectionString = runtime, RecoveryContinuationSigningKey = new string('r', 32)
+                }.ConfigureServices(services);
+                new RuntimePublicationEntityFrameworkCoreFeature().ConfigureServices(services);
+                new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
+                new WorkflowsRuntimePreparedStandaloneSourcePumpFeature().ConfigureServices(services);
+                new WorkflowsRuntimePreparedStandaloneRecurringTriggersFeature().ConfigureServices(services);
+                new PreparedStandaloneScheduleTriggersFeature().ConfigureServices(services);
+                services.Configure<RecurringTriggerPumpOptions>(options => options.MaxSchedulesPerTick = 1);
+                if (!authoredOnly)
+                {
+                    services.AddStandaloneTriggerIngress<FixtureEvent>(new("event", 1, EventFamily, EventSchema));
+                    services.AddScoped<IStandaloneTriggerSourceContext<FixtureEvent>, EventContext>();
+                    services.AddStandaloneTriggerIngress<UnqualifiedWaitEvent>(new("event", 1, WaitSourceFamily, EventSchema));
+                    services.AddScoped<IStandaloneTriggerSourceContext<UnqualifiedWaitEvent>, UnqualifiedWaitEventContext>();
+                }
+                new WorkflowsRuntimeKernelHostingFeature
+                {
+                    Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = true
+                }.ConfigureServices(services);
+                if (relayScope is not null)
+                    services.AddSingleton<IRuntimeAuthoredStandaloneEventAvailability>(new PublishedEventAvailability(relayScope));
+                var kernel = new WorkflowsRuntimeKernelFeature();
+                kernel.ConfigureServices(services);
+                kernel.PostConfigureServices(services);
+                return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            }
+
+            async Task AssertAuthoredEventCohortAsync(ServiceProvider host, IServiceProvider services, IRecurringTask pump)
+            {
+                const string eventName = "actor-origin";
+                const string family = "Elsa.Event.Broadcast";
+                const string first = "authored-event-a";
+                const string second = "authored-event-b";
+                const string later = "authored-event-c";
+                var firstEvent = new RuntimeAuthoredStandaloneEvent(DeliveryScope, new(Persistence.Value), new string('A', 64),
+                    new string('B', 64), eventName, JsonSerializer.SerializeToElement(new { order = "A-42" }), clock.GetUtcNow(),
+                    new("workflow:publisher", "subject:owner", new Dictionary<string, string>()));
+                var empty = firstEvent with { Occurrence = new string('C', 64) };
+                var port = services.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
+                var sourceStore = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
+                var context = services.GetRequiredService<RuntimeDbContext>();
+                var slot = Assert.IsType<WorkflowActivationSlot>(await services.GetRequiredService<IWorkflowActivationAuthority>()
+                    .FindAsync(Definition, KernelServing.DefaultSlotName, token));
+                await port.AdmitAsync(empty, token);
+                var unstamped = context.Database.GetMigrations().Single(id => id.EndsWith("_AuthoredEventCohorts", StringComparison.Ordinal));
+                // Keep the real empty-cohort receipt across the old physical shape. A replay below must
+                // still see it after matching triggers exist and therefore avoid selecting them.
+                await context.GetService<IMigrator>().MigrateAsync(unstamped, token);
+                await context.Database.MigrateAsync(token);
+                var firstWrite = TriggerWrite(slot, first, "event", new { eventName }) with { ObservedTargets = null };
+                foreach (var wrongScope in new PersistenceScope?[] { null, new("another-tenant") })
+                {
+                    await using var inactive = OpenHost(authoredOnly: true, relayScope: wrongScope);
+                    await using var operation = await inactive.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                    var committer = operation.ServiceProvider.GetRequiredService<ITriggerManagementCommitter>();
+                    Assert.False(committer.CanActivateType("event", 1));
+                    var unavailable = await Assert.ThrowsAsync<TriggerOperationException>(() =>
+                        committer.CommitAsync(DeliveryScope, firstWrite, token).AsTask());
+                    Assert.Equal("unavailable", unavailable.Code);
+                }
+
+                await using var active = OpenHost(authoredOnly: true, relayScope: Persistence);
+                await using var management = await active.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                var authoring = management.ServiceProvider.GetRequiredService<ITriggerManagementCommitter>();
+                Assert.True(authoring.CanActivateType("event", 1));
+                Assert.False(authoring.CanActivateType("event", 2));
+                await CommitAuthoredTriggerAsync(firstWrite);
+                await CommitAuthoredTriggerAsync(TriggerWrite(slot, second, "event", new { eventName }) with { ObservedTargets = null });
+                await port.AdmitAsync(empty, token);
+                Assert.Null(await FindAsync(sourceStore, empty, first));
+
+                if (!postgres)
+                {
+                    await context.Database.OpenConnectionAsync(token);
+                    // A second physical outbox insert in this cohort fails, regardless of which resource EF stages first.
+                    await context.Database.ExecuteSqlRawAsync("""
+                        CREATE TEMP TRIGGER fail_second_authored_event BEFORE INSERT ON elsa_runtime_post_commit_outbox
+                        WHEN EXISTS (
+                            SELECT 1 FROM elsa_runtime_post_commit_outbox WHERE "SourceKeyHash" = NEW."SourceKeyHash")
+                        BEGIN SELECT RAISE(ABORT, 'fail second authored event resource'); END;
+                        """, token);
+                    try { await Assert.ThrowsAsync<TriggerOperationException>(() => port.AdmitAsync(firstEvent, token).AsTask()); }
+                    finally { await context.Database.ExecuteSqlRawAsync("DROP TRIGGER fail_second_authored_event", token); }
+                    Assert.Null(await FindAsync(sourceStore, firstEvent, first));
+                    Assert.Null(await FindAsync(sourceStore, firstEvent, second));
+                    await context.Database.CloseConnectionAsync();
+                }
+
+                await port.AdmitAsync(firstEvent, token);
+                await AssertPinnedAsync(sourceStore, first);
+                await AssertPinnedAsync(sourceStore, second);
+
+                var thirdModel = ExecutableOf("standalone-neutral-third", Definition,
+                    SetOutput("set-result", "result", Literal("value", "third")));
+                var third = new WorkflowExecutable(thirdModel.Identity with { ArtifactVersion = "3", DefinitionVersionId = "version-3" },
+                    thirdModel.RootActivity, thirdModel.ResumeTargets, thirdModel.CreatedAt, thirdModel.CompatibilityMetadata,
+                    current.InputContract!, thirdModel.Dependencies, thirdModel.IncidentStrategy);
+                var republished = await PublishAsync(services, third, slot.Revision, clock.GetUtcNow(), token);
+                await CommitAuthoredTriggerAsync(TriggerWrite(republished, later, "event", new { eventName }) with { ObservedTargets = null });
+                await using (var fresh = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence))
+                {
+                    var reopened = fresh.ServiceProvider.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
+                    var reopenedStore = fresh.ServiceProvider.GetRequiredService<IRuntimeIngressDeliveryStore>();
+                    var cohortId = EfRelationalIdentity.HashLengthFramed("authored-event-cohort/1",
+                        DeliveryScope.Persistence.Value, DeliveryScope.TenantId!, firstEvent.Occurrence);
+                    Assert.Equal(1, await SetStampAsync("9.99.0", cohortId));
+                    var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() =>
+                        reopened.AdmitAsync(firstEvent with { EventName = "other" }, token).AsTask());
+                    Assert.Equal("RuntimeAuthoredEventCohort", skew.Family);
+                    Assert.Equal("9.99.0", skew.Found);
+                    Assert.Equal(1, await SetStampAsync("1.0.0", cohortId));
+                    await reopened.AdmitAsync(firstEvent, token);
+                    await AssertPinnedAsync(reopenedStore, first);
+                    await AssertPinnedAsync(reopenedStore, second);
+                    Assert.Null(await FindAsync(reopenedStore, firstEvent, later));
+                    await Assert.ThrowsAsync<TriggerOperationException>(() => reopened.AdmitAsync(firstEvent with { EventName = "other" }, token).AsTask());
+                }
+
+                await RunScheduledSweepAsync(pump, token);
+                foreach (var trigger in new[] { first, second })
+                {
+                    var delivered = Assert.IsType<RuntimePostCommitOutboxItem>(await FindAsync(sourceStore, firstEvent, trigger));
+                    Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
+                    Assert.Equal(current.Identity, Progress(delivered).Receipt?.Material);
+                }
+
+                Task<int> SetStampAsync(string version, string id) => context.Database.ExecuteSqlInterpolatedAsync(
+                    $"""UPDATE elsa_runtime_authored_event_cohort SET "SchemaVersion" = {version} WHERE "Id" = {id}""", token);
+
+                await AssertCohortGateAsync();
+
+                async Task AssertCohortGateAsync()
+                {
+                    const string familyName = "RuntimeAuthoredEventCohort";
+                    await using var gated = OpenHost(authoredOnly: true, relayScope: Persistence);
+                    await using var scope = await gated.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                    var gatedServices = scope.ServiceProvider;
+                    var db = gatedServices.GetRequiredService<RuntimeDbContext>();
+                    var declarations = EfSchemaModuleFamilies.ForContext(db.GetType())!;
+                    var registry = gatedServices.GetRequiredService<EfSchemaFinalizationGates>();
+                    var states = new EfSchemaFinalizationStore(db);
+                    var member = new SchemaFinalizationMember("authored-event-qualification", "isolated-host");
+                    foreach (var chain in declarations.Chains)
+                        await states.GetOrCreateAsync(chain.Family, chain.CurrentVersion, chain.ReadableVersions,
+                            SchemaFinalizationActor.Of(member), token);
+
+                    var predecessor = EfSchemaModuleFamilies.FromDeclarations(declarations.Module, declarations.Chains
+                        .Where(chain => chain.Family != familyName).Select(chain => declarations.DeclarationOf(chain.Family)));
+                    await AdmitAsync(predecessor);
+                    await AssertUnavailableAsync();
+
+                    var gate = await AdmitAsync(declarations);
+                    Assert.True(gatedServices.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>().SupportsAdmission);
+                    const string newer = "9.99.0";
+                    var record = Assert.IsType<SchemaFinalizationRecord>(await states.FindAsync(familyName, token));
+                    string[] newerBuildReads = [record.FinalizedVersion, newer];
+                    var intent = await states.RecordIntentAsync(familyName, record.Revision, newer, newerBuildReads, member, token);
+                    Assert.True(intent.Applied);
+                    Assert.True((await states.CommitIntentAsync(familyName, intent.Record.Revision, newerBuildReads, member, token)).Applied);
+                    await gate.RefreshAsync(db, token);
+                    await AssertUnavailableAsync();
+
+                    async Task<EfSchemaModuleGate> AdmitAsync(EfSchemaModuleFamilies families)
+                    {
+                        var configured = new EfSchemaModuleGate(families, null, new(), new());
+                        await configured.ActivateAsync(db, token);
+                        registry.Register(typeof(RuntimeDbContext), configured);
+                        return configured;
+                    }
+
+                    async Task AssertUnavailableAsync()
+                    {
+                        Assert.True(gatedServices.GetRequiredService<IRuntimeIngressDeliveryStore>().SupportsAdmission);
+                        var gatedIngress = gatedServices.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
+                        Assert.False(gatedIngress.SupportsAdmission);
+                        Assert.False(gatedServices.GetRequiredService<ITriggerManagementCommitter>().CanActivateType("event", 1));
+                        await Assert.ThrowsAsync<NotSupportedException>(() => gatedIngress.AdmitAsync(firstEvent, token).AsTask());
+                    }
+                }
+
+                async Task CommitAuthoredTriggerAsync(TriggerStoreWrite write)
+                {
+                    var receipt = await authoring.CommitAsync(DeliveryScope, write, token);
+                    Assert.Equal((write.Trigger.Id, 1L), (receipt.TriggerId, receipt.Revision));
+                    var stored = await management.ServiceProvider.GetRequiredService<IStandaloneTriggerStore>().FindAsync(DeliveryScope,
+                        write.Trigger.Id, token);
+                    Assert.True(stored?.Trigger.HasActivated);
+                }
+
+                async Task AssertPinnedAsync(IRuntimeIngressDeliveryStore store, string trigger)
+                {
+                    var item = Assert.IsType<RuntimePostCommitOutboxItem>(await FindAsync(store, firstEvent, trigger));
+                    Assert.Equal(current.Identity, Assert.Single(item.SubscriptionDelivery!.Recipients).Material);
+                    Assert.Equal(firstEvent.Authority.RootInitiator, item.StandaloneIngress?.SourceActorAttribution.RootInitiator);
+                }
+
+                ValueTask<RuntimePostCommitOutboxItem?> FindAsync(IRuntimeIngressDeliveryStore store, RuntimeAuthoredStandaloneEvent authored, string trigger) =>
+                    store.FindDeliveryAsync(DeliveryScope,
+                        RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, trigger, family, authored.Occurrence), token);
+            }
+
+            async Task AssertResourceRecurrenceAsync(IServiceProvider services, Contract.IActorReads reads, Contract.BoundScope owner,
+                IRecurringTask recurrence, IRecurringTask sourcePump)
+            {
+                const string cronId = "prepared-standalone-cron";
+                var schedules = services.GetRequiredService<IRecurringTriggerScheduleStore>();
+                var slot = await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync(Definition, KernelServing.DefaultSlotName, token);
+                var resource = services.GetRequiredService<ITriggerSourceResourceCommitStore>();
+                var now = clock.GetUtcNow();
+                var authored = new RecurringTriggerSchedule(RecurringTriggerSchedule.BuildId(material.Identity.ArtifactId, "legacy-timer"),
+                    material.Identity.ArtifactId, "legacy-timer", "Timer", "legacy-timer-hash", RecurringScheduleKind.Interval, "PT1M", now, now);
+                await schedules.SaveAsync(authored, token);
+                await WriteTriggerAsync(resource, Assert.IsType<WorkflowActivationSlot>(slot), TimerId, "timer", new { interval = "PT1M" });
+                await WriteTriggerAsync(resource, slot!, cronId, "cron", new { expression = "* * * * *", timezone = "UTC" });
+
+                var timer = await ReadResourceScheduleAsync(TimerId);
+                var cron = await ReadResourceScheduleAsync(cronId);
+                var sourceIds = new[] { timer, cron }.Select(schedule => RuntimeStandaloneIngressSource.BuildOutboxItemId(
+                    Persistence, Persistence.Value, schedule.Resource!.TriggerId, schedule.Resource.SourceFamily, schedule.BuildOccurrenceKey())).ToArray();
+                clock.Advance(TimeSpan.FromMinutes(2));
+                var ingress = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
+                await recurrence.ExecuteAsync(token);
+                Assert.Single(await ReadAcceptedAsync());
+                await recurrence.ExecuteAsync(token);
+                Assert.Equal(2, (await ReadAcceptedAsync()).Length);
+
+                var untouched = Assert.IsType<RecurringTriggerScheduleObservation>(await schedules.ObserveAsync(authored.ScheduleId, token));
+                Assert.Equal(authored.NextOccurrence, untouched.Schedule.NextOccurrence);
+                Assert.Equal(0, untouched.FailureCount);
+                Assert.Null(untouched.RetryAt);
+                Assert.False(untouched.OccurrenceInFlight);
+                Assert.True((await ReadResourceScheduleAsync(TimerId)).NextOccurrence > clock.GetUtcNow());
+                Assert.True((await ReadResourceScheduleAsync(cronId)).NextOccurrence > clock.GetUtcNow());
+                await sourcePump.ExecuteAsync(token);
+                foreach (var id in sourceIds)
+                {
+                    var delivered = await ReadAsync(services, id, token);
+                    var receipt = Assert.IsType<RuntimeTargetAcceptanceReceipt>(Progress(delivered).Receipt);
+                    Assert.Equal(RuntimeTargetAcceptanceKind.PreparedActorBirth, receipt.Kind);
+                    Assert.Equal(current.Identity, receipt.Material);
+                    await WaitForAsync(reads, owner, new(receipt.EvidenceId),
+                        actor => actor.Header.Status == Contract.ActorStatus.Finished, token);
+                }
+                Assert.Equal(3, (await reads.ListAsync(owner, new(), cancellationToken: token)).Items.Count);
+
+                async ValueTask<RecurringTriggerSchedule> ReadResourceScheduleAsync(string id) =>
+                    Assert.IsType<RecurringTriggerSchedule>(await schedules.FindAsync(
+                        RecurringTriggerSchedule.BuildResourceId(Persistence, id, Persistence.Value), token));
+
+                async Task<RuntimePostCommitOutboxItem[]> ReadAcceptedAsync()
+                {
+                    var accepted = new List<RuntimePostCommitOutboxItem>();
+                    foreach (var id in sourceIds)
+                        if (await ingress.FindDeliveryAsync(DeliveryScope, id, token) is { } item)
+                            accepted.Add(item);
+                    return accepted.ToArray();
+                }
+            }
+
+            async Task WriteTriggerAsync<TConfiguration>(ITriggerSourceResourceCommitStore store, WorkflowActivationSlot activation,
+                string id, string type, TConfiguration configuration)
+            {
+                var receipt = await store.CommitAsync(DeliveryScope, TriggerWrite(activation, id, type, configuration), [], token);
+                Assert.Equal((id, 1L), (receipt.TriggerId, receipt.Revision));
+            }
+
+            TriggerStoreWrite TriggerWrite<TConfiguration>(WorkflowActivationSlot activation, string id, string type, TConfiguration configuration)
+            {
+                var now = clock.GetUtcNow();
+                var origin = new TriggerManagementOrigin(TriggerManagementKind.Studio);
+                var trigger = new StandaloneTrigger(id, id, type, 1, JsonSerializer.SerializeToElement(configuration),
+                    1, 1, 1, TriggerDesiredState.Enabled, origin, now, now, "qualification", tenantId: Persistence.Value);
+                var subscription = new TriggerSubscription(id + "-subscription", id, Definition, KernelServing.DefaultSlotName, "native",
+                    1, 1, true, [], origin, new(id + "-grant", id, id + "-subscription", Definition, KernelServing.DefaultSlotName,
+                        "native", type, 1, TriggerGrantStatus.Granted, "qualification", now));
+                var observedTarget = new TriggerTargetObservation(Definition, activation.SlotName, activation.Revision,
+                    activation.ActiveActivationId, RuntimeIngressAdmission.ComputeInputContractFingerprint(material.InputContract!),
+                    "native", TriggerTargetState.Available);
+                return new(id + "-neutral-create", id + "-neutral-create", "qualification", null, trigger, [subscription])
+                {
+                    ObservedTargets = [observedTarget]
+                };
+            }
+        }
+        finally { directory?.Delete(recursive: true); }
+
+        static async Task RunScheduledSweepAsync(IRecurringTask pump, CancellationToken token)
+        {
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            await using var scheduled = pump.GetSchedule().ScheduleExecution(async () =>
+            {
+                try
+                {
+                    await pump.ExecuteAsync(token);
+                    completed.TrySetResult();
+                }
+                catch (Exception exception)
+                {
+                    completed.TrySetException(exception);
+                }
+            });
+            await completed.Task.WaitAsync(token);
+        }
+
+        static IStandaloneTriggerIngress<FixtureEvent> Source(IServiceProvider provider) =>
+            provider.GetRequiredService<IStandaloneTriggerIngress<FixtureEvent>>();
+
+        static async ValueTask<RuntimePostCommitOutboxItem> ReadAsync(IServiceProvider services, string sourceId, CancellationToken token) =>
+            Assert.IsType<RuntimePostCommitOutboxItem>(await services.GetRequiredService<IRuntimeIngressDeliveryStore>()
+                .FindDeliveryAsync(DeliveryScope, sourceId, token));
+
+        static StandaloneTriggerSignal Signal(string key) =>
+            new(EventId, key, EventSchema, JsonSerializer.SerializeToElement(new { }), JsonSerializer.SerializeToElement(new { }));
+
+        static string SourceId(StandaloneTriggerSignal signal) =>
+            RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, EventId, WaitSourceFamily, signal.SourceKey);
+    }
+
+    private sealed class PublishedEventAvailability(PersistenceScope owner) : IRuntimeAuthoredStandaloneEventAvailability
+    {
+        public bool Supports(PersistenceScope scope) => scope == owner;
+    }
+
+    private sealed class UnqualifiedWaitEvent;
+
+    private sealed class UnqualifiedWaitEventContext : IStandaloneTriggerSourceContext<UnqualifiedWaitEvent>
+    {
+        private readonly EventContext source = new();
+
+        public bool SupportsResourceAuthorization => true;
+
+        public async ValueTask<StandaloneTriggerInvocationContext> GetAsync(CancellationToken cancellationToken = default) =>
+            (await source.GetAsync(cancellationToken)) with
+            {
+                WaitCandidate = new("event", "unqualified-waits", null, new Dictionary<string, string>())
+            };
+
+        public ValueTask<bool> AuthorizeAsync(StandaloneTrigger trigger, StandaloneTriggerSignal signal, CancellationToken cancellationToken = default) =>
+            source.AuthorizeAsync(trigger, signal, cancellationToken);
+    }
+}

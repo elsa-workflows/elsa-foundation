@@ -37,7 +37,7 @@ internal static class RetryWitness
         Workflow Build(bool replacement = false, TimeSpan? jobTimeout = null)
         {
             var leaf = new Node("leaf", replacement ? typeof(ReplacementRetryLeaf) : typeof(RetryLeaf));
-            leaf.Inputs.Add("Value", Binding.Var("sourceValue")); leaf.Inputs.Add("Iteration", Binding.Var("CurrentItem")); leaf.Inputs.Add("Local", Binding.Var("local"));
+            leaf.Inputs.Add("Value", Binding.Var("sourceValue")); leaf.Inputs.Add("Iteration", Binding.Var("currentItem")); leaf.Inputs.Add("Local", Binding.Var("local"));
             var tail = Wf.Event("tail", "tail");
             if (jobTimeout is { } timeout)
                 tail = Wf.Sequence("deferred", tail, new Node("deferred-job", typeof(CallService)) { JobTimeout = timeout });

@@ -1,0 +1,476 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+using Kernel.Durable;
+using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
+using Kernel.Runtime;
+using Kernel.Runtime.Hosting;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Win32.SafeHandles;
+using Contract = Kernel.Foundation.Contracts;
+
+namespace Kernel.Foundation.Sqlite;
+
+/// <summary>Starts one Embedded node against an installed SQLite kernel qualification store.</summary>
+public static partial class SqliteEmbeddedHosting
+{
+    /// <summary>Whether the shipped SQLite format takes an actor's self-sends.</summary>
+    public static bool TakesSelfSends => RootProfiles.Shipped.HasFlag(RootCapabilities.SelfProtocol);
+
+    /// <summary>Whether the shipped SQLite format takes durable actor-owned timers.</summary>
+    public static bool TakesTimers => RootProfiles.Shipped.HasFlag(RootCapabilities.Timers);
+
+    /// <summary>Whether the shipped format takes attached and detached workflow starts from an owned turn.</summary>
+    public static bool TakesChildren => RootProfiles.Shipped.HasFlag(RootCapabilities.Children);
+
+    /// <summary>Whether the shipped format records a sequenced workflow journal.</summary>
+    public static bool TakesSequencedJournal => RootProfiles.Shipped.HasFlag(RootCapabilities.SequencedJournal);
+
+    /// <summary>Whether the shipped profile can register and deliver live HTTP waits.</summary>
+    public static bool TakesHttpWaits => RootProfiles.Shipped.HasFlag(RootCapabilities.LiveEventWaits);
+
+    /// <summary>Whether the shipped Embedded profile supports protected held root preparation.</summary>
+    public static bool TakesPreparedStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.PreparedStarts);
+
+    /// <summary>Whether the shipped Embedded profile supports inline promotion.</summary>
+    public static bool TakesInlineStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.InlinePromotion);
+
+    /// <summary>Whether the shipped format takes held Ephemeral HTTP for an isolated Test Run.</summary>
+    public static bool TakesHeldEphemeralHttpTestRuns => RootProfiles.Shipped.HasFlag(RootCapabilities.HeldEphemeralHttpTestRuns);
+
+    /// <summary>Whether the shipped Embedded profile supports Event-triggered starts.</summary>
+    public static bool TakesEventStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStarts);
+
+    /// <summary>Whether the shipped Embedded profile supports Event start receipt retention.</summary>
+    public static bool RetainsEventStartReceipts => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStartReceipts);
+
+    /// <summary>Whether the shipped Embedded profile supports ordered Event replay.</summary>
+    public static bool TakesOrderedEventScan => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStartScan);
+
+    /// <summary>Verifies a dedicated shipped SQLite file with an installed Event host.</summary>
+    public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>
+        InstallShippedFileAsync(databasePath, cancellationToken);
+
+    /// <summary>Installs or verifies the shipped SQLite file for the configured actor and root start protection.</summary>
+    public static Task InstallShippedAsync(string databasePath, string actorType, bool protectsStarts,
+        CancellationToken cancellationToken = default) =>
+        InstallShippedFileAsync(databasePath, cancellationToken, publicEventHost: new(actorType, protectsStarts));
+
+    internal static async Task<string> InstallShippedFileAsync(string databasePath, CancellationToken cancellationToken,
+        StoreFormat? qualificationFormat = null, RootPublicEventHost? publicEventHost = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (publicEventHost is not null) RootPublicEventHost.RequireConfiguredActorType(publicEventHost.ActorType);
+        var path = Path.GetFullPath(databasePath);
+        // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
+        using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }
+        using var file = await AcquireRuntimeFileAsync(path, requests: null, cancellationToken);
+        await using var db = KernelDb.ForSqliteRootShipped(file.Options, qualificationFormat, publicEventHost);
+        await EfStore.InstallSqliteShippedAsync(db, partitions: 1, cancellationToken);
+        await UseWalAsync(db, cancellationToken);
+        return file.Path;
+    }
+
+    // A fault or kill may leave work running. Its runtime lease remains held through process exit.
+    private static readonly object FileGate = new();
+    private static readonly Dictionary<string, ActiveFile> ActiveFiles = new(StringComparer.Ordinal);
+
+    /// <summary>Starts a node over a local database file. The process policy must terminate the process if the watchdog
+    /// cannot clear a stuck owner call. A clean stop releases the file for another host.</summary>
+    public static Task<RuntimeNode> StartAsync(string databasePath, string node, IActorType actor,
+        Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
+        CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        return StartCoreAsync(databasePath, node, (_, _) => actor, rootType: null, endProcess, options, fenceInBatch, cancellationToken, onFault, null);
+    }
+
+    /// <summary>Starts an Embedded node on the shipped format with root turns, timed jobs and optional held replies.</summary>
+    internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
+        Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
+        CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null,
+        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        RequireFoundationActorType(actor.Type);
+        if (auxiliaryActor is not null) ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return StartCoreAsync(databasePath, node, (store, terminalOutputLimit) => new ActorAdapter(
+                store.WorkerHeaders(store.BindSqliteWorkerNode(ActorAdapter.RootWithholding(actor, auxiliaryActor))), actor, store.RootSelfIssuer,
+                rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true,
+                retentionWindow: retentionWindow,
+                rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor,
+                local: requests is null ? null : (requests.Pending, node)),
+            actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests,
+            auxiliaryActorType: auxiliaryActor?.Type, protectChildBirths: protectChildBirths, inlineStarts: inlineStarts);
+    }
+
+    private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, int, IActorType> createActor,
+        string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
+        Action<Exception>? onFault, SqliteDirectRequests? requests, string? auxiliaryActorType = null,
+        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(node);
+        ArgumentNullException.ThrowIfNull(endProcess);
+        options ??= new LoopOptions();
+        var millisecond = TimeSpan.FromMilliseconds(1);
+        if (options.BalanceEvery < millisecond || options.BalanceEvery > TimeSpan.FromMilliseconds(int.MaxValue) ||
+            options.PollInterval < millisecond || options.Window < options.BalanceEvery * 2 ||
+            RuntimeNode.Cadence(Defaults.Lease, options) < millisecond)
+            throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var file = await AcquireRuntimeFileAsync(databasePath, requests, cancellationToken);
+        try
+        {
+            if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
+            var shipped = rootType is not null;
+            var eventHost = requests?.PublicEventHost ?? (requests is null && rootType is not null ? new(rootType, false) : null);
+            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
+                qualificationFormat: requests?.QualificationFormat, publicEventHost: eventHost) : new(file.Options);
+
+            int partitions;
+            bool selfSends, publicEventMaintenance;
+            int terminalOutputLimit;
+            await using (var db = Open())
+            {
+                selfSends = db.UsesRootSelfProtocol;
+                publicEventMaintenance = db.UsesRootPublicEventStarts;
+                if (auxiliaryActorType is not null && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
+                    throw new NotSupportedException("This SQLite root profile does not host an auxiliary actor.");
+                terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
+                if (shipped)
+                {
+                    var admission = new SqliteRootAdmission(Open, TimeSpan.Zero, file.AdmissionDefinitions);
+                    partitions = await admission.VerifyOwnerAsync(auxiliaryActorType, cancellationToken);
+                }
+                else
+                {
+                    await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+                    partitions = await db.Partitions.CountAsync(cancellationToken);
+                    if (partitions == 0)
+                        throw new InvalidOperationException("The SQLite kernel database has no installed partitions.");
+                }
+                await UseWalAsync(db, cancellationToken);
+            }
+
+            var pressure = requests?.Pressure;
+            var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch)
+                { CommitSql = CommitSql.Owned, AdmissionPressure = pressure, ProtectChildBirths = protectChildBirths };
+            if (shipped)
+            {
+                if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
+                await store.EnableRootJobsAsync(cancellationToken);
+                await store.EnableRootChildrenAsync(cancellationToken);
+            }
+            if (inlineStarts is not null) await inlineStarts.PrepareAsync(store, cancellationToken);
+            var watchdog = new Watchdog(Defaults.Lease, endProcess);
+            var watched = watchdog.Watch(store);
+            RuntimeNode? reporter = null;
+            var workers = new WorkerOptions
+            {
+                Partitions = partitions,
+                OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error),
+                Transport = requests,
+                Backlog = pressure?.Backlog
+            };
+            var host = DurableHost.ForNode(node, watched, createActor(store, terminalOutputLimit), partitions, workers);
+            await store.PrimeAdmissionPressureAsync(cancellationToken);
+            var publicEvents = publicEventMaintenance ? new SqliteRootAdmission(OpenMaintenance, TimeSpan.Zero, file.AdmissionDefinitions) : null;
+            var runtime = new RuntimeNode(node, watched, partitions, options, beside: RunBesideAsync,
+                beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
+            {
+                AfterCleanStop = file.Dispose
+            };
+            Volatile.Write(ref reporter, runtime);
+            try
+            {
+                await runtime.StartAsync(host, cancellationToken);
+                inlineStarts?.Attach(store, host.NodeWorker ?? throw new InvalidOperationException("Inline starts need an owned Worker."),
+                    runtime.WakeLocal, requests?.HeldEdge);
+                return runtime;
+            }
+            catch
+            {
+                await runtime.KillAsync();
+                throw;
+            }
+
+            Task RunBesideAsync(CancellationToken stop)
+            {
+                var watching = watchdog.RunAsync(stop);
+                return publicEvents is null ? watching : Task.WhenAll(watching,
+                    RootPublicEventStarts.RunMaintenanceAsync(publicEvents.MaintainPublicEventsAsync,
+                        error => Volatile.Read(ref reporter)?.RecordLoopError(error), stop));
+            }
+
+            KernelDb OpenMaintenance()
+            {
+                var db = Open();
+                ((SqliteConnection)db.Database.GetDbConnection()).DefaultTimeout = 2;
+                db.Database.SetCommandTimeout(2);
+                return db;
+            }
+        }
+        catch
+        {
+            file.Dispose();
+            throw;
+        }
+    }
+
+    private static async Task UseWalAsync(KernelDb db, CancellationToken token)
+    {
+        await db.Database.OpenConnectionAsync(token);
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "PRAGMA journal_mode = WAL";
+        if (await command.ExecuteScalarAsync(token) is not string mode || !mode.Equals("wal", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The SQLite kernel database could not enable WAL.");
+    }
+
+    private static string ResolveFilePath(string databasePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        var path = Path.GetFullPath(databasePath);
+        if (!File.Exists(path))
+            throw new FileNotFoundException("An installed SQLite kernel database is required.", path);
+        return OperatingSystem.IsWindows() ? ResolveWindowsPath(path) : ResolveUnixPath(path);
+    }
+
+    private static FileLease AcquireFile(string databasePath, SqliteDirectRequests? requests = null,
+        CancellationToken cancellationToken = default) =>
+        AcquireResolvedFile(ResolveFilePath(databasePath), forRuntime: false, requests, cancellationToken, out _)!;
+
+    private static async Task<FileLease> AcquireRuntimeFileAsync(string databasePath, SqliteDirectRequests? requests,
+        CancellationToken cancellationToken)
+    {
+        var path = ResolveFilePath(databasePath);
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var lease = AcquireResolvedFile(path, forRuntime: true, requests, cancellationToken, out var retiredReplies);
+            if (lease is not null) return lease;
+            await retiredReplies!.WaitAsync(cancellationToken);
+        }
+    }
+
+    private static FileLease? AcquireResolvedFile(string path, bool forRuntime, SqliteDirectRequests? requests,
+        CancellationToken cancellationToken, out Task? retiredReplies)
+    {
+        retiredReplies = null;
+        lock (FileGate)
+        {
+            // A canceled write that has yet to take a lease must not recreate a retired reply edge.
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!ActiveFiles.TryGetValue(path, out var file))
+            {
+                var identity = ReadLinuxIdentity(path);
+                if (identity is not null)
+                    file = ActiveFiles.Values.FirstOrDefault(open => open.LinuxIdentity == identity);
+                if (file is null)
+                {
+                    var connectionString = new SqliteConnectionStringBuilder
+                    {
+                        DataSource = path,
+                        Mode = SqliteOpenMode.ReadWrite,
+                        DefaultTimeout = 2,
+                        ForeignKeys = true
+                    }.ToString();
+                    var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connectionString).Options;
+                    file = new(path, connectionString, options, AcquireLock(path + ".host-lock"), identity);
+                    ActiveFiles.Add(path, file);
+                }
+            }
+            if (forRuntime)
+            {
+                if (file.Runtime) throw new SqliteHostLockException(file.Lock.Name);
+                // A canceled request can keep its reply lease until SQLite rolls back after the owner stops.
+                if (file.RetiredReplies is { } pending && !ReferenceEquals(file.ReplyEdge, requests))
+                {
+                    retiredReplies = pending.Task;
+                    return null;
+                }
+                file.RequireReplyEdge(requests);
+                file.Runtime = true;
+                file.ReplyEdge = requests;
+            }
+            else if (requests is not null)
+            {
+                file.RequireReplyEdge(requests);
+                file.ReplyUsers++;
+                file.ReplyEdge = requests;
+            }
+            file.Users++;
+            return new(file, forRuntime, forReplies: !forRuntime && requests is not null);
+        }
+    }
+
+    private sealed class ActiveFile(string path, string connectionString, DbContextOptions<KernelDb> options, FileStream sidecar,
+        LinuxFileIdentity? linuxIdentity)
+    {
+        internal string Path => path;
+        internal string ConnectionString => connectionString;
+        internal DbContextOptions<KernelDb> Options => options;
+        internal SqliteAdmissionDefinitions AdmissionDefinitions { get; } = new();
+        internal FileStream Lock => sidecar;
+        internal LinuxFileIdentity? LinuxIdentity => linuxIdentity;
+        internal int Users { get; set; }
+        internal bool Runtime { get; set; }
+        internal SqliteDirectRequests? ReplyEdge { get; set; }
+        internal int ReplyUsers { get; set; }
+        internal TaskCompletionSource? RetiredReplies { get; set; }
+        internal SemaphoreSlim ReplyWrites { get; } = new(1);
+        internal SemaphoreSlim ReplyOperatorWrites { get; } = new(1);
+
+        internal void RequireReplyEdge(SqliteDirectRequests? requested)
+        {
+            if ((Runtime || ReplyUsers != 0) && !ReferenceEquals(ReplyEdge, requested))
+                throw new ArgumentException("SQLite held requests and the Embedded owner must share one reply edge.");
+        }
+    }
+
+    private sealed class FileLease(ActiveFile file, bool forRuntime, bool forReplies) : IDisposable
+    {
+        private ActiveFile? _file = file;
+        internal string Path => Current.Path;
+        internal DbContextOptions<KernelDb> Options => Current.Options;
+        internal SqliteAdmissionDefinitions AdmissionDefinitions => Current.AdmissionDefinitions;
+        internal SemaphoreSlim ReplyWrites => Current.ReplyWrites;
+        internal SemaphoreSlim ReplyOperatorWrites => Current.ReplyOperatorWrites;
+        private ActiveFile Current => _file ?? throw new ObjectDisposedException(nameof(FileLease));
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _file, null) is not { } held) return;
+            lock (FileGate)
+            {
+                if (forRuntime)
+                {
+                    held.Runtime = false;
+                    if (held.ReplyUsers != 0)
+                        held.RetiredReplies ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+                if (forReplies && --held.ReplyUsers == 0)
+                {
+                    held.RetiredReplies?.SetResult();
+                    held.RetiredReplies = null;
+                }
+                if (!held.Runtime && held.ReplyUsers == 0) held.ReplyEdge = null;
+                if (--held.Users != 0) return;
+
+                ActiveFiles.Remove(held.Path);
+                try
+                {
+                    using var connection = new SqliteConnection(held.ConnectionString);
+                    SqliteConnection.ClearPool(connection);
+                }
+                finally
+                {
+                    held.ReplyWrites.Dispose();
+                    held.ReplyOperatorWrites.Dispose();
+                    held.Lock.Dispose();
+                }
+            }
+        }
+    }
+
+    private static string ResolveWindowsPath(string file)
+    {
+        // A Windows short name and its long name can point to the same file. Use the opened file's normalized path.
+        using var handle = File.OpenHandle(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var path = new StringBuilder(512);
+        while (true)
+        {
+            var length = GetFinalPathNameByHandle(handle, path, (uint)path.Capacity, 0);
+            if (length == 0)
+                throw new IOException($"Cannot resolve the SQLite database path '{file}'.", new Win32Exception(Marshal.GetLastPInvokeError()));
+            if (length < path.Capacity) return path.ToString();
+            path.Capacity = checked((int)length);
+        }
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, [Out] StringBuilder path, uint capacity, uint flags);
+
+    private static string ResolveUnixPath(string path)
+    {
+        // Resolve symlinks. Darwin also supplies the filesystem's spelling for case aliases.
+        var resolved = UnixRealPath(path, IntPtr.Zero);
+        if (resolved == IntPtr.Zero)
+            throw new IOException($"Cannot resolve the SQLite database path '{path}'.", new Win32Exception(Marshal.GetLastPInvokeError()));
+        try { return Marshal.PtrToStringUTF8(resolved)!; }
+        finally { FreeUnixPath(resolved); }
+    }
+
+    [DllImport("libc", EntryPoint = "realpath", SetLastError = true)]
+    private static extern IntPtr UnixRealPath([MarshalAs(UnmanagedType.LPUTF8Str)] string path, IntPtr resolved);
+
+    [DllImport("libc", EntryPoint = "free")]
+    private static extern void FreeUnixPath(IntPtr path);
+
+    private readonly record struct LinuxFileIdentity(uint DeviceMajor, uint DeviceMinor, ulong Inode);
+
+    // The Linux statx ABI has the same layout across architectures. Only the identity fields are used here.
+    [StructLayout(LayoutKind.Explicit, Size = 256)]
+    private struct LinuxFileStat
+    {
+        [FieldOffset(0)] internal uint Mask;
+        [FieldOffset(32)] internal ulong Inode;
+        [FieldOffset(136)] internal uint DeviceMajor;
+        [FieldOffset(140)] internal uint DeviceMinor;
+    }
+
+    private static LinuxFileIdentity? ReadLinuxIdentity(string path)
+    {
+        if (!OperatingSystem.IsLinux()) return null;
+        // Linux canonicalizes links but can preserve the lookup spelling on casefold filesystems.
+        // Join an already-open inode through its original SQLite filename and pool.
+        const int currentDirectory = -100;
+        const uint inode = 0x100;
+        try
+        {
+            if (LinuxStatx(currentDirectory, path, 0, inode, out var status) == 0 && (status.Mask & inode) != 0)
+                return new(status.DeviceMajor, status.DeviceMinor, status.Inode);
+        }
+        catch (EntryPointNotFoundException) { } // An older libc can still use its canonical path.
+        return null;
+    }
+
+    [DllImport("libc", EntryPoint = "statx")]
+    private static extern int LinuxStatx(int directory, [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        int flags, uint mask, out LinuxFileStat status);
+
+    // Use an explicit Unix flock: the CLR can be configured to skip the implicit lock from FileShare.None.
+    [DllImport("libc", EntryPoint = "flock", SetLastError = true)]
+    private static extern int UnixLockFile(int descriptor, int operation);
+
+    private static FileStream AcquireLock(string path)
+    {
+        // Keep the sidecar on disk after closing it. Unlinking a locked inode would let another host lock a new inode.
+        FileStream stream;
+        try { stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+        catch (IOException error) { throw new SqliteHostLockException(path, error); }
+
+        try
+        {
+            const int exclusiveNonBlocking = 2 | 4;
+            if (!OperatingSystem.IsWindows() && UnixLockFile(stream.SafeFileHandle.DangerousGetHandle().ToInt32(), exclusiveNonBlocking) != 0)
+                throw new SqliteHostLockException(path, new Win32Exception(Marshal.GetLastPInvokeError()));
+
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+    }
+
+}
+
+internal sealed class SqliteHostLockException(string path, Exception? cause = null)
+    : IOException($"Cannot acquire the SQLite host lock '{path}'. Only one host may use the database file.", cause);

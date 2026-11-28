@@ -17,7 +17,7 @@ public static class ProjectGraphContractTests
         ("Extensions/A/studio/src/X.csproj", false),
         ("Extensions/A/templates/src/X.csproj", false),
         ("essentials/src/Workflows/Elsa.Workflows.csproj", true),
-        ("apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj", true),
+        ("server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj", true),
         ("essentials/tests/A/B/X.csproj", true),
         ("extensions/A/src/X.csproj", true),
         ("extensions/A/src/Sub/X.csproj", true),
@@ -28,7 +28,7 @@ public static class ProjectGraphContractTests
         ("extensions/A/templates/src/X.csproj", false),
         ("extensions/A/templates/tests/X.csproj", false),
         ("extensions/A/X.csproj", false),
-        ("Studio/src/X.csproj", false),
+        ("studio/src/X.csproj", false),
         ("tools/x/X.csproj", false),
         ("essentials/src/Workflows/README.md", false)
     ];

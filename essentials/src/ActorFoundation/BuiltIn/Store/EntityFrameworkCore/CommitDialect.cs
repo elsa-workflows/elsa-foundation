@@ -8,7 +8,10 @@ namespace Kernel.EntityFramework;
 public enum CommitSql { EntityFramework, Owned }
 
 /// <summary>One fence row of a commit: the virtual partition, what the owner believes, and where the position moves.</summary>
-public sealed record FenceRow(int Id, long Epoch, long Position, long NewPosition);
+public sealed record FenceRow(int Id, long Epoch, long Position, long NewPosition)
+{
+    internal int? Backlog { get; init; }
+}
 
 /// <summary>What one result set of an owned command must say: nothing, a row count, the fence's count and time, or seqs.</summary>
 internal enum Expect { Skip, Count, Fence, Seq }
@@ -125,8 +128,9 @@ internal abstract class CommitDialect
 
     protected static string Ids(IEnumerable<int> ids) => string.Join(", ", ids);
 
-    protected static string Values(IReadOnlyList<FenceRow> rows) =>
-        string.Join(", ", rows.Select(r => FormattableString.Invariant($"({r.Id}, {r.Epoch}, {r.Position}, {r.NewPosition})")));
+    protected static string Values(IReadOnlyList<FenceRow> rows, bool includeBacklog = false) =>
+        string.Join(", ", rows.Select(r => FormattableString.Invariant($"({r.Id}, {r.Epoch}, {r.Position}, {r.NewPosition}") +
+            (includeBacklog ? ", " + (r.Backlog?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "NULL") : "") + ")"));
 
     protected static string KeyList(IReadOnlyList<string[]> keys) => string.Join(", ", keys.Select(k => "(" + string.Join(", ", k) + ")"));
 
@@ -149,12 +153,16 @@ internal abstract class ReturningDialect(string now, string @true, string @false
         if (rows.Count == 1)
         {
             var r = rows[0];
+            if (r.Backlog is { } backlog) columns += FormattableString.Invariant($", \"Backlog\" = {backlog}");
             c.Statement(FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = {r.NewPosition}{columns} WHERE "Id" = {r.Id} AND ({(unfenced ? "1 = 1" : FormattableString.Invariant($"\"Epoch\" = {r.Epoch} AND \"Position\" = {r.Position}"))}) RETURNING {Now} AS "Value" """), Expect.Fence, 1);
             return;
         }
         // k rows: locked in ascending Id order first, then one UPDATE.
         LockRows(c, rows);
-        c.Statement($"""UPDATE "Partitions" AS p SET "Position" = f.np{columns} FROM (VALUES {Values(rows)}) AS f(id, epoch, pos, np) WHERE p."Id" = f.id AND ({(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}) RETURNING {Now} AS "Value" """, Expect.Fence, rows.Count);
+        var backlogColumns = rows.Any(row => row.Backlog.HasValue);
+        if (backlogColumns) columns += """, "Backlog" = COALESCE(f.backlog, p."Backlog")""";
+        var valuesColumns = backlogColumns ? "id, epoch, pos, np, backlog" : "id, epoch, pos, np";
+        c.Statement($"""UPDATE "Partitions" AS p SET "Position" = f.np{columns} FROM (VALUES {Values(rows, backlogColumns)}) AS f({valuesColumns}) WHERE p."Id" = f.id AND ({(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}) RETURNING {Now} AS "Value" """, Expect.Fence, rows.Count);
     }
 
     public override void Checked(OwnedCommand c, string dml, int count) => c.Statement(dml + " RETURNING 1", Expect.Count, count);

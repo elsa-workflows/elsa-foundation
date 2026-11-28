@@ -49,8 +49,20 @@ public sealed class DockerWorkflowTests
         Assert.False(on.ContainsKey("pull_request"), "docker.yml must not build images on pull requests (#2751); found an 'on: pull_request' trigger.");
         // The workflow_run trigger's shape (Packages, completed, main) is pinned by the test above.
         Assert.Equal(["workflow_dispatch", "workflow_run"], on.Keys.Cast<string>().Order(StringComparer.Ordinal));
-        Assert.All(new[] { "build-and-push", "build-and-push-foundation-host", "build-and-push-essentials-host" },
+        Assert.All(new[] { "build-and-push", "build-and-push-foundation-host" },
             job => Assert.Equal("true", (string)Map(Jobs[job], "with")["push"]));
+
+        var profileMatrix = Map(Map(Jobs["package-profiles"], "strategy"), "matrix");
+        Assert.Equal(["amd64", "arm64"], (List<object>)profileMatrix["arch"]);
+        AssertNativeRunners("profile-builder");
+        AssertNativeRunners("package-profiles");
+        var build = StepScript("package-profiles", "Build the locked profile and verify offline startup");
+        Assert.Contains("docker build --platform \"$PLATFORM\"", build, StringComparison.Ordinal);
+        Assert.Contains("tools/docker-profiles/smoke.py \"$IMAGE\" --variant \"$PROFILE\"", build, StringComparison.Ordinal);
+        var stage = StepScript("stage-profile-images", "Push the tested native images under architecture-specific tags");
+        Assert.Contains("docker push \"$staged_tag\"", stage, StringComparison.Ordinal);
+        var publish = StepScript("build-and-push-essentials-host", "Verify the native image pair and publish the existing release tags");
+        Assert.Contains("docker buildx imagetools create -t \"$REPOSITORY:latest\" \"$source\"", publish, StringComparison.Ordinal);
     }
 
     /// <summary>Admission gates version resolution, which always consumes a Packages artifact and never plans for itself.</summary>
@@ -71,11 +83,15 @@ public sealed class DockerWorkflowTests
         Assert.Equal("${{ steps.admit.outputs.allowed }}", (string)Map(admission, "outputs")["allowed"]);
 
         var versions = Jobs["versions"];
-        Assert.Equal("admission", (string)versions["needs"]);
+        Assert.Equal(["admission"], Needs("versions"));
         Assert.Equal("needs.admission.outputs.allowed == 'true'", (string)versions["if"]);
-        Assert.Equal("versions", (string)Jobs["build-and-push"]["needs"]);
-        Assert.Equal("versions", (string)Jobs["build-and-push-foundation-host"]["needs"]);
-        Assert.Equal("versions", (string)Jobs["build-and-push-essentials-host"]["needs"]);
+        Assert.Equal(["versions"], Needs("build-and-push"));
+        Assert.Equal(["versions"], Needs("build-and-push-foundation-host"));
+        Assert.Equal(["build-and-push-foundation-host", "versions"], Needs("profile-builder"));
+        Assert.Equal(["build-and-push-foundation-host", "profile-builder", "versions"], Needs("package-profiles"));
+        Assert.Equal(["build-and-push-foundation-host", "package-profiles", "versions"], Needs("stage-profile-images"));
+        Assert.Equal(["build-and-push-foundation-host", "stage-profile-images", "versions"], Needs("publish-profile-release"));
+        Assert.Equal(["stage-profile-images", "versions"], Needs("build-and-push-essentials-host"));
 
         var steps = ((List<object>)versions["steps"]).Cast<Dictionary<object, object>>().ToList();
         Assert.DoesNotContain(steps, step => step.TryGetValue("name", out var name) && (string)name == "Plan");
@@ -84,6 +100,32 @@ public sealed class DockerWorkflowTests
         var downloadStep = steps.Single(step => step.TryGetValue("uses", out var uses) && ((string)uses).StartsWith("actions/download-artifact", StringComparison.Ordinal));
         Assert.False(downloadStep.ContainsKey("if"));
         Assert.Equal("elsa-foundation-nuget-packages", (string)Map(downloadStep, "with")["name"]);
+        Assert.Equal("${{ steps.resolve.outputs.run-id }}", (string)Map(downloadStep, "with")["run-id"]);
+        Assert.Equal("${{ steps.encode.outputs.package-versions }}", (string)Map(versions, "outputs")["package-versions"]);
+    }
+
+    [Fact]
+    public void Manual_profile_dispatches_do_not_move_existing_image_tags()
+    {
+        Assert.Equal("github.event_name != 'workflow_dispatch' || !(inputs.build_profiles || inputs.publish_profiles)",
+            Jobs["build-and-push"]["if"]);
+        Assert.Equal("github.ref == 'refs/heads/main' && (inputs.publish_profiles || !inputs.build_profiles)",
+            Jobs["stage-profile-images"]["if"]);
+        Assert.Equal("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_profiles",
+            Jobs["publish-profile-release"]["if"]);
+        Assert.Equal("github.ref == 'refs/heads/main' && !(inputs.build_profiles || inputs.publish_profiles)",
+            Jobs["build-and-push-essentials-host"]["if"]);
+
+        var foundationTags = (string)Map(Jobs["build-and-push-foundation-host"], "with")["meta-tags"];
+        Assert.Equal([
+            "type=raw,value=4.0.0-preview.${{ github.run_number }}",
+            "type=raw,value=latest,enable=${{ !(inputs.build_profiles || inputs.publish_profiles) }}",
+            "type=sha,enable=${{ !(inputs.build_profiles || inputs.publish_profiles) }}"
+        ], foundationTags.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal));
+
+        var publish = StepScript("publish-profile-release", "Publish Foundation and its builder before exposing profile tags");
+        Assert.DoesNotContain(":latest", publish, StringComparison.Ordinal);
+        Assert.DoesNotContain(":sha-", publish, StringComparison.Ordinal);
     }
 
     /// <summary>Neither the versions job nor any other job joins the publish-state group the Packages workflow serializes on.</summary>
@@ -132,6 +174,25 @@ public sealed class DockerWorkflowTests
     }
 
     private static Dictionary<object, object> Map(Dictionary<object, object> parent, string key) => (Dictionary<object, object>)parent[key];
+
+    private static IEnumerable<string> Needs(string job) => Jobs[job]["needs"] is string dependency
+        ? [dependency]
+        : ((List<object>)Jobs[job]["needs"]).Cast<string>().Order(StringComparer.Ordinal);
+
+    private static string StepScript(string job, string name) => (string)((List<object>)Jobs[job]["steps"])
+        .Cast<Dictionary<object, object>>()
+        .Single(step => step.TryGetValue("name", out var stepName) && (string)stepName == name)["run"];
+
+    private static void AssertNativeRunners(string job)
+    {
+        var definition = Jobs[job];
+        Assert.Equal("${{ matrix.runner }}", definition["runs-on"]);
+        var matrix = Map(Map(definition, "strategy"), "matrix");
+        var runners = ((List<object>)matrix["include"]).Cast<Dictionary<object, object>>()
+            .Select(entry => (Arch: (string)entry["arch"], Runner: (string)entry["runner"]))
+            .OrderBy(entry => entry.Arch, StringComparer.Ordinal);
+        Assert.Equal([("amd64", "ubuntu-24.04"), ("arm64", "ubuntu-24.04-arm")], runners);
+    }
 
     private static string RepositoryRoot()
     {

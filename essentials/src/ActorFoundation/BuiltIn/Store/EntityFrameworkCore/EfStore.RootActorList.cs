@@ -11,13 +11,15 @@ public sealed partial class EfStore
         string TypeData, IReadOnlyDictionary<string, string> Labels, long? ParkAt, string? ParkFault)
     {
         internal long? ParkRevision { get; init; }
+        internal string? ParkResolution { get; init; }
+        internal string? ParentReference { get; init; }
     }
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
     private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, long? TerminalRevision, string? Header, long? ParkAt, string? ParkFault, long AsOf, bool SourceReady,
-        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision);
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision, string? ParkResolution, string? DefinitionStamp, string? ParentReference);
     private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, long? TerminalRevision, string? Header, long? ParkAt, string? ParkFault, long AsOf, bool SourceReady,
-        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision);
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision, string? ParkResolution, string? DefinitionStamp, string? ParentReference);
 
     internal static async Task RequirePreviewInstallSchemaAsync(KernelDb db, CancellationToken token)
     {
@@ -25,7 +27,8 @@ public sealed partial class EfStore
             SELECT to_regclass('"Instances"') IS NOT NULL AND to_regclass('"Messages"') IS NOT NULL AND NOT EXISTS (
                 SELECT 1 FROM (VALUES ('"Instances"'), ('"Messages"'), ('"Journal"'), ('"Partitions"'), ('"KernelStoreVersions"'),
                     ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'), ('"FoundationRootReceipts"'),
-                    ('"FoundationActorList"'), ('"FoundationWorkflowHistory"'), ('"FoundationWorkflowHistoryFormat"')) expected(name)
+                    ('"FoundationActorList"'), ('"FoundationWorkflowHistory"'), ('"FoundationWorkflowHistoryFormat"'),
+                    ('"FoundationRetentionPolicies"')) expected(name)
                 JOIN pg_catalog.pg_class relation ON relation.oid = to_regclass(expected.name)
                 JOIN pg_catalog.pg_namespace ns ON ns.oid = relation.relnamespace
                 WHERE ns.nspname IS DISTINCT FROM pg_catalog.current_schema()
@@ -37,13 +40,14 @@ public sealed partial class EfStore
     // The actor list has one projector. What it projects and which triggers its readers require follow the root
     // capabilities: terminal marks with TerminalSelection, the delete of retired roots with Retirement (format 13 already
     // carries it), Park columns with ParkInspection (kept by the Park metadata trigger), and the v1 projection otherwise.
-    private sealed record ActorListProjection(bool TerminalMarks, bool Retires, bool Park, bool ParkRevision)
+    private sealed record ActorListProjection(bool TerminalMarks, bool Retires, bool Park, bool ParkRevision, bool ParkResolution)
     {
         private const string CheckpointWriter = "kernel_require_root_checkpoint_writer";
         private const string QualifiedGuard = "kernel_require_root_actor_list_v13";
 
         internal static ActorListProjection Of(KernelDb db) => new(db.UsesRootTerminalSelection,
-            db.UsesRootTerminalSelection || db.UsesRootRetirement, db.UsesRootParkInspection, db.ProjectsRootParkRevision);
+            db.UsesRootTerminalSelection || db.UsesRootRetirement, db.UsesRootParkInspection, db.ProjectsRootParkRevision,
+            db.UsesRootParkInspection && db.UsesRootParkedOperators);
 
         // A qualified projector writes through its trigger's schema and has a guard that refuses root writes without it.
         internal bool Qualified => TerminalMarks || Retires;
@@ -58,6 +62,7 @@ public sealed partial class EfStore
         internal string ParkAtColumn => Park ? """l."ParkAt" """ : "NULL::bigint";
         internal string ParkFaultColumn => Park ? """l."ParkFault" """ : "NULL::text";
         internal string ParkRevisionColumn => ParkRevision ? """l."ParkRevision" """ : "NULL::bigint";
+        internal string ParkResolutionColumn => ParkResolution ? """l."ParkResolution" """ : "NULL::text";
 
         internal string InstallSql => FilterSql + (Qualified ? "" : PlainProjectorSql) + TableSql
             .Replace("/*plain-projection*/", Qualified ? "" : PlainProjectionSql, StringComparison.Ordinal) + (Qualified ? QualifiedProjectorSql : "");
@@ -217,16 +222,43 @@ public sealed partial class EfStore
     internal static Task InstallRootActorListAsync(KernelDb db, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlRawAsync(ActorListProjection.Of(db).InstallSql, cancellationToken);
 
-    private static FormattableString ActorListQuery(ActorListProjection projection, FormattableString query)
+    private const string RootChildParentProjection = """
+        (SELECT p."Reference" FROM "Instances" child JOIN "FoundationRootBirths" p
+            ON p."Actor" = child."Parent" AND p."Tenant" = child."FoundationTenant" AND p."Creation" = 1
+            WHERE child."FoundationReference" = l."Reference" AND child."FoundationTenant" = l."Tenant")
+        """;
+
+    private static FormattableString ActorListQuery(KernelDb db, ActorListProjection projection, FormattableString query)
     {
+        var args = query.GetArguments();
+        var triggers = projection.ListTriggers;
+        string Parameter(int offset) => FormattableString.Invariant($"{{{args.Length + offset}}}");
+        var readiness = $$"""
+            EXISTS (
+                SELECT 1 FROM pg_catalog.pg_trigger source
+                JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
+                JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
+                    AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
+                WHERE source.tgrelid = to_regclass('"Instances"')
+                    AND source.tgname::text = ANY({{Parameter(0)}}) AND source.tgenabled IN ('O', 'A')
+                    AND (NOT {{Parameter(1)}} OR 2 = (
+                        SELECT count(*) FROM pg_catalog.pg_class dependency
+                        WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
+                            to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"'))))
+                GROUP BY source.tgrelid HAVING count(*) = {{Parameter(2)}}
+            )
+            """;
         var sql = query.Format
+            .Replace("/*actor-list-ready*/", readiness, StringComparison.Ordinal)
             .Replace("/*terminal-mark*/", projection.TerminalMarkColumn, StringComparison.Ordinal)
             .Replace("/*park-at*/", projection.ParkAtColumn, StringComparison.Ordinal)
             .Replace("/*park-fault*/", projection.ParkFaultColumn, StringComparison.Ordinal)
             .Replace("/*park-revision*/", projection.ParkRevisionColumn, StringComparison.Ordinal)
+            .Replace("/*park-resolution*/", projection.ParkResolutionColumn, StringComparison.Ordinal)
+            .Replace("/*parent*/", db.UsesRootChildren ? RootChildParentProjection : "NULL::text", StringComparison.Ordinal)
             .Replace("/*filter*/", projection.SchemaBound ? "" : "kernel_actor_list_filter", StringComparison.Ordinal)
             .Replace("/*filter-cast*/", projection.SchemaBound ? "::jsonb" : "", StringComparison.Ordinal);
-        return FormattableStringFactory.Create(sql, query.GetArguments());
+        return FormattableStringFactory.Create(StoreDefinitionsRevision.AddPostgresStampSql(sql), [.. args, triggers, projection.SchemaBound, triggers.Length]);
     }
 
     // Apply the same complete-escape transform as the projector. List parameters can then be
@@ -241,31 +273,21 @@ public sealed partial class EfStore
     internal async Task<(RootListItem Item, long AsOf)?> ReadRootActorAsync(string tenant, string reference,
         CancellationToken cancellationToken)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor reads require PostgreSQL.");
+        if (Engine is not null) throw new NotSupportedException("Qualified root actor reads require the local store.");
         await using var db = create();
+        if (!postgres && db.UsesSqliteRootRuntime) return await ReadSqliteRootActorAsync(db, tenant, reference, cancellationToken);
+        if (!postgres) throw new NotSupportedException("Qualified root actor reads require PostgreSQL or a shipped SQLite root store.");
         var expected = db.RequiredFormat;
         var projection = ActorListProjection.Of(db);
-        var triggers = projection.ListTriggers;
         RootPointRow row;
         try
         {
-            row = await db.Database.SqlQuery<RootPointRow>(ActorListQuery(projection, $"""
+            row = await db.Database.SqlQuery<RootPointRow>(ActorListQuery(db, projection, $"""
                 SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header", /*park-at*/ AS "ParkAt", /*park-fault*/ AS "ParkFault",
-                    /*park-revision*/ AS "ParkRevision", kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec",
+                    /*park-revision*/ AS "ParkRevision", /*park-resolution*/ AS "ParkResolution", /*parent*/ AS "ParentReference",
+                    kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
-                    EXISTS (
-                        SELECT 1 FROM pg_catalog.pg_trigger source
-                        JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
-                        JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
-                            AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
-                        WHERE source.tgrelid = to_regclass('"Instances"')
-                            AND source.tgname::text = ANY({triggers}) AND source.tgenabled IN ('O', 'A')
-                            AND (NOT {projection.SchemaBound} OR 2 = (
-                                SELECT count(*) FROM pg_catalog.pg_class dependency
-                                WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
-                                    to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"'))))
-                        GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
-                    ) AS "SourceReady"
+                    /*actor-list-ready*/ AS "SourceReady"
                 FROM (VALUES (1)) stamp(id)
                 LEFT JOIN "KernelStoreVersions" kernel ON kernel."Id" = {StoreVersionEntity.MarkerId}
                 LEFT JOIN "FoundationActorList" l ON l."Tenant" = {tenant} AND l."Reference" = {reference}
@@ -284,19 +306,23 @@ public sealed partial class EfStore
             await RequireStoreVersionsAsync(db, cancellationToken);
             throw;
         }
-        RequireSnapshotFormat(expected, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
+        RequireSnapshotFormat(db, row.StoreSchema, row.MessageProtocol, row.JournalCodec, row.DefinitionStamp);
         RequireRootActorListSource(row.SourceReady);
-        return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!, projection.TerminalMarks, row.ParkAt, row.ParkFault, row.ParkRevision), row.AsOf);
+        return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.TerminalRevision,
+            row.Header!, projection.TerminalMarks, row.ParkAt, row.ParkFault, row.ParkRevision, row.ParkResolution)
+            with { ParentReference = row.ParentReference }, row.AsOf);
     }
 
     internal async Task<RootListPage> ReadRootActorListAsync(string tenant, string after, string? type, int? status,
         KeyValuePair<string, string>[] labels, long? endedBefore, bool? parked, int limit, CancellationToken cancellationToken)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor lists require PostgreSQL.");
+        if (Engine is not null) throw new NotSupportedException("Qualified root actor lists require the local store.");
         await using var db = create();
+        if (!postgres && db.UsesSqliteRootRuntime)
+            return await ReadSqliteRootActorListAsync(db, tenant, after, type, status, labels, endedBefore, parked, limit, cancellationToken);
+        if (!postgres) throw new NotSupportedException("Qualified root actor lists require PostgreSQL or a shipped SQLite root store.");
         var expected = db.RequiredFormat;
         var projection = ActorListProjection.Of(db);
-        var triggers = projection.ListTriggers;
         var encodedType = type is null ? null : DurableKeyJson.Write(type);
         var encodedLabels = DurableKeyJson.Write(labels);
         if (projection.SchemaBound)
@@ -307,27 +333,15 @@ public sealed partial class EfStore
         List<RootListRow> rows;
         try
         {
-            rows = await db.Database.SqlQuery<RootListRow>(ActorListQuery(projection, $"""
+            rows = await db.Database.SqlQuery<RootListRow>(ActorListQuery(db, projection, $"""
                 WITH marker AS (
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
                     FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
                 ), readiness AS (
-                    SELECT EXISTS (
-                        SELECT 1 FROM pg_catalog.pg_trigger source
-                        JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
-                        JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
-                            AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
-                        WHERE source.tgrelid = to_regclass('"Instances"')
-                            AND source.tgname::text = ANY({triggers}) AND source.tgenabled IN ('O', 'A')
-                            AND (NOT {projection.SchemaBound} OR 2 = (
-                                SELECT count(*) FROM pg_catalog.pg_class dependency
-                                WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
-                                    to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"'))))
-                        GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
-                    ) AS "SourceReady"
+                    SELECT /*actor-list-ready*/ AS "SourceReady"
                 ), page AS (
                     SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header", /*park-at*/ AS "ParkAt", /*park-fault*/ AS "ParkFault",
-                        /*park-revision*/ AS "ParkRevision"
+                        /*park-revision*/ AS "ParkRevision", /*park-resolution*/ AS "ParkResolution", /*parent*/ AS "ParentReference"
                     FROM "FoundationActorList" l
                     WHERE l."Tenant" = {tenant} AND l."Reference" > {after}
                         AND (SELECT "SourceReady" FROM readiness)
@@ -341,8 +355,9 @@ public sealed partial class EfStore
                             WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(l."Labels") label(entry) WHERE label.entry = criterion.entry))
                     ORDER BY l."Reference" LIMIT {limit}
                 )
-                SELECT page."Reference", page."Status", page."EndedAt", page."TerminalRevision", page."Header", page."ParkAt", page."ParkFault", page."ParkRevision",
-                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec",
+                SELECT page."Reference", page."Status", page."EndedAt", page."TerminalRevision", page."Header", page."ParkAt", page."ParkFault",
+                    page."ParkRevision", page."ParkResolution", page."ParentReference",
+                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp",
                     (SELECT "SourceReady" FROM readiness) AS "SourceReady",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
@@ -360,9 +375,11 @@ public sealed partial class EfStore
             throw;
         }
         var first = rows[0];
-        RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
+        RequireSnapshotFormat(db, first.StoreSchema, first.MessageProtocol, first.JournalCodec, first.DefinitionStamp);
         RequireRootActorListSource(first.SourceReady);
-        var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!, projection.TerminalMarks, row.ParkAt, row.ParkFault, row.ParkRevision)).ToArray();
+        var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt,
+            row.TerminalRevision, row.Header!, projection.TerminalMarks, row.ParkAt, row.ParkFault, row.ParkRevision, row.ParkResolution)
+            with { ParentReference = row.ParentReference }).ToArray();
         return new(items, first.AsOf);
     }
 
@@ -372,7 +389,7 @@ public sealed partial class EfStore
     }
 
     private static RootListItem ToRootListItem(string reference, int status, long? endedAt, long? terminalRevision, string encodedHeader, bool qualified, long? parkAt, string? parkFault,
-        long? parkRevision)
+        long? parkRevision, string? parkResolution)
     {
         // A parked root is Faulted but has not ended: its Park commit writes no terminal mark.
         if (qualified && ((InstanceStatus)status == InstanceStatus.Running || parkAt is not null
@@ -381,9 +398,11 @@ public sealed partial class EfStore
             throw new StoreFormatException("The actor list terminal mark is incomplete.");
         if (parkAt is not null ? parkAt <= 0 || status != (int)InstanceStatus.Faulted || parkFault is null || parkRevision <= 0 : parkFault is not null || parkRevision is not null)
             throw new StoreFormatException("The actor list Park mark is incomplete.");
+        if (parkResolution is not null && (parkResolution is not (ParkTerminating or ParkDeleting) || parkAt is null || parkRevision is not > 0))
+            throw new StoreFormatException("The actor list Park resolution is invalid.");
         var header = DurableKeyJson.Read<RootHeader>(encodedHeader);
         return new(reference, header.Model, (InstanceStatus)status, endedAt, terminalRevision, qualified, header.TypeData,
             header.Labels.ToDictionary(StringComparer.Ordinal), parkAt, parkFault is null ? null : DurableKeyJson.Read<string>(parkFault))
-            { ParkRevision = parkRevision };
+            { ParkRevision = parkRevision, ParkResolution = parkResolution };
     }
 }

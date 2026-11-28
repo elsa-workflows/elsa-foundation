@@ -36,7 +36,10 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Core.Models;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.KernelApi;
+using Elsa.Workflows.Runtime.KernelHost;
+using Elsa.ActorFoundation.Hosting;
+using Kernel.Foundation.Contracts;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -352,9 +355,8 @@ public sealed class DomainManagementApiCompositionTests
                 // The publish engine split moved the workflow-publish feature out of
                 // WorkflowsPublishingApi into the endpoint-free WorkflowsPublishing engine, which both
                 // WorkflowsPublishingApi and GraphActivitiesDesign now DependsOn. Seed the engine and its
-                // transitive Runtime-triggers/Events feature assemblies so shell composition can discover them.
+                // Events feature assembly so shell composition can discover it.
                 typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,
-                typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeTriggersFeature).Assembly,
                 typeof(Elsa.Events.EventsFeature).Assembly,
                 // The production Workbench catalog already includes this assembly. This reduced
                 // fixture must also discover the mandatory shared authority required by both owners.
@@ -432,7 +434,7 @@ public sealed class DomainManagementApiCompositionTests
     }
 
     private static string StockServerConfigurationPath =>
-        Path.Combine(RepoRoot, "apps", "Elsa.Workbench.Host", "shells.json");
+        Path.Combine(RepoRoot, "server/apps", "Elsa.Workbench.Host", "shells.json");
 
     [ShellFeature(name: "ApiCapabilities")]
     public sealed class ApiCapabilitiesDependencyFeature : IShellFeature
@@ -484,7 +486,11 @@ public sealed class DomainManagementApiCompositionTests
             new ActivitiesDesignApiFeature().ConfigureServices(builder.Services);
             new WorkflowsDesignApiFeature().ConfigureServices(builder.Services);
             new WorkflowsPublishingApiFeature().ConfigureServices(builder.Services);
-            new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
+            var runtimeApi = new WorkflowsRuntimeKernelRetainedApiFeature();
+            runtimeApi.ConfigureServices(builder.Services);
+            builder.Services.AddSingleton(new KernelRuns(EmbeddedTenant.Bind("default"),
+                _ => ValueTask.FromResult<IActorReads>(new EmptyActorReads())));
+            runtimeApi.PostConfigureServices(builder.Services);
             new StructuredLogsFeature().ConfigureServices(builder.Services);
             new StudioPreferencesFeature().ConfigureServices(builder.Services);
             new StudioPreferencesApiFeature().ConfigureServices(builder.Services);
@@ -522,7 +528,7 @@ public sealed class DomainManagementApiCompositionTests
             ActivitiesDesignApi.MapActivitiesDesignApi(app);
             WorkflowsDesignApi.MapWorkflowsDesignApi(app);
             WorkflowsPublishingApi.MapWorkflowsPublishingApi(app);
-            WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
+            runtimeApi.MapEndpoints(app, app.Environment);
             StructuredLogsApi.MapStructuredLogsApi(app);
             StudioPreferencesApi.MapStudioPreferencesApi(app);
             if (includeExpressions)
@@ -614,6 +620,21 @@ public sealed class DomainManagementApiCompositionTests
             var handler = services.GetRequiredService(handlerType);
             return await (Task<T>)handlerType.GetMethod("Handle")!.Invoke(handler, [request, cancellationToken])!;
         }
+    }
+
+    private sealed class EmptyActorReads : IActorReads
+    {
+        public ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActorView?>(null);
+
+        public ValueTask<Page<ActorView>> ListAsync(BoundScope scope, ActorQuery query, PageToken? from = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new Page<ActorView>([], null, 0));
+
+        public ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new Page<JournalEntry>([], null, 0));
+
+        public ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new Page<DeliveryView>([], null, 0));
     }
 
     private sealed class EmptyRuntimeExecutableInspector : Elsa.Workflows.Runtime.Api.Services.IWorkflowExecutableInspector

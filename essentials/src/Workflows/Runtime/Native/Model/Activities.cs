@@ -291,8 +291,8 @@ public sealed record ForState
 /// </summary>
 public sealed class For : CompositeActivity
 {
-    /// <summary>The variable each pass declares: the old core's <c>index</c>, named as the Native ForEach names its own.</summary>
-    public const string IndexVariable = "Index";
+    /// <summary>The variable each pass declares: the old core's <c>index</c>, named as on the old core, as the Native ForEach names its own (currentItem, currentIndex).</summary>
+    public const string IndexVariable = "index";
 
     [Input] public int Start { get; set; }
     [Input] public int End { get; set; }
@@ -426,56 +426,67 @@ public sealed record ForEachState
     public int Index { get; set; }
 }
 
-/// <summary>Each pass runs the body in an iteration scope that declares CurrentItem and CurrentIndex.</summary>
+/// <summary>Each pass runs the body in an iteration scope that declares currentItem and currentIndex.</summary>
 [InterventionParent(2)]
 public sealed class ForEach : CompositeActivity, IInterventionParent
 {
+    private const int MaxItems = 1_000;
+
     JsonNode? IInterventionParent.PrepareRetry(Node definition, JsonNode? state, RetryChild child)
     {
         var progress = Values.To<ForEachState>(state) ?? throw new InvalidOperationException("Missing iteration retry obligation.");
         if (progress.Items is null || progress.Index < 0 || progress.Index >= progress.Items.Count || child.Tag is not null || definition.Children.Count != 1 || definition.Children[0].Id != child.Node ||
-            child.Scope is not { Count: 2 } || !child.Scope.TryGetValue("CurrentIndex", out var index) || index is not JsonValue value || !value.TryGetValue<int>(out var current) || current != progress.Index ||
-            !child.Scope.TryGetValue("CurrentItem", out var item) || !JsonNode.DeepEquals(item, progress.Items[progress.Index]))
+            child.Scope is not { Count: 2 } || !child.Scope.TryGetValue("currentIndex", out var index) || index is not JsonValue value || !value.TryGetValue<int>(out var current) || current != progress.Index ||
+            !child.Scope.TryGetValue("currentItem", out var item) || !JsonNode.DeepEquals(item, progress.Items[progress.Index]))
             throw new InvalidOperationException("Invalid iteration retry obligation.");
         return state?.DeepClone(); // only ordinary successful completion advances Index
     }
     [Input] public JsonArray? Items { get; set; }
 
-    /// <summary>The body's iteration is its committed scope's CurrentIndex (round 5 C).</summary>
+    /// <summary>The body's iteration is its committed scope's currentIndex (round 5 C).</summary>
     protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
-        childScope is not null && childScope.TryGetValue("CurrentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+        childScope is not null && childScope.TryGetValue("currentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
 
     protected internal override void Execute(CompositeContext context)
     {
-        var state = new ForEachState { Items = Items ?? [] };
-        context.SetState(state);
-        Next(context, state);
+        var items = Items ?? [];
+        if (items.Count > MaxItems)
+        {
+            context.Fault(new ActivityFault("foreach.items.limit", $"ForEach accepts at most {MaxItems} items. It received {items.Count}."));
+            return;
+        }
+        context.SetState(new ForEachState { Items = items });
+        Next(context, items, 0);
     }
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
-        var state = context.GetState<ForEachState>();
         if (child.Outcome == "Break")
         {
             context.Complete();
             return;
         }
-        state.Index++;
-        context.SetState(state);
-        Next(context, state);
+        // The checkpoint already owns the array. Advance its cursor without serializing the remaining items.
+        if (context.ReadState<JsonObject>() is not { } state ||
+            state[nameof(ForEachState.Items)] is not JsonArray items ||
+            state[nameof(ForEachState.Index)] is not JsonValue cursor || !cursor.TryGetValue<int>(out var current))
+            throw new InvalidOperationException("Invalid ForEach state.");
+        var index = current + 1;
+        state[nameof(ForEachState.Index)] = index;
+        Next(context, items, index);
     }
 
-    private static void Next(CompositeContext context, ForEachState state)
+    private static void Next(CompositeContext context, JsonArray items, int index)
     {
-        if (state.Index >= state.Items.Count || context.Children.Count == 0)
+        if (index >= items.Count || context.Children.Count == 0)
         {
             context.Complete();
             return;
         }
         context.Schedule(context.Children[0], scope: new Dictionary<string, JsonNode?>
         {
-            ["CurrentItem"] = state.Items[state.Index]?.DeepClone(),
-            ["CurrentIndex"] = state.Index,
+            ["currentItem"] = items[index]?.DeepClone(),
+            ["currentIndex"] = index,
         });
     }
 }
@@ -681,13 +692,16 @@ public sealed class Flowchart : CompositeActivity
             nodeMetadata: n.Gateways.ToDictionary(g => g.Key, g => new FlowchartNodeMetadata(KindOf(g.Value)), StringComparer.Ordinal))));
 
     /// <summary>
-    /// A child a run can be started at by its trigger: an HttpEndpoint that no connection leads to (<see cref="HttpRoutes"/>
-    /// registers these as start routes for a root Flowchart; a nested Flowchart marks them too). The graph engine roots its
-    /// loop classification at the start node and then at these, so a loop reached from an entry is classified from where
-    /// the run enters it, whatever the node ids.
+    /// The existing HTTP and schedule roots used to classify loops. Event discovery is separate so a workflow
+    /// starting elsewhere, including one resumed from an older checkpoint, keeps its original loop boundaries.
     /// </summary>
     internal static bool IsEntry(Node flowchart, Node child) =>
-        (child.Type == typeof(HttpEndpoint) || child.Type == typeof(Timer) || child.Type == typeof(Cron)) && !flowchart.Connections.Any(connection => connection.Target == child.Id);
+        (child.Type == typeof(HttpEndpoint) || child.Type == typeof(Timer) || child.Type == typeof(Cron)) &&
+        !flowchart.Connections.Any(connection => connection.Target == child.Id);
+
+    internal static bool IsEventEntry(Node flowchart, Node child) =>
+        child.Type == typeof(Event) && NativeStartTriggers.CanStart(child) &&
+        !flowchart.Connections.Any(connection => connection.Target == child.Id);
 
     private static string KindOf(Gateway gateway) => gateway switch
     {
@@ -829,10 +843,12 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
     [Input] public string Method { get; set; } = "POST";
     /// <summary>The route's opt-out of the release rule: its caller is answered when the turn ends, not after its commit.</summary>
     [Input] public bool RespondBeforeCommit { get; set; }
+    /// <summary>Whether a request on its route starts a run where one begins; false, it only waits (<see cref="NativeStartTriggers"/>).</summary>
+    [Input] public bool CanStartWorkflow { get; set; } = true;
 
     protected override ValueTask<Transition> ExecuteAsync(StartContext<HttpRequest> context)
     {
-        if (context.TryGetTrigger(out var request)) return new(Complete(request));
+        if (CanStartWorkflow && context.TryGetTrigger(out var request)) return new(Complete(request));
         // Without route values bound the path is a literal route, as before templates: an expression may compute it,
         // braces and all (HttpRoutes refuses a literal template with parameters and no RouteValues bound). Bound values that
         // came out null on a template fault here rather than wait on a key no request reaches.
@@ -840,12 +856,11 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
             return new(Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
         if (RouteValues is null) return new(Fault("http.route.invalid", $"The route '{Path}' has parameters and its route values are null."));
         string path;
-        bool parameters;
+        HttpRouteTemplate template;
         try
         {
             var values = RouteValues is null ? null : HttpFields.RouteValues(HttpFields.Scalars(RouteValues, "route value"));
-            var template = HttpRouteTemplate.Parse(Path);
-            parameters = template.Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal);
+            template = HttpRouteTemplate.Parse(Path);
             path = template.Resolve(values);
         }
         catch (ArgumentException refused) when (refused is HttpRouteTemplateException or HttpFieldsException)
@@ -853,7 +868,9 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
             return new(Fault("http.route.invalid", refused.Message));
         }
         // A template without parameters is a literal route (HttpRoutes.WaitKey keys it so too).
-        return new(Suspend(new HttpWaitState(Method, path), new HttpTrigger(Method, path, Resolved: parameters)));
+        var resolved = template.Segments.Any(segment => segment.Kind == HttpRouteSegmentKind.Parameter);
+        var trigger = new HttpTrigger(Method, path, resolved) { CanonicalTemplate = resolved ? template.Text : null };
+        return new(Suspend(new HttpWaitState(Method, path), trigger));
     }
 
     protected override ValueTask<Transition> ResumeAsync(ResumeContext<HttpWaitState, HttpRequest> context) => new(Complete(context.Trigger));
@@ -869,17 +886,22 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
 public sealed class WriteHttpResponse : Activity<HttpResponse>
 {
     [Input] public int StatusCode { get; set; } = 200;
-    [Input] public string ContentType { get; set; } = "text/plain";
+    /// <summary>The explicit media type, or blank to infer it from the body.</summary>
+    [Input] public string? ContentType { get; set; }
     [Input] public JsonNode? Body { get; set; }
-    /// <summary>The response headers besides the content type: an object of strings, numbers or booleans.</summary>
+    /// <summary>Response headers besides the content type. Each value is a scalar or a single string in an array.</summary>
     [Input] public JsonObject? Headers { get; set; }
 
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
         IReadOnlyDictionary<string, string> headers;
-        try { headers = HttpFields.ResponseHeaders(Headers); }
+        try { headers = HttpFields.AuthoredResponseHeaders(Headers); }
         catch (HttpFieldsException refused) { return new(Fault("http.headers.invalid", refused.Message)); }
-        var response = new HttpResponse(StatusCode, ContentType, Body) { Headers = headers };
+        var mediaType = ContentType;
+        if (string.IsNullOrWhiteSpace(mediaType))
+            mediaType = Body?.GetValueKind() == JsonValueKind.String ? "text/plain" : "application/json";
+
+        var response = new HttpResponse(StatusCode, mediaType, Body) { Headers = headers };
         return new(Complete(response).With(new EmitEffect("response", Values.From(response))));
     }
 }

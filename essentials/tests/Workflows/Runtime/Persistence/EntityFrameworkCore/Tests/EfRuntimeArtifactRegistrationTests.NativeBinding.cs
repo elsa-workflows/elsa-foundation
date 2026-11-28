@@ -17,7 +17,7 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPersistenceAccessContextAccessor>(new NativeBindingAccess());
-        if (runtimeFirst) services.AddWorkflowRuntime();
+        if (runtimeFirst) WorkflowPublicationDefaults.Add(services);
         var nativeBackend = RuntimeArtifactStoreBackend.Find(services);
         var nativeOwned = nativeBackend is null ? [] : services.Where(nativeBackend.Owns).ToArray();
         services.AddRuntimeArtifactsEntityFrameworkCore(new()
@@ -25,7 +25,7 @@ public sealed partial class EfRuntimeArtifactRegistrationTests
             Provider = "Sqlite", ConnectionString = "Data Source=:memory:"
         });
         services.AddOptions<RuntimeRecoveryContinuationOptions>().Configure(options => { options.SigningKey = SigningKey; options.AllowEphemeralDevelopmentKey = false; });
-        if (!runtimeFirst || repeatRuntime) services.AddWorkflowRuntime();
+        if (!runtimeFirst || repeatRuntime) WorkflowPublicationDefaults.Add(services);
         foreach (var previous in nativeOwned) Assert.DoesNotContain(previous, services);
         var groupType = typeof(InMemoryExecutableActivityTemplateStore).Assembly.GetType("Elsa.Workflows.Runtime.Services.Executables.InMemoryRuntimeArtifactStores", throwOnError: true)!;
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == groupType);

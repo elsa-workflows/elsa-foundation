@@ -1,9 +1,11 @@
+using System.Data.Common;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -13,6 +15,58 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootParkOpeningChecks
 {
+    private sealed class RecoveryQuoteObservation : DbCommandInterceptor
+    {
+        internal bool ObserveNext { get; set; }
+        internal bool ObserveParkInbox { get; set; }
+        internal int Quoted { get; private set; }
+        internal bool SkippedKeptScan { get; private set; }
+        internal bool ArrivalsUseKeptIndex { get; private set; }
+        internal bool ParkInboxUsesKeptIndex { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            var inbox = ObserveParkInbox && command.CommandText.Contains("CROSS JOIN (VALUES (0::smallint), (1::smallint))", StringComparison.Ordinal);
+            var quote = ObserveNext && command.CommandText.Contains("WITH arrivals AS MATERIALIZED", StringComparison.Ordinal);
+            if (!inbox && !quote)
+                return result;
+            await using var explain = ((NpgsqlCommand)command).Clone();
+            explain.CommandText = "EXPLAIN (ANALYZE, FORMAT JSON) " + command.CommandText;
+            using var plan = JsonDocument.Parse((string)(await explain.ExecuteScalarAsync(cancellationToken))!);
+            var nodes = Plans(plan.RootElement[0].GetProperty("Plan")).ToArray();
+            if (inbox)
+            {
+                ObserveParkInbox = false;
+                ParkInboxUsesKeptIndex = nodes.Any(node => UsesKeptIndex(node) &&
+                    node.GetProperty("Index Cond").GetString()!.Contains("Seq", StringComparison.Ordinal) &&
+                    node.GetProperty("Actual Loops").GetInt32() == 2);
+                return result;
+            }
+            ObserveNext = false;
+            var arrivals = nodes.Single(node => node.TryGetProperty("Subplan Name", out var name) && name.GetString() == "CTE arrivals");
+            Quoted = arrivals.GetProperty("Actual Rows").GetInt32();
+            ArrivalsUseKeptIndex = Plans(arrivals).Any(UsesKeptIndex);
+            SkippedKeptScan = nodes.Any(node => node.TryGetProperty("Relation Name", out var relation) && relation.GetString() == "Messages" &&
+                node.GetProperty("Actual Loops").GetInt32() == 0);
+            return result;
+
+            static bool UsesKeptIndex(JsonElement node) =>
+                node.TryGetProperty("Index Name", out var index) && index.GetString() == "IX_FoundationRootInbox_RecoveryKept" &&
+                node.TryGetProperty("Index Cond", out var condition) && condition.GetString() is { } indexCondition &&
+                indexCondition.Contains("Target", StringComparison.Ordinal) && indexCondition.Contains("FoundationKeptBy", StringComparison.Ordinal);
+
+            static IEnumerable<JsonElement> Plans(JsonElement node)
+            {
+                yield return node;
+                if (node.TryGetProperty("Plans", out var nested))
+                    foreach (var child in nested.EnumerateArray())
+                        foreach (var descendant in Plans(child))
+                            yield return descendant;
+            }
+        }
+    }
+
     internal static async Task<int> RunAsync(bool owned, bool inBatch, bool inspection = false, bool arrivals = false, bool recovery = false)
     {
         if (recovery) (inspection, arrivals) = (true, true);
@@ -21,6 +75,7 @@ internal static class PostgresRootParkOpeningChecks
         const string payload = "{\"retain\":\"this input\"}";
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
+        var recoveryQuote = new RecoveryQuoteObservation();
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         KernelDb Profile(DbContextOptions<KernelDb> settings) => recovery ? KernelDb.ForPostgresRootParkRecovery(settings)
             : arrivals ? KernelDb.ForPostgresRootParkArrivals(settings)
@@ -51,8 +106,26 @@ internal static class PostgresRootParkOpeningChecks
         }
         using var quoting = new NpgsqlCommandBuilder();
         var mixed = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "park_shadow," + quoting.QuoteIdentifier(source) };
-        var mixedOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(mixed.ConnectionString).Options;
+        var mixedOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(mixed.ConnectionString).AddInterceptors(recoveryQuote).Options;
         KernelDb OpenMixed() => Profile(mixedOptions);
+        await using (var db = OpenMixed())
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(stop);
+            await PostgresRootAdmission.PinRootNamespaceAsync(db, stop);
+            string[] tables = ["FoundationRootIssuer", "FoundationRootBirths", "Instances", "Messages", "Partitions", "Nodes",
+                "Journal", "Subscriptions", "FoundationDirectReceipts", "FoundationActorList", "FoundationRootReceipts", "Events"];
+            if (db.UsesRootOperatorProtocol) tables = [.. tables, "FoundationOperatorReceipts"];
+            var locked = await db.Database.SqlQuery<string>($"""
+                SELECT ns.nspname || '.' || c.relname AS "Value"
+                FROM pg_catalog.pg_locks l JOIN pg_catalog.pg_class c ON c.oid = l.relation
+                JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace
+                WHERE l.pid = pg_catalog.pg_backend_pid() AND l.granted AND l.mode = 'AccessShareLock'
+                    AND c.relname::text = ANY({tables})
+                """).ToListAsync(stop);
+            Check(locked.Count == tables.Length && locked.ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(tables.Select(table => source + "." + table)),
+                "the live pin transaction locks every required source relation and leaves the shadow relations unlocked");
+        }
         var admission = new PostgresRootAdmission(OpenMixed, TimeSpan.FromHours(1), lockOrdinaryWrites: true);
         var tenant = ContractScopes.Bind("park-preview");
         var probe = new Probe(original, fault);
@@ -603,6 +676,16 @@ internal static class PostgresRootParkOpeningChecks
             var selection = parked?.Selection ?? throw new InvalidOperationException("The parked view has no Park selection.");
             Check(parked.Park?.At == opened!.At && (await reads.GetAsync(tenant, sibling, stop))?.Selection is null,
                 "the public view of the parked root carries a Park selection and the running sibling none");
+            var parkReads = (Contract.IActorParkInboxReads)await Store(OpenMixed).OpenPreviewRootReadsAsync(1, stop);
+            var firstPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop);
+            Check(firstPage is { Items: [{ Kind: "ordinary", State: Contract.DeliveryState.Arrived }], Next: not null },
+                "the exact Park inbox starts with the oldest kept arrival");
+            var secondPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage!.Next, stop);
+            Check(secondPage is { Items: [{ Kind: "fail", State: Contract.DeliveryState.Consumed }], Next: not null } &&
+                secondPage.Items[0].Handle != firstPage.Items[0].Handle, "the next Park inbox page carries the consumed delivery's own handle");
+            var thirdPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, secondPage!.Next, stop);
+            Check(thirdPage is { Items: [{ Kind: "ordinary", State: Contract.DeliveryState.Arrived }], Next: null },
+                "the exact Park inbox stops after the last kept input");
             ValueTask<Contract.Admission> Send(Contract.ActorRef target, string id, Contract.OperatorCommand command) =>
                 ingress.SendAsync(tenant, new Contract.Target.Ref(target), id, Contract.Kinds.Recover, JsonSerializer.Serialize(command),
                     cancellationToken: stop);
@@ -627,17 +710,32 @@ internal static class PostgresRootParkOpeningChecks
             await using (var db = Open())
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Kind", "Partition", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration", "FoundationKeptBy")
-                    SELECT 'page-filler-' || n, -4, {before.Actor.Id}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1 FROM generate_series(1, {InMemoryStore.ParkPageLimit}) n
+                    SELECT 'page-filler-' || n, -4, {before.Actor.Id}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1 FROM generate_series(1, {InMemoryStore.ParkPageLimit}) n;
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Kind", "Partition", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration", "Seq")
+                    SELECT 'page-pending-' || n, -4, {before.Actor.Id}, 'ordinary', 0, {long.MaxValue}, 0, 0, 0, false, 0, -n
+                    FROM generate_series(1, 8192) n;
+                    ANALYZE "Messages";
                     """, stop);
+            recoveryQuote.ObserveParkInbox = true;
+            var skewedPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage.Next, stop);
+            Check(skewedPage?.Items.Count == 1 && recoveryQuote.ParkInboxUsesKeptIndex,
+                "the exact PostgreSQL page seeks both kept reasons by actor and sequence with 8192 earlier pending rows");
             Check(await Send(actor, "recover-page", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits a recover of the oversized Park");
+            recoveryQuote.ObserveNext = true;
             await using (var pager = await Own("recover-page"))
                 await Drive(pager, row => row is { Revision: 5 });
+            Check(recoveryQuote.Quoted == InMemoryStore.ParkPageLimit + 1 && recoveryQuote.SkippedKeptScan && recoveryQuote.ArrivalsUseKeptIndex,
+                $"the PostgreSQL row-limit refusal skips 8192 earlier pending rows through the actor-and-reason index and opens no bodies " +
+                $"(quoted {recoveryQuote.Quoted}, kept index {recoveryQuote.ArrivalsUseKeptIndex}, skipped scan {recoveryQuote.SkippedKeptScan})");
             Check((await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop))[^1] is { Revision: 5, Entries: """{"Outcome":"refused","Operation":"recover-page","Reason":"page"}""" } &&
                 (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop)) is { Status: InstanceStatus.Faulted, Fault: fault, State: original } &&
                 await ReadParkMark(before.Actor.Id) == opened && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park,
                 "the owner records a page refusal at the next revision and keeps the Park mark and fault");
+            Check(await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage.Next, stop) is null &&
+                await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop) is { Next: not null },
+                "a committed checkpoint change invalidates an earlier page without replacing the Park");
             await using (var db = Open())
-                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" LIKE 'page-filler-%'""", stop);
+                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" LIKE 'page-filler-%' OR "Id" LIKE 'page-pending-%'""", stop);
 
             Check(await Send(actor, "recover", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits the recover");
             Check(await Send(actor, "recover", new(selection)) is { Outcome: Contract.AdmissionOutcome.Duplicate }, "a repeated recover operation is a duplicate");
@@ -702,6 +800,9 @@ internal static class PostgresRootParkOpeningChecks
             }
             var secondSelection = (await reads.GetAsync(tenant, actor, stop))?.Selection
                 ?? throw new InvalidOperationException("The re-parked view has no Park selection.");
+            Check(await parkReads.ReadParkInboxAsync(tenant, actor, secondSelection, firstPage.Next, stop) is null &&
+                await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop) is null,
+                "a page from the first Park cannot read evidence in the replacement Park");
             Check(secondSelection != selection && await Send(actor, "recover-old", new(selection)) is
                     { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
                 "ingress refuses the generation-1 selection on the re-parked root");
@@ -751,8 +852,11 @@ internal static class PostgresRootParkOpeningChecks
                     """, stop);
             Check(await Send(sibling, "recover-bytes", new(neighborSelection)) is { Outcome: Contract.AdmissionOutcome.Accepted },
                 "ingress admits a recover of two arrivals over 4 MiB");
+            recoveryQuote.ObserveNext = true;
             await using (var large2 = await Own("large-page"))
                 await Drive(large2, row => row?.Revision == neighborParked.Revision + 2, sibling);
+            Check(recoveryQuote.Quoted == 2 && recoveryQuote.SkippedKeptScan,
+                $"the PostgreSQL byte-limit refusal quotes both sizes and skips the kept-envelope scan (quoted {recoveryQuote.Quoted}, skipped {recoveryQuote.SkippedKeptScan})");
             Check((await store.ReadJournalOfAsync(0, neighborId, 0, stop))[^1].Entries ==
                     """{"Outcome":"refused","Operation":"recover-bytes","Reason":"page"}""" &&
                 (await store.ReadFirstRootAsync(tenant.Tenant, sibling.Id, stop)) is { Status: InstanceStatus.Faulted },
@@ -1080,10 +1184,14 @@ internal static class PostgresRootParkOpeningChecks
     {
         internal IKernelStore Store = null!;
         internal Func<CommitBatch, CancellationToken, ValueTask<Committed>> Write = null!;
+        internal Func<int, long, TimeSpan, int, CancellationToken, ValueTask<Polled>>? Poll;
         protected override object? Invoke(MethodInfo? method, object?[]? args) =>
             method!.Name == nameof(IKernelStore.CommitAsync)
                 ? Write((CommitBatch)args![0]!, (CancellationToken)args[1]!)
-                : method.Invoke(Store, args);
+                : method.Name == nameof(IKernelStore.PollAsync) && Poll is { } poll && args is
+                    [int partition, long epoch, TimeSpan horizon, int limit, CancellationToken token]
+                    ? poll(partition, epoch, horizon, limit, token)
+                    : method.Invoke(Store, args);
     }
 
     private sealed class Probe(string original, string fault) : Contract.IActorType

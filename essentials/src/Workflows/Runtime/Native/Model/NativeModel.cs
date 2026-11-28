@@ -53,7 +53,12 @@ public sealed record TimerFired(string Wait);
 public sealed record ResumeStimulus(string Event, JsonNode? Payload = null);
 
 /// <summary>A background job's ticket. Its iteration path and effect key are computed in the turn that starts it and committed with it (round 5 C).</summary>
-public sealed record BackgroundArgs(string Workflow, string Node, string Frame, JsonObject Inputs, string? IterationPath = null, string? EffectKey = null);
+public sealed record BackgroundArgs(string Workflow, string Node, string Frame, JsonObject Inputs, string? IterationPath = null, string? EffectKey = null)
+{
+    /// <summary>The exact executable remembered when this job was issued, when the run selected one.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutableSelection { get; init; }
+}
 
 public sealed record BackgroundResult(TransitionKind Kind, JsonNode? Result, string Outcome, ActivityFault? Fault);
 
@@ -61,14 +66,105 @@ public class NativeExecutionOptions
 {
     public NativeFlaw Flaws { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
+
+    /// <summary>Uses versioned structural journal records for an opted-in host.</summary>
+    public bool UseStructuralJournal { get; init; }
+
+    /// <summary>Lets a host deliver an explicitly selected Event start with no payload.</summary>
+    public bool AuthoredEventStarts { get; init; }
+
+    /// <summary>Attests the exact resolved HTTP template on waits created by a prepared-standalone host.</summary>
+    public bool StampPreparedHttpWaits { get; init; }
+
+    /// <summary>
+    /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
+    /// <see cref="MaxActivitiesPerTurn"/> continues in the next turn. Without them a burst runs on to its next wait or end in
+    /// one turn, bounded by the state and history size limits and by <see cref="MaxActivitiesPerBurst"/>, past which the
+    /// workflow faults (<c>native.burst.limit</c>).
+    /// </summary>
+    public bool SelfSends { get; init; } = true;
+
+    /// <summary>
+    /// The most activities one turn runs without waiting on a host without self-sends (<see cref="SelfSends"/>): the bound a
+    /// burst is held to, the same however loaded the host is.
+    /// </summary>
+    public int MaxActivitiesPerBurst { get; init; } = 10_000;
+
+    /// <summary>
+    /// A backstop on a host without self-sends (<see cref="SelfSends"/>): the longest one turn runs without waiting before
+    /// the workflow faults (<c>native.burst.limit</c>). It keeps a turn from holding its node; it is not a correctness bound,
+    /// and how much work fits in it depends on the host's load.
+    /// </summary>
+    public TimeSpan MaxBurstDuration { get; init; } = TimeSpan.FromSeconds(30);
     public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
     /// <summary>The host's outbound HTTP for SendHttpRequest's job; without it the activity faults.</summary>
     public NativeHttpOptions? Http { get; init; }
+    /// <summary>The console stream for WriteLine and WriteLines in this model.</summary>
+    public TextWriter? ConsoleOutput { get; init; }
     /// <summary>The host's script engine for RunJavaScript; without it a script faults.</summary>
     public INativeScripts? Scripts { get; init; }
     /// <summary>The host's evaluator for host expressions (JavaScript, Liquid); without it such a binding faults its activation.</summary>
     public INativeExpressions? Expressions { get; init; }
+
+    /// <summary>Validates a present value against an authored reusable activity output's pinned type.</summary>
+    public Func<GraphOutputAssignment, JsonNode, bool>? ValidateGraphOutput { get; init; }
+
+    /// <summary>
+    /// What a publishing host serves for the id a Dispatch Workflow names. A designer's Dispatch names a definition, and a
+    /// publishing host serves each definition as one artifact at a time, so it answers with the workflow id it serves now,
+    /// with none, or with several (<see cref="ServedDefinition"/>). It is read once per child start, and that one answer
+    /// decides the start:
+    /// <list type="bullet">
+    /// <item>one workflow: the child starts it;</item>
+    /// <item>several, none of them the default: the Dispatch faults with <c>dispatch.ambiguous</c>;</item>
+    /// <item>none: the child starts the workflow the id names if the registry holds it, and otherwise the Dispatch faults
+    /// with <c>dispatch.unpublished</c>. A child start never goes through <see cref="ResolveWorkflow"/>.</item>
+    /// </list>
+    /// Without it, the child starts the workflow the id names. It is read inside the turn, so a turn that runs again after a
+    /// lost commit may start a version published in between.
+    /// </summary>
+    public Func<string, ServedDefinition>? ServedWorkflow { get; init; }
+
+    /// <summary>Validates and normalizes the evaluated inputs of an exact compiled Test Run child before staging its start.</summary>
+    public Func<TestRunChildSelection, JsonObject?, CancellationToken, ValueTask<(JsonObject? Inputs, ActivityFault? Refusal)>>?
+        ValidateTestRunChildInputs { get; init; }
+
+    /// <summary>
+    /// The workflow for an id the registry does not hold, which the host loads (null when it has none). A publishing host's
+    /// registry holds, after a restart, the versions its slots serve, and an instance started on an earlier version still runs
+    /// that version: the host loads it from its artifacts. Also consulted when a cached workflow differs from a turn or
+    /// job's exact selection. A matching result joins the registry. A migration's check reads the registry only, and a
+    /// Dispatch never starts a child through it (<see cref="ServedWorkflow"/>).
+    /// </summary>
+    public Func<string, CancellationToken, ValueTask<Workflow?>>? ResolveWorkflow { get; init; }
+}
+
+/// <summary>What a publishing host serves for a definition (<see cref="NativeExecutionOptions.ServedWorkflow"/>): one workflow, none, or several.</summary>
+public readonly record struct ServedDefinition
+{
+    private ServedDefinition(string? workflow, bool several, Workflow? selected = null) =>
+        (Workflow, Several, Selected) = (workflow, several, selected);
+
+    /// <summary>The workflow that serves the definition, when one does.</summary>
+    public string? Workflow { get; }
+
+    internal Workflow? Selected { get; }
+
+    /// <summary>Whether several serve it and none is the one a Dispatch reaches first.</summary>
+    public bool Several { get; }
+
+    public static ServedDefinition None => default;
+    public static ServedDefinition SeveralServe => new(null, true);
+    public static ServedDefinition By(string workflow) => new(workflow ?? throw new ArgumentNullException(nameof(workflow)), false);
+
+    /// <summary>Captures the served workflow and its exact executable selection in one read.</summary>
+    public static ServedDefinition FromWorkflow(Workflow workflow) =>
+        new((workflow ?? throw new ArgumentNullException(nameof(workflow))).Id, false, workflow);
+
+    // Selection evidence travels with the answer. The public serving decision is still its workflow ID and ambiguity.
+    public bool Equals(ServedDefinition other) => Workflow == other.Workflow && Several == other.Several;
+    public override int GetHashCode() => HashCode.Combine(Workflow, Several);
 }
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
@@ -88,6 +184,8 @@ public sealed partial class NativeState
     public Dictionary<string, JsonNode?> Results { get; set; } = new(StringComparer.Ordinal);
     public string? TriggerNode { get; set; }
     public JsonNode? Trigger { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool EmptyEventStartPending { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, InvocationInbox>? Inboxes { get; set; }
 }
@@ -134,13 +232,14 @@ public sealed record WaitEntry(string Frame, string Kind, string Key, long Creat
 
 /// <summary>One turn: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
 internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOptions options, INativeTurn turn, CancellationToken cancellationToken,
-    Contract.ActorStatus? ended = null)
+    Contract.ActorStatus? ended = null, Workflow? executable = null)
 {
     internal bool HasExactIdentity => turn.HasExactIdentity;
     private readonly NativeState _s = turn.State;
-    private Workflow _wf => registry.Get(turn.Workflow); // metadata-only turns never resolve authored definitions
+    private Workflow _wf => executable ?? registry.Get(turn.Workflow); // metadata-only turns never resolve authored definitions
     private Contract.ActorStatus _status = Contract.ActorStatus.Running;
     private int _executed;
+    private long? _burstStart;
 
     internal static bool HandlesMetadata(string kind) => kind is InvocationInput.Kind or ReceiptQuery.Kind;
 
@@ -185,6 +284,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     {
         switch (m.Kind)
         {
+            case NativeTestRunWaitControl.Deliver:
+                AcceptTestRunWait(m);
+                break;
             case NativeRetry.Kind:
             {
                 var result = Retry(m);
@@ -200,6 +302,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
                 if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
                 (_s.TriggerNode, _s.Trigger) = (start.TriggerNode, start.Trigger ?? turn.Ambient as JsonNode);
+                _s.EmptyEventStartPending = options.AuthoredEventStarts && _s.Trigger is null && start.TriggerNode is { } selected &&
+                    NativeStartTriggers.StartEvents(_wf).Any(node => node.Id == selected);
                 _s.Agenda.Add(new Work { Frame = NewId("f"), Node = _wf.Root.Id });
                 break;
             }
@@ -262,9 +366,14 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         while (!_checkpointRequested && _s.Agenda.Exists(w => !w.Gone) && _status == Contract.ActorStatus.Running)
         {
             // Durable: a boundary after every activity. Balanced and Ephemeral: one turn until all waits or ends (capped).
-            if ((Durable && _executed > 0) || _executed >= options.MaxActivitiesPerTurn)
+            if ((Durable && _executed > 0) || options.SelfSends && _executed >= options.MaxActivitiesPerTurn)
             {
                 turn.SendToSelf(NativeKinds.Continue);
+                return;
+            }
+            if (!options.SelfSends && BurstLimit() is { } limit)
+            {
+                End(Contract.ActorStatus.Faulted, BurstLimitFaultCode, Values.From(limit));
                 return;
             }
             var work = _s.Agenda.FirstOrDefault(w => !w.Gone && Runnable(w));
@@ -273,7 +382,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             {
                 // Not replay-safe: commit the attempt first, run it in the next turn. After a crash the row says it may have run.
                 work.Attempt = 1;
-                turn.Record($"a:{work.Frame}:{work.Attempt}");
+                turn.RecordFrameScheduled(work.Frame, work.Attempt);
                 turn.SendToSelf(NativeKinds.Continue);
                 return;
             }
@@ -292,6 +401,23 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
     }
 
+    internal const string BurstLimitFaultCode = "native.burst.limit";
+
+    // A host without self-sends runs a burst in one turn. Its bound is the activity count; the time backstop keeps a turn
+    // from holding its node. Past either the workflow faults with the reason, so the turn ends instead of the node stalling.
+    private ActivityFault? BurstLimit()
+    {
+        _burstStart ??= System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_executed >= options.MaxActivitiesPerBurst)
+            return new ActivityFault(BurstLimitFaultCode,
+                $"This turn ran {_executed:N0} activities without waiting, the most this host runs in one turn. " +
+                "Make the workflow wait (for an event or an HTTP request) sooner, or do less work between its waits.");
+        var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(_burstStart.Value);
+        return elapsed < options.MaxBurstDuration ? null : new ActivityFault(BurstLimitFaultCode,
+            $"This turn ran {elapsed.TotalSeconds:0.#} seconds without waiting, the longest this host lets one turn hold its node " +
+            $"({options.MaxBurstDuration.TotalSeconds:0.#} seconds). Make the workflow wait sooner, or do less work between its waits.");
+    }
+
     // The frame a work item runs, for a host expression's fault: a resume's waiting frame, or the frame it starts.
     private Frame? FrameOf(Work work) => work.Resume
         ? _s.Waits.TryGetValue(work.Wait!, out var wait) ? _s.Frames.GetValueOrDefault(wait.Frame) : null
@@ -304,6 +430,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         if (work.Parent is not null && !_s.Frames.ContainsKey(work.Parent)) return;     // its parent was cancelled meanwhile
         var node = _wf.Nodes[work.Node!];
         var frame = new Frame { Id = work.Frame, Node = node.Id, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope, LexicalScope = work.LexicalScope };
+        turn.RecordFrameStart(frame);
         if (work.RetrySource is not null)
         {
             frame.RetrySource = work.RetrySource; frame.OperationKey = work.OperationKey;
@@ -320,7 +447,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             _s.Frames[frame.Id] = frame;
             var wait = NewId("w");
             var path = IterationPath(frame);
-            var arguments = new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope)), path, EffectKeyOf(frame, path));
+            var arguments = new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope)), path, EffectKeyOf(frame, path))
+            {
+                ExecutableSelection = executable?.ExecutableSelection
+            };
             var jobTimeout = node.JobTimeout ?? TimeoutInput(node, arguments.Inputs);
             _s.Waits[wait] = new WaitEntry(frame.Id, "job", wait)
             {
@@ -349,11 +479,11 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 break;
             case IStateful stateful:
             {
-                var delivery = _s.TriggerNode == node.Id && _s.Trigger is not null;
+                var delivery = PendingTrigger == node.Id;
                 var trigger = delivery ? _s.Trigger : null;
-                if (delivery) (_s.TriggerNode, _s.Trigger) = (null, null);
+                if (delivery) (_s.TriggerNode, _s.Trigger, _s.EmptyEventStartPending) = (null, null, false);
                 var context = Context(frame);
-                Apply(frame, await InvokeAuthored(frame, () => stateful.StartAsync(context, delivery, trigger)));
+                await ApplyAsync(frame, await InvokeAuthored(frame, () => stateful.StartAsync(context, delivery, trigger)));
                 break;
             }
             case ILeaf leaf:
@@ -365,7 +495,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                     turn.ExternalAttempt(frame.Id, node.Id, frame.Attempt, again);
                 }
                 var leafContext = Context(frame);
-                Apply(frame, await InvokeAuthored(frame, () => leaf.ExecuteAsync(leafContext)));
+                await ApplyAsync(frame, await InvokeAuthored(frame, () => leaf.ExecuteAsync(leafContext)));
                 break;
         }
     }
@@ -394,9 +524,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             var finished = Values.To<Contract.JobFinished>(work.Payload)!;
             // A job whose deadline passed completes an activity that names a timeout outcome on it (SendHttpRequest's Timeout).
             if (finished.Error == "timeout" && node.Type.GetCustomAttributes(typeof(BackgroundAttribute), false) is [BackgroundAttribute { TimeoutOutcome: { } timedOut }])
-                Apply(frame, new Transition(TransitionKind.Complete, null, timedOut));
+                await ApplyAsync(frame, new Transition(TransitionKind.Complete, null, timedOut));
             else if (finished.Error is { } error) Fail(frame, new ActivityFault("job", error));
-            else if (System.Text.Json.JsonSerializer.Deserialize<BackgroundResult>(finished.Result!)! is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
+            else if (System.Text.Json.JsonSerializer.Deserialize<BackgroundResult>(finished.Result!)! is var r)
+                await ApplyAsync(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
             return;
         }
         // The wait and the frame are gone by now, so a host expression that fails here faults the frame directly.
@@ -406,13 +537,17 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         if (activity is null) return;
         var context = Context(frame);
         var state = frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State;
-        Apply(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
+        await ApplyAsync(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
     }
 
     private ActivityContext Context(Frame frame)
     {
         var path = IterationPath(frame);
-        return new(turn.Actor, frame.Id, frame.Node, frame.Attempt, cancellationToken, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path)) { Scripts = options.Scripts };
+        return new(turn.Actor, frame.Id, frame.Node, frame.Attempt, cancellationToken, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path))
+        {
+            Scripts = options.Scripts,
+            ConsoleOutput = options.ConsoleOutput
+        };
     }
 
     // ---- the effect key (round 5 C) ----------------------------------------------------------------------------------
@@ -471,15 +606,47 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
-    private void Apply(Frame frame, Transition t)
+    private async ValueTask ApplyAsync(Frame frame, Transition t)
     {
+        // Each child the transition starts, read off the host once: that answer both checks the start and makes it.
+        var children = ChildTargets(frame, t, out var refused);
+        if (refused is not null)
+        {
+            Fail(frame, refused);
+            return;
+        }
+        if (turn.TestScopeId is not null && children is not null && t.Triggers is { } triggers)
+        {
+            var normalized = new List<Trigger>(triggers.Count);
+            foreach (var trigger in triggers)
+            {
+                if (trigger is not ChildTrigger child)
+                {
+                    normalized.Add(trigger);
+                    continue;
+                }
+                if (options.ValidateTestRunChildInputs is not { } validate || child.Input is not (null or JsonObject))
+                {
+                    Fail(frame, new ActivityFault("dispatch.test.invalid-input", "The Test Run could not validate the child workflow input object."));
+                    return;
+                }
+                var (inputs, rejection) = await validate(children[child.Workflow].TestRunChild!, child.Input as JsonObject, cancellationToken);
+                if (rejection is not null)
+                {
+                    Fail(frame, rejection);
+                    return;
+                }
+                normalized.Add(child with { Input = inputs });
+            }
+            t = t with { Triggers = normalized };
+        }
         if (t.Kind == TransitionKind.Complete && t.Effects?.OfType<ExitEffect>().FirstOrDefault() is { } exit)
         {
-            foreach (var effect in t.Effects) if (effect is not ExitEffect) Do(frame, effect);
+            foreach (var effect in t.Effects) if (effect is not ExitEffect) Do(frame, effect, children);
             Exit(frame, exit);
             return;
         }
-        foreach (var effect in t.Effects ?? []) Do(frame, effect);
+        foreach (var effect in t.Effects ?? []) Do(frame, effect, children);
         switch (t.Kind)
         {
             case TransitionKind.Complete: Complete(frame, t.Outcome, t.Result); break;
@@ -488,13 +655,13 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case TransitionKind.Suspend:
                 frame.State = t.State;
                 _s.Frames[frame.Id] = frame;
-                foreach (var trigger in t.Triggers ?? []) Register(frame, trigger);
+                foreach (var trigger in t.Triggers ?? []) Register(frame, trigger, children);
                 break;
         }
     }
 
     // Every leak of the activity map ends here: each trigger and effect is one kernel call, made by the model.
-    private void Register(Frame frame, Trigger trigger)
+    private void Register(Frame frame, Trigger trigger, IReadOnlyDictionary<string, ChildWorkflowTarget>? children)
     {
         var id = NewId("w");
         switch (trigger)
@@ -506,6 +673,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case HttpTrigger h:
                 // A path resolved from a route template keeps its values' case; any other path is a literal route's.
                 var key = h.Resolved ? HttpRoutes.ResolvedKey(h.Method, h.Path) : HttpRoutes.Key(h.Method, h.Path);
+                if (options.StampPreparedHttpWaits && h.CanonicalTemplate is { } template)
+                    id += HttpRoutes.PreparedWaitSuffix(template);
                 _s.Waits[id] = new WaitEntry(frame.Id, "event", key);
                 turn.Subscribe(key, id);
                 break;
@@ -523,11 +692,74 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                     { Due = turn.SavesWaitRecipes ? dueAt : null };
                 break;
             case ChildTrigger c:
-                var child = turn.StartChild(frame.Id, c.Workflow, c.Mode, c.Input as JsonObject);
+                var child = turn.StartChild(frame.Id, children![c.Workflow], c.Mode, c.Input as JsonObject);
                 _s.Waits[id] = child;
                 turn.Record($"s:{frame.Id}:{child.Key}");
                 break;
         }
+    }
+
+    internal const string UnpublishedFaultCode = "dispatch.unpublished";
+    internal const string AmbiguousFaultCode = "dispatch.ambiguous";
+
+    /// <summary>
+    /// The workflow each child start of <paramref name="t"/> starts, by the id its Dispatch names. A Dispatch names a
+    /// definition or a workflow, and the host says which workflow serves a definition (<see cref="NativeExecutionOptions.ServedWorkflow"/>),
+    /// read once per id here. On a publishing host, a Dispatch the host serves nothing for, and whose id the registry does not
+    /// hold, is refused with the fault returned, as is one several serve; nothing starts then.
+    /// </summary>
+    private Dictionary<string, ChildWorkflowTarget>? ChildTargets(Frame frame, Transition t, out ActivityFault? refused)
+    {
+        refused = null;
+        Dictionary<string, ChildWorkflowTarget>? targets = null;
+        if (turn.TestScopeId is not null && t.Effects?.Any(effect => effect is DispatchEffect) == true)
+        {
+            refused = new ActivityFault("dispatch.test.detached", "Dispatch Workflow must wait for completion in this Test Run.");
+            return null;
+        }
+        var named = (t.Triggers ?? []).OfType<ChildTrigger>().Select(child => child.Workflow)
+            .Concat((t.Effects ?? []).OfType<DispatchEffect>().Select(dispatch => dispatch.Workflow));
+        foreach (var id in named)
+        {
+            targets ??= new(StringComparer.Ordinal);
+            if (targets.ContainsKey(id)) continue;
+            if (turn.TestScopeId is not null)
+            {
+                if (_wf.Nodes[frame.Node].TestRunChild is not { } child || child.Definition != id.Trim())
+                {
+                    refused = new ActivityFault(UnpublishedFaultCode,
+                        $"Dispatch Workflow names definition '{id}', which has no exact child executable in this Test Run.");
+                    return null;
+                }
+                targets[id] = new(child.ArtifactId, TestRunChild: child);
+                continue;
+            }
+            if (options.ServedWorkflow is not { } served)
+            {
+                targets[id] = Registered(id);
+                continue;
+            }
+            var answer = served(id);
+            if (answer.Workflow is { } workflow)
+                targets[id] = answer.Selected is { } selected ? new(workflow, selected) : Registered(workflow);
+            else if (answer.Several)
+            {
+                refused = new ActivityFault(AmbiguousFaultCode,
+                    $"Definition '{id}' is published in several channels and none is 'default'. Publish it to the default channel.");
+                return null;
+            }
+            else if (registry.TryGet(id, out var registered)) targets[id] = new(id, registered);
+            else
+            {
+                refused = new ActivityFault(UnpublishedFaultCode,
+                    $"Dispatch Workflow names definition '{id}', which is not published on this host. Publish it, then run the workflow again.");
+                return null;
+            }
+        }
+        return targets;
+
+        ChildWorkflowTarget Registered(string workflow) =>
+            new(workflow, registry.TryGet(workflow, out var registered) ? registered : null);
     }
 
     private void Unregister(string id, WaitEntry wait, bool cancel)
@@ -543,7 +775,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
     }
 
-    private void Do(Frame frame, Effect effect)
+    private void Do(Frame frame, Effect effect, IReadOnlyDictionary<string, ChildWorkflowTarget>? children)
     {
         switch (effect)
         {
@@ -553,7 +785,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case DispatchEffect d:
             {
                 // A detached start (friction F-N5, fixed in the merge): no parent, and minted here, so no read.
-                var child = turn.StartDetached(d.Workflow, d.Mode, d.Input as JsonObject);
+                var child = turn.StartDetached(children![d.Workflow], d.Mode, d.Input as JsonObject);
                 turn.Record($"d:{frame.Id}:{child.Id}");
                 break;
             }
@@ -586,7 +818,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
         CloseInbox(frame.Id, "completed");
         _s.Frames.Remove(frame.Id);
-        turn.Record($"c:{frame.Id}:{frame.Node}");
+        turn.RecordFrameOutcome(NativeJournalKind.Completed, frame);
         var node = _wf.Nodes[boundary.Node];
         Guard(boundary, () => ((IExitBoundary)RestoreActivity(boundary, node)).OnExit(new CompositeContext(this, boundary, node), exit.Outcome));
     }
@@ -599,7 +831,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         DisposeLexicalScopes(frame.Id);
         if (result is not null) _s.Results[frame.Node] = result;
         foreach (var (variable, path) in _wf.Nodes[frame.Node].Captures) Assign(frame, variable, Values.Path(result, path)?.DeepClone());
-        turn.Record($"c:{frame.Id}:{frame.Node}");
+        turn.RecordFrameOutcome(NativeJournalKind.Completed, frame);
         NotifyParent(frame, outcome, result);
     }
 
@@ -612,7 +844,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
         if (!_s.Frames.TryGetValue(frame.Parent, out var parent)) return;
         var node = _wf.Nodes[parent.Node];
-        // A composite's inputs are read again for every callback, so a host expression among them can fail here too.
+        // A composite that rebinds its inputs can fail here during expression evaluation.
         Guard(parent, () =>
         {
             var composite = (CompositeActivity)RestoreActivity(parent, node);
@@ -629,7 +861,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             Complete(frame, "Done", null);
             return;
         }
-        turn.Record($"c:{frame.Id}:{frame.Node}");     // MUTATION: the parent hears of it, the frame and its branches live on
+        turn.RecordFrameOutcome(NativeJournalKind.Completed, frame);     // MUTATION: the parent hears of it, the frame and its branches live on
         NotifyParent(frame, "Done", null);
     }
 
@@ -654,7 +886,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
         DisposeLexicalScopes(frame.Id);
-        turn.Record($"f:{frame.Id}:{frame.Node}");
+        turn.RecordFrameOutcome(NativeJournalKind.Faulted, frame);
         if (frame.Parent is null || !_s.Frames.TryGetValue(frame.Parent, out var parent))
         {
             if (frame.Parent is null) End(Contract.ActorStatus.Faulted, fault.Code, Values.From(fault));
@@ -686,7 +918,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => (f.Id, f.Tag)), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => (w.Frame, w.Tag))];
 
     /// <summary>The node whose start trigger is still to be delivered, if any.</summary>
-    internal string? PendingTrigger => _s.Trigger is null ? null : _s.TriggerNode;
+    internal string? PendingTrigger =>
+        _s.Trigger is not null || _s.EmptyEventStartPending ? _s.TriggerNode : null;
 
     internal IReadOnlyList<string> Running(string frame) =>
         [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => w.Frame)];
@@ -703,7 +936,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             }
             CancelChildren(frame);
             DisposeLexicalScopes(frame);
-            turn.Record($"x:{f.Id}:{f.Node}");
+            turn.RecordFrameOutcome(NativeJournalKind.Cancelled, f);
         }
         _s.Agenda.RemoveAll(w => !w.Resume && w.Frame == frame);
     }

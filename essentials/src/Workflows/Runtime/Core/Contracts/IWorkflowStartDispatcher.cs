@@ -49,3 +49,39 @@ public interface IWorkflowStartDispatcher
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>A host's dispatcher for direct authoring Test Runs in an exact runtime test scope.</summary>
+public interface IWorkflowDirectTestRunDispatcher : IWorkflowStartDispatcher
+{
+    /// <summary>Keyed trigger discovery for private Test Runs. The ordinary publication extractor stays separate.</summary>
+    const string TriggerBindingKey = "workflow-test-run";
+
+    /// <summary>Whether this host can admit the exact scoped trigger driver.</summary>
+    bool SupportsTrigger(string driverId);
+
+    /// <summary>Observes the isolated root selected by durable Test Run scope and source evidence.</summary>
+    /// <returns>The observed state, or null when the scope, source or actor do not agree.</returns>
+    ValueTask<WorkflowDirectTestRunObservation?> ObserveAsync(WorkflowTestScopeRecord scope, WorkflowExecutableSourceReference source,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Requests cancellation of the exact isolated actor after its authoring scope closes.</summary>
+    ValueTask RequestStopAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken = default);
+
+    /// <summary>Observes whether the exact isolated test actor is terminal.</summary>
+    ValueTask<bool> IsStoppedAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The durable evidence for a scoped Test Run's isolated root.</summary>
+public enum WorkflowDirectTestRunObservation
+{
+    Prepared,
+    Pending,
+    Disarmed,
+    Started,
+    Ended,
+    Retired,
+    CompletedWithoutRecord,
+    Unavailable,
+    Refused,
+    RateLimited
+}

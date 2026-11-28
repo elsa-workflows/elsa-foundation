@@ -10,9 +10,14 @@ internal interface IInvocationInputReceiver
 
 internal sealed partial class Burst
 {
-    private ActivityBase RestoreActivity(Frame frame, Node node) => typeof(IInvocationInputReceiver).IsAssignableFrom(node.Type)
-        ? (ActivityBase)Activator.CreateInstance(node.Type)!
-        : Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
+    private ActivityBase RestoreActivity(Frame frame, Node node)
+    {
+        // ForEach pins Items on entry. Its callbacks use the committed array and cursor.
+        if (node.Type == typeof(ForEach)) return new ForEach();
+        return typeof(IInvocationInputReceiver).IsAssignableFrom(node.Type)
+            ? (ActivityBase)Activator.CreateInstance(node.Type)!
+            : Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
+    }
 
     private void DrainInputs()
     {

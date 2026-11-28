@@ -358,20 +358,21 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
 
     bool IScopeSetRelease.SupportsSetRelease => _node is not null;
 
-    ValueTask IScopeSetRelease.ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken)
+    ValueTask<IReadOnlyList<int>> IScopeSetRelease.ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken)
     {
         if (activations.Any(activation => activation is not NodeScope scope || scope.Host != this))
             throw new ArgumentException("Release requires activations of this host.", nameof(activations));
         return LoseAsync(activations.Select(activation => activation.Scope).ToArray(), cancellationToken);
     }
 
-    private async ValueTask LoseAsync(IReadOnlyCollection<int> scopes, CancellationToken cancellationToken = default)
+    // Returns the scopes whose fence the store released.
+    private async ValueTask<IReadOnlyList<int>> LoseAsync(IReadOnlyCollection<int> scopes, CancellationToken cancellationToken = default)
     {
         await _turn.WaitAsync(cancellationToken);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await _node!.LoseAsync(scopes, cancellationToken);
+            return await _node!.LoseAsync(scopes, cancellationToken);
         }
         finally { _turn.Release(); }
     }
@@ -387,6 +388,6 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) =>
             (await host.PassAsync(this, cancellationToken)).Delay;
         public ValueTask<ScopePass> RunWithAgeAsync(CancellationToken cancellationToken = default) => host.PassAsync(this, cancellationToken);
-        public ValueTask DisposeAsync() => host.LoseAsync([scope]);
+        public async ValueTask DisposeAsync() => await host.LoseAsync([scope]);
     }
 }

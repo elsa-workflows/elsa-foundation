@@ -1,7 +1,3 @@
-using Elsa.Workflows.Dashboard;
-using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Executions;
-using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -12,29 +8,20 @@ public sealed class WorkflowRunHealthServiceTests
     private static readonly DateTimeOffset Now = new(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task AggregatesEveryAuthorizedRunBeyondANormalPageAndKeepsOutcomesIndependentFromIncidents()
+    public async Task ProjectsProviderTotalsAndKeepsOutcomesIndependentFromIncidents()
     {
-        var executions = Enumerable.Range(0, 125)
-            .Select(index => Execution(
-                $"run-{index}",
-                index % 5 == 0 ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed,
-                Now.AddMinutes(index),
-                definitionId: index % 2 == 0 ? "definition-a" : "definition-b"))
-            .Concat([
-                Execution("running-old", WorkflowExecutionStatus.Running, Now.AddDays(-2)),
-                Execution("other-tenant", WorkflowExecutionStatus.Faulted, Now.AddHours(1), tenantId: "tenant-b"),
-                Execution("test-run", WorkflowExecutionStatus.Faulted, Now.AddHours(1), runKind: WorkflowRunKind.TestRun),
-                Execution("at-exclusive-to", WorkflowExecutionStatus.Faulted, Now.AddDays(1))
-            ])
-            .ToArray();
-        var incidents = new[]
-        {
-            Incident("incident-1", "run-0"),
-            Incident("incident-2", "run-0"),
-            Incident("incident-3", "run-1"),
-            Incident("incident-other", "other-tenant")
-        };
-        var service = Service(executions, incidents);
+        var source = new AvailableDataSource(new WorkflowRunHealthAggregate(
+            StartedCount: 125,
+            SucceededCount: 100,
+            FailedCount: 25,
+            CancelledCount: 0,
+            IncompleteCount: 0,
+            IncidentBearingRunCount: 2,
+            IncidentCount: 3,
+            RunningCount: 1,
+            Buckets: [],
+            HighestFailureDefinitions: [new("definition-a", 13), new("definition-b", 12)]));
+        var service = new WorkflowRunHealthService(source, new FakeTimeProvider(Now));
 
         var result = await service.QueryAsync(Query(Now, Now.AddDays(1)));
 
@@ -53,20 +40,19 @@ public sealed class WorkflowRunHealthServiceTests
         Assert.Equal(12, result.HighestFailureDefinitions.Single(x => x.DefinitionId == "definition-b").FailedCount);
     }
 
-    [Fact]
-    public async Task IncludeTestRunsIsExplicit()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IncludeTestRunsIsForwardedToTheProviderAndResult(bool includeTestRuns)
     {
-        var service = Service([
-            Execution("published", WorkflowExecutionStatus.Completed, Now),
-            Execution("test", WorkflowExecutionStatus.Faulted, Now, runKind: WorkflowRunKind.TestRun)
-        ]);
+        var source = new AvailableDataSource();
+        var service = new WorkflowRunHealthService(source);
+        var query = Query(Now, Now.AddHours(1)) with { IncludeTestRuns = includeTestRuns };
 
-        var excluded = await service.QueryAsync(Query(Now, Now.AddHours(1)));
-        var included = await service.QueryAsync(Query(Now, Now.AddHours(1)) with { IncludeTestRuns = true });
+        var result = await service.QueryAsync(query);
 
-        Assert.Equal(1, excluded.StartedCount);
-        Assert.Equal(2, included.StartedCount);
-        Assert.Equal(1, included.FailedCount);
+        Assert.Equal(query, source.ObservedQuery?.Query);
+        Assert.Equal(includeTestRuns, result.IncludeTestRuns);
     }
 
     [Fact]
@@ -74,13 +60,16 @@ public sealed class WorkflowRunHealthServiceTests
     {
         var from = new DateTimeOffset(2026, 3, 29, 0, 0, 0, TimeSpan.FromHours(1));
         var to = new DateTimeOffset(2026, 3, 30, 0, 0, 0, TimeSpan.FromHours(2));
-        var service = Service([Execution("run", WorkflowExecutionStatus.Completed, from.AddHours(22))]);
+        var source = new AvailableDataSource();
+        var service = new WorkflowRunHealthService(source);
 
-        var result = await service.QueryAsync(Query(from, to) with { TimeZone = "Europe/Amsterdam" });
+        await service.QueryAsync(Query(from, to) with { TimeZone = "Europe/Amsterdam" });
 
-        var bucket = Assert.Single(result.Buckets);
+        Assert.NotNull(source.ObservedQuery);
+        var bucket = Assert.Single(source.ObservedQuery.Buckets);
+        Assert.Equal(from, bucket.From);
+        Assert.Equal(to, bucket.To);
         Assert.Equal(TimeSpan.FromHours(23), bucket.To - bucket.From);
-        Assert.Equal(1, bucket.StartedCount);
     }
 
     [Fact]
@@ -88,16 +77,19 @@ public sealed class WorkflowRunHealthServiceTests
     {
         var from = new DateTimeOffset(2026, 10, 25, 0, 0, 0, TimeSpan.FromHours(2));
         var to = new DateTimeOffset(2026, 10, 25, 4, 0, 0, TimeSpan.FromHours(1));
-        var service = Service([]);
+        var source = new AvailableDataSource();
+        var service = new WorkflowRunHealthService(source);
 
-        var result = await service.QueryAsync(Query(from, to) with
+        await service.QueryAsync(Query(from, to) with
         {
             TimeZone = "Europe/Amsterdam",
             Bucket = WorkflowRunHealthBucketSize.Hour
         });
 
-        Assert.Equal(5, result.Buckets.Count);
-        Assert.All(result.Buckets, bucket => Assert.Equal(TimeSpan.FromHours(1), bucket.To - bucket.From));
+        Assert.NotNull(source.ObservedQuery);
+        var buckets = source.ObservedQuery.Buckets;
+        Assert.Equal(5, buckets.Count);
+        Assert.All(buckets, bucket => Assert.Equal(TimeSpan.FromHours(1), bucket.To - bucket.From));
     }
 
     [Theory]
@@ -105,10 +97,12 @@ public sealed class WorkflowRunHealthServiceTests
     [InlineData("")]
     public async Task RejectsInvalidIanaTimeZone(string timeZone)
     {
-        var service = Service([]);
+        var source = new AvailableDataSource();
+        var service = new WorkflowRunHealthService(source);
 
         await Assert.ThrowsAsync<WorkflowRunHealthQueryException>(async () =>
             await service.QueryAsync(Query(Now, Now.AddHours(1)) with { TimeZone = timeZone }));
+        Assert.Null(source.ObservedQuery);
     }
 
     [Fact]
@@ -125,53 +119,27 @@ public sealed class WorkflowRunHealthServiceTests
     [Fact]
     public async Task TenantScopeIsRequiredBeforeTheProviderIsQueried()
     {
-        var service = Service([]);
+        var source = new AvailableDataSource();
+        var service = new WorkflowRunHealthService(source);
 
         await Assert.ThrowsAsync<WorkflowRunHealthQueryException>(async () =>
             await service.QueryAsync(Query(Now, Now.AddHours(1)) with { TenantId = "" }));
-    }
-
-    private static WorkflowRunHealthService Service(
-        IReadOnlyCollection<WorkflowExecutionState> executions,
-        IReadOnlyCollection<IncidentState>? incidents = null)
-    {
-        var executionStore = new InMemoryWorkflowExecutionStateStore();
-        var incidentStore = new InMemoryIncidentStateStore();
-        foreach (var execution in executions)
-            executionStore.SaveAsync(execution).AsTask().GetAwaiter().GetResult();
-        foreach (var incident in incidents ?? [])
-            incidentStore.SaveAsync(incident).AsTask().GetAwaiter().GetResult();
-        return new(new InMemoryWorkflowRunHealthDataSource(executionStore, incidentStore), new FakeTimeProvider(Now));
+        Assert.Null(source.ObservedQuery);
     }
 
     private static WorkflowRunHealthQuery Query(DateTimeOffset from, DateTimeOffset to) =>
         new(from, to, "Etc/UTC", WorkflowRunHealthBucketSize.Day, "tenant-a");
 
-    private static WorkflowExecutionState Execution(
-        string id,
-        WorkflowExecutionStatus status,
-        DateTimeOffset startedAt,
-        string definitionId = "definition",
-        string tenantId = "tenant-a",
-        WorkflowRunKind runKind = WorkflowRunKind.PublishedRun) =>
-        new(
-            id,
-            new WorkflowExecutableIdentity($"artifact-{id}", definitionId, $"version-{id}", "1", "hash"),
-            status,
-            null,
-            startedAt,
-            startedAt,
-            startedAt,
-            status.IsTerminal() ? startedAt.AddMinutes(1) : null,
-            null,
-            null,
-            tenantId,
-            new Dictionary<string, string>())
-        {
-            RunKind = runKind
-        };
+    private sealed class AvailableDataSource(WorkflowRunHealthAggregate? aggregate = null) : IWorkflowRunHealthDataSource
+    {
+        public bool IsAvailable => true;
+        public WorkflowRunHealthDataQuery? ObservedQuery { get; private set; }
 
-    private static IncidentState Incident(string id, string executionId) =>
-        new(id, executionId, null, null, IncidentSeverity.Error, IncidentStatus.Open,
-            null, "Failure", "Failed", Now, null);
+        public ValueTask<WorkflowRunHealthAggregate> QueryAsync(
+            WorkflowRunHealthDataQuery query, CancellationToken cancellationToken = default)
+        {
+            ObservedQuery = query;
+            return ValueTask.FromResult(aggregate ?? new(0, 0, 0, 0, 0, 0, 0, 0, [], []));
+        }
+    }
 }

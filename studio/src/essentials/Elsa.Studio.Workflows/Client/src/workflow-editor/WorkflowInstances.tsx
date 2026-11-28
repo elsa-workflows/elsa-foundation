@@ -1,0 +1,4029 @@
+import { getNotifications } from "./notifications";
+import { StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-sdk";
+import {
+  activityExecutionSummaryFromInspection,
+  findMatchingExecutionScope,
+  isKnownExecutionInScope,
+  loadExecutionScope,
+  resolveExecutionScopeAncestorId,
+  resolveKnownExecutionScope,
+  sameExecutionScopes,
+  trimExecutionScopesForTarget,
+  type IncidentActivityInspection
+} from "./executionScope";
+import { useExecutionFocusRequest } from "./executionFocus";
+export { activityExecutionSummaryFromInspection } from "./executionScope";
+import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
+export { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
+import "./runWorkbench.css";
+import "./activityInspection.css";
+import "./activityExecutionBrowser.css";
+// Primary view wrappers must be laid out before their lazy history content loads.
+import "./run-history/runHistory.css";
+import { RuntimeCapturedValue } from "./RuntimeValueEvidence";
+import { latestActivityExecution } from "../runtimeActivityOrder";
+import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
+import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry } from "../api/runtime";
+import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
+import { runtimeValueContextId } from "./RuntimeValueEvidence";
+import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { ReactFlow, Background, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
+import { Activity as ActivityIcon, AlertCircle, AlertTriangle, Boxes, ChevronLeft, ChevronRight, Info, ListTree, Loader2, Maximize2, Minimize2, PanelLeftClose, Play, RefreshCw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution, StudioIncidentRootCauseProviderContribution } from "@elsa-workflows/studio-sdk";
+import { listActivities } from "../api/activityDesign";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
+import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
+import { hasUnattributedChildDefinition } from "../workflowInstanceInspection";
+import { formatNamedIdentityTitle, formatRunPageTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
+import type { ActivityCatalogItem, ActivityExecutionLayout, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import { formatActivitySummary } from "../activitySummary";
+import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeActivityDisplay";
+import {
+  buildCanvas,
+  buildUnsupportedActivityCanvas,
+  findActivityNode,
+  findNodeScopePath,
+  getActivityDesignerSupport,
+  getChildSlots,
+  planSlotNavigation,
+  resolveScope,
+  slotCrumbLabel,
+  type ChildSlot,
+  type ScopeFrame,
+  type WorkflowEdgeData,
+  type WorkflowNodeData
+} from "../workflowAdapter";
+import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverlays";
+import { buildExecutableActivityGraph, findExecutableGraphNodeId, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
+import { formatDate, formatDuration, resolutionOutcomeLabel, shortTypeName } from "../workflowFormatting";
+import { PanelTabList } from "./PanelTabList";
+import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
+import { WorkflowInstanceInspectionFacts, WorkflowInstanceInspectionNote } from "./WorkflowInstanceInspectionFacts";
+import { nodeTypes, edgeTypes } from "./graph";
+import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
+import { ReadOnlyWorkflowSequence } from "./ReadOnlyWorkflowSequence";
+import { decorateExecutionMotion, useConfirmedExecutionMotion } from "./executionMotion";
+import { CompensationScopeDesigner, type CompensationOperatorControls } from "../graph-authoring/CompensationScopeDesigner";
+import { compensationStepsSlotId } from "../compensationScope";
+import { deriveCompensationRuntime, type CompensationJournalSource, type CompensationScopeRuntime } from "../compensationRuntime";
+import { useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "./useOperatorActions";
+import { RunParkRecovery } from "./RunParkRecovery";
+import { RunParkEvidence } from "./RunParkEvidence";
+import { canReviewDefinition, IncidentNextStep, useDefinitionReviewAccess, type DefinitionAccessObservation } from "./IncidentNextStep";
+import { writeRunSelection } from "./runSelectionUrl";
+import { readRunHistoryLocation as readTimelineLocation, writeRunHistoryLocation, type RunHistoryLocation as RunTimelineLocation } from "./run-history/historyLocation";
+import type { RunHistorySelection, RuntimeHistoryEvent } from "../runtimeHistoryTypes";
+import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
+import { CopyValueButton } from "./executableShared";
+import { getDialogs } from "./dialogs";
+import { isTerminalExecution, readObservedExecution, useExecutionObservation, type ExecutionObservationStatus } from "./useExecutionObservation";
+import type { WorkflowWeaverController } from "../workflowWeaver";
+import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
+export { formatSnapshotPayload } from "./RuntimeValueEvidence";
+import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
+import {
+  activityNodeKey,
+  dispatchAiAction,
+  findAiAction,
+  formatRunKind,
+  formatWorkflowRunLoadError
+} from "./editorHelpers";
+import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
+import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
+import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
+import { focusRunCanvasNode, readStoredRunCanvasFocusMode, writeStoredRunCanvasFocusMode, type RunCanvasFocusMode } from "./runCanvasFocus";
+import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
+import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
+import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
+import { AnchoredPopover, StudioResultState, SkeletonRows, StudioDialog, studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioShellBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
+import { RunWorkflowPicker } from "./RunWorkflowPicker";
+import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
+import { StudioLink } from "../StudioLink";
+import "./cleanListTables.css";
+import "./minimalRunInspection.css";
+import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
+import { ActivityPlaybackControls } from "./ActivityPlaybackControls";
+import { useActivityPlayback } from "./useActivityPlayback";
+import { ActivityPlaybackIdentityError, type PlaybackOccurrence } from "../api/activityPlayback";
+import { getWorkflowHistoryEvent, getWorkflowHistoryBookmark } from "../api/runtimeHistory";
+import type { PlaybackOperation, PlaybackTarget, PreparedPlaybackSelection } from "./activityPlaybackModel";
+import type { PreparedHistoryEvent } from "./run-history/HistoryInspection";
+import { RunActivitiesTimeline } from "./run-history/RunActivitiesTimeline";
+
+type RunTimelineMode = "activities" | "events";
+
+function hasExplicitHistoryIntent(location: RunTimelineLocation): boolean {
+  return Boolean(
+    location.selection
+    || location.filters.activityExecutionId
+    || location.filters.category
+    || location.filters.name
+    || location.filters.search
+    || location.filters.detail !== "lifecycle"
+  );
+}
+
+type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
+
+const runHistoryPageSizes = [10, 25, 50, 100] as const;
+const ActivityExecutionInspectionPanel = lazy(async () => ({ default: (await import("./ActivityExecutionBrowser")).ActivityExecutionInspectionPanel }));
+const ExecutionScopeNavigator = lazy(async () => ({ default: (await import("./ActivityExecutionBrowser")).ExecutionScopeNavigator }));
+const HistoricalBoundaryLayout = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).HistoricalBoundaryLayout }));
+const RunHistoryTimeline = lazy(async () => ({ default: (await import("./run-history/RunHistoryTimeline")).RunHistoryTimeline }));
+const RunHistorySummary = lazy(async () => ({ default: (await import("./run-history/RunHistorySummary")).RunHistorySummary }));
+const HistoryInspection = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).HistoryInspection }));
+
+interface RunHistoryFilters {
+  status: string;
+  runKind: string;
+  definitionId: string;
+  workflowExecutionId: string;
+  artifactId: string;
+  correlationId: string;
+  from: string;
+  to: string;
+  incidentHealth: "" | "active" | "blocking" | "none";
+}
+
+interface RunHistoryLocation {
+  filters: RunHistoryFilters;
+  pageSize: number;
+  cursor: string | null;
+}
+
+const emptyRunHistoryPage: WorkflowInstanceListPage = {
+  items: [],
+  previousCursor: null,
+  nextCursor: null,
+  hasPrevious: false,
+  hasNext: false,
+  count: 0,
+  totalCount: 0
+};
+
+export function WorkflowInstances({ context, navigate }: {
+  context: StudioEndpointContext;
+  navigate(path: string): void;
+}) {
+  const healthFilterHelpId = useId();
+  const [location, setLocation] = useState<RunHistoryLocation>(readRunHistoryLocation);
+  const [draftFilters, setDraftFilters] = useState<RunHistoryFilters>(location.filters);
+  const [state, setState] = useState<"loading" | "ready" | "failed" | "unsupported">("loading");
+  const [error, setError] = useState("");
+  const [page, setPage] = useState<WorkflowInstanceListPage>(emptyRunHistoryPage);
+  const [definitionNames, setDefinitionNames] = useState<Map<string, string>>(() => new Map());
+  const [healthFilterSupported, setHealthFilterSupported] = useState<boolean | null>(null);
+  const [deleteCapability, setDeleteCapability] = useState<{ context: StudioEndpointContext; supported: boolean } | null>(null);
+  const [selectedRunIds, setSelectedRunIds] = useState<Set<string>>(() => new Set());
+  const [deletionPhase, setDeletionPhase] = useState<"idle" | "confirming" | "deleting">("idle");
+  const deletingRuns = deletionPhase !== "idle";
+  const deletionTrigger = useRef<{ context: StudioEndpointContext; element: HTMLElement | null } | null>(null);
+  const refreshButton = useRef<HTMLButtonElement>(null);
+  const [deleteFeedback, setDeleteFeedback] = useState<{ message: string; failures: Array<{ id: string; message: string }> } | null>(null);
+  const requestSequence = useRef(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const workspaceTab = useStudioWorkspaceTab();
+  const definitionNamesAbort = useRef<AbortController | null>(null);
+  const deletionSequence = useRef(0);
+  const deletionController = useRef<AbortController | null>(null);
+  const deletionScope = useRef({ context, location });
+  deletionScope.current = { context, location };
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const cursorScope = { backend: context, query: buildRunHistoryUrl({ ...location, cursor: null }) };
+  const cursorHistory = useRef(createCursorHistory(cursorScope, location.cursor));
+  const previousPage = getPreviousCursor(cursorHistory.current, cursorScope, location.cursor, page);
+  const canFilterByHealth = healthFilterSupported === true;
+  const canDeleteRuns = deleteCapability?.context === context && deleteCapability.supported;
+  const visibleSelectedCount = page.items.reduce((count, instance) => count + Number(selectedRunIds.has(instance.workflowExecutionId)), 0);
+  const allVisibleSelected = page.items.length > 0 && visibleSelectedCount === page.items.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    const trigger = deletionTrigger.current;
+    if (deletingRuns || !trigger) return;
+    deletionTrigger.current = null;
+    if (trigger.context !== context) return;
+    const element = trigger.element?.isConnected && trigger.element.tagName === "BUTTON" ? trigger.element : refreshButton.current;
+    element?.focus();
+  }, [context, deletingRuns]);
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected;
+  }, [someVisibleSelected]);
+
+  useEffect(() => {
+    setSelectedRunIds(new Set());
+    setDeleteFeedback(null);
+    setDeletionPhase("idle");
+    deletionSequence.current += 1;
+    deletionController.current?.abort();
+    deletionController.current = null;
+    return () => {
+      deletionSequence.current += 1;
+      deletionController.current?.abort();
+      deletionController.current = null;
+    };
+  }, [context]);
+
+  const load = useCallback(async (background = false) => {
+    const requestId = ++requestSequence.current;
+    definitionNamesAbort.current?.abort();
+    if (!background) setState("loading");
+    setRefreshing(true);
+    setError("");
+    try {
+      const filters = location.filters;
+      const [supportsHealthFilter, supportsDeletion] = await Promise.all([
+        supportsWorkflowInstanceHealthFilter(context),
+        supportsWorkflowInstanceDeletion(context)
+      ]);
+      if (requestId !== requestSequence.current) return;
+      setHealthFilterSupported(supportsHealthFilter);
+      setDeleteCapability({ context, supported: supportsDeletion });
+      if (filters.incidentHealth && !supportsHealthFilter) throw new WorkflowInstanceHealthFilterUnavailableError();
+      const nextPage = await listWorkflowInstances(context, {
+        status: valueOrUndefined(filters.status),
+        runKind: valueOrUndefined(filters.runKind),
+        definitionId: valueOrUndefined(filters.definitionId),
+        workflowExecutionId: valueOrUndefined(filters.workflowExecutionId),
+        artifactId: valueOrUndefined(filters.artifactId),
+        correlationId: valueOrUndefined(filters.correlationId),
+        from: toUtcIso(filters.from),
+        to: toUtcIso(filters.to),
+        incidentHealth: filters.incidentHealth || undefined,
+        take: location.pageSize,
+        cursor: location.cursor ?? undefined
+      });
+      if (requestId !== requestSequence.current) return;
+      if (location.cursor && nextPage.items.length === 0) {
+        const firstLocation = { ...location, cursor: null };
+        cursorHistory.current = reconcileCursorHistory(cursorHistory.current, {
+          backend: context,
+          query: buildRunHistoryUrl({ ...firstLocation, cursor: null })
+        }, null);
+        setSelectedRunIds(new Set());
+        setState("loading");
+        setLocation(firstLocation);
+        navigateRef.current(buildRunHistoryUrl(firstLocation));
+        return;
+      }
+      const visibleIds = new Set(nextPage.items.map(instance => instance.workflowExecutionId));
+      setSelectedRunIds(current => new Set([...current].filter(id => visibleIds.has(id))));
+      setPage(nextPage);
+      setState("ready");
+      definitionNamesAbort.current?.abort();
+      const namesAbort = new AbortController();
+      definitionNamesAbort.current = namesAbort;
+      void loadDefinitionDisplayNames(context, [
+        ...nextPage.items.filter(item => !hasUnattributedChildDefinition(item)).map(item => item.definitionId),
+        ...(filters.definitionId ? [filters.definitionId] : [])
+      ], namesAbort.signal).then(names => {
+        if (requestId !== requestSequence.current) return;
+        setDefinitionNames(names);
+      });
+    } catch (e) {
+      if (requestId !== requestSequence.current) return;
+      setError(e instanceof Error ? e.message : String(e));
+      const accessDenied = e instanceof StudioHttpError && (e.status === 401 || e.status === 403);
+      if (!background || accessDenied) setPage(emptyRunHistoryPage);
+      setState(current => e instanceof WorkflowInstanceHealthFilterUnavailableError ? "unsupported" : background && !accessDenied && current === "ready" ? current : "failed");
+    } finally {
+      if (requestId === requestSequence.current) setRefreshing(false);
+    }
+  }, [context, location]);
+
+  useEffect(() => {
+    void load();
+    return () => {
+      requestSequence.current += 1;
+      definitionNamesAbort.current?.abort();
+    };
+  }, [load]);
+
+  useEffect(() => {
+    const restoreLocation = () => {
+      const next = readRunHistoryLocation();
+      setSelectedRunIds(new Set());
+      setDeleteFeedback(null);
+      setDeletionPhase("idle");
+      deletionSequence.current += 1;
+      deletionController.current?.abort();
+      deletionController.current = null;
+      setLocation(next);
+      setDraftFilters(next.filters);
+    };
+    window.addEventListener("popstate", restoreLocation);
+    return () => window.removeEventListener("popstate", restoreLocation);
+  }, []);
+
+  const updateLocation = (next: RunHistoryLocation, syncDraft = true) => {
+    setSelectedRunIds(new Set());
+    setDeleteFeedback(null);
+    setDeletionPhase("idle");
+    deletionSequence.current += 1;
+    deletionController.current?.abort();
+    deletionController.current = null;
+    cursorHistory.current = reconcileCursorHistory(cursorHistory.current, {
+      backend: context, query: buildRunHistoryUrl({ ...next, cursor: null })
+    }, next.cursor);
+    setState("loading");
+    setLocation(next);
+    if (syncDraft) setDraftFilters(next.filters);
+    navigate(buildRunHistoryUrl(next));
+  };
+
+  const applyFilters = () => updateLocation({
+    filters: normalizeRunHistoryFilters({ ...draftFilters, definitionId: location.filters.definitionId }),
+    pageSize: location.pageSize,
+    cursor: null
+  });
+
+  const clearFilters = () => updateLocation({
+    filters: emptyRunHistoryFilters(),
+    pageSize: location.pageSize,
+    cursor: null
+  });
+
+  const updateAppliedFilter = <K extends keyof RunHistoryFilters,>(name: K, value: RunHistoryFilters[K]) => {
+    setDraftFilters(current => ({ ...current, [name]: value }));
+    updateLocation({
+      filters: { ...location.filters, [name]: value },
+      pageSize: location.pageSize,
+      cursor: null
+    }, false);
+  };
+
+  const openInstance = (workflowExecutionId: string) => {
+    const returnTo = new URLSearchParams({ returnTo: buildRunHistoryUrl(location) }).toString();
+    navigate(`/workflows/instances/${encodeURIComponent(workflowExecutionId)}?${returnTo}`);
+  };
+
+  const toggleRunSelection = (workflowExecutionId: string, selected: boolean) => {
+    setSelectedRunIds(current => {
+      const next = new Set(current);
+      if (selected) next.add(workflowExecutionId);
+      else next.delete(workflowExecutionId);
+      return next;
+    });
+  };
+
+  const toggleVisibleRunSelection = (selected: boolean) => {
+    setSelectedRunIds(current => {
+      const next = new Set(current);
+      for (const instance of page.items) {
+        if (selected) next.add(instance.workflowExecutionId);
+        else next.delete(instance.workflowExecutionId);
+      }
+      return next;
+    });
+  };
+
+  const deleteRuns = async (workflowExecutionIds: string[]) => {
+    if (!canDeleteRuns || deletingRuns || workflowExecutionIds.length === 0) return;
+    const ids = [...new Set(workflowExecutionIds)];
+    const title = ids.length === 1 ? `Delete workflow run ${ids[0]}?` : `Delete these ${ids.length} workflow runs?`;
+    const confirmation = `${ids.join("\n")}\n\nActive runs will be stopped before deletion. This action cannot be undone.`;
+    const operationId = ++deletionSequence.current;
+    const operationContext = context;
+    const operationLocation = location;
+    const controller = new AbortController();
+    deletionController.current = controller;
+    const isCurrentOperation = () => deletionSequence.current === operationId
+      && deletionScope.current.context === operationContext
+      && deletionScope.current.location === operationLocation;
+    deletionTrigger.current = { context, element: document.activeElement instanceof HTMLElement ? document.activeElement : null };
+    setDeletionPhase("confirming");
+    const confirmed = await getDialogs().confirm({ title, message: confirmation, confirmLabel: "Delete", tone: "danger" });
+    if (!isCurrentOperation()) return;
+    if (!confirmed) {
+      if (deletionController.current === controller) deletionController.current = null;
+      setDeletionPhase("idle");
+      return;
+    }
+    setDeletionPhase("deleting");
+    setDeleteFeedback(null);
+
+    const results = await mapWithConcurrency(ids, 3, async id => {
+      if (controller.signal.aborted) return { id, deleted: false, message: "Deletion was interrupted." };
+      try {
+        await deleteWorkflowInstance(operationContext, id, controller.signal);
+        return { id, deleted: true, message: "" };
+      } catch (error) {
+        return { id, deleted: false, message: error instanceof Error ? error.message : String(error) };
+      }
+    });
+    if (!isCurrentOperation()) return;
+    if (deletionController.current === controller) deletionController.current = null;
+
+    const successfulIds = results.filter(result => result.deleted).map(result => result.id);
+    const failures = results.filter(result => !result.deleted).map(result => ({ id: result.id, message: result.message }));
+    setSelectedRunIds(current => {
+      const next = new Set(current);
+      for (const id of successfulIds) next.delete(id);
+      for (const { id } of failures) next.add(id);
+      return next;
+    });
+    setDeleteFeedback({
+      message: `${successfulIds.length ? `${formatRunCount(successfulIds.length)} deleted.` : "No workflow runs were deleted."}${failures.length ? ` ${formatRunCount(failures.length)} could not be deleted. Review the errors below before retrying.` : ""}`,
+      failures
+    });
+    setDeletionPhase("idle");
+    if (successfulIds.length > 0) void load();
+  };
+
+  const instances = page.items;
+  const appliedFilterChips = buildRunFilterChips(location.filters, definitionNames);
+  const advancedAppliedCount = countAdvancedRunFilters(location.filters);
+  const activeFilterCount = appliedFilterChips.length;
+  const hasDraftFilters = Object.values(draftFilters).some(Boolean);
+
+  return (
+    <>
+      <StudioPageHeader title="Runs" headingLevel={2} description="Inspect workflow runs, their progress, and run data." refresh={{
+        id: `workflow-runs:${context.baseUrl}`,
+        label: "Refresh workflow runs",
+        onRefresh: () => load(true),
+        refreshing,
+        disabled: deletingRuns,
+        autoRefresh: true,
+        active: workspaceTab?.active ?? true,
+        buttonRef: refreshButton
+      }} />
+      <form className="wf-run-filters" aria-label="Workflow run filters" onSubmit={event => {
+        event.preventDefault();
+        applyFilters();
+      }}>
+        <div className="studio-collection-toolbar">
+          <RunWorkflowPicker context={context} definitionId={location.filters.definitionId} onChange={definitionId => updateAppliedFilter("definitionId", definitionId)} />
+          <div className="wf-run-primary-controls" aria-label="Primary workflow run filters">
+            <StudioButton
+              type="button"
+              aria-pressed={location.filters.incidentHealth === "active"}
+              aria-describedby={healthFilterSupported === false ? healthFilterHelpId : undefined}
+              disabled={healthFilterSupported === false && location.filters.incidentHealth !== "active"}
+              onClick={() => updateAppliedFilter("incidentHealth", location.filters.incidentHealth === "active" ? "" : "active")}
+            >Needs attention</StudioButton>
+            <StudioButton
+              type="button"
+              aria-pressed={location.filters.status === "Running"}
+              onClick={() => updateAppliedFilter("status", location.filters.status === "Running" ? "" : "Running")}
+            >Running</StudioButton>
+            {healthFilterSupported === false ? <small id={healthFilterHelpId}>Current incident health filtering is not available from this host.</small> : null}
+          </div>
+          <StudioButton type="button" onClick={clearFilters} disabled={activeFilterCount === 0 && !hasDraftFilters}>Clear filters</StudioButton>
+        </div>
+        {appliedFilterChips.length > 0 ? (
+          <div className="wf-run-applied-filters" aria-label="Applied workflow run filters">
+            {appliedFilterChips.map(chip => (
+              <span className="wf-run-filter-chip" key={chip.name}>
+                <span>{chip.label}</span>
+                <StudioButton type="button" aria-label={`Remove ${chip.removeLabel} filter`} onClick={() => updateAppliedFilter(chip.name, "")}>×</StudioButton>
+              </span>
+            ))}
+          </div>
+        ) : null}
+        <AdvancedSection label="More filters" setCount={advancedAppliedCount} defaultOpen={advancedAppliedCount > 0} allowCollapseWhenSet>
+          <div className="wf-run-advanced-panel">
+            <fieldset className="wf-run-filter-group">
+              <legend>Run attributes</legend>
+              <div className="wf-run-filter-grid">
+                <StudioField className="wf-run-filter-field" label="Status">
+                  <select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
+                    <option value="">All statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Running">Running</option>
+                    <option value="Suspended">Suspended</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Faulted">Faulted</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </StudioField>
+                <StudioField className="wf-run-filter-field" label="Kind">
+                  <select aria-label="Run Kind" value={draftFilters.runKind} onChange={event => setDraftFilters(current => ({ ...current, runKind: event.target.value }))}>
+                    <option value="">All kinds</option>
+                    <option value="TestRun">Test Run</option>
+                    <option value="PublishedRun">Published Run</option>
+                    <option value="BackgroundWeaverRun">Background Weaver Run</option>
+                    <option value="Unknown">Unknown / legacy</option>
+                  </select>
+                </StudioField>
+                <StudioField className="wf-run-filter-field" label="Incident health">
+                  <select aria-label="Workflow run incident health" value={draftFilters.incidentHealth} disabled={!canFilterByHealth && !draftFilters.incidentHealth} onChange={event => setDraftFilters(current => ({ ...current, incidentHealth: event.target.value as RunHistoryFilters["incidentHealth"] }))}>
+                    <option value="">All health states</option>
+                    <option value="active" disabled={!canFilterByHealth}>Active incidents</option>
+                    <option value="blocking" disabled={!canFilterByHealth}>Needs intervention</option>
+                    <option value="none" disabled={!canFilterByHealth}>No active incidents</option>
+                  </select>
+                </StudioField>
+              </div>
+            </fieldset>
+            <fieldset className="wf-run-filter-group">
+              <legend>Workflow identifiers</legend>
+              <div className="wf-run-filter-grid">
+                <RunFilterInput label="Execution ID" value={draftFilters.workflowExecutionId} onChange={value => setDraftFilters(current => ({ ...current, workflowExecutionId: value }))} />
+                <RunFilterInput label="Executable" value={draftFilters.artifactId} onChange={value => setDraftFilters(current => ({ ...current, artifactId: value }))} />
+                <RunFilterInput label="Correlation" value={draftFilters.correlationId} onChange={value => setDraftFilters(current => ({ ...current, correlationId: value }))} />
+              </div>
+            </fieldset>
+            <fieldset className="wf-run-filter-group">
+              <legend>Date range</legend>
+              <div className="wf-run-filter-grid">
+                <RunFilterInput label="From" type="datetime-local" value={draftFilters.from} onChange={value => setDraftFilters(current => ({ ...current, from: value }))} />
+                <RunFilterInput label="To" type="datetime-local" value={draftFilters.to} onChange={value => setDraftFilters(current => ({ ...current, to: value }))} />
+              </div>
+            </fieldset>
+            <div className="wf-run-filter-actions">
+              <StudioButton type="submit">Apply filters</StudioButton>
+            </div>
+          </div>
+        </AdvancedSection>
+      </form>
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" headingLevel={3} description={error || "Please try again, or check that the Elsa server is reachable."} actions={<StudioButton type="button" onClick={() => void load()}>Retry</StudioButton>} /> : null}
+      {state === "ready" && error ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" headingLevel={3} description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
+      {state === "unsupported" ? <p className="wf-run-health-unavailable" role="status">{error} No workflow runs were loaded. Clear the incident-health filter to search without it.</p> : null}
+      {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><SkeletonRows /></div> : null}
+      {canDeleteRuns && state === "ready" && selectedRunIds.size > 0 ? (
+        <div className="wf-run-deletion-toolbar" aria-label="Workflow run deletion controls">
+          <span aria-live="polite">{formatRunCount(selectedRunIds.size)} selected</span>
+          <StudioButton type="button" disabled={selectedRunIds.size === 0 || deletingRuns} onClick={() => void deleteRuns([...selectedRunIds])}>
+            {deletionPhase === "deleting" ? "Deleting…" : "Delete selected"}
+          </StudioButton>
+          <StudioButton type="button" disabled={selectedRunIds.size === 0 || deletingRuns} onClick={() => setSelectedRunIds(new Set())}>
+            Clear selection
+          </StudioButton>
+        </div>
+      ) : null}
+      {canDeleteRuns && deleteFeedback ? (
+        <div className="wf-run-deletion-feedback" role={deleteFeedback.failures.length ? "alert" : "status"}>
+          <p>{deleteFeedback.message}</p>
+          {deleteFeedback.failures.length ? (
+            <ul>
+              {deleteFeedback.failures.map(failure => <li key={failure.id}><code>{failure.id}</code>: {failure.message}</li>)}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {state === "ready" && !error && instances.length === 0 ? (
+        <StudioCollectionEmptyState headingLevel={3} aria-live="polite"
+            icon={<Boxes size={22} />}
+            title={activeFilterCount ? "No workflow runs match these filters" : "No workflow runs yet"}
+            description={activeFilterCount
+              ? "Clear or adjust the operational filters to broaden the result set."
+              : "Run a published workflow executable to create execution history here."}
+          />
+      ) : null}
+      {state === "ready" && instances.length > 0 ? (
+        <div className={`studio-table-container studio-collection-table wf-grid wf-instance-grid${canDeleteRuns ? " wf-instance-grid--deletable" : ""}`} role="table" aria-label="Workflow runs">
+          <div className="wf-grid-head" role="row">
+            <span role="columnheader" className="wf-run-column-header">
+              {canDeleteRuns ? <StudioField className="wf-run-select-all" label={<span className="wf-visually-hidden">Select all workflow runs on this page</span>}><input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allVisibleSelected}
+                disabled={deletingRuns}
+                onChange={event => toggleVisibleRunSelection(event.target.checked)}
+              /></StudioField> : null}
+              <strong>Run</strong>
+            </span>
+            <span role="columnheader">Execution ID</span>
+            <span role="columnheader">Identifiers</span>
+            <span role="columnheader">Kind</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Health</span>
+            <span role="columnheader">Activity</span>
+            <span role="columnheader">Started</span>
+            <span role="columnheader">Duration</span>
+            {canDeleteRuns ? <span role="columnheader">Actions</span> : null}
+          </div>
+          {instances.map(instance => {
+            const unattributedChild = hasUnattributedChildDefinition(instance);
+            const workflowName = unattributedChild ? `Child run · ${instance.workflowExecutionId.slice(-8)}` : definitionNames.get(instance.definitionId) ?? instance.definitionId;
+            const secondaryIdentifiers = [
+              { label: "Executable ID", value: instance.artifactId },
+              { label: unattributedChild ? "Executable definition ID" : "Definition ID", value: instance.definitionId },
+              { label: unattributedChild ? "Executable definition version ID" : "Definition version ID", value: instance.definitionVersionId }
+            ].filter(identifier => identifier.value);
+            return (
+            <div
+              className="wf-grid-row"
+              role="row"
+              {...studioRowInteraction<HTMLDivElement>(() => openInstance(instance.workflowExecutionId))}
+              aria-selected={selectedRunIds.has(instance.workflowExecutionId)}
+              aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${workflowName} · ${instance.status}${instance.subStatus ? ` · ${instance.subStatus}` : ""} · ${formatCurrentIncidentHealth(instance)}`}
+              key={instance.workflowExecutionId}
+            >
+              <div role="cell" className="wf-run-identity-cell">
+                {canDeleteRuns ? <StudioField className="wf-run-select" label={<span className="wf-visually-hidden">{`Select workflow run ${instance.workflowExecutionId}`}</span>}><input
+                  type="checkbox"
+                  checked={selectedRunIds.has(instance.workflowExecutionId)}
+                  disabled={deletingRuns}
+                  onChange={event => toggleRunSelection(instance.workflowExecutionId, event.target.checked)}
+                /></StudioField> : null}
+                <div className="wf-run-identity-content">
+                  <StudioButton
+                    type="button"
+                    className="wf-run-inspect"
+                    aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${workflowName}`}
+                    onClick={() => openInstance(instance.workflowExecutionId)}
+                  >
+                    <strong>{workflowName}</strong>
+                  </StudioButton>
+                </div>
+              </div>
+              <span role="cell" className="wf-list-primary-id wf-run-primary-identifier"><CopyableIdentifier label="Execution ID" value={instance.workflowExecutionId} /></span>
+              <span role="cell" className="wf-run-secondary-identifiers"><WorkflowListIdentifiers kind="Workflow run" name={instance.workflowExecutionId} identifiers={secondaryIdentifiers}>
+                <p>{formatCurrentIncidentHealth(instance)}</p>
+                <p>{instance.activityCount} activities · {instance.incidentCount} incidents</p>
+              </WorkflowListIdentifiers></span>
+              <span role="cell">{formatRunKind(instance.runKind)}</span>
+              <span role="cell"><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
+              <span role="cell"><CurrentIncidentHealthLabel instance={instance} /></span>
+              <span role="cell" className="wf-run-activity-indicator">
+                <span aria-hidden="true" title={`${instance.activityCount} activities · ${instance.incidentCount} incidents`}>{instance.activityCount}</span>
+                <span className="wf-visually-hidden">{instance.activityCount} activities · {instance.incidentCount} incidents</span>
+              </span>
+              <span role="cell"><StudioTimestamp value={instance.startedAt ?? instance.createdAt} fallback="—" /></span>
+              <span role="cell">{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
+              {canDeleteRuns ? <span role="cell" className="wf-run-row-actions wf-row-actions">
+                <OverflowMenu ariaLabel={`Actions for workflow run ${instance.workflowExecutionId}`} items={[{
+                  id: "delete", label: "Delete", destructive: true, disabled: deletingRuns,
+                  onSelect: () => { void deleteRuns([instance.workflowExecutionId]); }
+                }]} />
+              </span> : null}
+            </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {state === "ready" ? (
+        <div className="studio-collection-footer" aria-label="Workflow run pagination">
+          <span className="wf-pagination-summary" aria-live="polite">
+            Showing {page.count} of {page.totalCount} matching runs
+          </span>
+          <StudioField className="wf-page-size" label="Rows"><select aria-label="Workflow run page size" value={location.pageSize} onChange={event => updateLocation({
+              filters: location.filters,
+              pageSize: Number(event.target.value),
+              cursor: null
+            }, false)}>
+              {runHistoryPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
+            </select></StudioField>
+          <div className="wf-page-controls">
+            <StudioButton type="button" disabled={!previousPage.available} onClick={() => {
+              const previous = moveCursorHistoryPrevious(cursorHistory.current, cursorScope, location.cursor, page);
+              if (!previous.destination.available) return;
+              cursorHistory.current = previous.history;
+              updateLocation({ ...location, cursor: previous.destination.cursor }, false);
+            }} aria-label="Previous workflow run page">
+              <ChevronLeft size={14} /> Previous
+            </StudioButton>
+            <span role="status">{page.hasNext ? "More results" : "End of results"}</span>
+            <StudioButton type="button" disabled={!page.hasNext || !page.nextCursor} onClick={() => {
+              const next = moveCursorHistoryNext(cursorHistory.current, cursorScope, location.cursor, page.nextCursor);
+              if (!next.destination.available) return;
+              cursorHistory.current = next.history;
+              updateLocation({ ...location, cursor: next.destination.cursor }, false);
+            }} aria-label="Next workflow run page">
+              Next <ChevronRight size={14} />
+            </StudioButton>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function RunFilterInput({ label, value, type = "text", onChange }: {
+  label: string;
+  value: string;
+  type?: "text" | "datetime-local";
+  onChange(value: string): void;
+}) {
+  return (
+    <StudioField className="wf-run-filter-field" label={label}><input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} /></StudioField>
+  );
+}
+
+function emptyRunHistoryFilters(): RunHistoryFilters {
+  return {
+    status: "",
+    runKind: "",
+    definitionId: "",
+    workflowExecutionId: "",
+    artifactId: "",
+    correlationId: "",
+    from: "",
+    to: "",
+    incidentHealth: ""
+  };
+}
+
+type RunHistoryFilterName = keyof RunHistoryFilters;
+
+interface RunHistoryFilterChip {
+  name: RunHistoryFilterName;
+  label: string;
+  removeLabel: string;
+}
+
+function buildRunFilterChips(filters: RunHistoryFilters, definitionNames: Map<string, string>): RunHistoryFilterChip[] {
+  const chips: RunHistoryFilterChip[] = [];
+  if (filters.status) chips.push({ name: "status", label: `Status: ${filters.status}`, removeLabel: "Status" });
+  if (filters.runKind) chips.push({ name: "runKind", label: `Kind: ${formatRunKind(filters.runKind)}`, removeLabel: "Kind" });
+  if (filters.definitionId) chips.push({
+    name: "definitionId",
+    label: `Workflow: ${definitionNames.get(filters.definitionId) ?? filters.definitionId}`,
+    removeLabel: "Workflow"
+  });
+  if (filters.workflowExecutionId) chips.push({ name: "workflowExecutionId", label: `Execution ID: ${filters.workflowExecutionId}`, removeLabel: "Execution ID" });
+  if (filters.artifactId) chips.push({ name: "artifactId", label: `Executable: ${filters.artifactId}`, removeLabel: "Executable" });
+  if (filters.correlationId) chips.push({ name: "correlationId", label: `Correlation: ${filters.correlationId}`, removeLabel: "Correlation" });
+  if (filters.from) chips.push({ name: "from", label: `From: ${filters.from}`, removeLabel: "From" });
+  if (filters.to) chips.push({ name: "to", label: `To: ${filters.to}`, removeLabel: "To" });
+  if (filters.incidentHealth) {
+    const label = filters.incidentHealth === "active"
+      ? "Needs attention"
+      : filters.incidentHealth === "blocking" ? "Needs intervention" : "No active incidents";
+    chips.push({ name: "incidentHealth", label, removeLabel: label });
+  }
+  return chips;
+}
+
+function countAdvancedRunFilters(filters: RunHistoryFilters) {
+  return Number(Boolean(filters.status) && filters.status !== "Running")
+    + Number(Boolean(filters.runKind))
+    + Number(Boolean(filters.workflowExecutionId))
+    + Number(Boolean(filters.artifactId))
+    + Number(Boolean(filters.correlationId))
+    + Number(Boolean(filters.from))
+    + Number(Boolean(filters.to))
+    + Number(Boolean(filters.incidentHealth) && filters.incidentHealth !== "active");
+}
+
+function formatRunCount(count: number) {
+  return `${count} workflow run${count === 1 ? "" : "s"}`;
+}
+
+async function mapWithConcurrency<T, TResult>(
+  items: readonly T[],
+  maxConcurrency: number,
+  mapItem: (item: T) => Promise<TResult>
+): Promise<TResult[]> {
+  const results = new Array<TResult>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(items.length, Math.max(1, Math.floor(maxConcurrency)));
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await mapItem(items[index]);
+    }
+  }));
+  return results;
+}
+
+function normalizeRunHistoryFilters(filters: RunHistoryFilters): RunHistoryFilters {
+  return Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, value.trim()])) as unknown as RunHistoryFilters;
+}
+
+export function readRunHistoryLocation(search = window.location.search): RunHistoryLocation {
+  const parameters = new URLSearchParams(search);
+  const requestedPageSize = Number(parameters.get("pageSize"));
+  return {
+    filters: {
+      status: parameters.get("status") ?? "",
+      runKind: parameters.get("runKind") ?? "",
+      definitionId: parameters.get("definitionId") ?? "",
+      workflowExecutionId: parameters.get("workflowExecutionId") ?? "",
+      artifactId: parameters.get("artifactId") ?? "",
+      correlationId: parameters.get("correlationId") ?? "",
+      from: parameters.get("from") ?? "",
+      to: parameters.get("to") ?? "",
+      incidentHealth: parseIncidentHealth(parameters.get("incidentHealth"))
+    },
+    pageSize: runHistoryPageSizes.includes(requestedPageSize as typeof runHistoryPageSizes[number]) ? requestedPageSize : 25,
+    cursor: parameters.get("cursor")
+  };
+}
+
+export function buildRunHistoryUrl(location: RunHistoryLocation) {
+  const parameters = new URLSearchParams();
+  Object.entries(location.filters).forEach(([name, value]) => {
+    if (value) parameters.set(name, value);
+  });
+  if (location.pageSize !== 25) parameters.set("pageSize", String(location.pageSize));
+  if (location.cursor) parameters.set("cursor", location.cursor);
+  const query = parameters.toString();
+  return `/workflows/instances${query ? `?${query}` : ""}`;
+}
+
+export function parseRunHistoryReturnTo(value: string | null | undefined, origin = window.location.origin): string | null {
+  if (!value || value.startsWith("//") || value.includes("\\") || value.includes("#")) return null;
+  try {
+    const base = new URL(origin);
+    const target = new URL(value, base);
+    const absolutePath = value.match(/^https?:\/\/[^/?#]+([^?#]*)/i)?.[1] || "/";
+    const rawPath = value.startsWith("/") ? value.split(/[?#]/, 1)[0] : absolutePath;
+    if (target.origin !== base.origin || target.pathname !== "/workflows/instances" || target.username || target.password || rawPath !== target.pathname) return null;
+    if (!value.startsWith("/") && !/^https?:\/\//i.test(value)) return null;
+    return buildRunHistoryUrl(readRunHistoryLocation(target.search));
+  } catch {
+    return null;
+  }
+}
+
+export function getRunHistoryBackLocation(returnTo: string | null | undefined): string {
+  return parseRunHistoryReturnTo(returnTo) ?? "/workflows/instances";
+}
+
+function valueOrUndefined(value: string) {
+  return value || undefined;
+}
+
+function parseIncidentHealth(value: string | null): RunHistoryFilters["incidentHealth"] {
+  return value === "active" || value === "blocking" || value === "none" ? value : "";
+}
+
+export function formatCurrentIncidentHealth(instance: Pick<WorkflowInstanceSummary, "activeIncidentCount" | "blockingIncidentCount">) {
+  if (typeof instance.activeIncidentCount !== "number" || typeof instance.blockingIncidentCount !== "number") {
+    return "Current health unavailable";
+  }
+  if (instance.blockingIncidentCount > 0) {
+    return `${instance.activeIncidentCount} active · ${instance.blockingIncidentCount} blocking · Needs intervention`;
+  }
+  if (instance.activeIncidentCount > 0) {
+    return `${instance.activeIncidentCount} active · Non-blocking`;
+  }
+  return "No active incidents";
+}
+
+function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSummary }) {
+  const available = typeof instance.activeIncidentCount === "number" && typeof instance.blockingIncidentCount === "number";
+  const health = !available
+    ? "unavailable"
+    : instance.blockingIncidentCount! > 0
+      ? "blocking"
+      : instance.activeIncidentCount! > 0
+        ? "active"
+        : "none";
+  const label = health === "blocking" ? "Needs intervention" : health === "active" ? `${instance.activeIncidentCount} active` : health === "none" ? "Healthy" : "Unknown";
+  return <span className="wf-run-health-indicator" data-health={health} title={formatCurrentIncidentHealth(instance)}>
+    <span aria-hidden="true">{label}</span>
+    <span className="wf-visually-hidden">{formatCurrentIncidentHealth(instance)}</span>
+  </span>;
+}
+
+function toUtcIso(value: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString();
+}
+
+interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
+  definitionName?: string | null;
+  activityCatalogAccess: "allowed" | "forbidden" | "unavailable";
+  executableGraph: ExecutableActivityGraph | null;
+  incidentActivityExecutions: ActivityExecutionStateSummary[];
+  incidentAssociationLookupIncomplete: boolean;
+  incidentActivityLookupSupported: boolean;
+  pendingIncidentActivityExecutionIds: string[];
+  unavailableIncidentActivityFailures: UnavailableIncidentActivityFailure[];
+}
+
+const maxIncidentActivityLookups = 50;
+const incidentActivityLookupBatchSize = 8;
+
+export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], incidentRootCauseProviders = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, initialHistoryLocation, initialHistorySearch, initialHistoryNavigation = 0, navigate, onRunTitleChange }: {
+  context: StudioEndpointContext;
+  ai: StudioWeaverRegistry;
+  /** The Workflows module's Weaver state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
+  weaver?: WorkflowWeaverController;
+  expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
+  workflowExecutionId: string;
+  initialActivityExecutionId?: string | null;
+  initialInspectorTab?: InstanceInspectorTab;
+  initialReturnTo?: string | null;
+  initialHistoryLocation?: RunTimelineLocation;
+  initialHistorySearch?: string;
+  initialHistoryNavigation?: number;
+  navigate(path: string): void;
+  onRunTitleChange?(title: string): void;
+}) {
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [error, setError] = useState("");
+  const [loadedData, setData] = useState<WorkflowInstanceWorkbenchData | null>(null);
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  const parsedInitialHistory = useMemo(() => initialHistoryLocation ?? readTimelineLocation(initialHistorySearch ?? ""), [initialHistoryLocation, initialHistorySearch]);
+  const [historyLocation, setHistoryLocation] = useState<RunTimelineLocation>(parsedInitialHistory);
+  const currentHistoryLocation = useRef(historyLocation); currentHistoryLocation.current = historyLocation;
+  const [timelineMode, setTimelineMode] = useState<RunTimelineMode>(() => hasExplicitHistoryIntent(parsedInitialHistory) ? "events" : "activities");
+  const timelineModeRef = useRef(timelineMode); timelineModeRef.current = timelineMode;
+  const [playbackOpen, setPlaybackOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const overviewPopoverId = useId();
+  const overviewTriggerRef = useRef<HTMLButtonElement>(null);
+  const appliedHistoryIntent = useRef<{ context: string; location: string; navigation: number } | null>(null);
+  const initialHistoryKey = JSON.stringify(parsedInitialHistory);
+  const timelineReturn = useRef<{ context: string; historyEventId: string; activityExecutionId: string } | null>(null);
+  const historyBack = useRef<Array<{ location: RunTimelineLocation; evidenceId: string | null; focus: HTMLElement | null }>>([]);
+  const [historyOwnerMessage, setHistoryOwnerMessage] = useState("");
+  const [focusHistoryInspector, setFocusHistoryInspector] = useState(true);
+  const [activeInspectorTab, setActiveInspectorTab] = useState<InstanceInspectorTab>(initialInspectorTab);
+  const [focusedRuntimeNodeId, setFocusedRuntimeNodeId] = useState<string | null>(null);
+  const [moveCanvasKeyboardFocus, setMoveCanvasKeyboardFocus] = useState(true);
+  const [canvasFocusRequestId, setCanvasFocusRequestId] = useState(0);
+  const [canvasFocusMode, setCanvasFocusMode] = useState<RunCanvasFocusMode>(() => readStoredRunCanvasFocusMode());
+  const updateCanvasFocusMode = useCallback((nextMode: RunCanvasFocusMode) => {
+    setCanvasFocusMode(nextMode);
+    writeStoredRunCanvasFocusMode(nextMode);
+  }, []);
+  const [focusInputKey, setFocusInputKey] = useState<string | null>(null);
+  const [incidentAssociationMessage, setIncidentAssociationMessage] = useState<string | null>(null);
+  const [frames, setFrames] = useState<ScopeFrame[]>([]);
+  const appliedInitialInspectorTab = useRef<InstanceInspectorTab | null>(null);
+  const appliedInitialActivityExecutionId = useRef<string | null>(null);
+  const occurrenceChoiceFocus = useExecutionFocusRequest();
+  const scopeOccurrenceFocus = useExecutionFocusRequest();
+  const incidentNavigationRequest = useRef(0);
+  const loadGeneration = useRef(0);
+  const definitionNameAbort = useRef<AbortController | null>(null);
+  const incidentActivityLookupSequence = useRef(0);
+  const latestIncidentActivityLookupById = useRef(new Map<string, number>());
+  const observedArtifact = useRef<{ identity: string; artifactId: string } | null>(null);
+  const observation = useExecutionObservation<WorkflowInstanceDetails>({ context, identity: JSON.stringify(["instance", workflowExecutionId]), enabled: !!workflowExecutionId,
+    read: async scope => {
+      const pinned = observedArtifact.current?.identity === scope.identity ? observedArtifact.current.artifactId : undefined;
+      const details = await readObservedExecution(context, workflowExecutionId, pinned, scope.signal);
+      if (scope.isCurrent()) observedArtifact.current = { identity: scope.identity, artifactId: details.instance.artifactId };
+      return { value: details, terminal: isTerminalExecution(details.instance.status) };
+    }
+  });
+  const browserContext = observation.identity;
+  useEffect(() => {
+    const previous = appliedHistoryIntent.current;
+    const explicitNavigation = previous?.navigation !== initialHistoryNavigation;
+    if (previous?.context === browserContext && previous.location === initialHistoryKey && !explicitNavigation) return;
+    appliedHistoryIntent.current = { context: browserContext, location: initialHistoryKey, navigation: initialHistoryNavigation };
+    // Retained workspace tabs reconnect effects and remember our local address-bar writes. Neither
+    // is a new investigation: keep the causal Back stack and the user's chosen inspector tab.
+    if (!explicitNavigation && previous?.context === browserContext && JSON.stringify(currentHistoryLocation.current) === initialHistoryKey) return;
+    timelineReturn.current = null;
+    setHistoryLocation(parsedInitialHistory);
+    setTimelineMode(hasExplicitHistoryIntent(parsedInitialHistory) ? "events" : "activities");
+    setOverviewOpen(false);
+    historyBack.current = []; setHistoryOwnerMessage(""); setFocusHistoryInspector(true);
+    appliedInitialInspectorTab.current = null; // A new exact target must open even after Issues/Details.
+  }, [browserContext, initialHistoryKey, initialHistoryNavigation, parsedInitialHistory]);
+  useEffect(() => {
+    if (!overviewOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOverviewOpen(false);
+      overviewTriggerRef.current?.focus();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [overviewOpen]);
+  const [browserEvidence, setBrowserEvidence] = useState<{ context: string; items: ActivityExecutionStateSummary[] }>({ context: browserContext, items: [] });
+  const [executionScopes, setExecutionScopes] = useState<{ context: string; items: Array<{ execution: ActivityExecutionStateSummary; label: string }> }>({ context: browserContext, items: [] });
+  const [scopeNavigation, setScopeNavigation] = useState<{ context: string; loading: boolean; error: string; retaining?: boolean }>({ context: browserContext, loading: false, error: "" });
+  const [preparedScope, setPreparedScope] = useState<{ context: string; scopeId?: string; nodeId: string; prepared: PreparedAttachedExecution } | null>(null);
+  const [preparedHistoryEvent, setPreparedHistoryEvent] = useState<PreparedHistoryEvent | undefined>();
+  const [historyTargetPending, setHistoryTargetPending] = useState(false);
+  const historyTargetRequest = useRef<AbortController | null>(null);
+  const scopeRequest = useRef<AbortController | null>(null);
+  const focusReadyScope = useRef<AbortController | null>(null);
+  const captureFocusOperation = () => {
+    const navigation = incidentNavigationRequest.current;
+    const generation = loadGeneration.current;
+    const identity = runtimeValueContextId(context);
+    const controller = scopeRequest.current;
+    return { token: controller, signal: controller?.signal,
+      isReady: () => scopeRequest.current === controller && focusReadyScope.current === controller,
+      isCurrent: () => navigation === incidentNavigationRequest.current && generation === loadGeneration.current
+        && identity === runtimeValueContextId(context) && controller === scopeRequest.current };
+  };
+  const [boundaryCanvas, setBoundaryCanvas] = useState<{ context: string; layout: ActivityExecutionLayout } | null>(null);
+  const requestedScope = useRef<{ execution: ActivityExecutionStateSummary; includeSelf: boolean; label?: string; moveOccurrence?: boolean } | null>(null);
+  const rememberedExecutions = useRef(new Map<string, ActivityExecutionStateSummary>());
+  const confirmedSingletons = useRef(new Map<string, ActivityExecutionStateSummary>());
+  const loadedBrowserContext = useRef<string | null>(null);
+  const loadingBrowserContext = useRef<string | null>(null);
+  const failedMetadataContext = useRef<string | null>(null);
+  const [metadataRevision, setMetadataRevision] = useState(0);
+  const reloadDetailsRequested = useRef(false);
+  const data = loadedBrowserContext.current === browserContext && observation.status !== "unavailable" ? loadedData : null;
+  const currentData = state === "ready" && data?.details.instance.workflowExecutionId === workflowExecutionId
+    ? data
+    : null;
+  const hasLoadedData = loadedData !== null;
+  const evidenceRevision = loadGeneration.current + observation.revision;
+  const historyResourceRefreshKey = JSON.stringify([loadGeneration.current, data?.details.instance.updatedAt, data?.details.instance.status]);
+  const observationIsCurrent = observation.isCurrent;
+  const refreshObservation = observation.refresh;
+  useEffect(() => () => { scopeRequest.current?.abort(); historyTargetRequest.current?.abort(); }, [browserContext]);
+  const currentExecutionScopes = executionScopes.context === browserContext ? executionScopes.items : [];
+  const executionScope = currentExecutionScopes.at(-1)?.execution;
+  const associationActivities = combineActivityExecutions(
+    combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []),
+    browserEvidence.context === browserContext ? browserEvidence.items : []);
+  const currentExecutionScopesRef = useRef(currentExecutionScopes);
+  currentExecutionScopesRef.current = currentExecutionScopes;
+  const associationActivitiesRef = useRef(associationActivities);
+  associationActivitiesRef.current = associationActivities;
+  const scopeNavigationLoading = scopeNavigation.context === browserContext && scopeNavigation.loading;
+  const [showScopeNavigationLoading, setShowScopeNavigationLoading] = useState(false);
+  useEffect(() => {
+    if (!scopeNavigationLoading) {
+      setShowScopeNavigationLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowScopeNavigationLoading(true), 200);
+    return () => window.clearTimeout(timer);
+  }, [scopeNavigationLoading]);
+  const selectedActivity = findSelectedActivityExecution(associationActivities, selectedEvidenceId, data?.details.incidents ?? []);
+  const {
+    containerRef,
+    mode,
+    timelineDocked,
+    timelineCollapsed,
+    timelineWidth,
+    timelineMaxWidth,
+    inspectorWidth,
+    inspectorMaxWidth,
+    inspectorCollapsed,
+    inspectorMaximized,
+    inspectorExpanded,
+    canResizeInspector,
+    mediumDrawerOpen,
+    workbenchClassName,
+    workbenchStyle,
+    closeInspector,
+    openInspector,
+    showCanvasForSelection,
+    toggleInspectorCollapsed,
+    toggleInspectorMaximized,
+    startInspectorResize,
+    handleInspectorResizeKeyDown,
+    toggleTimelineCollapsed,
+    expandTimeline,
+    startTimelineResize,
+    handleTimelineResizeKeyDown
+  } = useRunDetailLayout({ selectedActivityId: selectedActivity?.activityExecutionId });
+  useEffect(() => {
+    const requestedInitialTab = initialInspectorTab === "timeline" && parsedInitialHistory.selection ? "activity" : initialInspectorTab;
+    if (appliedInitialInspectorTab.current === requestedInitialTab) return;
+    appliedInitialInspectorTab.current = requestedInitialTab;
+    incidentNavigationRequest.current += 1;
+    scopeRequest.current?.abort();
+    setScopeNavigation(current => current.context === browserContext && current.loading
+      ? { context: browserContext, loading: false, error: "Execution scope navigation was interrupted. Retry the scope." } : current);
+    setActiveInspectorTab(requestedInitialTab);
+    // Exact history links can resolve to an unavailable result without an activity owner.
+    // Activity-only links open through the resolved selection instead of an unverified ID.
+    if (parsedInitialHistory.selection || requestedInitialTab === "issues") openInspector();
+  }, [browserContext, initialInspectorTab, initialHistoryNavigation, parsedInitialHistory.selection, openInspector]);
+  const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
+  // The exact Run Weaver may read while it is shown: its Workflow Instance identity and the activity execution selected on
+  // it, published only once the run has loaded and withdrawn while loading, after a failed load and on unmount. The server
+  // reads the Run itself, never "the latest run", and applies the run endpoints' own access and redaction.
+  const inspectedRun = currentData
+    ? { workflowExecutionId: currentData.details.instance.workflowExecutionId, activityExecutionId: selectedActivity?.activityExecutionId ?? null }
+    : null;
+  useWorkflowInspectionContext({ controller: weaver, clientId: ai.clientId, kind: "run", identity: inspectedRun });
+  const journals = useCompensationJournals(context, workflowExecutionId);
+
+  // Spec 260: re-reads the run's details and incidents while an operator action is applied, without resetting the view.
+  const refreshRun = useCallback(async () => {
+    if (!workflowExecutionId) return null;
+    try {
+      const details = await readObservedExecution(context, workflowExecutionId, data?.details.instance.artifactId);
+      if (!observationIsCurrent()) return null;
+      refreshObservation();
+      const supported = await supportsActivityExecutionInspection(context).catch(() => false);
+      const summaries = await loadActiveIncidentActivitySummaries(
+        details,
+        supported ? activityExecutionId => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId) : null);
+      if (!observationIsCurrent()) return null;
+      setData(current => loadedBrowserContext.current === browserContext && current && current.details.instance.workflowExecutionId === workflowExecutionId
+        ? {
+          ...current,
+          details,
+          incidentActivityExecutions: combineActivityExecutions(current.incidentActivityExecutions, summaries.activities),
+          pendingIncidentActivityExecutionIds: summaries.pendingActivityExecutionIds,
+          incidentAssociationLookupIncomplete: summaries.incomplete
+        }
+        : current);
+      return details;
+    } catch {
+      return null;
+    }
+  }, [browserContext, context, data?.details.instance.artifactId, observationIsCurrent, refreshObservation, workflowExecutionId]);
+
+  const rootActivity = data?.definitionVersion?.state.rootActivity ?? null;
+  const labelOfNode = useCallback((nodeId: string | undefined) => {
+    if (!nodeId || !data?.definitionVersion?.state.rootActivity) return undefined;
+    const node = findActivityNode(data.definitionVersion.state.rootActivity, nodeId);
+    if (!node) return undefined;
+    return resolveActivityLabel(
+      data.definitionVersion.activityPresentation?.find(record => record.nodeId === node.nodeId),
+      data.activityCatalog.find(item => item.activityVersionId === node.activityVersionId),
+      node.activityVersionId);
+  }, [data]);
+  const [runRefreshVersion, setRunRefreshVersion] = useState(0);
+  const operator = useOperatorActions({
+    context,
+    workflowExecutionId,
+    details: observation.canInteract ? data?.details ?? null : null,
+    root: rootActivity,
+    activities: associationActivities,
+    journals,
+    labelOf: labelOfNode,
+    refreshRun
+  });
+  const unattributedChildDefinition = hasUnattributedChildDefinition(data?.details.instance);
+  const selectedDefinitionId = unattributedChildDefinition ? undefined : data?.details.instance.definitionId;
+  const definitionAccess = useDefinitionReviewAccess(
+    context,
+    selectedDefinitionId,
+    state === "ready" && !!data && !unattributedChildDefinition
+  );
+  const selectedDefinitionCanBeReviewed = canReviewDefinition(definitionAccess, context, selectedDefinitionId);
+  const runDisplayName = unattributedChildDefinition
+    ? `Child run · ${(data?.details.instance.workflowExecutionId ?? workflowExecutionId).slice(-8)}`
+    : data?.definitionName ?? data?.definitionVersion?.definition.name;
+  useEffect(() => {
+    onRunTitleChange?.(unattributedChildDefinition ? runDisplayName ?? "Child run" : formatRunPageTitle(runDisplayName, data?.details.instance.definitionId));
+  }, [data?.details.instance.definitionId, onRunTitleChange, runDisplayName, unattributedChildDefinition]);
+
+  // The selected occurrence lives in the URL (spec 260 FR-423): an activity execution, or the one an incident names.
+  const selectedUrlActivityId = state !== "ready" || !selectedEvidenceId
+    ? null
+    : associationActivities.some(activity => activity.activityExecutionId === selectedEvidenceId)
+      ? selectedEvidenceId
+      : (() => {
+        const incident = data?.details.incidents?.find(item => item.incidentId === selectedEvidenceId);
+        return incident ? readIncidentActivityExecutionId(incident) ?? null : null;
+      })();
+  useEffect(() => {
+    if (state !== "ready" || window.location.pathname.replace(/\/$/, "") !== `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`) return;
+    writeRunSelection(selectedUrlActivityId);
+  }, [selectedUrlActivityId, state, workflowExecutionId]);
+  useEffect(() => {
+    if (state === "ready" && data?.details.instance.workflowExecutionId === workflowExecutionId
+      && window.location.pathname.replace(/\/$/, "") === `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`) writeRunHistoryLocation(historyLocation);
+  }, [data?.details.instance.workflowExecutionId, historyLocation, state, workflowExecutionId]);
+
+  const resetJournals = journals.reset;
+  const load = useCallback(async (details: WorkflowInstanceDetails, preserveCanvas = false) => {
+    const generation = ++loadGeneration.current;
+    failedMetadataContext.current = null;
+    scopeRequest.current?.abort();
+    setScopeNavigation(current => current.context === browserContext && current.loading
+      ? { context: browserContext, loading: false, error: "Execution scope resolution was interrupted by refresh. Retry the scope." } : current);
+    resetJournals();
+    latestIncidentActivityLookupById.current.clear();
+    incidentNavigationRequest.current += 1;
+    setIncidentAssociationMessage(null);
+    setFocusedRuntimeNodeId(null);
+    setFocusInputKey(null);
+    if (!workflowExecutionId) {
+      setError("No workflow execution id was provided.");
+      setState("failed");
+      return;
+    }
+
+    if (!preserveCanvas) setState("loading");
+    setError("");
+    try {
+      const [executableResult, activityCatalog, sourceResult, incidentActivityResult] = await Promise.all([
+        getExecutable(context, details.instance.artifactId, details.instance.sourceReferenceId).then(
+          executable => ({ executable, error: "" }),
+          error => ({ executable: null, error: error instanceof Error ? error.message : String(error) })
+        ),
+        listActivities(context).then(
+          catalog => ({ ...catalog, access: "allowed" as const }),
+          error => {
+            const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+            if (status === 403) return { activities: [], access: "forbidden" as const };
+            if (status === 404 || error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError)
+              return { activities: [], access: "unavailable" as const };
+            throw error;
+          }),
+        details.instance.sourceReferenceId
+          ? getExecutableInputSources(context, details.instance.artifactId, details.instance.sourceReferenceId).then(
+              sources => ({ sources, access: sources.accessState || sources.access || "allowed" }),
+              error => ({ sources: null, access: sourceAccessFromError(error) }))
+          : Promise.resolve({ sources: null, access: "unavailable" }),
+        supportsActivityExecutionInspection(context).then(
+          async supported => {
+            const fetchInspection = supported
+              ? (activityExecutionId: string) => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId)
+              : null;
+            const summaries = await loadActiveIncidentActivitySummaries(details, fetchInspection);
+            const requestedActivityId = initialActivityExecutionId?.trim();
+            const alreadyLoaded = requestedActivityId && (
+              details.activities.some(activity => activity.activityExecutionId === requestedActivityId) ||
+              summaries.activities.some(activity => activity.activityExecutionId === requestedActivityId));
+            const incidentLookupAlreadyCoversRequest = requestedActivityId && (details.incidents ?? []).some(incident =>
+              isActiveIncident(incident) && readIncidentActivityExecutionId(incident) === requestedActivityId);
+            if (!fetchInspection || !requestedActivityId || alreadyLoaded || incidentLookupAlreadyCoversRequest) {
+              return { supported, ...summaries };
+            }
+
+            const requestedActivity = await loadExactIncidentActivitySummary(
+              workflowExecutionId,
+              requestedActivityId,
+              fetchInspection);
+            return {
+              supported,
+              ...summaries,
+              activities: requestedActivity.status === "found"
+                ? [...summaries.activities, requestedActivity.summary]
+                : summaries.activities
+            };
+          },
+          async () => ({ supported: false, ...await loadActiveIncidentActivitySummaries(details, null) }))
+      ]);
+      if (generation !== loadGeneration.current || !observationIsCurrent()) return;
+      const catalog = activityCatalog.activities;
+      const executableGraph = executableResult.executable
+        ? buildExecutableActivityGraph(
+            executableResult.executable.rootActivity,
+            catalog,
+            sourceResult.sources?.authoredInputs ?? [],
+            sourceResult.sources?.compiledInputs ?? [],
+            sourceResult.access,
+            executableResult.executable.chosenReference?.activityPresentation ?? [])
+        : null;
+      setData({
+        details,
+        definitionVersion: executableResult.executable
+          ? projectPinnedExecutable(executableResult.executable, details, catalog, executableGraph ?? undefined)
+          : null,
+        definitionVersionError: executableResult.error,
+        activityCatalog: catalog,
+        activityCatalogAccess: activityCatalog.access,
+        executableGraph,
+        incidentActivityExecutions: incidentActivityResult.activities,
+        incidentAssociationLookupIncomplete: incidentActivityResult.incomplete,
+        incidentActivityLookupSupported: incidentActivityResult.supported,
+        pendingIncidentActivityExecutionIds: incidentActivityResult.pendingActivityExecutionIds,
+        unavailableIncidentActivityFailures: incidentActivityResult.unavailableFailures
+      });
+      const initialEvidence = resolveInitialActivityEvidenceId(
+        combineActivityExecutions(details.activities, incidentActivityResult.activities),
+        initialActivityExecutionId);
+      if (loadedBrowserContext.current !== browserContext) {
+        confirmedSingletons.current.clear();
+        setSelectedEvidenceId(initialEvidence);
+        setFrames([]);
+        loadedBrowserContext.current = browserContext;
+      } else {
+        setSelectedEvidenceId(current => details.incidents?.some(item => item.incidentId === current) ? initialEvidence : current);
+        setBrowserEvidence(current => ({ context: browserContext, items: (current.context === browserContext ? current.items : [])
+          .map(item => details.activities.find(fresh => fresh.activityExecutionId === item.activityExecutionId) ?? item) }));
+      }
+      setState("ready");
+      if (initialEvidence) {
+        requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
+      }
+      definitionNameAbort.current?.abort();
+      const namesAbort = new AbortController();
+      definitionNameAbort.current = namesAbort;
+      if (!hasUnattributedChildDefinition(details.instance)) void loadDefinitionDisplayNames(context, [details.instance.definitionId], namesAbort.signal).then(
+        definitionNames => {
+          if (generation !== loadGeneration.current) return;
+          const definitionName = definitionNames.get(details.instance.definitionId);
+          if (!definitionName) return;
+          setData(current => current ? applyDefinitionDisplayName(current, definitionName) : current);
+        },
+        () => undefined
+      );
+    } catch (e) {
+      if (generation !== loadGeneration.current) return;
+      failedMetadataContext.current = browserContext;
+      setData(null);
+      setError(formatWorkflowRunLoadError(e, workflowExecutionId));
+      setState("failed");
+    }
+  }, [browserContext, context, initialActivityExecutionId, observationIsCurrent, resetJournals, workflowExecutionId]);
+
+  useEffect(() => {
+    return () => {
+      loadGeneration.current += 1;
+      definitionNameAbort.current?.abort();
+    };
+  }, [load]);
+
+  useEffect(() => {
+    const details = observation.value;
+    if (!details) {
+      if (!hasLoadedData && observation.error) { setError(formatWorkflowRunLoadError(new Error(observation.error), workflowExecutionId)); setState("failed"); }
+      if (!workflowExecutionId) { setError("No workflow execution id was provided."); setState("failed"); }
+      return;
+    }
+    if (loadedBrowserContext.current !== browserContext || reloadDetailsRequested.current) {
+      if (failedMetadataContext.current === browserContext && !reloadDetailsRequested.current) return;
+      if (loadingBrowserContext.current === browserContext) return;
+      const preserveCanvas = loadedBrowserContext.current === browserContext && hasLoadedData;
+      reloadDetailsRequested.current = false;
+      loadingBrowserContext.current = browserContext;
+      void load(details, preserveCanvas).finally(() => {
+        if (loadingBrowserContext.current !== browserContext) return;
+        loadingBrowserContext.current = null;
+        if (reloadDetailsRequested.current) setMetadataRevision(value => value + 1);
+      });
+      return;
+    }
+    // Reconcile data without rebuilding the pinned graph, resetting scopes or moving the viewport.
+    setData(current => current && current.details.instance.workflowExecutionId === workflowExecutionId && current.details !== details
+      ? { ...current, details } : current);
+    setBrowserEvidence(current => current.context === browserContext ? { ...current, items: current.items
+      .map(item => details.activities.find(fresh => fresh.activityExecutionId === item.activityExecutionId) ?? item) } : current);
+  }, [browserContext, hasLoadedData, load, metadataRevision, observation.error, observation.revision, observation.value, workflowExecutionId]);
+
+  const openDefinitionDesigner = (requestedDefinitionId?: string) => {
+    const definitionId = requestedDefinitionId ?? data?.details.instance.definitionId;
+    if (!definitionId || hasUnattributedChildDefinition(data?.details.instance)) return;
+
+    navigate(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
+  };
+  const closeResponsiveInspector = () => {
+    beginEvidenceNavigation();
+    closeInspector();
+    const nodeId = selectedActivity ? findExecutableGraphNodeId(data?.executableGraph, selectedActivity) ?? selectedActivity.authoredActivityId : selectedEvidenceId;
+    requestAnimationFrame(() => focusSelectedCanvasActivity(focusedRuntimeNodeId ?? nodeId));
+  };
+
+  const navigateToScope = (nextFrames: ScopeFrame[]) => {
+    beginEvidenceNavigation();
+    setBoundaryCanvas(null);
+    setFrames(nextFrames);
+    if (currentExecutionScopes.length > 0 && rootActivity) {
+      const nextOwner = resolveScope(rootActivity, nextFrames, data?.activityCatalog)?.owner ?? rootActivity;
+      const trimmed = trimExecutionScopesForTarget(currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nextOwner.nodeId);
+      if (trimmed.length !== currentExecutionScopes.length) {
+        scopeRequest.current?.abort();
+        requestedScope.current = null;
+        setExecutionScopes({ context: browserContext, items: trimmed });
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+      }
+    }
+  };
+
+  const focusNodePath = useCallback((nodeId: string | null) => {
+    if (!nodeId || !data?.definitionVersion?.state.rootActivity) return;
+    const path = findNodeScopePath(
+      data.definitionVersion.state.rootActivity,
+      nodeId,
+      activity => resolveActivityLabel(
+        data.definitionVersion?.activityPresentation?.find(record => record.nodeId === activity.nodeId),
+        data.activityCatalog.find(item => item.activityVersionId === activity.activityVersionId),
+        activity.activityVersionId),
+      data.activityCatalog
+    );
+    if (path) setFrames(path);
+  }, [data]);
+
+
+
+  const ensureIncidentActivityAssociation = useCallback(async (incident: IncidentStateSummary, isCurrent: () => boolean = () => true) => {
+    const generation = loadGeneration.current;
+    const activities = combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []);
+    const existing = resolveIncidentActivityAssociation(incident, activities, data?.executableGraph);
+    if (existing?.activityExecution) {
+      if (isCurrent()) setIncidentAssociationMessage(null);
+      return existing;
+    }
+    const activityExecutionId = readIncidentActivityExecutionId(incident);
+    if (!activityExecutionId || !data) return existing;
+    const lookupRequest = ++incidentActivityLookupSequence.current;
+    latestIncidentActivityLookupById.current.set(activityExecutionId, lookupRequest);
+    const isLatestLookup = () => latestIncidentActivityLookupById.current.get(activityExecutionId) === lookupRequest;
+    const finishLookup = () => {
+      if (isLatestLookup()) latestIncidentActivityLookupById.current.delete(activityExecutionId);
+    };
+    let supported: boolean;
+    try {
+      supported = await supportsActivityExecutionInspection(context);
+    } catch {
+      if (isLatestLookup() && isCurrent()) setIncidentAssociationMessage(incidentActivityLookupFailureMessage("unavailable"));
+      finishLookup();
+      return existing;
+    }
+    if (!isLatestLookup()) return existing;
+    if (!supported) {
+      if (isCurrent()) setIncidentAssociationMessage(incidentActivityLookupFailureMessage("unsupported"));
+      finishLookup();
+      return existing;
+    }
+    const workflowExecutionId = data.details.instance.workflowExecutionId;
+    const result = await loadExactIncidentActivitySummary(
+      workflowExecutionId,
+      activityExecutionId,
+      id => getActivityExecutionInspection(context, workflowExecutionId, id));
+    if (!isLatestLookup()) return existing;
+    if (result.status === "failed") {
+      if (isCurrent()) setIncidentAssociationMessage(incidentActivityLookupFailureMessage(result.reason));
+      finishLookup();
+      return existing;
+    }
+    const exact = result.summary;
+    if (isCurrent()) setIncidentAssociationMessage(null);
+    setData(current => {
+      if (!current || generation !== loadGeneration.current || current.details.instance.workflowExecutionId !== workflowExecutionId)
+        return current;
+      const pendingIncidentActivityExecutionIds = current.pendingIncidentActivityExecutionIds
+        .filter(id => id !== activityExecutionId);
+      return {
+        ...current,
+        incidentActivityExecutions: combineActivityExecutions(current.incidentActivityExecutions, [exact]),
+        pendingIncidentActivityExecutionIds,
+        incidentAssociationLookupIncomplete: pendingIncidentActivityExecutionIds.length > 0,
+        incidentActivityLookupSupported: true,
+        unavailableIncidentActivityFailures: current.unavailableIncidentActivityFailures
+          .filter(failure => failure.activityExecutionId !== activityExecutionId)
+      };
+    });
+    finishLookup();
+    return resolveIncidentActivityAssociation(incident, combineActivityExecutions(activities, [exact]), data?.executableGraph);
+  }, [context, data]);
+
+  const loadMoreIncidentAssociations = async () => {
+    if (!data?.incidentActivityLookupSupported || data.pendingIncidentActivityExecutionIds.length === 0) return;
+    const generation = loadGeneration.current;
+    const workflowExecutionId = data.details.instance.workflowExecutionId;
+    const pendingIds = data.pendingIncidentActivityExecutionIds;
+    const result = await loadActiveIncidentActivitySummaries(
+      { ...data.details, activities: associationActivities },
+      activityExecutionId => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId),
+      pendingIds);
+    setData(current => {
+      if (!current || generation !== loadGeneration.current || current.details.instance.workflowExecutionId !== workflowExecutionId)
+        return current;
+      const confirmedActivityExecutionIds = new Set(current.incidentActivityExecutions.map(activity => activity.activityExecutionId));
+      const pendingIncidentActivityExecutionIds = result.pendingActivityExecutionIds
+        .filter(id => !confirmedActivityExecutionIds.has(id));
+      const unavailableIncidentActivityFailures = combineUnavailableIncidentActivityFailures(
+        current.unavailableIncidentActivityFailures.filter(failure => !confirmedActivityExecutionIds.has(failure.activityExecutionId)),
+        result.unavailableFailures.filter(failure => !confirmedActivityExecutionIds.has(failure.activityExecutionId)));
+      return {
+        ...current,
+        incidentActivityExecutions: combineActivityExecutions(
+          current.incidentActivityExecutions,
+          result.activities.filter(activity => !confirmedActivityExecutionIds.has(activity.activityExecutionId))),
+        pendingIncidentActivityExecutionIds,
+        incidentAssociationLookupIncomplete: pendingIncidentActivityExecutionIds.length > 0,
+        unavailableIncidentActivityFailures
+      };
+    });
+  };
+
+  const beginEvidenceNavigation = (retainPrepared = false) => {
+    playback.pause();
+    historyTargetRequest.current?.abort();
+    setHistoryTargetPending(false);
+    const requestId = ++incidentNavigationRequest.current;
+    if (!retainPrepared) setPreparedScope(null);
+    if (scopeNavigation.context === browserContext && scopeNavigation.loading) {
+      scopeRequest.current?.abort();
+      setScopeNavigation({ context: browserContext, loading: false, error: scopeNavigation.retaining ? "" : "Execution scope navigation was interrupted. Retry the scope." });
+    }
+    setIncidentAssociationMessage(null);
+    setFocusInputKey(null);
+    setFocusedRuntimeNodeId(null);
+    return requestId;
+  };
+
+  const requestCanvasFocus = (nodeId: string | null, moveKeyboardFocus = true) => {
+    setMoveCanvasKeyboardFocus(moveKeyboardFocus);
+    setFocusedRuntimeNodeId(nodeId);
+    if (nodeId) setCanvasFocusRequestId(current => current + 1);
+  };
+
+  const selectEvidence = (evidenceId: string | null) => {
+    timelineReturn.current = null;
+    beginEvidenceNavigation();
+    setHistoryLocation(value => ({ ...value, selection: null }));
+    setSelectedEvidenceId(evidenceId);
+  };
+
+  const selectInspectorTab = (tab: InstanceInspectorTab) => {
+    if (tab === "timeline" && timelineDocked) expandTimeline();
+    if (tab === activeInspectorTab) return;
+    beginEvidenceNavigation();
+    // Peer inspector tabs retain the exact history target; entity navigation and Back change it explicitly.
+    if (tab === "timeline") setHistoryLocation(value => ({ ...value, view: "timeline" }));
+    setActiveInspectorTab(tab);
+  };
+
+  const toggleInspectorCollapsedWithNavigation = () => {
+    beginEvidenceNavigation();
+    toggleInspectorCollapsed();
+  };
+
+  const toggleInspectorMaximizedWithNavigation = () => {
+    beginEvidenceNavigation();
+    toggleInspectorMaximized();
+  };
+
+  const openIncidentInIssues = (incidentId?: string | null, nodeId?: string | null) => {
+    timelineReturn.current = null;
+    const requestId = beginEvidenceNavigation();
+    setHistoryLocation(value => ({ ...value, selection: null }));
+    const isCurrent = () => incidentNavigationRequest.current === requestId;
+    const incident = data?.details.incidents?.find(item => item.incidentId === incidentId);
+    const existingAssociation = incident
+      ? resolveIncidentActivityAssociation(incident, associationActivities, data?.executableGraph)
+      : null;
+    const targetNodeId = nodeId ?? existingAssociation?.nodeId ?? null;
+    setSelectedEvidenceId(incidentId ?? null);
+    setActiveInspectorTab("issues");
+    requestCanvasFocus(targetNodeId);
+    focusNodePath(targetNodeId);
+    openInspector();
+
+    if (incident) {
+      void ensureIncidentActivityAssociation(incident, isCurrent).then(association => {
+        if (!isCurrent() || !association?.nodeId || association.nodeId === targetNodeId) return;
+        requestCanvasFocus(association.nodeId);
+        focusNodePath(association.nodeId);
+      });
+    }
+  };
+
+  const showIncidentActivity = (incident: IncidentStateSummary, showInput: boolean) => {
+    timelineReturn.current = null;
+    const requestId = beginEvidenceNavigation();
+    const isCurrent = () => incidentNavigationRequest.current === requestId;
+    const existingAssociation = resolveIncidentActivityAssociation(incident, associationActivities, data?.executableGraph);
+    setSelectedEvidenceId(incident.incidentId);
+    setActiveInspectorTab(existingAssociation?.activityExecution ? "activity" : "issues");
+    setFocusInputKey(showInput && existingAssociation?.activityExecution ? readIncidentInputKey(incident) : null);
+    requestCanvasFocus(existingAssociation?.nodeId ?? null);
+    focusNodePath(existingAssociation?.nodeId ?? null);
+    if (showInput) openInspector();
+    else showCanvasForSelection();
+
+    void ensureIncidentActivityAssociation(incident, isCurrent).then(association => {
+      if (!isCurrent()) return;
+      if (!association?.activityExecution && association?.nodeId && !readIncidentActivityExecutionId(incident)) {
+        setIncidentAssociationMessage("This incident identifies an activity but not an exact execution, so Studio cannot choose a repeated occurrence.");
+      }
+      if (association?.activityExecution) {
+        setSelectedEvidenceId(association.activityExecution.activityExecutionId);
+        void restoreExecutionContext(association.activityExecution, false);
+      }
+      setActiveInspectorTab(association?.activityExecution ? "activity" : "issues");
+      setFocusInputKey(showInput && association?.activityExecution ? readIncidentInputKey(incident) : null);
+      if (association?.nodeId !== existingAssociation?.nodeId) {
+        requestCanvasFocus(association?.nodeId ?? null);
+        focusNodePath(association?.nodeId ?? null);
+      }
+      if (showInput) openInspector();
+      else showCanvasForSelection();
+    });
+  };
+
+  const labelForExecution = useCallback((execution: ActivityExecutionStateSummary) => {
+    const facts = findExecutableNodeFacts(data?.executableGraph, execution);
+    const pinnedCatalogItem = facts?.catalogActivityVersionId
+      ? data?.activityCatalog.find(item => item.activityVersionId === facts.catalogActivityVersionId)
+      : undefined;
+    return resolveActivityLabel(
+      facts?.presentation,
+      pinnedCatalogItem ?? data?.activityCatalog.find(item => item.activityTypeKey === execution.activityType),
+      facts?.activityType || execution.activityType || execution.authoredActivityId);
+  }, [data?.activityCatalog, data?.executableGraph]);
+
+  const rememberExecution = useCallback((execution: ActivityExecutionStateSummary) => {
+    setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(
+      current.context === browserContext ? current.items : [], [execution]) }));
+  }, [browserContext]);
+  const rememberObservedExecutions = useCallback((
+    executions: ActivityExecutionStateSummary[],
+    scopeObservation?: { scopeId?: string; singletons: ActivityExecutionStateSummary[]; repeatedNodes: string[] }
+  ) => {
+    if (loadedBrowserContext.current !== browserContext) return;
+    if (executions.length > 0) {
+      setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(current.context === browserContext ? current.items : [], executions) }));
+    }
+    if (scopeObservation) {
+      for (const nodeId of scopeObservation.repeatedNodes) {
+        confirmedSingletons.current.delete(JSON.stringify([browserContext, scopeObservation.scopeId, nodeId]));
+      }
+      for (const singleton of scopeObservation.singletons) {
+        confirmedSingletons.current.set(JSON.stringify([browserContext, scopeObservation.scopeId, singleton.executableNodeId]), singleton);
+      }
+    }
+  }, [browserContext]);
+
+  const restoreExecutionContext = useCallback(async (execution: ActivityExecutionStateSummary, includeSelf: boolean, label?: string) => {
+    requestedScope.current = { execution, includeSelf, label };
+    scopeRequest.current?.abort();
+    const controller = new AbortController();
+    scopeRequest.current = controller;
+    const generation = loadGeneration.current;
+    const navigation = incidentNavigationRequest.current;
+    let committed = false;
+    try {
+      if (!await supportsActivityExecutionBrowsing(context) || controller.signal.aborted || generation !== loadGeneration.current || navigation !== incidentNavigationRequest.current) return;
+      const knownScopes = resolveKnownExecutionScope(workflowExecutionId, execution, {
+        graph: data?.executableGraph,
+        includeSelf,
+        label,
+        currentScopes: currentExecutionScopesRef.current,
+        knownActivities: associationActivitiesRef.current,
+        labelFor: labelForExecution
+      });
+      if (knownScopes) {
+        setBoundaryCanvas(null);
+        setExecutionScopes(current =>
+          current.context === browserContext && sameExecutionScopes(current.items, knownScopes)
+            ? current
+            : { context: browserContext, items: knownScopes });
+        focusReadyScope.current = controller;
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+        committed = true;
+        return true;
+      }
+      setScopeNavigation({ context: browserContext, loading: true, error: "" });
+      const result = await loadExecutionScope(context, workflowExecutionId, execution, {
+        graph: data?.executableGraph, includeSelf, label, labelFor: labelForExecution, signal: controller.signal,
+        isCurrent: () => generation === loadGeneration.current && navigation === incidentNavigationRequest.current
+      });
+      if (!controller.signal.aborted && navigation === incidentNavigationRequest.current) {
+        result.activities.forEach(rememberExecution);
+        const pinnedBoundaryLayout = result.layout;
+        const chain = result.scopes;
+        setBoundaryCanvas(pinnedBoundaryLayout ? { context: browserContext, layout: pinnedBoundaryLayout } : null);
+        setExecutionScopes({ context: browserContext, items: chain });
+        focusReadyScope.current = controller;
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+        committed = true;
+        return true;
+      }
+    } catch {
+      if (!controller.signal.aborted && navigation === incidentNavigationRequest.current) setScopeNavigation({ context: browserContext, loading: false, error: "Execution context could not be resolved. Retry the selection to inspect its scope." });
+    } finally {
+      if (!committed) controller.abort();
+    }
+  }, [browserContext, context, data?.executableGraph, labelForExecution, rememberExecution, workflowExecutionId]);
+
+  const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true, inspectorTab: InstanceInspectorTab = "activity", alignPlayback = true) => {
+    timelineReturn.current = null;
+    rememberExecution(execution);
+    const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
+    const effectiveAncestorId = resolveExecutionScopeAncestorId(
+      currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nodeId, execution.activityExecutionId
+    );
+    rememberedExecutions.current.set(JSON.stringify([browserContext, effectiveAncestorId, execution.executableNodeId]), execution);
+    beginEvidenceNavigation();
+    setSelectedEvidenceId(execution.activityExecutionId);
+    setHistoryLocation(value => ({ ...value, selection: null }));
+    setActiveInspectorTab(inspectorTab);
+    if (focusCanvas) requestCanvasFocus(nodeId);
+    if (updateScope && executionScope?.executableNodeId === execution.executableNodeId && executionScope.activityExecutionId !== execution.activityExecutionId)
+      void restoreExecutionContext(execution, true);
+    openInspector();
+    if (alignPlayback && playback.window && inspectorTab === "activity") void playback.inspectOccurrence(execution.activityExecutionId);
+  };
+
+  const selectActivityExecution = (activityExecutionId: string, inspectorTab: InstanceInspectorTab = "activity") => {
+    const known = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
+    if (!known) return;
+    selectBrowserExecution(known, true, inspectorTab !== "timeline", inspectorTab);
+    focusNodePath(findExecutableGraphNodeId(data?.executableGraph, known) ?? known.authoredActivityId);
+    void restoreExecutionContext(known, false);
+  };
+
+  const selectTimelineActivity = (execution: ActivityExecutionStateSummary) => {
+    playback.pause();
+    selectBrowserExecution(execution, true, true, "activity");
+    focusNodePath(findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId);
+    void restoreExecutionContext(execution, false);
+  };
+
+  const enterChildExecution = (entry: ActivityExecutionBrowseEntry) => {
+    const execution = entry.execution;
+    selectBrowserExecution(execution, true, true, "activity", false);
+    const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
+    const root = data?.definitionVersion?.state.rootActivity;
+    const node = root ? findActivityNode(root, nodeId, data?.activityCatalog) : null;
+    const firstChild = node ? getChildSlots(node, data?.activityCatalog)[0]?.activities[0] : null;
+    focusNodePath(firstChild?.nodeId ?? nodeId);
+    const occurrence = execution.iterationId && entry.iterationPosition && !entry.attempt ? `Iteration ${entry.iterationPosition}` : `Execution ${entry.position}`;
+    void restoreExecutionContext(execution, Boolean(firstChild) || !node, `${labelForExecution(execution)} · ${occurrence}`);
+    if (playback.window) void playback.inspectOccurrence(execution.activityExecutionId, Boolean(firstChild) || !node);
+  };
+
+  const selectGraphActivity = (nodeId: string) => {
+    timelineReturn.current = null;
+    beginEvidenceNavigation();
+    setHistoryLocation(value => ({ ...value, selection: null }));
+    const node = data?.executableGraph?.factsByNodeId.get(nodeId);
+    const matchingScope = findMatchingExecutionScope(currentExecutionScopes, node?.executableNodeId);
+    const targetAncestorId = matchingScope
+      ? currentExecutionScopes[matchingScope.index - 1]?.execution.activityExecutionId
+      : resolveExecutionScopeAncestorId(currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nodeId, undefined);
+    const remembered = matchingScope?.entry.execution
+      ?? rememberedExecutions.current.get(JSON.stringify([browserContext, targetAncestorId, node?.executableNodeId]))
+      ?? confirmedSingletons.current.get(JSON.stringify([browserContext, targetAncestorId, node?.executableNodeId]));
+    if (currentExecutionScopes.length > 0 && rootActivity && findActivityNode(rootActivity, nodeId, data?.activityCatalog)) {
+      const trimmed = trimExecutionScopesForTarget(currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nodeId);
+      if (trimmed.length !== currentExecutionScopes.length) {
+        scopeRequest.current?.abort();
+        requestedScope.current = null;
+        setBoundaryCanvas(null);
+        setExecutionScopes({ context: browserContext, items: trimmed });
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+      }
+    }
+    setSelectedEvidenceId(remembered?.activityExecutionId ?? nodeId);
+    setActiveInspectorTab("activity");
+    openInspector();
+    if (remembered && playback.window) void playback.inspectOccurrence(remembered.activityExecutionId, false, true);
+    else playback.pause("Choose a recorded execution to change the playback position.");
+  };
+
+  const moveScopeOccurrence = async (execution: ActivityExecutionStateSummary) => {
+    const navigation = beginEvidenceNavigation(true);
+    const retainedNode = selectedActivity?.executableNodeId;
+    const retainedCanvasNode = selectedActivity ? findExecutableGraphNodeId(data?.executableGraph, selectedActivity) ?? selectedActivity.executableNodeId : null;
+    requestedScope.current = { execution, includeSelf: true, moveOccurrence: true };
+    scopeRequest.current?.abort();
+    const controller = new AbortController();
+    scopeRequest.current = controller;
+    const generation = loadGeneration.current;
+    const isCurrent = () => !controller.signal.aborted && navigation === incidentNavigationRequest.current && generation === loadGeneration.current;
+    const retainPrevious = scopeNavigation.context !== browserContext || !scopeNavigation.error || Boolean(scopeNavigation.retaining);
+    let committed = false;
+    try {
+      if (!await supportsActivityExecutionBrowsing(context) || !isCurrent()) return;
+      setScopeNavigation({ context: browserContext, loading: true, error: "", retaining: retainPrevious });
+      const retainedOutsideGraph = Boolean(
+        retainedNode
+        && retainedNode !== execution.executableNodeId
+        && !findExecutableNodeFacts(data?.executableGraph, { executableNodeId: retainedNode })
+      );
+      const scope = await loadExecutionScope(context, workflowExecutionId, execution, {
+        graph: data?.executableGraph, includeSelf: true,
+        loadBoundaryLayout: !findExecutableNodeFacts(data?.executableGraph, execution) || retainedOutsideGraph,
+        labelFor: labelForExecution, signal: controller.signal, isCurrent
+      });
+      if (!isCurrent()) return;
+      const page = retainedNode && retainedNode !== execution.executableNodeId ? await browseActivityExecutions(context, workflowExecutionId,
+        { executableNodeId: retainedNode, ancestorActivityExecutionId: execution.activityExecutionId, limit: 1 }, controller.signal) : undefined;
+      if (!isCurrent()) return;
+      // A repeated child requires an explicit choice inside the new scope.
+      const selected = page ? page.totalCount === 1 ? page.items[0]?.execution ?? null : null : execution;
+      let prepared: PreparedAttachedExecution = { contextIdentity: runtimeValueContextId(context), workflowExecutionId,
+        execution: null, inspection: null, values: new Map(), page };
+      if (selected && data?.executableGraph) {
+        const { prepareAttachedExecution } = await import("./prepareAttachedExecution");
+        if (!isCurrent()) return;
+        const owner = selected.executableNodeId === execution.executableNodeId ? scope.scopes.at(-2)?.execution : execution;
+        prepared = await prepareAttachedExecution(context, workflowExecutionId, selected, scope, data.executableGraph,
+          selected.authoredActivityId, controller.signal, owner?.authoredActivityId, undefined, data.activityCatalog, false);
+      }
+      if (!isCurrent()) return;
+      const scopePage = scope.pages.get(execution.activityExecutionId) ?? await browseActivityExecutions(context, workflowExecutionId,
+        { executableNodeId: execution.executableNodeId, parentActivityExecutionId: execution.parentActivityExecutionId ?? undefined,
+          anchorActivityExecutionId: execution.activityExecutionId }, controller.signal);
+      prepared = { ...prepared, scopePage: { executionId: execution.activityExecutionId, page: scopePage } };
+      if (!isCurrent()) return;
+      scope.activities.forEach(rememberExecution);
+      if (selected) {
+        rememberExecution(selected);
+        rememberedExecutions.current.set(JSON.stringify([browserContext, execution.activityExecutionId, selected.executableNodeId]), selected);
+      }
+      // Commit the destination together, after its scoped selection and evidence are ready.
+      setBoundaryCanvas(scope.layout ? { context: browserContext, layout: scope.layout } : null);
+      setExecutionScopes({ context: browserContext, items: scope.scopes });
+      setPreparedScope({ context: browserContext, scopeId: execution.activityExecutionId, nodeId: retainedNode ?? execution.executableNodeId, prepared });
+      setSelectedEvidenceId(selected?.activityExecutionId ?? retainedCanvasNode ?? execution.authoredActivityId);
+      focusReadyScope.current = controller;
+      setScopeNavigation({ context: browserContext, loading: false, error: "" });
+      committed = true;
+      if (selected && playback.window) void playback.inspectOccurrence(selected.activityExecutionId, selected.activityExecutionId === execution.activityExecutionId);
+    } catch (error) {
+      if (!isCurrent()) return;
+      const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+      const denied = status === 401 || status === 403 || status === 404;
+      if (denied) setPreparedScope(null);
+      setScopeNavigation({ context: browserContext, loading: false,
+        error: denied ? "This execution scope is unavailable in the current context." : "This occurrence's activity data could not be loaded. Retry the scope.",
+        retaining: retainPrevious && !denied });
+    } finally {
+      if (!committed) controller.abort();
+    }
+  };
+
+  const openExecutionIssues = (execution: ActivityExecutionStateSummary) => {
+    rememberExecution(execution);
+    beginEvidenceNavigation();
+    setSelectedEvidenceId(execution.activityExecutionId);
+    setActiveInspectorTab("issues");
+    openInspector();
+  };
+
+  const browserNodeFacts = findExecutableNodeFacts(data?.executableGraph, selectedActivity)
+    ?? (selectedEvidenceId ? data?.executableGraph?.factsByNodeId.get(selectedEvidenceId) : undefined);
+  const boundaryNode = boundaryCanvas?.context === browserContext
+    ? boundaryCanvas.layout.nodes.find(node => node.executableNodeId === selectedEvidenceId) : undefined;
+  const browserNodeIdentity = browserNodeFacts ?? selectedActivity ?? (boundaryNode ? {
+    executableNodeId: boundaryNode.executableNodeId, activityType: boundaryNode.activityType ?? "Activity"
+  } : undefined);
+  const selectedIncident = data?.details.incidents?.find(incident => incident.incidentId === selectedEvidenceId);
+  const incidentExecutionId = selectedIncident ? readIncidentActivityExecutionId(selectedIncident) : null;
+  const browserExactId = selectedActivity && (selectedActivity.activityExecutionId === selectedEvidenceId || selectedActivity.activityExecutionId === incidentExecutionId)
+    ? selectedActivity.activityExecutionId : undefined;
+  const browserGraphNodeId = browserNodeIdentity
+    ? findExecutableGraphNodeId(data?.executableGraph, browserNodeIdentity)
+      ?? (selectedEvidenceId && data?.executableGraph?.factsByNodeId.has(selectedEvidenceId) ? selectedEvidenceId : null)
+    : null;
+  const browserAncestorId = resolveExecutionScopeAncestorId(
+    currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, browserGraphNodeId, browserExactId
+  );
+  function selectHistoryTarget(selection: RunHistorySelection, focusInspector = true) {
+    setFocusHistoryInspector(focusInspector);
+    beginEvidenceNavigation();
+    if (selection) setTimelineMode("events");
+    if (selection?.kind !== historyLocation.selection?.kind || selection?.id !== historyLocation.selection?.id)
+      historyBack.current.push({ location: historyLocation, evidenceId: selectedEvidenceId, focus: document.activeElement instanceof HTMLElement ? document.activeElement : null });
+    setHistoryLocation(value => ({ ...value, selection }));
+    setHistoryOwnerMessage(""); setActiveInspectorTab("activity"); openInspector();
+  }
+  function backFromHistory() {
+    timelineReturn.current = null;
+    beginEvidenceNavigation(true);
+    const previous = historyBack.current.pop();
+    if (previous && previous.evidenceId !== selectedEvidenceId) {
+      if (previous.evidenceId) selectActivityExecution(previous.evidenceId);
+      else setSelectedEvidenceId(null);
+    }
+    setHistoryLocation(previous?.location ?? { ...historyLocation, selection: null });
+    if (previous?.focus) requestAnimationFrame(() => { if (previous.focus?.isConnected && !previous.focus.closest("[hidden]")) previous.focus.focus(); });
+    setHistoryOwnerMessage(""); setActiveInspectorTab("activity");
+  }
+  function focusHistoryExecution(activityExecutionId: string) {
+    if (timelineDocked) expandTimeline();
+    setTimelineMode("events");
+    beginEvidenceNavigation(true);
+    setHistoryLocation(value => ({ ...value, view: "timeline", filters: { ...value.filters, activityExecutionId, includeDescendants: false } }));
+  }
+  async function showHistoryActivity(activityExecutionId: string, keepTarget?: RunHistorySelection) {
+    const selection = currentHistoryLocation.current.selection;
+    const returnTarget = selection?.kind === "event" ? { context: browserContext, historyEventId: selection.id, activityExecutionId } : null;
+    const known = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
+    if (known) {
+      selectActivityExecution(activityExecutionId);
+      timelineReturn.current = returnTarget;
+      if (keepTarget) setHistoryLocation(value => ({ ...value, selection: keepTarget }));
+      return;
+    }
+    const navigation = incidentNavigationRequest.current, generation = loadGeneration.current;
+    try {
+      const inspection = await getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId);
+      if (generation !== loadGeneration.current || navigation !== incidentNavigationRequest.current || !observationIsCurrent()) return;
+      if (inspection.workflowExecutionId !== workflowExecutionId || inspection.activityExecutionId !== activityExecutionId) throw new Error("Execution identity mismatch");
+      const execution = activityExecutionSummaryFromInspection(inspection);
+      selectBrowserExecution(execution); focusNodePath(findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId);
+      void restoreExecutionContext(execution, false);
+      timelineReturn.current = returnTarget;
+      if (keepTarget) setHistoryLocation(value => ({ ...value, selection: keepTarget }));
+    } catch {
+      if (generation === loadGeneration.current && navigation === incidentNavigationRequest.current)
+        setHistoryOwnerMessage("The exact owning execution is unavailable. Its recorded event remains inspectable.");
+    }
+  }
+  async function openHistoryEvent(event: Pick<RuntimeHistoryEvent, "historyEventId" | "activityExecutionId">, retainReturn = false) {
+    if (!retainReturn) timelineReturn.current = null;
+    setTimelineMode("events");
+    playback.pause(event.activityExecutionId ? undefined : "This event has no activity occurrence. Playback remains at its confirmed position.");
+    const navigation = ++incidentNavigationRequest.current;
+    scopeRequest.current?.abort(); historyTargetRequest.current?.abort();
+    if (event.activityExecutionId && playback.window) {
+      const confirmed = await playback.selectOccurrence(event.activityExecutionId, event.historyEventId);
+      if (confirmed !== false) return;
+    }
+    if (navigation !== incidentNavigationRequest.current) return;
+    const controller = new AbortController(); historyTargetRequest.current = controller;
+    setHistoryTargetPending(true); setHistoryOwnerMessage("");
+    const generation = loadGeneration.current, identity = runtimeValueContextId(context);
+    const current = () => !controller.signal.aborted && navigation === incidentNavigationRequest.current
+      && generation === loadGeneration.current && identity === runtimeValueContextId(context) && observationIsCurrent();
+    try {
+      const value = await getWorkflowHistoryEvent(context, workflowExecutionId, event.historyEventId, controller.signal);
+      if (!current()) return;
+      timelineReturn.current = null;
+      setPreparedHistoryEvent({ contextIdentity: identity, workflowExecutionId, historyEventId: event.historyEventId, value });
+      setFocusHistoryInspector(false);
+      setHistoryLocation(previous => ({ ...previous, selection: { kind: "event", id: event.historyEventId } }));
+      if (value.event.activityExecutionId) {
+        const known = associationActivities.find(item => item.activityExecutionId === value.event.activityExecutionId);
+        const nodeId = known
+          ? findExecutableGraphNodeId(data?.executableGraph, known) ?? known.authoredActivityId
+          : value.event.executableNodeId
+            ? [...(data?.executableGraph?.factsByNodeId.entries() ?? [])].find(([, facts]) => facts.executableNodeId === value.event.executableNodeId)?.[0] ?? null
+            : null;
+        if (nodeId) {
+          requestCanvasFocus(nodeId, false);
+          focusNodePath(nodeId);
+        }
+      }
+      setHistoryOwnerMessage(""); setActiveInspectorTab("activity"); openInspector();
+      if (value.event.activityExecutionId && !playback.window) void playback.selectOccurrence(value.event.activityExecutionId, event.historyEventId);
+    } catch (error) {
+      if (current()) {
+        const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+        if (status === 401 || status === 403 || status === 404 || status === 409) timelineReturn.current = null;
+        if (status === 401 || status === 403) playback.invalidate("Recorded event inspection is unavailable with your current access.");
+        else setHistoryOwnerMessage("The requested recorded event could not be loaded. The previous confirmed selection remains visible.");
+      }
+    } finally { if (current()) setHistoryTargetPending(false); }
+  }
+  const labelForHistoryEvent = (event: RuntimeHistoryEvent) => {
+    const execution = associationActivities.find(item => item.activityExecutionId === event.activityExecutionId);
+    if (execution) return labelForExecution(execution);
+    if (event.executableNodeId && data?.executableGraph) {
+      const facts = [...data.executableGraph.factsByNodeId.values()].find(item => item.executableNodeId === event.executableNodeId);
+      if (facts) {
+        const pinnedCatalogItem = data.activityCatalog.find(item => item.activityVersionId === facts.catalogActivityVersionId);
+        return resolveActivityLabel(facts.presentation, pinnedCatalogItem ??
+          data.activityCatalog.find(item => item.activityTypeKey === facts.activityType), facts.activityType);
+      }
+    }
+    return null;
+  };
+  const preparePlaybackSelection = useCallback(async (entry: PlaybackOccurrence, target: PlaybackTarget, operation: PlaybackOperation): Promise<PreparedPlaybackSelection> => {
+    const navigation = ++incidentNavigationRequest.current, generation = loadGeneration.current;
+    scopeRequest.current?.abort(); historyTargetRequest.current?.abort();
+    setHistoryTargetPending(false);
+    const current = () => operation.isCurrent() && navigation === incidentNavigationRequest.current
+      && generation === loadGeneration.current && observationIsCurrent();
+    const eventId = target.historyEventId ?? entry.historyEventId;
+    const value = await getWorkflowHistoryEvent(context, workflowExecutionId, eventId, operation.signal);
+    if (!current()) throw new DOMException("Obsolete playback selection", "AbortError");
+    if (value.event.activityExecutionId !== entry.activityExecutionId) throw new ActivityPlaybackIdentityError();
+    let execution: ActivityExecutionStateSummary | null = null;
+    let inspection: Awaited<ReturnType<typeof getActivityExecutionInspection>> | null = null;
+    let scope: Awaited<ReturnType<typeof loadExecutionScope>> | null = null;
+    let prepared: PreparedAttachedExecution | null = null;
+    let limitation = "";
+    try {
+      inspection = await getActivityExecutionInspection(context, workflowExecutionId, entry.activityExecutionId, operation.signal);
+      if (!current()) throw new DOMException("Obsolete playback selection", "AbortError");
+      if (inspection.workflowExecutionId !== workflowExecutionId || inspection.activityExecutionId !== entry.activityExecutionId)
+        throw new ActivityPlaybackIdentityError();
+      execution = { ...activityExecutionSummaryFromInspection(inspection), provenance: inspection.provenance,
+        parentActivityExecutionId: inspection.provenance.parentActivityExecutionId, iterationId: inspection.provenance.iterationId,
+        executionSequence: inspection.executionSequence };
+      prepared = { contextIdentity: runtimeValueContextId(context), workflowExecutionId, execution, inspection, values: new Map() };
+      try {
+        scope = await loadExecutionScope(context, workflowExecutionId, execution, { graph: data?.executableGraph,
+          includeSelf: !!target.includeSelfScope, labelFor: labelForExecution, signal: operation.signal, isCurrent: current });
+        if (data?.executableGraph) {
+          const { prepareAttachedExecution } = await import("./prepareAttachedExecution");
+          prepared = await prepareAttachedExecution(context, workflowExecutionId, execution, scope, data.executableGraph,
+            execution.authoredActivityId, operation.signal, scope.scopes.at(-1)?.execution.authoredActivityId, undefined, data.activityCatalog, false);
+        } else limitation = "The pinned diagram is unavailable. Recorded activity occurrences remain inspectable.";
+      } catch (error) {
+        if (!current()) throw error;
+        const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+        if (status === 403 || status === 404 || error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError
+          || error instanceof Error && /Pinned boundary structure|Recorded execution ancestry/.test(error.message)) {
+          scope = null; limitation = "The pinned diagram or exact ancestry is unavailable. No diagram traversal is inferred.";
+        } else throw error;
+      }
+    } catch (error) {
+      if (!current()) throw error;
+      const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+      if (status === 403 || status === 404 || error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError)
+        limitation = "Owning execution details and diagram highlighting are unavailable. Its recorded occurrence remains inspectable.";
+      else throw error;
+    }
+    if (!current()) throw new DOMException("Obsolete playback selection", "AbortError");
+    return { limitation, commit: () => {
+      if (!current()) return;
+      if (!target.inspectActivity) timelineReturn.current = null;
+      const controller = new AbortController();
+      operation.signal.addEventListener("abort", () => controller.abort(), { once: true });
+      scopeRequest.current = controller; focusReadyScope.current = controller;
+      if (execution) {
+        rememberExecution(execution);
+        if (target.rememberChoice) rememberedExecutions.current.set(JSON.stringify([browserContext, scope?.scopes.at(-1)?.execution.activityExecutionId, execution.executableNodeId]), execution);
+      }
+      scope?.activities.forEach(rememberExecution);
+      setBoundaryCanvas(scope?.layout ? { context: browserContext, layout: scope.layout } : null);
+      setExecutionScopes({ context: browserContext, items: scope?.scopes ?? [] });
+      setPreparedScope(execution && prepared ? { context: browserContext, scopeId: scope?.scopes.at(-1)?.execution.activityExecutionId, nodeId: execution.executableNodeId, prepared } : null);
+      if (!target.preserveSelection || currentHistoryLocation.current.selection?.kind === "event" && currentHistoryLocation.current.selection.id === eventId)
+        setPreparedHistoryEvent({ contextIdentity: runtimeValueContextId(context), workflowExecutionId, historyEventId: eventId, value });
+      setSelectedEvidenceId(entry.activityExecutionId);
+      setFocusHistoryInspector(false); setHistoryOwnerMessage("");
+      const inspectActivity = Boolean(target.inspectActivity) || (timelineModeRef.current === "activities" && !target.historyEventId);
+      if (!target.preserveInspector) setActiveInspectorTab("activity");
+      if (!target.preserveSelection) setHistoryLocation(previous => ({ ...previous, selection: inspectActivity && execution ? null : { kind: "event", id: eventId } }));
+      setScopeNavigation({ context: browserContext, loading: false, error: "" });
+      const nodeId = execution && scope ? findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId : null;
+      if (!target.skipCanvasFocus) requestCanvasFocus(nodeId, false);
+      if (nodeId) focusNodePath(nodeId); else setFrames([]);
+      if (!target.preserveInspector && (target.inspectActivity || currentHistoryLocation.current.view !== "diagram")) openInspector();
+    } };
+  }, [browserContext, context, data?.activityCatalog, data?.executableGraph, focusNodePath, labelForExecution, observationIsCurrent, openInspector, rememberExecution, workflowExecutionId]);
+  const initialPlaybackSelection = parsedInitialHistory.selection;
+  const playback = useActivityPlayback({ context, workflowExecutionId, enabled: state === "ready" && !!data && playbackOpen,
+    activityExecutionId: historyLocation.filters.activityExecutionId, includeDescendants: historyLocation.filters.includeDescendants,
+    initialActivityExecutionId: selectedActivity?.activityExecutionId ?? initialActivityExecutionId,
+    preserveInitialInspection: !!initialPlaybackSelection || !!initialActivityExecutionId || !!selectedActivity || !!historyLocation.selection,
+    initialSelectionKey: JSON.stringify([initialHistoryKey, initialHistoryNavigation]),
+    resolveInitialSelection: initialPlaybackSelection ? async signal => {
+      try {
+        if (initialPlaybackSelection.kind === "event") {
+          const value = await getWorkflowHistoryEvent(context, workflowExecutionId, initialPlaybackSelection.id, signal);
+          return value.event.activityExecutionId ? { activityExecutionId: value.event.activityExecutionId, historyEventId: value.event.historyEventId }
+            : { note: "The recorded inspection has no activity owner. Playback opens at the first available activity; that inspection is unchanged." };
+        }
+        const id = (await getWorkflowHistoryBookmark(context, workflowExecutionId, initialPlaybackSelection.id, signal)).bookmark.bookmark.identity.activityExecutionId;
+        return id ? { activityExecutionId: id } : { note: "The recorded inspection has no activity owner. Playback opens at the first available activity; that inspection is unchanged." };
+      } catch (error) {
+        if (typeof error === "object" && error !== null && "status" in error && error.status === 404)
+          return { note: "The existing recorded inspection has no available activity anchor. Playback opens at the first available activity; that inspection is unchanged." };
+        throw error;
+      }
+    } : undefined,
+    prepareSelection: preparePlaybackSelection,
+    onUnavailable: () => {
+      timelineReturn.current = null;
+      historyTargetRequest.current?.abort(); setHistoryTargetPending(false);
+      setPreparedHistoryEvent(undefined); setPreparedScope(null); setSelectedEvidenceId(null); requestCanvasFocus(null);
+      setHistoryLocation(previous => previous.selection ? { ...previous, selection: null } : previous);
+    } });
+  const labelForPlayback = (entry: PlaybackOccurrence) => labelForHistoryEvent({ activityExecutionId: entry.activityExecutionId,
+    executableNodeId: entry.executableNodeId } as RuntimeHistoryEvent) ?? "Recorded activity execution";
+  const pauseForWorkbenchInteraction = (target: EventTarget | null) => {
+    if (target instanceof Element && target.closest(".wf-instance-inspector, .wf-run-diagram-view")) playback.pause();
+  };
+  const scopeBlocked = scopeNavigation.context === browserContext && (scopeNavigation.loading || Boolean(scopeNavigation.error));
+  const retainScope = scopeNavigation.context === browserContext && Boolean(scopeNavigation.retaining);
+  const prepared = preparedScope?.context === browserContext && preparedScope.scopeId === executionScope?.activityExecutionId
+    && preparedScope.nodeId === browserNodeIdentity?.executableNodeId ? preparedScope.prepared : undefined;
+  const knownConfirmedExecution = browserNodeIdentity && browserExactId && isKnownExecutionInScope(
+    workflowExecutionId,
+    browserNodeIdentity.executableNodeId,
+    selectedActivity,
+    browserAncestorId,
+    associationActivities
+  ) ? selectedActivity : undefined;
+  const browserActivityContent = scopeBlocked && !retainScope ? <p className="wf-instance-note" role="status">{scopeNavigation.loading ? "Resolving execution scope…" : scopeNavigation.error}</p> : browserNodeIdentity && data ? <Suspense fallback={<p className="wf-instance-note" role="status">Loading execution browser…</p>}><ActivityExecutionInspectionPanel
+    key={`${browserContext}:${browserNodeIdentity.executableNodeId}`}
+    context={context} workflowExecutionId={workflowExecutionId} nodeId={browserNodeIdentity.executableNodeId}
+    nodeLabel={resolveActivityLabel(
+      browserNodeFacts?.presentation,
+      data.activityCatalog.find(item => item.activityTypeKey === browserNodeIdentity.activityType),
+      shortTypeName(browserNodeIdentity.activityType) ?? browserNodeIdentity.activityType
+    )}
+    exactId={browserExactId} seed={browserExactId ? selectedActivity : null} ancestorId={browserAncestorId} refreshKey={evidenceRevision} requireExplicitSelection
+    labelFor={labelForExecution} onSelect={value => selectBrowserExecution(value, true, false)} onEnter={enterChildExecution}
+    onIncident={openExecutionIssues}
+    choiceFocus={occurrenceChoiceFocus} captureFocusOperation={captureFocusOperation}
+    initialPage={!browserExactId || prepared?.execution?.activityExecutionId === browserExactId ? prepared?.page : undefined}
+    confirmedExecution={prepared?.execution ?? knownConfirmedExecution}
+    onUnavailable={() => setPreparedScope(current => current?.prepared === prepared ? null : current)}
+    renderDetails={(execution, navigation, children) => <WorkflowActivityExecutionDetails context={context} activity={execution}
+      historyRefreshKey={historyResourceRefreshKey} onSelectHistory={selectHistoryTarget} onFocusHistory={focusHistoryExecution}
+      onOpenIncident={openIncidentInIssues} navigate={navigate}
+      backendSession={backendSession} runRelatedLinks={runRelatedLinks}
+      refreshKey={evidenceRevision}
+      activityCatalog={data.activityCatalog} executableNodeFacts={findExecutableNodeFacts(data.executableGraph, execution)}
+      expressionEditors={expressionEditors} focusInputKey={focusInputKey} onSelectEvidence={selectActivityExecution}
+      executionNavigation={navigation} childExecutions={children} prepared={prepared} />}
+  /></Suspense> : undefined;
+
+  useEffect(() => {
+    const id = initialActivityExecutionId?.trim();
+    if (!data || !id || appliedInitialActivityExecutionId.current === id) return;
+    const activity = associationActivities.find(item => item.activityExecutionId === id);
+    if (!activity) return;
+    appliedInitialActivityExecutionId.current = id;
+    const nodeId = findExecutableGraphNodeId(data.executableGraph, activity) ?? activity.authoredActivityId;
+    requestCanvasFocus(nodeId);
+    focusNodePath(nodeId);
+    void restoreExecutionContext(activity, false);
+  }, [associationActivities, data, focusNodePath, initialActivityExecutionId, restoreExecutionContext]);
+
+  const refreshWorkspace = () => {
+    setRunRefreshVersion(version => version + 1);
+    playback.pause(); historyTargetRequest.current?.abort();
+    confirmedSingletons.current.clear();
+    loadGeneration.current++;
+    scopeRequest.current?.abort(); incidentNavigationRequest.current++;
+    latestIncidentActivityLookupById.current.clear(); setIncidentAssociationMessage(null);
+    setScopeNavigation(current => current.context === browserContext && current.loading
+      ? { context: browserContext, loading: false, error: "Execution scope resolution was interrupted by refresh. Retry the scope." } : current);
+    setSelectedEvidenceId(current => data?.details.incidents?.some(incident => incident.incidentId === current) ? null : current);
+    reloadDetailsRequested.current = true; refreshObservation();
+  };
+
+  const runViewTabs: StudioTabItem[] = [
+    { id: "timeline", label: "Timeline", icon: <ListTree size={15} />, panelIndex: null },
+    { id: "diagram", label: "Diagram", icon: <WorkflowIcon size={15} />, panelIndex: null }
+  ];
+  const selectRunView = (id: string) => {
+    if (id === "timeline") {
+      if (timelineDocked) expandTimeline();
+      beginEvidenceNavigation(); setHistoryLocation(value => ({ ...value, view: "timeline" }));
+      const anchor = timelineReturn.current;
+      if (!historyLocation.selection && activeInspectorTab === "activity" && anchor?.context === browserContext
+        && anchor.activityExecutionId === selectedEvidenceId && observationIsCurrent()) {
+        void openHistoryEvent(anchor, true);
+        return;
+      }
+      const cursor = playback.cursor;
+      if (!historyLocation.selection && activeInspectorTab === "activity" && cursor && cursor.activityExecutionId === selectedEvidenceId
+        && !playback.outsideSelection && playback.phase !== "failed" && !playback.error)
+        void playback.selectOccurrence(cursor.activityExecutionId, cursor.historyEventId);
+      return;
+    }
+    beginEvidenceNavigation(); showCanvasForSelection(); setHistoryLocation(value => ({ ...value, view: "diagram" }));
+  };
+
+  const definitionId = currentData?.details.instance.definitionId?.trim();
+  const runPageTitle = !currentData
+    ? "Run"
+    : unattributedChildDefinition ? runDisplayName ?? "Child run"
+    : runDisplayName?.trim() && runDisplayName.trim() !== definitionId
+      ? formatRunPageTitle(runDisplayName, definitionId)
+      : definitionId ? `Run · ${definitionId}` : "Run";
+  const runHistoryBackLocation = getRunHistoryBackLocation(initialReturnTo);
+  const hasExecutionScopeContext = currentExecutionScopes.length > 0
+    || (scopeNavigation.context === browserContext && ((scopeNavigation.loading && showScopeNavigationLoading) || Boolean(scopeNavigation.error)));
+  const executionBreadcrumb = hasExecutionScopeContext ? (
+    <nav className="wf-execution-scope" aria-label="Execution scope">
+      <StudioButton type="button" onClick={() => {
+        beginEvidenceNavigation();
+        scopeRequest.current?.abort();
+        setBoundaryCanvas(null);
+        requestedScope.current = null;
+        setExecutionScopes({ context: browserContext, items: [] });
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+        setFrames([]);
+      }}>All executions</StudioButton>
+      {currentExecutionScopes.map(scope => (
+        <StudioButton type="button" key={scope.execution.activityExecutionId} onClick={() => {
+          selectBrowserExecution(scope.execution);
+          focusNodePath(findExecutableGraphNodeId(data?.executableGraph, scope.execution) ?? scope.execution.authoredActivityId);
+          void restoreExecutionContext(scope.execution, true);
+        }}>
+          <ChevronRight size={13} />{scope.label}
+        </StudioButton>
+      ))}
+      {executionScope && (!scopeBlocked || retainScope) ? (
+        <Suspense fallback={null}>
+          <ExecutionScopeNavigator
+            choiceFocus={scopeOccurrenceFocus}
+            captureFocusOperation={captureFocusOperation}
+            context={context}
+            execution={executionScope}
+            label={labelForExecution(executionScope)}
+            refreshKey={evidenceRevision}
+            initialPage={prepared?.scopePage?.executionId === executionScope.activityExecutionId ? prepared.scopePage.page : undefined}
+            onIncident={openExecutionIssues}
+            onSelect={execution => void moveScopeOccurrence(execution)}
+            onUnavailable={() => {
+              beginEvidenceNavigation();
+              setScopeNavigation({ context: browserContext, loading: false, error: "This execution scope is unavailable in the current context." });
+            }}
+          />
+        </Suspense>
+      ) : null}
+      {scopeNavigation.context === browserContext && ((scopeNavigation.loading && showScopeNavigationLoading) || scopeNavigation.error) ? (
+        <span role="status">
+          {scopeNavigation.loading
+            ? retainScope ? "Loading requested occurrence… Showing the previous scope." : "Resolving execution scope…"
+            : scopeNavigation.error}
+          {scopeNavigation.error ? (
+            <StudioButton type="button" onClick={() => {
+              const request = requestedScope.current;
+              if (!request) return;
+              if (request.moveOccurrence) void moveScopeOccurrence(request.execution);
+              else void restoreExecutionContext(request.execution, request.includeSelf, request.label);
+            }}>Retry execution scope</StudioButton>
+          ) : null}
+        </span>
+      ) : null}
+    </nav>
+  ) : null;
+
+  const activeBoundaryLayout = boundaryCanvas?.context === browserContext ? boundaryCanvas.layout : undefined;
+  const canvasScopeOwner = rootActivity && currentData
+    ? resolveScope(rootActivity, frames, currentData.activityCatalog)?.owner ?? rootActivity
+    : null;
+  const canvasExecutionScope = activeBoundaryLayout || !canvasScopeOwner || !currentData
+    ? executionScope
+    : trimExecutionScopesForTarget(currentExecutionScopes, rootActivity, currentData.executableGraph, currentData.activityCatalog, canvasScopeOwner.nodeId).at(-1)?.execution;
+  const historyWorkspace = !timelineDocked && historyLocation.view === "timeline";
+  const runHistoryEnabled = timelineDocked ? !timelineCollapsed : historyWorkspace;
+
+  return (
+    <>
+      <div className="wf-detail-header" role="group" aria-label="Run workspace actions">
+        <div className="wf-detail-header__identity">
+          <><StudioShellBreadcrumbs items={[{ href: runHistoryBackLocation, label: "Runs" }]} current={runPageTitle}
+          renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />
+          <>
+            <h2 className="wf-detail-header__title" title={runPageTitle}>{runPageTitle}</h2>
+            {currentData ? <WorkflowStatusBadge status={currentData.details.instance.status} subStatus={currentData.details.instance.subStatus} /> : null}
+          </></>
+        </div>
+        <div className="wf-detail-header__actions">
+          {currentData ? (
+            <StudioButton
+              type="button"
+              size="sm"
+              className="wf-playback-toggle-btn"
+              aria-pressed={playbackOpen}
+              aria-label={playbackOpen ? "Hide playback" : "Playback"}
+              title={playbackOpen ? "Hide activity playback controls" : "Step through activity execution playback"}
+              onClick={() => setPlaybackOpen(open => {
+                if (open) playback.pause();
+                return !open;
+              })}
+            >
+              <Play size={14} aria-hidden="true" /> Playback
+            </StudioButton>
+          ) : null}
+          <StudioButton size="sm" aria-label="Refresh execution" title="Refresh execution" onClick={refreshWorkspace}><RefreshCw size={14} aria-hidden="true" /> Refresh</StudioButton>
+          {currentData && selectedDefinitionCanBeReviewed && selectedDefinitionId ? <StudioButton size="sm"
+            onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} aria-hidden="true" /> Open definition</StudioButton> : null}
+          {currentData && instanceAction ? <OverflowMenu ariaLabel="More run actions" items={[{
+            id: "explain-run", label: <><Sparkles size={13} aria-hidden="true" /> Explain</>,
+            onSelect: () => dispatchAiAction(ai, instanceAction, {
+              workflowExecutionId: currentData.details.instance.workflowExecutionId,
+              activityExecutionId: selectedActivity?.activityExecutionId ?? null,
+              status: currentData.details.instance.status,
+              attached: Boolean(weaver?.inspection?.runs)
+            })
+          }]} /> : null}
+        </div>
+        {operator.status}
+        <RunParkRecovery key={workflowExecutionId} context={context} workflowExecutionId={workflowExecutionId}
+          inspect={observation.canInteract && currentData?.details.instance.status === "Faulted"}
+          refreshVersion={runRefreshVersion} refreshRun={refreshRun} />
+      </div>
+      {operator.dialog}
+      {observation.canInteract && currentData?.details.instance.status === "Faulted"
+        ? <RunParkEvidence key={`${workflowExecutionId}:${runRefreshVersion}`} context={context} workflowExecutionId={workflowExecutionId} />
+        : null}
+      {state === "ready" && data && !timelineDocked ? <div className="wf-canvas-tabs wf-run-primary-views">
+        <StudioTabs tabs={runViewTabs} activeTab={historyLocation.view} ariaLabel="Run workspace views" compact onSelect={selectRunView} />
+      </div> : null}
+      {state === "ready" && data && playbackOpen ? <ActivityPlaybackControls playback={playback}
+        scopeLabel={historyLocation.filters.activityExecutionId ? `Selected execution${historyLocation.filters.includeDescendants ? " and descendants" : " only"}` : "Entire run"}
+        labelFor={labelForPlayback} /> : null}
+      {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
+      {currentData && currentData.activityCatalogAccess !== "allowed" ? (
+        <p className="wf-instance-note" role="status">
+          Activity definitions are not available {currentData.activityCatalogAccess === "forbidden" ? "with your permissions" : "on this backend"}. Activity labels and input descriptions may be limited.
+        </p>
+      ) : null}
+      {currentData ? (
+        <div ref={containerRef} onPointerDownCapture={event => pauseForWorkbenchInteraction(event.target)}
+          onKeyDownCapture={event => pauseForWorkbenchInteraction(event.target)} onWheelCapture={event => pauseForWorkbenchInteraction(event.target)}
+          className={`${historyWorkspace ? workbenchClassName.replace(/\binspector-(?:collapsed|maximized)\b/g, "") : workbenchClassName}${historyWorkspace ? " wf-run-history-workspace" : ""}`}
+          style={historyWorkspace ? { ...workbenchStyle, "--wf-run-inspector-width": `${Math.max(340, inspectorWidth)}px` } as CSSProperties : workbenchStyle}>
+          {currentData.incidentAssociationLookupIncomplete ? (
+            <div className="wf-run-association-status" role="status">
+              <span>
+              {currentData.incidentActivityLookupSupported
+                ? `Some affected activities are not shown yet (${currentData.pendingIncidentActivityExecutionIds.length} remaining). Open Issues and load more.`
+                : "Exact affected activity data is unavailable from this server."}
+              </span>
+            </div>
+          ) : null}
+          <div className="wf-run-history-view" hidden={timelineDocked ? timelineCollapsed : historyLocation.view !== "timeline"}>
+            <header className="wf-timeline-panel-header">
+              <div className="wf-timeline-mode-switch" role="group" aria-label="Timeline view">
+                <button
+                  type="button"
+                  className="wf-timeline-mode-btn"
+                  aria-pressed={timelineMode === "activities"}
+                  onClick={() => setTimelineMode("activities")}
+                >
+                  Activities
+                </button>
+                <button
+                  type="button"
+                  className="wf-timeline-mode-btn"
+                  aria-pressed={timelineMode === "events"}
+                  onClick={() => setTimelineMode("events")}
+                >
+                  Events
+                </button>
+              </div>
+              {timelineDocked ? (
+                <div className="wf-history-heading-actions">
+                  <StudioButton
+                    ref={overviewTriggerRef}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="wf-history-toolbar-btn"
+                    aria-label="Run overview"
+                    title="Run overview"
+                    aria-haspopup="dialog"
+                    aria-expanded={overviewOpen}
+                    aria-controls={overviewOpen ? overviewPopoverId : undefined}
+                    onClick={() => setOverviewOpen(open => !open)}
+                  >
+                    <Info size={14} aria-hidden="true" />
+                  </StudioButton>
+                  <StudioButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="wf-history-toolbar-btn"
+                    aria-label="Hide timeline panel"
+                    title="Hide timeline panel"
+                    onClick={toggleTimelineCollapsed}
+                  >
+                    <PanelLeftClose size={14} aria-hidden="true" />
+                  </StudioButton>
+                </div>
+              ) : null}
+            </header>
+            {timelineDocked ? (
+              <AnchoredPopover
+                anchorRef={overviewTriggerRef}
+                open={overviewOpen}
+                id={overviewPopoverId}
+                role="dialog"
+                aria-label="Run overview"
+                className="wf-history-popover"
+                minWidth={300}
+                maxHeight={420}
+                onDismiss={() => setOverviewOpen(false)}
+                onKeyDown={event => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setOverviewOpen(false);
+                    overviewTriggerRef.current?.focus();
+                  }
+                }}
+              >
+                <div className="wf-history-overview-popover">
+                  <Suspense fallback={<p className="wf-instance-note" role="status">Loading run overview…</p>}>
+                    <RunHistorySummary
+                      context={context}
+                      instance={currentData.details.instance}
+                      name={unattributedChildDefinition ? runDisplayName ?? "Child run" : currentData.definitionName ?? currentData.definitionVersion?.definition.name ?? currentData.details.instance.definitionId}
+                      activities={currentData.details.activities}
+                      labelForActivity={labelForExecution}
+                      activitiesLimited={!!currentData.details.activityNextContinuationToken}
+                      enabled={overviewOpen}
+                      onBookmark={id => { setOverviewOpen(false); selectHistoryTarget({ kind: "bookmark", id }); }}
+                    />
+                  </Suspense>
+                </div>
+              </AnchoredPopover>
+            ) : null}
+            {timelineMode === "activities" ? (
+              <RunActivitiesTimeline
+                key={browserContext}
+                context={context}
+                workflowExecutionId={workflowExecutionId}
+                activities={associationActivities}
+                activitiesDeferred={currentData.details.activitiesDeferred}
+                refreshKey={`${runRefreshVersion}:${currentData.details.instance.status}`}
+                hasMoreFromSummary={Boolean(currentData.details.activityNextContinuationToken)}
+                selectedActivityExecutionId={!historyLocation.selection ? selectedActivity?.activityExecutionId ?? null : null}
+                labelForActivity={labelForExecution}
+                onSelectActivity={selectTimelineActivity}
+                onRefresh={refreshWorkspace}
+                onExecutionsLoaded={rememberObservedExecutions}
+              />
+            ) : (
+              <Suspense fallback={<p role="status">Loading run history workspace…</p>}>
+                {!timelineDocked ? <RunHistorySummary context={context} instance={currentData.details.instance}
+                  name={unattributedChildDefinition ? runDisplayName ?? "Child run" : currentData.definitionName ?? currentData.definitionVersion?.definition.name ?? currentData.details.instance.definitionId}
+                  activities={currentData.details.activities} labelForActivity={labelForExecution} activitiesLimited={!!currentData.details.activityNextContinuationToken} enabled={runHistoryEnabled && timelineMode === "events"}
+                  onBookmark={id => selectHistoryTarget({ kind: "bookmark", id })} /> : null}
+                <RunHistoryTimeline context={context} workflowExecutionId={workflowExecutionId} filters={historyLocation.filters}
+                  embedded
+                  onFiltersChange={filters => { beginEvidenceNavigation(true); setHistoryLocation(value => ({ ...value, filters })); }}
+                  onManualNavigation={() => playback.pause()}
+                  selectedActivityExecutionId={selectedActivity?.activityExecutionId} selectedActivityLabel={selectedActivity ? labelForExecution(selectedActivity) : undefined}
+                  selectedEventId={historyLocation.selection?.kind === "event" ? historyLocation.selection.id : null}
+                  selectedEvent={preparedHistoryEvent?.contextIdentity === runtimeValueContextId(context) && preparedHistoryEvent.workflowExecutionId === workflowExecutionId
+                    ? preparedHistoryEvent.value.event : undefined}
+                  onSelectEvent={openHistoryEvent} labelForEvent={labelForHistoryEvent} onCommittedAdvance={refreshObservation}
+                  enabled={runHistoryEnabled && timelineMode === "events"} />
+              </Suspense>
+            )}
+          </div>
+          {timelineDocked && timelineCollapsed ? <StudioButton className="wf-run-timeline-rail" type="button" aria-label="Show timeline panel" onClick={expandTimeline}>Timeline</StudioButton> : null}
+          {timelineDocked && !timelineCollapsed ? <div
+            className="wf-side-resize-handle left"
+            role="separator"
+            aria-label="Resize timeline panel"
+            aria-orientation="vertical"
+            aria-valuemin={260}
+            aria-valuemax={timelineMaxWidth}
+            aria-valuenow={timelineWidth}
+            tabIndex={0}
+            onPointerDown={startTimelineResize}
+            onKeyDown={handleTimelineResizeKeyDown}
+          /> : null}
+          <div className="wf-run-diagram-view" hidden={!timelineDocked && historyLocation.view !== "diagram"}>
+          <WorkflowInstanceCanvas
+            observationIdentity={observation.identity}
+            observationStatus={observation.status}
+            onSelectExecutionSummary={selectBrowserExecution}
+            onExecutionsObserved={rememberObservedExecutions}
+            context={context}
+            boundaryLayout={activeBoundaryLayout}
+            executionScope={canvasExecutionScope}
+            refreshKey={evidenceRevision}
+            scopeLoading={scopeBlocked && !retainScope}
+            executionBreadcrumb={executionBreadcrumb}
+            definitionVersion={currentData.definitionVersion}
+            definitionVersionError={currentData.definitionVersionError}
+            activityCatalog={currentData.activityCatalog}
+            executableGraph={currentData.executableGraph}
+            details={currentData.details}
+            associationActivities={associationActivities}
+            selectedEvidenceId={selectedEvidenceId}
+            onSelectEvidence={selectEvidence}
+            onOpenIncident={openIncidentInIssues}
+            onSelectActivity={selectGraphActivity}
+            focusNodeId={focusedRuntimeNodeId}
+            focusRequestId={canvasFocusRequestId}
+            moveKeyboardFocus={moveCanvasKeyboardFocus}
+            focusMode={canvasFocusMode}
+            onFocusModeChange={updateCanvasFocusMode}
+            visible={timelineDocked || historyLocation.view === "diagram"}
+            frames={frames}
+            onNavigateToScope={navigateToScope}
+            inactive={mode === "medium" && mediumDrawerOpen}
+            journals={journals}
+            operator={{
+              canAct: operator.canAct,
+              workflowExecutionId: currentData.details.instance.workflowExecutionId,
+              pending: operator.pending,
+              onAction: operator.open
+            }}
+          />
+          </div>
+          {mediumDrawerOpen && historyLocation.view === "diagram" ? (
+            <StudioButton type="button" className="wf-run-inspector-backdrop" aria-label="Close run details" onClick={closeResponsiveInspector} />
+          ) : null}
+          {(historyWorkspace ? mode === "desktop" : canResizeInspector) ? (
+            <div
+              className="wf-side-resize-handle right"
+              role="separator"
+              aria-label="Resize run details panel"
+              aria-orientation="vertical"
+              aria-valuemin={runDetailMinInspectorWidth}
+              aria-valuemax={inspectorMaxWidth}
+              aria-valuenow={inspectorWidth}
+              tabIndex={0}
+              onPointerDown={startInspectorResize}
+              onKeyDown={handleInspectorResizeKeyDown}
+            />
+          ) : <div className="wf-side-resize-spacer" />}
+          <WorkflowInstanceInspector
+            context={context}
+            summary={currentData.details.instance}
+            activityContent={<>{historyTargetPending ? <p className="wf-instance-note" role="status">Loading requested recorded event… Showing the previous confirmed inspection.</p> : null}{historyOwnerMessage ? <p className="wf-instance-note" role="status">{historyOwnerMessage}</p> : null}<div hidden={!!historyLocation.selection}>{browserActivityContent ?? <p className="wf-instance-note">Select an activity from the list or diagram to inspect its inputs, outputs, outcomes, and incidents.</p>}</div>{historyLocation.selection ? <>
+              <Suspense fallback={<p className="wf-instance-note" role="status">Loading recorded history details…</p>}><HistoryInspection context={context}
+                workflowExecutionId={workflowExecutionId} selection={historyLocation.selection} preparedEvent={preparedHistoryEvent} focusOnSelection={focusHistoryInspector} refreshKey={historyResourceRefreshKey} onSelect={selectHistoryTarget} onBack={backFromHistory}
+                onEventUnavailable={target => {
+                  if (target.contextIdentity === runtimeValueContextId(context) && target.workflowExecutionId === workflowExecutionId
+                    && currentHistoryLocation.current.selection?.kind === "event" && currentHistoryLocation.current.selection.id === target.historyEventId) {
+                    setPreparedHistoryEvent(previous => previous?.contextIdentity === target.contextIdentity && previous.workflowExecutionId === target.workflowExecutionId
+                      && previous.historyEventId === target.historyEventId ? undefined : previous);
+                    if (playback.cursor) playback.invalidate("The selected recorded observation is unavailable. Refresh playback to revalidate access and recording.");
+                  }
+                }}
+                onActivity={id => { void showHistoryActivity(id); }} onFocusTimeline={focusHistoryExecution} onIncident={openIncidentInIssues} navigate={navigate} /></Suspense></> : null}</>}
+            details={currentData.details}
+            associationActivities={associationActivities}
+            associationLookupIncomplete={currentData.incidentAssociationLookupIncomplete}
+            associationLookupSupported={currentData.incidentActivityLookupSupported}
+            associationLookupMessage={incidentAssociationMessage}
+            pendingIncidentActivityCount={currentData.pendingIncidentActivityExecutionIds.length}
+            unavailableActivityFailures={currentData.unavailableIncidentActivityFailures}
+            state="ready"
+            error=""
+            selectedEvidenceId={selectedEvidenceId}
+            onSelectEvidence={selectEvidence}
+            activeTab={activeInspectorTab === "timeline" ? "activity" : activeInspectorTab}
+            onActiveTabChange={selectInspectorTab}
+            onShowAffectedActivity={incident => showIncidentActivity(incident, false)}
+            onViewInput={incident => showIncidentActivity(incident, true)}
+            onLoadMoreIncidentAssociations={loadMoreIncidentAssociations}
+            focusInputKey={focusInputKey}
+            onSelectActivityExecution={selectActivityExecution}
+            renderIncidentActions={operator.renderIncidentActions}
+            guidanceForIncident={operator.guidanceForIncident}
+            onOpenDefinition={unattributedChildDefinition ? undefined : openDefinitionDesigner}
+            definitionAccess={definitionAccess}
+            activityCatalog={currentData.activityCatalog}
+            executableGraph={currentData.executableGraph}
+            definitionName={unattributedChildDefinition ? null : currentData.definitionName ?? currentData.definitionVersion?.definition.name}
+            expressionEditors={expressionEditors}
+            backendSession={backendSession} runRelatedLinks={runRelatedLinks} incidentRootCauseProviders={incidentRootCauseProviders}
+            graphNodeIds={currentData.definitionVersion ? collectWorkflowGraphNodeIds(currentData.definitionVersion, currentData.activityCatalog) : undefined}
+            rootNodeId={currentData.definitionVersion?.state.rootActivity?.nodeId}
+            collapsed={historyLocation.view === "timeline" ? false : inspectorCollapsed}
+            expanded={historyWorkspace || inspectorExpanded}
+            maximized={historyWorkspace ? false : inspectorMaximized}
+            layoutMode={historyWorkspace ? "desktop" : mode}
+            historyWorkspace={historyWorkspace}
+            responsiveOpen={!historyWorkspace && historyLocation.view === "diagram" && (mode === "medium" ? mediumDrawerOpen : mode === "narrow" && inspectorExpanded)}
+            onCloseResponsive={closeResponsiveInspector}
+            onToggleCollapsed={toggleInspectorCollapsedWithNavigation}
+            onToggleMaximized={toggleInspectorMaximizedWithNavigation}
+          />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export function applyDefinitionDisplayName<T extends {
+  details: Pick<WorkflowInstanceDetails, "instance">;
+  definitionVersion: WorkflowDefinitionVersionDetails | null;
+  definitionName?: string | null;
+}>(data: T, definitionName: string | null | undefined): T & { definitionName: string } {
+  const name = resolveNamedIdentity(definitionName, data.details.instance.definitionId).label;
+  const nextVersion = data.definitionVersion && data.definitionVersion.definition.name !== name
+    ? {
+        ...data.definitionVersion,
+        definition: {
+          ...data.definitionVersion.definition,
+          name
+        }
+      }
+    : data.definitionVersion;
+  if (data.definitionName === name && nextVersion === data.definitionVersion) return { ...data, definitionName: name };
+  return {
+    ...data,
+    definitionName: name,
+    definitionVersion: nextVersion
+  };
+}
+
+export function projectPinnedExecutable(
+  executable: WorkflowExecutableDetails,
+  details: WorkflowInstanceDetails,
+  catalog: ActivityCatalogItem[],
+  executableGraph?: ExecutableActivityGraph,
+  definitionName?: string | null
+): WorkflowDefinitionVersionDetails {
+  const timestamp = executable.createdAt ?? details.instance.createdAt;
+  const graph = executableGraph ?? buildExecutableActivityGraph(
+    executable.rootActivity,
+    catalog,
+    [],
+    [],
+    null,
+    executable.chosenReference?.activityPresentation ?? []);
+  return {
+    id: details.instance.definitionVersionId,
+    version: details.instance.artifactVersion,
+    definition: {
+      id: details.instance.definitionId,
+      name: resolveNamedIdentity(definitionName, details.instance.definitionId).label,
+      description: `Pinned Runtime executable ${executable.artifactId}`,
+      createdAt: timestamp,
+      lastModifiedAt: timestamp
+    },
+    state: { rootActivity: graph.root },
+    layout: executable.chosenReference?.layout ?? [],
+    activityPresentation: graph.activityPresentation
+  };
+}
+
+export function resolveInitialActivityEvidenceId(
+  activities: ReadonlyArray<{ activityExecutionId: string }>,
+  requestedActivityExecutionId: string | null
+) {
+  return requestedActivityExecutionId &&
+    activities.some(activity => activity.activityExecutionId === requestedActivityExecutionId)
+    ? requestedActivityExecutionId
+    : null;
+}
+
+export function combineActivityExecutions(
+  pageActivities: ActivityExecutionStateSummary[],
+  incidentActivities: ActivityExecutionStateSummary[]
+) {
+  const byId = new Map(pageActivities.map(activity => [activity.activityExecutionId, activity]));
+  for (const activity of incidentActivities) byId.set(activity.activityExecutionId, activity);
+  return [...byId.values()];
+}
+
+export type IncidentActivityInspectionFetcher = (activityExecutionId: string) => Promise<IncidentActivityInspection>;
+
+export type IncidentActivityLookupFailureReason = "identity-mismatch" | "permission-denied" | "unavailable" | "unsupported";
+type UnavailableIncidentActivityFailure = {
+  activityExecutionId: string;
+  reason: "identity-mismatch" | "permission-denied";
+};
+
+export function incidentActivityLookupFailureMessage(reason: IncidentActivityLookupFailureReason) {
+  switch (reason) {
+    case "identity-mismatch":
+      return "Runtime returned a different run or activity execution. Studio kept the incident open and did not open that execution.";
+    case "permission-denied":
+      return "You do not have permission to inspect this activity execution. The incident remains available here.";
+    case "unsupported":
+      return "This host does not support exact activity inspection. The incident remains available here.";
+    default:
+      return "Studio could not load the exact activity execution. Use Show affected activity to try again; the incident remains available here.";
+  }
+}
+
+export type ExactIncidentActivitySummaryResult =
+  | { status: "found"; summary: ActivityExecutionStateSummary }
+  | { status: "failed"; reason: Exclude<IncidentActivityLookupFailureReason, "unsupported"> };
+
+export async function loadExactIncidentActivitySummary(
+  workflowExecutionId: string,
+  activityExecutionId: string,
+  fetchInspection: IncidentActivityInspectionFetcher
+): Promise<ExactIncidentActivitySummaryResult> {
+  try {
+    const inspection = await fetchInspection(activityExecutionId);
+    if (inspection.activityExecutionId !== activityExecutionId || inspection.workflowExecutionId !== workflowExecutionId) {
+      return { status: "failed", reason: "identity-mismatch" };
+    }
+    return { status: "found", summary: activityExecutionSummaryFromInspection(inspection) };
+  } catch (error) {
+    const structuredStatus = typeof error === "object" && error !== null && "status" in error
+      ? (error as { status?: unknown }).status
+      : undefined;
+    const status = typeof structuredStatus === "number" && Number.isFinite(structuredStatus)
+      ? structuredStatus
+      : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    const permissionDenied = status !== undefined
+      ? status === 401 || status === 403
+      : /forbidden|permission|unauthori[sz]ed/i.test(message);
+    return {
+      status: "failed",
+      reason: permissionDenied ? "permission-denied" : "unavailable"
+    };
+  }
+}
+
+export async function loadActiveIncidentActivitySummaries(
+  details: WorkflowInstanceDetails,
+  fetchInspection: IncidentActivityInspectionFetcher | null,
+  requestedActivityExecutionIds?: string[]
+) {
+  const activitiesById = new Map(details.activities.map(activity => [activity.activityExecutionId, activity]));
+  const activeIds = [...new Set((details.incidents ?? [])
+    .filter(isActiveIncident)
+    .map(readIncidentActivityExecutionId)
+    .filter((id): id is string => Boolean(id?.trim())))];
+  const requestedIds = requestedActivityExecutionIds
+    ? [...new Set(requestedActivityExecutionIds.filter(id => activeIds.includes(id)))]
+    : activeIds.filter(id => !activitiesById.get(id)?.authoredActivityId);
+  if (requestedIds.length === 0) {
+    return {
+      activities: [] as ActivityExecutionStateSummary[],
+      incomplete: false,
+      pendingActivityExecutionIds: [] as string[],
+      unavailableFailures: [] as UnavailableIncidentActivityFailure[]
+    };
+  }
+  if (!fetchInspection) {
+    return {
+      activities: [] as ActivityExecutionStateSummary[],
+      incomplete: true,
+      pendingActivityExecutionIds: requestedIds,
+      unavailableFailures: [] as UnavailableIncidentActivityFailure[]
+    };
+  }
+
+  const fetched: ActivityExecutionStateSummary[] = [];
+  const failedIds: string[] = [];
+  const unavailableFailures: UnavailableIncidentActivityFailure[] = [];
+  const selectedIds = requestedIds.slice(0, maxIncidentActivityLookups);
+  for (let index = 0; index < selectedIds.length; index += incidentActivityLookupBatchSize) {
+    const batch = selectedIds.slice(index, index + incidentActivityLookupBatchSize);
+    const results = await Promise.all(batch.map(async activityExecutionId => {
+      const result = await loadExactIncidentActivitySummary(details.instance.workflowExecutionId, activityExecutionId, fetchInspection);
+      return { activityExecutionId, result };
+    }));
+    for (const result of results) {
+      if (result.result.status === "found") fetched.push(result.result.summary);
+      else if (result.result.reason === "unavailable") failedIds.push(result.activityExecutionId);
+      else unavailableFailures.push({ activityExecutionId: result.activityExecutionId, reason: result.result.reason });
+    }
+  }
+
+  const pendingActivityExecutionIds = [...requestedIds.slice(selectedIds.length), ...failedIds];
+  return {
+    activities: fetched,
+    incomplete: pendingActivityExecutionIds.length > 0,
+    pendingActivityExecutionIds,
+    unavailableFailures
+  };
+}
+
+function combineUnavailableIncidentActivityFailures(
+  existing: UnavailableIncidentActivityFailure[],
+  next: UnavailableIncidentActivityFailure[]
+) {
+  const byActivityExecutionId = new Map(existing.map(failure => [failure.activityExecutionId, failure]));
+  for (const failure of next) byActivityExecutionId.set(failure.activityExecutionId, failure);
+  return [...byActivityExecutionId.values()];
+}
+
+function sourceAccessFromError(error: unknown) {
+  const status = typeof error === "object" && error !== null && "status" in error
+    ? Number((error as { status?: unknown }).status)
+    : undefined;
+  const message = error instanceof Error ? error.message : String(error);
+  return status === 401 || status === 403 || /forbidden|permission|unauthori[sz]ed/i.test(message)
+    ? "permissionHidden"
+    : "unavailable";
+}
+
+function WorkflowInstanceCanvas({
+  observationIdentity, observationStatus, context, executionScope, boundaryLayout, refreshKey, scopeLoading, executionBreadcrumb, onSelectExecutionSummary,
+  onExecutionsObserved,
+  definitionVersion,
+  definitionVersionError,
+  activityCatalog,
+  executableGraph,
+  details,
+  associationActivities,
+  selectedEvidenceId,
+  onSelectEvidence,
+  onOpenIncident,
+  onSelectActivity,
+  focusNodeId,
+  focusRequestId,
+  moveKeyboardFocus = true,
+  focusMode = "pan",
+  onFocusModeChange,
+  visible = true,
+  frames,
+  onNavigateToScope,
+  inactive = false,
+  journals,
+  operator
+}: {
+  observationIdentity: string;
+  observationStatus: ExecutionObservationStatus;
+  context: StudioEndpointContext;
+  executionScope?: ActivityExecutionStateSummary;
+  boundaryLayout?: ActivityExecutionLayout;
+  refreshKey: number;
+  scopeLoading: boolean;
+  executionBreadcrumb: ReactNode;
+  onSelectExecutionSummary(execution: ActivityExecutionStateSummary): void;
+  onExecutionsObserved(
+    executions: ActivityExecutionStateSummary[],
+    scopeObservation?: { scopeId?: string; singletons: ActivityExecutionStateSummary[]; repeatedNodes: string[] }
+  ): void;
+  definitionVersion: WorkflowDefinitionVersionDetails | null;
+  definitionVersionError: string;
+  activityCatalog: ActivityCatalogItem[];
+  executableGraph: ExecutableActivityGraph | null;
+  details: WorkflowInstanceDetails;
+  associationActivities: ActivityExecutionStateSummary[];
+  selectedEvidenceId: string | null;
+  onSelectEvidence(evidenceId: string | null): void;
+  onOpenIncident(incidentId: string, nodeId?: string | null): void;
+  onSelectActivity(nodeId: string): void;
+  focusNodeId: string | null;
+  focusRequestId: number;
+  moveKeyboardFocus?: boolean;
+  focusMode?: RunCanvasFocusMode;
+  onFocusModeChange?(mode: RunCanvasFocusMode): void;
+  visible?: boolean;
+  frames: ScopeFrame[];
+  onNavigateToScope(frames: ScopeFrame[]): void;
+  inactive?: boolean;
+  journals?: CompensationJournals;
+  operator?: CompensationOperatorControls;
+}) {
+  const scopeKey = getInstanceScopeKey(frames);
+  const [flowInstance, setFlowInstance] = useState<WorkflowRunFlowInstance | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const focusModeRef = useRef(focusMode);
+  focusModeRef.current = focusMode;
+  const journalOf = journals?.get;
+  const unscopedCanvas = useMemo(
+    () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope, onOpenIncident, [], executableGraph, journalOf),
+    [activityCatalog, definitionVersion, details, executableGraph, frames, journalOf, onNavigateToScope, onOpenIncident, selectedEvidenceId]);
+  const scoped = useScopedCanvasActivities(context, details.instance.workflowExecutionId, executionScope?.activityExecutionId,
+    boundaryLayout ? boundaryLayout.nodes.map(node => node.executableNodeId) : unscopedCanvas.nodes.map(node => executableGraph?.factsByNodeId.get(nodeRuntimeId(node))?.executableNodeId ?? nodeRuntimeId(node)), refreshKey,
+    associationActivities.find(item => item.activityExecutionId === selectedEvidenceId), true);
+  const selectedIncident = details.incidents?.find(incident => incident.incidentId === selectedEvidenceId);
+  const incidentExecutionId = selectedIncident ? readIncidentActivityExecutionId(selectedIncident) : null;
+  const selectedExecution = associationActivities.find(item => (item.activityExecutionId === selectedEvidenceId || item.activityExecutionId === incidentExecutionId)
+    && item.workflowExecutionId === details.instance.workflowExecutionId);
+  const shownActivities = scopeLoading ? [] : selectedExecution && !scoped.activities.some(item => item.activityExecutionId === selectedEvidenceId)
+    ? [...scoped.activities, selectedExecution] : scoped.activities;
+  useEffect(() => {
+    if (scoped.loading) return;
+    if (scoped.activities.length === 0 && scoped.repeatedNodes.length === 0) return;
+    const repeatedSet = new Set(scoped.repeatedNodes);
+    const singletons = scoped.activities.filter(item => !repeatedSet.has(item.executableNodeId));
+    onExecutionsObserved(scoped.activities, {
+      scopeId: executionScope?.activityExecutionId,
+      singletons,
+      repeatedNodes: scoped.repeatedNodes
+    });
+  }, [executionScope?.activityExecutionId, onExecutionsObserved, scoped.activities, scoped.loading, scoped.repeatedNodes]);
+  const scopedIds = new Set(shownActivities.map(item => item.activityExecutionId));
+  const shownIncidents = executionScope || scopeLoading ? (details.incidents ?? []).filter(item => {
+    const id = readIncidentActivityExecutionId(item);
+    return id ? scopedIds.has(id) : false;
+  }) : details.incidents;
+  const canvas = buildInstanceCanvas(definitionVersion, activityCatalog, { ...details, incidents: shownIncidents }, selectedEvidenceId,
+    frames, onNavigateToScope, onOpenIncident, shownActivities, executableGraph, journalOf);
+  const motion = useConfirmedExecutionMotion({ identity: JSON.stringify([observationIdentity, scopeKey, executionScope?.activityExecutionId, selectedEvidenceId]),
+    observationStatus, enabled: !inactive && !scopeLoading && !scoped.failed && !boundaryLayout,
+    observationRevision: refreshKey, confirmedRevision: scoped.confirmedRevision,
+    ready: !scoped.loading && !scoped.anchoring, workflowExecutionId: details.instance.workflowExecutionId,
+    mode: canvas.mode === "sequence" ? "sequence" : (definitionVersion?.state.rootActivity ? resolveScope(definitionVersion.state.rootActivity, frames, activityCatalog)?.slot.mode : undefined),
+    nodes: canvas.nodes, edges: canvas.edges, observations: scoped.observations });
+  const animatedCanvas = decorateExecutionMotion(canvas.nodes, canvas.edges, motion);
+  // Spec 260: a live scope's rows come from its journal; read it once the shown occurrence is known.
+  const shownScopeExecutionId = canvas.mode === "compensation" ? canvas.compensation?.runtime.scopeActivityExecutionId : undefined;
+  const shownScopeStatus = shownScopeExecutionId ? associationActivities.find(activity => activity.activityExecutionId === shownScopeExecutionId)?.status : undefined;
+  const requestJournal = journals?.request;
+  const journalGeneration = journals?.generation;
+  useEffect(() => {
+    if (shownScopeExecutionId && requestJournal) requestJournal(shownScopeExecutionId, shownScopeStatus);
+  }, [journalGeneration, requestJournal, shownScopeExecutionId, shownScopeStatus]);
+  const focusCanvasNodeId = focusNodeId
+    ? canvas.nodes.find(node => nodeRuntimeId(node) === focusNodeId)?.id ?? null
+    : null;
+  const hasScopeContext = Boolean(definitionVersion && frames.length > 0) || Boolean(executionBreadcrumb);
+  const [showScopedLoading, setShowScopedLoading] = useState(false);
+
+  useEffect(() => {
+    if (!scoped.loading) {
+      setShowScopedLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowScopedLoading(true), 250);
+    return () => window.clearTimeout(timer);
+  }, [scoped.loading]);
+
+  const canvasStatus = scoped.loading
+    ? (showScopedLoading ? { tone: "loading" as const, text: "Loading visible run data…" } : null)
+    : scoped.failed
+      ? { tone: "warning" as const, text: "Some visible run data could not be loaded. Refresh to retry." }
+      : scoped.repeated
+        ? { tone: "info" as const, text: "Some activities ran more than once. Choose an occurrence to inspect." }
+        : null;
+
+  useEffect(() => {
+    if (!visible || canvas.mode !== "graph" || !flowInstance || !focusCanvasNodeId) return;
+    const frame = requestAnimationFrame(() => {
+      const container = canvasContainerRef.current;
+      const rect = container?.getBoundingClientRect();
+      const containerSize = container
+        ? { width: container.clientWidth || rect?.width || 0, height: container.clientHeight || rect?.height || 0 }
+        : null;
+      focusRunCanvasNode({
+        flowInstance,
+        nodeId: focusCanvasNodeId,
+        mode: focusModeRef.current,
+        animate: moveKeyboardFocus,
+        containerSize
+      });
+      if (moveKeyboardFocus) focusSelectedCanvasActivity(focusNodeId);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [canvas.mode, flowInstance, focusCanvasNodeId, focusNodeId, focusRequestId, moveKeyboardFocus, scopeKey, visible]);
+
+  return (
+    <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas" aria-hidden={inactive || undefined} inert={inactive || undefined}>
+      {hasScopeContext ? (
+        <div className="wf-instance-scope-strip">
+          {definitionVersion && frames.length > 0 ? (
+            <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
+          ) : null}
+          {executionBreadcrumb}
+        </div>
+      ) : null}
+      <div ref={canvasContainerRef} className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
+        const node = canvas.nodes.find(candidate => candidate.id === nodeId);
+        if (node) onSelectActivity(nodeRuntimeId(node));
+      })}>
+        {!definitionVersion ? (
+          <div className="wf-empty">
+            The workflow run loaded, but its pinned executable graph could not be resolved.
+            {definitionVersionError ? <small>{definitionVersionError}</small> : null}
+          </div>
+        ) : null}
+        {definitionVersion && canvas.mode === "graph" && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this executable.</div> : null}
+        {boundaryLayout ? <Suspense fallback={<p role="status">Loading pinned activity structure…</p>}><HistoricalBoundaryLayout layout={boundaryLayout}
+          selectedExecutableNodeId={associationActivities.find(item => item.activityExecutionId === selectedEvidenceId)?.executableNodeId}
+          statusByNode={new Map(shownActivities.map(item => [item.executableNodeId, item.status]))}
+          onSelectNode={nodeId => {
+            const execution = shownActivities.find(item => item.executableNodeId === nodeId);
+            if (execution) onSelectExecutionSummary(execution);
+            else onSelectActivity(nodeId);
+          }} /></Suspense> : definitionVersion && canvas.mode === "compensation" && canvas.compensation ? (
+          <CompensationScopeDesigner
+            key={scopeKey}
+            owner={canvas.compensation.owner}
+            nodes={animatedCanvas.nodes}
+            selectedNodeId={null}
+            readOnly
+            runtime={canvas.compensation.runtime}
+            onSelect={nodeId => nodeId && onSelectActivity(nodeId)}
+            onSelectExecution={onSelectEvidence}
+            onOpenIncident={incidentId => onOpenIncident(incidentId)}
+            onOpenSlot={canvas.compensation.openSlot}
+            operator={operator}
+          />
+        ) : definitionVersion && canvas.mode === "sequence" ? (
+          <ReadOnlyWorkflowSequence
+            key={scopeKey}
+            nodes={animatedCanvas.nodes}
+            onSelectActivity={onSelectActivity}
+            onSelectEvidence={onSelectEvidence}
+            focusNodeId={visible && !scoped.loading ? focusCanvasNodeId : null}
+            focusRequestId={focusRequestId}
+            moveKeyboardFocus={moveKeyboardFocus}
+            focusMode={focusMode}
+          />
+        ) : canvas.nodes.length > 0 ? (
+          <ReadOnlyWorkflowFlow
+            key={`${details.instance.workflowExecutionId}:${scopeKey}`}
+            nodes={animatedCanvas.nodes}
+            edges={animatedCanvas.edges}
+            onInit={setFlowInstance}
+            onSelectActivity={onSelectActivity}
+            onSelectEvidence={onSelectEvidence}
+            focusRequestId={focusRequestId}
+            focusMode={focusMode}
+            onFocusModeChange={onFocusModeChange}
+          />
+        ) : null}
+      </div>
+      {canvasStatus ? (
+        <div className={`wf-canvas-status-pill is-${canvasStatus.tone}`} role="status" aria-live="polite">
+          {canvasStatus.tone === "loading" ? <Loader2 size={13} className="wf-canvas-status-spinner" aria-hidden="true" />
+            : canvasStatus.tone === "warning" ? <AlertTriangle size={13} aria-hidden="true" />
+              : <Info size={13} aria-hidden="true" />}
+          <span>{canvasStatus.text}</span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ReadOnlyWorkflowFlow({
+  nodes,
+  edges,
+  onInit,
+  onSelectActivity,
+  onSelectEvidence,
+  focusRequestId,
+  focusMode,
+  onFocusModeChange
+}: {
+  nodes: Node<WorkflowNodeData>[];
+  edges: Edge<WorkflowEdgeData>[];
+  onInit(instance: WorkflowRunFlowInstance): void;
+  onSelectActivity(nodeId: string): void;
+  onSelectEvidence(evidenceId: string | null): void;
+  focusRequestId: number;
+  focusMode?: RunCanvasFocusMode;
+  onFocusModeChange?(mode: RunCanvasFocusMode): void;
+}) {
+  const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(nodes);
+
+  return (
+    <ReactFlow
+      nodes={flowNodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      fitView
+      fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)}
+      minZoom={0.1}
+      onInit={onInit}
+      onNodesChange={onNodesChange}
+      nodesDraggable={false}
+      nodesConnectable={false}
+      elementsSelectable
+      onNodeClick={(_, node) => onSelectActivity(nodeRuntimeId(node))}
+      onPaneClick={() => onSelectEvidence(null)}
+    >
+      <Background />
+      <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} minReadableZoom={READ_ONLY_READABLE_ZOOM} />
+      <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
+      <ReadOnlyFlowControls nodeCount={flowNodes.length} focusMode={focusMode} onFocusModeChange={onFocusModeChange} />
+      <RetainFlowViewport />
+    </ReactFlow>
+  );
+}
+
+// Builds the read-only run-inspection canvas for the scope addressed by `frames`. Slot badges navigate
+// along the same planned frame path as the editor (planSlotNavigation): a slot holding a single canvas
+// container is descended THROUGH so the canvas shows the container's contents instead of a one-node
+// canvas holding the container. Only the plan's frames are used — selection stays evidence-driven.
+export function buildInstanceCanvas(
+  definitionVersion: WorkflowDefinitionVersionDetails | null,
+  activityCatalog: ActivityCatalogItem[],
+  details: WorkflowInstanceDetails,
+  selectedEvidenceId: string | null,
+  frames: ScopeFrame[],
+  onNavigateToScope: (frames: ScopeFrame[]) => void,
+  onOpenIncident: (incidentId: string, nodeId?: string | null) => void = () => undefined,
+  associationActivities: ActivityExecutionStateSummary[] = details.activities,
+  executableGraph: ExecutableActivityGraph | null = null,
+  journalOf?: (scopeActivityExecutionId: string | undefined) => CompensationJournalSource | undefined
+): {
+  nodes: Node<WorkflowNodeData>[];
+  edges: Edge<WorkflowEdgeData>[];
+  mode: "sequence" | "graph" | "compensation";
+  compensation?: { owner: ActivityNode; runtime: CompensationScopeRuntime; openSlot(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void };
+} {
+  const root = definitionVersion?.state.rootActivity;
+  if (!definitionVersion || !root) return { nodes: [], edges: [], mode: "graph" };
+
+  const scope = resolveScope(root, frames, activityCatalog);
+  const scopeOwner = scope?.owner ?? root;
+  const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
+  const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
+  const baseCanvas = support === "bpmn" && scope
+    ? buildBpmnCanvas(scope, activityCatalog, definitionVersion.layout, definitionVersion.activityPresentation)
+    : support === "unsupported" || !scope
+    ? buildUnsupportedActivityCanvas(
+        scopeOwner,
+        activityCatalog,
+        definitionVersion.layout,
+        formatActivitySummary,
+        definitionVersion.activityPresentation)
+    : buildCanvas(
+        scope,
+        activityCatalog,
+        definitionVersion.layout,
+        formatActivitySummary,
+        definitionVersion.activityPresentation);
+  const readonlyNodes = baseCanvas.nodes.map(node => {
+    const bpmnData = node.data as BpmnNodeData;
+    const runtimeNodeId = bpmnData.runtimeNodeId ?? bpmnData.boundActivity?.nodeId ?? node.id;
+    const slotOwnerNodeId = bpmnData.boundActivity?.nodeId ?? runtimeNodeId;
+    return {
+      ...node,
+      draggable: false,
+      connectable: false,
+      deletable: false,
+      data: {
+        ...node.data,
+        runtimeNodeId,
+        onEnterSlot: (slot: ChildSlot) => {
+          const plan = planSlotNavigation(frames, scopeOwner, slotOwnerNodeId, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);
+          if (plan) onNavigateToScope(plan.frames);
+        },
+        onIncidentClick: (incidentId: string, targetNodeId?: string | null) =>
+          onOpenIncident(incidentId, targetNodeId === undefined ? runtimeNodeId : targetNodeId)
+      }
+    } as Node<WorkflowNodeData>;
+  });
+
+  const canvas = decorateWorkflowCanvasElements(
+    applyRuntimeOverlays(readonlyNodes, associationActivities, Array.isArray(details.incidents) ? details.incidents : [], selectedEvidenceId, activityCatalog, executableGraph),
+    baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
+  );
+  if (support !== "unsupported" && scope?.slot.id === compensationStepsSlotId) {
+    const incidents = Array.isArray(details.incidents) ? details.incidents : [];
+    const options = { complete: !details.activityNextContinuationToken, selectedActivityExecutionId: selectedEvidenceId, root };
+    const derived = deriveCompensationRuntime(scopeOwner, associationActivities, incidents, options);
+    const journal = journalOf?.(derived.scopeActivityExecutionId);
+    // The scope's name as the canvas shows it, for the operator actions' labels.
+    const scopeLabel = resolveActivityLabel(
+      definitionVersion.activityPresentation?.find(record => record.nodeId === scopeOwner.nodeId),
+      scopeOwnerCatalogItem,
+      scopeOwner.activityVersionId);
+    return {
+      ...canvas,
+      mode: "compensation",
+      compensation: {
+        owner: scopeOwner,
+        runtime: { ...(journal ? deriveCompensationRuntime(scopeOwner, associationActivities, incidents, { ...options, journal }) : derived), scopeLabel },
+        openSlot: (ownerNodeId, ownerLabel, slot) => {
+          const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot), activityCatalog);
+          if (plan) onNavigateToScope(plan.frames);
+        }
+      }
+    };
+  }
+
+  return {
+    ...canvas,
+    mode: support !== "unsupported" && scope?.slot.mode === "sequence" && scope.slot.cardinality === "many"
+      ? "sequence" : "graph"
+  };
+}
+
+function nodeRuntimeId(node: Node) {
+  const data = node.data as Partial<WorkflowNodeData> & { boundActivity?: { nodeId?: string } };
+  return data.runtimeNodeId ?? data.boundActivity?.nodeId ?? node.id;
+}
+
+function getInstanceScopeKey(frames: ScopeFrame[]) {
+  if (frames.length === 0) return "root";
+  return frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
+}
+
+function collectWorkflowGraphNodeIds(definitionVersion: WorkflowDefinitionVersionDetails, activityCatalog: ActivityCatalogItem[]) {
+  const ids = new Set<string>();
+  const visit = (activity: ActivityNode | null | undefined) => {
+    if (!activity) return;
+    ids.add(activity.nodeId);
+    for (const slot of getChildSlots(activity, activityCatalog)) {
+      slot.activities.forEach(visit);
+    }
+  };
+  visit(definitionVersion.state.rootActivity);
+  return ids;
+}
+
+export function getIncidentHealthActionState(incidents?: IncidentStateSummary[] | null) {
+  const available = Array.isArray(incidents);
+  const activeIncidents = available ? incidents.filter(isActiveIncident) : [];
+  const blockingCount = activeIncidents.filter(incident => incident.isBlocking).length;
+  const health = !available ? "unavailable" : blockingCount > 0 ? "blocking" : activeIncidents.length > 0 ? "active" : "none";
+  const label = !available
+    ? "Incident health unavailable"
+    : blockingCount > 0
+      ? `Needs intervention · ${blockingCount} blocking · ${activeIncidents.length} active`
+      : activeIncidents.length > 0
+        ? `${activeIncidents.length} active non-blocking`
+        : "No active incidents";
+
+  return { health, label };
+}
+
+
+function WorkflowInstanceInspector({
+  activityContent,
+  context,
+  summary,
+  details,
+  state,
+  error,
+  selectedEvidenceId = null,
+  associationActivities,
+  associationLookupIncomplete = false,
+  associationLookupSupported = false,
+  associationLookupMessage = null,
+  pendingIncidentActivityCount = 0,
+  unavailableActivityFailures = [],
+  onSelectEvidence,
+  activeTab,
+  onActiveTabChange,
+  onShowAffectedActivity,
+  onViewInput,
+  onLoadMoreIncidentAssociations,
+  focusInputKey,
+  onSelectActivityExecution,
+  renderIncidentActions,
+  guidanceForIncident,
+  onOpenDefinition,
+  definitionAccess,
+  graphNodeIds,
+  rootNodeId,
+  activityCatalog = [],
+  executableGraph,
+  definitionName,
+  expressionEditors = [],
+  backendSession,
+  runRelatedLinks = [],
+  incidentRootCauseProviders = [],
+  collapsed = false,
+  expanded = true,
+  maximized = false,
+  layoutMode = "desktop",
+  responsiveOpen = false,
+  historyWorkspace = false,
+  onCloseResponsive,
+  onToggleCollapsed,
+  onToggleMaximized
+}: {
+  context: StudioEndpointContext;
+  summary: WorkflowInstanceSummary | null;
+  activityContent?: ReactNode;
+  details: WorkflowInstanceDetails | null;
+  associationActivities?: ActivityExecutionStateSummary[];
+  associationLookupIncomplete?: boolean;
+  associationLookupSupported?: boolean;
+  associationLookupMessage?: string | null;
+  pendingIncidentActivityCount?: number;
+  unavailableActivityFailures?: UnavailableIncidentActivityFailure[];
+  state: "idle" | "loading" | "ready" | "failed";
+  error: string;
+  selectedEvidenceId?: string | null;
+  onSelectEvidence?(evidenceId: string): void;
+  activeTab: InstanceInspectorTab;
+  onActiveTabChange(tab: InstanceInspectorTab): void;
+  onShowAffectedActivity(incident: IncidentStateSummary): void;
+  onViewInput(incident: IncidentStateSummary): void;
+  onLoadMoreIncidentAssociations(): Promise<void>;
+  focusInputKey: string | null;
+  onSelectActivityExecution(activityExecutionId: string, inspectorTab?: InstanceInspectorTab): void;
+  renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
+  guidanceForIncident?: OperatorActionsApi["guidanceForIncident"];
+  onOpenDefinition?(definitionId: string): void;
+  definitionAccess?: DefinitionAccessObservation;
+  graphNodeIds?: Set<string>;
+  rootNodeId?: string | null;
+  activityCatalog?: ActivityCatalogItem[];
+  executableGraph?: ExecutableActivityGraph | null;
+  definitionName?: string | null;
+  expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
+  collapsed?: boolean;
+  expanded?: boolean;
+  maximized?: boolean;
+  layoutMode?: RunDetailLayoutMode;
+  responsiveOpen?: boolean;
+  historyWorkspace?: boolean;
+  onCloseResponsive?(): void;
+  onToggleCollapsed?(): void;
+  onToggleMaximized?(): void;
+}) {
+  const inspectorRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!responsiveOpen) return;
+    const inspector = inspectorRef.current;
+    const firstControl = inspector?.querySelector<HTMLElement>("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])");
+    requestAnimationFrame(() => (firstControl ?? inspector)?.focus());
+  }, [responsiveOpen]);
+
+  if (!summary) {
+    return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow run to inspect its timeline.</div></aside>;
+  }
+
+  const incidents = Array.isArray(details?.incidents) ? details.incidents : [];
+  const incidentEvidenceAvailable = Array.isArray(details?.incidents);
+  const incidentCount = incidents.length;
+  const activityAssociations = associationActivities ?? details?.activities ?? [];
+  const selectedActivity = findSelectedActivityExecution(activityAssociations, selectedEvidenceId, incidents);
+  const openActivityEvidence = (evidenceId: string) => {
+    onSelectActivityExecution(evidenceId);
+  };
+  const tabs: WorkflowEditorPanelTab[] = [
+    { id: "activity", title: "Activity", order: 1, icon: <ActivityIcon size={14} />, render: () => null },
+    { id: "issues", title: incidentCount > 0 ? `Issues (${incidentCount})` : "Issues", order: 2, icon: <AlertCircle size={14} />, render: () => null },
+    { id: "details", title: "Details", order: 3, icon: <SlidersHorizontal size={14} />, render: () => null }
+  ];
+
+  return (
+    <aside
+      ref={inspectorRef}
+      className="wf-instance-inspector"
+      aria-label="Run details panel"
+      role={layoutMode === "medium" ? "dialog" : undefined}
+      aria-modal={layoutMode === "medium" ? true : undefined}
+      tabIndex={layoutMode === "medium" ? -1 : undefined}
+      onKeyDown={event => {
+        if (layoutMode === "medium" && event.key === "Escape") {
+          event.preventDefault();
+          onCloseResponsive?.();
+        }
+        if (layoutMode === "medium" && event.key === "Tab") trapFocusWithin(event, inspectorRef.current);
+      }}
+    >
+      <div className="wf-panel-title wf-instance-panel-title">
+        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => onActiveTabChange(tabId as InstanceInspectorTab)} />
+        {!historyWorkspace ? <span className="wf-panel-actions">
+          {layoutMode !== "desktop" ? (
+            <StudioButton
+              type="button"
+              className="wf-panel-action-button"
+              aria-label={layoutMode === "narrow" ? "Back to workflow run canvas" : "Close run details panel"}
+              title={layoutMode === "narrow" ? "Back to canvas" : "Close"}
+              onClick={onCloseResponsive}
+            >
+              <ChevronLeft size={14} />
+            </StudioButton>
+          ) : null}
+          {layoutMode === "desktop" ? (
+          <StudioButton
+            type="button"
+            className="wf-panel-action-button"
+            aria-label={collapsed ? "Expand run details panel" : "Collapse run details panel"}
+            title={collapsed ? "Expand" : "Collapse"}
+            onClick={onToggleCollapsed}
+          >
+            {collapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </StudioButton>
+          ) : null}
+          {layoutMode === "desktop" && !collapsed ? (
+            <StudioButton
+              type="button"
+              className="wf-panel-action-button"
+              aria-label={maximized ? "Restore run details panel" : "Maximize run details panel"}
+              title={maximized ? "Restore" : "Maximize"}
+              onClick={onToggleMaximized}
+            >
+              {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </StudioButton>
+          ) : null}
+        </span> : null}
+      </div>
+      {expanded ? (
+        <>
+          {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
+          {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
+          {state === "ready" && details ? (
+            <div className="wf-instance-tab-content">
+              {activeTab === "activity" || activeTab === "timeline" ? (activityContent ??
+                <WorkflowActivityExecutionDetails
+                  context={context}
+                  activity={selectedActivity}
+                  activityCatalog={activityCatalog}
+                  executableNodeFacts={findExecutableNodeFacts(executableGraph, selectedActivity)}
+                  expressionEditors={expressionEditors}
+                  backendSession={backendSession} runRelatedLinks={runRelatedLinks}
+                  focusInputKey={focusInputKey}
+                  onSelectEvidence={openActivityEvidence}
+                />
+              ) : activeTab === "issues" ? (
+                <>
+                  <WorkflowIncidentList
+                    incidents={incidentEvidenceAvailable ? incidents : undefined}
+                    activities={activityAssociations}
+                    executableGraph={executableGraph}
+                    associationLookupIncomplete={associationLookupIncomplete}
+                    associationLookupSupported={associationLookupSupported}
+                    associationLookupMessage={associationLookupMessage}
+                    pendingIncidentActivityCount={pendingIncidentActivityCount}
+                    unavailableActivityFailures={unavailableActivityFailures}
+                    activityCatalog={activityCatalog}
+                    selectedEvidenceId={selectedEvidenceId}
+                    onSelectEvidence={onSelectEvidence}
+                    onShowAffectedActivity={onShowAffectedActivity}
+                    onViewInput={onViewInput}
+                    onLoadMoreIncidentAssociations={onLoadMoreIncidentAssociations}
+                    renderIncidentActions={renderIncidentActions}
+                    context={context}
+                    summary={summary}
+                    incidentRootCauseProviders={incidentRootCauseProviders}
+                    guidanceForIncident={guidanceForIncident}
+                    onOpenDefinition={onOpenDefinition}
+                    definitionAccess={definitionAccess}
+                  />
+                  <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} activityCatalog={activityCatalog} executableGraph={executableGraph} />
+                </>
+              ) : (
+                <>
+                  <dl className="wf-instance-meta">
+                    <dt>Status</dt>
+                    <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
+                    <dt>Workflow Instance ID</dt>
+                    <dd><CopyableIdentifier label="Workflow Instance ID" value={summary.workflowExecutionId} /></dd>
+                    <dt>Run Kind</dt>
+                    <dd>{formatRunKind(summary.runKind)}</dd>
+                    <dt>Executable</dt>
+                    <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
+                    <dt>{hasUnattributedChildDefinition(summary) ? "Source definition" : "Definition"}</dt>
+                    <dd>{hasUnattributedChildDefinition(summary) ? <>
+                      <p>Source definition is unavailable for this child run.</p>
+                      <details><summary>Executable definition metadata</summary>
+                        <CopyableIdentifier label="Executable definition ID" value={summary.definitionId} />
+                        <CopyableIdentifier label="Executable definition version ID" value={summary.definitionVersionId} />
+                      </details>
+                    </> : <NamedIdentity name={definitionName} id={summary.definitionId} secondary={summary.definitionVersionId} />}</dd>
+                    <dt>Created</dt>
+                    <dd><StudioTimestamp value={summary.createdAt} fallback="—" /></dd>
+                    <dt>Started</dt>
+                    <dd><StudioTimestamp value={summary.startedAt} fallback="—" /></dd>
+                    <dt>Completed</dt>
+                    <dd><StudioTimestamp value={summary.completedAt} fallback="—" /></dd>
+                    <dt>Correlation</dt>
+                    <dd>{summary.correlationId || "None"}</dd>
+                    <WorkflowInstanceInspectionFacts
+                      persistenceMode={details.persistenceMode}
+                      inspectionGranularity={details.inspectionGranularity}
+                    />
+                  </dl>
+                  <WorkflowInstanceInspectionNote inspectionGranularity={details.inspectionGranularity} />
+                  <section className="wf-instance-section" aria-label="Workflow outputs">
+                    <h3>Workflow outputs</h3>
+                    {!details.outputs ? <p>Workflow output inspection is unavailable on this host.</p> : !Object.keys(details.outputs).length ? <p>No workflow outputs have been captured.</p> : (
+                      <div className="wf-runtime-input-list" role="list">
+                        {Object.entries(details.outputs).map(([name, output]) => (
+                          <article className="wf-runtime-input wf-workflow-output" role="listitem" key={name}>
+                            <header><strong>{name}</strong><small>Captured <StudioTimestamp value={output.capturedAt} fallback="—" /></small></header>
+                            {output.isRedacted ? <p>{output.redactionReason || "This output is redacted."}</p> : <RuntimeCapturedValue value={output.value} captureMode={output.captureMode} />}
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </aside>
+  );
+}
+
+export interface IncidentActivityAssociation {
+  nodeId: string | null;
+  activityExecution: ActivityExecutionStateSummary | null;
+}
+
+export function resolveIncidentActivityAssociation(
+  incident: IncidentStateSummary,
+  activities: ActivityExecutionStateSummary[],
+  executableGraph?: ExecutableActivityGraph | null
+): IncidentActivityAssociation | null {
+  const getNodeId = (activity: ActivityExecutionStateSummary) =>
+    findExecutableGraphNodeId(executableGraph, activity) ?? (activity.authoredActivityId || activity.executableNodeId || null);
+  const explicitExecutionId = readIncidentActivityExecutionId(incident);
+  const exactExecution = explicitExecutionId
+    ? activities.find(activity => activity.activityExecutionId === explicitExecutionId)
+    : undefined;
+  if (exactExecution) {
+    return { nodeId: getNodeId(exactExecution), activityExecution: exactExecution };
+  }
+
+  const incidentExecutions = explicitExecutionId
+    ? []
+    : activities.filter(activity => activity.incidentIds?.includes(incident.incidentId) ?? false);
+  if (incidentExecutions.length === 1) {
+    const exact = incidentExecutions[0]!;
+    return { nodeId: getNodeId(exact), activityExecution: exact };
+  }
+
+  const explicitNodeId = incident.executableNodeId?.trim() || incident.metadata?.["runtime.executableNodeId"]?.trim();
+  if (explicitNodeId) {
+    const pinnedNodeId = findExecutableGraphNodeId(executableGraph, { executableNodeId: explicitNodeId });
+    if (pinnedNodeId) return { nodeId: pinnedNodeId, activityExecution: null };
+    const nodeActivity = activities.find(activity => activity.executableNodeId === explicitNodeId);
+    if (!nodeActivity) {
+      const authoredMatches = activities.filter(activity => activity.authoredActivityId === explicitNodeId);
+      if (new Set(authoredMatches.map(activity => activity.executableNodeId)).size > 1) {
+        return { nodeId: null, activityExecution: null };
+      }
+      if (authoredMatches.length === 1) return { nodeId: getNodeId(authoredMatches[0]!), activityExecution: null };
+    }
+    const nodeId = nodeActivity ? getNodeId(nodeActivity) : explicitNodeId;
+    return { nodeId, activityExecution: null };
+  }
+
+  const incidentNodeIds = [...new Set(incidentExecutions.map(getNodeId).filter(Boolean))];
+  return incidentNodeIds.length === 1
+    ? { nodeId: incidentNodeIds[0]!, activityExecution: null }
+    : null;
+}
+
+function readIncidentInputKey(incident: IncidentStateSummary) {
+  return incident.metadata?.["runtime.inputKey"]?.trim() || null;
+}
+
+function readIncidentActivityExecutionId(incident: IncidentStateSummary) {
+  return incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim() || null;
+}
+
+export function getIncidentRootCause(incident: IncidentStateSummary, providers: StudioIncidentRootCauseProviderContribution[] = []) {
+  // Try registered providers first (filtered by failureTypes / metadataKeyPrefixes)
+  const matchedProviders = providers.filter(provider => {
+    if (provider.failureTypes && provider.failureTypes.length > 0) {
+      if (!provider.failureTypes.includes(incident.failureType)) return false;
+    }
+    if (provider.metadataKeyPrefixes && provider.metadataKeyPrefixes.length > 0 && incident.metadata) {
+      const hasMatchingKey = Object.keys(incident.metadata).some(key =>
+        provider.metadataKeyPrefixes!.some(prefix => key.startsWith(prefix))
+      );
+      if (!hasMatchingKey) return false;
+    }
+    return true;
+  });
+  for (const provider of matchedProviders) {
+    const result = provider.getRootCause({
+      incidentId: incident.incidentId,
+      failureType: incident.failureType,
+      message: incident.message,
+      metadata: incident.metadata,
+      severity: incident.severity,
+      status: incident.status,
+      isBlocking: incident.isBlocking,
+      createdAt: incident.createdAt
+    });
+    if (result) return result;
+  }
+  // Fall back to default logic
+  const rootCause = incident.metadata?.["runtime.faultInnerMessage"]?.trim();
+  const message = rootCause || incident.message;
+  const child = message.match(/^Flowchart faulted because child node '([^']+)' faulted:/);
+  if (child) return `Activity '${child[1]}' failed. Review its incident to correct the cause.`;
+  return message;
+}
+
+function findSelectedActivityExecution(
+  activities: ActivityExecutionStateSummary[],
+  selectedEvidenceId: string | null,
+  incidents: IncidentStateSummary[] = []
+) {
+  if (!selectedEvidenceId) return null;
+
+  const selectedIncident = incidents.find(incident => incident.incidentId === selectedEvidenceId);
+  if (selectedIncident) return resolveIncidentActivityAssociation(selectedIncident, activities)?.activityExecution ?? null;
+
+  const exactActivity = activities.find(activity => activity.activityExecutionId === selectedEvidenceId);
+  if (exactActivity) return exactActivity;
+
+  const nodeActivities = activities.filter(activity =>
+    activity.executableNodeId === selectedEvidenceId ||
+    activity.authoredActivityId === selectedEvidenceId);
+  return nodeActivities.length > 0 ? latestActivityExecution(nodeActivities) : null;
+}
+
+export function focusSelectedCanvasActivity(selectedEvidenceId: string | null) {
+  if (!selectedEvidenceId) return;
+  const node = [...document.querySelectorAll<HTMLElement>(".wf-instance-canvas [data-id]")]
+    .find(element => element.dataset.id === selectedEvidenceId || element.dataset.runtimeNodeId === selectedEvidenceId ||
+      [...element.querySelectorAll<HTMLElement>("[data-runtime-node-id]")]
+        .some(runtimeNode => runtimeNode.dataset.runtimeNodeId === selectedEvidenceId));
+  node?.focus();
+}
+
+function trapFocusWithin(event: ReactKeyboardEvent<HTMLElement>, container: HTMLElement | null) {
+  if (!container) return;
+  const controls = [...container.querySelectorAll<HTMLElement>(
+    "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+  )].filter(element => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+  if (controls.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+
+  const first = controls[0]!;
+  const last = controls.at(-1)!;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+const incidentStackTraceMetadataKeys = [
+  "runtime.faultStackTrace",
+  "runtime.exceptionStackTrace",
+  "runtime.stackTrace",
+  "faultStackTrace",
+  "exceptionStackTrace",
+  "stackTrace"
+];
+
+export function WorkflowIncidentList({
+  context,
+  summary,
+  incidents,
+  activities = [],
+  activityCatalog = [],
+  executableGraph,
+  associationLookupIncomplete = false,
+  associationLookupSupported = false,
+  associationLookupMessage = null,
+  pendingIncidentActivityCount = 0,
+  unavailableActivityFailures = [],
+  selectedEvidenceId = null,
+  onSelectEvidence,
+  onShowAffectedActivity,
+  onViewInput,
+  onLoadMoreIncidentAssociations,
+  renderIncidentActions,
+  incidentRootCauseProviders = [],
+  guidanceForIncident,
+  onOpenDefinition,
+  definitionAccess
+}: {
+  context?: StudioEndpointContext;
+  summary?: WorkflowInstanceSummary | null;
+  incidents?: IncidentStateSummary[] | null;
+  activities?: ActivityExecutionStateSummary[];
+  activityCatalog?: ActivityCatalogItem[];
+  executableGraph?: ExecutableActivityGraph | null;
+  associationLookupIncomplete?: boolean;
+  associationLookupSupported?: boolean;
+  associationLookupMessage?: string | null;
+  pendingIncidentActivityCount?: number;
+  unavailableActivityFailures?: UnavailableIncidentActivityFailure[];
+  selectedEvidenceId?: string | null;
+  onSelectEvidence?(evidenceId: string): void;
+  onShowAffectedActivity?(incident: IncidentStateSummary): void;
+  onViewInput?(incident: IncidentStateSummary): void;
+  onLoadMoreIncidentAssociations?(): Promise<void>;
+  /** Spec 260: the operator actions of a waiting incident, shown in its details dialog. */
+  renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
+  guidanceForIncident?: OperatorActionsApi["guidanceForIncident"];
+  onOpenDefinition?(definitionId: string): void;
+  definitionAccess?: DefinitionAccessObservation;
+}) {
+  const [copyStatus, setCopyStatus] = useState("");
+  const [loadingAssociations, setLoadingAssociations] = useState(false);
+  const [incidentDetailsId, setIncidentDetailsId] = useState<string | null>(null);
+  const incidentEvidenceAvailable = Array.isArray(incidents);
+  const incidentRows = incidents ?? [];
+  const incidentDetails = incidentRows.find(incident => incident.incidentId === incidentDetailsId) ?? null;
+  const incidentGuidance = incidentDetails
+    ? guidanceForIncident?.(incidentDetails) ?? {
+        actionAvailability: "unknown" as const,
+        canAct: false,
+        pendingIncidentId: null,
+        requesterCancelled: false,
+        retryReviewEligibility: { status: "unknown", reason: "source-not-loaded" }
+      }
+    : undefined;
+  const permissionDeniedCount = unavailableActivityFailures.filter(failure => failure.reason === "permission-denied").length;
+  const identityMismatchCount = unavailableActivityFailures.filter(failure => failure.reason === "identity-mismatch").length;
+
+  return (
+    <section className="wf-instance-section">
+      <h4>Incidents</h4>
+      {!incidentEvidenceAvailable ? <p>Incident data is unavailable from this Runtime host.</p> : null}
+      {associationLookupIncomplete ? (
+        <div className="wf-run-association-status" role="status">
+          <p className="wf-instance-note">{associationLookupSupported
+            ? `Some affected activities are not shown yet (${pendingIncidentActivityCount} remaining).`
+            : "This server cannot provide exact activity data."}</p>
+          {associationLookupSupported && onLoadMoreIncidentAssociations ? (
+            <StudioButton
+              type="button"
+              className="wf-run-incident-action"
+              data-health="active"
+              disabled={loadingAssociations}
+              onClick={() => {
+                setLoadingAssociations(true);
+                void onLoadMoreIncidentAssociations().finally(() => setLoadingAssociations(false));
+              }}
+            >
+              {loadingAssociations ? "Loading affected activities..." : `Load more affected activities (${pendingIncidentActivityCount})`}
+            </StudioButton>
+          ) : null}
+        </div>
+      ) : null}
+      {unavailableActivityFailures.length > 0 ? (
+        <div className="wf-run-association-status" role="status">
+          {permissionDeniedCount > 0 ? (
+            <p>You do not have permission to inspect {permissionDeniedCount} exact activity execution{permissionDeniedCount === 1 ? "" : "s"}. The incident{permissionDeniedCount === 1 ? " remains" : "s remain"} available here.</p>
+          ) : null}
+          {identityMismatchCount > 0 ? (
+            <p>Runtime returned a different run or activity execution for {identityMismatchCount} association{identityMismatchCount === 1 ? "" : "s"}. Studio kept those incidents open and did not open the returned execution.</p>
+          ) : null}
+        </div>
+      ) : null}
+      {associationLookupMessage ? <p className="wf-run-association-status" role="status">{associationLookupMessage}</p> : null}
+      {incidentEvidenceAvailable && incidentRows.length === 0 ? <p>No incidents recorded.</p> : null}
+      {incidentRows.map(incident => (
+        (() => {
+          const association = resolveIncidentActivityAssociation(incident, activities, executableGraph);
+          const inputKey = readIncidentInputKey(incident);
+          const expressionLanguage = incident.metadata?.["runtime.expressionLanguage"];
+          const activityFacts = findExecutableNodeFacts(executableGraph, association?.activityExecution) ??
+            (association?.nodeId ? executableGraph?.factsByNodeId.get(association.nodeId) : undefined);
+          const labelActivity = association?.activityExecution ?? activityFacts;
+          const activityLabel = getIncidentActivityLabel(labelActivity, activityCatalog, activityFacts?.presentation);
+          const inputLabel = getIncidentInputLabel(association?.activityExecution, activityCatalog, inputKey, activityFacts);
+          const incidentHealthLabel = !isActiveIncident(incident)
+            ? "Historical"
+            : incident.isBlocking ? "Needs intervention" : "Non-blocking";
+          return (
+            <article
+              className="wf-instance-incident"
+              data-incident-id={incident.incidentId}
+              data-severity={incident.severity.toLowerCase()}
+              data-selected={incident.incidentId === selectedEvidenceId}
+              key={incident.incidentId}
+            >
+              <StudioButton
+                type="button"
+                className="wf-instance-incident-summary"
+                onClick={() => onSelectEvidence?.(incident.incidentId)}
+              >
+                <strong>{activityLabel ? `${activityLabel}${inputLabel ? ` · ${inputLabel}` : ""}` : inputLabel ? `Input · ${inputLabel}` : incident.failureType}</strong>
+                <p className="wf-instance-incident-cause">{getIncidentRootCause(incident, incidentRootCauseProviders)}</p>
+                <span className="wf-instance-incident-status" data-health={incident.isBlocking && isActiveIncident(incident) ? "blocking" : "neutral"}>{incidentHealthLabel} · {incident.status}</span>
+                {expressionLanguage ? <small>Expression language · {expressionLanguage}</small> : null}
+              </StudioButton>
+              <div className="wf-instance-incident-actions">
+                {association?.nodeId || hasIncidentActivityExecutionId(incident) ? (
+                  <StudioButton type="button" onClick={() => onShowAffectedActivity?.(incident)}>Show affected activity</StudioButton>
+                ) : <span className="wf-instance-note">Run-level issue · no activity association was recorded.</span>}
+                {inputKey && (association?.activityExecution || hasIncidentActivityExecutionId(incident)) ? (
+                  <StudioButton type="button" onClick={() => onViewInput?.(incident)}>View input data</StudioButton>
+                ) : inputKey ? (
+                  <span className="wf-instance-note">Input key is recorded, but its exact activity execution is unavailable.</span>
+                ) : null}
+                <StudioButton type="button" className="wf-incident-open-details" onClick={() => setIncidentDetailsId(incident.incidentId)}>Open incident details</StudioButton>
+                <CopyValueButton
+                  scope={context}
+                  value={formatIncidentForClipboard(incident)}
+                  ariaLabel={`Copy incident ${incident.failureType}`}
+                  copiedLabel="incident"
+                  textLabel="Copy incident details"
+                  onCopied={label => { setCopyStatus(""); getNotifications().notify({ level: "success", title: `Copied ${label}` }); }}
+                  onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
+                />
+              </div>
+              <details className="wf-incident-technical-details">
+                <summary>Technical details</summary>
+                <IncidentTechnicalContent incident={incident} />
+              </details>
+            </article>
+          );
+        })()
+      ))}
+      {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
+      {incidentDetails ? (
+        <IncidentDetailsDialog
+          incident={incidentDetails}
+          context={context}
+          summary={summary}
+          guidance={incidentGuidance}
+          onOpenDefinition={onOpenDefinition}
+          definitionAccess={definitionAccess}
+          incidentRootCauseProviders={incidentRootCauseProviders}
+          onClose={() => setIncidentDetailsId(null)}
+          actions={renderIncidentActions?.(
+            incidentDetails,
+            incidentActivityLabel(incidentDetails, activities, activityCatalog, executableGraph),
+            () => setIncidentDetailsId(null),
+            () => document.querySelector<HTMLElement>(`.wf-instance-incident[data-incident-id="${CSS.escape(incidentDetails.incidentId)}"] .wf-incident-open-details`)?.focus())}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+export function getIncidentActivityLabel(
+  activity: Pick<ActivityExecutionStateSummary, "activityType" | "activityTypeVersion"> | null | undefined,
+  catalog: ActivityCatalogItem[],
+  presentation?: ExecutableGraphNodeFacts["presentation"]
+) {
+  if (!activity) return null;
+  const catalogItem = catalog.find(item => item.activityTypeKey === activity.activityType && item.version === activity.activityTypeVersion);
+  return resolveActivityLabel(presentation, catalogItem, activity.activityType);
+}
+
+function hasIncidentActivityExecutionId(incident: IncidentStateSummary) {
+  return Boolean(readIncidentActivityExecutionId(incident));
+}
+
+export function getIncidentInputLabel(
+  activity: Pick<ActivityExecutionStateSummary, "activityType" | "activityTypeVersion"> | null | undefined,
+  catalog: ActivityCatalogItem[],
+  inputKey: string | null,
+  activityFacts?: Pick<ExecutableGraphNodeFacts, "inputBindings">
+) {
+  if (!inputKey) return null;
+  const exactActivityVersion = activity
+    ? catalog.find(item => item.activityTypeKey === activity.activityType && item.version === activity.activityTypeVersion)
+    : undefined;
+  const descriptor = exactActivityVersion?.inputs
+    .find(input => {
+      if (!input || typeof input !== "object") return false;
+      const record = input as Record<string, unknown>;
+      const referenceKey = typeof record.referenceKey === "string" ? record.referenceKey.trim() : "";
+      return referenceKey ? referenceKey === inputKey : record.name === inputKey;
+    }) as StudioActivityInputDescriptor | undefined;
+  const displayName = descriptor?.displayName?.trim();
+  const frozenInputName = activityFacts?.inputBindings.find(binding => (binding.inputKey?.trim() || binding.inputName) === inputKey)?.inputName.trim();
+  const inputLabel = displayName && displayName !== inputKey
+    ? `${displayName} input`
+    : frozenInputName && frozenInputName !== inputKey
+      ? `${frozenInputName} input`
+      : `${inputKey} input`;
+  return inputLabel;
+}
+
+function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
+  const stackTrace = getIncidentStackTrace(incident);
+  if (!stackTrace) return null;
+
+  return (
+    <details className="wf-incident-stacktrace">
+      <summary>Stack trace</summary>
+      <pre tabIndex={0}>{stackTrace}</pre>
+    </details>
+  );
+}
+
+function IncidentTechnicalContent({ incident }: { incident: IncidentStateSummary }) {
+  const activityExecutionId = readIncidentActivityExecutionId(incident);
+  const inputKey = readIncidentInputKey(incident);
+  const inputFailureCode = incident.metadata?.["runtime.inputFailureCode"];
+  const expressionLanguage = incident.metadata?.["runtime.expressionLanguage"];
+  const inputPhase = incident.metadata?.["runtime.inputEvaluationPhase"];
+  const innerType = incident.metadata?.["runtime.faultInnerType"];
+  const hasMetadata = Boolean(incident.metadata && Object.keys(incident.metadata).length > 0);
+
+  return (
+    <div className="wf-incident-technical-content">
+      <section className="wf-incident-message-section" aria-label="Incident message">
+        <h5>Message</h5>
+        <p className="wf-incident-message">{incident.message}</p>
+      </section>
+      <dl className="wf-incident-metadata">
+        <dt>Failure type</dt><dd><code>{incident.failureType}</code></dd>
+        <dt>Incident ID</dt><dd><code>{incident.incidentId}</code></dd>
+        <dt>Workflow execution ID</dt><dd><code>{incident.workflowExecutionId}</code></dd>
+        {activityExecutionId ? <><dt>Activity execution ID</dt><dd><code>{activityExecutionId}</code></dd></> : null}
+        {incident.executableNodeId ? <><dt>Executable node ID</dt><dd><code>{incident.executableNodeId}</code></dd></> : null}
+        <dt>Status</dt><dd>{incident.status}</dd>
+        <dt>Severity</dt><dd>{incident.severity}</dd>
+        <dt>Blocking</dt><dd>{incident.isBlocking ? "Yes" : "No"}</dd>
+        {incident.resolutionOutcome ? <><dt>Resolution action</dt><dd>{resolutionOutcomeLabel(incident.resolutionOutcome)}</dd></> : null}
+        <dt>Created</dt><dd><StudioTimestamp value={incident.createdAt} fallback="—" /></dd>
+        {incident.resolvedAt ? <><dt>Resolved</dt><dd><StudioTimestamp value={incident.resolvedAt} fallback="—" /></dd></> : null}
+        {innerType ? <><dt>Root cause type</dt><dd><code>{innerType}</code></dd></> : null}
+        {inputKey ? <><dt>Input key</dt><dd><code>{inputKey}</code></dd></> : null}
+        {inputFailureCode ? <><dt>Input failure code</dt><dd><code>{inputFailureCode}</code></dd></> : null}
+        {inputPhase ? <><dt>Input evaluation phase</dt><dd>{inputPhase}</dd></> : null}
+        {expressionLanguage ? <><dt>Expression language</dt><dd>{expressionLanguage}</dd></> : null}
+      </dl>
+      <IncidentStackTrace incident={incident} />
+      {hasMetadata ? (
+        <details className="wf-incident-raw-metadata">
+          <summary>View complete runtime metadata</summary>
+          <pre>{JSON.stringify(incident.metadata, null, 2)}</pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+// The label the incident list shows for an incident's activity, for the operator dialog's target line.
+function incidentActivityLabel(
+  incident: IncidentStateSummary,
+  activities: ActivityExecutionStateSummary[],
+  activityCatalog: ActivityCatalogItem[],
+  executableGraph: ExecutableActivityGraph | null | undefined
+) {
+  const association = resolveIncidentActivityAssociation(incident, activities, executableGraph);
+  const activityFacts = findExecutableNodeFacts(executableGraph, association?.activityExecution) ??
+    (association?.nodeId ? executableGraph?.factsByNodeId.get(association.nodeId) : undefined);
+  return getIncidentActivityLabel(association?.activityExecution ?? activityFacts, activityCatalog, activityFacts?.presentation) ?? incident.failureType;
+}
+
+function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDefinition, definitionAccess, onClose, actions, incidentRootCauseProviders = [] }: {
+  incident: IncidentStateSummary;
+  context?: StudioEndpointContext;
+  summary?: WorkflowInstanceSummary | null;
+  guidance?: ReturnType<OperatorActionsApi["guidanceForIncident"]>;
+  onOpenDefinition?(definitionId: string): void;
+  definitionAccess?: DefinitionAccessObservation;
+  onClose(): void;
+  actions?: ReactNode;
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
+}) {
+  const [copyStatus, setCopyStatus] = useState("");
+
+  return (
+    <StudioDialog open title="Incident details" closeLabel="Close incident details" className="wf-incident-details-dialog"
+      description={getIncidentRootCause(incident, incidentRootCauseProviders)} onClose={onClose} onEscapeKeyDown={event => event.stopPropagation()}>
+      <div className="wf-incident-details-body">
+        <div className="wf-incident-details-actions">
+          <CopyValueButton
+            scope={context}
+            value={formatIncidentForClipboard(incident)}
+            ariaLabel={`Copy incident ${incident.failureType}`}
+            copiedLabel="incident"
+            textLabel="Copy incident details"
+            onCopied={() => { setCopyStatus(""); getNotifications().notify({ level: "success", title: "Copied incident" }); }}
+            onCopyFailed={() => setCopyStatus("Could not copy incident.")}
+          />
+          {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
+        </div>
+        {actions}
+        {guidance ? <IncidentNextStep context={context} summary={summary} incident={incident} guidance={guidance} onOpenDefinition={onOpenDefinition} definitionAccess={definitionAccess} /> : null}
+        <IncidentTechnicalContent incident={incident} />
+      </div>
+    </StudioDialog>
+  );
+}
+
+export function getIncidentStackTrace(incident: IncidentStateSummary) {
+  const directStackTrace = firstNonBlank(incident.stackTrace, incident.exceptionStackTrace);
+  if (directStackTrace) return directStackTrace;
+
+  for (const key of incidentStackTraceMetadataKeys) {
+    const value = incident.metadata?.[key];
+    if (value && value.trim()) return value;
+  }
+
+  return null;
+}
+
+function firstNonBlank(...values: Array<string | null | undefined>) {
+  return values.find(value => value?.trim()) ?? null;
+}
+
+function NamedIdentity({
+  name,
+  id,
+  secondary
+}: {
+  name?: string | null;
+  id: string;
+  secondary?: string | null;
+}) {
+  const identity = resolveNamedIdentity(name, id, [secondary]);
+  const secondaryText = identity.secondaryIds.join(" · ") || null;
+  return (
+    <span className="wf-identity-cell" title={formatNamedIdentityTitle(identity.label, identity.secondaryIds)}>
+      <strong>{identity.label}</strong>
+      {secondaryText ? <small>{secondaryText}</small> : null}
+    </span>
+  );
+}
+
+function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId, activityCatalog, executableGraph }: {
+  details: WorkflowInstanceDetails;
+  graphNodeIds?: Set<string>;
+  rootNodeId?: string | null;
+  activityCatalog?: ActivityCatalogItem[];
+  executableGraph?: ExecutableActivityGraph | null;
+}) {
+  if (!graphNodeIds) return null;
+
+  const unmatchedActivities = details.activities.filter(activity => {
+    const nodeId = activityNodeKey(activity);
+    return nodeId && nodeId !== rootNodeId && !graphNodeIds.has(nodeId);
+  });
+
+  if (unmatchedActivities.length === 0) return null;
+
+  return (
+    <section className="wf-instance-section">
+      <h4>Executions outside canvas</h4>
+      <div className="wf-instance-unmatched-list">
+        {unmatchedActivities.map(activity => (
+          <div className="wf-instance-unmatched" key={`activity-${activity.activityExecutionId}`}>
+            <strong>{getIncidentActivityLabel(activity, activityCatalog ?? [], findExecutableNodeFacts(executableGraph, activity)?.presentation)}</strong>
+            <small title={activity.activityExecutionId}>{activity.activityExecutionId}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function formatIncidentForClipboard(incident: IncidentStateSummary) {
+  const lines = [
+    `Incident: ${incident.failureType}`,
+    `Incident ID: ${incident.incidentId}`,
+    `Workflow execution ID: ${incident.workflowExecutionId}`,
+    incident.activityExecutionId ? `Activity execution ID: ${incident.activityExecutionId}` : "",
+    incident.executableNodeId ? `Executable node ID: ${incident.executableNodeId}` : "",
+    `Status: ${incident.status}`,
+    `Severity: ${incident.severity}`,
+    `Blocking: ${incident.isBlocking ? "Yes" : "No"}`,
+    incident.resolutionOutcome ? `Resolution action: ${resolutionOutcomeLabel(incident.resolutionOutcome)}` : "",
+    `Created: ${formatDate(incident.createdAt)}`,
+    incident.resolvedAt ? `Resolved: ${formatDate(incident.resolvedAt)}` : "",
+    "",
+    incident.message
+  ].filter(Boolean);
+
+  const stackTrace = getIncidentStackTrace(incident);
+  if (stackTrace) lines.push("", "Stack trace:", stackTrace);
+
+  if (incident.metadata && Object.keys(incident.metadata).length > 0) {
+    lines.push("", "Metadata:", JSON.stringify(incident.metadata, null, 2));
+  }
+
+  return lines.join("\n");
+}

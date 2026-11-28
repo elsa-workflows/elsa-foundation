@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Kernel.EntityFramework;
 
 // Disposable prototype schemas only. Guards execute inside the existing DML transaction, without a header read.
+// S5b-3a: in a composed parked-operator set a Terminate-then-delete retires a parked root as it ends it Cancelled.
 internal static class PhysicalRetirement
 {
     internal static Task InstallAsync(KernelDb db, Engine? engine, bool postgres)
@@ -44,12 +45,27 @@ internal static class PhysicalRetirement
                 """
         };
         if (postgres && engine is null)
-            sql = sql.Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? FormattableString.Invariant($"""
+            sql = sql.Replace("/*root-atomic-retirement*/", RootExceptions(db), StringComparison.Ordinal);
+        return db.Database.ExecuteSqlRawAsync(sql);
+    }
+
+    internal static string SqliteRootGuard(KernelDb db) =>
+        """
+        CREATE TRIGGER kernel_physical_retirement BEFORE UPDATE ON Instances
+        WHEN OLD.Retired = 1 OR NEW.Retired = 1 AND (OLD.Status = 0 OR NEW.Status <> OLD.Status) /*root-atomic-retirement*/
+        BEGIN SELECT RAISE(ABORT, 'Physical retirement is irreversible and requires an ended run.'); END
+        """.Replace("/*root-atomic-retirement*/", RootExceptions(db), StringComparison.Ordinal);
+
+    private static string RootExceptions(KernelDb db) => db.UsesRootTerminateThenDelete ? FormattableString.Invariant($"""
                 AND NOT ((OLD."Status" = 0 AND NEW."Status" = {(int)InstanceStatus.Cancelled}
                     AND OLD."FoundationReference" IS NOT NULL AND NEW."FoundationReference" = OLD."FoundationReference"
                     AND NEW."FoundationWriteRevision" = OLD."Revision" + 1 AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL) IS TRUE)
-                """) : "", StringComparison.Ordinal);
-        return db.Database.ExecuteSqlRawAsync(sql);
-    }
+                """) + (db.UsesRootParkedOperators ? FormattableString.Invariant($"""
+                AND NOT ((OLD."Status" = {(int)InstanceStatus.Faulted} AND OLD."FoundationParkAt" IS NOT NULL
+                    AND NEW."Status" = {(int)InstanceStatus.Cancelled}
+                    AND OLD."FoundationReference" IS NOT NULL AND NEW."FoundationReference" = OLD."FoundationReference"
+                    AND NEW."FoundationWriteRevision" = OLD."Revision" + 1 AND NEW."Revision" = NEW."FoundationWriteRevision"
+                    AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL) IS TRUE)
+                """) : "") : "";
 }

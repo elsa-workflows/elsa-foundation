@@ -50,9 +50,10 @@ activated `IVariableTypeDescriptorCatalog` and the host's resolved `IActivityCon
 an authored alias never opens arbitrary CLR types or the runtime alias registry.
 
 Type admission alone does not establish the actual serialized profile of a Workflow input, variable or
-current item. For a single (non-collection) admitted type whose members the metadata reader can read,
-the CLR contribution returns `Declared` with `activity.shape.declared-type`: the type's members under the
-activity-value profile, as advisory names for authoring help. Validation and the Activity Data picker
+current item. For an admitted type whose members the metadata reader can read, and for a List, Array, HashSet
+or Dictionary of one, the CLR contribution returns `Declared` with `activity.shape.declared-type`: the type's
+members under the activity-value profile (on the collection's `Element` or the map's `MapValue`), as advisory
+names for authoring help. A member path below a collection keeps the unbound answer. Validation and the Activity Data picker
 treat `Declared` as Unknown. Every other case returns Unknown with
 `activity.shape.serialization-profile-unbound`: an admitted whole type can be retained, but a nonempty
 literal path has no asserted selected type. Request seeding preserves caller JSON or default
@@ -90,9 +91,9 @@ holding application-wide static state (§2.5.1).
   author-controlled SemVer. Re-register to change the version-precedence policy; the default (FR-020:
   `[Version]` → `AssemblyInformationalVersion` → 4-part assembly version) is the sanctioned rule.
 - **`IActivityTypeCategoryResolver` → `ActivityTypeCategoryResolver`** — resolves an activity's catalog
-  category. The default takes the last dot-separated segment of the declaring assembly's simple name
-  (e.g. `Elsa.Runtime.Activities.Primitives` → `Primitives`). Re-register for a different scheme
-  (e.g. a type-level `[Category]` attribute).
+  category. The default uses a nonblank `System.ComponentModel.CategoryAttribute` declared directly
+  on the activity or derives the category from the declaring assembly's last name segment.
+  Re-register for a different convention.
 - **`IClrAssemblyScanner` → `ClrAssemblyScanner`** — the reflection-only folder scanner that produces
   one `ActivityVersionReconciliationModel` per discovered `IActivity`. Re-register to change the
   scanning strategy without touching `ClrActivityReconciliationSource`, which depends only on the

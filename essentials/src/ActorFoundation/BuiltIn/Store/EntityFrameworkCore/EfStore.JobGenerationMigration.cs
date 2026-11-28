@@ -167,7 +167,7 @@ public sealed partial class EfStore
         END
         """;
 
-    private const string SqliteGenerationClause = """
+    internal const string SqliteGenerationClause = """
         kernel_job_generation BEFORE UPDATE ON Instances
         WHEN NEW.Retired = 0 AND OLD.NextJobGeneration IS NOT NULL AND
              (NEW.NextJobGeneration IS NULL OR NEW.NextJobGeneration < OLD.NextJobGeneration)

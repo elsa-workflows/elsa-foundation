@@ -47,23 +47,23 @@ internal static class PortChecks
 
         // For: half-open and closed ranges, a negative step, a step away from the end, and Break through an If.
         yield return Workflow("port-for", Sequence("root",
-                For("up", 0, 5, Set("s1", "up", Expr("up + Index"))),
-                For("closed", 1, 3, Set("s2", "closed", Expr("closed + Index")), endInclusive: true),
-                For("down", 6, 0, Set("s3", "down", Expr("down + Index")), step: -2),
+                For("up", 0, 5, Set("s1", "up", Expr("up + index"))),
+                For("closed", 1, 3, Set("s2", "closed", Expr("closed + index")), endInclusive: true),
+                For("down", 6, 0, Set("s3", "down", Expr("down + index")), step: -2),
                 For("away", 0, 5, Set("s4", "away", 99), step: -1),
                 For("pinned", 0, Var("n"), Set("s6", "n", Expr("n + 1"))),
-                For("downto", 3, 1, Set("s7", "downto", Expr("downto + Index")), step: -1, endInclusive: true),
-                For("broken", 0, 10, Sequence("body", If("stop", Expr("Index == 2"), Break("brk")), Set("s5", "broken", Expr("broken + Index")))),
+                For("downto", 3, 1, Set("s7", "downto", Expr("downto + index")), step: -1, endInclusive: true),
+                For("broken", 0, 10, Sequence("body", If("stop", Expr("index == 2"), Break("brk")), Set("s5", "broken", Expr("broken + index")))),
                 Set("out", "output", Expr("up + ' ' + closed + ' ' + down + ' ' + away + ' ' + n + ' ' + downto + ' ' + broken")), Hold()),
             ("up", 0), ("closed", 0), ("down", 0), ("away", 0), ("n", 3), ("downto", 0), ("broken", 0), ("output", null));
         yield return Workflow("port-for-zero", For("zero", 0, 5, Set("s", "a", 1), step: 0), ("a", null));
         // Each pass of a For is its own activation: an outbound effect in the body gets a key per index.
-        yield return Workflow("port-for-effects", For("each", 0, 3, Email("mail", "ops@example.com", Expr("'pass ' + Index"), "body")));
+        yield return Workflow("port-for-effects", For("each", 0, 3, Email("mail", "ops@example.com", Expr("'pass ' + index"), "body")));
         yield return Workflow("port-do-effects", Do("each", Expr("count < 3"), Sequence("body", Set("inc", "count", Expr("count + 1")), Email("mail", "ops@example.com", "pass", "body"))), ("count", 0));
 
         // Bodies that wait, so that each loop and the Switch resume from committed state in later turns.
         yield return Workflow("port-suspend", Sequence("root",
-                For("for", 0, 2, Sequence("fb", Delay("fd", 5), Set("fs", "f", Expr("f + Index")))),
+                For("for", 0, 2, Sequence("fb", Delay("fd", 5), Set("fs", "f", Expr("f + index")))),
                 Do("do", Expr("d < 2"), Sequence("db", Delay("dd", 5), Set("ds", "d", Expr("d + 1")))),
                 Switch("sw", Var("tier"), (Case("gold"), Sequence("sb", Delay("sd", 5), Set("ss", "s", "gold")))),
                 Set("out", "output", Expr("f + ' ' + d + ' ' + s")), Hold()),
@@ -80,8 +80,8 @@ internal static class PortChecks
         // Break through a Switch and through a Flowchart, inside ForEach and While.
         yield return Workflow("port-break", Sequence("root",
                 ForEach("each", Expr("[1, 2, 3]"), Sequence("body",
-                    Switch("sw", Expr("'' + CurrentItem"), (Case("2"), Break("brk1"))),
-                    Set("s1", "seen", Expr("seen + CurrentItem")))),
+                    Switch("sw", Expr("'' + currentItem"), (Case("2"), Break("brk1"))),
+                    Set("s1", "seen", Expr("seen + currentItem")))),
                 While("loop", true, Flowchart("flow",
                     [Set("inc", "n", Expr("n + 1")), If("decide", Expr("n == 3")), Break("brk2")],
                     [new("inc", "decide"), new("decide", "brk2", "True")])),

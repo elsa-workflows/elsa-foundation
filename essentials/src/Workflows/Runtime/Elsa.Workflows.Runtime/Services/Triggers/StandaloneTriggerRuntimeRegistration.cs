@@ -1,56 +1,28 @@
-using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Extensions;
-using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Coalescing;
-using Elsa.Workflows.Runtime.Services.Triggers.Management;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Services.Triggers;
 
-internal sealed record StandaloneTriggerProviderRegistration(string Name, ServiceDescriptor Resource, ServiceDescriptor Ingress)
-{
-    internal ServiceDescriptor? SourceCommit { get; init; }
-    internal ServiceDescriptor? Reservations { get; init; }
-    internal void EnsureOwned(IServiceCollection services)
-    {
-        if (!services.Where(x => x.ServiceType == typeof(IStandaloneTriggerStore)).SequenceEqual([Resource]) ||
-            !services.Where(x => x.ServiceType == typeof(IRuntimeIngressDeliveryStore)).SequenceEqual([Ingress]) ||
-            SourceCommit is not null && !services.Where(x => x.ServiceType == typeof(ITriggerSourceResourceCommitStore)).SequenceEqual([SourceCommit]) ||
-            Reservations is not null && !services.Where(x => x.ServiceType == typeof(IRuntimeIngressReservationReader)).SequenceEqual([Reservations]))
-            throw new InvalidOperationException("Standalone trigger persistence no longer owns its selected resource and ingress ports.");
-    }
-}
-
 internal static class StandaloneTriggerRuntimeRegistration
 {
     internal static void AddServices(IServiceCollection services)
     {
-        StandaloneTriggerProviderCompositionValidator.Register(services);
-        services.TryAddScoped<ITriggerInputMapper, TriggerInputMapper>();
-        services.TryAddScoped<TriggerTargetResolver>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IEventHandler<TriggerTargetModelsDiscovering>, CollectTriggerTargetModels>());
-        services.TryAddScoped<TriggerManagementTargets>();
-        services.TryAddScoped<IStandaloneTriggerTargetDiscovery, StandaloneTriggerTargetDiscovery>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITriggerTargetModelSource, NativeTriggerTargetModelSource>());
+        if (services.Select(x => x.ImplementationInstance).OfType<StandaloneTriggerProviderRegistration>()
+            .Any(marker => marker.Name == StandaloneTriggerProviderRegistration.PreparedEntityFramework))
+            throw new InvalidOperationException("Legacy standalone services cannot be combined with the prepared Actor Foundation provider.");
+        StandaloneTriggerSourceRegistration.AddServices(services);
         services.TryAddScoped<NativeIngressTargetEvidence>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStandaloneTriggerRuntimeTarget, NativeStandaloneTriggerRuntimeTarget>());
         services.TryAddScoped<NativeIngressWaitTargetEvidence>();
         services.TryAddScoped<IRuntimeIngressWaitTarget, NativeIngressWaitTarget>();
-        services.TryAddScoped<StandaloneTriggerAdmission>();
         services.TryAddScoped<WorkflowStimulusSubscriptionSelector>(provider => new(
             provider.GetRequiredService<IStandaloneTriggerStore>(), provider.GetRequiredService<TriggerTargetResolver>(), provider.GetRequiredService<ITriggerInputMapper>(),
             provider.GetServices<IStandaloneTriggerRuntimeTarget>(), provider.GetServices<IStimulusDeliveryIntentAdapter>(),
             Physical<IWorkflowExecutionStateStore>(provider, typeof(CoalescingWorkflowExecutionStateStore)), provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<IWorkflowExecutableStartPolicy>()));
-        services.TryAddScoped<IStandaloneTriggerIngressFactory, StandaloneTriggerIngressFactory>();
-        services.TryAddScoped<ITriggerManagementCommitter, ProtectedTriggerManagementCommitter>();
-        services.TryAddScoped<IRuntimeIngressTransportObserver>(provider => provider.GetRequiredService<IRuntimeIngressDeliveryStore>() as IRuntimeIngressTransportObserver
-            ?? new UnavailableIngressTransportObserver());
-        services.AddRuntimeDeliverySourceExecutor<StandaloneTriggerDeliveryExecutor>(RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind,
-            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5)));
         var marker = services.Select(x => x.ImplementationInstance).OfType<StandaloneTriggerProviderRegistration>().SingleOrDefault();
         if (marker is not null) { marker.EnsureOwned(services); return; }
         if (services.Any(x => x.ServiceType == typeof(IStandaloneTriggerStore) || x.ServiceType == typeof(IRuntimeIngressDeliveryStore))) return;
@@ -76,6 +48,9 @@ internal static class StandaloneTriggerRuntimeRegistration
         services.AddSingleton(new StandaloneTriggerProviderRegistration("InMemory", resource, ingress) { Reservations = reader, SourceCommit = sourceCommit });
     }
 
+    internal static void AddPreparedServices(IServiceCollection services) =>
+        StandaloneTriggerSourceRegistration.AddPreparedServices(services, PreparedStandaloneOutboxFactory.Create);
+
     internal static T Physical<T>(IServiceProvider provider, Type knownDecorator) where T : class
     {
         var selected = provider.GetRequiredService<T>();
@@ -83,5 +58,3 @@ internal static class StandaloneTriggerRuntimeRegistration
             ? provider.GetRequiredService<CoalescingInner<T>>().Value : selected;
     }
 }
-
-internal sealed class UnavailableIngressTransportObserver : IRuntimeIngressTransportObserver;

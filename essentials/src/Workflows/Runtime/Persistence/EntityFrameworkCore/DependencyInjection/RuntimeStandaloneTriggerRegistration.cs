@@ -28,24 +28,29 @@ internal static class RuntimeStandaloneTriggerRegistration
         else if (services.Any(x => x.ServiceType == typeof(IStandaloneTriggerStore) || x.ServiceType == typeof(IRuntimeIngressDeliveryStore)))
             throw new InvalidOperationException("Runtime EF cannot replace an independently selected standalone trigger resource or ingress port.");
         var resource = ServiceDescriptor.Scoped<IStandaloneTriggerStore, EfStandaloneTriggerStore>();
-        var ingress = ServiceDescriptor.Scoped<IRuntimeIngressDeliveryStore>(provider => new EfRuntimeIngressDeliveryStore(
-            provider.GetRequiredService<RuntimeDbContext>(), provider.GetRequiredService<IStandaloneTriggerStore>(),
-            StandaloneTriggerRuntimeRegistration.Physical<IRuntimePostCommitOutboxStore>(provider, typeof(CoalescingRuntimePostCommitOutboxStore)),
-            provider.GetRequiredService<IWorkflowActivationAuthority>(), provider.GetRequiredService<IWorkflowExecutableStore>(),
-            provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
-            StandaloneTriggerRuntimeRegistration.Physical<IWorkflowExecutionStateStore>(provider, typeof(CoalescingWorkflowExecutionStateStore)),
-            provider.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(), provider.GetRequiredService<TimeProvider>(),
-            provider.GetRequiredService<NativeIngressTargetEvidence>(), provider.GetService<IRuntimeModelExecutionReader>(), provider.GetService<IRecurringTriggerScheduleStore>(),
-            provider.GetServices<IStimulusDeliveryIntentAdapter>(), provider.GetRequiredService<NativeIngressWaitTargetEvidence>(),
-            provider.GetRequiredService<IBookmarkResumeResolver>(),
-            StandaloneTriggerRuntimeRegistration.Physical<IRuntimeCheckpointCommitStore>(provider, typeof(CoalescingRuntimeCheckpointCommitStore))));
-        services.Add(resource); services.Add(ingress);
-        var reader = ServiceDescriptor.Scoped<IRuntimeIngressReservationReader, EfIngressReservationStore>();
-        var sourceCommit = ServiceDescriptor.Scoped<ITriggerSourceResourceCommitStore, EfTriggerSourceResourceCommitStore>();
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(IRuntimeIngressReservationReader) || descriptor.ServiceType == typeof(ITriggerSourceResourceCommitStore)))
-            throw new InvalidOperationException("Runtime EF cannot replace an independently selected source projection owner.");
-        services.Add(reader); services.Add(sourceCommit);
-        services.AddSingleton(new StandaloneTriggerProviderRegistration("EntityFrameworkCore", resource, ingress) { Reservations = reader, SourceCommit = sourceCommit });
+        var ingress = ServiceDescriptor.Scoped<IRuntimeIngressDeliveryStore>(provider =>
+        {
+            var context = provider.GetRequiredService<RuntimeDbContext>();
+            var resources = provider.GetRequiredService<IStandaloneTriggerStore>();
+            var outbox = StandaloneTriggerRuntimeRegistration.Physical<IRuntimePostCommitOutboxStore>(provider, typeof(CoalescingRuntimePostCommitOutboxStore));
+            var slots = provider.GetRequiredService<IWorkflowActivationAuthority>();
+            var executables = provider.GetRequiredService<IWorkflowExecutableStore>();
+            var references = provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+            var executions = StandaloneTriggerRuntimeRegistration.Physical<IWorkflowExecutionStateStore>(provider, typeof(CoalescingWorkflowExecutionStateStore));
+            var leases = provider.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>();
+            var access = provider.GetRequiredService<IPersistenceAccessContextAccessor>();
+            var time = provider.GetRequiredService<TimeProvider>();
+            var evidence = provider.GetRequiredService<NativeIngressTargetEvidence>();
+            var modelInputs = provider.GetService<IRuntimeModelExecutionReader>();
+            var schedules = provider.GetService<IRecurringTriggerScheduleStore>();
+            var legacy = new EfLegacyRuntimeIngress(context, resources, outbox, executables, executions, access, time,
+                evidence, modelInputs, provider.GetServices<IStimulusDeliveryIntentAdapter>(),
+                provider.GetRequiredService<NativeIngressWaitTargetEvidence>(), provider.GetRequiredService<IBookmarkResumeResolver>(),
+                StandaloneTriggerRuntimeRegistration.Physical<IRuntimeCheckpointCommitStore>(provider, typeof(CoalescingRuntimeCheckpointCommitStore)));
+            return new EfRuntimeIngressDeliveryStore(context, resources, outbox, slots, executables, references, leases, access, time,
+                legacy, schedules, provider.GetService<IRuntimePreparedStartAttemptProof>());
+        });
+        RuntimeStandaloneSourceEntityFrameworkRegistration.RegisterResources(services, "EntityFrameworkCore", resource, ingress);
         var queue = services.Where(x => x.ServiceType == typeof(IAuthoredModelQueue)).ToArray();
         if (queue.Length > 1 || queue.Length == 1 && queue[0].ImplementationType != typeof(EfAuthoredModelQueue))
             throw new InvalidOperationException("Runtime EF cannot replace an independently selected authored model queue participant.");

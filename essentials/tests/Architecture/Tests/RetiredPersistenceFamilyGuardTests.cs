@@ -5,7 +5,7 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// EF Core is the only first-party persistence family. The retired storage library and the retired
-/// document-database driver were deleted, not deprecated, so nothing under <c>Essentials/</c> or <c>extensions/</c>,
+/// document-database driver were deleted, not deprecated, so nothing under <c>essentials/</c> or <c>extensions/</c>,
 /// <c>tools/</c>, <c>docker/</c>, <c>e2e-tests/</c>, <c>.github/</c> or the repository-level package and
 /// feed configuration may name either of them again: no project, no package, no NuGet feed, no build or CI
 /// configuration, no directory and no solution filter.
@@ -42,7 +42,7 @@ public sealed class RetiredPersistenceFamilyGuardTests
     ];
 
     /// <summary>Roots that ship or build the product, including Studio as a sibling product under extensions/. History under docs/, specs/ and archives is out of scope.</summary>
-    private static readonly string[] ScannedRoots = ["essentials", "apps", "extensions", "tools", "samples", "docker", "e2e-tests", ".github", ".config"];
+    private static readonly string[] ScannedRoots = ["essentials", "server", "extensions", "tools", "samples", "docker", "e2e-tests", ".github", ".config"];
 
     /// <summary>Scanned by name wherever they sit; repository-root files of a scanned extension are read too.</summary>
     private static readonly string[] ScannedFiles = ["Directory.Packages.props", "NuGet.config", "Elsa.Server.slnx", "Dockerfile"];

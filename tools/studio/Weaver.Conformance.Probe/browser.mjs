@@ -4,7 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
 
-const require = createRequire(new URL("../../../Studio/package.json", import.meta.url));
+const require = createRequire(new URL("../../../studio/package.json", import.meta.url));
 const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");

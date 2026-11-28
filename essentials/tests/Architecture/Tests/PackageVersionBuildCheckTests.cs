@@ -53,7 +53,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
 
     [Theory]
     [InlineData("essentials/src", true)]
-    [InlineData("apps", true)]
+    [InlineData("server/apps", true)]
     [InlineData("extensions/Agent/src", true)]
     [InlineData("essentials/tests", false)]
     [InlineData("extensions/Agent/tests", false)]

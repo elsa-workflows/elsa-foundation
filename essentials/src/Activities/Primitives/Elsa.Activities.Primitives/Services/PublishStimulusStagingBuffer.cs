@@ -4,7 +4,6 @@ using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Activities.Primitives.Services;
 
@@ -64,7 +63,7 @@ public sealed class PublishStimulusStagingBuffer :
     private static RuntimePostCommitIntent BuildIntent(PublishStimulusRequest request, int ordinal, DateTimeOffset recordedAt)
     {
         var step = ordinal.ToString(CultureInfo.InvariantCulture);
-        var intentId = RuntimeChainId.Derive($"publish-stimulus:{request.ActivityExecutionId}", step);
+        var intentId = RuntimeChainIdentity.Derive($"publish-stimulus:{request.ActivityExecutionId}", step);
         var idempotencyKey = $"publish-stimulus:{request.ActivityExecutionId}:{step}";
         var payload = new PublishStimulusIntentPayload(
             EventStimulus.StimulusType,

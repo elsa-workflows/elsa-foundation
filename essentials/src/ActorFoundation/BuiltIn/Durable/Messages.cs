@@ -67,19 +67,60 @@ internal sealed record FoundationOperatorCommand(string? Selection)
     internal FoundationParkMark? RootParkMark { get; init; }
     internal long? RootParkWindow { get; init; }
     internal FoundationRootParkFacts? RootParkFacts { get; init; }
+    // S5b-2: the store's control that clears the next page of an open clearing.
+    internal bool RootParkClear { get; init; }
 }
 
 internal sealed record FoundationTerminalStamp(long Revision, long At);
 
 internal sealed record FoundationParkMark(long Revision, long At);
 
+internal sealed record FoundationRootParkTimer(string Id, long Sequence, ParkKeepReason? KeptBy, long Bytes, string Envelope)
+{
+    internal static string Digest(Message timer) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        DurableKeyJson.CodeUnits(DurableKeyJson.Write(new { timer.Id, timer.Kind, timer.Due, timer.Payload }))));
+
+    // The SQLite wire holds escaped text in base64. PostgreSQL splits it into a compact byte column.
+    internal static long RearmBytes(ParkTimerRecipe recipe)
+    {
+        if (recipe.Payload is not { } payload) return InMemoryStore.RestoreWaitAllowance;
+        long size = System.Text.Encoding.UTF8.GetByteCount(payload);
+        if (payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(payload)) size = (size + 2) / 3 * 4;
+        return InMemoryStore.RestoreWaitAllowance + size;
+    }
+}
+
 internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest)
 {
+    internal Message? InlineRetry { get; init; }
+    internal bool KeepsInlineRetry { get; init; }
+    internal bool KeepsQueuedCreator { get; init; }
+    internal string? RecoverableJobRegistry { get; init; }
+    internal bool KeepsRegisteredJob { get; init; }
+    internal string? RestorableTimers { get; init; }
+
     // S5b: the row holds jobs, children, custom handles or subscriptions, which a parked Terminate cannot dispose of yet.
     internal bool Outstanding { get; init; }
+    // S5b-3a: a pending row other than a direct input, which the retirement of a Terminate-then-delete refuses.
+    internal bool Residue { get; init; }
     // S5b: the store marks the command's row unseen when a Park keep changes the kept set (EfStore.RereadsParkFacts), so
     // the owner forgets a copy read ahead of the keep and reads it again. Without it the stale command stays in memory.
     internal bool Rereads { get; init; }
+    // S5b-2: the open clearing's operation and total, and the rows of the next page (Page == the whole set when it fits).
+    internal string? Clearing { get; init; }
+    internal long Cleared { get; init; }
+    internal int Page { get; init; }
+    internal const int MaxProtectionRefusals = 5;
+    internal long ProtectionRefusals { get; init; }
+
+    internal bool StopsForUnreadableProtection => ProtectionRefusals >= MaxProtectionRefusals - 1;
+    internal static string ProtectionRefusal(string operation) => Json.Write(new { Outcome = "refused", Operation = operation, Reason = "unavailable" });
+    internal static string ProtectionStopped(string operation, long cleared) =>
+        Json.Write(new { Outcome = "clearing-stopped", Operation = operation, Reason = "unavailable", Cleared = cleared });
+
+    // S5b-2: the store marks the root's pending inputs unseen in a clearing's Open (EfStore.ClearsParkInPages), so the owner
+    // forgets the copies it read ahead and the poll withholds them until the end.
+    internal bool ClearsInPages { get; init; }
 }
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
@@ -92,6 +133,9 @@ public sealed record Message(
     // Qualified identity returned with a generated creator by its PostgreSQL poll. Never accepted from external ingress.
     internal (string Actor, string Tenant, string Reference)? FoundationRootBinding { get; init; }
     internal bool BindFoundationChild { get; init; }
+    internal bool FoundationRootChildNotice { get; init; }
+    internal bool FoundationRootChildInput { get; init; }
+    internal (string Tenant, string ActorType)? FoundationScheduleControl { get; init; }
     internal bool StoreStartInputOnce { get; init; }
     internal Message? StoredEnvelope { get; init; }
     internal EventMatch? ProjectedEvent { get; init; }
@@ -132,7 +176,8 @@ public sealed record Message(
     // Creation provenance is assigned by the accepted event insert or StartChild. Outside entry points
     // discard their supplied scope. Ordinary application sends can address an already running child.
     internal bool SuppliedCreator => Start is not null &&
-        (Target.ChildAddress && InboxScope != InboxKey.ChildCreatorScope ||
+        (Target.ChildAddress && InboxScope != InboxKey.ChildCreatorScope &&
+            !(BindFoundationChild && FoundationRootBinding is not null) ||
          Target.EventStartAddress && (EventMatch is null || InboxScope > -2));
     public T Read<T>() => Json.Read<T>(Payload!);
 }

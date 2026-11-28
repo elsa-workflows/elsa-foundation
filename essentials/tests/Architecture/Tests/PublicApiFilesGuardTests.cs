@@ -64,7 +64,7 @@ public sealed class PublicApiFilesGuardTests
         Assert.Contains(Projects, project => project is { Name: "Elsa.Primitives", Tracks: true });
         Assert.Contains(Projects, project => project is { Name: "Elsa.Events.Core", Tracks: true });
         Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("essentials/tests/", StringComparison.Ordinal));
-        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("apps/", StringComparison.Ordinal));
+        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("server/apps/", StringComparison.Ordinal));
         Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("extensions/", StringComparison.Ordinal));
         Assert.True(Projects.Count(project => !project.Tracks) > Projects.Count(project => project.Tracks),
             "Expected untracked projects (tests at least) to outnumber tracked ones; the sweep may have stopped finding them.");
@@ -184,7 +184,7 @@ public sealed class PublicApiFilesGuardTests
             var directory = Path.Join(Root, relativeDirectory);
             Directory.CreateDirectory(directory);
             var segments = relativeDirectory.Split('/');
-            var name = $"Elsa.{segments[2]}.{segments[^1]}";
+            var name = $"Elsa.{segments[^2]}.{segments[^1]}";
             var condition = conditional ? " Condition=\"'$(Configuration)' == 'Release'\"" : string.Empty;
             var properties = (tracks ? $"<{OptIn}>true</{OptIn}>" : string.Empty) + (notPackable ? "<IsPackable>false</IsPackable>" : string.Empty);
 

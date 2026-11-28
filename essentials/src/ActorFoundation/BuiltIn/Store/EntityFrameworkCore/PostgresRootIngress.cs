@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
@@ -12,19 +10,22 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
     (Requests Requests, string Node, Func<long> Clock)? heldOperators = null,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeRecover = null) : Contract.IIngress
 {
-    private static readonly JsonSerializerOptions OperatorJson = new()
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        AllowDuplicateProperties = false
-    };
-
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        try { return await SendCoreAsync(scope, target, id, kind, payload, options, cancellationToken); }
+        catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+    }
+
+    private async ValueTask<Contract.Admission> SendCoreAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+        string? payload, Contract.AddOptions? options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(kind);
+        if (target is Contract.Target.Event publish && admission.SupportsPublicEvents())
+            return await admission.PublishPublicEventAsync(scope.Tenant, publish.CorrelationKey, id, payload, options, cancellationToken);
         if (Contract.Kinds.IsCommand(kind))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -53,6 +54,9 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
                 return new(Contract.AdmissionOutcome.Refused);
             }
         }
+        if (target is Contract.Target.Key keyed)
+            return await admission.AdmitKeyedAsync(scope.Tenant, keyed, id, kind, payload, options?.DueAt, options?.KeepFor,
+                actorType, cancellationToken);
         if (target is not Contract.Target.Ref direct || FoundationMetadataLimits.IsReservedKind(kind))
             throw new NotSupportedException("The preview supports ordinary input addressed to a root reference.");
         var admitted = await admission.AdmitDirectResultAsync(scope.Tenant, direct.Actor.Id, id, kind, payload,
@@ -66,7 +70,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         };
     }
 
-    private bool Authorizes(Contract.BoundScope scope, Contract.ActorRef actor, string kind) =>
+    internal bool Authorizes(Contract.BoundScope scope, Contract.ActorRef actor, string kind) =>
         PostgresRootAdmission.IsIssuedReferenceShape(actor.Id) && (kind switch
         {
             Contract.Kinds.Terminate => authorizeTerminate,
@@ -81,10 +85,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         if (!FoundationMetadataLimits.IsOutsideMessageId(id) || payload is null || payload.Length > 2_048)
             return new(Contract.AdmissionOutcome.Refused);
 
-        Contract.OperatorCommand? command;
-        try { command = JsonSerializer.Deserialize<Contract.OperatorCommand>(payload, OperatorJson); }
-        catch (JsonException) { return new(Contract.AdmissionOutcome.Refused); }
-
+        var command = RootAdmissionWire.ReadOperatorCommand(payload);
         if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null } ||
             kind == Contract.Kinds.Recover && options?.DueAt is not null)
             return new(Contract.AdmissionOutcome.Refused);
@@ -111,6 +112,14 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
             { Duplicate: false } => new(Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(receipt.Reference)),
             _ => new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection)
         };
+    }
+
+    internal async Task<Contract.Admission?> AdmitHeldOperatorAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id,
+        string kind, string? payload, Contract.AddOptions? add, HeldRootRequest caller, CancellationToken token)
+    {
+        var route = new PostgresRootAdmission.OperatorReply(caller.Address, caller.Caller.Deadline);
+        try { return await OperateAsync(scope, actor, id, kind, payload, add, token, route); }
+        catch (PostgresRootAdmission.OperatorReplyExpired) { return null; }
     }
 
     public async ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
@@ -174,6 +183,10 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         catch (PostgresRootAdmission.OperatorReplyExpired)
         {
             return await TimeoutAsync();
+        }
+        catch (RootAdmissionRefused refusal)
+        {
+            return refusal.Reply;
         }
         finally
         {
@@ -256,8 +269,12 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
     }
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
-        CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Event starts are outside this preview.");
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        RootPublicEventStarts.Validate(actorType, key, wait, spec);
+        return new(admission.SetPublicEventStartAsync(scope.Tenant, key, wait, spec, cancellationToken));
+    }
 
     // The error an operator caller sees when the owner refused its held command.
     internal static string RefusalError(string result) => result switch
@@ -267,7 +284,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         "StaleSelection" => "stale selection",
         "TargetMismatch" => "target",
         "Parked" => "parked",
-        "ParkPageLimit" => "park page limit",
+        "ResolutionOpen" => "resolution open",
         "ParkOutstanding" => "park outstanding",
         _ => "missing"
     };
@@ -276,7 +293,8 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
 public sealed partial class EfStore
 {
     /// <summary>
-    /// Installs the ordinary or Native job generated-root preview on an initialized PostgreSQL store.
+    /// Installs the generated-root schema of a PostgreSQL Core Preview format (the ordinary or a Native job preview format,
+    /// or the shipped format) on an initialized PostgreSQL store; the shipped format's workflow history with it.
     /// Run during setup or with existing owners and callers stopped. Retains issued references and bookmarks.
     /// </summary>
     public async Task InstallPreviewRootSchemaAsync(CancellationToken cancellationToken = default)
@@ -284,10 +302,16 @@ public sealed partial class EfStore
         if (!postgres || Engine is not null)
             throw new NotSupportedException("Generated-root preview installation requires PostgreSQL.");
 
-        await using var db = create();
-        if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
-            throw new NotSupportedException("Installation requires the ordinary or Native job PostgreSQL Core Preview format.");
-        await PostgresRootAdmission.InstallAsync(db, cancellationToken, exclusiveFormat: true);
+        bool history;
+        await using (var db = create())
+        {
+            if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
+                throw new NotSupportedException("Installation requires a PostgreSQL Core Preview format.");
+            await PostgresRootAdmission.InstallAsync(db, cancellationToken, exclusiveFormat: true);
+            // Workflow history ships inside a format whose roots live in a pinned namespace (retirement or Park).
+            history = db.RequiresPinnedRootNamespace && db.SupportsRootWorkflowHistory;
+        }
+        if (history) await InstallRootWorkflowHistoryAsync(cancellationToken);
     }
 
     // The host authenticates the caller and authorizes termination of the supplied exact reference.
@@ -299,22 +323,27 @@ public sealed partial class EfStore
         PostgresRootAdmission.RequireActorType(actorType);
         ArgumentOutOfRangeException.ThrowIfLessThan(deduplicationWindow, TimeSpan.Zero);
         if (!postgres || Engine is not null) throw new NotSupportedException("Selected root ingress requires PostgreSQL.");
-        await using var db = create();
-        if (!db.Database.IsNpgsql() || !db.UsesRootTerminalSelection)
-            throw new NotSupportedException("Selected root ingress requires the PostgreSQL selection profile.");
-        await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
-        if (authorizeDelete is not null && !db.UsesRootRetirement)
-            throw new NotSupportedException("Selected deletion requires the PostgreSQL retirement profile.");
-        if (heldOperators is { } host)
+        bool usePressure;
+        await using (var db = create())
         {
-            if (!db.UsesRootOperatorReplies) throw new NotSupportedException("Held operators require the PostgreSQL reply profile.");
-            ArgumentNullException.ThrowIfNull(host.Requests);
-            ArgumentNullException.ThrowIfNull(host.Clock);
-            if (string.IsNullOrWhiteSpace(host.Node) || host.Node.Length > 256 || host.Node.Contains('|') ||
-                host.Node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(host.Node))
-                throw new ArgumentException("Expected an issued reply node.", nameof(heldOperators));
+            if (!db.Database.IsNpgsql() || !db.UsesRootTerminalSelection)
+                throw new NotSupportedException("Selected root ingress requires the PostgreSQL selection profile.");
+            await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+            if (authorizeDelete is not null && !db.UsesRootRetirement)
+                throw new NotSupportedException("Selected deletion requires the PostgreSQL retirement profile.");
+            if (heldOperators is { } host)
+            {
+                if (!db.UsesRootOperatorReplies) throw new NotSupportedException("Held operators require the PostgreSQL reply profile.");
+                ArgumentNullException.ThrowIfNull(host.Requests);
+                ArgumentNullException.ThrowIfNull(host.Clock);
+                if (string.IsNullOrWhiteSpace(host.Node) || host.Node.Length > 256 || host.Node.Contains('|') ||
+                    host.Node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(host.Node))
+                    throw new ArgumentException("Expected an issued reply node.", nameof(heldOperators));
+            }
+            usePressure = db.UsesRootDueBacklog;
         }
-        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType,
+        var pressure = usePressure ? await OpenStandalonePostgresPressureAsync(create, cancellationToken) : null;
+        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true, pressure: pressure), actorType,
             authorizeTerminate, authorizeDelete, heldOperators);
     }
 
@@ -330,10 +359,15 @@ public sealed partial class EfStore
         if (!postgres || Engine is not null)
             throw new NotSupportedException("Generated-root preview ingress requires PostgreSQL.");
 
-        await using var db = create();
-        if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
-            throw new NotSupportedException("Ingress requires the ordinary or Native job PostgreSQL Core Preview format.");
-        await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
-        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType);
+        bool usePressure;
+        await using (var db = create())
+        {
+            if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
+                throw new NotSupportedException("Ingress requires the ordinary or Native job PostgreSQL Core Preview format.");
+            await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
+            usePressure = db.UsesRootDueBacklog;
+        }
+        var pressure = usePressure ? await OpenStandalonePostgresPressureAsync(create, cancellationToken) : null;
+        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true, pressure: pressure), actorType);
     }
 }

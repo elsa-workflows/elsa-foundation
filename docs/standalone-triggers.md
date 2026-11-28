@@ -1,6 +1,6 @@
 # Standalone triggers
 
-Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime extension catalog](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
+Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime source contracts](../essentials/src/Workflows/Runtime/Core/StandaloneTriggers).
 
 **Implementation status:** Implemented for the explicitly selected host features and supported profiles described below. See the [source-bound delivery receipt](../specs/1217-standalone-triggers/evidence/delivery-2026-11-22.md) for local qualification, self-review, owner-waived CI/independent review and operational limits. The [qualification guide](../specs/1217-standalone-triggers/quickstart.md) describes repeatable verification.
 
@@ -14,8 +14,8 @@ Install the following features in the shell that owns the resources. Feature nam
 | HTTP configuration metadata and validation | `StandaloneHttpTriggerAuthoring` |
 | Event configuration metadata and validation | `StandaloneEventTriggerAuthoring` |
 | Timer/Cron configuration metadata and validation | `StandaloneScheduleTriggerAuthoring` |
-| HTTP request intake | `ActivitiesHttp`, with its `WorkflowsRuntimeHttp` dependency and the ordinary Runtime composition |
-| Timer/Cron intake | `StandaloneScheduleTriggers`, with its `WorkflowsRuntimeRecurringTriggers` dependency, ordinary Runtime scheduling and the normal Tasks lifecycle |
+| HTTP request intake | `KernelActivitiesHttp`, with its `WorkflowsRuntimeStandaloneHttp` dependency and the selected prepared Actor persistence |
+| Timer/Cron intake on Actor Foundation | `PreparedStandaloneScheduleTriggers`, with `WorkflowsRuntimePreparedStandaloneRecurringTriggers` and the selected prepared Actor persistence |
 | Workflow-origin broadcast Events | `ActivitiesPrimitives` and the ordinary durable `PublishEvent`/Runtime delivery composition |
 | Application-origin Event producer | `AddStandaloneEventIngress<TSource>` plus the application's trusted scoped source context; see the [Event module example](../essentials/src/Activities/Primitives/Elsa.Activities.Primitives/StandaloneTriggers/README.md#application-owned-event-producer) |
 | Restart-surviving storage candidate | The complete `WorkflowsRuntimeEntityFrameworkCore` provider, including its resource, ingress, publication, material, queue and checkpoint participants |
@@ -47,7 +47,7 @@ Third-party modules can introduce their own types without modifying Runtime or S
 3. Submit a `StandaloneTriggerSignal` through `IStandaloneTriggerIngress<TSource>.AdmitAsync`. Use a stable source key for the same occurrence. Runtime selects eligible subscriptions, maps inputs and captures accepted responsibility. The producer acknowledges the actual admission result; it does not claim workflow completion.
 4. Optionally contribute a public `StudioTriggerConfigurationEditorContribution` matching the type, schema version and editor identity. Missing, conflicting or failing editors fall back to generic metadata fields while preserving saved values. Backend validation and preview/apply remain authoritative.
 
-The independently compiled [Core-only source/type consumer](../essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/ConsumerModule.cs) and its [behavioral controls](../essentials/tests/Workflows/Runtime/Tests/StandaloneTriggerPublicConsumerTests.cs) demonstrate registration, admission, replay, authorization and producer isolation. The separate [Studio editor consumer](../tools/ux-acceptance/extensions/TriggerEditor/wwwroot/studio/modules/acceptance-trigger-editor/module.js) demonstrates the optional public SDK slot.
+The independently compiled [Core-only source/type consumer](../essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/ConsumerModule.cs) and its [behavioral controls](../essentials/tests/Workflows/Runtime/Tests/StandaloneTriggerPublicConsumerTests.cs) demonstrate registration, admission, replay, authorization and producer isolation. The [pinned Studio editor consumer](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/tools/ux-acceptance/extensions/TriggerEditor/wwwroot/studio/modules/acceptance-trigger-editor/module.js) demonstrates the optional public SDK slot. Replay that consumer using the [classic Workbench compatibility guide](contributing/workbench-compatibility-tests.md#standalone-trigger-browser-journeys).
 
 A module can expose both an activity and a standalone resource over shared source services. Adding an activity alone does not automatically provide independent resource configuration, subscriptions or activation. Those are explicit contributions, with their own ownership and lifecycle.
 

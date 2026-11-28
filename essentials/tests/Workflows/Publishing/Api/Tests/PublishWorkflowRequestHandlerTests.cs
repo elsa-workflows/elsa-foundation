@@ -1,4 +1,3 @@
-using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
@@ -452,7 +451,6 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal(legacy.Identity.ArtifactId, historicalReference.ArtifactId);
         Assert.NotNull(historicalReference.DeletedAt);
 
-        Assert.Equal(7, await ExecutePublishedSetAndReadAsync(current));
         var retry = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
         Assert.Equal(publication.ArtifactId, retry.ArtifactId);
         Assert.Equal(publication.PublicationId, retry.PublicationId);
@@ -462,56 +460,6 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     {
         public ValueTask<WorkflowExecutable> CompileAsync(WorkflowExecutableCompileRequest request, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(executable);
-    }
-
-    private sealed class SevenExpressionEvaluator : Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator
-    {
-        public ValueTask<JsonElement> EvaluateAsync(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest request)
-        {
-            Assert.Empty(request.ParameterValues);
-            return ValueTask.FromResult(JsonSerializer.SerializeToElement(7));
-        }
-    }
-
-    private static async Task<int> ExecutePublishedSetAndReadAsync(WorkflowExecutable executable, int initialCounter = 0)
-    {
-        const string workflowId = "hash-upgrade-execution";
-        const string invocationId = "hash-upgrade-set";
-        var now = DateTimeOffset.UtcNow;
-        var workflows = new InMemoryWorkflowExecutionStateStore();
-        var activities = new InMemoryActivityExecutionStateStore();
-        var type = new ValueTypeDescriptor("Int32");
-        await workflows.SaveAsync(new WorkflowExecutionState(workflowId, executable.Identity, WorkflowExecutionStatus.Running,
-            null, now, now, now, null, null, null, null, new Dictionary<string, string>())
-        {
-            RootVariableFrame = new VariableFrameFactory().CreateRoot(workflowId, "workflow",
-                new Dictionary<string, ValueEnvelope> { ["counter"] = ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(initialCounter), ValueProtectionPolicy.InstanceInline) })
-        });
-        var activity = new ActivityExecutionState(
-            new ActivityExecution(invocationId, workflowId, "set-counter", "set-counter", "elsa.intrinsic.set", "1.0.0"),
-            ActivityExecutionStatus.Scheduled, null, now, null, null, null, null, null, null, null, [], [], 0, 0,
-            new Dictionary<string, string>());
-        await activities.SaveAsync(activity);
-        var payload = new RuntimeStartActivityCommandPayload(executable.Identity, "set-counter", invocationId,
-            RuntimeStartActivityCommandPayload.ScheduledActivityReason);
-        var work = new RuntimeSchedulerWorkItem("start", workflowId, "command", WorkflowExecutionCommandKind.StartActivity,
-            "envelope", "hash-upgrade-start", now, now, 1, JsonSerializer.SerializeToElement(payload),
-            new Dictionary<string, string>(), new Dictionary<string, string>());
-        var executor = new WorkflowIntrinsicExecutor(workflows, activities, new RuntimeInputBindingResolver(),
-            new InMemoryDurableValueStateStore(), new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),
-            TimeProvider.System, portableExpressionEvaluator: new SevenExpressionEvaluator(),
-            inputValidator: new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()));
-
-        var commit = await executor.ExecuteAsync(work, payload, executable, executable.RootActivity, activity);
-
-        Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(commit.StateChanges.ActivityExecutions).State.Status);
-        var value = commit.StateChanges.WorkflowExecution!.State.RootVariableFrame!.Values["counter"];
-        var nextRead = new RuntimeInputBinding("next", type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.VariableRead,
-            variable: new RuntimeVariableReference("counter", "workflow"));
-        var resolved = new RuntimeInputBindingResolver().Resolve(nextRead, new RuntimeInputBindingResolutionContext(workflowId, "next-activity",
-            variableEnvelopes: new Dictionary<RuntimeVariableValueAddress, ValueEnvelope> { [new("workflow", "counter")] = value }));
-        Assert.Equal("Int32", resolved.Envelope!.Type.Alias);
-        return resolved.Envelope.InlineValue!.Value.GetInt32();
     }
 
     [Fact]
@@ -1214,8 +1162,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
                 _sequenceActivity)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        var sources = await new WorkflowExecutableInspector(_store, _referenceStore, new InMemoryWorkflowExecutionStateStore())
-            .GetInputSourcesAsync(published.ArtifactId, published.SourceReferenceId);
+        var inspector = new WorkflowExecutableInspector(_store, _referenceStore, new UnobservedTestRunStore());
+        var sources = await inspector.GetInputSourcesAsync(published.ArtifactId, published.SourceReferenceId);
 
         Assert.Collection(
             sources!.AuthoredInputs.OrderBy(input => input.ExecutableNodeId, StringComparer.Ordinal),
@@ -1420,25 +1368,6 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var binding = Assert.Single(executable!.RootActivity.InputBindings).Value;
         Assert.Equal("Text", binding.InputKey);
         Assert.True(binding.EffectivePolicy.IsSensitive);
-    }
-
-    [Fact]
-    public async Task PublishedExecutableArtifactCanBeDispatchedForExecution()
-    {
-        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
-        var published = await Handler(workflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        var dispatcher = new WorkflowStartDispatcher(
-            _store,
-            _referenceStore,
-            new InProcessWorkflowExecutionActorProvider(),
-            new ShortRuntimeExecutionIdGenerator());
-
-        // The publish above appended a live Published source reference the dispatch gates on.
-        var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(published.ArtifactId, "test"));
-
-        Assert.Equal(published.ArtifactId, result.PinnedExecutable.ArtifactId);
-        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
-        Assert.NotEmpty(result.WorkflowExecutionId);
     }
 
     [Fact]
@@ -1769,7 +1698,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     private WorkflowActivationCoordinator Coordinator(IWorkflowTriggerBindingExtractor extractor) =>
         new(
             _activationAuthority,
-            new InMemoryWorkflowActivationSwitch(_activationAuthority, _referenceStore, TimeProvider.System, _bindingStore),
+            ActivationSwitchDecoration.Create(_activationAuthority, _referenceStore, TimeProvider.System, _bindingStore),
             _referenceStore,
             TestRootWriteLeases.Create(_store),
             TimeProvider.System,

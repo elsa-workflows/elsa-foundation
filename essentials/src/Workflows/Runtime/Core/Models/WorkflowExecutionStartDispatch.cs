@@ -811,4 +811,20 @@ public sealed class WorkflowExecutionStartDispatchResult
     public WorkflowExecutionCommandDispatchResult CommandDispatch { get; }
     public WorkflowExecutionActorDescriptor Agent { get; }
     public WorkflowExecutableSourceProvenance? PinnedSource { get; }
+
+    /// <summary>The response from a synchronous HTTP Test Run, available only to its authenticated request.</summary>
+    [JsonIgnore]
+    public WorkflowTestRunHttpReply? TestRunHttpReply { get; init; }
+
+    /// <summary>The scoped Test Run finished before a workflow execution record was created.</summary>
+    [JsonIgnore]
+    public bool TestRunCompletedWithoutRecord { get; init; }
+}
+
+public sealed record WorkflowTestRunHttpReply(int StatusCode, string ContentType, string? Body,
+    IReadOnlyDictionary<string, string> Headers)
+{
+    /// <summary>The owner supplied a live reply for the held Test Run. The workflow may still be running.</summary>
+    [JsonIgnore]
+    public bool OwnerAccepted { get; init; }
 }

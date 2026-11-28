@@ -13,6 +13,7 @@
     <InternalsVisibleTo Include="Kernel.Foundation.InMemory" />
     <InternalsVisibleTo Include="Kernel.EntityFramework" />
     <InternalsVisibleTo Include="Kernel.Foundation.Postgres" />
+    <InternalsVisibleTo Include="Kernel.Foundation.Sqlite" />
     <InternalsVisibleTo Include="Kernel.Native.Run" />
     <InternalsVisibleTo Include="Kernel.Workflows" />
     <InternalsVisibleTo Include="Kernel.Ef.Conformance" />

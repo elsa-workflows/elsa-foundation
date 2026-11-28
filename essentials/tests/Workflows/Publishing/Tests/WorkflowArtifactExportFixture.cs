@@ -14,8 +14,10 @@ using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Publishing.Tests;
 
@@ -119,8 +121,7 @@ internal sealed class WorkflowArtifactExportFixture
 
     /// <summary>
     /// Runs an already compiled, content-verified executable through the production publish handler and activation
-    /// coordinator. This is the author-engine boundary used by the cross-process export/import proof: no test writes
-    /// the executable or its Published reference directly.
+    /// coordinator so the export reads a Published reference written by the actual publication path.
     /// </summary>
     public async Task<WorkflowExecutableSourceReference> PublishThroughProductionAsync(WorkflowExecutable executable)
     {
@@ -131,16 +132,16 @@ internal sealed class WorkflowArtifactExportFixture
             State = WorkflowDefinitionState.Empty
         };
         var versionStore = new SingleWorkflowVersionStore(version);
-        var extractor = new WorkflowTriggerBindingExtractor([]);
-        var indexer = new WorkflowTriggerIndexer(extractor, TriggerBindings);
-        var coordinator = new WorkflowActivationCoordinator(
-            ActivationAuthority,
-            new InMemoryWorkflowActivationSwitch(ActivationAuthority, SourceReferences, TimeProvider.System, TriggerBindings),
-            SourceReferences,
-            new InProcessRootWriteLeaseManager(),
-            TimeProvider.System,
-            indexer,
-            TriggerBindings);
+        var services = new ServiceCollection()
+            .AddSingleton<IWorkflowActivationAuthority>(ActivationAuthority)
+            .AddSingleton<IWorkflowExecutableSourceReferenceStore>(SourceReferences)
+            .AddSingleton<IWorkflowTriggerBindingStore>(TriggerBindings)
+            .AddSingleton<IWorkflowExecutableRootWriteLeaseManager, InProcessRootWriteLeaseManager>();
+        WorkflowPublicationDefaults.Add(services);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var coordinator = scope.ServiceProvider.GetRequiredService<IWorkflowActivationCoordinator>();
+        var extractor = scope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingExtractor>();
         var handler = new PublishWorkflowRequestHandler(
             new VerifiedExecutableCompiler(executable),
             Executables,

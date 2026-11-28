@@ -10,6 +10,15 @@ internal static class ContractBoundaryCheck
     private static readonly string[] ImplementationWords =
         ["Partition", "Epoch", "Fence", "Lease", "Position", "NodeRecord", "KernelStore", "TenantColumn", "Sql", "SQL"];
 
+    // Playback positions are actor-relative ranks. The Test Run partition identifies its Runtime persistence scope.
+    private static readonly HashSet<MemberInfo> DomainVocabularyMembers = new[]
+    {
+        typeof(ActorPlaybackQuery).GetProperty(nameof(ActorPlaybackQuery.Position))!,
+        typeof(ActorPlaybackEntry).GetProperty(nameof(ActorPlaybackEntry.Position))!,
+        typeof(ActorPlaybackPage).GetProperty(nameof(ActorPlaybackPage.SelectedPosition))!,
+        typeof(WorkflowTestStart).GetProperty(nameof(WorkflowTestStart.Partition))!
+    }.SelectMany(property => property.GetAccessors().Cast<MemberInfo>().Prepend(property)).ToHashSet();
+
     public static int Run()
     {
         var foundation = typeof(ActorRef).Assembly;
@@ -76,7 +85,8 @@ internal static class ContractBoundaryCheck
             const BindingFlags publicMembers = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
             foreach (var member in type.GetMembers(publicMembers))
             {
-                CheckName(member.Name, $"{type.FullName}.{member.Name}", faults);
+                if (!DomainVocabularyMembers.Contains(member))
+                    CheckName(member.Name, $"{type.FullName}.{member.Name}", faults);
                 foreach (var signature in Signature(member))
                     CheckType(signature, $"{type.FullName}.{member.Name} signature", faults);
             }
