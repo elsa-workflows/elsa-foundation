@@ -830,7 +830,19 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
-      "elsa.workflows.dashboard": {
+      "elsa.workflows.dashboard.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Dashboard.Retained": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.dashboard.retained": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
@@ -842,21 +854,8 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
-        }
-      },
-      "elsa.workflows.dashboard.persistence.entityframeworkcore": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Workflows.Dashboard": "[4.0.0-dev, )",
-          "Elsa.Workflows.Design.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
-          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
-          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
         }
       },
       "elsa.workflows.design.core": {
@@ -954,6 +953,7 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Inspection.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Publications": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
