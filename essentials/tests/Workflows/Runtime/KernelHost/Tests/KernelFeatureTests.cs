@@ -1,11 +1,10 @@
-using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.KernelHost.Tests;
@@ -26,25 +25,11 @@ public sealed class KernelFeatureTests
         public ValueTask<WorkflowActivationResult> EnsureServingAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
-    /// <summary>A shell as the old core composes it, beside the host's kernel serving state.</summary>
+    /// <summary>Publication defaults with optional host-owned kernel serving.</summary>
     private static ServiceCollection Shell(bool hostComposesKernel = true)
     {
         var services = new ServiceCollection();
-        var executables = new InMemoryWorkflowExecutableStore();
-        var references = new InMemoryWorkflowExecutableSourceReferenceStore(executables, TimeProvider.System);
-        var authority = new InMemoryWorkflowActivationAuthority();
-        var bindings = new InMemoryWorkflowTriggerBindingStore();
-        services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<IWorkflowExecutableStore>(executables);
-        services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(references);
-        services.AddSingleton<IWorkflowActivationAuthority>(authority);
-        services.AddSingleton<IWorkflowTriggerBindingStore>(bindings);
-        services.AddSingleton<IWorkflowActivationSwitch>(new InMemoryWorkflowActivationSwitch(authority, references, TimeProvider.System, bindings));
-        services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(new WorkflowExecutableRootWriteLeaseManager(executables,
-            Options.Create(new WorkflowExecutableGarbageCollectionOptions()), TimeProvider.System));
-        // The old defaults and an independent publication observer.
-        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
-        services.TryAddSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
+        WorkflowPublicationDefaults.Add(services);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowTriggerIndexObserver, LibraryObserver>());
         if (hostComposesKernel)
         {
@@ -72,7 +57,7 @@ public sealed class KernelFeatureTests
     }
 
     [Fact]
-    public void Without_the_feature_the_shell_keeps_the_old_core()
+    public void Without_kernel_the_shell_keeps_default_publication_services()
     {
         var services = Shell();
 
