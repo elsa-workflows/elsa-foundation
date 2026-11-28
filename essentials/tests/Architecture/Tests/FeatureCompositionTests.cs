@@ -105,7 +105,6 @@ public sealed class FeatureCompositionTests
         "WorkflowsExecutionEvidence",
         "WorkflowsRuntimeHistory",
         "WorkflowsRuntimeRecurringTriggers",
-        "WorkflowsRuntimeReferenceGarbageCollection",
         "WorkflowsRuntimeResumption",
         "WorkflowsRuntimeScheduling"
     ];

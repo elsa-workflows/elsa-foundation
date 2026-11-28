@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
-using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -26,14 +25,11 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
     public void Legacy_collector_constructor_does_not_claim_saved_cohort_root_support() =>
         Assert.False(NewGarbageCollector().SupportsStimulusDeliveryRetention);
 
-    [Theory]
-    [InlineData(false)] [InlineData(true)]
-    public async Task Default_DI_selects_qualified_cohort_retention_and_keeps_ordinary_template_cleanup(bool pumpFirst)
+    [Fact]
+    public async Task Default_DI_selects_qualified_cohort_retention_and_keeps_ordinary_template_cleanup()
     {
         var services = new ServiceCollection().AddLogging();
-        if (pumpFirst) new WorkflowsRuntimeReferenceGarbageCollectionFeature().ConfigureServices(services);
         services.AddWorkflowRuntime();
-        if (!pumpFirst) new WorkflowsRuntimeReferenceGarbageCollectionFeature().ConfigureServices(services);
         services.Configure<WorkflowExecutableGarbageCollectionOptions>(options => options.ArtifactCreationGracePeriod = TimeSpan.Zero);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = provider.CreateScope();
