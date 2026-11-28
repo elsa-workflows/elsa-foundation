@@ -50,3 +50,25 @@ module and provider suites.
 The optional Studio live compensation, nesting and operator journeys require an
 owned classic Workbench and matching Studio. Set `ELSA_CLASSIC_COMPENSATION_LIVE=1`
 with `ELSA_STUDIO_URL` when running them against that pair.
+
+## Standalone trigger browser journeys
+
+The historical seven-appearance harness includes direct BPMN hosting and classic
+Runtime EF setup and checkpoint witnesses. Use the pinned classic-default
+checkout above and its matching Studio dependencies and Chromium. Run the full
+suite into a new evidence directory.
+
+```sh
+(
+  cd "$compatibility_root/workbench-classic-default"
+  pnpm --dir studio install --frozen-lockfile
+  pnpm --dir studio exec playwright install chromium
+  python3 tools/ux-acceptance/standalone.py --output "$compatibility_root/standalone-trigger-evidence"
+)
+```
+
+For a single reported journey, pass `--journey` using the title from the pinned
+runner. Use `--studio-shape application` for the ordinary Studio application or
+`--studio-shape coordinated-sdk` for the independently enrolled SDK consumer.
+The source SHA in the report belongs to the classic checkout. Stock Workbench
+uses the Actor Foundation source and schedule witnesses for the supported engines.
