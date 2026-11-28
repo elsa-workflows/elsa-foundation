@@ -177,7 +177,10 @@ public sealed partial class KernelStandalonePreparedStartTests
             new Elsa.Events.EventsFeature().ConfigureServices(services);
             KernelRuntimeFixture.Add(services, provider, runtime);
             new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
-            new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation }
+            new WorkflowsRuntimeKernelHostingFeature
+            {
+                Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = true
+            }
                 .ConfigureServices(services);
             new WorkflowsRuntimeKernelFeature().ConfigureServices(services);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);

@@ -181,7 +181,7 @@ public sealed class KernelShellHeldExecutableTests
                 Assert.False(refused.Headers.ContainsKey(KernelHttpEdge.WorkflowInstanceIdHeader));
                 Assert.Equal(before, (await reads.ListAsync(tenant, new(), cancellationToken: token)).Items.Count);
                 Assert.True(await references.RetireAsync(publishedSourceId, DateTimeOffset.UtcNow, "retired the source", token));
-                await stores.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync(token);
+                Assert.Contains(identity.ArtifactId, await materials.ListMaterialRetentionRootIdsAsync(token));
                 Assert.NotNull(await materials.FindAsync(identity.ArtifactId, token));
             }
             finally { await StopAsync(shell); }
@@ -218,8 +218,8 @@ public sealed class KernelShellHeldExecutableTests
                 var pins = stores.GetRequiredService<IRuntimeKernelExecutablePinStore>();
                 await WaitAsync(() => pins.ReadOpenTailAsync(Persistence, token), cursor => cursor is null, token);
                 Assert.Empty(await pins.ListPinnedExecutableArtifactIdsAsync(token));
-                await stores.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync(token);
-                Assert.Null(await stores.GetRequiredService<IWorkflowExecutableStore>().FindAsync(identity.ArtifactId, token));
+                var materials = stores.GetRequiredService<IWorkflowExecutableStore>();
+                Assert.DoesNotContain(identity.ArtifactId, await materials.ListMaterialRetentionRootIdsAsync(token));
             }
             finally { await StopAsync(shell); }
         }

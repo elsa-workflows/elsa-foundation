@@ -278,8 +278,6 @@ public sealed class KernelRunListTests
             await historicalRuns.SaveAsync(Legacy("legacy-test", Tenant, WorkflowRunKind.TestRun));
             builder.Services.AddSingleton<IWorkflowExecutionStateStore>(historicalRuns);
             builder.Services.AddSingleton<IActivityExecutionStateStore>(historicalRuns);
-            builder.Services.AddScoped<RuntimeHistoryInspectionService>(_ =>
-                throw new InvalidOperationException("The retained API resolved a legacy history reader."));
         }
         var feature = new WorkflowsRuntimeKernelRetainedApiFeature();
         feature.ConfigureServices(builder.Services);
@@ -300,10 +298,7 @@ public sealed class KernelRunListTests
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionActorProvider>());
         Assert.Null(scope.ServiceProvider.GetService<ActivityExecutionBrowseSource>());
         if (!separateLegacyReaders)
-        {
             Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
-            Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
-        }
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowRunInspection>());
         var permissions = scope.ServiceProvider.GetRequiredService<IPermissionCatalog>();
         Assert.NotNull(permissions.Find(WorkflowRuntimePermissions.WorkflowRuntimeRead));
@@ -356,15 +351,18 @@ public sealed class KernelRunListTests
 
     private sealed class LegacyInspectionSpy(string actorId) : IWorkflowExecutionStateStore, IActivityExecutionStateStore
     {
-        private readonly InMemoryWorkflowExecutionStateStore _runs = new();
+        private readonly Dictionary<string, WorkflowExecutionState> _runs = new(StringComparer.Ordinal);
 
-        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
-            _runs.SaveAsync(state, cancellationToken);
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
+        {
+            _runs.Add(state.WorkflowExecutionId, state);
+            return ValueTask.FromResult(state);
+        }
 
         public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             workflowExecutionId == actorId
                 ? throw new InvalidOperationException("The retained API read legacy state for the Actor run.")
-                : _runs.FindAsync(workflowExecutionId, cancellationToken);
+                : ValueTask.FromResult(_runs.GetValueOrDefault(workflowExecutionId));
 
         public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId,
             CancellationToken cancellationToken = default) =>
@@ -1021,7 +1019,7 @@ public sealed class KernelRunListTests
         var foreign = new ServiceCollection();
         foreign.AddSingleton(new KernelRuns(Scope, _ => throw new NotSupportedException()));
         retained.ConfigureServices(foreign);
-        foreign.AddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
+        foreign.AddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<KernelWorkflowInstanceDetailsService>());
 
         var refused = Assert.Throws<InvalidOperationException>(() => retained.PostConfigureServices(foreign));
         Assert.Contains(nameof(IWorkflowInstanceDetailsService), refused.Message, StringComparison.Ordinal);

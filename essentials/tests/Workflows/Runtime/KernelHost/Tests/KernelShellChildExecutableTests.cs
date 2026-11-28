@@ -138,10 +138,10 @@ public sealed class KernelShellChildExecutableTests
                 var sourceId = WorkflowActivationReferenceIdentity.Create(slot!.ActiveActivationId!);
                 Check(await sources.RetireAsync(sourceId, TimeProvider.System.GetUtcNow(), "qualification retired the unpublished source", token),
                     "the unpublished activation source no longer roots its artifact");
-                var collector = runtimeServices.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>();
-                await collector.SweepAsync(token);
-                Check(await runtimeServices.GetRequiredService<IWorkflowExecutableStore>().FindAsync(child.Identity.ArtifactId, token) is not null,
-                    "normal executable collection kept the unpublished child artifact");
+                var materials = runtimeServices.GetRequiredService<IWorkflowExecutableStore>();
+                Check((await materials.ListMaterialRetentionRootIdsAsync(token)).Contains(child.Identity.ArtifactId) &&
+                    await materials.FindAsync(child.Identity.ArtifactId, token) is not null,
+                    "the live child still retains the unpublished executable through the physical material store");
 
                 await RefuseReplacedIdentityAsync(services, serving, runtimeServices, pins);
             }
@@ -184,9 +184,9 @@ public sealed class KernelShellChildExecutableTests
                 await WaitAsync(() => pins.ReadOpenTailAsync(Scope, token), cursor => cursor is null, token);
                 Check((await pins.ListPinnedExecutableArtifactIdsAsync(token)).Count == 0,
                     "installed housekeeping released the exact retired birth's pin");
-                await stores.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync(token);
-                Check(await stores.GetRequiredService<IWorkflowExecutableStore>().FindAsync(child.Identity.ArtifactId, token) is null,
-                    "ordinary executable collection removed the artifact after its final root was released");
+                var materials = stores.GetRequiredService<IWorkflowExecutableStore>();
+                Check(!(await materials.ListMaterialRetentionRootIdsAsync(token)).Contains(child.Identity.ArtifactId),
+                    "the retired child no longer holds a physical material retention root");
             }
             finally { await StopAsync(shell); }
         }
