@@ -275,19 +275,6 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "elsa.activities.bpmn.api": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Bpmn.Core": "[4.0.0-dev, )",
-          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
-          "Elsa.Api.Capabilities.Core": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
-        }
-      },
       "elsa.activities.bpmn.composite": {
         "type": "Project",
         "dependencies": {

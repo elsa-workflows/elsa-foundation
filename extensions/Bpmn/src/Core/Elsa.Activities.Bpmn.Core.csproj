@@ -4,7 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Shared wire plumbing stays private to the BPMN domain. -->
-    <InternalsVisibleTo Include="Elsa.Activities.Bpmn" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Design" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange.Tests" />

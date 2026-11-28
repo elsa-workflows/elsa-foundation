@@ -50,7 +50,7 @@ Permanent frozen authoring descriptors and the original runtime/interchange disc
 
 ## Cross-domain contributions
 
-`ActivitiesBpmnInterchange` and the optional `ActivitiesBpmnDirectPublishing` register keyed `IEndpointFaultRenderer` contributions (`BpmnInterchangeFaultRenderer`, `BpmnDirectPublishingFaultRenderer`) for their own endpoint groups; see the [API catalog](../../../../essentials/src/Api/EXTENSION_POINTS.md). Direct publication calls the BPMN Core `IBpmnModelRuntime` replacement port and declares the `elsa.api.bpmn-publishing` capability; it adds no runtime writer of its own.
+`ActivitiesBpmnInterchange` registers a keyed `IEndpointFaultRenderer` contribution (`BpmnInterchangeFaultRenderer`) for its endpoint group; see the [API catalog](../../../../essentials/src/Api/EXTENSION_POINTS.md). The archived direct publisher calls the BPMN Core `IBpmnModelRuntime` replacement port and declares the `elsa.api.bpmn-publishing` capability; it adds no runtime writer of its own.
 
 ## Shared logical-slot publication
 
