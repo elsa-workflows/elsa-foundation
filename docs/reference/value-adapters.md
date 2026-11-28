@@ -40,6 +40,7 @@ is exact for any length and exponent. A number held as a string (`"9007199254740
 | Set a member equal, as a JavaScript value, to what it read | Unchanged | Nothing (ADR 0090 C2; a string forces the write) |
 | Added a member JSON cannot hold (a function, a Symbol, `undefined`) | Unchanged | Nothing: JSON drops such a member, so the stored value is what it was (an input expression is not refused for it) |
 | Returned a value | Result | The result, as JSON |
+| Returned a Promise | Result | The value the Promise settled with, as JSON (issue #5687, as in Elsa 3). A rejected Promise faults the evaluation as `throw reason` would; one that never settles faults with `VF-PROMISE-001`. Only the top-level result is unwrapped: a Promise inside returned data is written as `{}`, as in Elsa 3 |
 
 An entered value written unchanged, as a result or inside another value, is written from its original JSON, so it
 carries no loss. Such a lossy number gets no read warning (`VF-PREC-002`), even when the script also computed with it:
@@ -61,19 +62,20 @@ throws where the script does it (spec 1231 FR-006). An input expression never wr
 | A lossy element of an array written whole | Refused by the precision policy | `VF-PREC-001` | The array path, "written as a whole", each lossy element with both values; remedy: hold it as a string or do not change the array |
 | A lossy number read but not written | One warning per evaluation, recorded on the activity execution and shown in its inspection (`Warnings`) | `VF-PREC-002` | The lossy paths and why; never a value. When the evaluation or step read a protected value, and in the log, only the roots (`variables.order`, `args`): a member below can be a key of that value |
 | A lossy number passed to a host function | One warning per function and set of paths in an evaluation, recorded on the activity execution and logged; the call runs with the nearest value JavaScript holds (spec 1223 FR-028) | `VF-PREC-002` | The function and the argument path (`argument 0.order.id`); the protected form and the log name the argument only |
-| An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity, or change a copy made with [`structuredClone`](#copying-a-value-structuredclone) |
+| An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity, or change a copy made with [`deepClone`](#copying-a-value-deepclone) |
 | An input expression changes a read value in a way publication cannot see | Evaluation fails, nothing written | `VF-BIND-001` | Same; when a value it read is protected, the declared variable only, no path, and no name it computed |
-| A script activity changes a value it read without assigning the variable (`variables.order.total = 1`) | Written (a partial update); one warning recorded on the activity execution | `VF-WRITE-001` | The variable and the changed paths; when a value it read is protected, the variable only. Assign the variable to make the write explicit, or change a copy (`structuredClone(variables.order)`, see [below](#copying-a-value-structuredclone)) to leave the variable unchanged |
+| A script activity changes a value it read without assigning the variable (`variables.order.total = 1`) | Written (a partial update); one warning recorded on the activity execution | `VF-WRITE-001` | The variable and the changed paths; when a value it read is protected, the variable only. Assign the variable to make the write explicit, or change a copy (`deepClone(variables.order)`, see [below](#copying-a-value-deepclone)) to leave the variable unchanged |
+| A script or input expression returns a Promise that never settles (`new Promise(() => {})`; an evaluation has no timers) | Evaluation fails, nothing written | `VF-PROMISE-001` | "a Promise that never settles"; remedy: resolve or reject it within the script, or return the value itself |
 | A script activity reads a name no visible variable has | Reads `undefined`; one warning | `VF-READ-001` | The name; when a value it read is protected, none |
 
-### Copying a value: `structuredClone`
+### Copying a value: `deepClone`
 
-`structuredClone(value)` returns an independent deep copy of a JSON value (issue #6215). It is a built-in
-(`JavaScriptBuiltInFunctions.StructuredClone`) in both Run JavaScript and input expressions. Changing the copy, nested
+`deepClone(value)` returns an independent deep copy of a JSON value (issue #6215). It is a built-in
+(`JavaScriptBuiltInFunctions.DeepClone`) in both Run JavaScript and input expressions. Changing the copy, nested
 arrays and objects included, never changes the variable, so it raises neither `VF-WRITE-001` nor `VF-BIND-001`:
 
 ```js
-const draft = structuredClone(variables.order);
+const draft = deepClone(variables.order);
 draft.items.push(item);       // the variable `order` is unchanged
 draft.customer.name = 'Ada';  // so is its nested object
 return draft;
@@ -90,9 +92,9 @@ them changes the variable.
   its JSON form, never the live object, or the call fails when it has none. The value is bounded by the Jint feature's
   result limits (`MaxResultBytes`, `MaxResultDepth`, `MaxResultNodes`), as every host function argument is: a larger
   value fails the call.
-- **Publish.** A value passed to `structuredClone` does not escape (spec 1231 FR-019), so
-  `structuredClone(variables.order)` alone does not put `order` among the variables the step may write. A script that
-  declares its own `structuredClone`, or whose source names `toJSON` (making the copy runs it, and it can change the
+- **Publish.** A value passed to `deepClone` does not escape (spec 1231 FR-019), so
+  `deepClone(variables.order)` alone does not put `order` among the variables the step may write. A script that
+  declares its own `deepClone`, or whose source names `toJSON` (making the copy runs it, and it can change the
   value), loses this. Like the analyzer's other cases of code a script installs on a prototype (a `toString` override
   read by `'' + variables.o`), a `toJSON` installed without naming it is not seen; the run-time `VF-WRITE-001`
   still reports the change.
@@ -101,8 +103,11 @@ them changes the variable.
 - **Name.** Built-in names are reserved and unprefixed (ADR 0045 §5 D-5): a script or expression that declares one
   gets the `ShadowedFunction` warning, and a `let`, `const`, `class` or function declaration hides the built-in (a
   host function's namespace root, such as `acme`, behaves the same). A top-level `var` of such a name fails in a statement-form input expression, since it would write the read-only
-  global; it works in Run JavaScript, whose body runs inside a function. The web-standard name was chosen over `clone`, which scripts commonly use for
-  their own locals (`const clone = …`), so reserving it would warn on ordinary code.
+  global; it works in Run JavaScript, whose body runs inside a function. The name `deepClone` is easy for workflow
+  engineers to remember, and it says that the copy is deep, unlike a spread. It was chosen over `clone`, which scripts
+  commonly use for their own locals: `const clone = clone(x)` would read the local before it is set. A script's own
+  `deepClone` helper still gets the warning and hides the built-in; name the copy something else
+  (`const copy = deepClone(variables.order)`).
 
 The precision policy is one replaceable host-wide component (`IJavaScriptPrecisionPolicy`, D-17). Elsa ships only
 `RefusingPrecisionPolicy`, with no options and no per-workflow or per-node override. A host that wants other handling

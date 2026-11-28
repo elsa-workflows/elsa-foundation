@@ -54,7 +54,8 @@ internal sealed class JintPortableJavaScriptEvaluator(
         var variables = IsolatedJintEngine.SetVariables(engine, values, request.PinnedVariableValues(), request.VariableReader, featureOptions.Value);
 
         EvaluationLimits.Start(engine);
-        var result = engine.Evaluate(prepared);
+        // Issue #5687: a Promise result yields the value it settled with, as in Elsa 3.
+        var result = JavaScriptPromiseResults.Settle(engine, engine.Evaluate(prepared));
         // Writing the result and checking the variables runs the script's own toJSON and getters: a phase of its own.
         EvaluationLimits.Start(engine);
 
