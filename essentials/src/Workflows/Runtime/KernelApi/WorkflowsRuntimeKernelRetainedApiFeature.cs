@@ -9,10 +9,13 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelHost;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
@@ -31,14 +34,27 @@ public sealed class WorkflowsRuntimeKernelRetainedApiFeature : IWebShellFeature,
 {
     public const string FeatureName = "WorkflowsRuntimeKernelRetainedApi";
 
-    public void ConfigureServices(IServiceCollection services) => WorkflowsRuntimeKernelApiFeature.ConfigureRetainedServices(services);
+    // Keep historic endpoint ownership and capability contributor identities stable.
+    internal const string RouteOwner = "WorkflowsRuntimeKernelApi";
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddRetainedRuntimeHttpServices();
+        RuntimeHttpInspectionServices.AddExecutableInspectionServices(services);
+        RuntimeHttpInspectionServices.AddRunInspectionServices(services, provider => new WorkflowRunInspection(
+            provider.GetRequiredService<IWorkflowInstanceDetailsService>(),
+            provider.GetRequiredService<IActivityExecutionInspectionService>(),
+            timeProvider: provider.GetRequiredService<TimeProvider>(),
+            executables: provider.GetRequiredService<IWorkflowExecutableInspection>()));
+        services.AddDataProtection();
+    }
 
     public void PostConfigureServices(IServiceCollection services)
     {
         if (services.Any(descriptor => descriptor.ServiceType == typeof(LegacyRuntimeApiSelected) && !descriptor.IsKeyedService))
             throw new InvalidOperationException($"The shell must select either {FeatureName} or WorkflowsRuntimeApi, which share Workflow Runtime routes.");
 
-        WorkflowsRuntimeKernelApiFeature.ConfigureKernelServices(services, FeatureName);
+        ConfigureKernelServices(services);
         services.AddScoped<IWorkflowRetainedRunSource>(serviceProvider => serviceProvider.GetRequiredService<KernelRunReader>());
         var links = RuntimeApiCapabilities.StaticDeclaration.Links.Where(link => link.Rel is
             "workflow-executables" or "workflow-executable" or "workflow-executable-provenance" or
@@ -52,7 +68,52 @@ public sealed class WorkflowsRuntimeKernelRetainedApiFeature : IWebShellFeature,
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
         var (execute, delete, inputSources) = GetOptionalRoutes(endpoints.ServiceProvider);
-        WorkflowsRuntimeKernelApiFeature.MapRetainedEndpoints(endpoints, execute, delete, inputSources);
+        RuntimeHttpApi.MapRetainedEndpoints(endpoints, execute, delete, inputSources);
+        KernelHistoryStream.Map(endpoints);
+        KernelParkRecovery.Map(endpoints);
+        KernelParkInspection.Map(endpoints);
+    }
+
+    private static void ConfigureKernelServices(IServiceCollection services)
+    {
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(KernelRuns) && !descriptor.IsKeyedService))
+            throw new InvalidOperationException(
+                $"The {FeatureName} feature needs the host's {nameof(KernelRuns)} registration.");
+        services.AddScoped<KernelRunReader>();
+        services.TryAddScoped<IRuntimePreparedStandaloneRunReader, KernelPreparedStandaloneRunReader>();
+        services.AddScoped<KernelActivityTimeline>();
+        services.AddScoped<KernelHistoryCursor>();
+        services.AddScoped<KernelPlaybackCursor>();
+        services.AddApiCapabilitySource<KernelHistoryCapabilitySource>();
+        services.AddApiCapabilitySource<KernelParkInspectionCapabilitySource>();
+        ReplaceService(typeof(IWorkflowInstanceListService), typeof(KernelWorkflowInstanceListService));
+        ReplaceService(typeof(IWorkflowInstanceDetailsService), typeof(KernelWorkflowInstanceDetailsService));
+        ReplaceService(typeof(IActivityExecutionBrowseSource), typeof(KernelActivityExecutionBrowseSource));
+        ReplaceService(typeof(IActivityExecutionInspectionService), typeof(KernelActivityExecutionInspectionService));
+        ReplaceService(typeof(IRuntimeHistoryPageReader), typeof(KernelRuntimeHistoryPageReader));
+        ReplaceService(typeof(IRuntimeHistoryOccurrencePageReader), typeof(KernelPlaybackPageReader));
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(KernelOperatorIngress) && !descriptor.IsKeyedService))
+        {
+            ReplaceService(typeof(IWorkflowInstanceDeletionService), typeof(KernelWorkflowInstanceDeletionService));
+            services.TryAddSingleton<SelectedRunDeletionAvailable>();
+            services.TryAddScoped<KernelParkRecovery>();
+            services.AddApiCapabilitySource<KernelParkRecoveryCapabilitySource>();
+        }
+        ReplaceService(typeof(IWorkflowExecutableRetentionReader),
+            typeof(KernelWorkflowExecutableRetentionReader));
+
+        void ReplaceService(Type service, Type kernelImplementation)
+        {
+            foreach (var descriptor in services.Where(descriptor => descriptor.ServiceType == service && !descriptor.IsKeyedService).ToArray())
+            {
+                if (!RuntimeHttpInspectionServices.OwnsStoredReader(descriptor))
+                    throw new InvalidOperationException(
+                        $"The {FeatureName} feature replaces the shell's {service.Name} with the kernel's, and this shell registers another for it. " +
+                        $"One implementation serves per shell: remove that registration, or leave the {FeatureName} feature out of the shell.");
+                services.Remove(descriptor);
+            }
+            services.AddScoped(service, kernelImplementation);
+        }
     }
 
     private static (bool Execute, bool Delete, bool InputSources) GetOptionalRoutes(IServiceProvider services)

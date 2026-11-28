@@ -24,7 +24,7 @@ internal static class KernelParkInspection
 
     internal static void Map(IEndpointRouteBuilder routes) =>
         routes.MapGet(Route, ReadAsync)
-            .WithOwner(WorkflowsRuntimeKernelApiFeature.FeatureName)
+            .WithOwner(WorkflowsRuntimeKernelRetainedApiFeature.RouteOwner)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeRead)
             .WithName("ReadWorkflowRunPark")
@@ -74,6 +74,6 @@ internal sealed class KernelParkInspectionCapabilitySource(KernelRuns runs) : IA
         await runs.SupportsParkInboxAsync(cancellationToken)
             ? [new(RuntimeApiCapabilities.CapabilityId, 1,
                 [new("workflow-instance-park", KernelParkInspection.Route, templated: true)],
-                $"{WorkflowsRuntimeKernelApiFeature.FeatureName}.Park")]
+                $"{WorkflowsRuntimeKernelRetainedApiFeature.RouteOwner}.Park")]
             : [];
 }

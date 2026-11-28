@@ -4,11 +4,13 @@ The per-project catalog of `Elsa.Workflows.Runtime.KernelApi`. The [README](READ
 
 ## Composition
 
-`WorkflowsRuntimeKernelApiFeature` (`WorkflowsRuntimeKernelApi`) is a public, inheritable shell feature with virtual
-`ConfigureServices` and `PostConfigureServices`. It depends on `WorkflowsRuntimeKernel` and `WorkflowsRuntimeApi`. In
-`PostConfigureServices` it requires the host's `KernelRuns`, registered by instance on the root container, and puts the
-kernel's implementations of the replacement contracts below in the place of the runtime API's defaults, refusing a shell
-that registers any other implementation (constitution 2.6.2).
+`WorkflowsRuntimeKernelRetainedApiFeature` (`WorkflowsRuntimeKernelRetainedApi`) depends on
+`WorkflowsRuntimeKernel` and `ApiCapabilities`. Its post-configuration requires the host's
+`KernelRuns` and selects one retained workflow read implementation for each contract.
+The earlier mixed-preview feature and its classic read fallback remain in the
+[pinned Workbench compatibility source](../../../../../docs/contributing/workbench-compatibility-tests.md).
+Run the archived mixed reader tests from source `ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a`
+with the locked `Elsa.Workflows.Runtime.KernelHost.Tests.csproj`.
 
 ## Implemented replacement contracts
 

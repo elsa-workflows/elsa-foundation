@@ -26,7 +26,7 @@ internal static class KernelHistoryStream
     private static readonly byte[] Newline = [(byte)'\n'];
 
     internal static void Map(IEndpointRouteBuilder routes) => routes.MapGet(Route, FollowAsync)
-        .WithOwner(WorkflowsRuntimeKernelApiFeature.FeatureName)
+        .WithOwner(WorkflowsRuntimeKernelRetainedApiFeature.RouteOwner)
         .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
         .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeRead)
         .WithName("WatchCommittedWorkflowHistory");
