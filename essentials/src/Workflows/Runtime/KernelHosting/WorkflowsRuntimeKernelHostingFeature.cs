@@ -128,8 +128,7 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
         if (schedules) services.AddSingleton(new WorkflowScheduleCutoverClock(persistenceScope, storage.ReadClockAsync));
         services.AddSingleton(sp =>
         {
-            var servesSchedules = schedules && (!RequiresScheduleActivities || sp.GetServices<IActivityTriggerStimulusProvider>()
-                .Any(provider => provider.ProviderId is "Elsa.Timer" or "Elsa.Cron"));
+            var servesSchedules = schedules && (!RequiresScheduleActivities || sp.GetService<KernelWorkflowScheduleActivities>() is not null);
             return new KernelServing(cronError: servesSchedules ? CronosCalendar.Error : null,
                 capabilities: new KernelHostCapabilities(Schedules: servesSchedules, Timers: storage.TakesTimers,
                     Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits)

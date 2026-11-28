@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -19,6 +20,7 @@ public sealed class KernelActivitiesSchedulingFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.TryAddSingleton<KernelWorkflowScheduleActivities>();
         services.TryAddSingleton<KernelTimerTestRunIntervalPolicy>();
         ActivitiesSchedulingFeature.ConfigureAuthoredActivities(services);
     }
