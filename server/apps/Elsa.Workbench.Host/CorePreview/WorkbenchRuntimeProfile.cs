@@ -10,7 +10,7 @@ internal static class WorkbenchRuntimeProfile
     {
         var features = configuration.GetSection("CShells:Shells:default:Features");
         var hosting = features.GetSection(WorkflowsRuntimeKernelHostingFeature.FeatureName);
-        var actors = hosting.Exists() && !string.Equals(hosting.Value, "false", StringComparison.OrdinalIgnoreCase);
+        var actors = IsSelected(hosting);
         var readinessShell = configuration[$"{ShellReadinessOptions.SectionName}:{nameof(ShellReadinessOptions.DefaultShellName)}"];
         var preview = actors && (readinessShell is null or "default") && configuration.GetValue<bool>(WorkbenchCorePreview.EnabledKey);
         if (preview)
@@ -21,7 +21,7 @@ internal static class WorkbenchRuntimeProfile
             if (preview || !actors && features.GetChildren().Any(feature =>
                     feature.Key is "WorkflowsRuntimeApi" or "WorkflowsRuntimeEntityFrameworkCore"))
                 configuration.AddJsonFile("shells.CorePreview.Production.json", optional: false, reloadOnChange: true);
-            else if (actors)
+            else if (actors && IsSelected(features.GetSection("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence")))
                 configuration.AddJsonFile("shells.Actor.Production.json", optional: false, reloadOnChange: true);
         }
 
@@ -37,4 +37,7 @@ internal static class WorkbenchRuntimeProfile
             new($"{hosting.Path}:SqlitePath", Path.GetFullPath("elsa-workbench-actors.db", environment.ContentRootPath))
         ]);
     }
+
+    private static bool IsSelected(IConfigurationSection feature) =>
+        feature.Exists() && !string.Equals(feature.Value, "false", StringComparison.OrdinalIgnoreCase);
 }
