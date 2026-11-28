@@ -284,6 +284,7 @@ public sealed class Elsa3BulkDispatchConversionTests
         Assert.Equal(["bulk:Done->after"], Elsa3FlowchartFixtures.Connections(Node(result.Value!.State, "chart")));
         var dead = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved);
         Assert.Contains("'Canceled'", dead.Message, StringComparison.Ordinal);
+        Assert.Equal("Remove the connection from the Elsa 3 workflow.", dead.Guidance);
     }
 
     [Fact]
@@ -318,8 +319,9 @@ public sealed class Elsa3BulkDispatchConversionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.Equal(["bulk:Done->after"], Elsa3FlowchartFixtures.Connections(Node(result.Value!.State, "chart")));
-        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved &&
-                                                          diagnostic.Message.Contains("'Completed'", StringComparison.Ordinal));
+        var dead = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved &&
+                                                                   diagnostic.Message.Contains("'Completed'", StringComparison.Ordinal));
+        Assert.Equal("Remove the connection from the Elsa 3 workflow.", dead.Guidance);
     }
 
     [Fact]

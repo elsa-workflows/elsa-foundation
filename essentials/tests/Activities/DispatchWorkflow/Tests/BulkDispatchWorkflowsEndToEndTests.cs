@@ -224,27 +224,45 @@ public sealed class BulkDispatchWorkflowsEndToEndTests
         Assert.Equal(["completed:0:slot-fault", "completed:1:item-1", "completed:2:item-2"], SlotRuns(fixture, parentId));
     }
 
-    [Fact]
-    public async Task A_fault_inside_a_Sequence_in_a_slot_follows_the_strategy_in_the_same_way()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_fault_inside_a_Sequence_in_a_slot_follows_the_strategy_in_the_same_way(bool continueWithIncidents)
     {
         await using var fixture = await Fixture.CreateAsync();
-        const string parentId = "parent-bulk-sequence-fault";
+        var parentId = $"parent-bulk-sequence-fault-{continueWithIncidents}";
         object?[] items = [Fixture.BulkItem(0, message: Fixture.FaultingSlotMessage), Fixture.BulkItem(1)];
 
-        await fixture.StartBulkParentAsync("bulk-sequence-fault", parentId, items, waitForCompletion: true, completedSlot: true,
+        await fixture.StartBulkParentAsync($"bulk-sequence-fault-{continueWithIncidents}", parentId, items, waitForCompletion: true, completedSlot: true,
+            incidentStrategy: continueWithIncidents ? IncidentStrategyBuiltIns.ContinueWithIncidentsReference : null,
             completedSlotInSequence: true);
         await fixture.SweepUntilQuietAsync();
 
-        Assert.Equal(WorkflowExecutionStatus.Faulted, (await fixture.FindWorkflowAsync(parentId))?.Status);
-        var activities = await fixture.ListActivitiesAsync(parentId);
-        Assert.Contains(activities, state => state.Execution.ExecutableNodeId == Fixture.CompletedSlotNodeId && state.Status == ActivityExecutionStatus.Faulted);
-        // The faulted pass's Sequence never reached its next activity.
+        // The ContinueWithIncidents case shows the nested activities read their pass's item, so this fault is the probe's own.
+        Assert.Single(await fixture.ListActivitiesAsync(parentId), state =>
+            state.Execution.ExecutableNodeId == Fixture.CompletedSlotNodeId && state.Status == ActivityExecutionStatus.Faulted);
         Assert.DoesNotContain(SlotRuns(fixture, parentId), run => run.StartsWith("completed-tail:0:", StringComparison.Ordinal));
+        if (!continueWithIncidents)
+        {
+            Assert.Equal(WorkflowExecutionStatus.Faulted, (await fixture.FindWorkflowAsync(parentId))?.Status);
+            return;
+        }
+
+        // Under ContinueWithIncidents the other pass ran its whole Sequence, in order, and the faulted pass keeps the bulk
+        // activity open, as a fault directly in the slot does.
+        Assert.Equal(["completed:1:item-1", "completed-tail:1:item-1"], fixture.ChildProbe.Observations
+            .Where(observation => observation.WorkflowExecutionId == parentId && observation.WorkflowInputs.ContainsKey("slot"))
+            .Select(observation => $"{observation.WorkflowInputs["slot"]}:{observation.WorkflowInputs["index"]}:{observation.WorkflowInputs["message"]}"));
+        Assert.NotEqual(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(parentId))?.Status);
+        await AssertBulkStatusAsync(fixture, parentId, ActivityExecutionStatus.Running, ActivityExecutionStatus.Suspended);
     }
 
     [Fact]
-    public async Task Cancelling_the_parent_cancels_the_children_it_waits_for()
+    public async Task Cancelling_the_parent_cancels_every_dispatch_its_passes_wait_for()
     {
+        // The cancel reaches each pass's suspended Dispatch execution under the bulk node. The children have not started
+        // yet: had a dispatch survived, the sweep after the cancel would start its child. Cancelling a started child is
+        // the shared Dispatch cancellation path (WorkflowDispatchCancellationTests).
         await using var fixture = await Fixture.CreateAsync();
         const string parentId = "parent-bulk-cancel";
         object?[] items = [Fixture.BulkItem(0), Fixture.BulkItem(1), Fixture.BulkItem(2)];
@@ -259,8 +277,8 @@ public sealed class BulkDispatchWorkflowsEndToEndTests
         var dispatches = await fixture.ListDispatchesAsync(parentId);
         Assert.Equal(3, dispatches.Count);
         Assert.All(dispatches, dispatch => Assert.Equal(WorkflowDispatchStatus.Cancelled, dispatch.Status));
-        Assert.DoesNotContain(fixture.ChildProbe.Observations, observation => !StringComparer.Ordinal.Equals(observation.WorkflowExecutionId, parentId));
-        Assert.Empty(SlotRuns(fixture, parentId));
+        foreach (var dispatch in dispatches)
+            Assert.Null(await fixture.FindWorkflowAsync(dispatch.ChildWorkflowExecutionId));
     }
 
     private static async Task<ActivityExecutionState[]> DispatchExecutionsAsync(Fixture fixture, string parentId) =>
