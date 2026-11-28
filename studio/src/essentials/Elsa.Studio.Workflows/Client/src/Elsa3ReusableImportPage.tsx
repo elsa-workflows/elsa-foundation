@@ -4,7 +4,8 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState
+  useState,
+  type Ref
 } from "react";
 import {
   CheckCircle2,
@@ -57,8 +58,20 @@ import type {
 
 const maximumClientUploadBytes = 16 * 1024 * 1024;
 const analysisPageSize = 100;
+const importSteps = [
+  { id: "export", label: "Export" },
+  { id: "selection", label: "Choose workflows" },
+  { id: "review", label: "Review" },
+  { id: "result", label: "Results" }
+] as const;
 
 type OperationStatus = "idle" | "loading" | "ready" | "failed";
+type ImportStep = typeof importSteps[number]["id"];
+
+function focusStep(heading: HTMLHeadingElement | null) {
+  heading?.focus({ preventScroll: true });
+  (heading?.closest("main") ?? heading)?.scrollIntoView?.({ block: "start" });
+}
 
 export function Elsa3ReusableImportPage({
   context,
@@ -69,6 +82,10 @@ export function Elsa3ReusableImportPage({
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
+  const exportHeading = useRef<HTMLHeadingElement>(null);
+  const analysisHeading = useRef<HTMLHeadingElement>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const receiptHeading = useRef<HTMLHeadingElement>(null);
   const totalBytes = files.reduce((total, file) => total + file.size, 0);
   const [collectionHandleInput, setCollectionHandleInput] = useState("");
   const [uploadStatus, setUploadStatus] = useState<OperationStatus>("idle");
@@ -80,9 +97,10 @@ export function Elsa3ReusableImportPage({
   const [readiness, setReadiness] = useState<Elsa3ReusableImportSelectionReadiness | null>(null);
   const [selectionStatus, setSelectionStatus] = useState<OperationStatus>("idle");
   const [publishImportedActivities, setPublishImportedActivities] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const [step, setStep] = useState<ImportStep>("export");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [applyStatus, setApplyStatus] = useState<OperationStatus>("idle");
+  const [applyMessage, setApplyMessage] = useState("");
   const [receipt, setReceipt] = useState<Elsa3ReusableImportReceipt | null>(null);
   const [message, setMessage] = useState("");
   const [diagnostics, setDiagnostics] = useState<Elsa3MigrationDiagnostic[]>([]);
@@ -120,6 +138,14 @@ export function Elsa3ReusableImportPage({
     [analysis]
   );
 
+  const previousStep = useRef(step);
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    const headings = { export: exportHeading, selection: analysisHeading, review: reviewHeading, result: receiptHeading };
+    focusStep(headings[step].current);
+  }, [step]);
+
   useEffect(() => () => {
     uploadController.current?.abort();
     analysisController.current?.abort();
@@ -136,9 +162,11 @@ export function Elsa3ReusableImportPage({
     setExpandedSelection(new Set());
     setReadiness(null);
     setSelectionStatus("idle");
-    setReviewOpen(false);
+    setStep("export");
+    setPublishImportedActivities(false);
     setIdempotencyKey("");
     setApplyStatus("idle");
+    setApplyMessage("");
     setReceipt(null);
     setDiagnostics([]);
     setMessage(nextMessage);
@@ -147,6 +175,7 @@ export function Elsa3ReusableImportPage({
   const chooseFiles = (nextFiles: File[]) => {
     uploadController.current?.abort();
     setFiles(nextFiles);
+    if (!nextFiles.length && fileInput.current) fileInput.current.value = "";
     setUploadStatus("idle");
     setUploadResult(null);
     setCollectionHandleInput("");
@@ -174,7 +203,7 @@ export function Elsa3ReusableImportPage({
     uploadController.current?.abort();
     uploadController.current = controller;
     setUploadStatus("loading");
-    setMessage(`Uploading ${formatBytes(totalBytes)} once. Apply will use only the immutable handle.`);
+    setMessage(`Uploading ${formatBytes(totalBytes)} of export files…`);
     try {
       const result = await uploadElsa3ReusableCollection(context, files, controller.signal);
       if (controller.signal.aborted) return;
@@ -203,6 +232,10 @@ export function Elsa3ReusableImportPage({
 
   const analyze = async () => {
     if (!effectiveCollectionHandle) return;
+    if (analysis) {
+      goToStep("selection");
+      return;
+    }
     resetReviewedInput("Running preview. No Design documents are being written.");
     const controller = new AbortController();
     analysisController.current?.abort();
@@ -219,10 +252,9 @@ export function Elsa3ReusableImportPage({
       if (controller.signal.aborted) return;
       setAnalysis(startElsa3ReusableImportAnalysis(page));
       setAnalysisStatus("ready");
+      setStep("selection");
       setDiagnostics(page.diagnostics);
-      setMessage(page.isComplete
-        ? `Analysis complete for ${page.total} exact source versions.`
-        : `Analyzed ${page.processed} of ${page.total} exact source versions. Load the next bounded page to continue.`);
+      setMessage("");
     } catch (error) {
       if (isAbortError(error)) return;
       if (isPrivacyBoundaryError(error)) {
@@ -266,9 +298,7 @@ export function Elsa3ReusableImportPage({
       setAnalysis(next);
       setAnalysisStatus("ready");
       setDiagnostics(next.diagnostics);
-      setMessage(next.nextOffset === null
-        ? `Analysis complete for ${next.total} exact source versions.`
-        : `Analyzed ${next.processed} of ${next.total} exact source versions.`);
+      setMessage("");
     } catch (error) {
       if (isAbortError(error)) return;
       if (isPrivacyBoundaryError(error)) {
@@ -290,10 +320,11 @@ export function Elsa3ReusableImportPage({
     if (checked) requested.add(item.sourceVersionId);
     else requested.delete(item.sourceVersionId);
     setRequestedSelection(requested);
-    setReviewOpen(false);
+    setPublishImportedActivities(false);
     setIdempotencyKey("");
     setReceipt(null);
     setApplyStatus("idle");
+    setApplyMessage("");
     if (requested.size === 0) {
       selectionController.current?.abort();
       setExpandedSelection(new Set());
@@ -357,20 +388,23 @@ export function Elsa3ReusableImportPage({
 
   const openReview = () => {
     if (!analysis || !readiness?.isReady || expandedSelection.size === 0 || applyStatus === "loading" || receipt) return;
-    reviewedOperationGeneration.current += 1;
-    setPublishImportedActivities(false);
-    setReviewOpen(true);
-    setIdempotencyKey(createIdempotencyKey());
-    setReceipt(null);
-    setApplyStatus("idle");
-    setMessage("Review binds the exact Plan ID, immutable collection handle, access scope, and source-version closure.");
+    if (!idempotencyKey) {
+      reviewedOperationGeneration.current += 1;
+      setIdempotencyKey(createIdempotencyKey());
+    }
+    goToStep("review");
+  };
+
+  const goToStep = (nextStep: ImportStep) => {
+    setStep(nextStep);
+    setMessage("");
   };
 
   const apply = async () => {
-    if (!analysis || !reviewOpen || !idempotencyKey || expandedSelection.size === 0) return;
+    if (!analysis || step !== "review" || !idempotencyKey || expandedSelection.size === 0) return;
     const generation = reviewedOperationGeneration.current;
     setApplyStatus("loading");
-    setMessage("Applying one authoritative atomic import. No partial Design result is accepted.");
+    setApplyMessage("Saving the reviewed drafts…");
     setDiagnostics([]);
     try {
       const result = await applyElsa3ReusableImport(
@@ -395,17 +429,17 @@ export function Elsa3ReusableImportPage({
       }
       if (error instanceof StudioHttpError && error.status === 501) {
         setApplyStatus("failed");
-        setMessage("This server could not apply the collection as drafts. Check that the server supports draft imports and that the collection is still available.");
+        setApplyMessage("This server could not apply the collection as drafts. Check that the server supports draft imports and that the collection is still available.");
         return;
       }
       const rejection = atomicRejection(error);
       if (rejection) {
         setApplyStatus("failed");
         setDiagnostics(rejection.diagnostics);
-        setMessage(rejection.message);
+        setApplyMessage(rejection.message);
         return;
       }
-      setMessage("The Apply response was ambiguous. Studio is reconciling through the durable receipt without resubmitting.");
+      setApplyMessage("The Apply response was ambiguous. Studio is reconciling through the durable receipt without resubmitting.");
       await reconcile(true, generation);
     }
   };
@@ -447,7 +481,7 @@ export function Elsa3ReusableImportPage({
           const rejection = atomicRejection(retryError);
           setApplyStatus("failed");
           setDiagnostics(rejection?.diagnostics ?? []);
-          setMessage(rejection?.message ?? identicalRetryReconciliationMessage(retryError));
+          setApplyMessage(rejection?.message ?? identicalRetryReconciliationMessage(retryError));
           return;
         }
       }
@@ -456,7 +490,7 @@ export function Elsa3ReusableImportPage({
         return;
       }
       setApplyStatus("failed");
-      setMessage(reconciliationMessage(error));
+      setApplyMessage(reconciliationMessage(error));
     }
   };
 
@@ -467,8 +501,8 @@ export function Elsa3ReusableImportPage({
     if (generation !== reviewedOperationGeneration.current) return;
     setReceipt(result);
     setApplyStatus("ready");
-    // The receipt owns unpublished-apply guidance so the sticky status bar cannot cover it or repeat it.
-    setMessage(importReceiptNeedsResume(result) ? "" : importReceiptApplyMessage(result));
+    setApplyMessage("");
+    goToStep("result");
   };
 
   const redactAuthorizedState = () => {
@@ -487,98 +521,102 @@ export function Elsa3ReusableImportPage({
     setUploadStatus("idle");
   };
 
-  return (
-    <main
-      className={message && !receipt ? "studio-page ad-page elsa3-import-pending" : "studio-page ad-page"}
-      aria-labelledby="elsa3-import-title"
+  const activeMessage = step === "review" ? applyMessage : message;
+  const feedback = activeMessage ? (
+    <div
+      className="elsa3-import-status"
+      role={(step === "review" ? applyStatus === "failed" : uploadStatus === "failed" || analysisStatus === "failed" || selectionStatus === "failed") ? "alert" : "status"}
     >
+      {activeMessage}
+    </div>
+  ) : null;
+
+  return (
+    <main className="studio-page ad-page" aria-labelledby="elsa3-import-title">
       <StudioShellBreadcrumbs items={[{ label: "Activity definitions", disabled: applyStatus === "loading", onClick: () => navigate("/workflows/activity-definitions") }]} current="Import from Elsa 3" />
-      <StudioPageHeader headingLevel={2} title={<>Import from Elsa 3</>} titleId="elsa3-import-title" description={<>
-            Import reusable activities and the workflows that use them. Each workflow keeps a reference to the imported version.
-          </>} actions={<><span className="elsa3-import-safety-badge"><ShieldCheck size={16} /> Uses reusable activities directly</span></>} />
+      <StudioPageHeader headingLevel={2} title="Import from Elsa 3" titleId="elsa3-import-title"
+        description="Review an Elsa 3 export and save its workflows and reusable activities as drafts." />
 
-      <StudioStepper label="Import progress" steps={[
-        { id: "export", label: "Select export" }, { id: "analysis", label: "Review analysis" },
-        { id: "selection", label: "Review selection" }, { id: "confirm", label: "Confirm import" }, { id: "result", label: "Results" }
-      ]} current={receipt ? "result" : reviewOpen ? "confirm" : analysis && expandedSelection.size ? "selection" : analysis ? "analysis" : "export"} />
+      <StudioStepper label="Import progress" steps={importSteps} current={step} />
 
-      <section className="elsa3-import-callout" aria-label="Conversion contract">
-        <strong>What gets imported</strong>
-        <span>
-          Preview the import before saving. Studio includes the activities your selection needs and saves the reviewed definitions together.
-        </span>
-      </section>
-
-      <section className="elsa3-import-panel" aria-labelledby="elsa3-source-title">
+      <section className="elsa3-import-panel" aria-labelledby="elsa3-source-title" hidden={step !== "export"}>
         <header className="elsa3-import-split">
           <div>
-            <h2 id="elsa3-source-title">1. Select an export</h2>
-            <p>Select JSON or ZIP exports from Elsa 3 Studio, or enter an existing collection ID.</p>
+            <h2 id="elsa3-source-title" ref={exportHeading} tabIndex={-1}>Select an export</h2>
+            <p>Choose JSON or ZIP files exported from Elsa 3 Studio.</p>
           </div>
           {uploadResult ? <span className="elsa3-import-success-badge"><CheckCircle2 size={14} /> Upload complete</span> : null}
         </header>
-        <div className="elsa3-import-responsive-grid">
-          <label className="elsa3-import-field">
-            <span>Elsa 3 export files</span>
-            <input
-              type="file"
-              ref={fileInput}
-              multiple
-              accept=".json,.zip,application/json,application/zip"
-              disabled={uploadStatus === "loading" || applyStatus === "loading"}
-              onChange={event => chooseFiles(Array.from(event.target.files ?? []))}
-            />
-            <small>{files.length ? `${files.map(file => file.name).join(", ")} · ${formatBytes(totalBytes)}` : `Up to ${formatBytes(maximumClientUploadBytes)} per upload`}</small>
-          </label>
-          <span className="elsa3-import-or">or</span>
-          <StudioField className="elsa3-import-field" label={<><span>Existing collection ID</span></>}><input
-              value={collectionHandleInput}
+        <label className="elsa3-import-field elsa3-import-files">
+          <span>Elsa 3 export files</span>
+          <input
+            type="file"
+            ref={fileInput}
+            multiple
+            accept=".json,.zip,application/json,application/zip"
+            disabled={uploadStatus === "loading" || applyStatus === "loading"}
+            onChange={event => chooseFiles(Array.from(event.target.files ?? []))}
+          />
+          <small>{files.length ? `${files.map(file => file.name).join(", ")} · ${formatBytes(totalBytes)}` : `Up to ${formatBytes(maximumClientUploadBytes)} per upload`}</small>
+        </label>
+        <TechnicalDetails label="Use an existing collection ID">
+          <StudioField className="elsa3-import-field" label="Existing collection ID">
+            <input value={collectionHandleInput}
               disabled={uploadStatus === "loading" || applyStatus === "loading"}
               onChange={event => changeCollectionHandle(event.target.value)}
-              placeholder="Collection ID"
-            /><small>Use an unexpired collection ID from this backend and account.</small></StudioField>
-        </div>
-        <div className="elsa3-import-actions">
-          <StudioButton type="button" onClick={() => void upload()} disabled={!files.length || uploadStatus === "loading" || applyStatus === "loading"}>
-            {uploadStatus === "loading" ? <LoaderCircle size={14} className="wf-spin" /> : <Upload size={14} />}
-            {uploadStatus === "loading" ? "Uploading bounded collection" : "Upload once"}
-          </StudioButton>
-          {uploadStatus === "loading" ? <StudioButton type="button" onClick={cancelUpload}><XCircle size={14} /> Cancel upload</StudioButton> : null}
-          <StudioButton
-            type="button"
-            variant="primary"
-            disabled={!effectiveCollectionHandle || uploadStatus === "loading" || analysisStatus === "loading" || applyStatus === "loading"}
-            onClick={() => void analyze()}
-          >
-            <FileArchive size={14} /> Analyze collection
-          </StudioButton>
-          {analysisStatus === "loading" ? <StudioButton type="button" onClick={cancelAnalysis}><XCircle size={14} /> Cancel analysis</StudioButton> : null}
-        </div>
+              placeholder="Collection ID" />
+            <small>Use an unexpired collection ID from this backend and account.</small>
+          </StudioField>
+        </TechnicalDetails>
         {uploadResult ? (
-          <dl className="elsa3-import-identity-grid">
-            <div><dt>Collection handle</dt><dd><code>{uploadResult.collectionHandle}</code></dd></div>
-            <div><dt>Exact source versions</dt><dd>{uploadResult.sourceVersionCount}</dd></div>
-            <div><dt>Accepted bytes</dt><dd>{formatBytes(uploadResult.contentLength)}</dd></div>
-            <div><dt>Expires</dt><dd>{formatDateTime(uploadResult.expiresAt)}</dd></div>
-          </dl>
+          <TechnicalDetails label="Upload details">
+            <dl className="elsa3-import-identity-grid">
+              <div><dt>Collection ID</dt><dd><code>{uploadResult.collectionHandle}</code></dd></div>
+              <div><dt>Exact source versions</dt><dd>{uploadResult.sourceVersionCount}</dd></div>
+              <div><dt>Accepted bytes</dt><dd>{formatBytes(uploadResult.contentLength)}</dd></div>
+              <div><dt>Expires</dt><dd>{formatDateTime(uploadResult.expiresAt)}</dd></div>
+            </dl>
+          </TechnicalDetails>
         ) : null}
+        {step === "export" ? feedback : null}
+        <footer className="elsa3-import-footer">
+          <div className="elsa3-import-actions">
+            <StudioButton type="button" variant={effectiveCollectionHandle ? "default" : "primary"}
+              onClick={() => void upload()} disabled={!files.length || uploadStatus === "loading" || analysisStatus === "loading" || applyStatus === "loading"}>
+              {uploadStatus === "loading" ? <LoaderCircle size={14} className="wf-spin" /> : <Upload size={14} />}
+              {uploadStatus === "loading" ? "Uploading files…" : "Upload once"}
+            </StudioButton>
+            {uploadStatus === "loading" ? <StudioButton type="button" onClick={cancelUpload}><XCircle size={14} /> Cancel upload</StudioButton> : null}
+            <StudioButton type="button" variant={effectiveCollectionHandle ? "primary" : "default"}
+              disabled={!effectiveCollectionHandle || uploadStatus === "loading" || analysisStatus === "loading" || applyStatus === "loading"}
+              onClick={() => void analyze()}>
+              <FileArchive size={14} /> {analysis ? "Continue to workflows" : "Analyze collection"}
+            </StudioButton>
+            {analysisStatus === "loading" ? <StudioButton type="button" onClick={cancelAnalysis}><XCircle size={14} /> Cancel analysis</StudioButton> : null}
+          </div>
+        </footer>
       </section>
 
-      {analysis ? (
+      {step === "selection" && analysis ? (
         <section className="elsa3-import-panel" aria-labelledby="elsa3-analysis-title">
           <header className="elsa3-import-split">
             <div>
-              <h2 id="elsa3-analysis-title">2. Review the analysis</h2>
-              <p>One row per exact source version, grouped by Elsa 3 source definition.</p>
+              <h2 id="elsa3-analysis-title" ref={analysisHeading} tabIndex={-1}>Choose workflows</h2>
+              <p>Select the workflows you want to import. Studio checks which reusable activities they need.</p>
             </div>
-            <span className="elsa3-import-progress">
-              {analysis.processed} / {analysis.total} versions · {analysis.processedDiagnostics} / {analysis.totalDiagnostics} diagnostics
-            </span>
+            {analysis.nextOffset !== null || analysis.totalDiagnostics > 0 ? (
+              <span className="elsa3-import-progress">
+                {analysis.processed} / {analysis.total} versions
+                {analysis.totalDiagnostics > 0 ? ` · ${analysis.processedDiagnostics} / ${analysis.totalDiagnostics} diagnostics` : ""}
+              </span>
+            ) : null}
           </header>
-          <dl className="elsa3-import-identity-grid">
-            <div><dt>Immutable handle</dt><dd><code>{analysis.collectionHandle}</code></dd></div>
-            <div><dt>Plan ID</dt><dd><code>{analysis.planId}</code></dd></div>
-          </dl>
+          <TechnicalDetails label="Analysis details">
+            <dl className="elsa3-import-identity-grid">
+              <div><dt>Collection ID</dt><dd><code>{analysis.collectionHandle}</code></dd></div>
+              <div><dt>Plan ID</dt><dd><code>{analysis.planId}</code></dd></div>
+            </dl>
+          </TechnicalDetails>
           {completeCycles.length ? (
             <section className="elsa3-import-warning" aria-label="Complete dependency cycles">
               <h3>Complete dependency cycles</h3>
@@ -590,7 +628,7 @@ export function Elsa3ReusableImportPage({
             {groups.map(group => (
               <section key={group.sourceDefinitionId} className="elsa3-import-group">
                 <header className="elsa3-import-group-header">
-                  <strong>{group.sourceDefinitionId}</strong>
+                  <strong>{group.versions.find(item => item.sourceName)?.sourceName || group.sourceDefinitionId}</strong>
                   <span>{group.versions.length} exact version{group.versions.length === 1 ? "" : "s"}</span>
                 </header>
                 {group.versions.map(item => (
@@ -608,71 +646,47 @@ export function Elsa3ReusableImportPage({
             ))}
           </div>
           {analysis.nextOffset !== null ? (
-            <StudioButton type="button" onClick={() => void loadNextPage()} disabled={analysisStatus === "loading"}>
-              {analysisStatus === "loading" ? "Loading next bounded page…" : `Load next analysis page from ${analysis.nextOffset}`}
-            </StudioButton>
+            <div className="elsa3-import-actions">
+              <StudioButton type="button" onClick={() => void loadNextPage()} disabled={analysisStatus === "loading"}>
+                {analysisStatus === "loading" ? "Loading next bounded page…" : `Load next analysis page from ${analysis.nextOffset}`}
+              </StudioButton>
+              {analysisStatus === "loading" ? <StudioButton type="button" onClick={cancelAnalysis}>Cancel analysis</StudioButton> : null}
+            </div>
           ) : <p className="elsa3-import-complete"><CheckCircle2 size={15} /> All {analysis.total} exact source versions are loaded.</p>}
           {selectionStatus === "loading" ? <StudioButton type="button" onClick={cancelSelection}><XCircle size={14} /> Cancel dependency check</StudioButton> : null}
+          {diagnostics.length ? <DiagnosticList diagnostics={diagnostics} /> : null}
+          {feedback}
+          <footer className="elsa3-import-footer">
+            <StudioButton type="button" aria-label="Back to export" onClick={() => goToStep("export")}
+              disabled={analysisStatus === "loading" || selectionStatus === "loading"}>Back</StudioButton>
+            <StudioButton type="button" variant="primary"
+              disabled={!readiness?.isReady || selectionStatus === "loading" || analysis.nextOffset !== null || applyStatus === "loading" || Boolean(receipt)}
+              onClick={openReview}>
+              Review exact import
+            </StudioButton>
+          </footer>
         </section>
       ) : null}
 
-      {analysis && expandedSelection.size > 0 ? (
-        <section className="elsa3-import-panel" aria-labelledby="elsa3-selection-title">
-          <header className="elsa3-import-split">
-            <div>
-              <h2 id="elsa3-selection-title">3. Review selected versions and dependencies</h2>
-              <p>Each selected version includes the activities it depends on. Required versions appear below.</p>
-            </div>
-            <span className={readiness?.isReady ? "elsa3-import-success-badge" : "elsa3-import-warning-badge"}>
-              {selectionStatus === "loading" ? "Checking dependencies" : readiness?.isReady ? "Ready" : "Not ready"}
-            </span>
-          </header>
-          <div className="elsa3-import-selection-list">
-            {selectedItems.map(item => (
-              <span key={item.sourceVersionId}>
-                <strong>{item.sourceName || item.sourceDefinitionId} v{item.sourceVersion}</strong>
-                <code>{item.sourceVersionId}</code>
-                {readiness?.addedDependencySourceVersionIds.includes(item.sourceVersionId) ? <small>Required dependency</small> : <small>Requested owner</small>}
-              </span>
-            ))}
-          </div>
-          <StudioButton
-            type="button"
-            variant="primary"
-            disabled={!readiness?.isReady || selectionStatus === "loading" || analysis.nextOffset !== null || applyStatus === "loading" || Boolean(receipt)}
-            onClick={openReview}
-          >
-            Review exact import
-          </StudioButton>
-          {analysis.nextOffset !== null ? <p>Load the complete bounded analysis before final review.</p> : null}
-        </section>
-      ) : null}
-
-      {reviewOpen && analysis ? (
+      {step === "review" && analysis ? (
         <section className="elsa3-import-panel" aria-labelledby="elsa3-review-title">
           <header className="elsa3-import-split">
             <div>
-              <h2 id="elsa3-review-title">4. Confirm import</h2>
-              <p>Review the selected versions before importing. If you change the selection, Studio runs the analysis again.</p>
+              <h2 id="elsa3-review-title" ref={reviewHeading} tabIndex={-1}>Review import</h2>
+              <p>Check which drafts Studio will save before applying the import.</p>
             </div>
             <span className="elsa3-import-safety-badge"><ShieldCheck size={15} /> Saves all selected definitions together</span>
           </header>
-          <dl className="elsa3-import-identity-grid">
-            <div><dt>Plan ID</dt><dd><code>{analysis.planId}</code></dd></div>
-            <div><dt>Collection handle</dt><dd><code>{analysis.collectionHandle}</code></dd></div>
-            <div><dt>Request ID</dt><dd><code>{idempotencyKey}</code></dd></div>
-            <div><dt>Access scope</dt><dd>Current authorized tenant and user</dd></div>
+          <dl className="elsa3-import-summary">
             <div><dt>Exact source versions</dt><dd>{summary.exactSourceVersions}</dd></div>
-            <div><dt>Activity Definitions</dt><dd>{summary.activityDefinitions}</dd></div>
-            <div><dt>Activity Definition versions</dt><dd>{summary.activityDefinitionVersions}</dd></div>
-            <div><dt>Wrapper Workflows</dt><dd>{summary.wrapperWorkflows}</dd></div>
-            <div><dt>Ordinary Workflows</dt><dd>{summary.ordinaryWorkflows}</dd></div>
-            <div><dt>Exact reusable rewrites</dt><dd>{summary.rewrites}</dd></div>
+            <div><dt>Reusable activities</dt><dd>{summary.activityDefinitions}</dd></div>
+            <div><dt>Workflows</dt><dd>{newestSelectedVersions.size}</dd></div>
           </dl>
           <ul className="elsa3-import-review-outcomes">
             {selectedItems.map(item => (
               <li key={item.sourceVersionId}>
                 <strong>{item.sourceName || item.sourceDefinitionId} v{item.sourceVersion}</strong>
+                {readiness?.addedDependencySourceVersionIds.includes(item.sourceVersionId) ? " · Required dependency" : ""}
                 {" · "}{item.isReusable && (publishImportedActivities ? "Publish activity now · " : "Save activity draft · ")}
                 {newestSelectedVersions.get(item.workflowDefinitionId) === item.sourceVersion
                   ? item.isReusable ? "Save wrapper workflow draft" : "Save workflow draft"
@@ -681,35 +695,48 @@ export function Elsa3ReusableImportPage({
             ))}
           </ul>
           {summary.activityDefinitions > 0 ? (
-            <label>
+            <label className="elsa3-import-choice">
               <input id="elsa3-publish-imported" type="checkbox" checked={publishImportedActivities}
                 disabled={applyStatus !== "idle" || Boolean(receipt)}
-                onChange={event => setPublishImportedActivities(event.target.checked)} /> Publish imported activities now
-              <span> · Published activities become available to workflows.</span>
+                onChange={event => setPublishImportedActivities(event.target.checked)} />
+              <span>Publish imported activities now
+                <small>Published activities become available to workflows immediately.</small>
+              </span>
             </label>
           ) : null}
-          <div className="elsa3-import-actions">
-            <StudioButton type="button" variant="primary" onClick={() => void apply()} disabled={applyStatus === "loading" || Boolean(receipt)}>
-              {applyStatus === "loading" ? <LoaderCircle size={14} className="wf-spin" /> : <ShieldCheck size={14} />}
-              {applyStatus === "loading" ? "Applying or reconciling" : "Apply reviewed import"}
-            </StudioButton>
-            {applyStatus === "failed" && !receipt ? (
-              <StudioButton type="button" onClick={() => void reconcile(true)}><RefreshCw size={14} /> Check import status</StudioButton>
-            ) : null}
-          </div>
+          <TechnicalDetails label="Import plan details">
+            <dl className="elsa3-import-identity-grid">
+              <div><dt>Plan ID</dt><dd><code>{analysis.planId}</code></dd></div>
+              <div><dt>Collection ID</dt><dd><code>{analysis.collectionHandle}</code></dd></div>
+              <div><dt>Request ID</dt><dd><code>{idempotencyKey}</code></dd></div>
+              <div><dt>Access scope</dt><dd>Current authorized tenant and user</dd></div>
+              <div><dt>Activity definition versions</dt><dd>{summary.activityDefinitionVersions}</dd></div>
+              <div><dt>Wrapper workflows</dt><dd>{summary.wrapperWorkflows}</dd></div>
+              <div><dt>Ordinary workflows</dt><dd>{summary.ordinaryWorkflows}</dd></div>
+              <div><dt>Exact reusable rewrites</dt><dd>{summary.rewrites}</dd></div>
+            </dl>
+          </TechnicalDetails>
+          {diagnostics.length ? <DiagnosticList diagnostics={diagnostics} /> : null}
+          {feedback}
+          <footer className="elsa3-import-footer">
+            <StudioButton type="button" aria-label="Back to workflow selection" onClick={() => goToStep("selection")}
+              disabled={applyStatus === "loading"}>Back</StudioButton>
+            <div className="elsa3-import-actions">
+              {applyStatus === "failed" ? (
+                <StudioButton type="button" onClick={() => void reconcile(true)}><RefreshCw size={14} /> Check import status</StudioButton>
+              ) : null}
+              <StudioButton type="button" variant="primary" onClick={() => void apply()} disabled={applyStatus === "loading"}>
+                {applyStatus === "loading" ? <LoaderCircle size={14} className="wf-spin" /> : <ShieldCheck size={14} />}
+                {applyStatus === "loading" ? "Applying or reconciling" : "Apply reviewed import"}
+              </StudioButton>
+            </div>
+          </footer>
         </section>
       ) : null}
 
-      {receipt ? <ImportReceipt receipt={receipt} navigate={navigate} /> : null}
-      {diagnostics.length ? <DiagnosticList diagnostics={diagnostics} /> : null}
-      {message ? (
-        <div
-          className={receipt ? "elsa3-import-status-static" : "elsa3-import-status"}
-          role={applyStatus === "failed" || uploadStatus === "failed" || analysisStatus === "failed" || selectionStatus === "failed" ? "alert" : "status"}
-          aria-live="polite"
-        >
-          {message}
-        </div>
+      {step === "result" && receipt ? (
+        <ImportReceipt receipt={receipt} selectedItems={selectedItems} navigate={navigate}
+          headingRef={receiptHeading} onRestart={() => chooseFiles([])} />
       ) : null}
     </main>
   );
@@ -743,18 +770,10 @@ function SourceVersionRow({
         />
         <span>
           <strong>{item.sourceName ? `${item.sourceName} v${item.sourceVersion}` : `Source version ${item.sourceVersion}`}</strong>
-          <small>{item.isReusable ? "Reusable source → Activity Definition + wrapper Workflow" : "Ordinary consuming Workflow"}</small>
+          <small>{item.isReusable ? "Reusable activity and its wrapper workflow" : "Workflow"}</small>
         </span>
       </label>
-      <div className="elsa3-import-row-facts">
-        <span><b>Generated identity</b>{item.isReusable ? item.activityTypeKey : item.workflowDefinitionId}</span>
-        <span><b>Dependencies</b>{item.dependencies.length}</span>
-        <span><b>Rewrites</b>{item.rewrites.length}</span>
-        <span><b>Direct starts</b>{item.directStarts.length}</span>
-        <span><b>Diagnostics</b>{item.diagnostics.length}</span>
-      </div>
-      {required ? <p className="elsa3-import-required">Required by the selected reusable dependency closure.</p> : null}
-      {requested && !required ? <p className="elsa3-import-requested">Selected as an owner.</p> : null}
+      {required ? <p className="elsa3-import-required">Required dependency</p> : null}
       {item.dependencies.length ? (
         <TechnicalDetails label="Exact dependencies and rewrites">
           <ul>
@@ -777,9 +796,10 @@ function SourceVersionRow({
         </TechnicalDetails>
       ) : null}
       {item.diagnostics.length ? <DiagnosticList diagnostics={item.diagnostics} compact /> : null}
-      <TechnicalDetails label="Deterministic technical IDs">
+      <TechnicalDetails label="Technical IDs">
         <dl className="elsa3-import-technical-ids">
           <dt>Source version ID</dt><dd><code>{item.sourceVersionId}</code></dd>
+          {item.activityTypeKey ? <><dt>Activity type key</dt><dd><code>{item.activityTypeKey}</code></dd></> : null}
           <dt>Workflow definition ID</dt><dd><code>{item.workflowDefinitionId}</code></dd>
           <dt>Workflow version ID</dt><dd><code>{item.workflowVersionId}</code></dd>
           {item.activityDefinitionId ? <><dt>Activity Definition ID</dt><dd><code>{item.activityDefinitionId}</code></dd></> : null}
@@ -827,43 +847,47 @@ function DiagnosticList({
 
 function ImportReceipt({
   receipt,
-  navigate
+  selectedItems,
+  navigate,
+  headingRef,
+  onRestart
 }: {
   receipt: Elsa3ReusableImportReceipt;
+  selectedItems: readonly Elsa3ReusableImportItem[];
   navigate(path: string): void;
+  headingRef: Ref<HTMLHeadingElement>;
+  onRestart(): void;
 }) {
   const outcomeLabel = importReceiptOutcomeLabel(receipt);
   const unpublished = importReceiptNeedsResume(receipt);
+  const sourceVersions = new Map(selectedItems.map(item => [item.sourceVersionId, item.sourceVersion]));
+  const labelCounts = new Map<string, number>();
+  const labeledSources = receipt.sources.map(source => {
+    const version = sourceVersions.get(source.sourceVersionId);
+    const label = `${source.name || source.sourceDefinitionId} · ${version === undefined ? source.sourceVersionId : `v${version}`}`;
+    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+    return { source, label };
+  });
   return (
     <section
       className={unpublished ? "elsa3-import-partial-receipt" : "elsa3-import-receipt"}
       aria-labelledby="elsa3-receipt-title"
     >
       <header className="elsa3-import-receipt-header">
-        <h2 id="elsa3-receipt-title" className="elsa3-import-receipt-title">Import results</h2>
+        <h2 id="elsa3-receipt-title" ref={headingRef} tabIndex={-1}>Import results</h2>
         <span className={unpublished ? "elsa3-import-warning-badge" : "elsa3-import-success-badge"} data-receipt-outcome={outcomeLabel}>
           {unpublished ? <XCircle size={14} /> : <CheckCircle2 size={14} />} {outcomeLabel}
         </span>
-        <code>{receipt.receiptId}</code>
       </header>
-      {unpublished ? (
-        <p className="elsa3-import-resume" role="status">
-          {importReceiptApplyMessage(receipt)}
-        </p>
-      ) : null}
-      <dl className="elsa3-import-identity-grid">
-        <div><dt>Plan ID</dt><dd><code>{receipt.planId}</code></dd></div>
-        <div><dt>Collection handle</dt><dd><code>{receipt.collectionHandle}</code></dd></div>
-        <div><dt>Selection fingerprint</dt><dd><code>{receipt.selectionFingerprint}</code></dd></div>
-        <div><dt>Completed</dt><dd>{formatDateTime(receipt.completedAt)}</dd></div>
-      </dl>
+      <p role="status">{importReceiptApplyMessage(receipt)}</p>
       <div className="elsa3-import-receipt-sources">
-        {receipt.sources.map(source => {
+        {labeledSources.map(({ source, label }) => {
           const publication = publicationForSource(receipt.publications, source.sourceVersionId);
+          const sourceLabel = (labelCounts.get(label) ?? 0) > 1 ? `${label} · ${source.sourceVersionId}` : label;
           return (
-            <article key={source.sourceVersionId} className="elsa3-import-row">
+            <article key={source.sourceVersionId} className="elsa3-import-row" aria-label={sourceLabel}>
               <header className="elsa3-import-split">
-                <strong>{source.name || source.sourceDefinitionId} · {source.sourceVersionId}</strong>
+                <strong>{sourceLabel}</strong>
                 <span>{importResourceDisposition(source.workflowDisposition)}</span>
               </header>
               {publication && (receipt.publishImportedActivities !== false || isPublishedImportStatus(publication.status)) ? <PublicationState publication={publication} /> : null}
@@ -887,23 +911,38 @@ function ImportReceipt({
                   </StudioButton>
                 ) : null}
               </div>
-              <small>
-                Workflow: {importResourceDisposition(source.workflowDisposition)}
-                {source.activityDefinitionDisposition !== null && source.activityDefinitionDisposition !== undefined
-                  ? ` · Activity Definition: ${importResourceDisposition(source.activityDefinitionDisposition)}`
-                  : ""}
-                {source.activityVersionDisposition !== null && source.activityVersionDisposition !== undefined
-                  ? ` · Activity Definition version: ${importResourceDisposition(source.activityVersionDisposition)}`
-                  : ""}
-                <br />
-                Workflow navigation identity: {source.workflowNavigationIdentity}
-                {source.activityVersionNavigationIdentity ? ` · Activity version navigation identity: ${source.activityVersionNavigationIdentity}` : ""}
-              </small>
+              <TechnicalDetails label="Source result details">
+                <small>
+                  Source version ID: <code>{source.sourceVersionId}</code><br />
+                  Workflow: {importResourceDisposition(source.workflowDisposition)}
+                  {source.activityDefinitionDisposition !== null && source.activityDefinitionDisposition !== undefined
+                    ? ` · Activity Definition: ${importResourceDisposition(source.activityDefinitionDisposition)}`
+                    : ""}
+                  {source.activityVersionDisposition !== null && source.activityVersionDisposition !== undefined
+                    ? ` · Activity Definition version: ${importResourceDisposition(source.activityVersionDisposition)}`
+                    : ""}
+                  <br />
+                  Workflow navigation identity: {source.workflowNavigationIdentity}
+                  {source.activityVersionNavigationIdentity ? ` · Activity version navigation identity: ${source.activityVersionNavigationIdentity}` : ""}
+                </small>
+              </TechnicalDetails>
             </article>
           );
         })}
       </div>
       {receipt.warnings?.length ? <ConversionWarnings warnings={receipt.warnings} /> : null}
+      <TechnicalDetails label="Import receipt details">
+        <dl className="elsa3-import-identity-grid">
+          <div><dt>Receipt ID</dt><dd><code>{receipt.receiptId}</code></dd></div>
+          <div><dt>Plan ID</dt><dd><code>{receipt.planId}</code></dd></div>
+          <div><dt>Collection ID</dt><dd><code>{receipt.collectionHandle}</code></dd></div>
+          <div><dt>Selection fingerprint</dt><dd><code>{receipt.selectionFingerprint}</code></dd></div>
+          <div><dt>Completed</dt><dd>{formatDateTime(receipt.completedAt)}</dd></div>
+        </dl>
+      </TechnicalDetails>
+      <footer className="elsa3-import-footer">
+        <StudioButton type="button" onClick={onRestart}>Start another import</StudioButton>
+      </footer>
     </section>
   );
 }

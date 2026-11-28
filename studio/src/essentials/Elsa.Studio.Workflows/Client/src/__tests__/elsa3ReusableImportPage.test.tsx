@@ -99,8 +99,9 @@ describe("Elsa 3 reusable import workbench", () => {
     click(checkbox(container, "Select owner exact source version 1"));
     await waitFor(() => expect(container.textContent).toContain("Required dependency"));
     click(button(container, "Review exact import"));
-    expect(container.textContent).toContain("Activity Definitions2");
-    expect(container.textContent).toContain("Activity Definition versions2");
+    expect(container.textContent).toContain("Reusable activities2");
+    click(button(container, "Import plan details"));
+    expect(container.textContent).toContain("Activity definition versions2");
     expect(container.textContent).toContain("Exact reusable rewrites1");
     const publish = container.querySelector<HTMLInputElement>("#elsa3-publish-imported")!;
     expect(publish.checked).toBe(false);
@@ -253,8 +254,8 @@ describe("Elsa 3 reusable import workbench", () => {
 
     const handleInput = container.querySelector("input[placeholder='Collection ID']") as HTMLInputElement;
     expect(handleInput.disabled).toBe(true);
-    expect(checkbox(container, "Select owner exact source version 1").disabled).toBe(true);
-    expect((button(container, "Review exact import") as HTMLButtonElement).disabled).toBe(true);
+    expect(container.querySelector("section[aria-labelledby='elsa3-analysis-title']")).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>("button[aria-label='Back to workflow selection']")?.disabled).toBe(true);
     expect((button(container, "Activity definitions") as HTMLButtonElement).disabled).toBe(true);
 
     // Simulate an external host invalidating the controlled field despite the UI freeze.
@@ -298,8 +299,15 @@ describe("Elsa 3 reusable import workbench", () => {
     click(button(container, "Review exact import"));
     click(button(container, "Apply reviewed import"));
 
-    await waitFor(() => expect(container.textContent).toContain("guarantees that no partial Design documents were written"));
+    const rejectionMessage = "guarantees that no partial Design documents were written";
+    await waitFor(() => expect(container.textContent).toContain(rejectionMessage));
     expect(getElsa3ReusableImportReceipt).not.toHaveBeenCalled();
+
+    click(button(container, "Back"));
+    expect(container.textContent).not.toContain(rejectionMessage);
+    click(button(container, "Review exact import"));
+    expect(container.textContent).toContain(rejectionMessage);
+    expect(button(container, "Check import status")).toBeTruthy();
   });
 
   it("shows a partly published apply as partly published, with publication state and conversion warnings", async () => {
