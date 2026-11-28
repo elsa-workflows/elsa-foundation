@@ -137,35 +137,25 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).last().click();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toBeVisible();
     await page.goto(studioBackendLink(page, "/user-tasks/forms"));
-    await expect(page.getByRole("table", { name: "Reusable task forms", exact: true }).getByText(form.id, { exact: true })).toBeVisible();
-    const nextVersion = page.getByRole("button", { name: "Create next version", exact: true }).first();
-    expect((await nextVersion.boundingBox())!.width).toBeGreaterThan(120);
-    expect((await nextVersion.boundingBox())!.height).toBeLessThan(48);
-    // #4068: every column fits at 360 px, each action sits beside its form's name, and only a form's latest version offers a next one.
-    expect(await fitsWidth("Reusable form versions")).toBe(true);
-    const formRows = await page.getByRole("table", { name: "Reusable task forms", exact: true }).locator("tbody tr").evaluateAll(rows => rows.map(row => ({
-      id: row.querySelector("td[data-label='Identifier']")?.textContent ?? "",
-      version: Number(row.querySelector("td[data-label='Version']")?.textContent ?? "0"),
-      offersNext: [...row.querySelectorAll("button")].some(button => button.textContent === "Create next version")
-    })));
-    const superseded = formRows.filter(item => item.version < Math.max(...formRows.filter(other => other.id === item.id).map(other => other.version)));
-    expect(superseded.filter(item => item.offersNext)).toEqual([]);
-    const actionRow = page.getByRole("row").filter({ has: nextVersion }).first();
-    await nextVersion.scrollIntoViewIfNeeded();
-    const [nameBox, actionBox] = [await actionRow.getByRole("button").first().boundingBox(), await nextVersion.boundingBox()];
-    expect(nameBox!.x).toBeGreaterThanOrEqual(0); expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    const formTable = page.getByRole("table", { name: "Task forms", exact: true });
+    const publishedForm = formTable.getByRole("row", { name: `Open reusable task form ${form.name}`, exact: true });
+    await expect(publishedForm.getByText(form.id, { exact: true })).toBeVisible();
+    await expect(publishedForm.getByText("Published · v1", { exact: true })).toBeVisible();
     await capture(page, info, "task-forms");
-    await nextVersion.scrollIntoViewIfNeeded(); await capture(page, info, "task-form-versions");
+    await publishedForm.press("Enter");
+    await page.getByRole("tab", { name: "Versions", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Published form versions preview", { exact: true }).getByText("Note", { exact: true })).toBeVisible();
+    await capture(page, info, "task-form-versions");
+    await page.goto(studioBackendLink(page, "/user-tasks/forms"));
     await page.getByRole("button", { name: "New form", exact: true }).first().press("Enter");
     await confirmNewResource(page, "form", "New form");
-    await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
-    await page.getByRole("button", { name: "Add field", exact: true }).click();
-    // #4068: the automatically assigned version is shown as a value, not as an editable-looking box.
-    await expect(page.getByRole("textbox", { name: /^Version/ })).toHaveCount(0);
-    await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-editor");
-    await page.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-actions");
-    await page.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
-    await expect(page.getByRole("button", { name: "New form", exact: true }).first()).toBeFocused();
+    const properties = page.getByRole("button", { name: "Expand properties panel", exact: true });
+    if (await properties.isVisible()) await properties.click();
+    await expect(page.getByLabel("Form ID", { exact: true })).toBeVisible();
+    await capture(page, info, "task-form-editor");
+    await page.getByRole("button", { name: "Publish", exact: true }).scrollIntoViewIfNeeded();
+    await capture(page, info, "task-form-actions");
   } finally {
     // This definition belongs to this test's disposable host; keep the reference
     // collection empty for the next project without affecting any developer store.
