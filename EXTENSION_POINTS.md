@@ -139,7 +139,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Provider-neutral persistence access and scope selection | [`essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
+| Provider-neutral Runtime persistence scope | [`IPersistenceAccessContextAccessor`](essentials/src/Workflows/Runtime/Core/Contracts/IPersistenceAccessContextAccessor.cs) |
 | Entity Framework persistence policy (history table, provider guard, migrate vs validate; shared policy under ADR 0073) | [`essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md`](essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md) |
 
 ### Activities
@@ -147,7 +147,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Activities flowchart (scoped execution seam + runtime composite activity contracts + gateway policy contract) | [`essentials/src/Activities/Flowchart/EXTENSION_POINTS.md`](essentials/src/Activities/Flowchart/EXTENSION_POINTS.md) |
-| Activities runtime (activity constructors + resume target declarations) | [`essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md`](essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md) |
+| Activities runtime hosting (CLR type registration and secret contracts) | [`ActivitiesRuntimeHostingFeature`](essentials/src/Activities/Runtime/Hosting/ActivitiesRuntimeHostingFeature.cs) |
 | DispatchWorkflow authoring and classic compatibility | [`essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md`](essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md) |
 | DispatchWorkflow design (options and executable-pin contribution) | [`essentials/src/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md`](essentials/src/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md) |
 | Activities HTTP (synchronous-response sink seam; HttpEndpoint/WriteHttpResponse + inbound middleware) | [`extensions/Http/src/Activities/EXTENSION_POINTS.md`](extensions/Http/src/Activities/EXTENSION_POINTS.md) |
@@ -194,14 +194,13 @@ not automatic constitution violations.
 | Workflow release source capture — retained acquisition and verified durable capture | [`essentials/src/Workflows/Publishing/Releases/Capture/Elsa.Workflows.Publishing.Releases.Capture/EXTENSION_POINTS.md`](essentials/src/Workflows/Publishing/Releases/Capture/Elsa.Workflows.Publishing.Releases.Capture/EXTENSION_POINTS.md) |
 | Workflow release archive contracts — scoped frozen transport captures | [`Archive Core`](essentials/src/Workflows/Publishing/Releases/Persistence/Core/EXTENSION_POINTS.md) |
 | Workflow release archive persistence — consumer-context SQLite storage | [`Archive EF Core`](essentials/src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| User Tasks (durable human work, journal/retention/eligibility/form integration and recovery cadence) | [`Runtime domain User Tasks`](essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) |
-| Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
-| Runtime diagnostic history (bounded reads, delivery/retention ports and immutable owner inputs; spec 1211) | [`Runtime history provider ports`](essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#runtime-history-provider-ports), [`owner-input contracts`](essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#runtime-history-owner-input-contracts), [`EF history and timer ownership`](essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflows runtime API — executable inspection and diagnostics services | [`essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/EXTENSION_POINTS.md) |
+| User Tasks (forms, work ownership, history and recovery) | [User Tasks](docs/user-tasks.md) |
+| Workflows runtime contracts (publication, execution, and storage boundaries) | [Runtime Core contracts](essentials/src/Workflows/Runtime/Core/Contracts/) |
+| Runtime History (Actor-backed reads and retained run activity evidence) | [Runtime API catalog](essentials/src/Workflows/Runtime/KernelApi/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`extensions/Http/src/Workflows/Runtime/EXTENSION_POINTS.md`](extensions/Http/src/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime — kernel host (publications on the clean-slate kernel: coordinator, trigger extractor, schedule actors, shell feature) | [`essentials/src/Workflows/Runtime/KernelHost/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/KernelHost/EXTENSION_POINTS.md) |
-| Workflows runtime — kernel API (the runtime API's run list from the clean-slate kernel on a kernel shell) | [`essentials/src/Workflows/Runtime/KernelApi/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/KernelApi/EXTENSION_POINTS.md) |
-| Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
+| Workflows runtime — kernel API (execution, test runs, executable inspection and retained run details) | [`essentials/src/Workflows/Runtime/KernelApi/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/KernelApi/EXTENSION_POINTS.md) |
+| Workflows runtime — actor wait and recovery lifecycle | [Durable resumption](docs/runtime-durable-resumption.md) |
 
 ### Rules
 
