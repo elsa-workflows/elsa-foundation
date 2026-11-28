@@ -37,10 +37,12 @@ public sealed class StandaloneTriggerPublicConsumerTests
             attribute => new AssemblyName(attribute.AssemblyName).Name == fixture.GetName().Name);
     }
 
-    [Fact]
-    public async Task Public_consumer_source_and_adapter_use_the_actual_physical_admission_and_keep_captured_authority_on_replay()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Public_consumer_source_and_adapter_use_the_actual_physical_admission_and_keep_captured_authority_on_replay(bool publicationFirst)
     {
-        var services = RuntimeServices();
+        var services = RuntimeServices(publicationFirst);
         var selected = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IStandaloneTriggerRuntimeTarget));
         services.Remove(selected);
         ConsumerModule.AddTargetDecorator(services, provider => (IStandaloneTriggerRuntimeTarget)(selected.ImplementationFactory?.Invoke(provider) ??
@@ -48,6 +50,7 @@ public sealed class StandaloneTriggerPublicConsumerTests
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = provider.CreateScope(); var sp = scope.ServiceProvider;
         Bind(sp);
+        Assert.True(sp.GetRequiredService<ITriggerSourceResourceCommitStore>().SupportsActivatedResources);
         await SeedActualPublicationAndResourceAsync(sp);
         // These are detached data fields, not source context, grants, material or target authority.
         var payload = JsonSerializer.SerializeToElement(new { message = "hello", tenantId = "forged", grantId = "forged" });
@@ -436,12 +439,16 @@ public sealed class StandaloneTriggerPublicConsumerTests
         return item;
     }
 
-    private static ServiceCollection RuntimeServices()
+    private static ServiceCollection RuntimeServices(bool? publicationFirst = null)
     {
         var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         new EventsFeature().ConfigureServices(services);
         new SerializationFeature().ConfigureServices(services);
+        if (publicationFirst is true)
+            WorkflowPublicationDefaults.Add(services);
         services.AddWorkflowRuntime();
+        if (publicationFirst is false)
+            WorkflowPublicationDefaults.Add(services);
         services.AddWorkflowStimulusRouter();
         ConsumerModule.AddSource(services, Trusted);
         services.AddPersistenceModes();

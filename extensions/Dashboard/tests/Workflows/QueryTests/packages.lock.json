@@ -283,6 +283,7 @@
       "elsa.workflows.runtime.publications": {
         "type": "Project",
         "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },

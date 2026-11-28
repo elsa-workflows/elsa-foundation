@@ -7,7 +7,6 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Values;
 
 namespace Elsa.Workflows.Publishing.Services;
 
@@ -247,7 +246,7 @@ public sealed class RuntimeOutputCaptureCompiler(
                 System.Text.Json.JsonSerializer.SerializeToElement(variable.Type));
             captures.Add(definition.ReferenceKey, new RuntimeOutputCapture(
                 definition.ReferenceKey,
-                $"{RuntimeWorkflowStateSeed.VariableValueIdPrefix}{variable.Name}",
+                $"{RuntimeOutputCapture.WorkflowVariableValueIdPrefix}{variable.Name}",
                 type,
                 DurableValueLifecycle.Instance,
                 DurableValueStorage.Custom,

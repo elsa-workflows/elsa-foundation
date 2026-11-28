@@ -9,7 +9,7 @@ public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAut
     private readonly Dictionary<string, WorkflowActivationSlot> slots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> activationSlots = new(StringComparer.Ordinal);
 
-    /// <summary>The lock every slot read and transition takes; <see cref="InMemoryWorkflowActivationSwitch"/> holds it across a switch (#2230).</summary>
+    /// <summary>The lock every slot read and transition takes; <see cref="PublicationActivationSwitch"/> holds it across a switch (#2230).</summary>
     internal Lock Gate => gate;
 
     public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
