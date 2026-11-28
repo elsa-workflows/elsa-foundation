@@ -6616,22 +6616,12 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "Cronos",
-          "version": "0.13.0"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Configuration",
           "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
         {
@@ -6799,11 +6789,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime",
-          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Publications",
           "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
         },
@@ -6819,22 +6804,12 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "Cronos",
-          "version": "0.13.0"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Configuration",
           "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
         {
@@ -8349,6 +8324,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Tasks.Core",
           "path": "essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
         },
@@ -8359,12 +8339,27 @@
         },
         {
           "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
           "version": "10.0.12"
         },
         {
           "type": "external",
           "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
           "version": "10.0.10"
         },
         {
@@ -8611,12 +8606,27 @@
         },
         {
           "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.Logging.Abstractions",
           "version": "10.0.12"
         },
         {
           "type": "external",
           "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
           "version": "10.0.10"
         },
         {
@@ -20305,11 +20315,6 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "Cronos",
-          "version": "0.13.0"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "Microsoft.Extensions.AI.Abstractions",
           "version": "10.10.1"
         }
@@ -25588,11 +25593,6 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
           "version": "10.0.12"
         },
@@ -25693,11 +25693,6 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
         {
