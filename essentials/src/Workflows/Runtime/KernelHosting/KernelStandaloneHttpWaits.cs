@@ -22,16 +22,12 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
             item.StandaloneIngress is not { } source || Read(source) is not { } plan)
             throw new NotSupportedException("The accepted standalone HTTP source has no qualified detached wait plan.");
         var operation = RuntimeDeliveryFingerprint.Compute("elsa.runtime.foundation-http-wait-source.v1", source.OutboxItemId);
-        _ = await foundation.DeliverWaitsAsync(operation, source.Fingerprint, plan.Deliveries, AllowsNew(plan), token);
+        // Runtime accepted this detached plan. A later authored publication cannot revoke it. The provider
+        // independently checks every matched wait against the captured provenance before committing the cohort.
+        _ = await foundation.DeliverWaitsAsync(operation, source.Fingerprint, plan.Deliveries, allowNew: true, token);
     }
 
-    private bool AllowsNew(WaitPlan plan) => serving.MatchHttp(plan.Method, plan.Path) switch
-    {
-        null => true,
-        { Route.Route: { Start: false } route } => route.Template.Segments.All(segment => segment.Kind == HttpRouteSegmentKind.Literal) ||
-            route.Template.Text == plan.Template,
-        _ => false
-    };
+    private bool AllowsNew(WaitPlan plan) => serving.MatchHttp(plan.Method, plan.Path) is not { Route.Route.Start: true };
 
     private static WaitPlan? Read(RuntimeStandaloneIngressSource source)
     {
@@ -61,21 +57,50 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
                 Headers = HttpFields.RequestHeaders(Flatten(request.Headers)),
                 Query = HttpFields.Query(Flatten(request.Query))
             };
+            if (ResolvedPaths(path) is not { } variants) return null;
             var literal = HttpRouteMatcher.Literal(request.Method, path).Key;
             var deliveries = new List<PreparedWaitDelivery> { new(literal, JsonSerializer.Serialize(model)) };
-            if (template.Segments.Any(segment => segment.Kind == HttpRouteSegmentKind.Parameter))
+            var matches = template.Segments.Any(segment => segment.Kind == HttpRouteSegmentKind.Parameter)
+                ? HttpRoutes.WaitKey(request.Method, template, names)
+                : null;
+            foreach (var variant in variants)
             {
-                var resolved = HttpRoutes.WaitKey(request.Method, template, names);
-                deliveries.Add(new(resolved, JsonSerializer.Serialize(model with { RouteValues = names })));
+                var key = HttpRoutes.ResolvedKey(request.Method, variant);
+                deliveries.Add(key == matches
+                    ? new(key, JsonSerializer.Serialize(model with { RouteValues = names }), HttpRoutes.PreparedWaitSuffix(template.Text))
+                    : new(key, Payload: null));
             }
-            // The existing hashed alias can coincide with a literal '#<digest>' activity. This private bridge accepts
-            // bounded concrete paths only, and never attempts a second legacy encoding of a route.
-            return deliveries.Any(delivery => delivery.Key.Contains('#')) ? null : new(request.Method, "/" + path, template.Text, deliveries);
+            // The existing hashed alias can coincide with a literal '#<digest>' activity. A resolved key
+            // which cannot be checked as a concrete path is likewise unsafe for a new source.
+            return deliveries.Any(delivery => delivery.Key.Contains('#')) || !PreparedWaitDelivery.FitsEnvelope(deliveries)
+                ? null
+                : new(request.Method, "/" + path, deliveries);
         }
         catch (Exception error) when (error is JsonException or HttpRouteTemplateException or HttpFieldsException or InvalidOperationException or KeyNotFoundException)
         {
             return null;
         }
+    }
+
+    private static IReadOnlyList<string>? ResolvedPaths(string path)
+    {
+        // Historical route literals are lower case while historical parameter values retain case. Inspect
+        // every possible resolved key without consulting today's publication. Bound the alias probes distinctly
+        // from the payload copies (one literal input and at most one attested resolved input).
+        var variants = new List<string> { "" };
+        foreach (var segment in path.Split('/'))
+        {
+            var lower = segment.ToLowerInvariant();
+            var count = variants.Count;
+            if (segment != lower && 2 * count >= PreparedWaitDelivery.MaxKeys) return null;
+            for (var index = 0; index < count; index++)
+            {
+                var parent = variants[index];
+                variants[index] = parent + "/" + segment;
+                if (lower != segment) variants.Add(parent + "/" + lower);
+            }
+        }
+        return variants;
     }
 
     private static bool SameConcretePath(HttpRouteTemplate template, string path, IReadOnlyDictionary<string, string> values)
@@ -98,5 +123,5 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
 
     private sealed record CapturedRequest(string Method, string Path, Dictionary<string, string[]> Headers, Dictionary<string, string[]> Query,
         Dictionary<string, string> RouteData);
-    private sealed record WaitPlan(string Method, string Path, string Template, IReadOnlyList<PreparedWaitDelivery> Deliveries);
+    private sealed record WaitPlan(string Method, string Path, IReadOnlyList<PreparedWaitDelivery> Deliveries);
 }

@@ -70,6 +70,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             SelfSends = serving.Capabilities.SelfSends,
             UseStructuralJournal = Foundation.Reads is IActorSequencedJournalReads { SupportsSequencedJournal: true },
             AuthoredEventStarts = storage.TakesDirectTestRuns || storage.TakesEventStarts,
+            StampPreparedHttpWaits = storage.TakesPreparedHttpWaits,
             ServedWorkflow = serving.ServedWorkflow,
             ValidateTestRunChildInputs = storage.TakesAttachedTestRuns ? ValidateTestRunChildInputsAsync : null,
             ResolveWorkflow = ResolveWorkflowAsync

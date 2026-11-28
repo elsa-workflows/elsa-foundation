@@ -55,6 +55,12 @@ public sealed class HttpRoutes
             ? ResolvedKey(method, template.Resolve(values))
             : Key(method, template.Text);
 
+    /// <summary>The opaque wait identity suffix attesting the canonical parameter names of a resolved route.</summary>
+    public static string PreparedWaitSuffix(string canonicalTemplate) => "/http-route/" + Digest(canonicalTemplate);
+
+    private static string Digest(string value) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+
     private static string Readable(string method, string path) => Readable(method, ':', path);
 
     private static string Readable(string method, char separator, string path)
@@ -63,7 +69,7 @@ public sealed class HttpRoutes
         var key = $"http:{verb}{separator}{path}";
         return System.Text.Encoding.UTF8.GetByteCount(key) <= MaxReadableKeyBytes
             ? key
-            : $"http:{verb}{separator}#{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path)))}";
+            : $"http:{verb}{separator}#{Digest(path)}";
     }
 
     private static string Normalize(string path) => path.Trim().Trim('/').ToLowerInvariant();

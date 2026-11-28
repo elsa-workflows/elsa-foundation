@@ -73,6 +73,9 @@ public class NativeExecutionOptions
     /// <summary>Lets a host deliver an explicitly selected Event start with no payload.</summary>
     public bool AuthoredEventStarts { get; init; }
 
+    /// <summary>Attests the exact resolved HTTP template on waits created by a prepared-standalone host.</summary>
+    public bool StampPreparedHttpWaits { get; init; }
+
     /// <summary>
     /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
     /// <see cref="MaxActivitiesPerTurn"/> continues in the next turn. Without them a burst runs on to its next wait or end in
@@ -661,6 +664,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case HttpTrigger h:
                 // A path resolved from a route template keeps its values' case; any other path is a literal route's.
                 var key = h.Resolved ? HttpRoutes.ResolvedKey(h.Method, h.Path) : HttpRoutes.Key(h.Method, h.Path);
+                if (options.StampPreparedHttpWaits && h.CanonicalTemplate is { } template)
+                    id += HttpRoutes.PreparedWaitSuffix(template);
                 _s.Waits[id] = new WaitEntry(frame.Id, "event", key);
                 turn.Subscribe(key, id);
                 break;

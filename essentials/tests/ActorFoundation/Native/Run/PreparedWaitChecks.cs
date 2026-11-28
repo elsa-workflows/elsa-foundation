@@ -17,12 +17,15 @@ internal static class PreparedWaitChecks
     private const string Literal = "http:POST:orders/amy";
     private const string Resolved = "http:POST=orders/Amy";
     private const string Empty = "http:POST:empty";
+    private const string Historical = "http:POST=historical/Amy";
+    private const string HistoricalLiteral = "http:POST:historical/amy";
+    private static readonly string RouteSuffix = HttpRoutes.PreparedWaitSuffix("orders/{order}");
     private static readonly Contract.BoundScope Tenant = ContractScopes.Bind("default");
     private static readonly Contract.BoundScope Other = ContractScopes.Bind("other");
     private static readonly string Source = new('a', 64);
     private static readonly string Zero = new('b', 64);
     private static readonly string Digest = new('c', 64);
-    private static readonly PreparedWaitDelivery[] Deliveries = [new(Literal, "literal reply"), new(Resolved, "resolved reply")];
+    private static readonly PreparedWaitDelivery[] Deliveries = [new(Literal, "literal reply"), new(Resolved, "resolved reply", RouteSuffix)];
 
     internal static async Task<int> RunAsync(bool postgres, bool fenceInBatch)
     {
@@ -93,9 +96,29 @@ internal static class PreparedWaitChecks
         try
         {
             var literal = await InstallWaitAsync(Tenant, "literal-first", Literal);
-            var resolved = await InstallWaitAsync(Tenant, "resolved-first", Resolved);
+            var resolved = await InstallWaitAsync(Tenant, "resolved-first", Resolved, RouteSuffix);
             var foreign = await InstallWaitAsync(Other, "foreign", Literal);
-            var wrongCase = await InstallWaitAsync(Tenant, "wrong-case", Resolved.Replace("Amy", "amy", StringComparison.Ordinal));
+            var wrongCase = await InstallWaitAsync(Tenant, "wrong-case", Resolved.Replace("Amy", "amy", StringComparison.Ordinal), RouteSuffix);
+            var historical = await InstallWaitAsync(Tenant, "historical", Historical);
+            var differentTemplate = await InstallWaitAsync(Tenant, "different-template", Historical, HttpRoutes.PreparedWaitSuffix("historical/{customer}"));
+            var historicalLiteral = await InstallWaitAsync(Tenant, "historical-literal", HistoricalLiteral);
+            foreach (var (source, key) in new[]
+            {
+                (new string('e', 64), new PreparedWaitDelivery(Historical, "wrong route", HttpRoutes.PreparedWaitSuffix("historical/{order}"))),
+                (new string('f', 64), new PreparedWaitDelivery(Historical, Payload: null))
+            })
+            {
+                try
+                {
+                    _ = await handoff.DeliverWaitsAsync(source, Digest, [new(HistoricalLiteral, "never enqueue"), key], allowNew: true, token);
+                    throw new InvalidOperationException("A historical ambiguous wait allowed a partial cohort.");
+                }
+                catch (NotSupportedException) { Console.WriteLine("ok historical ambiguity refuses the entire exact cohort"); }
+            }
+            foreach (var ambiguous in new[] { historical, differentTemplate, historicalLiteral })
+                Require((await reads.GetAsync(Tenant, ambiguous, token))?.Header.Status == Contract.ActorStatus.Running &&
+                    (await reads.InboxAsync(Tenant, ambiguous, cancellationToken: token)).Items.Count == 0,
+                    "the refused historical cohort enqueues nothing");
             try
             {
                 _ = await handoff.DeliverWaitsAsync(Source, Digest, Deliveries, allowNew: false, token);
@@ -136,9 +159,9 @@ internal static class PreparedWaitChecks
             await owner.StopAsync(stop.Token);
         }
 
-        async Task<Contract.ActorRef> InstallWaitAsync(Contract.BoundScope scope, string operation, string key)
+        async Task<Contract.ActorRef> InstallWaitAsync(Contract.BoundScope scope, string operation, string key, string suffix = "")
         {
-            var result = await ingress.SendAsync(scope, new Contract.Target.Start(new(ActorType, key)), operation, Contract.Kinds.Start, cancellationToken: token);
+            var result = await ingress.SendAsync(scope, new Contract.Target.Start(new(ActorType, key + "\n" + suffix)), operation, Contract.Kinds.Start, cancellationToken: token);
             if (result is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } actor })
                 throw new InvalidOperationException("Standalone wait fixture root was not admitted.");
             _ = await AwaitAsync(scope, actor, Contract.ActorStatus.Running);
@@ -178,10 +201,11 @@ internal static class PreparedWaitChecks
             if (message.Kind == Contract.Kinds.Start)
             {
                 turn.State = "{}";
-                turn.SetHeader(turn.Header.TypeData, turn.Header.Labels);
-                turn.Subscribe(turn.Header.TypeData, "wait");
+                var registration = turn.Header.TypeData.Split('\n', 2);
+                turn.Subscribe(registration[0], "wait" + registration[1]);
             }
-            else if (message is { Kind: Contract.Kinds.Event, Event.Wait: "wait", Payload: { } payload })
+            else if (message is { Kind: Contract.Kinds.Event, Event.Wait: { } wait, Payload: { } payload } &&
+                wait.StartsWith("wait", StringComparison.Ordinal))
             {
                 turn.SetHeader(payload, turn.Header.Labels);
                 turn.End(Contract.ActorStatus.Finished);

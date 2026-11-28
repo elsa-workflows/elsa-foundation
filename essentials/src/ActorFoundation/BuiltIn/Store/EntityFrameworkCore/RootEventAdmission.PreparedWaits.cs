@@ -25,16 +25,11 @@ internal static partial class RootEventAdmission
         IReadOnlyList<PreparedWaitDelivery> deliveries)
     {
         ArgumentNullException.ThrowIfNull(deliveries);
-        if (!IsDigest(operation) || !IsDigest(sourceDigest) || deliveries.Count is < 1 or > 2)
+        if (!IsDigest(operation) || !IsDigest(sourceDigest))
             throw new ArgumentException("A prepared wait handoff requires its bounded source identity and route keys.");
-        if (deliveries.Any(delivery => delivery is not { Payload: not null } ||
-            !FoundationMetadataLimits.FitsLiveWaitName(delivery.Key) || !FitsRetainedEventPayload(delivery.Payload)))
+        if (!PreparedWaitDelivery.FitsEnvelope(deliveries))
             throw new ArgumentException("The prepared wait handoff does not fit its committed delivery envelope.");
-        var selected = deliveries.OrderBy(delivery => delivery.Key, StringComparer.Ordinal).ToArray();
-        if (selected.Select(delivery => delivery.Key).Distinct(StringComparer.Ordinal).Count() != selected.Length ||
-            selected.Sum(delivery => (long)Encoding.UTF8.GetByteCount(delivery.Payload)) > FoundationMetadataLimits.EventContentBytes)
-            throw new ArgumentException("The prepared wait handoff does not fit its committed delivery envelope.");
-        return selected;
+        return deliveries.OrderBy(delivery => delivery.Key, StringComparer.Ordinal).ToArray();
 
         static bool IsDigest(string value) => value is { Length: 64 } && value.All(char.IsAsciiHexDigitLower);
     }
@@ -66,6 +61,10 @@ internal static partial class RootEventAdmission
         {
             var key = tenant + "_" + delivery.Key;
             var waits = await ReadWaitsAsync(db, tenant, key, Apply, bind is not null, token);
+            if (waits.Count == 0) continue;
+            if (delivery.Payload is null || delivery.RequiredWaitSuffix is { } suffix &&
+                waits.Any(wait => wait.Wait?.EndsWith(suffix, StringComparison.Ordinal) != true))
+                throw new NotSupportedException("A committed wait lacks the exact route authority required by the source.");
             if (waits.Count > FoundationMetadataLimits.MaxTurnSends - messages.Count) throw FanoutFull();
             foreach (var wait in waits)
             {
