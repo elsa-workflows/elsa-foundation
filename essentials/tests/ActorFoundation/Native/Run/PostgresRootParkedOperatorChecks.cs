@@ -1205,11 +1205,9 @@ internal static class PostgresRootParkedOperatorChecks
                 await set.SendAsync(clearing, "clearing-2", "fail", payload: payload),
                 "the joint profile admits two inputs whose total exceeds one clearing page");
             var clearingPark = await set.DriveAsync(clearing, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
-            Check(!await set.TriggerProbeEntriesAsync(clearingPark, [ProbeRefusal, ProbeClearing],
-                    Change(clearingPark, $$"""
-                        "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1, "FoundationParkClearingKind" = '{{Kinds.Terminate}}'
-                        """)),
-                "the composed checkpoint guard refuses an Open at a revision that carries a refusal");
+            Check(!await set.TriggerProbeEntriesAsync(clearingPark, [ProbeRefusal, ProbeClearing], write: null,
+                    expectedRefusal: "Sequenced journal requires increasing revisions"),
+                "the shipped sequenced journal refuses a clearing entry at the same revision as a refusal");
             clearingSelection = await set.ParkSelectionAsync(clearing, clearingPark.Revision);
             Check(await set.OperateAsync(clearing, "start-clearing", Kinds.Terminate, clearingSelection, reply: true) &&
                 await SendOperatorAsync(clearing, "behind-clearing", Contract.Kinds.Recover, clearingSelection, stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
@@ -1650,7 +1648,7 @@ internal static class PostgresRootParkedOperatorChecks
                 throw new InvalidOperationException("A Terminate was admitted beside an unpinned receipts relation.");
             }
             catch (StoreFormatException error) when (error.Message == (shippedSet
-                ? "The child profile requires its source tables in the marker schema."
+                ? "The PostgreSQL schedule lineage source or its definitions are incomplete."
                 : "Park requires the source tables in the marker schema."))
             {
                 Check(true, "the Park pin refuses a Terminate whose receipts relation is not a marker-schema table");
@@ -3063,7 +3061,8 @@ internal static class PostgresRootParkedOperatorChecks
         yield return ("Children", "\"Children\" = coalesce(\"Children\", '') || 'x'");
         yield return ("Parent", "\"Parent\" = coalesce(\"Parent\", '') || 'x'");
         yield return ("FoundationParkAt", "\"FoundationParkAt\" = coalesce(\"FoundationParkAt\", 0) + 1");
-        yield return ("FoundationTerminalRevision", "\"FoundationTerminalRevision\" = \"Revision\" + 1");
+        // A previous revision changes this column without claiming a new terminal stamp without its timestamp.
+        yield return ("FoundationTerminalRevision", "\"FoundationTerminalRevision\" = \"Revision\"");
         yield return ("FoundationTerminalAt", "\"FoundationTerminalAt\" = coalesce(\"FoundationTerminalAt\", 0) + 1");
         yield return ("Model", "\"Model\" = \"Model\" || 'x'");
         yield return ("Definition", "\"Definition\" = \"Definition\" || 'x'");
@@ -3112,14 +3111,17 @@ internal static class PostgresRootParkedOperatorChecks
             Cold = Store();
             await Cold.CreateAsync(PartitionCount);
             Admission = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
-            await Admission.InstallAsync(stop);
+            await using var profile = open();
+            if (profile.RequiredFormat == StoreFormat.RootShipped)
+                await Cold.InstallPreviewRootSchemaAsync(stop);
+            else
+                await Admission.InstallAsync(stop);
             _cursor = await Admission.OpenJournalCursorAsync(stop);
             _reads = new PostgresRootReads(Cold, _cursor, 12);
-            await using (var profile = open())
-                // Format 22 has no selected-root ingress; its Recover is admitted directly.
-                _ingress = profile.UsesRootTerminalSelection
-                    ? await Cold.OpenSelectedRootIngressAsync(Probe.Type, TimeSpan.FromHours(1), (scope, _) => ReferenceEquals(scope, tenant), stop)
-                    : new PostgresRootIngress(Admission, Probe.Type, authorizeRecover: (_, _) => true);
+            // Format 22 has no selected-root ingress; its Recover is admitted directly.
+            _ingress = profile.UsesRootTerminalSelection
+                ? await Cold.OpenSelectedRootIngressAsync(Probe.Type, TimeSpan.FromHours(1), (scope, _) => ReferenceEquals(scope, tenant), stop)
+                : new PostgresRootIngress(Admission, Probe.Type, authorizeRecover: (_, _) => true);
         }
 
         // Sees every commit an owner of the set writes, with that owner's store.
@@ -3474,7 +3476,7 @@ internal static class PostgresRootParkedOperatorChecks
             TriggerProbeEntriesAsync(root, entries is null ? [] : [entries], write);
 
         // Several raw entries at the next revision, then one write, always rolled back.
-        internal async Task<bool> TriggerProbeEntriesAsync(EfStore.RootImage root, string[] entries, FormattableString? write)
+        internal async Task<bool> TriggerProbeEntriesAsync(EfStore.RootImage root, string[] entries, FormattableString? write, string? expectedRefusal = null)
         {
             await using var db = open();
             await using var transaction = await db.Database.BeginTransactionAsync(stop);
@@ -3486,7 +3488,7 @@ internal static class PostgresRootParkedOperatorChecks
                 await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", stop);
                 return true;
             }
-            catch (Exception error) when (IsTriggerRefusal(error))
+            catch (Exception error) when (IsTriggerRefusal(error, expectedRefusal))
             {
                 return false;
             }
@@ -3523,9 +3525,9 @@ internal static class PostgresRootParkedOperatorChecks
                 SELECT 0, coalesce(max("Position"), 0) + 1, {root.Actor.Id}, {root.Revision + 1}, {entries} FROM "Journal" WHERE "Partition" = 0
                 """, stop);
 
-        private static bool IsTriggerRefusal(Exception error) =>
+        private static bool IsTriggerRefusal(Exception error, string? expectedRefusal = null) =>
             (error as PostgresException ?? error.InnerException as PostgresException) is { SqlState: "23514" } refused &&
-            TriggerMessages.Contains(refused.MessageText);
+            (expectedRefusal is null ? TriggerMessages.Contains(refused.MessageText) : refused.MessageText == expectedRefusal);
     }
 
     private sealed class OperatorReceiptInsertBarrier : DbCommandInterceptor
