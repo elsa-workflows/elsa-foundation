@@ -731,7 +731,8 @@ public sealed class ArchiveInvoice(IInvoiceClient invoices) : Activity
 
 **Verdict**: port
 
-**Applies when**: the activity throws to report failure, cancels itself, or reacts to cancellation.
+**Applies when**: the activity throws to report failure, cancels itself, or checks for cancellation itself. Only passing
+`context.CancellationToken` on to a call is not enough: that stays the same in Elsa 4 (cases 05 and 10 show it).
 
 **Search**: `throw new`, `CancelActivityAsync`, `CancellationToken`, `Fault`, `OnCanceledAsync`
 
@@ -933,8 +934,8 @@ internal sealed class AcmeVariableTypes : IVariableTypeDescriptorProvider
 ```
 
 **Steps**:
-1. Implement `IVariableTypeDescriptorProvider` and register the type under a dotted alias, `<prefix>.<Name>`. Elsa 4
-   refuses a module alias without a dot.
+1. Implement `IVariableTypeDescriptorProvider` and register the type under a dotted alias, `<prefix>.<Name>`, with the
+   prefix the plan records. Elsa 4 refuses a module alias without a dot.
 2. Register the provider in the feature (case 18).
 3. How the converter matches: it looks up the Elsa 3 type name as an Elsa 4 alias, or as the full name of a registered
    type, and otherwise loads it as an assembly-qualified CLR name. A bare Elsa 3 alias such as `Invoice` therefore

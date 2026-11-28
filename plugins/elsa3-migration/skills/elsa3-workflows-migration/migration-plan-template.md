@@ -37,9 +37,11 @@ Moving the clone to another commit means running the assessment again.
 ## Components
 
 <!--
-Kind: activity type, JavaScript function, variable type, storage driver.
+Kind: activity type, JavaScript function, variable type, storage driver (the report's `activity`, `javascript-function`,
+`variable-type`, `storage-driver`).
 Uses: definitions that use the component, then references, as the report counts them.
-Source: a path, `not found`, or `Elsa 3 built-in` (not searched for).
+Source: a path (for a variable type, the file that registers its alias), `not found`, or `Elsa 3 built-in` (not searched
+for).
 Cases: porting catalog case numbers, in catalog order.
 Status: todo → porting → ported → verified, or redesign / dropped (with the decision in Notes);
         a storage driver: todo → interviewed (with the goal and decision in Notes).

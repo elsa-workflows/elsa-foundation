@@ -21,7 +21,7 @@ Links to the Elsa 4 repository are for further reading only.
 ## What can reach the AI provider
 
 When an AI assistant runs this guide, what it reads is sent to its provider. An assistant's first output in every
-session is this statement, before it reads any file, the plan included:
+session is this statement, before it reads any file other than this folder's own (the plan included):
 
 - **Read without asking**: the migration report (`report.json`, which the tool always redacts: it holds no literal
   values, scripts or secrets; a report whose `redacted` marker is not `true` is not read further without asking), the migration plan, and the files in this folder. The plan holds only what you write
@@ -96,8 +96,9 @@ dotnet run --project <clone>/extensions/Elsa3/src/Migration/Cli -- workflows ass
 `<export>` is a folder of Elsa 3 definition JSON files (searched recursively) or a `.zip`. The tool writes
 `report.json`, `report.html` and a `migrated/` folder into `<output>`.
 
-After every run, record the command, its exit code and the date as `Last report` in the plan (and the report's
-`tool` name and version once a report is written, as the template's `Last report` line shows), then read the result:
+After every run, record `Last report` in the plan: the path of `report.json`, the full command as run, its exit code,
+the date, and the report's `tool` name and version once a report is written (the template's `Last report` line shows
+the shape). Then read the result:
 
 - **Exit 0 or 1, and the last line of standard output is the output path**: the run wrote a report. Exit 0 means no
   Must fix or Reconsider finding is left; exit 1 means there are some. Read `<output>/report.json`.
@@ -119,6 +120,9 @@ After every run, record the command, its exit code and the date as `Last report`
 - **No built-in knowledge of findings.** Read each finding's `code`, `message`, `path` and `guidance` from the report,
   and act on its `category`, `remedy`, `componentKind` and `componentName`. Never rely on remembering what a code
   means; refer to a finding by its code as the report gives it (written `<code>` in this guide).
+- **Guidance and the catalog.** A finding's guidance says what clears the finding. When it describes how to build a
+  component and the porting catalog's case describes it too, follow the case: for example, a matching namespace and
+  class make the replaced-type marker unnecessary (case 02), although the marker would also clear the finding.
 - **Redacted.** Confirm the report's `redacted` marker is `true` before reading further (see the privacy statement).
 - **Progress.** Show the user the report's `summary` after every run: definitions, how many go smoothly, the counts per
   category and per bucket, and how many are blocked by a dependency.
@@ -174,9 +178,10 @@ each:
 2. **Target.** Record the Elsa 4 target name: for an activity, the full class name (case 02); for a JavaScript
    function, `<prefix>.<name>` (case 14); for a variable type, its dotted alias (case 16).
 3. **Feature and project.** Record the Elsa 4 feature and project the component goes into (case 18), and the Elsa 3
-   tests to port (case 19).
-4. **Prefixes.** Before porting the first JavaScript function, ask the user which prefix or prefixes to use and record
-   which function takes which.
+   tests to port (case 19). A storage driver gets neither: it is answered by an interview, not a port.
+4. **Prefixes.** Before porting the first JavaScript function or variable type, ask the user which prefix or prefixes
+   to use (`acme`, for example) and record which component takes which. A JavaScript function becomes
+   `<prefix>.<name>` (case 14) and a variable type `<prefix>.<Name>` (case 16).
 5. **Port.** Set the status to `porting` and follow each case's steps in catalog order, copying the shape of its "after"
    example. Port the tests. When the port builds and its tests pass, set the status to `ported`. If the session stops
    in the middle, the status stays `porting` and the next session continues that component.
