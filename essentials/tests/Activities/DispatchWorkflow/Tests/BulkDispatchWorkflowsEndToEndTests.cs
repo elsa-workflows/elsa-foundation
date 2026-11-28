@@ -56,6 +56,22 @@ public sealed class BulkDispatchWorkflowsEndToEndTests
         Assert.Equal(20, dispatchRuns.Select(run => run.IterationId).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(Enumerable.Range(0, 20).Select(index => $"completed:{index}:item-{index}").Order(StringComparer.Ordinal), SlotRuns(fixture, parentId));
         await AssertBulkDoneAsync(fixture, parentId);
+
+        // The Dispatch passes were committed in item order, and the item after the window's k-th ended pass was committed
+        // no earlier than that pass ended (a pass ends when its slot completes): never more than 16 open.
+        var dispatchCommits = dispatchRuns
+            .OrderBy(run => run.FirstCommitSequence)
+            .Select(run => (Index: int.Parse(run.IterationId![(run.IterationId!.LastIndexOf(':') + 1)..], System.Globalization.CultureInfo.InvariantCulture), Commit: run.FirstCommitSequence!.Value))
+            .ToArray();
+        Assert.Equal(Enumerable.Range(0, 20), dispatchCommits.Select(run => run.Index));
+        var passEnds = (await fixture.ListActivitiesAsync(parentId))
+            .Where(state => state.Execution.ExecutableNodeId == Fixture.CompletedSlotNodeId)
+            .Select(state => state.LastCommitSequence!.Value)
+            .Order()
+            .ToArray();
+        for (var index = BulkDispatchWorkflowsConstants.Window; index < 20; index++)
+            Assert.True(dispatchCommits[index].Commit >= passEnds[index - BulkDispatchWorkflowsConstants.Window],
+                $"Item {index} was committed at {dispatchCommits[index].Commit}, before pass end {index - BulkDispatchWorkflowsConstants.Window + 1} at {passEnds[index - BulkDispatchWorkflowsConstants.Window]}.");
     }
 
     [Fact]

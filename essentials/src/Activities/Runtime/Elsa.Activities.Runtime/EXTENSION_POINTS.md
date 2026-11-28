@@ -142,7 +142,7 @@ diagnostics remain separate work. No new API/type contract, dependency, test fri
 ### `IRuntimeAcceptsRescheduledFaultedChild` *(Core — `Elsa.Workflows.Runtime.Core`, #3135)*
 - **Kind:** Opt-in marker capability for structural parents; no members.
 - **Usage:** a parent that keeps waiting for a child whose fault it was told about but did not consume implements it, so an operator's `RescheduleActivity/1` of that faulted child reaches it: the successor carries no parent-completion marker and its outcome arrives as that child's ordinary outcome. `ExecutableNodeCompiler` compiles it into node metadata (`runtime.acceptsRescheduledFaultedChild` = `true`, absent otherwise), and the reschedule preflight reads it from the pinned executable without constructing the parent. A faulted source whose parent deferred on its fault is refused with `ParentDoesNotAcceptRescheduledChild` when the parent's node lacks the capability. Any faulted source is refused with `SourceParentNotRunning` or `SourceAncestorNotRunning` while its parent or an ancestor is no longer running, and with `SourceFaultHandledByAncestor` when an ancestor already received its fault and deferred (spec 258 R-3). Only a newly compiled artifact carries the capability: node metadata is not part of the artifact hash, so republishing an unchanged definition reuses the stored artifact without it (as with `runtime.structuralFaultHandling`). A parent that absorbs child faults, or stops tracking a faulted child (a BPMN error boundary or late-fault guard), must not implement it.
-- **Known implementations (shipped):** `Sequence` (its next step follows from the completed node alone) and `Parallel` (its join reads the durable branch states). Both are cross-domain contributions from their activity modules.
+- **Known implementations (shipped):** `Sequence` (its next step follows from the completed node alone), `Parallel` (its join reads the durable branch states) and `BulkDispatchWorkflows` (spec 1242; its routed-pass state ends the faulted pass when the rescheduled child completes). All are cross-domain contributions from their activity modules.
 
 ### `IRuntimeActivityChildNotificationHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Engine-only structural re-evaluation protocol (spec 126, seam C — the child→parent counterpart of the parent→child seams above).
@@ -165,6 +165,7 @@ These consumers do not yet implement the combined callback.
 - `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned structure and child projection)*
 - `Elsa.Activities.Sequence` — `Sequence` *(schedules child executable nodes in Sequence-owned slot order)*
 - `Elsa.Activities.ControlFlow` — `Parallel` *(fork/join: counts branch completions toward the join threshold)* and the `If`/`Switch`/`For`/`ForEach`/`While`/`Do` control-flow composites
+- `Elsa.Activities.DispatchWorkflow` — `BulkDispatchWorkflows` *(spec 1242: schedules one Dispatch pass per item within a window of 16 and routes each Dispatch outcome to its `ChildCompleted` or `ChildFaulted` slot; no fault callback)*
 - Fault callback implementations: `Parallel` *(faults once its success threshold is unreachable)* and `Flowchart` *(faults when an inbound branch of an all-inbound join faults)*.
 
 ---

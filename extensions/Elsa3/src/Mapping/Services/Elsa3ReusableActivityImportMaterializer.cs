@@ -60,30 +60,43 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     private ValueTask<IReadOnlyDictionary<string, IReadOnlyList<string>>> BulkDispatchTargetInputsAsync(
         IEnumerable<Elsa3WorkflowDefinition> sources,
         IReadOnlyDictionary<string, IReadOnlyList<string>> sameImport,
+        string? tenantId,
         CancellationToken cancellationToken)
     {
         if (_sourceReferences is null || _executables is null || _timeProvider is null)
-            return BulkDispatchTargetInputsAsync(sources, sameImport, null, cancellationToken);
+            return BulkDispatchTargetInputsAsync(sources, sameImport, published: null, cancellationToken);
 
         IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference>? published = null;
         return BulkDispatchTargetInputsAsync(sources, sameImport, async (target, token) =>
         {
-            // The live published reference a dispatch would pin, newest first, as DispatchPinSource picks it.
+            // The live published reference a dispatch would pin in the import's tenant, newest first, as DispatchPinSource
+            // picks it.
             published ??= await _sourceReferences.ListAllAsync(
                 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope.Published,
                 liveOnly: true,
                 now: _timeProvider.GetUtcNow(),
                 token);
-            var reference = published
-                .Where(candidate => StringComparer.Ordinal.Equals(candidate.DefinitionId, target))
-                .OrderByDescending(candidate => candidate.PublishedAt)
-                .ThenBy(candidate => candidate.SourceReferenceId, StringComparer.Ordinal)
-                .FirstOrDefault();
+            var reference = SelectPublishedTarget(published, tenantId, target);
             return reference is not null && await _executables.FindAsync(reference.ArtifactId, token) is { InputContract: { } contract }
                 ? contract.Inputs.Select(input => input.Name).ToArray()
                 : null;
         }, cancellationToken);
     }
+
+    /// <summary>
+    /// The live published reference of <paramref name="definitionId"/> in <paramref name="tenantId"/> a dispatch would
+    /// pin: newest first, as DispatchPinSource picks it. Another tenant's workflow of the same id is never read.
+    /// </summary>
+    internal static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference? SelectPublishedTarget(
+        IEnumerable<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference> published,
+        string? tenantId,
+        string definitionId) =>
+        published
+            .Where(candidate => StringComparer.Ordinal.Equals(candidate.TenantId, tenantId) &&
+                                StringComparer.Ordinal.Equals(candidate.DefinitionId, definitionId))
+            .OrderByDescending(candidate => candidate.PublishedAt)
+            .ThenBy(candidate => candidate.SourceReferenceId, StringComparer.Ordinal)
+            .FirstOrDefault();
 
     /// <summary>
     /// The declared inputs of every workflow a selected definition's BulkDispatchWorkflows starts by literal id (spec 1242
@@ -151,6 +164,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         ReusableActivityImportCollection collection,
         ReusableActivityImportPlan plan,
         IReadOnlyList<ReusableActivityImportItem> selection,
+        string? tenantId = null,
         CancellationToken cancellationToken = default)
     {
         var selectedById = selection.ToDictionary(x => x.SourceVersionId, StringComparer.Ordinal);
@@ -197,7 +211,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                     .Inputs ?? []).Select(input => input.Name).ToArray(),
                 StringComparer.Ordinal);
 
-        var bulkDispatchTargetInputs = await BulkDispatchTargetInputsAsync(sourceById.Values, dispatchTargetInputs, cancellationToken);
+        var bulkDispatchTargetInputs = await BulkDispatchTargetInputsAsync(sourceById.Values, dispatchTargetInputs, tenantId, cancellationToken);
 
         foreach (var item in reusable.Concat(selection.Where(x => !x.IsReusable).OrderBy(x => x.SourceVersionId, StringComparer.Ordinal)))
         {

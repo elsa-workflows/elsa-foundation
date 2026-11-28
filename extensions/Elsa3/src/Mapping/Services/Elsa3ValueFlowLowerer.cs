@@ -123,16 +123,18 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     expressionRewriter.ScriptMayWriteVariables(expression.Value,
                         ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)));
 
-        // Spec 1242 FR-020a: whether a branch script writes variables is only known before its script is rewritten.
+        // Spec 1242 FR-020a: whether a branch script writes variables is only known before its script is rewritten. A
+        // script body is usually a literal (RunJavaScript). Only a script body can write once converted (an input expression
+        // that writes is refused), and only workflow variables (a container variable write is refused), so any write is outer.
         if (plan is { BulkDispatches.Count: > 0 })
         {
             foreach (var property in properties.Where(property =>
-                         property.Expression is { } expression &&
-                         expression.Type.Equals("JavaScript", StringComparison.OrdinalIgnoreCase) &&
                          isScriptBody?.Invoke(property.Activity, property.PropertyName) == true &&
                          accessors.InBulkDispatchBranch(property.Activity)))
             {
-                if (expressionRewriter.ScriptMayWriteVariables(property.Expression!.Value,
+                if (property.Expression is not { } body ||
+                    !body.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
+                    expressionRewriter.ScriptMayWriteVariables(body.Value,
                         ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)))
                     plan.BulkDispatchBranchScriptWrites.Add(property.Activity);
             }

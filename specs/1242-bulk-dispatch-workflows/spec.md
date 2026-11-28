@@ -431,6 +431,9 @@ and on-completed-callbacks suites pass.
   variable declared outside the bulk node MUST raise behaviour warning `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`.
   - An Elsa 3 composite inside a branch, for example a `Flowchart` or `Sequence`, can declare its own variables. Writes
     to those are declared inside the bulk node, are not outer writes, and raise no warning.
+  - A branch script (for example a `RunJavaScript` body) that may write a variable raises the warning. A converted
+    script can write only workflow variables: a script write to a container variable is refused
+    (`ELS3-SETTER-UNDECLARED-VARIABLE`), and an input expression that writes is refused (`VF-IMP-005`).
   - Writes in the correlation function or the static `Input` are already refused as input expressions
     (`ForbiddenCapability`). The generated `Dispatch` child has no output capture. Guidance: Elsa 3 ran
   the branches one at a time, and Elsa 4 runs them concurrently, so a shared counter or list can lose updates. Record

@@ -169,8 +169,9 @@ the design side), and converter rules.
     - It sets every member explicitly: `WorkflowDefinitionId` (literal only), `Inputs` (the per-item script),
       `CorrelationId`, `WaitForCompletion` (missing → true, null or valueless → false, case-insensitive literal,
       otherwise carried), and `CancelChildOnParentCancellation` false.
-    - It refuses a bound `StartNewTrace` or `ChannelName`. The normalizer's `CheckRemoved` is private and those members
-      are `Structure` on the bulk entry, so the rewrite repeats that check.
+    - It refuses a bound `StartNewTrace` or `ChannelName`. Those members are `Structure` on the bulk entry, so the
+      normalizer never checks them; the rewrite calls the normalizer's `CheckRemoved`, made internal for it, together
+      with `TryReadObject`, `Describe` and `TryGetObjectExpression`.
     - It refuses any non-null literal `Items` with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-014). No existing value
       contract refuses literals; if spec 1243 adds one for FR-017, use it instead.
     - It records the wait classification (missing, literal true, literal false, expression) in a plan field on the
@@ -252,8 +253,9 @@ the design side), and converter rules.
   - under ContinueWithIncidents a slot fault is an open incident, other passes go on, `RetryFaultedActivity` is
     refused, and a `RescheduleActivity` ends the pass;
   - a `Dispatch` self-fault follows the strategy (`ChildFaulted` does not run);
-  - the window of 16: never more than 16 passes open, including under repeated callbacks, and a second Dispatch
-    completion for a pass whose slot already runs schedules nothing;
+  - the window of 16: never more than 16 passes open after any sweep, and passes open in item order;
+  - the pass bookkeeping (a unit test of the state): ending or routing a pass twice changes nothing, so a repeated
+    callback cannot schedule a further item and a second Dispatch completion for a routed pass schedules nothing;
   - publish refuses an empty or wrong `Dispatch` slot (`BulkDispatch/DispatchSlot`);
   - `variables.currentItem` reads in `Dispatch` and in the slots resolve at publish;
   - at run time, `ChildCompleted` and `ChildFaulted` read the right `currentItem` and `currentIndex` for their pass, also

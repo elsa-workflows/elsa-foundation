@@ -197,6 +197,16 @@ public sealed class Elsa3BulkDispatchConversionTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task A_blank_literal_item_key_is_refused(string key)
+    {
+        var result = await ConvertAsync(Bulk(("defaultItemInputKey", Literal(key))));
+
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "blank");
+    }
+
+    [Theory]
     [InlineData("JavaScript", "return { Sku: 'x' };")]
     [InlineData("Liquid", "{{ x }}")]
     public async Task An_expression_static_input_is_refused(string language, string expression)
@@ -509,6 +519,41 @@ public sealed class Elsa3BulkDispatchConversionTests
         Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.BulkDispatchOuterWrite);
     }
 
+    [Fact]
+    public async Task A_branch_script_writing_a_workflow_variable_warns()
+    {
+        var script = Activity("tally", "Elsa.RunJavaScript", ("script", Literal("setVariable('Total', 1);")));
+
+        var result = await ConvertAsync(Bulk(("childCompleted", Port(script))), variables: [Variable("Total")]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.BulkDispatchOuterWrite);
+        Assert.Contains("variables from its script", warning.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_branch_script_that_writes_no_variable_does_not_warn()
+    {
+        var script = Activity("tally", "Elsa.RunJavaScript", ("script", Literal("return getLines().length;")));
+
+        var result = await ConvertAsync(Bulk(("childCompleted", Port(script))));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.BulkDispatchOuterWrite);
+    }
+
+    [Fact]
+    public async Task A_branch_output_captured_into_a_workflow_variable_warns()
+    {
+        var script = Activity("calc", "Elsa.RunJavaScript", ("script", Literal("return 1;")), ("result", Captured("id-Total")));
+
+        var result = await ConvertAsync(Bulk(("childFaulted", Port(script))), variables: [Variable("Total")]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.BulkDispatchOuterWrite);
+        Assert.Contains("into a workflow variable", warning.Message, StringComparison.Ordinal);
+    }
+
     // ── Publish validation ──────────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -598,6 +643,24 @@ public sealed class Elsa3BulkDispatchConversionTests
         Assert.Equal(["OrderId"], inputs["acme.published"]);
         Assert.False(inputs.ContainsKey("acme.missing"));
         Assert.Equal(["acme.missing", "acme.published"], asked);
+    }
+
+    [Fact]
+    public void A_published_target_is_read_only_from_the_import_tenant()
+    {
+        static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference Reference(string id, string? tenant, int day) =>
+            new(id, $"artifact-{id}", "workflow-definition", "acme.child", "1", "acme.child", "acme.child-v1", "1.0.0",
+                DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddDays(day),
+                Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope.Published, TenantId: tenant);
+        Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference[] published =
+            [Reference("tenant-a", "tenant-a", 1), Reference("tenant-b", "tenant-b", 2), Reference("global", null, 3)];
+
+        var select = Elsa3.Mapping.Services.Elsa3ReusableActivityImportMaterializer.SelectPublishedTarget;
+
+        Assert.Equal("tenant-a", select(published, "tenant-a", "acme.child")?.SourceReferenceId);
+        Assert.Equal("global", select(published, null, "acme.child")?.SourceReferenceId);
+        Assert.Null(select(published, "tenant-c", "acme.child"));
+        Assert.Null(select(published, "tenant-a", "acme.other"));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────────────────────

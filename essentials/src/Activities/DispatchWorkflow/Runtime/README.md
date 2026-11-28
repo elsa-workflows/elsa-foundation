@@ -43,6 +43,8 @@ See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the feature specifications un
 
 The [Timeline history contributor and selected child source handlers](EXTENSION_POINTS.md#timeline-history-contribution) supply Runtime history through Core's checkpoint/source/observation contracts. New native facts are pinned to v5 admissions; legacy runs keep their policy and replay bytes. History points across the actual parent/child edge but grants no start, resume or control authority.
 
+`BulkDispatchWorkflows` (spec 1242) implements the Workflows.Runtime contracts `IRuntimeStructuralActivity`, `IRuntimeActivityChildCompletionHandler` and the `IRuntimeAcceptsRescheduledFaultedChild` marker from the Activities domain; see [Elsa.Activities.Runtime EXTENSION_POINTS.md](../../Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md).
+
 ## BulkDispatchWorkflows
 
 Spec 1242 (`specs/1242-bulk-dispatch-workflows/`) adds `BulkDispatchWorkflows` (runtime type `Elsa.BulkDispatchWorkflows`): start one child workflow per item, optionally wait for all of them, and run a branch per child that ends.

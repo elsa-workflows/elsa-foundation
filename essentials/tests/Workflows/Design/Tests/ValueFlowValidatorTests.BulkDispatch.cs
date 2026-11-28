@@ -30,6 +30,18 @@ public sealed partial class ValueFlowValidatorTests
         Assert.DoesNotContain(errors, error => error.Severity != "Warning");
     }
 
+    [Fact]
+    public async Task A_bulk_dispatch_Dispatch_capturing_its_output_into_a_workflow_variable_is_warned_about()
+    {
+        var bulk = Structured("bulk", BulkDispatchWorkflowsConstants.StructureKind,
+            new Dictionary<string, ActivityNode> { ["dispatch"] = Capture("dispatch", "lastChild") });
+
+        var errors = await ValidateWithBulkAsync(Sequence("root", bulk));
+
+        Assert.Equal("$workflow/variables/lastChild", SingleConcurrentWrite(errors).Path);
+        Assert.DoesNotContain(errors, error => error.Severity != "Warning");
+    }
+
     private static async Task<IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError>> ValidateWithBulkAsync(ActivityNode root)
     {
         var catalog = new StubActivityCatalog().Add("test.activity@1").Add("elsa.sequence.structure@1").Add($"{BulkDispatchWorkflowsConstants.StructureKind}@1");
