@@ -623,7 +623,6 @@
     {
       "project": "essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
       "tier": "integration",
-      "trait": "child-process",
       "medianMinutes": 3.85
     },
     {
