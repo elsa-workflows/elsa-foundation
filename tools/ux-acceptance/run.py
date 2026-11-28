@@ -200,6 +200,8 @@ CLASSIC_JOURNEYS = {
     'execution navigation keeps keyboard focus and exact evidence',
     'existing home widgets and layout defaults',
     'explicit authored activity names survive publication and execution',
+    'native BPMN reusable blocks preserve reviewed XML bindings',
+    'native BPMN workflow blocks preserve reviewed XML bindings',
     'native child and compensation history navigation',
     'production history occurrence and approval qualification',
     'recorded activity playback coverage and access',
