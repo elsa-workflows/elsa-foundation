@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Provider-neutral workflow Runtime persistence services.</Description>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <ProjectReference Include="..\..\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+  </ItemGroup>
+
+</Project>
