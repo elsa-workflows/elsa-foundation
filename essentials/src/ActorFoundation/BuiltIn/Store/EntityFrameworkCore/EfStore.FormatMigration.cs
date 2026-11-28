@@ -6,8 +6,13 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     // The coordinated migration's transactional data changes and its format marker land together.
-    internal async Task<bool> AdvanceStoreFormatAsync(StoreFormat expected, StoreFormat next,
-        Func<KernelDb, CancellationToken, Task>? migrateData = null, CancellationToken cancellationToken = default)
+    internal Task<bool> AdvanceStoreFormatAsync(StoreFormat expected, StoreFormat next,
+        Func<KernelDb, CancellationToken, Task>? migrateData = null, CancellationToken cancellationToken = default) =>
+        AdvanceStoreFormatAsync(expected, next, verifySource: null, migrateData, cancellationToken);
+
+    private async Task<bool> AdvanceStoreFormatAsync(StoreFormat expected, StoreFormat next,
+        Func<KernelDb, CancellationToken, Task>? verifySource, Func<KernelDb, CancellationToken, Task>? migrateData,
+        CancellationToken cancellationToken)
     {
         if (next == expected || next.StoreSchema < expected.StoreSchema || next.MessageProtocol < expected.MessageProtocol ||
             next.JournalCodec < expected.JournalCodec || next is { StoreSchema: < 1 } or { MessageProtocol: < 1 } or { JournalCodec: < 1 })
@@ -19,6 +24,8 @@ public sealed partial class EfStore
         if (stored == next) return false;    // a resumed caller can observe an advance that already landed
         if (stored != expected)
             throw new StoreFormatException($"Cannot advance the kernel store from {expected}. The store records {stored}.");
+
+        if (verifySource is not null) await verifySource(db, cancellationToken);
 
         var live = await db.Nodes.FromSqlRaw(Q($"""SELECT * FROM "Nodes" WHERE "LeaseUntil" >= {Now}""")).AsNoTracking()
             .OrderBy(node => node.Id).ToListAsync(cancellationToken);
@@ -45,18 +52,24 @@ public sealed partial class EfStore
     // Only the exact previous shipped profile can advance. Existing checkpoints, jobs, and physical definitions retain
     // their encoding. The next build can read those checkpoints before publishing the first task-specific message.
     internal Task<bool> UpgradeUserTaskWaitFormatAsync(CancellationToken cancellationToken) =>
-        AdvanceStoreFormatAsync(StoreFormat.RootShipped, StoreFormat.RootUserTaskWaitsQualification, async (db, token) =>
-        {
-            if (db.RequiredFormat != StoreFormat.RootShipped)
-                throw new InvalidOperationException("The coordinated task upgrade requires the previous shipped context.");
+        AdvanceStoreFormatAsync(StoreFormat.RootShipped, StoreFormat.RootUserTaskWaitsQualification, VerifySourceAsync,
+            migrateData: null, cancellationToken);
 
-            if (db.UsesSqliteRootRuntime)
-                await RequireSqliteRootAdmissionAsync(db, db.SqliteRuntimeDefinitions!, token);
-            else if (db.Database.IsNpgsql())
-                await RequireStoreVersionsAsync(db, token);
-            else
-                throw new NotSupportedException("Actor user task waits require a shipped SQLite or PostgreSQL store.");
-        }, cancellationToken);
+    private static async Task VerifySourceAsync(KernelDb db, CancellationToken token)
+    {
+        if (db.RequiredFormat != StoreFormat.RootShipped)
+            throw new InvalidOperationException("The coordinated task upgrade requires the previous shipped context.");
+
+        if (db.UsesSqliteRootRuntime)
+        {
+            await RequireSqliteRootAdmissionAsync(db, db.SqliteRuntimeDefinitions!, token);
+            await RequireSqliteFoundationShapeAsync(db, partitions: 1, create: false, token);
+        }
+        else if (db.Database.IsNpgsql())
+            await PostgresRootAdmission.VerifyUserTaskUpgradeSourceAsync(db, token);
+        else
+            throw new NotSupportedException("Actor user task waits require a shipped SQLite or PostgreSQL store.");
+    }
 
     private static bool Includes(string readable, int format) =>
         readable.Split(',').Contains(format.ToString(CultureInfo.InvariantCulture), StringComparer.Ordinal);

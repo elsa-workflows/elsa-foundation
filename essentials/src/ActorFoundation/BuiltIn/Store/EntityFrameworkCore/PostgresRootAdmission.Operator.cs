@@ -349,6 +349,19 @@ internal sealed partial class PostgresRootAdmission
     internal static async Task<uint?> PinRootCommitNamespaceAsync(KernelDb db, bool writesJournal, CancellationToken token) =>
         (await PinRootNamespaceAsync(db, loadIssuer: false, token, writesJournal))?.Marker;
 
+    internal static async Task VerifyUserTaskUpgradeSourceAsync(KernelDb db, CancellationToken token)
+    {
+        // The coordinator has already locked the exact prior format exclusively. Pin its actual relations before the
+        // coordinator reads Nodes, and verify both public actor authority and the enabled or disabled publisher scope.
+        var pin = await PinRootNamespaceAsync(db, loadIssuer: true, token, writesJournal: true)
+            ?? throw new StoreFormatException("The task upgrade requires the selected PostgreSQL root source.");
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", token);
+        var bind = await PinAuthoredEventSourceAsync(db, pin.Marker, token);
+        var host = db.PublicEventHost ?? throw new StoreFormatException("The task upgrade requires the configured public Event host.");
+        await RootPublicEventHost.RequireAsync(db, host, bind, token);
+        await RootAuthoredStandaloneEvents.ReadTenantAsync(db, bind, token);
+    }
+
     internal static Task<uint> PinRetentionPolicySourceAsync(KernelDb db, CancellationToken token)
     {
         var pin = new NpgsqlBatchCommand("""

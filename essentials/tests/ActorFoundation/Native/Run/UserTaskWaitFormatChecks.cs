@@ -114,6 +114,13 @@ internal static class UserTaskWaitFormatChecks
             if (!await initial.Nodes.AnyAsync(node => node.LeaseUntil >= now, token)) break;
             await Task.Delay(100, token);
         }
+        await RejectWrongAuthorityAsync(async wrong =>
+        {
+            var selected = new EfStore(() => KernelDb.ForSqliteRootRuntime(options, definitions, publicEventHost: wrong), postgres: false);
+            await selected.UpgradeUserTaskWaitFormatAsync(token);
+        });
+        await using (var wrongMarker = Open(candidate: true))
+            await RefusesOtherFormatAsync(() => EfStore.RequireSqliteRootAdmissionAsync(wrongMarker, definitions, token));
         Require(await candidate.UpgradeUserTaskWaitFormatAsync(token), "A stopped shipped SQLite file must advance exactly once.");
         Require(!await candidate.UpgradeUserTaskWaitFormatAsync(token), "A resumed SQLite upgrade must be idempotent.");
         await using var current = Open(candidate: true);
@@ -166,6 +173,12 @@ internal static class UserTaskWaitFormatChecks
                 var released = await current.Nodes.Where(node => node.Id == "previous-task-format")
                     .ExecuteUpdateAsync(set => set.SetProperty(node => node.LeaseUntil, 0), token);
                 Require(released == 1, "The fixture must release only the selected prior owner.");
+                await RejectWrongAuthorityAsync(async wrong =>
+                {
+                    var selected = new EfStore(() => KernelDb.ForPostgresRootShipped(staged, wrong), postgres: true);
+                    await selected.UpgradeUserTaskWaitFormatAsync(token);
+                });
+                await VerifyMarkersAsync(current, other, token);
                 Require(await store.UpgradeUserTaskWaitFormatAsync(token), "A stopped shipped PostgreSQL store must advance exactly once.");
                 Require(!await store.UpgradeUserTaskWaitFormatAsync(token), "A resumed PostgreSQL upgrade must be idempotent.");
                 await VerifyMarkersAsync(other, current, token);
@@ -173,6 +186,12 @@ internal static class UserTaskWaitFormatChecks
                 await EfStore.RequireStoreVersionsAsync(other, token);
             }
         }
+    }
+
+    private static async Task RejectWrongAuthorityAsync(Func<RootPublicEventHost, Task> upgrade)
+    {
+        await RefusesOtherFormatAsync(() => upgrade(EventHost with { AuthoredStandaloneTenant = "different-publisher" }));
+        await RefusesOtherFormatAsync(() => upgrade(EventHost with { ProtectsStarts = !EventHost.ProtectsStarts }));
     }
 
     private static async Task VerifyMarkersAsync(KernelDb current, KernelDb other, CancellationToken token)
