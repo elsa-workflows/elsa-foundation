@@ -3462,7 +3462,8 @@ public sealed class Elsa3ExpressionRewriter(
         /// The workflow instance built-in (<c>getCorrelationId</c>, …) a change of <paramref name="target"/> goes through
         /// (#6230), or null. It follows the object chain and destructuring targets like
         /// <see cref="TargetReachesAmbientRoot"/>, so a computed key that reads one stays a read; unlike it, an object it
-        /// does not follow is searched only where its value can come from, never as a whole.
+        /// does not follow is searched only where its value can come from, never as a whole. Like the ambient roots, a value
+        /// held elsewhere first (a local, a literal's element, a call's result) is not tracked.
         /// </summary>
         private string? InstanceReaderOf(Node target) => target switch
         {
@@ -3502,8 +3503,8 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// The refusal of a change through the value <paramref name="reader"/> returns (text or null): a change of a member
-        /// reached through it (possibly, where the value comes through a branch), or an assignment to the value itself, which
-        /// failed in Elsa 3. Neither is reproduced.
+        /// reached through it (possibly, where the value comes through a branch), or a change of the value itself (an
+        /// assignment or update of the call), which failed in Elsa 3. Neither is reproduced.
         /// </summary>
         private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader, bool changesMember) => changesMember
             ? new(
@@ -3513,15 +3514,16 @@ public sealed class Elsa3ExpressionRewriter(
                 "Remove the change, or keep the member on a local object of the script's own, in the Elsa 3 workflow before import.")
             : new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                $"JavaScript assigns to the value '{reader}()' returns. Elsa 3 failed on that assignment, and the conversion does not reproduce it.",
-                $"Copy the value into a local first (let value = {reader}();) and assign to the local{InstanceChangeRoute(reader)}, " +
+                $"JavaScript changes the value '{reader}()' returns itself. Elsa 3 failed on that change, and the conversion does not reproduce it.",
+                $"Copy the value into a local first (let value = {reader}();) and change the local{InstanceChangeRoute(reader)}, " +
                 "in the Elsa 3 workflow before import.");
 
         /// <summary>Where the script runs, what changes the instance value <paramref name="reader"/> reads, if anything does.</summary>
         private string InstanceChangeRoute(string reader) => reader switch
         {
             "getCorrelationId" when ConvertsWorkflowState => "; to change the instance's correlation ID, call setCorrelationId(value)",
-            "getCorrelationId" => "; to change the instance's correlation ID, use a Correlate activity",
+            // A reusable workflow's body cannot run a Correlate activity yet (#3023), so it has no route.
+            "getCorrelationId" when !IsReusable => "; to change the instance's correlation ID, use a Correlate activity",
             "getWorkflowInstanceName" => "; to change the instance's name, call setWorkflowInstanceName(value)",
             _ => string.Empty,
         };
