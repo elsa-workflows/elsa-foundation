@@ -42,6 +42,22 @@ public sealed partial class EfStore
         return true;
     }
 
+    // Only the exact previous shipped profile can advance. Existing checkpoints, jobs, and physical definitions retain
+    // their encoding. The next build can read those checkpoints before publishing the first task-specific message.
+    internal Task<bool> UpgradeUserTaskWaitFormatAsync(CancellationToken cancellationToken) =>
+        AdvanceStoreFormatAsync(StoreFormat.RootShipped, StoreFormat.RootUserTaskWaitsQualification, async (db, token) =>
+        {
+            if (db.RequiredFormat != StoreFormat.RootShipped)
+                throw new InvalidOperationException("The coordinated task upgrade requires the previous shipped context.");
+
+            if (db.UsesSqliteRootRuntime)
+                await RequireSqliteRootAdmissionAsync(db, db.SqliteRuntimeDefinitions!, token);
+            else if (db.Database.IsNpgsql())
+                await RequireStoreVersionsAsync(db, token);
+            else
+                throw new NotSupportedException("Actor user task waits require a shipped SQLite or PostgreSQL store.");
+        }, cancellationToken);
+
     private static bool Includes(string readable, int format) =>
         readable.Split(',').Contains(format.ToString(CultureInfo.InvariantCulture), StringComparer.Ordinal);
 }

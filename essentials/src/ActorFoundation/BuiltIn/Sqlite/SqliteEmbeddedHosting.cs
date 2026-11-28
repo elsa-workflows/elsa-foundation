@@ -74,6 +74,20 @@ public static partial class SqliteEmbeddedHosting
         return file.Path;
     }
 
+    internal static async Task<bool> UpgradeUserTaskWaitFormatAsync(string path, RootPublicEventHost? publicEventHost,
+        CancellationToken token)
+    {
+        if (!File.Exists(path)) throw new InvalidOperationException("The previous shipped SQLite file does not exist.");
+        using var file = await AcquireRuntimeFileAsync(path, requests: null, token);
+        KernelDb Previous() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, publicEventHost: publicEventHost);
+        var store = new EfStore(Previous, postgres: false);
+        var changed = await store.UpgradeUserTaskWaitFormatAsync(token);
+        await using var current = KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
+            StoreFormat.RootUserTaskWaitsQualification, publicEventHost);
+        await EfStore.RequireSqliteRootAdmissionAsync(current, file.AdmissionDefinitions, token);
+        return changed;
+    }
+
     internal static async ValueTask<Contract.CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(string path, Contract.BoundScope scope,
         Contract.ActorRef actor, RootPublicEventHost? publicEventHost, CancellationToken cancellationToken)
     {

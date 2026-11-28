@@ -1,8 +1,11 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
+using Kernel.Foundation.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
 
@@ -26,7 +29,7 @@ internal static class UserTaskWaitFormatChecks
         else
             await PostgresAsync(token);
 
-        Console.WriteLine($"{provider}: both task-wait format directions refused mismatches and preserved their store markers.");
+        Console.WriteLine($"{provider}: mismatched owners were refused and the stopped shipped store advanced with its physical definitions unchanged.");
         return 0;
     }
 
@@ -53,12 +56,73 @@ internal static class UserTaskWaitFormatChecks
                 await RefusesOtherFormatAsync(() => EfStore.RequireSqliteRootAdmissionAsync(other, definitions, token));
                 await EfStore.RequireSqliteRootAdmissionAsync(current, definitions, token);
                 await VerifyMarkersAsync(current, other, token);
+                if (selected is null)
+                    await UpgradeSqliteAsync(options, definitions, token);
             }
         }
         finally
         {
             folder.Delete(recursive: true);
         }
+    }
+
+    private static async Task UpgradeSqliteAsync(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions,
+        CancellationToken token)
+    {
+        KernelDb Open(bool candidate) => KernelDb.ForSqliteRootRuntime(options, definitions, candidate ? Candidate : null, EventHost);
+        var previous = new EfStore(() => Open(candidate: false), postgres: false);
+        var next = new EfStore(() => Open(candidate: true), postgres: false);
+        await using var initial = Open(candidate: false);
+        var path = new SqliteConnectionStringBuilder(initial.Database.GetConnectionString()!).DataSource;
+        var actorType = WorkflowActor.WorkflowActor.ActorType;
+        var prior = new SqliteEmbeddedFoundation(path, "previous-task-format", actorType);
+        var candidate = SqliteEmbeddedFoundation.ForUserTaskWaitsQualification(path, "next-task-format", actorType);
+        await prior.InstallShippedAsync(token);
+        var registry = new WorkflowRegistry().Add(Wf.Workflow("old-event", Wf.Event("await-event", "upgrade-unblocks")));
+        var model = new NativeExecutionModel(registry);
+        var actor = new WorkflowActor.WorkflowActor([model]);
+        var scope = EmbeddedTenant.Bind("scope-format-upgrade");
+        await using var owner = prior.CreateHostedService(actor, reason => throw new InvalidOperationException(reason));
+        await owner.StartAsync(token);
+        var ingress = await prior.OpenIngressAsync(token);
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(WorkflowActor.WorkflowActor.Start(
+            NativeExecutionModel.Start("old-event"))), "prior-wait", Contract.Kinds.Start, cancellationToken: token);
+        Require(started is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "The previous owner must admit a real Native workflow.");
+        var id = started.Actor!.Value.Id;
+        EfStore.RootImage? before;
+        do
+        {
+            before = await previous.ReadFirstRootAsync(scope.Tenant, id, token);
+            if (before?.State is not null) break;
+            await Task.Delay(20, token);
+        } while (true);
+        Require(before is { StateVersion: > 0, State: not null, Status: InstanceStatus.Running } &&
+            before.State.Contains("upgrade-unblocks", StringComparison.Ordinal), "The old owner must commit the ordinary Native wait.");
+        try
+        {
+            await candidate.UpgradeUserTaskWaitFormatAsync(token);
+            throw new InvalidOperationException("The in-use store was allowed to advance.");
+        }
+        catch (StoreFormatException error) when (error.Message.Contains("Live node", StringComparison.Ordinal)) { }
+        catch (IOException) { }
+
+        await owner.StopAsync(token);
+        // A clean stop relinquishes the file. The prior node's persisted advertisement remains fenced through its lease.
+        while (true)
+        {
+            var now = await prior.ReadClockAsync(token);
+            if (!await initial.Nodes.AnyAsync(node => node.LeaseUntil >= now, token)) break;
+            await Task.Delay(100, token);
+        }
+        Require(await candidate.UpgradeUserTaskWaitFormatAsync(token), "A stopped shipped SQLite file must advance exactly once.");
+        Require(!await candidate.UpgradeUserTaskWaitFormatAsync(token), "A resumed SQLite upgrade must be idempotent.");
+        await using var current = Open(candidate: true);
+        await using var old = Open(candidate: false);
+        await VerifyMarkersAsync(current, old, token);
+        await RefusesOtherFormatAsync(() => EfStore.RequireSqliteRootAdmissionAsync(old, definitions, token));
+        var after = await next.ReadFirstRootAsync(scope.Tenant, id, token);
+        Require(after is not null && after.State == before!.State && after.Revision == before.Revision && after.StateVersion == before.StateVersion,
+            "Advancing the marker must preserve the old ordinary workflow checkpoint and its revision.");
     }
 
     private static async Task PostgresAsync(CancellationToken token)
@@ -89,6 +153,25 @@ internal static class UserTaskWaitFormatChecks
             await RefusesOtherFormatAsync(() => EfStore.RequireStoreVersionsAsync(other, token));
             await EfStore.RequireStoreVersionsAsync(current, token);
             await VerifyMarkersAsync(current, other, token);
+            if (!useCandidate)
+            {
+                await store.NodeHeartbeatAsync("previous-task-format", TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), token);
+                try
+                {
+                    await store.UpgradeUserTaskWaitFormatAsync(token);
+                    throw new InvalidOperationException("The live prior PostgreSQL owner was allowed to advance.");
+                }
+                catch (StoreFormatException error) when (error.Message.Contains("Live node", StringComparison.Ordinal)) { }
+                await VerifyMarkersAsync(current, other, token);
+                var released = await current.Nodes.Where(node => node.Id == "previous-task-format")
+                    .ExecuteUpdateAsync(set => set.SetProperty(node => node.LeaseUntil, 0), token);
+                Require(released == 1, "The fixture must release only the selected prior owner.");
+                Require(await store.UpgradeUserTaskWaitFormatAsync(token), "A stopped shipped PostgreSQL store must advance exactly once.");
+                Require(!await store.UpgradeUserTaskWaitFormatAsync(token), "A resumed PostgreSQL upgrade must be idempotent.");
+                await VerifyMarkersAsync(other, current, token);
+                await RefusesOtherFormatAsync(() => EfStore.RequireStoreVersionsAsync(current, token));
+                await EfStore.RequireStoreVersionsAsync(other, token);
+            }
         }
     }
 

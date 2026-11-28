@@ -56,6 +56,16 @@ public static partial class PostgresPreviewHosting
         Contract.BoundScope? publisherScope, CancellationToken cancellationToken) =>
         InstallPreviewFormatAsync(() => CreateUserTaskWaitsQualificationContext(options, actorType, publisherScope), cancellationToken);
 
+    /// <summary>Advances a stopped shipped PostgreSQL store to the exact Actor user task format.</summary>
+    public static async Task<bool> UpgradeUserTaskWaitFormatAsync(DbContextOptions<KernelDb> options, string actorType,
+        Contract.BoundScope? publisherScope, CancellationToken cancellationToken)
+    {
+        var previous = new EfStore(() => CreateShippedContext(options, actorType, protectsStarts: true, publisherScope), postgres: true);
+        var changed = await previous.UpgradeUserTaskWaitFormatAsync(cancellationToken);
+        await InstallUserTaskWaitsQualificationAsync(options, actorType, publisherScope, cancellationToken);
+        return changed;
+    }
+
     /// <summary>Reads the committed checkpoint of an exact ordinary Actor life for task reconciliation.</summary>
     public static async ValueTask<Contract.CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(Func<KernelDb> open, Contract.BoundScope scope,
         Contract.ActorRef actor, CancellationToken cancellationToken)

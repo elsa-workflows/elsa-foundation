@@ -50,6 +50,19 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
             ? new(databasePath, node, actorType, StoreFormat.RootUserTaskWaitsQualification, protectRootStart)
             : ForStandaloneQualification(databasePath, node, actorType, publisherScope, StoreFormat.RootUserTaskWaitsQualification, protectRootStart);
 
+    /// <summary>Advances a stopped shipped SQLite store under the exclusive file ownership gate.</summary>
+    public async Task<bool> UpgradeUserTaskWaitFormatAsync(CancellationToken cancellationToken)
+    {
+        if (qualificationFormat != StoreFormat.RootUserTaskWaitsQualification)
+            throw new InvalidOperationException("This store does not support Actor user task waits.");
+        await installation.WaitAsync(cancellationToken);
+        try
+        {
+            return await SqliteEmbeddedHosting.UpgradeUserTaskWaitFormatAsync(installedPath ?? path, publicEventHost, cancellationToken);
+        }
+        finally { installation.Release(); }
+    }
+
     /// <summary>Reads the committed checkpoint of an exact ordinary Actor life for task reconciliation.</summary>
     public ValueTask<Contract.CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         CancellationToken cancellationToken)
