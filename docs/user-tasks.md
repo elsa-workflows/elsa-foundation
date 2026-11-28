@@ -38,11 +38,19 @@ The Actor profile accepts up to 64 outstanding tasks per workflow run. Each task
 and response data can use up to 64 KiB of JSON. Test Run remains available for workflows
 that do not open user tasks.
 
+### Participant API
+
+In `elsa.api.user-tasks` version 1, the Actor task owner advertises `claim`, `release`, `complete`
+and `targets` alongside the inbox and form relations. Participants need `user-tasks:read` and
+`user-tasks:act`. Clients send the task revision and a stable request ID when completing a task.
+Keep the request ID and response together for retries. A `202` means the response is recorded
+and still awaiting confirmation that the Actor consumed it.
+
 ## Classic workflow tasks
 
 User Tasks let a workflow wait for a person to choose an action and optionally submit form data. The task is Runtime-owned human work; `Elsa.Tasks` continues to schedule host startup/background/recurring work.
 
-## Author a purchase approval
+### Author a purchase approval
 
 1. Enable the `UserTasksStudio` module in Studio and use a backend with the User Tasks capability. The normal Foundation Studio host includes the module. Use a cohesive durable Runtime provider; the aggregate Runtime EF registration includes the journal and its migrations.
 2. Open **User Tasks → Forms**, choose **Create form version** and publish a form. Studio assigns its version. Open a listed form to inspect its published fields and constraints, or choose **Create next version** to revise it. Add text, multiline, number, boolean, date or choice fields. Keys are case-sensitive; labels/help are displayed as text. Set required, read-only, length, number range and choice constraints as needed. Publishing another version never changes an existing version.
@@ -53,7 +61,7 @@ User Tasks let a workflow wait for a person to choose an action and optionally s
 
 Actions must be unique, trimmed, nonempty names (maximum 20 actions, 100 characters each). `Unmatched` is reserved by the generic value-outcome contract. Actions are authored literals pinned during publication. Existing tasks keep the actions, form version and prefilled values resolved for their invocation.
 
-## Complete and manage work
+### Complete and manage work
 
 Open a task from the User Tasks collection to work on its dedicated page. **Back to task list** returns to the originating inbox, search and page; browser Back also preserves that collection context. An expired page offers **First page** while retaining the inbox and search. Leaving an unsent response requires confirmation through the return action; an unconfirmed completion stays protected until its result is resolved.
 
@@ -63,7 +71,7 @@ A recorded response can remain **Response pending** while Runtime delivery recov
 
 Managers can inspect the tenant's work and reassign an open/claimed task to an active tenant user or group. Reassignment clears the old claim. Management permission does not grant permission to complete somebody else's work. History records the trusted actor, operation/action and UTC instant. Completed/cancelled tasks refuse further action. Workflow cancellation/end retires unfinished work; missing state alone is not proof that a task has ended.
 
-## Access and host composition
+### Access and host composition
 
 Grant the permissions needed by each role:
 
@@ -81,7 +89,7 @@ Runtime does not depend on Design or HTTP. A non-HTTP host supplies `IUserTaskAc
 
 Use `AddRuntimeEntityFrameworkCore` to select the complete durable family. A durable custom `IUserTaskStore` also needs a qualified `IUserTaskPersistenceBoundary` that retains execution completion evidence until acknowledgement, alongside the provider's exact-bookmark checkpoint boundary. `IsDurable` alone is insufficient. The EF boundary accepts its owned journal/execution pair. Volatile tasks are available only with explicit `UserTaskOptions.AllowVolatileTasksForDevelopment = true` and an in-memory execution provider; they do not survive a process restart.
 
-## Custom applications and forms
+### Custom applications and forms
 
 Discover `elsa.api.user-tasks` version 1 and its `tasks`, `task`, `claim`, `release`, `complete`, `reassign`, `forms`, `form-version`, `targets` and `identity` relations. The capability is operationally conditional on the selected task persistence boundary. The [API contract](../specs/1196-user-tasks/contracts/api.md) describes status/error and concurrency semantics.
 
@@ -93,7 +101,7 @@ An external form integration contributes exactly one `IUserTaskFormProvider` for
 
 A Studio integration contributes `api.userTaskForms.add({ id, provider, component })` using `StudioUserTaskFormProps`. The renderer receives the frozen form, values, read-only state, exact field errors and an `onChange` callback. Missing/duplicate renderers disable completion. Server validation is authoritative. Integrations supply ordinary component code; task definitions do not execute caller-supplied HTML or scripts.
 
-## Recovery and storage
+### Recovery and storage
 
 The journal commits revision, history, accepted response and delivery responsibility together. Tasks are staged before their wait commits and become actionable only after observing the committed invocation's physical bookmark generation. Recovery dispatches the pinned accepted response to that exact generation. Queue acceptance does not mark a task complete; acknowledgement checks the committed activity result. A provider deletion fence retains that evidence until acknowledgement. A replaced wait retires its former task; retries creating a successor invocation create a distinct task.
 
