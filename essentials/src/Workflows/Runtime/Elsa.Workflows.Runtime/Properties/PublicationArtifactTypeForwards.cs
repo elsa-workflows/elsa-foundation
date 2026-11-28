@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Values;
 
 [assembly: TypeForwardedTo(typeof(InMemoryExecutableActivityTemplateStore))]
+[assembly: TypeForwardedTo(typeof(InMemoryRuntimeArtifactStores))]
 [assembly: TypeForwardedTo(typeof(InMemoryWorkflowExecutableSourceReferenceStore))]
 [assembly: TypeForwardedTo(typeof(InMemoryWorkflowExecutableStore))]
 [assembly: TypeForwardedTo(typeof(RuntimeRequirementChecker))]

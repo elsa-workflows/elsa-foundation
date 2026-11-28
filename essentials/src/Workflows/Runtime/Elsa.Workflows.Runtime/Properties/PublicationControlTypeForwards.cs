@@ -16,4 +16,5 @@ using System.Runtime.CompilerServices;
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.WorkflowTriggerBindingExtractor))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.WorkflowTriggerIndexer))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Triggers.RuntimeIngressReservationRules))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.IncidentResolutionActions))]
