@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -33,29 +35,29 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
     {
         if (!PreparedStandaloneHttp.IsHttp(source) || !source.CanonicalPayload.TryGetProperty("waitCandidate", out var saved) ||
             saved.ValueKind != JsonValueKind.Object ||
-            !source.CanonicalPayload.TryGetProperty("submittedIntent", out var intent) ||
-            !source.CanonicalPayload.TryGetProperty("payload", out var payload)) return null;
+            !source.CanonicalPayload.TryGetProperty("submittedIntent", out var intent)) return null;
         try
         {
             if (saved.Deserialize<RuntimeIngressWaitCandidate>(Web) is not { Input: { } input, ObservedWaits.Count: 0 } candidate ||
                 candidate.Metadata.GetValueOrDefault(RuntimeMetadataKeys.StandaloneHttpExactPath) is not { } path ||
-                input.Deserialize<CapturedRequest>() is not { Method.Length: > 0, Headers: not null, Query: not null, RouteData: not null } request ||
+                input.Deserialize<CapturedRequest>() is not { Method.Length: > 0, Headers: not null, RouteData: not null } request ||
                 !SafeRelativePath(path) ||
                 intent.GetProperty("method").GetString() != request.Method ||
                 !string.Equals(request.Path, path, StringComparison.OrdinalIgnoreCase) ||
                 intent.GetProperty("path").GetString() is not { } publicPath || !publicPath.StartsWith('/') ||
                 !publicPath.TrimEnd('/').EndsWith("/" + path, StringComparison.Ordinal) ||
+                intent.GetProperty("rawQuery").GetString() is not { } rawQuery ||
+                !TryReadBody(intent, request.Body, out var body) ||
                 source.CanonicalPayload.GetProperty("trigger").GetProperty("configuration").GetProperty("path").GetString() is not { } route)
                 return null;
             var template = HttpRouteTemplate.Parse(route);
             var names = HttpFields.RouteValues(request.RouteData);
             if (!template.FullyBound || !SameConcretePath(template, path, names)) return null;
 
-            var body = payload.ValueKind == JsonValueKind.Null ? null : JsonNode.Parse(payload.GetRawText());
             var model = new HttpRequest(request.Method, publicPath, body)
             {
                 Headers = HttpFields.RequestHeaders(Flatten(request.Headers)),
-                Query = HttpFields.Query(Flatten(request.Query))
+                Query = HttpFields.Query(KernelHttpRequestHandler.QueryPairs(rawQuery))
             };
             if (ResolvedPaths(path) is not { } variants) return null;
             var literal = HttpRouteMatcher.Literal(request.Method, path).Key;
@@ -80,6 +82,27 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
         {
             return null;
         }
+    }
+
+    private static bool TryReadBody(JsonElement intent, string? text, out JsonNode? body)
+    {
+        body = null;
+        if (text is null) return true;
+        if (!intent.GetProperty("utf8Body").GetBoolean() ||
+            !MediaTypeHeaderValue.TryParse(intent.GetProperty("contentType").GetString(), out var contentType) ||
+            contentType.MediaType is not { } mediaType) return false;
+        if (mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
+        {
+            // The ordinary body model retains UTF-8 text only. Refuse a different declared decoder
+            // before accepting an Actor source rather than hand the wait replacement characters.
+            if (KernelHttpRequestHandler.EncodingOf(contentType.CharSet?.Trim('"'))?.CodePage != Encoding.UTF8.CodePage) return false;
+            body = JsonValue.Create(text);
+            return true;
+        }
+
+        if (!KernelHttpRequestHandler.IsJson(mediaType)) return false;
+        body = JsonNode.Parse(text);
+        return true;
     }
 
     private static IReadOnlyList<string>? ResolvedPaths(string path)
@@ -121,7 +144,7 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
     private static IEnumerable<KeyValuePair<string, string>> Flatten(IReadOnlyDictionary<string, string[]> fields) =>
         fields.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value)));
 
-    private sealed record CapturedRequest(string Method, string Path, Dictionary<string, string[]> Headers, Dictionary<string, string[]> Query,
+    private sealed record CapturedRequest(string Method, string Path, string? Body, Dictionary<string, string[]> Headers,
         Dictionary<string, string> RouteData);
     private sealed record WaitPlan(string Method, string Path, IReadOnlyList<PreparedWaitDelivery> Deliveries);
 }

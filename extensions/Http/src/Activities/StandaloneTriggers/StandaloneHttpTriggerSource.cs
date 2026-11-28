@@ -56,23 +56,32 @@ internal sealed class HttpTriggerSourceContext(IHttpContextAccessor http, IPersi
             new WorkflowExecutionAuthoritySnapshot("standalone-trigger", rootActor)) { Reservation = reservation };
     }
     internal void CaptureRequest(HttpRequestModel model, string stimulusHash, IReadOnlyList<RuntimeIngressWaitObservation>? observedWaits = null,
-        string? exactRelativePath = null)
+        string? exactRelativePath = null, bool utf8Body = true)
     {
         if (current is null || current.WaitCandidate is not null || request is null || !ReferenceEquals(request, http.HttpContext))
             throw new TriggerOperationException("unavailable", "HTTP request intent cannot be rebound or detached from its source.");
         // Template-derived RouteData belongs to the accepted capture, never the submitted-intent identity.
-        var intent = JsonSerializer.SerializeToElement(new { method = request.Request.Method.ToUpperInvariant(),
-            path = request.Request.Path.Value, query = model.Query,
-            headers = model.Headers.ToDictionary(pair => pair.Key.ToLowerInvariant(), pair => pair.Value, StringComparer.Ordinal),
-            body = model.Body, contentType = request.Request.ContentType });
+        var intent = new Dictionary<string, object?>
+        {
+            ["method"] = request.Request.Method.ToUpperInvariant(),
+            ["path"] = request.Request.Path.Value,
+            ["query"] = model.Query,
+            ["headers"] = model.Headers.ToDictionary(pair => pair.Key.ToLowerInvariant(), pair => pair.Value, StringComparer.Ordinal),
+            ["body"] = model.Body,
+            ["contentType"] = request.Request.ContentType
+        };
         var metadata = new Dictionary<string, string>();
         if (exactRelativePath is not null && request.Features.Get<IHttpRequestFeature>()?.RawTarget is { Length: > 0 } rawTarget &&
             !rawTarget.Split('?', 2)[0].Contains('%'))
+        {
             metadata[RuntimeMetadataKeys.StandaloneHttpExactPath] = exactRelativePath;
+            intent["rawQuery"] = request.Request.QueryString.Value ?? "";
+            intent["utf8Body"] = utf8Body;
+        }
         var candidate = new RuntimeIngressWaitCandidate(HttpEndpointStimulus.StimulusType, stimulusHash,
             JsonSerializer.SerializeToElement(model), metadata,
             new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(HttpRequestModel)), schemaVersion: 1), HttpEndpoint.ActivityType, observedWaits);
-        current = current with { SubmittedIntent = intent, WaitCandidate = candidate };
+        current = current with { SubmittedIntent = JsonSerializer.SerializeToElement(intent), WaitCandidate = candidate };
     }
     public ValueTask<StandaloneTriggerInvocationContext> GetAsync(CancellationToken cancellationToken = default)
     {
