@@ -73,10 +73,9 @@ Studio wiring (see `docker-compose.yml`):
   the OpenIddict identity module"** (or "must be a base64-encoded PKCS#8 RSA private key") — set
   `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` to a valid key (see
   [Environment variables](#environment-variables)).
-- **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — the host is
-  missing the `Elsa.Workflows.Runtime.Resumption` project reference that every durable
-  persistence provider depends on. It is wired in `Elsa.Workbench.Host.csproj` / `Program.cs`; rebuild the
-  image if you see this.
+- **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — a mounted shell
+  requests a classic workflow feature. Open that deployment with its [matching classic image and settings](#workbench-mixed-preview-compatibility).
+  The stock Actor shell uses `WorkflowsRuntimeKernelHosting` and `WorkflowsRuntimeKernelRetainedApi`.
 - **`Npgsql … Failed to connect to 127.0.0.1:5432`** — the feature fell back to its default
   connection string, meaning `ConnectionString` did not bind. Ensure it is a **top-level** property
   on the feature section (not nested under `Options`).
@@ -347,6 +346,9 @@ describes the storage boundary and cutover sequence.
 Open an explicitly mounted classic shell with its matching immutable Workbench image and configuration.
 Keep its `WorkflowsRuntimeEntityFrameworkCore` recovery and hierarchy signing keys with that deployment.
 Current Workbench refuses the classic Runtime API and persistence selectors before opening a store.
+Keep the matching classic deployment for prior opt-ins such as workflow Decisions, Agent human review,
+ETL and Rules workflow waits, classic dispatch, JSON artifact import, reference cleanup and engine tracing.
+The stock Workbench keeps the independent Decision, Agent authoring, ETL, Rules and OpenTelemetry modules.
 
 For the historical apphost witnesses, build both Workbench and the Native runner from the same
 checkout. Pass the checkout as the second argument after the configuration to the scripts in

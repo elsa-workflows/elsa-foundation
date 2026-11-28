@@ -72,3 +72,32 @@ runner. Use `--studio-shape application` for the ordinary Studio application or
 `--studio-shape coordinated-sdk` for the independently enrolled SDK consumer.
 The source SHA in the report belongs to the classic checkout. Stock Workbench
 uses the Actor Foundation source and schedule witnesses for the supported engines.
+
+The former nightly used the application for six journeys and the coordinated SDK
+consumer for access. Replay the access part explicitly with the same checkout.
+
+```sh
+(
+  cd "$compatibility_root/workbench-classic-default"
+  python3 tools/ux-acceptance/standalone.py --output "$compatibility_root/standalone-trigger-sdk-access" \
+    --journey 'standalone access and availability' --studio-shape coordinated-sdk
+)
+```
+
+## Classic composed Studio and Decision runtime
+
+The classic composed browser runner covers task forms and approvals, Decision
+activities, BPMN and compensation execution, the old run-health projection,
+and the classic history, playback and process restart routes. Use its matching
+Workbench and Studio in the same classic-default checkout. Add `--journey` to
+select a specific title listed by the archived runner. The Decision runtime
+probe also qualifies an actual restart of a workflow waiting on the classic
+checkpoint implementation.
+
+```sh
+(
+  cd "$compatibility_root/workbench-classic-default"
+  python3 tools/ux-acceptance/run.py --output "$compatibility_root/composed-studio-classic"
+  python3 tools/decisions/qualify-execution.py --output "$compatibility_root/decision-execution-classic"
+)
+```

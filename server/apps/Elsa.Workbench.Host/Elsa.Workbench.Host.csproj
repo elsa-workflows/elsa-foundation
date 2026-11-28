@@ -19,8 +19,6 @@
     </PropertyGroup>
     <ItemGroup Condition="'$(ElsaDashboardQualification)' == 'true'">
         <Compile Include="../../../tools/ux-acceptance/DashboardQualificationBootstrap.cs" Link="Qualification/DashboardQualificationBootstrap.cs" />
-        <Compile Include="../../../tools/ux-acceptance/HistoryQualificationControls.cs" Link="Qualification/HistoryQualificationControls.cs" />
-        <Compile Include="../../../tools/ux-acceptance/ActivityPlaybackQualificationControls.cs" Link="Qualification/ActivityPlaybackQualificationControls.cs" />
         <Compile Include="../../../tools/studio/Weaver.Conformance.Probe/fixtures/BackendConsumer/QualificationPrincipals.cs" Link="Qualification/QualificationPrincipals.cs" />
     </ItemGroup>
 
@@ -76,8 +74,6 @@
 	<ItemGroup>
 		<ProjectReference Include="../../../extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
 		<ProjectReference Include="../../../extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
-		<ProjectReference Include="../../../extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
-		<ProjectReference Include="../../../extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -112,8 +108,6 @@
 		<ProjectReference Include="../../../essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
 		<ProjectReference Include="../../../essentials/src/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj" />
 		<!-- The generic human review wait and its decision API, enabled by an explicit shell composition. -->
-		<ProjectReference Include="../../../extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj" />
-		<ProjectReference Include="../../../extensions/Agent/src/Review/Api/Elsa.Agent.Review.Api.csproj" />
 		<!-- User-defined agents: agent authoring, its editor API and the model connection types, enabled by an explicit shell composition. -->
 		<ProjectReference Include="../../../extensions/Agent/src/Design/Elsa.Agent.Design.csproj" />
 		<ProjectReference Include="../../../extensions/Agent/src/Api/Elsa.Agent.Api.csproj" />
@@ -132,15 +126,11 @@
 		<ProjectReference Include="../../../extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj" />
 		<ProjectReference Include="../../../extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj" />
 		<ProjectReference Include="../../../extensions/Etl/src/RabbitMq/Elsa.Etl.RabbitMq.csproj" />
-		<ProjectReference Include="../../../extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
-		<ProjectReference Include="../../../extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
 		<ProjectReference Include="../../../extensions/Bpmn/src/Composite/Elsa.Activities.Bpmn.Composite.csproj" />
 		<ProjectReference Include="../../../extensions/Bpmn/src/Design/Elsa.Activities.Bpmn.Design.csproj" />
 		<ProjectReference Include="../../../extensions/Bpmn/src/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
-		<ProjectReference Include="../../../essentials/src/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj" />
-		<ProjectReference Include="../../../essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Runtime/Hosting/Elsa.Activities.Runtime.Hosting.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
@@ -271,8 +261,5 @@
     <ProjectReference Include="../../../extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
     <ProjectReference Include="../../../extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
     <ProjectReference Include="../../../extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
-    <ProjectReference Include="../../../extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
-    <ProjectReference Include="../../../extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
   </ItemGroup>
 </Project>

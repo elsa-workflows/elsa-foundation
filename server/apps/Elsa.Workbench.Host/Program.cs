@@ -194,8 +194,6 @@ builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
 builder.Services.AddSingleton<DefaultShellWarmup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
 #if ELSA_DASHBOARD_QUALIFICATION
-ActivityPlaybackQualificationControls.Register(builder.Services);
-HistoryQualificationControls.Register(builder.Services);
 builder.Services.AddSingleton<DashboardQualificationBootstrap>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());
 builder.Services.AddSingleton<IShellServiceExclusionProvider>(new DashboardQualificationServiceExclusions());
@@ -384,17 +382,11 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Decisions.Design.DecisionsDesignFeature).Assembly,
             typeof(Elsa.Decisions.Api.DecisionsApiFeature).Assembly,
             typeof(Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Decisions.Workflows.Design.DecisionsWorkflowsDesignFeature).Assembly,
-            typeof(Elsa.Decisions.Workflows.Runtime.DecisionsWorkflowsRuntimeFeature).Assembly,
-            typeof(Elsa.Decisions.Workflows.Api.DecisionsWorkflowsApiFeature).Assembly,
             typeof(ConnectionsApiFeature).Assembly,
             // Available for durable local/model connections when explicitly selected in the shell.
             typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature).Assembly,
             typeof(ConnectionsDesignFeature).Assembly,
             typeof(ConnectionsWorkflowsFeature).Assembly,
-            // The generic human review wait for user-defined agents and its decision API.
-            typeof(Elsa.Agent.Review.AgentReviewFeature).Assembly,
-            typeof(Elsa.Agent.Review.Api.AgentReviewApiFeature).Assembly,
             // User-defined agents: authoring, the editor's model reads and the model connection types.
             typeof(Elsa.Agent.Design.AgentDesignFeature).Assembly,
             typeof(Elsa.Agent.Api.AgentApiFeature).Assembly,
@@ -405,20 +397,16 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Agent.AgentRuntimeFeature).Assembly,
             typeof(Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Agent.Inspection.Api.AgentInspectionApiFeature).Assembly,
-            // Opt-in finite ETL authoring, native execution and independent runtime inspection.
+            // Opt-in ETL authoring, execution and inspection for standalone ETL applications.
             typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
             typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,
             typeof(Elsa.Etl.Runtime.EtlRuntimeFeature).Assembly,
             typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature).Assembly,
             typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature).Assembly,
-            typeof(Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature).Assembly,
             // Opt-in durable Rules. Package qualification references these same host assemblies from NuGet;
             // the configured deployment receipt must still match the active package graph and loaded assets.
             typeof(Elsa.Rules.Runtime.RulesRuntimeFeature).Assembly,
             typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesRuntimeEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Rules.Workflows.Design.RulesWorkflowsDesignFeature).Assembly,
-            typeof(Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,
 
@@ -492,8 +480,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 #if ELSA_DASHBOARD_QUALIFICATION
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), "default", configuration);
-HistoryQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());
-ActivityPlaybackQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());
 // Shell middleware replaces request services; the bootstrap is owned by the root host.
 var dashboardQualification = app.Services.GetRequiredService<DashboardQualificationBootstrap>();
 app.MapGet(DashboardQualificationBootstrap.ReadinessPath, () => dashboardQualification.Ready

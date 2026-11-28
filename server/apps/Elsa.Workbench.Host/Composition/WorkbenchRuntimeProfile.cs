@@ -1,3 +1,4 @@
+using CShells.Configuration;
 using Elsa.Workflows.Runtime.KernelHosting;
 
 namespace Elsa.Workbench.Composition;
@@ -12,13 +13,6 @@ internal static class WorkbenchRuntimeProfile
                 "to drain the existing stores. See the Workbench compatibility guidance in docs/docker.md.");
 
         var shells = configuration.GetSection("CShells:Shells");
-        if (shells.GetChildren().SelectMany(shell => shell.GetSection("Features").GetChildren())
-            .Any(feature => IsSelected(feature) &&
-                (string.Equals(feature.Key, "WorkflowsRuntimeApi", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(feature.Key, "WorkflowsRuntimeEntityFrameworkCore", StringComparison.OrdinalIgnoreCase))))
-            throw new InvalidOperationException("The classic Workbench workflow runtime has been retired. Use its pinned image " +
-                "to open the existing classic stores. See the Workbench compatibility guidance in docs/docker.md.");
-
         var features = shells.GetSection("default:Features");
         var hosting = features.GetSection(WorkflowsRuntimeKernelHostingFeature.FeatureName);
         var actors = IsSelected(hosting);
@@ -31,6 +25,13 @@ internal static class WorkbenchRuntimeProfile
             // Host-supplied credentials and explicit arguments take precedence over the selected profile.
             configuration.AddEnvironmentVariables().AddCommandLine(args);
         }
+
+        if (shells.GetChildren()
+            .SelectMany(shell => new ShellBuilder(shell.Key).FromConfiguration(shell).Build().EnabledFeatures)
+            .Any(feature => string.Equals(feature, "WorkflowsRuntimeApi", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(feature, "WorkflowsRuntimeEntityFrameworkCore", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("The classic Workbench workflow runtime has been retired. Use its pinned image " +
+                "to open the existing classic stores. See the Workbench compatibility guidance in docs/docker.md.");
 
         if (!actors || !string.Equals(hosting["Provider"] ?? "SQLite", "SQLite", StringComparison.OrdinalIgnoreCase) ||
             !string.IsNullOrWhiteSpace(hosting["SqlitePath"]))

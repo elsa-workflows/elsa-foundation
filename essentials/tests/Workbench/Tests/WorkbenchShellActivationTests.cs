@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Workbench.Tests;
@@ -185,25 +186,36 @@ public sealed class WorkbenchShellActivationTests
     [Theory]
     [InlineData("default", "workflowsruntimeapi", "true")]
     [InlineData("custom", "WORKFLOWSRUNTIMEENTITYFRAMEWORKCORE:Provider", "SQLite")]
+    [InlineData("custom", "0", "WorkflowsRuntimeApi")]
+    [InlineData("custom", "0:Name", "WorkflowsRuntimeEntityFrameworkCore")]
+    [InlineData("default", "WorkflowsRuntimeApi", null)]
     public async Task Retired_classic_selector_in_any_shell_is_refused_before_opening_the_actor_store(
-        string shellName, string selector, string value)
+        string shellName, string selector, string? value)
     {
         var stores = Directory.CreateTempSubdirectory("elsa-retired-classic-stores-");
-        var shell = WorkbenchShell.Development with
+        var settings = new Dictionary<string, string>
         {
-            Settings = new Dictionary<string, string>
-            {
-                [$"CShells:Shells:{shellName}:Features:{selector}"] = value,
-                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:SqlitePath"] =
-                    Path.Combine(stores.FullName, "actors.db")
-            }
+            ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:SqlitePath"] =
+                Path.Combine(stores.FullName, "actors.db")
         };
+        if (value is not null)
+            settings[$"CShells:Shells:{shellName}:Features:{selector}"] = value;
 
+        var shell = WorkbenchShell.Development with { Settings = settings };
         try
         {
             var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             {
-                await using var _ = await WorkbenchProcess.StartAsync(shell);
+                await using var _ = await WorkbenchProcess.StartAsync(shell, directory =>
+                {
+                    if (value is not null)
+                        return;
+
+                    var path = Path.Combine(directory, "shells.json");
+                    var content = JsonNode.Parse(File.ReadAllText(path))!;
+                    content["CShells"]!["Shells"]![shellName]!["Features"]![selector] = new JsonObject();
+                    File.WriteAllText(path, content.ToJsonString());
+                });
             });
             Assert.Contains("The classic Workbench workflow runtime has been retired", failure.Message, StringComparison.Ordinal);
             Assert.Empty(stores.EnumerateFileSystemInfos());
