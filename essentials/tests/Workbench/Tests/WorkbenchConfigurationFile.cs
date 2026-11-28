@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 
 namespace Elsa.Workbench.Tests;
@@ -14,13 +15,19 @@ internal static class WorkbenchConfigurationFile
     public static void RemoveValue(string path, IReadOnlyList<string> segments) =>
         Update(path, segments, (parent, key) => parent.Remove(key));
 
-    public static async Task WaitForBlueprintValueAsync(WorkbenchProcess host, string value)
+    public static async Task WaitForBlueprintValueAsync(WorkbenchProcess host, string key, string value)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         const string blueprint = "/_admin/shells/default/blueprint";
-        while (!(await host.ManagementClient.GetStringAsync(blueprint, deadline.Token))
-            .Contains(value, StringComparison.Ordinal))
+
+        while (true)
+        {
+            var snapshot = await host.ManagementClient.GetFromJsonAsync<JsonObject>(blueprint, deadline.Token);
+            if (string.Equals(snapshot?["configurationData"]?[key]?.ToString(), value, StringComparison.Ordinal))
+                return;
+
             await Task.Delay(100, deadline.Token);
+        }
     }
 
     private static void Update(string path, IReadOnlyList<string> segments, Action<JsonObject, string> update)

@@ -208,7 +208,7 @@ public sealed class CompositionHostAttestationProbeTests
             Path.Join(host.ContentRoot, "appsettings.Development.json"),
             ["Cors", "AllowedOrigins", "0"], newOrigin);
         WriteSetting(Path.Join(host.ContentRoot, "shells.Development.json"), 402);
-        await WorkbenchConfigurationFile.WaitForBlueprintValueAsync(host, "402");
+        await WorkbenchConfigurationFile.WaitForBlueprintValueAsync(host, $"{ArtifactFeature}:{CacheCapacitySetting}", "402");
 
         using var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null);
         response.EnsureSuccessStatusCode();
@@ -267,7 +267,7 @@ public sealed class CompositionHostAttestationProbeTests
         var failedGeneration = (int)readiness["generation"]!;
         var failedOverlay = Path.Combine(host.ContentRoot, "shells.Development.json");
         WorkbenchConfigurationFile.WriteOpenIddictSigningKey(failedOverlay, Canary);
-        await WorkbenchConfigurationFile.WaitForBlueprintValueAsync(host, Canary);
+        await WorkbenchConfigurationFile.WaitForBlueprintValueAsync(host, "FoundationIdentityOpenIddict:SigningKey", Canary);
         using (var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null))
         {
             Assert.True(response.IsSuccessStatusCode);
