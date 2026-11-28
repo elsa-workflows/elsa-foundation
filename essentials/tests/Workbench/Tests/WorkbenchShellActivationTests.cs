@@ -24,6 +24,7 @@ public sealed class WorkbenchShellActivationTests
         "ActivitiesGraphRuntime",
         // Publishing and serving HTTP-triggered workflows.
         "KernelActivitiesHttp",
+        "ActorHttpConnections",
         "WorkflowsPublishingApi",
         "WorkflowsPublishing",
         "WorkflowDesignValidations",
@@ -112,6 +113,7 @@ public sealed class WorkbenchShellActivationTests
             catalog.TryGetValue(feature, out var entry) && entry.SourceKind == "runtime",
             $"{feature} is not in the runtime catalog."));
 
+        Assert.False(Runs("ConnectionsWorkflows"));
         Assert.False(Runs("WorkflowsRuntimeApi"));
         Assert.False(Runs("WorkflowsRuntimeCheckpointPersistence"));
         Assert.False(Runs("WorkflowsRuntimeResumption"));
@@ -139,6 +141,9 @@ public sealed class WorkbenchShellActivationTests
         using var diagnostics = await workbench.Client.GetAsync("/runtime/workflows/diagnostics/settings");
         Assert.True(diagnostics.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
             $"The explicit preview did not map the legacy Runtime API. Host output:{Environment.NewLine}{workbench.Output}");
+        var catalog = (await workbench.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
+        Assert.True(catalog["ConnectionsWorkflows"].Runs);
+        Assert.False(catalog["ActorHttpConnections"].Runs);
         Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-preview.db")));
         Assert.False(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
     }

@@ -25,6 +25,7 @@
           "DecisionsWorkflowsRuntime": {},
           "DecisionsWorkflowsApi": {},
           "ConnectionsWorkflows": {},
+          "ActorHttpConnections": false,
           "WorkflowsDashboard": {},
           "WorkflowsRuntimeAttention": {},
           "WorkflowsRuntimeApi": {

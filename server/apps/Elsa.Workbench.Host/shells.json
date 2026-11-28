@@ -160,6 +160,7 @@
           "AzureOpenAIAgents": {},
           "OpenAIAgents": {},
           "Connections": {},
+          "ActorHttpConnections": {},
           "Decisions": {},
           "DecisionsDesign": {},
           "DecisionsApi": {},

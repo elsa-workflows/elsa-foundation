@@ -21,6 +21,7 @@
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "Connections": {},
+          "ActorHttpConnections": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},
           "WorkflowsDesignApi": {},

@@ -185,8 +185,13 @@ From `docker/compose`:
 docker compose up --build
 ```
 
-This builds the `elsa-workbench:local` image (context is the repo root) and starts two services:
-`postgres` and `elsa-workbench`. Compose waits for Postgres to be healthy before starting the server.
+This builds the `elsa-workbench:local` image from the repo root. Compose waits for PostgreSQL,
+creates the dedicated `elsa_actors` database through `actor-database`, and then starts `elsa-workbench`.
+
+The stock local and Compose shells enable Actor HTTP Connections. Published workflow jobs can
+use a tenant-owned HTTP connection with Basic, Bearer, or API key authentication. Isolated Test Runs
+and connections that refresh credentials are unsupported on this path. The explicit Core Preview
+selects the existing `ConnectionsWorkflows` adapter for its mixed workflow shell.
 
 Once the server reports healthy, hit its root endpoint:
 

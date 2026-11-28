@@ -114,6 +114,7 @@
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "Connections": {},
+          "ActorHttpConnections": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},
           "SecretsEntityFrameworkCore": {
