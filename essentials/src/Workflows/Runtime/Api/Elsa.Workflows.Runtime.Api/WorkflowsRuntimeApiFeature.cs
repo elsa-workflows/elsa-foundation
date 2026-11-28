@@ -82,9 +82,8 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
                     options.Keys = new Dictionary<string, string>(WorkflowAlterationPayloadProtectionKeys, StringComparer.Ordinal);
             });
         }
-        services.TryAddScoped<LegacyWorkflowExecutableRetentionReader>();
-        services.TryAddScoped<IWorkflowExecutableRetentionReader>(sp => sp.GetRequiredService<LegacyWorkflowExecutableRetentionReader>());
-        services.AddExecutableInspectionServices();
+        RuntimeHttpInspectionServices.AddLegacyExecutableRetentionReader(services);
+        RuntimeHttpInspectionServices.AddExecutableInspectionServices(services);
         services.TryAddScoped<StimulusDispatchService>();
         services.TryAddScoped<IStimulusDispatchService>(sp => sp.GetRequiredService<StimulusDispatchService>());
         services.TryAddScoped<WorkflowExecutionStartService>();
@@ -112,9 +111,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         });
         services.TryAddScoped<IRuntimeHistoryPageReader>(sp => sp.GetRequiredService<RuntimeHistoryInspectionService>());
         services.TryAddScoped<IRuntimeHistoryOccurrencePageReader>(sp => sp.GetRequiredService<RuntimeHistoryInspectionService>());
-        services.TryAddScoped<ActivityExecutionInspectionService>();
-        services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
-        services.TryAddScoped<IActivityExecutionBrowseSource, ActivityExecutionBrowseSource>();
+        RuntimeHttpInspectionServices.AddStoredActivityInspection(services);
         services.TryAddScoped<WorkflowInstanceDeletionService>();
         services.TryAddScoped<IWorkflowInstanceDeletionService>(sp => sp.GetRequiredService<WorkflowInstanceDeletionService>());
         services.TryAddScoped<WorkflowInstanceDetailsService>();
@@ -123,7 +120,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowInstanceListService>(sp => sp.GetRequiredService<WorkflowInstanceListService>());
         services.TryAddScoped<WorkflowIncidentListService>();
         services.TryAddScoped<IWorkflowIncidentListService>(sp => sp.GetRequiredService<WorkflowIncidentListService>());
-        services.AddRunInspectionServices();
+        RuntimeHttpInspectionServices.AddRunInspectionServices(services);
         services.TryAddScoped<WorkflowDispatchInspectionService>();
         services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
         services.TryAddScoped<RuntimeDiagnosticsSettingsService>();
