@@ -51,6 +51,30 @@ describe("activity input wire adapter", () => {
     );
   });
 
+  // #5373: Run JavaScript Arguments (JsonElement, default `{}`) shows as Object JSON while unset, is not written while
+  // untouched, and after an edit saves as Object JSON text that reopens as the same object.
+  it("shows an unset Arguments default as JSON, leaves it unwritten, and reopens an edit unchanged", () => {
+    const argumentsInput = {
+      name: "Arguments", referenceKey: "Arguments", typeName: "System.Text.Json.JsonElement", isWrapped: true,
+      defaultSyntax: "Literal", defaultValue: {}
+    };
+    const expanded = expandStateFromWire(stateOf(writeLine("script", {})));
+    const shown = readWrappedInput(expanded.rootActivity!, argumentsInput);
+    expect(shown.expression).toEqual({ type: "Object", value: "{}" });
+    expect(canonicalizeStateForWire(expanded).rootActivity!.inputs).toEqual([]);
+
+    const value = { customer: { id: 7, vip: true }, items: [1, 2], note: null };
+    const edited = { ...expanded, rootActivity: { ...expanded.rootActivity!, Arguments: { ...shown, expression: { type: "Object", value } } } };
+    const saved = canonicalizeStateForWire(edited);
+    expect(saved.rootActivity!.inputs).toEqual([
+      { referenceKey: "Arguments", value: { expressionType: "Object", value: JSON.stringify(value) } }
+    ]);
+
+    const reopened = readWrappedInput(expandStateFromWire(JSON.parse(JSON.stringify(saved))).rootActivity!, argumentsInput);
+    expect(reopened.expression.type).toBe("Object");
+    expect(JSON.parse(reopened.expression.value as string)).toEqual(value);
+  });
+
   it("keeps the existing empty editor fallback when a wire argument has no value", () => {
     const loaded = stateOf({ ...writeLine("review", {}), inputs: [{ referenceKey: "GroupId", value: { expressionType: "Literal" } }] });
     expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.inputs)

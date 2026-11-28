@@ -98,6 +98,11 @@ Replace both: implement both contracts on one class, or register a node converte
 - **Purpose:** maps exact planned reusable references to deterministic activity-version ids, creates graph-provider catalog material, and preserves each original workflow definition/version identity as a direct-start wrapper.
 - **Bulk dispatch targets (spec 1242 FR-016):** before converting, it collects the declared inputs of every workflow a selected BulkDispatchWorkflows starts by literal id: from the newest selected version in the same import, else, when the host registers Workflows Runtime's `IWorkflowExecutableSourceReferenceStore` and `IWorkflowExecutableStore` (and a `TimeProvider`), from the input contract of the newest live published executable of that definition in the import's tenant: the tenant the importer stamps on the imported rows and publishes them under (the access scope's, else the request's), which is the tenant `DispatchPinSource` pins in when the caller is published. Another tenant's workflow of the same id is never read. Without those stores (a Design-only host) only same-import targets are known, and a bulk dispatch of any other target is refused with `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`.
 
+### `IReusableActivityImportBlockedItemAnalyzer` contribution
+
+- **Implementation:** `Elsa3ReusableActivityImportMaterializer`.
+- **Purpose:** converts the items left out for a refused reusable, and every reusable they use, in publish order, and returns the left-out items' diagnostics (#6242). A reference to a reusable that converted reads its converted contract. One that did not reads its Elsa 3 inputs, outputs and declared outcomes with `Done`, and an `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED` on that reference node is left out, since a reusable completes with every outcome its Complete nodes name.
+
 ### `IReusableActivityTriggerClassifier` contribution
 
 - **Implementation:** `Elsa3ReusableActivityTriggerClassifier`, registered with `TryAdd` by `Elsa3MappingFeature`.

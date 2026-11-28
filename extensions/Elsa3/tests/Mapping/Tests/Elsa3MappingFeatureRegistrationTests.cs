@@ -43,6 +43,18 @@ public sealed class Elsa3MappingFeatureRegistrationTests
         Assert.Equal(Enum.GetValues<Elsa3NodeRewriteKind>().Order(), kinds.Order());
     }
 
+    // #6242: the materializer also analyses the items an apply left out for a refused reusable.
+    [Fact]
+    public void The_materializer_is_registered_as_the_blocked_item_analyzer()
+    {
+        var services = new ServiceCollection();
+        new Elsa3MappingFeature().ConfigureServices(services);
+
+        var descriptor = Assert.Single(services, service => service.ServiceType == typeof(Elsa3.Activities.Design.Import.Contracts.IReusableActivityImportBlockedItemAnalyzer));
+        Assert.Equal(typeof(Elsa3.Mapping.Services.Elsa3ReusableActivityImportMaterializer), descriptor.ImplementationType);
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+    }
+
     // Spec 1223 FR-034: a date interpretation the converter cannot apply fails composition, naming the fix.
     [Theory]
     [InlineData(Elsa3DateInterpretation.SourceTimeZone, null, "no source time zone")]

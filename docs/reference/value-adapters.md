@@ -40,6 +40,7 @@ is exact for any length and exponent. A number held as a string (`"9007199254740
 | Set a member equal, as a JavaScript value, to what it read | Unchanged | Nothing (ADR 0090 C2; a string forces the write) |
 | Added a member JSON cannot hold (a function, a Symbol, `undefined`) | Unchanged | Nothing: JSON drops such a member, so the stored value is what it was (an input expression is not refused for it) |
 | Returned a value | Result | The result, as JSON |
+| Returned a Promise | Result | The value the Promise settled with, as JSON (issue #5687, as in Elsa 3). A rejected Promise faults the evaluation as `throw reason` would; one that never settles faults with `VF-PROMISE-001`. Only the top-level result is unwrapped: a Promise inside returned data is written as `{}`, as in Elsa 3 |
 
 An entered value written unchanged, as a result or inside another value, is written from its original JSON, so it
 carries no loss. Such a lossy number gets no read warning (`VF-PREC-002`), even when the script also computed with it:
@@ -64,6 +65,7 @@ throws where the script does it (spec 1231 FR-006). An input expression never wr
 | An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity, or change a copy made with [`deepClone`](#copying-a-value-deepclone) |
 | An input expression changes a read value in a way publication cannot see | Evaluation fails, nothing written | `VF-BIND-001` | Same; when a value it read is protected, the declared variable only, no path, and no name it computed |
 | A script activity changes a value it read without assigning the variable (`variables.order.total = 1`) | Written (a partial update); one warning recorded on the activity execution | `VF-WRITE-001` | The variable and the changed paths; when a value it read is protected, the variable only. Assign the variable to make the write explicit, or change a copy (`deepClone(variables.order)`, see [below](#copying-a-value-deepclone)) to leave the variable unchanged |
+| A script or input expression returns a Promise that never settles (`new Promise(() => {})`; an evaluation has no timers) | Evaluation fails, nothing written | `VF-PROMISE-001` | "a Promise that never settles"; remedy: resolve or reject it within the script, or return the value itself |
 | A script activity reads a name no visible variable has | Reads `undefined`; one warning | `VF-READ-001` | The name; when a value it read is protected, none |
 
 ### Copying a value: `deepClone`

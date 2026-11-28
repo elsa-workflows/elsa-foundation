@@ -48,6 +48,13 @@ describe("formatActivitySummary", () => {
     expect(formatActivitySummary(node({ text: wrapped("Literal", { a: 1 }) }), catalog([textInput]))).toBeUndefined();
   });
 
+  it("treats Object JSON text as structured but keeps other Object text", () => {
+    expect(formatActivitySummary(node({ text: wrapped("Object", '{"a":1}') }), catalog([textInput]))).toBeUndefined();
+    expect(formatActivitySummary(node({ text: wrapped("Object", "[1]") }), catalog([textInput]))).toBeUndefined();
+    expect(formatActivitySummary(node({ text: wrapped("Object", "{ not json") }), catalog([textInput]))).toBe('"{ not json"');
+    expect(formatActivitySummary(node({ text: wrapped("Literal", "[draft]") }), catalog([textInput]))).toBe('"[draft]"');
+  });
+
   it("shows the raw source for a text expression", () => {
     const summary = formatActivitySummary(node({ text: wrapped("JavaScript", "total > 100") }), catalog([textInput]));
     expect(summary).toBe("total > 100");
