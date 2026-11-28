@@ -44,8 +44,12 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
   await expect(page.getByRole("heading", { name: "Import from Elsa 3" })).toBeVisible();
   await expect(page.getByLabel("Elsa 3 export files")).toBeVisible();
   await page.getByRole("button", { name: "Use an existing collection ID" }).click();
-  await page.getByPlaceholder("Collection ID").fill("collection");
-  await page.getByRole("button", { name: "Analyze collection" }).click();
+  const collectionId = page.getByLabel("Existing collection ID");
+  await collectionId.fill("collection");
+  await collectionId.press("Tab");
+  const analyze = page.getByRole("button", { name: "Analyze collection" });
+  await expect(analyze).toBeFocused();
+  await analyze.press("Enter");
 
   await expect(page.getByText("100 / 102 versions")).toBeVisible();
   await expect(page.getByText("ELS3-REUSABLE-MISSING-REFERENCE", { exact: true }).first()).toBeVisible();
@@ -98,6 +102,13 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
 
 test("Elsa 3 import reports an idempotent Already imported receipt without a second mutation claim", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 900 });
+  const first = {
+    ...importReceipt(1).sources[0],
+    name: "Owner",
+    workflowNavigationIdentity: `/design/workflows/definitions/${"d".repeat(40)}/versions/${"v".repeat(40)}`
+  };
+  const second = { ...first, sourceVersionId: "owner-v2", activityDefinitionVersionId: "activity-owner-v2" };
+  const selected = ["owner-v1", "owner-v2"];
   await page.route(`**${importRoot}/**`, async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -107,28 +118,35 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
         planId: "plan",
         offset: 0,
         limit: 100,
-        processed: 1,
-        total: 1,
+        processed: 2,
+        total: 2,
         processedDiagnostics: 0,
         totalDiagnostics: 0,
         isComplete: true,
         nextOffset: null,
-        items: [sourceItem("owner", "owner-v1", true)],
+        items: [
+          sourceItem("owner", "owner-v1", true, { sourceName: "Owner" }),
+          sourceItem("owner", "owner-v2", true, { sourceName: "Owner", sourceVersion: 2, activityDefinitionVersionId: "activity-owner-v2" })
+        ],
         diagnostics: []
       });
     }
     if (url.pathname.endsWith("/selection")) {
+      const requested = request.postDataJSON().selectedSourceVersionIds;
       return json(route, {
         collectionHandle: "collection",
         planId: "plan",
-        requestedSourceVersionIds: ["owner-v1"],
-        expandedSourceVersionIds: ["owner-v1"],
+        requestedSourceVersionIds: requested,
+        expandedSourceVersionIds: requested,
         addedDependencySourceVersionIds: [],
         isReady: true,
         diagnostics: []
       });
     }
-    if (url.pathname.endsWith("/apply-drafts")) return json(route, importReceipt(1));
+    if (url.pathname.endsWith("/apply-drafts")) {
+      expect(request.postDataJSON().selectedSourceVersionIds).toEqual(selected);
+      return json(route, { ...importReceipt(1), sources: [first, second] });
+    }
     return route.abort();
   });
 
@@ -137,11 +155,20 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
   await page.getByPlaceholder("Collection ID").fill("collection");
   await page.getByRole("button", { name: "Analyze collection" }).click();
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
+  await page.getByRole("checkbox", { name: "Select owner exact source version 2" }).check();
   await page.getByRole("button", { name: "Review exact import" }).click();
   await page.getByRole("button", { name: "Apply reviewed import" }).click();
 
   await expect(page.getByText("Already imported. The durable receipt is identical and no second mutation was made.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply reviewed import" })).toBeDisabled();
+  const results = page.getByRole("region", { name: "Import results" });
+  const firstVersion = results.getByRole("article", { name: "Owner · v1" });
+  const secondVersion = results.getByRole("article", { name: "Owner · v2" });
+  await expect(firstVersion.getByText("Owner · v1", { exact: true })).toBeVisible();
+  await expect(secondVersion.getByText("Owner · v2", { exact: true })).toBeVisible();
+  await firstVersion.getByRole("button", { name: "Source result details" }).click();
+  await expect(firstVersion.getByText(first.workflowNavigationIdentity, { exact: false })).toBeVisible();
+  expect(await results.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   const overflowOffenders = await page.evaluate(() =>
     [...document.querySelectorAll("*")]
       .filter(element => element.getBoundingClientRect().right > document.documentElement.clientWidth)
@@ -154,6 +181,8 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
       }))
   );
   expect(overflowOffenders).toEqual([]);
+  await secondVersion.getByRole("button", { name: "Open Activity Definition version" }).click();
+  await expect(page).toHaveURL(/definition=activity-owner&section=versions&version=activity-owner-v2/);
 });
 
 test("Elsa 3 export upload sends the selected file and is cancellable without accepting a late handle", async ({ page }) => {

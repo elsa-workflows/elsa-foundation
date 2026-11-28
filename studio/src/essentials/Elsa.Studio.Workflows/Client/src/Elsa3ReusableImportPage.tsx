@@ -131,15 +131,14 @@ export function Elsa3ReusableImportPage({
 
   const analyzedPlan = analysis?.planId;
   const receiptId = receipt?.receiptId;
+  const previousProgress = useRef({ analyzedPlan, reviewOpen, receiptId });
   useEffect(() => {
-    if (analyzedPlan) focusStep(analysisHeading.current);
-  }, [analyzedPlan]);
-  useEffect(() => {
-    if (reviewOpen) focusStep(reviewHeading.current);
-  }, [reviewOpen]);
-  useEffect(() => {
-    if (receiptId) focusStep(receiptHeading.current);
-  }, [receiptId]);
+    const previous = previousProgress.current;
+    previousProgress.current = { analyzedPlan, reviewOpen, receiptId };
+    if (receiptId && receiptId !== previous.receiptId) focusStep(receiptHeading.current);
+    else if (reviewOpen && !previous.reviewOpen) focusStep(reviewHeading.current);
+    else if (analyzedPlan && analyzedPlan !== previous.analyzedPlan) focusStep(analysisHeading.current);
+  }, [analyzedPlan, reviewOpen, receiptId]);
 
   useEffect(() => () => {
     uploadController.current?.abort();
@@ -541,6 +540,15 @@ export function Elsa3ReusableImportPage({
           />
           <small>{files.length ? `${files.map(file => file.name).join(", ")} · ${formatBytes(totalBytes)}` : `Up to ${formatBytes(maximumClientUploadBytes)} per upload`}</small>
         </label>
+        <TechnicalDetails label="Use an existing collection ID">
+          <StudioField className="elsa3-import-field" label="Existing collection ID">
+            <input value={collectionHandleInput}
+              disabled={uploadStatus === "loading" || applyStatus === "loading"}
+              onChange={event => changeCollectionHandle(event.target.value)}
+              placeholder="Collection ID" />
+            <small>Use an unexpired collection ID from this backend and account.</small>
+          </StudioField>
+        </TechnicalDetails>
         <div className="elsa3-import-actions">
           <StudioButton type="button" variant={effectiveCollectionHandle ? "default" : "primary"}
             onClick={() => void upload()} disabled={!files.length || uploadStatus === "loading" || applyStatus === "loading"}>
@@ -558,15 +566,6 @@ export function Elsa3ReusableImportPage({
           </StudioButton>
           {analysisStatus === "loading" ? <StudioButton type="button" onClick={cancelAnalysis}><XCircle size={14} /> Cancel analysis</StudioButton> : null}
         </div>
-        <TechnicalDetails label="Use an existing collection ID">
-          <StudioField className="elsa3-import-field" label="Existing collection ID">
-            <input value={collectionHandleInput}
-              disabled={uploadStatus === "loading" || applyStatus === "loading"}
-              onChange={event => changeCollectionHandle(event.target.value)}
-              placeholder="Collection ID" />
-            <small>Use an unexpired collection ID from this backend and account.</small>
-          </StudioField>
-        </TechnicalDetails>
         {uploadResult ? (
           <TechnicalDetails label="Upload details">
             <dl className="elsa3-import-identity-grid">
@@ -722,7 +721,7 @@ export function Elsa3ReusableImportPage({
         </section>
       ) : null}
 
-      {receipt ? <ImportReceipt receipt={receipt} navigate={navigate} headingRef={receiptHeading} /> : null}
+      {receipt ? <ImportReceipt receipt={receipt} selectedItems={selectedItems} navigate={navigate} headingRef={receiptHeading} /> : null}
       {diagnostics.length ? <DiagnosticList diagnostics={diagnostics} /> : null}
       {message ? (
         <div
@@ -842,15 +841,18 @@ function DiagnosticList({
 
 function ImportReceipt({
   receipt,
+  selectedItems,
   navigate,
   headingRef
 }: {
   receipt: Elsa3ReusableImportReceipt;
+  selectedItems: readonly Elsa3ReusableImportItem[];
   navigate(path: string): void;
   headingRef: Ref<HTMLHeadingElement>;
 }) {
   const outcomeLabel = importReceiptOutcomeLabel(receipt);
   const unpublished = importReceiptNeedsResume(receipt);
+  const sourceVersions = new Map(selectedItems.map(item => [item.sourceVersionId, item.sourceVersion]));
   return (
     <section
       className={unpublished ? "elsa3-import-partial-receipt" : "elsa3-import-receipt"}
@@ -866,10 +868,12 @@ function ImportReceipt({
       <div className="elsa3-import-receipt-sources">
         {receipt.sources.map(source => {
           const publication = publicationForSource(receipt.publications, source.sourceVersionId);
+          const version = sourceVersions.get(source.sourceVersionId);
+          const sourceLabel = `${source.name || source.sourceDefinitionId} · ${version === undefined ? source.sourceVersionId : `v${version}`}`;
           return (
-            <article key={source.sourceVersionId} className="elsa3-import-row">
+            <article key={source.sourceVersionId} className="elsa3-import-row" aria-label={sourceLabel}>
               <header className="elsa3-import-split">
-                <strong>{source.name || source.sourceDefinitionId}</strong>
+                <strong>{sourceLabel}</strong>
                 <span>{importResourceDisposition(source.workflowDisposition)}</span>
               </header>
               {publication && (receipt.publishImportedActivities !== false || isPublishedImportStatus(publication.status)) ? <PublicationState publication={publication} /> : null}

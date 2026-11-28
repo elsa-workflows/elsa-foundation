@@ -228,6 +228,7 @@
 .elsa3-import-receipt-sources {
   display: grid;
   gap: 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 .elsa3-import-publication {
