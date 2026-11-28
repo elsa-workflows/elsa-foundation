@@ -9,6 +9,21 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 public static class KernelToolbox
 {
     public static void Register(IServiceCollection services) =>
-        services.AddSingleton(provider => new RuntimeActivityExclusion(NativeActivityCatalog.KernelUnsupportedSet,
-            WorkflowsRuntimeKernelFeature.IsComposedIn(provider) ? NativeActivityCatalog.Unsupported : []));
+        services.AddSingleton(provider => new RuntimeActivityExclusion(NativeActivityCatalog.KernelUnsupportedSet, UnavailableTypes(provider)));
+
+    private static IReadOnlyCollection<string> UnavailableTypes(IServiceProvider provider)
+    {
+        if (!WorkflowsRuntimeKernelFeature.IsComposedIn(provider))
+            return [];
+
+        if (provider.GetService<KernelServing>() is not { } serving)
+            return NativeActivityCatalog.Unsupported;
+
+        var capabilities = serving.Capabilities;
+        var unavailable = NativeActivityCatalog.Supported.Where(activity =>
+            (!capabilities.HttpEndpoints && activity.Value == typeof(HttpEndpoint)) ||
+            (!capabilities.Schedules && (activity.Value == typeof(Kernel.Native.Timer) || activity.Value == typeof(Cron))));
+
+        return [.. NativeActivityCatalog.Unsupported, .. unavailable.Select(activity => activity.Key)];
+    }
 }

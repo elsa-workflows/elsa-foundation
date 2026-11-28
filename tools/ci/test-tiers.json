@@ -1086,7 +1086,6 @@
           "opentelemetry",
           "publishing",
           "rules",
-          "runtime-distributed",
           "transaction-topology",
           "connections",
           "agent-journal"

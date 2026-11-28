@@ -13173,6 +13173,8 @@ static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicat
 static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? right) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowHttpActivities
 Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowHttpActivities.KernelWorkflowHttpActivities() -> void
+Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowScheduleActivities
+Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowScheduleActivities.KernelWorkflowScheduleActivities() -> void
 Elsa.Workflows.Runtime.Core.Contracts.StandaloneWorkflowHttpRouteProjection
 Elsa.Workflows.Runtime.Core.Contracts.StandaloneWorkflowHttpRouteProjection.StandaloneWorkflowHttpRouteProjection() -> void
 Elsa.Workflows.Runtime.Core.Models.RecurringScheduleInterval

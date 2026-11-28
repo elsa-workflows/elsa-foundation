@@ -41,9 +41,13 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
     DisplayName = "Workflows Runtime Kernel Hosting",
     Description = "Runs published Native and Flowchart workflows on the built-in Actor Foundation. Enable on the default shell at host startup.",
     DependsOn = new object[] { WorkflowsRuntimeKernelRetainedApiFeature.FeatureName, "KernelActivitiesHttp", "JavaScriptJintEngine", "Tasks" })]
-public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfigureShellServices
+public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfigureShellServices
 {
     public const string FeatureName = "WorkflowsRuntimeKernelHosting";
+
+    internal virtual string SelectedFeatureName => FeatureName;
+    internal virtual bool RequiresHttp => true;
+    internal virtual bool RequiresScheduleActivities => false;
 
     [ManifestSetting(DisplayName = "Provider", Description = "Use SQLite or PostgreSQL.", Category = "Persistence", DefaultValue = "SQLite")]
     public string Provider { get; set; } = "SQLite";
@@ -105,6 +109,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
             throw new InvalidOperationException("Protected standalone HTTP requires committed root responses.");
         if (PreparedStandaloneStarts && !storage.TakesPreparedStarts)
             throw new InvalidOperationException("Prepared standalone starts require Foundation's protected root admission capability.");
+        if (services.Any(descriptor => !descriptor.IsKeyedService && descriptor.ServiceType == typeof(KernelShellStorage)))
+            throw new InvalidOperationException("The shell must select one Kernel hosting feature.");
         var tenant = EmbeddedTenant.Bind(Tenant);
         var testTenant = storage.TakesDirectTestRuns ? EmbeddedTenant.Isolate(tenant, "workflow-test-run") : null;
         var persistenceScope = new PersistenceScope(tenant.Tenant);
@@ -115,17 +121,26 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
         services.AddSingleton(storage);
         services.AddSingleton(new KernelOperatorIngress(storage.OpenOperatorsAsync, storage.ReadClockAsync));
         services.AddSingleton(retention);
-        services.AddSingleton(new ShellRestartRequirement(FeatureName));
+        services.AddSingleton(new ShellRestartRequirement(SelectedFeatureName));
+        var httpSelection = new KernelHttpEndpointSelection(RequiresHttp);
+        services.AddSingleton(httpSelection);
         var schedules = storage.TakesManagedSchedules;
         if (schedules) services.AddSingleton(new WorkflowScheduleCutoverClock(persistenceScope, storage.ReadClockAsync));
-        services.AddSingleton(new KernelServing(cronError: schedules ? CronosCalendar.Error : null,
-            capabilities: new KernelHostCapabilities(Schedules: schedules, Timers: storage.TakesTimers,
-                Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits),
-            publicationScope: persistenceScope)
+        services.AddSingleton(sp =>
         {
-            ProtectsHttpStarts = storage.TakesPreparedStarts
+            var servesSchedules = schedules && (!RequiresScheduleActivities || sp.GetService<KernelWorkflowScheduleActivities>() is not null);
+            return new KernelServing(cronError: servesSchedules ? CronosCalendar.Error : null,
+                capabilities: new KernelHostCapabilities(Schedules: servesSchedules, Timers: storage.TakesTimers,
+                    Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits)
+                {
+                    HttpEndpoints = httpSelection.IsSelected(sp)
+                },
+                publicationScope: persistenceScope)
+            {
+                ProtectsHttpStarts = storage.TakesPreparedStarts
+            };
         });
-        services.AddSingleton<IScheduleActors>(schedules
+        services.AddSingleton<IScheduleActors>(sp => sp.GetRequiredService<KernelServing>().Capabilities.Schedules
             ? new RuntimeManagedScheduleActors()
             : new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
         if (storage.TakesEventStarts)
@@ -231,15 +246,19 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
                         title: "The durable retention policy is unavailable.");
                 }
             })
-            .WithOwner(FeatureName)
+            .WithOwner(SelectedFeatureName)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)
             .WithName("GetKernelWorkflowRetention");
 
-        var http = RequireHttpSettings(endpoints.ServiceProvider);
+        var services = endpoints.ServiceProvider;
+        var selection = services.GetRequiredService<KernelHttpEndpointSelection>();
+        if (!selection.IsSelected(services)) return;
+
+        var http = RequireHttpSettings(services);
         endpoints.Map(HttpBasePath(http) + "/{**path}", static (HttpContext context) =>
                 context.RequestServices.GetRequiredService<KernelHttpRequestHandler>().HandleAsync(context))
-            .WithOwner(FeatureName)
+            .WithOwner(SelectedFeatureName)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .AllowPublic("kernel workflow HTTP endpoints", "Starts or resumes a published workflow on its configured HTTP route and returns its response.");
     }
@@ -257,4 +276,10 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
             throw new InvalidOperationException("Kernel workflow HTTP endpoints require a positive request body limit below Int64.MaxValue.");
         return basePath;
     }
+}
+
+internal sealed record KernelHttpEndpointSelection(bool Required)
+{
+    public bool IsSelected(IServiceProvider services) =>
+        Required || services.GetService<KernelWorkflowHttpActivities>() is not null;
 }
