@@ -3,9 +3,9 @@
 Owner project: `Elsa.Agent.Inspection.Api`
 Domain: `Elsa.Agent`
 
-Two MinimalEndpoints endpoints with capability `elsa.api.agent-inspection` v1. Feature
-`AgentInspectionApi` depends on `AgentRuntime`, `WorkflowsPublishingApi` and `ApiCapabilities`; it is a
-separate project so the authoring API stays composable without the runtime.
+The [classic Agent inspection registration](../../../../../docs/contributing/classic-runtime-witnesses.md#classic-agent-execution-and-dispatch-checkpoints)
+supplies two MinimalEndpoints endpoints and capability `elsa.api.agent-inspection` v1 in an explicit programmatic composition.
+It stays separate from the Agent authoring API.
 
 | Route | Permission | Answer |
 |---|---|---|

@@ -1,6 +1,8 @@
 # Agent runtime
 
-`Elsa.Agent` owns `AgentRuntime`. Compose it with a model contribution and an
+`Elsa.Agent` supplies programmatic classic Agent Runtime registration. In the [pinned classic
+composition](../../../../docs/contributing/classic-runtime-witnesses.md#classic-agent-execution-and-dispatch-checkpoints),
+use it with a model contribution and an
 explicit journal profile. Its feature depends on ordinary Background Activities, Serialization,
 and Secrets. The feature registers the shared helper's scoped agent JSON validator. Configure the existing Secrets key ring; there is
 no implicit ephemeral encryption key or memory-journal fallback.
