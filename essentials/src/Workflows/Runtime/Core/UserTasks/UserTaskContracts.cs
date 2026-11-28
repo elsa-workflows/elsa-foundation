@@ -58,6 +58,13 @@ public interface IUserTaskRuntime
     ValueTask ReconcileAsync(UserTaskRecord task, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Completes journal reconciliation for tasks owned by the selected ordinary Actor runtime.</summary>
+public interface IActorUserTaskRuntime
+{
+    bool Owns(UserTaskRecord task);
+    ValueTask ReconcileAsync(UserTaskRecord task, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Participant/manager operations; each call obtains fresh trusted authority.</summary>
 public interface IUserTaskOperations
 {

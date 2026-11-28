@@ -63,7 +63,14 @@ public sealed record UserTaskRecord(string Id, string TenantId, string WorkflowE
     string? ClaimantId, IReadOnlyList<string> Actions, IReadOnlyList<string> OptionalFormActions,
     UserTaskForm? Form, JsonElement Prefill, UserTaskStatus Status, long Revision, DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt, IReadOnlyList<UserTaskHistory> History, StimulusResumeRecipient? Recipient = null,
-    UserTaskDecision? Decision = null);
+    UserTaskDecision? Decision = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public UserTaskActorRecipient? ActorRecipient { get; init; }
+}
+
+/// <summary>The opaque actor, frame and wait that own an ordinary Actor task.</summary>
+public sealed record UserTaskActorRecipient(string ActorId, string FrameId, string WaitId);
 
 public sealed record UserTaskCreation(string WorkflowExecutionId, string InvocationId, string ExecutableNodeId,
     string OperationKey, string Title, string? Description, string? AssigneeId, string? GroupId,
