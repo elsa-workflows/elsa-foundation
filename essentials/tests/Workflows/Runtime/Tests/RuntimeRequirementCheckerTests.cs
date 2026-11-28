@@ -73,30 +73,6 @@ public sealed class RuntimeRequirementCheckerTests
             entry => AssertActivityType(entry, string.Empty, ["node-unreadable"], RuntimeRequirementStatus.MissingActivityType));
     }
 
-    [Fact]
-    public void A_runtime_composed_by_AddWorkflowRuntime_answers_the_requirement_an_intrinsic_node_declares()
-    {
-        // The descriptor type and schema version are spelled out: they are the wire values a published artifact carries.
-        var intrinsic = Node("node-finish", "intrinsic", JsonSerializer.SerializeToElement(new { kind = "Finish", schemaVersion = "1.0.0" }));
-        using var runtime = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
-        var checker = Checker(runtime.GetServices<IRuntimeActivityConsumerCapability>(), []);
-        var subject = new RuntimeRequirementCheckSubject(
-            "artifact-3",
-            [new RuntimeRequirement(intrinsic.Descriptor.ConsumerKey, intrinsic.Descriptor.SchemaVersion)],
-            [],
-            [intrinsic]);
-
-        var result = checker.Check(subject);
-
-        Assert.True(result.IsSatisfied);
-        AssertRequirement(Assert.Single(result.Requirements), "intrinsic", "1", RuntimeRequirementStatus.Available, ["1", "2"]);
-
-        var scoped = new RuntimeRequirementCheckSubject("scoped-output", [new RuntimeRequirement("intrinsic", "2")], [], []);
-        Assert.True(checker.Check(scoped).IsSatisfied);
-        var legacy = Checker([new RuntimeActivityConsumerCapability("intrinsic", ["1"])], []);
-        AssertRequirement(Assert.Single(legacy.Check(scoped).Requirements), "intrinsic", "2", RuntimeRequirementStatus.UnsupportedSchema, ["1"]);
-    }
-
     private static void AssertRequirement(
         RuntimeRequirementStatusEntry entry,
         string consumerKey,

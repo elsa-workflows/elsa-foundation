@@ -272,7 +272,7 @@ public sealed class GraphBodyScopeTests
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new Primitives.ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .Build(Enumerable.Range(1, 64).Select(index => $"actexec-{index}"));
         var body = GraphBoundaryCompleteTests.Sequence(
@@ -344,7 +344,7 @@ public sealed class GraphBodyScopeTests
     private static WorkflowExecutionHarness ScriptingHarness() =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
-            .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .WithFeature(services => new Expressions.ExpressionsFeature().ConfigureServices(services))
             .WithFeature(services => new Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services))

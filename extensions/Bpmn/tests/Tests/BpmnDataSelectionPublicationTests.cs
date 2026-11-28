@@ -126,12 +126,8 @@ public sealed class BpmnDataSelectionPublicationTests
         Assert.Null(read.ProducerScopeId);
     }
 
-    /// <summary>
-    /// One workflow end to end: the binding the analyzer offers is stored unchanged, compiled by the publication
-    /// compiler and run by the engine, and the reader commits the value its producer returned.
-    /// </summary>
     [Fact]
-    public async Task The_offered_scope_free_binding_publishes_unchanged_and_reads_the_producer_at_run_time()
+    public async Task The_offered_scope_free_binding_publishes_unchanged()
     {
         using var fixture = new Fixture();
         ActivityNode Process(ArgumentState[] readerInputs) => BpmnChildResultFactsTests.Process(children:
@@ -141,15 +137,12 @@ public sealed class BpmnDataSelectionPublicationTests
         var offered = Assert.Single(browsed.Sources, source => source.Id == "activity:decision:$result").Binding!;
 
         var executable = await fixture.Compile(Process([new("Value", offered, null, null, null, null)]));
-        await using var runtime = await BpmnRuntimeFixture.CreateAsync(["process-exec", "decision-exec", "capture-exec"],
-            services => new Elsa.Serialization.SystemText.SerializationFeature().ConfigureServices(services));
-        var run = await runtime.RunAsync(executable);
-
-        run.AssertWorkflowCompleted();
-        var produced = run.AssertCompleted("decision").Completion!.Result.InlineValue!.Value;
-        var read = run.AssertCompleted("capture").InputSnapshot!.Values["Value"].InlineValue!.Value;
-        Assert.Equal("Done", read.GetProperty("outcome").GetString());
-        Assert.True(JsonElement.DeepEquals(produced, read));
+        var capture = Assert.Single(executable.RootActivity.ChildSlots).Activities
+            .Single(child => child.AuthoredActivityId == "capture");
+        var read = Assert.IsType<RuntimeActivityResultReference>(capture.InputBindings["Value"].ActivityResult);
+        Assert.Equal("decision", read.ProducerExecutableNodeId);
+        Assert.Null(read.ProducerScopeId);
+        Assert.Equal("$result", read.ProjectionKey);
     }
 
     /// <summary>

@@ -158,10 +158,6 @@
     <File Path="NuGet.config" />
   </Folder>
   <Folder Name="/tools/" />
-  <Folder Name="/tools/bpmn/">
-    <Project Path="tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj" />
-    <Project Path="tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj" />
-  </Folder>
   <Folder Name="/tools/ef/">
     <Project Path="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj" />
   </Folder>
@@ -631,9 +627,6 @@
   <Folder Name="/extensions/Bpmn/tests/">
     <Project Path="extensions/Bpmn/tests/Tests/Elsa.Activities.Bpmn.Tests.csproj" />
   </Folder>
-  <Folder Name="/extensions/Bpmn/tests/Hosting/">
-    <Project Path="extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj" />
-  </Folder>
   <Folder Name="/extensions/Bpmn/tests/Interchange/">
     <Project Path="extensions/Bpmn/tests/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj" />
   </Folder>
@@ -985,11 +978,6 @@
   <Folder Name="/extensions/Http/tests/Workflows/" />
   <Folder Name="/extensions/Http/tests/Workflows/Runtime/">
     <Project Path="extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
-  </Folder>
-  <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/">
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/TimerHistoryRestartHost/TimerHistoryRestartHost.csproj" />
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/RuntimeHistoryRestartHost/RuntimeHistoryRestartHost.csproj" />
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/WorkerOidcHost.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/" />
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/">

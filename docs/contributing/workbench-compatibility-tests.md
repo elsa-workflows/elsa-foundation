@@ -122,6 +122,15 @@ git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-b
 )
 ```
 
+The main BPMN test project in this checkout also runs the archived classic
+checkpoint/child/compensation journeys. For the actual BPMN CallActivity REST
+witness, run the following script from the classic-default checkout above
+against its matching owned Workbench URL:
+
+```sh
+pwsh -NoProfile -File e2e-tests/bpmn/Test-BpmnCallActivity.ps1 -BaseUrl "$classic_base_url"
+```
+
 Current source keeps BPMN structure, Design and XML interchange packages and
 their authoring tests. Its retained BPMN publication tests exercise provenance
 without starting a classic workflow.
@@ -194,3 +203,41 @@ git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-w
 The package-backed Rules Workbench witness has its own matching source and
 publish-state pins. Follow the immutable input recipe in the
 [Rules acceptance quickstart](../../specs/999-durable-rules/quickstart.md).
+
+## Classic BPMN delivery inspection and recovery probes
+
+Use the classic-default checkout above for the preflight validator, checked
+snapshot reader, and the Workbench build that includes the recovery probe.
+From that checkout:
+
+```sh
+(
+  cd "$compatibility_root/workbench-classic-default"
+  dotnet build tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj -p:RestoreLockedMode=true
+  dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj -p:RestoreLockedMode=true
+  python3 -m unittest discover -s e2e-tests/bpmn -p test_inspect_broadcast_delivery.py -v
+)
+```
+
+The [broadcast recovery commands](../../e2e-tests/bpmn/RecoveryProbe/README.md)
+build the matching probe and standard Workbench. Run the model broadcast,
+rollback, signal interruption, and native Blocks controllers from that same
+source. Use the matching closed snapshots and original evidence receipts.
+
+For the final deterministic snapshot-reader tests, including corrupt-copy
+controls, use the last source revision that still built the reader and linked the
+closed snapshot into the tests:
+
+```sh
+git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-bpmn-reader" 45a594857c700de2fe76de9cbcb62d06bbf6876b
+(
+  cd "$compatibility_root/classic-bpmn-reader"
+  python3 tools/bpmn/restore_evidence.py
+  dotnet test extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter FullyQualifiedName~ReadOnlyRuntimeSnapshotTests
+)
+```
+
+Current source keeps evidence restoration, the offline capture and upgrade receipt
+verifiers, and source comparison. BPMN document authoring and XML interchange keep
+their existing suites.

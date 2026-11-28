@@ -14,6 +14,6 @@ internal sealed class KernelHistoryCapabilitySource(KernelRuns runs) : IApiCapab
         var live = new ApiCapabilityLink("workflow-history-live", KernelHistoryStream.Route, templated: true);
         return [new(RuntimeApiCapabilities.CapabilityId, 1, await runs.SupportsPlaybackAsync(cancellationToken)
             ? [link, live, new("workflow-history-occurrences", "runtime/workflows/instances/{workflowExecutionId}/history/occurrences", templated: true)]
-            : [link, live], $"{WorkflowsRuntimeKernelApiFeature.FeatureName}.History")];
+            : [link, live], $"{WorkflowsRuntimeKernelRetainedApiFeature.RouteOwner}.History")];
     }
 }

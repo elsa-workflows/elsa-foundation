@@ -31,8 +31,6 @@ internal sealed class KernelPlaybackCursor(IDataProtectionProvider protection)
 
     internal string Seal(Window window) => Prefix + _protector.Protect(JsonSerializer.Serialize(window));
 
-    internal static bool Owns(string? token) => token?.StartsWith(Prefix, StringComparison.Ordinal) == true;
-
     internal static string Bind(string tenant, string artifact, RuntimeHistoryOccurrenceQuery query, string access) =>
         RuntimeHistoryIdentity.CreateBinding([tenant, artifact, query.WorkflowExecutionId, KernelHistoryJournal.Policy,
             query.Limit.ToString(CultureInfo.InvariantCulture), query.ActivityExecutionId, query.IncludeDescendants ? "1" : "0", access]);

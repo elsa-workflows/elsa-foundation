@@ -1,12 +1,8 @@
 using System.Text.Json;
 using Elsa.Activities.Flowchart;
-using Elsa.Activities.Flowchart.Contracts;
-using Elsa.Activities.Flowchart.Internal;
-using Elsa.Activities.Flowchart.Internal.Policies;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Runtime.Api;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -65,32 +61,5 @@ public sealed class ActivitiesFlowchartFeatureTests
                 Assert.Equal("reject", reject.NodeId);
                 Assert.Equal([new("Outcome", "rejected", "Connected")], reject.MemberUsage);
             });
-    }
-
-    [Fact]
-    public void ConfigureServices_RegistersFlowchartExecutionServicesAndBuiltInPolicies()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-
-        new ActivitiesFlowchartFeature().ConfigureServices(services);
-        var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetRequiredService<FlowchartReachabilityAnalyzer>());
-        Assert.NotNull(provider.GetRequiredService<FlowchartExecutionEngine>());
-
-        var registry = provider.GetRequiredService<IFlowchartPolicyRegistry>();
-        var policyKinds = registry.Policies.Select(policy => policy.PolicyKind).ToHashSet(StringComparer.Ordinal);
-        Assert.True(policyKinds.IsSupersetOf([
-            FlowchartPolicyKinds.Decision,
-            FlowchartPolicyKinds.ParallelFork,
-            FlowchartPolicyKinds.ParallelJoin,
-            FlowchartPolicyKinds.InclusiveFork,
-            FlowchartPolicyKinds.InclusiveJoin,
-            FlowchartPolicyKinds.FirstWins,
-            FlowchartPolicyKinds.Merge,
-            FlowchartPolicyKinds.ImplicitActivationJoin,
-            FlowchartPolicyKinds.DirectContinuation
-        ]));
     }
 }

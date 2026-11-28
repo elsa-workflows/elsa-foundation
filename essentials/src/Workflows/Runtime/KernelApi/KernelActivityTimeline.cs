@@ -21,7 +21,8 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
     {
         var actor = new ActorRef(run.State.WorkflowExecutionId);
         var result = new InMemoryActivityExecutionInspectionStore(browseByExecutionSequence: true);
-        if (run.Header is not { } header || !Supports(header))
+        var header = run.Header;
+        if (!Supports(header))
             return upperRevision is null ? new Snapshot(result, null) : null;
 
         var source = run.IsolatedReads ?? runs;

@@ -26,6 +26,6 @@ public sealed class UnboundHttpConnectionApplicator : IHttpConnectionApplicator
         }
 
         throw new InvalidOperationException(
-            $"SendHttpRequest is bound to connection '{connection.Name}' but no connection applicator is composed. Enable the ConnectionsWorkflows feature.");
+            $"SendHttpRequest is bound to connection '{connection.Name}' but no connection applicator is composed. Compose a workflow HTTP connection applicator.");
     }
 }

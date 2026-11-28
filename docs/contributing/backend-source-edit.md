@@ -2,28 +2,28 @@
 
 This short exercise changes a disposable checkout, proves the change with a focused test, then observes it in a running workflow. It is a learning exercise, not a product feature or a real contribution PR. Start with the [backend source quickstart](backend-source-quickstart.md) and use a fresh disposable checkout to contain its SQLite data and temporary edits.
 
-From the repository root, open `essentials/tests/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs`. In `WriteLine_hydrates_plain_text_without_an_argument_or_memory_wrapper`, change only the captured-output assertion to:
+From the repository root, open `essentials/tests/Workflows/Runtime/KernelHost/Tests/WriteLineBoundInputExecutionTests.cs`. In `WriteLine_hydrates_plain_text_without_an_argument_or_memory_wrapper`, change only the captured-output assertion to:
 
 ```csharp
 Assert.Equal("Onboarding: Hello World!", output.Trim());
 ```
 
-Keep the following `writeLine.Text` assertion at `Hello World!`; this exercise changes output formatting, not the activity input. Run the focused test in locked mode:
+Keep the activity input at `Hello World!` and run the focused test in locked mode:
 
 ```bash
-dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --filter FullyQualifiedName~WriteLineBoundInputExecutionTests -p:RestoreLockedMode=true
+dotnet test essentials/tests/Workflows/Runtime/KernelHost/Tests/Elsa.Workflows.Runtime.KernelHost.Tests.csproj --filter FullyQualifiedName~WriteLineBoundInputExecutionTests -p:RestoreLockedMode=true
 ```
 
-It should fail because the activity still writes `Hello World!`. Now, in `essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activities/WriteLine.cs`, change:
+It should fail because the activity still writes `Hello World!`. Now, in `essentials/src/Workflows/Runtime/Native/Activities/Activities.cs`, change:
 
 ```csharp
-Console.WriteLine(Text);
+(context.ConsoleOutput ?? Out)?.WriteLine(Text);
 ```
 
 to:
 
 ```csharp
-Console.WriteLine($"Onboarding: {Text}");
+(context.ConsoleOutput ?? Out)?.WriteLine($"Onboarding: {Text}");
 ```
 
 Run the same locked-mode focused test again. It should pass. Build the default Workbench:

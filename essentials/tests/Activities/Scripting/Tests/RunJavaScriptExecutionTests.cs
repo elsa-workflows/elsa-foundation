@@ -5,7 +5,6 @@ using Elsa.Activities.Scripting.Activities;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint;
-using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -158,12 +157,8 @@ public sealed class RunJavaScriptExecutionTests
 
     private static async ValueTask<ActivityTransition> ExecuteAsync(RunJavaScript activity)
     {
-        var context = new SimpleActivityExecutionContext(
-            activity,
-            CancellationToken.None,
-            invocationId: "script-1",
-            executableNodeId: "script-node");
-        return await ((IActivity)activity).ExecuteAsync(context.ToActivityExecutionContext());
+        var context = new ActivityExecutionContext("workflow-1", "script-1", "attempt-1", "script-node", CancellationToken.None);
+        return await ((IActivity)activity).ExecuteAsync(context);
     }
 
     private static ServiceProvider BuildProvider(int? maxStatements = null)

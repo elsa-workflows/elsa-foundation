@@ -295,7 +295,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             // Design-side graph provider. Kept separate from Graph Runtime so authoring-only and runtime-only
             // custom hosts can compose exactly the plane they need.
             typeof(GraphActivitiesDesignFeature).Assembly,
-            typeof(GraphActivitiesRuntimeFeature).Assembly,
+            typeof(GraphActivitiesRuntimeHostingFeature).Assembly,
             // HTTP endpoint authoring + serving. ActivitiesHttp mounts the inbound middleware and depends on
             // WorkflowsRuntimeHttp, whose route-table projection keeps published and waiting endpoints reachable.
             // Both assemblies are explicit because the dependency is feature-name based; it cannot make an assembly
@@ -365,7 +365,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Studio.Dashboard.Api.DashboardResourcesApiFeature).Assembly,
             typeof(Elsa.Studio.Dashboard.Management.DashboardManagementFeature).Assembly,
             typeof(Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQueriesFeature).Assembly,
+            typeof(Elsa.Workflows.Dashboard.Queries.KernelWorkflowDashboardQueriesFeature).Assembly,
             typeof(Elsa.Weaver.Dashboard.DashboardWeaverFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
@@ -386,7 +386,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             // Available for durable local/model connections when explicitly selected in the shell.
             typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature).Assembly,
             typeof(ConnectionsDesignFeature).Assembly,
-            typeof(ConnectionsWorkflowsFeature).Assembly,
+            typeof(ActorHttpConnectionsFeature).Assembly,
             // User-defined agents: authoring, the editor's model reads and the model connection types.
             typeof(Elsa.Agent.Design.AgentDesignFeature).Assembly,
             typeof(Elsa.Agent.Api.AgentApiFeature).Assembly,

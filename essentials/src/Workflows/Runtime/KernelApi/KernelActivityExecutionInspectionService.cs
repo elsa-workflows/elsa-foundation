@@ -6,13 +6,12 @@ using Elsa.Workflows.Runtime.Inspection.Core;
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelActivityExecutionInspectionService(KernelRunReader runs, KernelActivityTimeline timeline,
-    IActivityInspectionContextAsync authorization, KernelPreviewRunReads? preview = null) : IActivityExecutionInspectionService
+    IActivityInspectionContextAsync authorization) : IActivityExecutionInspectionService
 {
     public async Task<ActivityExecutionInspectionView?> GetAsync(GetActivityExecution request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ActivityExecutionId);
         if (await runs.GetAsync(request.WorkflowExecutionId, cancellationToken) is not { } run) return null;
-        if (run.Header is null) return preview?.ActivityInspection is { } legacy ? await legacy.GetAsync(run.State, request, cancellationToken) : null;
         if (!await authorization.CanInspectStructureAsync(run.State, cancellationToken) ||
             await timeline.OpenAsync(run, upperRevision: null, request.ActivityExecutionId, cancellationToken) is not { } snapshot ||
             await snapshot.Activities.FindAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken) is not { } activity)

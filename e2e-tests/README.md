@@ -158,10 +158,8 @@ Docker. On Windows replace `pwsh -NoProfile -File` with `powershell -NoProfile -
   disposable data, following the exact file inventory and allowlist in the [backend quickstart](../docs/contributing/backend-source-quickstart.md#reset-disposable-sqlite-data).
   Preserve valuable workflows in their existing checkout and use a separate disposable checkout; do not
   delete database files with a wildcard or treat this reset as an in-place data migration.
-- **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
-  `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
-  require the DispatchWorkflow features (see "Composition change" below). A suite whose features aren't composed
-  will fault, not skip.
+- **Opt-in features:** `DispatchWorkflow` and `bpmn` require the DispatchWorkflow features (see
+  “Composition change” below). The [classic scheduling witnesses](scheduling/README.md) use their pinned Workbench.
 
 **A failing e2e test is a signal, not a verdict.** It means one of two things: (1) a genuine **regression** in the
 server, or (2) the test is **stale** because the codebase moved — a contract/response shape changed, a tracked bug
@@ -222,8 +220,7 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `http/Test-HttpResponseFlowchart.ps1` | imports the corrected [HTTP demo export](http/fixtures/test-http.json), resolves activity versions from the local catalog, publishes, and asserts HTTP 200 with the authored JSON body through `HttpEndpoint → SetCorrelationId → WriteHttpResponse`. Owns an isolated Workbench with fresh SQLite databases; build Workbench first. `-WorkflowPath <original-export>` reproduces the missing-`ResponseMode: Sync` failure. |
 | `http/Test-RuntimeConcurrencyCorrectness.ps1` | the #2392 reference HTTP workflow under concurrent clients (default 16 × 4, `-PersistenceMode Durable`/`Balanced`): every request ends in HTTP 200 `Alice Smith`, one Completed instance per request, zero incidents. A 429 is admission backpressure: it is retried per `Retry-After` (`-MaxShedRetries`, default 30) and reported, and fails only if still shed after the last retry (#2548). Correctness only; no timings (#2532) |
 | `http/Test-SendHttpRequestStatusOutcomes.ps1` | the per-status outcome ports the compiler pins from `SendHttpRequest.ExpectedStatusCodes` are connectable on the PUBLISHED node and route correctly, including the `Unmatched status code` catch-all (#1119) |
-| `bpmn/Test-BpmnCallActivity.ps1` | BPMN `callActivity` bound to a REAL waited `DispatchWorkflow` child (spec 133): child completes -> parent resumes via `Completed`; child faults -> the error boundary routes (no parent incident) |
-| `bpmn/Test-BpmnBroadcastRecovery.ps1` | owns isolated actual Workbenches: crash before selection, after populated/empty cohort commit or after one completed/rearmed callback; Unix competing-proposal mode resumes an expired old owner after a standard peer saves its different winner and requires actual provider stale-write rejection. Checks actual membership identities, source claims, exact catches/join, keyed starts, rearm/attempt preservation and later-wait exclusions. Requires separate probe/standard builds; see [recovery probe](bpmn/RecoveryProbe/README.md). These candidate cuts do not close all FR-015, historical upgrade or Studio acceptance. |
+| [Classic BPMN broadcast recovery](bpmn/RecoveryProbe/README.md) | Matching archived Workbench and checked reader reproduce the SQLite source, cohort, and delivery recovery cases. |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
 | `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
@@ -370,7 +367,9 @@ Classic Elsa let each variable pick a storage driver (Memory vs WorkflowInstance
 is no Memory/WorkflowInstance dichotomy to select between, so the classic per-variable-driver tests do not
 reproduce. This is an architecture difference (like the removed flow-activity model), not a bug; no script.
 
-## Composition change: DispatchWorkflow (child workflows)
+## Classic DispatchWorkflow evidence
+
+The following observations describe the previous runtime. For current Actor child execution, see the [retained kernel tests](../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs).
 
 `Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
 Enabling it (separate from the bug fixes below):
@@ -384,15 +383,14 @@ outcome `Dispatched` while the child runs independently.
 **Waited path (`WaitForCompletion=true`) works again (re-verified 2026-07-23 @ `3dd732d07`).** The #1006
 hang is gone since the #982 node-scoped resume-target fix (`4c2386551`): the parent suspends at the dispatch
 node, the child runs, and the parent resumes with the child's terminal outcome (`Completed`/`Faulted`) —
-covered end-to-end by `bpmn/Test-BpmnCallActivity.ps1` (a BPMN `callActivity` is a waited `DispatchWorkflow`
-by convention). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
+covered end-to-end by the [archived BPMN call-activity witness](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
 
-**Known defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
+**Historical classic defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
 fault-recording checkpoint commit fails, so the child surfaces a
 `Critical`/`SchedulerWorkPoisoned` incident instead of the normal `ActivityReturnedFault` one and the faulted
 activity's state stays uncommitted (`Running`). Dispatched executions only; a directly-executed `Fault`
 workflow records its incident cleanly. Parent-side outcome delivery is unaffected (the waited parent still
-resumes with `Faulted`), which is why `bpmn/Test-BpmnCallActivity.ps1` scenario B passes despite it.
+resumes with `Faulted`), as verified by scenario B in the same archived witness.
 
 ## Server fixes made while building these tests
 

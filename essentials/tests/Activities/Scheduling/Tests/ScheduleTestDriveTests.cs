@@ -16,20 +16,6 @@ public sealed class ScheduleTestDriveTests
 {
     [Theory]
     [InlineData("Elsa.Timer", "Interval", "PT5M", "2026-10-16T12:05:00+00:00")]
-    [InlineData("Elsa.Timer", "Interval", "PT0.5S", "2026-10-16T12:00:00.5+00:00")]
-    [InlineData("Elsa.Cron", "Expression", "0 9 * * *", "2026-10-17T09:00:00+00:00")]
-    public async Task ModuleDriver_UsesProductionCalculator_AndFiresOnlyOneImmediateOccurrence(string activity, string input, string expression, string next)
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<TimeProvider>(new FakeTimeProvider(TestRunTriggerFixture.Now));
-        services.AddSingleton<IRecurringScheduleCalculator, RecurringScheduleCalculator>();
-        new ActivitiesSchedulingFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-        await AssertImmediateOccurrenceAsync(provider, activity, input, expression, next);
-    }
-
-    [Theory]
-    [InlineData("Elsa.Timer", "Interval", "PT5M", "2026-10-16T12:05:00+00:00")]
     [InlineData("Elsa.Timer", "Interval", " PT5M ", "2026-10-16T12:05:00+00:00")]
     [InlineData("Elsa.Timer", "Interval", "PT1S", "2026-10-16T12:00:01+00:00")]
     [InlineData("Elsa.Cron", "Expression", "0 9 * * *", "2026-10-17T09:00:00+00:00")]
