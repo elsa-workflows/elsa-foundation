@@ -78,14 +78,10 @@ using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Json;
 using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
-using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
-using Elsa.Workflows.Runtime.Resumption;
-using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.Extensions.Configuration.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -294,7 +290,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(ActivitiesDesignApiFeature).Assembly,
 
             // Construction seam (Runtime side): the dispatch factory and stable CLR/graph consumers.
-            typeof(ActivitiesRuntimeFeature).Assembly,
+            typeof(ActivitiesRuntimeHostingFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
             typeof(ActivitiesSequenceFeature).Assembly,
             typeof(ActivitiesFlowchartFeature).Assembly,
@@ -322,21 +318,10 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(WorkflowsPublishingApiFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
-            typeof(WorkflowsRuntimeApiFeature).Assembly,
             typeof(StandaloneTriggersApiFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeDbContext).Assembly,
-            typeof(Elsa.Activities.Bpmn.ActivitiesBpmnHostingFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.ActivitiesBpmnFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature).Assembly,
-            typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature).Assembly,
-
-            // Durable-resumption pump. Every EF Core persistence provider DependsOn this feature, so
-            // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
-            // composed; without it the shell fails to activate with a FeatureNotFoundException.
-            typeof(WorkflowsRuntimeResumptionFeature).Assembly,
-
-            // Reference GC pump. Opt-in like resumption; its assembly is in the catalog so the feature can
-            // be enabled to periodically prune expired/retired references and the artifacts no live reference points at.
-            typeof(WorkflowsRuntimeReferenceGarbageCollectionFeature).Assembly,
 
             // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
             typeof(WeaverFeature).Assembly,
@@ -382,7 +367,6 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Weaver.Dashboard.DashboardWeaverFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
-            typeof(WorkflowsDashboardFeature).Assembly,
             typeof(WorkflowsDashboardRetainedFeature).Assembly,
             // WorkflowsDashboard DependsOn WorkflowDesignValidations — its assembly must be in the catalog or the
             // dependency resolver fails shell activation with FeatureNotFoundException.
@@ -431,16 +415,8 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesRuntimeEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Rules.Workflows.Design.RulesWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature).Assembly,
-            typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,
-
-            // Engine self-instrumentation: puts the WorkflowsRuntimeTracing feature in the catalog so it can be
-            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The
-            // DiagnosticsOpenTelemetryEngineBridge feature (Elsa.Diagnostics.OpenTelemetry.Workflows, a project reference
-            // WithHostAssemblies() discovers) subscribes that source and forwards the spans into the OpenTelemetry
-            // ingestion store so Studio's timing view is populated.
-            typeof(WorkflowsRuntimeTracingFeature).Assembly,
 
             // Test-host execution evidence: puts the WorkflowsExecutionEvidence feature in the catalog so an automated
             // test suite can query what a workflow actually did over HTTP. Process-local and non-durable by design.
