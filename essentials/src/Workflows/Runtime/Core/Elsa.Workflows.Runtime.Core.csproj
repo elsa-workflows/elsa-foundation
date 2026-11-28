@@ -21,8 +21,10 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Api.Http" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHost" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" />
   </ItemGroup>
 

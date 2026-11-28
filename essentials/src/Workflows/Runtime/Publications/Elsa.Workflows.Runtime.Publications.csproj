@@ -6,6 +6,9 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Tests" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" />
+    <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <ProjectReference Include="../Core/Elsa.Workflows.Runtime.Core.csproj" />

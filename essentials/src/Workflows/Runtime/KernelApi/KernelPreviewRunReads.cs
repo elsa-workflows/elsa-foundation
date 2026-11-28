@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -11,8 +12,8 @@ internal sealed class KernelPreviewRunReads(IServiceProvider services)
     internal IWorkflowExecutionStateStore? Runs => services.GetService<IWorkflowExecutionStateStore>();
     internal ActivityExecutionBrowseSource? ActivityBrowse => services.GetService<ActivityExecutionBrowseSource>();
     internal ActivityExecutionInspectionService? ActivityInspection => services.GetService<ActivityExecutionInspectionService>();
-    internal WorkflowInstanceDetailsService? Details => services.GetService<WorkflowInstanceDetailsService>();
-    internal RuntimeHistoryInspectionService? History => services.GetService<RuntimeHistoryInspectionService>();
+    internal ILegacyRunDetailsReader? Details => services.GetService<ILegacyRuntimePreviewReaders>()?.Details;
+    internal ILegacyRuntimeHistoryReader? History => services.GetService<ILegacyRuntimePreviewReaders>()?.History;
     internal LegacyWorkflowExecutableRetentionReader? ExecutableRetention => services.GetService<LegacyWorkflowExecutableRetentionReader>();
-    internal WorkflowInstanceDeletionService? Deletion => services.GetService<WorkflowInstanceDeletionService>();
+    internal IWorkflowInstanceDeletionService? Deletion => services.GetService<ILegacyRuntimePreviewReaders>()?.Deletion;
 }

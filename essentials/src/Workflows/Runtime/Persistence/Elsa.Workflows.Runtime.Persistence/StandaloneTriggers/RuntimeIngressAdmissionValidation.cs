@@ -88,13 +88,25 @@ internal static class RuntimeIngressAdmissionValidation
             throw new InvalidDataException("The prepared source envelope differs from its exact submitted intent.");
     }
 
+    internal static RuntimeIngressAdmissionPolicy Policy(StandaloneTrigger trigger)
+    {
+        if (trigger.TypeKey != "http") return RuntimeIngressAdmissionPolicy.Independent;
+        if (!trigger.Configuration.TryGetProperty("http", out var http) || !http.TryGetProperty("mode", out var mode))
+            throw new InvalidDataException("An HTTP trigger requires its canonical response mode.");
+        if (mode.GetString() == "WorkflowResponse") return RuntimeIngressAdmissionPolicy.RequireAll;
+        if (mode.GetString() != "AsyncFanOut") throw new NotSupportedException("The HTTP response mode is unsupported.");
+        if (!http.TryGetProperty("admissionPolicy", out var policy) || policy.GetString() == "RequireAll") return RuntimeIngressAdmissionPolicy.RequireAll;
+        if (policy.GetString() == "AcceptAvailable") return RuntimeIngressAdmissionPolicy.AcceptAvailable;
+        throw new NotSupportedException("The HTTP admission policy is unsupported.");
+    }
+
     internal static void CheckAggregate(RuntimeIngressAdmissionRequest request, TriggerAggregate aggregate)
     {
         var source = request.Candidate.StandaloneIngress!;
         var delivery = request.Candidate.SubscriptionDelivery!;
         if (aggregate.Trigger.Id != source.TriggerId || aggregate.Trigger.TenantId != request.Scope.TenantId ||
             aggregate.Trigger.Revision != request.ExpectedTriggerRevision || aggregate.Trigger.AssociationRevision != source.AssociationGeneration ||
-            aggregate.Trigger.DesiredState != TriggerDesiredState.Enabled || StandaloneTriggerAdmission.Policy(aggregate.Trigger) != source.AdmissionPolicy)
+            aggregate.Trigger.DesiredState != TriggerDesiredState.Enabled || Policy(aggregate.Trigger) != source.AdmissionPolicy)
             throw new TriggerOperationException("conflict", "The trigger changed before admission; prepare its current associations again.");
         if (aggregate.Trigger.TypeKey is "timer" or "cron" && request.ScheduleClaim is null)
             throw new NotSupportedException("Resource schedules require their actual server-owned occurrence claim before admission.");

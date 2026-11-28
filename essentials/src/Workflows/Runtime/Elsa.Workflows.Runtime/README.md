@@ -167,7 +167,7 @@ At run time:
   here.
 
 The run inspector and execution evidence render a withheld value by its marker; see the
-[Runtime API](../Api/README.md#withheld-and-protected-values) and
+[Runtime API](../Api/Elsa.Workflows.Runtime.Api/README.md#withheld-and-protected-values) and
 [execution evidence](../../ExecutionEvidence/README.md#value-dispositions) documentation.
 
 ## Delayed child schedules
