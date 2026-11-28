@@ -222,7 +222,7 @@
                     "typeName": "ObjectDictionary",
                     "expression": {
                         "type": "JavaScript",
-                        "value": "var result = getHttpRequestBody().subworkflowInput;\r\nresult.MillisecondsToDelaySubworkflowExecutionTime = getHttpRequestBody().millisecondsToDelaySubworkflowExecutionTime;\r\nreturn result;"
+                        "value": "// A local copy: the input only reads its variable (#5894).\r\nvar result = Object.assign({}, getHttpRequestBody().subworkflowInput);\r\nresult.MillisecondsToDelaySubworkflowExecutionTime = getHttpRequestBody().millisecondsToDelaySubworkflowExecutionTime;\r\nreturn result;"
                     }
                 },
                 "waitForCompletion": {
