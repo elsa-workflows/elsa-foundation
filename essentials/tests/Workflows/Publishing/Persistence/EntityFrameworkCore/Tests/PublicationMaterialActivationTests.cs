@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using System.Text.Json;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -258,7 +261,7 @@ public sealed class PublicationMaterialActivationTests
         var bindings = new InMemoryWorkflowTriggerBindingStore();
         var indexer = new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor([]), bindings);
         var coordinator = new WorkflowActivationCoordinator(materials, authority,
-            new InMemoryWorkflowActivationSwitch(authority, references, TimeProvider.System, bindings), references,
+            ActivationSwitchDecoration.Create(authority, references, TimeProvider.System, bindings), references,
             new WorkflowExecutableRootWriteLeaseManager(materials, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), TimeProvider.System),
             TimeProvider.System, triggerIndexer: indexer, triggerBindingStore: bindings);
         var publications = new InMemoryPublicationRecordStore();
@@ -412,10 +415,20 @@ public sealed class PublicationMaterialActivationTests
         public WorkflowActivationCoordinator Coordinator(IWorkflowTriggerIndexObserver? observer = null) =>
             new(Materials, Authority, _switch, References,
                 new WorkflowExecutableRootWriteLeaseManager(Materials, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), TimeProvider.System),
-                TimeProvider.System, triggerIndexer: new RecurringTriggerScheduleIndexer(new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor([]), _bindings),
-                    [], _schedules, new RecurringScheduleCalculator(), TimeProvider.System, NullLogger<RecurringTriggerScheduleIndexer>.Instance),
+                TimeProvider.System, triggerIndexer: CreateTriggerIndexer(),
                 triggerBindingStore: _bindings, recurringScheduleStore: _schedules,
                 triggerObservers: observer is null ? [] : [observer]);
+        private IWorkflowTriggerIndexer CreateTriggerIndexer()
+        {
+            var services = new ServiceCollection();
+            services.AddSingleton(_bindings);
+            services.AddSingleton(_schedules);
+            services.AddWorkflowPublicationTriggers();
+            using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            return scope.ServiceProvider.GetRequiredService<IWorkflowTriggerIndexer>();
+        }
+
         public PublicationActivator Activator(IWorkflowTriggerIndexObserver? observer = null) => new(
             Coordinator(observer), Publications, Authority, References, TimeProvider.System);
         public UnpublishPublicationSlotRequestHandler Unpublisher() => new(Authority, Coordinator(), Publications, Materials, References, TimeProvider.System);

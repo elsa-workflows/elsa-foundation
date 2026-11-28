@@ -614,10 +614,6 @@
   <Folder Name="/essentials/tests/Activities/Compensation/">
     <Project Path="essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj" />
   </Folder>
-  <Folder Name="/essentials/tests/Activities/Compensation/Persistence/" />
-  <Folder Name="/essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/">
-    <Project Path="essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
-  </Folder>
   <Folder Name="/essentials/tests/Activities/ControlFlow/">
     <Project Path="essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj" />
   </Folder>

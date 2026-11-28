@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -7,6 +8,7 @@ using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 
@@ -406,12 +408,11 @@ public sealed class PublicationActivationTests
     private PublicationActivator NewActivator(IWorkflowTriggerIndexer? indexer = null, IWorkflowActivationAuthority? authority = null) =>
         new(NewCoordinator(indexer), _publications, authority ?? _authority, _references, new FakeTimeProvider(_now));
 
-    // These tests follow the journal, not serving: the projection stores are no-ops, so the switch moves the slot and the
-    // references alone.
+    // These tests follow the journal. The switch moves the slot and references against a no-op trigger projection.
     private WorkflowActivationCoordinator NewCoordinator(IWorkflowTriggerIndexer? indexer = null) =>
         new(
             _authority,
-            new InMemoryWorkflowActivationSwitch(_authority, _references, new FakeTimeProvider(_now)),
+            ActivationSwitchDecoration.Create(_authority, _references, new FakeTimeProvider(_now)),
             _references,
             TestRootWriteLeases.Create(_executables),
             new FakeTimeProvider(_now),
