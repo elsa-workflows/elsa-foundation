@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Activities.Http.Tests" />
-    <InternalsVisibleTo Include="Elsa.Activities.Http.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>

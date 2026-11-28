@@ -14,12 +14,12 @@ namespace Elsa.Activities.Http.Tests;
 /// <summary>
 /// The outbound request goes through the named <see cref="IHttpClientFactory"/>
 /// client, whose default logging handlers carry raw header values as structured state at <see cref="LogLevel.Trace"/>.
-/// <see cref="ActivitiesHttpFeature"/> replaces them with one logger that writes no header. Captures every log call and
+/// <see cref="KernelActivitiesHttpFeature"/> replaces them with one logger that writes no header. Captures every log call and
 /// scope the host's logging produces at <see cref="LogLevel.Trace"/> while <c>SendHttpRequest</c> sends an
 /// <c>Authorization</c> value, serializing each one's formatted message, its structured state (every pair, its value
 /// expanded through nested pairs and collections) and its exception, and asserts none of them contains the value.
 /// Scope: the lines and scopes written during one successful and one failed send, through the composition
-/// <see cref="ActivitiesHttpFeature"/> registers.
+/// <see cref="KernelActivitiesHttpFeature"/> registers.
 /// </summary>
 public sealed class SendHttpRequestAuthorizationLoggingTests
 {

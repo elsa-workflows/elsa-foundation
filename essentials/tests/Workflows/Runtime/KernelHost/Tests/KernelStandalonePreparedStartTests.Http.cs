@@ -440,8 +440,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
                 new HttpFeature(new ShellFeatureContext(new ShellSettings { Id = new ShellId("qualification") }, [])).ConfigureServices(services);
                 new StandaloneHttpTriggerAuthoringFeature().ConfigureServices(services);
-                var runtimeHttp = new WorkflowsRuntimeStandaloneHttpFeature();
-                runtimeHttp.ConfigureServices(services);
+                new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(services);
                 var activities = new KernelActivitiesHttpFeature { SyncRequestTimeout = timeout };
                 activities.ConfigureServices(services);
                 if (actorWaits)
@@ -461,7 +460,6 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var kernel = new WorkflowsRuntimeKernelFeature();
                 kernel.ConfigureServices(services);
                 kernel.PostConfigureServices(services);
-                runtimeHttp.PostConfigureServices(services);
                 activities.PostConfigureServices(services);
                 var app = builder.Build();
                 app.UseAuthentication();

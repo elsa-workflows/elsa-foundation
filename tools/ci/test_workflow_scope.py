@@ -101,7 +101,7 @@ class WorkflowScopeTests(unittest.TestCase):
                          'extensions/Dashboard/src/Core/Dataset.cs',
                          'extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj',
                          'extensions/Git/src/Elsa.Git/GitClient.cs',
-                         'extensions/Http/src/Activities/ActivitiesHttpFeature.cs',
+                         'extensions/Http/src/Activities/KernelActivitiesHttpFeature.cs',
                          'extensions/Http/tests/Tests/Elsa.Http.Tests.csproj',
                          'extensions/Secrets/src/Elsa.Secrets/Features/SecretsFeature.cs',
                          'extensions/Secrets/tests/Tests/Elsa.Secrets.Tests.csproj',

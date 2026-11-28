@@ -248,8 +248,8 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
     shells
         .WithHostAssemblies()
         .WithAssemblies(
-            typeof(ActivitiesHttpFeature).Assembly,
-            typeof(WorkflowsRuntimeHttpFeature).Assembly)
+            typeof(KernelActivitiesHttpFeature).Assembly,
+            typeof(WorkflowsRuntimeStandaloneHttpFeature).Assembly)
 
         // Delegates authentication-scheme and authorization-policy resolution to the shell scope at
         // request time, so each shell's Identity composition (schemes, permission policies) is honored
@@ -296,12 +296,11 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             // custom hosts can compose exactly the plane they need.
             typeof(GraphActivitiesDesignFeature).Assembly,
             typeof(GraphActivitiesRuntimeHostingFeature).Assembly,
-            // HTTP endpoint authoring + serving. ActivitiesHttp mounts the inbound middleware and depends on
-            // WorkflowsRuntimeHttp, whose route-table projection keeps published and waiting endpoints reachable.
+            // HTTP endpoint authoring, standalone route projection and Actor HTTP intake.
             // Both assemblies are explicit because the dependency is feature-name based; it cannot make an assembly
             // absent from a clean host deployment discoverable.
-            typeof(ActivitiesHttpFeature).Assembly,
-            typeof(WorkflowsRuntimeHttpFeature).Assembly,
+            typeof(KernelActivitiesHttpFeature).Assembly,
+            typeof(WorkflowsRuntimeStandaloneHttpFeature).Assembly,
             // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which
             // publish source-owned CLR activity definitions through the stable provider/runtime seam.
             typeof(ActivitiesDesignReconciliationFeature).Assembly,
