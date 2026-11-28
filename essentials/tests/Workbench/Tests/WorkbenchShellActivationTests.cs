@@ -182,6 +182,38 @@ public sealed class WorkbenchShellActivationTests
         }
     }
 
+    [Theory]
+    [InlineData("default", "workflowsruntimeapi", "true")]
+    [InlineData("custom", "WORKFLOWSRUNTIMEENTITYFRAMEWORKCORE:Provider", "SQLite")]
+    public async Task Retired_classic_selector_in_any_shell_is_refused_before_opening_the_actor_store(
+        string shellName, string selector, string value)
+    {
+        var stores = Directory.CreateTempSubdirectory("elsa-retired-classic-stores-");
+        var shell = WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string>
+            {
+                [$"CShells:Shells:{shellName}:Features:{selector}"] = value,
+                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:SqlitePath"] =
+                    Path.Combine(stores.FullName, "actors.db")
+            }
+        };
+
+        try
+        {
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            {
+                await using var _ = await WorkbenchProcess.StartAsync(shell);
+            });
+            Assert.Contains("The classic Workbench workflow runtime has been retired", failure.Message, StringComparison.Ordinal);
+            Assert.Empty(stores.EnumerateFileSystemInfos());
+        }
+        finally
+        {
+            stores.Delete(recursive: true);
+        }
+    }
+
     /// <summary>
     /// Each secret the Production overlay requires must fail activation when omitted, so <c>/health/ready</c> reports
     /// the misconfiguration instead of the host reporting ready and failing later: token issuance and authentication,

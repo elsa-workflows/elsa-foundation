@@ -13,8 +13,9 @@ internal static class WorkbenchRuntimeProfile
 
         var shells = configuration.GetSection("CShells:Shells");
         if (shells.GetChildren().SelectMany(shell => shell.GetSection("Features").GetChildren())
-            .Any(feature => (feature.Key is "WorkflowsRuntimeApi" or "WorkflowsRuntimeEntityFrameworkCore") &&
-                !string.Equals(feature.Value, "false", StringComparison.OrdinalIgnoreCase)))
+            .Any(feature => IsSelected(feature) &&
+                (string.Equals(feature.Key, "WorkflowsRuntimeApi", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(feature.Key, "WorkflowsRuntimeEntityFrameworkCore", StringComparison.OrdinalIgnoreCase))))
             throw new InvalidOperationException("The classic Workbench workflow runtime has been retired. Use its pinned image " +
                 "to open the existing classic stores. See the Workbench compatibility guidance in docs/docker.md.");
 
