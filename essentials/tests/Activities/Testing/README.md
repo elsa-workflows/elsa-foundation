@@ -49,9 +49,8 @@ dotnet test essentials/tests/Activities/Flowchart/Tests/Elsa.Activities.Flowchar
 ```
 
 Current Flowchart tests keep the authoring, routing, start-entry, policy and
-serialized state contracts. The Behavioral suite keeps the reusable Graph
-boundary outcome case. The Actor Foundation Workbench checks exercise retained
-authored Flowcharts on SQLite and PostgreSQL.
+serialized state contracts. The Actor Foundation Workbench checks exercise
+retained authored Flowcharts on SQLite and PostgreSQL.
 
 ## Classic full-library activity drives
 
@@ -69,11 +68,26 @@ dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavio
   --filter 'FullyQualifiedName~A_reader_beside_its_producer_in_a_sequence_on_a_bpmn_gateway_loop|FullyQualifiedName~FlowchartTriggerStartBehaviorTests'
 ```
 
-Current Behavioral tests keep the separate Graph execution, member-read and
-activity contract checks. Supported Actor workflow execution is exercised by the
-Native and Kernel Host suites. They exercise entry selection from a triggered
-Flowchart, multiple authored HTTP entry registrations and exact scheduled trigger
-identity.
+The final classic Behavioral checkout also holds the reusable boundary outcome,
+Graph scope and Complete tests, including cancellation on memory and SQLite.
+It holds the classic causal member, activity-result and workflow-input tests,
+including scheduler poison and recovery assertions.
+
+```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" e1d66e87c2301a2f731c393b24e53a3ef566cdba
+(
+  cd "$archive/source"
+  dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true
+)
+```
+
+Current Behavioral tests keep activity contract and capability composition checks.
+They also exercise the real compiler's member selection and refusals and the
+validated supplied and default workflow inputs. The Native and Kernel Host
+suites exercise Actor execution, including Graph boundary outcomes and scope,
+Flowchart trigger entry selection, authored HTTP entries and exact schedule identity.
 
 ## Classic Graph runtime execution and recovery
 
