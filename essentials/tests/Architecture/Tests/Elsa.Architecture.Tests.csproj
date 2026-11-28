@@ -173,7 +173,7 @@
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Elsa.Workflows.Dashboard\Elsa.Workflows.Dashboard.csproj" />
+    <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Retained\Elsa.Workflows.Dashboard.Retained.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Reconciliation\Elsa3.Activities.Design.Import.Reconciliation.csproj" />

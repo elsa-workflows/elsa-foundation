@@ -534,7 +534,6 @@
     <Project Path="essentials/src/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Dashboard/">
-    <Project Path="essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj" />
     <Project Path="essentials/src/Workflows/Dashboard/Retained/Elsa.Workflows.Dashboard.Retained.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Dashboard/Persistence/">

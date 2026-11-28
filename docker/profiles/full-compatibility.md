@@ -55,6 +55,16 @@ git -c core.fsmonitor=false worktree add --detach "$archive/source" e758c2cc86cc
 python3 "$archive/source/tools/docker-profiles/smoke.py" "$image" --variant full
 ```
 
+The same checkout retains the classic in-memory run-health aggregation tests.
+
+```sh
+(
+  cd "$archive/source"
+  dotnet test essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj -c Release -p:RestoreLockedMode=true \
+    --filter FullyQualifiedName~WorkflowRunHealthServiceTests
+)
+```
+
 The [classic Workbench preservation guidance](../../docs/docker.md#workbench-mixed-preview-compatibility)
 covers the separate earlier Workbench deployment. The archived
 [BPMN apphost qualification](https://github.com/elsa-workflows/elsa-foundation/blob/e758c2cc86ccdb4294be0aa63bdfe933060db75e/extensions/Bpmn/tests/Hosting/Tests/README.md)
