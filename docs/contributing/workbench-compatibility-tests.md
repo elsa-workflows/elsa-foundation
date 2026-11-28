@@ -146,8 +146,21 @@ for the producer, importer, and fixture.
 )
 ```
 
+Use the same pinned source to replay the classic authored middleware, synchronous replies, HTTP TestRun,
+and the classic checkpoint, command-budget and route convergence cases from that HTTP host.
+
+```sh
+(
+  cd "$compatibility_root/classic-artifact-http"
+  dotnet test extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj \
+    -c Release -p:RestoreLockedMode=true
+  dotnet test extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~HttpEndpointMiddlewareTests|FullyQualifiedName~ActivitiesHttpFeatureTests'
+)
+```
+
 Current source retains the Publishing executable export and material checks, the Design
-JSON workflow reconciliation path, and the Actor HTTP provider witnesses.
+JSON workflow reconciliation path, and the [Actor HTTP provider witnesses](../../essentials/tests/Workflows/Runtime/KernelHost/Tests).
 
 ## Classic reviews, Decisions, ETL and Rules in workflows
 

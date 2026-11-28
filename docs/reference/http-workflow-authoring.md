@@ -26,7 +26,7 @@ A 202 confirms acceptance, not completion. Use the returned execution identifier
 
 ## Synchronous request deadline
 
-The `ActivitiesHttp` shell feature exposes a server-wide **Synchronous request timeout** (`HttpEndpointOptions.SyncRequestTimeout`), set to 30 seconds by default. For a Sync endpoint, this deadline starts after the route and endpoint settings are selected. It covers authorization, request-body reading, inline workflow dispatch, and delivery of the workflow response. A positive endpoint `RequestTimeout` can shorten the host deadline; it cannot extend it.
+The `KernelActivitiesHttp` shell feature exposes a server-wide **Synchronous request timeout** (`HttpEndpointOptions.SyncRequestTimeout`), set to 30 seconds by default. For a Sync endpoint, this deadline starts after the route and endpoint settings are selected. It covers authorization, request-body reading, inline workflow dispatch, and delivery of the workflow response. A positive endpoint `RequestTimeout` can shorten the host deadline; it cannot extend it.
 
 When the deadline expires, the server cancels the request token. Authorization handlers, body streams, workflow activities, and response writers that observe cancellation stop cooperatively, and the server returns `408 Request Timeout` if the live response has not already started. If timeout cancellation interrupts an already-started response, the server aborts the connection rather than completing a truncated success response. The server cannot forcibly stop work that ignores cancellation. Async endpoints do not use this host-wide Sync limit; their authored `RequestTimeout` continues to bound dispatch as before.
 

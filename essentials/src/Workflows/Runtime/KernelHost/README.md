@@ -59,13 +59,8 @@ the Native model's definitions.
   maps the held reply to the authored HTTP response or the corresponding status. A request with no waiter returns 404.
 - `KernelServing.ServeHostWorkflowAsync` serves a workflow the host defines itself beside the publications, its routes
   checked against the serving set (the Workbench's opt-in HTTP probe is one).
-- On a kernel shell the feature also unmounts the old core's HTTP endpoint middleware (`HttpEndpointMiddleware`): it is
-  re-registered with options of its own, a new instance at its defaults with an empty base path, so it passes every
-  request on and the host's kernel edge serves `/workflows/http`. The old core's standalone HTTP triggers still serve
-  under that base path, in the shell's pipeline ahead of the edge: a request whose method and template a standalone
-  trigger and a kernel route both match goes to the trigger. The HTTP activities' test runs (`/workflows/test-runs`), standalone HTTP triggers and
-  options stay as they are; a shell with the test-run middleware and no endpoint middleware of the expected name is
-  refused. Studio's HTTP test run therefore still runs on the old core (slice 8).
+- `KernelActivitiesHttp` hosts the standalone HTTP trigger and isolated TestRun middleware. Standalone requests are
+  matched in the shell pipeline before the kernel edge serves authored routes. Both use the shell's HTTP options.
 - `UnavailableScheduleActors` is for a host that runs no schedule actor. Such a host also says `Schedules: false`, so a
   Timer or Cron never reaches it. Setting a schedule throws the reason; stopping one and unregistering a run do nothing,
   so unpublishing never fails on them.

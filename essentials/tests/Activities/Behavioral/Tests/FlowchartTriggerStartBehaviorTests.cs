@@ -122,7 +122,7 @@ public sealed class FlowchartTriggerStartBehaviorTests
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesHttpFeature().ConfigureServices(services))
+            .WithFeature(services => new KernelActivitiesHttpFeature().ConfigureServices(services))
             .WithFeature(services => new Workflows.Runtime.Scheduling.WorkflowsRuntimeSchedulingFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .WithFeature(services => services.AddSingleton<Elsa.Http.Core.Contracts.IHttpRequestBodyParser, Elsa.Http.Services.HttpRequestBodyParser>())

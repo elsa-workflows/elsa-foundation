@@ -106,6 +106,6 @@ public sealed class RequiredInputDrive : IActivityDrive
     private static WorkflowExecutionHarness HttpHarness() => Harness(
         services => new SerializationFeature().ConfigureServices(services),
         services => new ActivitiesPrimitivesFeature().ConfigureServices(services),
-        services => new ActivitiesHttpFeature().ConfigureServices(services),
+        services => new KernelActivitiesHttpFeature().ConfigureServices(services),
         services => services.AddSingleton<Elsa.Http.Core.Contracts.IHttpRequestBodyParser, Elsa.Http.Services.HttpRequestBodyParser>());
 }

@@ -643,7 +643,6 @@
     <Project Path="essentials/tests/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj" />
   </Folder>
   <Folder Name="/extensions/Http/tests/Activities/">
-    <Project Path="extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj" />
     <Project Path="extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Activities/Scripting/">

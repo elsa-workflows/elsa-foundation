@@ -319,7 +319,7 @@ FastEndpoints surface ([#1405](https://github.com/elsa-workflows/elsa-foundation
 replaces it. An `ApiSecurity` entry left in a shell's feature list names a feature that no longer exists; CShells
 logs a warning and activates the shell without it. Workflow-defined HTTP endpoints are separate: they are anonymous
 unless their `HttpEndpoint` activity sets `Authorize` (optionally with a `Policy`). For those that do, the
-`WorkflowsRuntimeHttp` feature's `AuthorizationHandlerType` setting chooses how the check runs, and pointing it at
+`WorkflowsRuntimeStandaloneHttp` feature's `AuthorizationHandlerType` setting chooses how the check runs, and pointing it at
 `AllowAnonymousHttpEndpointAuthorizationHandler` lets every such request through.
 
 **Antiforgery on the login form.** The backend login page embeds an antiforgery token (form field

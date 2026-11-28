@@ -27,6 +27,7 @@ public sealed class WorkbenchShellActivationTests
         "ActorSecretsWorkflows",
         // Publishing and serving HTTP-triggered workflows.
         "KernelActivitiesHttp",
+        "WorkflowsRuntimeStandaloneHttp",
         "ActorHttpConnections",
         "WorkflowsPublishingApi",
         "WorkflowsPublishing",
@@ -47,9 +48,6 @@ public sealed class WorkbenchShellActivationTests
     private static readonly string[] CatalogedFeatures =
     [
         "ActivitiesBpmn",
-        // ActivitiesHttp depends on its route-table projection by feature name, and a name cannot make an assembly
-        // that is absent from the host discoverable. A shell that does not list it gets it as a dependency.
-        "WorkflowsRuntimeHttp",
         // File-based workflow deployment is opt-in: it needs a source and a path to register.
         "JsonWorkflowReconciliation"
     ];
@@ -119,6 +117,8 @@ public sealed class WorkbenchShellActivationTests
 
         Assert.False(Runs("ConnectionsWorkflows"));
         Assert.DoesNotContain("ActivitiesRuntime", catalog.Keys);
+        Assert.DoesNotContain("ActivitiesHttp", catalog.Keys);
+        Assert.DoesNotContain("WorkflowsRuntimeHttp", catalog.Keys);
         Assert.False(Runs("ActivitiesGraphRuntime"));
         Assert.False(Runs("SecretsWorkflows"));
         Assert.DoesNotContain("WorkflowsRuntimeApi", catalog.Keys);

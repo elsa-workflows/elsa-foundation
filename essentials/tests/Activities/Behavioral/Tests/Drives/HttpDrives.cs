@@ -71,7 +71,7 @@ public sealed class SendHttpRequestDrive : IActivityDrive
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesHttpFeature().ConfigureServices(services))
+            .WithFeature(services => new KernelActivitiesHttpFeature().ConfigureServices(services))
             .WithFeature(services => services
                 .AddHttpClient(HttpActivityConstants.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => new StubHttpMessageHandler(responder)))
@@ -199,7 +199,7 @@ public sealed class WriteHttpResponseDrive : IActivityDrive
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesHttpFeature().ConfigureServices(services))
+            .WithFeature(services => new KernelActivitiesHttpFeature().ConfigureServices(services))
             .Build("actexec-write-response");
 
         var node = Nodes.Leaf("node-write-response", typeof(WriteHttpResponse), new Dictionary<string, object?>
@@ -233,7 +233,7 @@ public sealed class HttpEndpointDrive : IActivityDrive
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesHttpFeature().ConfigureServices(services))
+            .WithFeature(services => new KernelActivitiesHttpFeature().ConfigureServices(services))
             // HttpEndpoint derives ParsedContent from the raw body through this parser; the Http feature leaves it
             // to the host, so the drive registers the production implementation.
             .WithFeature(services => services.AddSingleton<Elsa.Http.Core.Contracts.IHttpRequestBodyParser, Elsa.Http.Services.HttpRequestBodyParser>())

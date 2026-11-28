@@ -160,7 +160,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
 
     /// <summary>
     /// Starts a canary host, activates its shell, and waits for its startup tasks (catalog reconciliation among them).
-    /// With <paramref name="withHttpActivities"/> the shell also composes <c>ActivitiesHttp</c>, whose named client sends
+    /// With <paramref name="withHttpActivities"/> the shell also composes <c>KernelActivitiesHttp</c>, whose named client sends
     /// to <see cref="HttpEndpoint"/> instead of the network (<see cref="SecretsCanaryHttpTransportFeature"/>).
     /// </summary>
     public static async Task<SecretsCanaryWorkflowHost> StartAsync(CanaryStartMode mode, bool withHttpActivities = false)
@@ -229,8 +229,8 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
                     // The feature assemblies a host that composes the HTTP activities adds; a host that does not enable the
                     // features by name gets none of their services.
                     typeof(HttpFeature).Assembly,
-                    typeof(WorkflowsRuntimeHttpFeature).Assembly,
-                    typeof(ActivitiesHttpFeature).Assembly,
+                    typeof(WorkflowsRuntimeStandaloneHttpFeature).Assembly,
+                    typeof(KernelActivitiesHttpFeature).Assembly,
                     typeof(ConnectionsFeature).Assembly,
                     typeof(ConnectionsWorkflowsFeature).Assembly,
                     typeof(ConnectionsDesignFeature).Assembly)
@@ -321,7 +321,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     /// <summary>The features a host with the HTTP activities adds: the activities, and the canary's endpoint standing in for the network.</summary>
     private static readonly string[] HttpFeatures =
     [
-        "ActivitiesHttp",
+        "KernelActivitiesHttp",
         SecretsCanaryHttpTransportFeature.Name,
         "Connections",
         "ConnectionsWorkflows",

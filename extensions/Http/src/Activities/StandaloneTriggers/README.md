@@ -1,12 +1,12 @@
 # Standalone HTTP trigger integration
 
-`StandaloneHttpTriggerAuthoringFeature` installs metadata and configuration validation independently of runtime listeners. `ActivitiesHttpFeature` installs the producer-bound source context and HTTP middleware before embedded endpoint routing. The source uses the ordinary Runtime ingress port; it owns no delivery queue or recovery pump.
+`StandaloneHttpTriggerAuthoringFeature` installs metadata and configuration validation independently of runtime listeners. `KernelActivitiesHttpFeature` installs the producer-bound source context and HTTP middleware before embedded endpoint routing. The source uses the ordinary Runtime ingress port; it owns no delivery queue or recovery pump.
 
 The [transport contract](../../../../../specs/1217-standalone-triggers/contracts/transports.md) records response policies, source identity, lifecycle and recovery requirements. This source integration is an implementation candidate; management API/operator examples, composed-host, provider and Studio qualification remain open.
 
 ## Composition and configuration
 
-Select `StandaloneHttpTriggerAuthoring` for HTTP metadata/validation and the exclusive reservation planner. Select `ActivitiesHttp` for actual request intake and its existing Runtime HTTP dependencies. Management routes come from the separate `StandaloneTriggersApi` feature. Actual activation requires the selected protected resource/ingress provider family, an enabled eligible subscription and a resource invocation grant; installing metadata or middleware alone is insufficient.
+Select `StandaloneHttpTriggerAuthoring` for HTTP metadata/validation and the exclusive reservation planner. Select `KernelActivitiesHttp` for actual request intake and its existing Runtime HTTP dependencies. Management routes come from the separate `StandaloneTriggersApi` feature. Actual activation requires the selected protected resource/ingress provider family, an enabled eligible subscription and a resource invocation grant; installing metadata or middleware alone is insufficient.
 
 The configuration fields are `method`, `path` and `sourceAccess` (`Authenticated` or `Anonymous`). In management requests, put `http` beside `configuration`: `{ "mode": "WorkflowResponse" }`, or `{ "mode": "AsyncFanOut", "admissionPolicy": "RequireAll" }`. Async also accepts `AcceptAvailable`; omitted async policy defaults to `RequireAll`. These settings are persisted together in the resource configuration by the API.
 
