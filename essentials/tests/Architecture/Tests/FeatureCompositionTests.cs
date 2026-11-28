@@ -82,8 +82,6 @@ public sealed class FeatureCompositionTests
             ["AgentSourcesEntityFrameworkCore"], ["AgentEntityFrameworkCore"]),
         new("Legacy and retained workflow APIs own the same routes.",
             [WorkflowsRuntimeKernelRetainedApiFeature.FeatureName], ["WorkflowsRuntimeApi"]),
-        new("Legacy and retained HTTP features own the same routes.",
-            ["WorkflowsRuntimeStandaloneHttp"], ["WorkflowsRuntimeHttp"]),
         new("Legacy and retained workflow attention provide the same contributor.",
             ["WorkflowsRuntimeRetainedAttention"], ["WorkflowsRuntimeAttention"]),
     ];

@@ -65,7 +65,7 @@ internal sealed class CanaryHttpEndpointHandler(CanaryHttpEndpoint endpoint) : H
 
 /// <summary>
 /// Composes the canary's HTTP endpoint into the canary host's shell, and nowhere else: the named client
-/// <c>ActivitiesHttpFeature</c> configures gets the endpoint as its primary handler, a replacement made after every
+/// <c>KernelActivitiesHttpFeature</c> configures gets the endpoint as its primary handler, a replacement made after every
 /// feature has registered its own, so the client's real pipeline (its logging handlers included) is the one in front of
 /// it. Enabled only in a host started with the HTTP activities.
 /// </summary>
@@ -73,7 +73,7 @@ internal sealed class CanaryHttpEndpointHandler(CanaryHttpEndpoint endpoint) : H
     name: Name,
     DisplayName = "Secrets canary HTTP transport",
     Description = "Test-only local endpoint behind the HTTP activities' named client in the spec 188 canary.",
-    DependsOn = new object[] { "ActivitiesHttp", "Connections", "ActorSecretsWorkflows" })]
+    DependsOn = new object[] { "KernelActivitiesHttp", "Connections", "ActorSecretsWorkflows" })]
 public sealed class SecretsCanaryHttpTransportFeature : IShellFeature, IPostConfigureShellServices
 {
     public const string Name = "SecretsCanaryHttpTransport";

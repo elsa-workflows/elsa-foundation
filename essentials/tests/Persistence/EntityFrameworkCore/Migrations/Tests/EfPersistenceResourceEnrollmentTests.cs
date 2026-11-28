@@ -23,7 +23,6 @@ public sealed class EfPersistenceResourceEnrollmentTests
     private static readonly Assembly[] FeatureAssemblies =
     [
         .. ModuleContextCatalog.Modules,
-        typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
@@ -32,13 +31,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
 
     private static readonly (string Feature, string Module, string Context)[] Expected =
     [
-        ("WorkflowsRuntimeEntityFrameworkCore", "Workflows.Runtime", "RuntimeDbContext"),
-        ("WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence", "Workflows.Runtime", "RuntimeDbContext"),
-        ("WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence", "Workflows.Runtime", "RuntimeDbContext"),
-        ("WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence", "Workflows.Runtime", "RuntimeDbContext"),
-        ("WorkflowsRuntimeAlterationEntityFrameworkCorePersistence", "Workflows.Runtime", "RuntimeDbContext"),
         ("WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", "Workflows.Runtime", "RuntimeDbContext"),
-        ("WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence", "Workflows.Runtime", "RuntimeDbContext"),
         ("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "Workflows.Runtime", "RuntimeDbContext"),
         ("WorkflowsDesignEntityFrameworkCore", "Workflows.Design", "WorkflowsDesignDbContext"),
         ("ActivitiesDesignEntityFrameworkCore", "Activities.Design", "ActivitiesDesignDbContext"),
@@ -48,7 +41,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
     ];
 
     [Fact]
-    public void Only_the_reviewed_thirteen_features_are_enrolled_with_declared_module_ownership()
+    public void Only_the_retained_features_are_enrolled_with_declared_module_ownership()
     {
         var discovered = EfPersistenceParticipantCatalog.Discover(FeatureAssemblies);
 
@@ -93,8 +86,8 @@ public sealed class EfPersistenceResourceEnrollmentTests
 
         Assert.True(result.HasApplicableResource);
         Assert.Empty(result.RefusalCodes);
-        Assert.Equal("PostgreSql", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:Provider"]);
-        Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:ConnectionName"]);
+        Assert.Equal("PostgreSql", result.Patch.ConfigurationData["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:Provider"]);
+        Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:ConnectionName"]);
         Assert.Equal(2, result.Patch.ConfigurationData.Count);
     }
 
@@ -147,7 +140,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
         {
             var result = EfPersistencePreparation.Prepare(context, configuration, assemblies);
             Assert.Empty(result.RefusalCodes);
-            Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:ConnectionName"]);
+            Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:ConnectionName"]);
         }
     }
 
@@ -166,7 +159,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
     {
         var context = PreparationContext(new Dictionary<string, string?>
         {
-            ["WorkflowsRuntimeEntityFrameworkCore:Provider"] = "Sqlite"
+            ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:Provider"] = "Sqlite"
         });
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -207,9 +200,9 @@ public sealed class EfPersistenceResourceEnrollmentTests
     public void Resource_selection_for_known_id_without_owning_startup_type_refuses()
     {
         var context = new ShellSettingsPreparationContext(new ShellId("default"),
-            new Dictionary<string, string?>(), ["WorkflowsRuntimeEntityFrameworkCore"], [], [],
-            [new ShellFeaturePreparationDescriptor("WorkflowsRuntimeEntityFrameworkCore", [], null, false)],
-            ["WorkflowsRuntimeEntityFrameworkCore"], [], []);
+            new Dictionary<string, string?>(), ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"], [], [],
+            [new ShellFeaturePreparationDescriptor("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", [], null, false)],
+            ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"], [], []);
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
@@ -271,10 +264,10 @@ public sealed class EfPersistenceResourceEnrollmentTests
     {
         var context = RuntimePairContext(new Dictionary<string, string?>
             {
-                ["WorkflowsRuntimeEntityFrameworkCore:Pooling"] = firstPooling.ToString(),
-                ["WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence:Pooling"] = secondPooling.ToString(),
-                ["Elsa:Persistence:Bindings:WorkflowsRuntimeEntityFrameworkCore"] = "first",
-                ["Elsa:Persistence:Bindings:WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence"] = "second"
+                ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:Pooling"] = firstPooling.ToString(),
+                ["WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence:Pooling"] = secondPooling.ToString(),
+                ["Elsa:Persistence:Bindings:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"] = "first",
+                ["Elsa:Persistence:Bindings:WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"] = "second"
             });
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -299,8 +292,8 @@ public sealed class EfPersistenceResourceEnrollmentTests
     {
         var context = RuntimePairContext(new Dictionary<string, string?>
         {
-            ["WorkflowsRuntimeEntityFrameworkCore:Schema"] = "runtime_first",
-            ["WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence:Schema"] = "runtime_second"
+            ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:Schema"] = "runtime_first",
+            ["WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence:Schema"] = "runtime_second"
         });
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -342,8 +335,8 @@ public sealed class EfPersistenceResourceEnrollmentTests
     {
         var context = RuntimePairContext(new Dictionary<string, string?>
             {
-                ["Elsa:Persistence:Bindings:WorkflowsRuntimeEntityFrameworkCore"] = "first",
-                ["Elsa:Persistence:Bindings:WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence"] = "second",
+                ["Elsa:Persistence:Bindings:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"] = "first",
+                ["Elsa:Persistence:Bindings:WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"] = "second",
                 ["ConnectionStrings:One"] = "Data Source=same.db"
             });
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -367,7 +360,7 @@ public sealed class EfPersistenceResourceEnrollmentTests
     {
         var context = RuntimePairContext(new Dictionary<string, string?>
         {
-            ["Elsa:Persistence:Bindings:WorkflowsRuntimeEntityFrameworkCore"] = "first"
+            ["Elsa:Persistence:Bindings:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"] = "first"
         });
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -513,21 +506,21 @@ public sealed class EfPersistenceResourceEnrollmentTests
 
     private static ShellSettingsPreparationContext PreparationContext(IReadOnlyDictionary<string, string?>? values = null) =>
         new(new ShellId("default"), values ?? new Dictionary<string, string?>(),
-            ["WorkflowsRuntimeEntityFrameworkCore"], [], [],
-            [new ShellFeaturePreparationDescriptor("WorkflowsRuntimeEntityFrameworkCore", [],
-                typeof(RuntimeEntityFrameworkCoreFeature), false)],
-            ["WorkflowsRuntimeEntityFrameworkCore"], [], []);
+            ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"], [], [],
+            [new ShellFeaturePreparationDescriptor("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", [],
+                typeof(RuntimeArtifactsEntityFrameworkCoreFeature), false)],
+            ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"], [], []);
 
     private static ShellSettingsPreparationContext RuntimePairContext(IReadOnlyDictionary<string, string?> values) =>
         new(new ShellId("default"), values,
-            ["WorkflowsRuntimeEntityFrameworkCore", "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence"], [], [],
+            ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"], [], [],
             [
-                new ShellFeaturePreparationDescriptor("WorkflowsRuntimeEntityFrameworkCore", [],
-                    typeof(RuntimeEntityFrameworkCoreFeature), false),
-                new ShellFeaturePreparationDescriptor("WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence", [],
-                    typeof(RuntimeBookmarksEntityFrameworkCoreFeature), false)
+                new ShellFeaturePreparationDescriptor("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", [],
+                    typeof(RuntimeArtifactsEntityFrameworkCoreFeature), false),
+                new ShellFeaturePreparationDescriptor("WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", [],
+                    typeof(RuntimeWorkflowTestScopeEntityFrameworkCoreFeature), false)
             ],
-            ["WorkflowsRuntimeEntityFrameworkCore", "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence"], [], []);
+            ["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"], [], []);
 }
 
 [ShellFeature(name: "ThrowingEnrollmentProbe")]
