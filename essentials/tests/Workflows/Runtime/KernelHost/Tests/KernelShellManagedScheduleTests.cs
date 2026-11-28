@@ -207,14 +207,7 @@ public sealed class KernelShellManagedScheduleTests
             services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
             services.AddSingleton<TimeProvider>(new SkewedRuntimeClock());
             services.AddLogging(builder => builder.AddSimpleConsole().SetMinimumLevel(LogLevel.Warning));
-            services.AddWorkflowRuntime();
-            services.AddRuntimeEntityFrameworkCore(new()
-            {
-                Provider = provider,
-                ConnectionString = runtime,
-                RecoveryContinuationSigningKey = new string('r', 32),
-                HierarchyCursorSigningKey = new string('h', 32)
-            });
+            KernelRuntimeFixture.Add(services, provider, runtime);
             new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, storage);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
