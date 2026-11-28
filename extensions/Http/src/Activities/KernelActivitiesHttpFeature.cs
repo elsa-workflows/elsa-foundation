@@ -4,6 +4,7 @@ using Elsa.Activities.Http.Capabilities;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Activities.Http.Options;
+using Elsa.Activities.Http.Services;
 using Elsa.Activities.Http.StandaloneTriggers;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -49,6 +50,8 @@ public sealed class KernelActivitiesHttpFeature : IShellFeature, IMiddlewareShel
     {
         if (Has<HttpEndpointMiddleware>())
             throw new InvalidOperationException("KernelActivitiesHttp and legacy authored HTTP middleware cannot serve the same shell.");
+        if (Has<IActivityExecutionStateStore>())
+            services.TryAddScoped<HttpResponseInstructionDelivery>();
         if (Has<ITestRunTargetStore>() && Has<IWorkflowTestScopeStore>() && Has<ITestRunTargetDispatcher>() &&
             Has<IWorkflowExecutionPartitionAccessor>())
             services.TryAddScoped<HttpTestRunIngressMiddleware>();

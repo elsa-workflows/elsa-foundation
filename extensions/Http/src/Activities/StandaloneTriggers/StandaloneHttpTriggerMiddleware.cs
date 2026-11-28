@@ -227,9 +227,12 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
                         return;
                     }
                 }
-                var delivery = operation.ServiceProvider.GetRequiredService<HttpResponseInstructionDelivery>();
+                var delivery = operation.ServiceProvider.GetService<HttpResponseInstructionDelivery>()
+                    ?? throw new TriggerOperationException("unavailable", "The earlier workflow response is unavailable on this host.");
                 if (await delivery.TryDeliverAsync(context.Response, [executionId], deadline.Token)) return;
-                var state = await operation.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId, deadline.Token);
+                var executions = operation.ServiceProvider.GetService<IWorkflowExecutionStateStore>()
+                    ?? throw new TriggerOperationException("unavailable", "The earlier workflow response is unavailable on this host.");
+                var state = await executions.FindAsync(executionId, deadline.Token);
                 if (state?.Status is WorkflowExecutionStatus.Completed or WorkflowExecutionStatus.Cancelled or WorkflowExecutionStatus.Faulted)
                 {
                     if (await delivery.TryDeliverAsync(context.Response, [executionId], deadline.Token)) return;

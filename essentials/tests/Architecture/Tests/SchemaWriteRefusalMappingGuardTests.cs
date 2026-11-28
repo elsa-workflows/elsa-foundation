@@ -5,12 +5,16 @@ using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
+using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Modularity.Api;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.KernelApi;
+using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa3.Activities.Design.Import;
 using Microsoft.AspNetCore.Builder;
@@ -60,6 +64,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         typeof(WorkflowsDesignApiFeature),
         typeof(WorkflowsPublishingApiFeature),
         typeof(WorkflowsRuntimeApiFeature),
+        typeof(WorkflowsRuntimeKernelRetainedApiFeature),
         typeof(Elsa3ImportActivitiesFeature)
     ];
 
@@ -242,6 +247,13 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         var builder = WebApplication.CreateSlimBuilder();
         var shellFeature = (IWebShellFeature)Activator.CreateInstance(feature)!;
         shellFeature.ConfigureServices(builder.Services);
+        if (shellFeature is WorkflowsRuntimeKernelRetainedApiFeature kernel)
+        {
+            builder.Services.AddSingleton<NormalizedPrincipalValidator>();
+            builder.Services.AddSingleton(new KernelRuns(EmbeddedTenant.Bind("default"),
+                _ => throw new NotSupportedException("The refusal mapping probe does not read runs.")));
+            kernel.PostConfigureServices(builder.Services);
+        }
         var app = builder.Build();
         shellFeature.MapEndpoints(app, null);
         var endpoints = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
