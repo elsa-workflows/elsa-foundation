@@ -886,17 +886,22 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
 public sealed class WriteHttpResponse : Activity<HttpResponse>
 {
     [Input] public int StatusCode { get; set; } = 200;
-    [Input] public string ContentType { get; set; } = "text/plain";
+    /// <summary>The explicit media type, or blank to infer it from the body.</summary>
+    [Input] public string? ContentType { get; set; }
     [Input] public JsonNode? Body { get; set; }
-    /// <summary>The response headers besides the content type: an object of strings, numbers or booleans.</summary>
+    /// <summary>Response headers besides the content type. Each value is a scalar or a single string in an array.</summary>
     [Input] public JsonObject? Headers { get; set; }
 
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
         IReadOnlyDictionary<string, string> headers;
-        try { headers = HttpFields.ResponseHeaders(Headers); }
+        try { headers = HttpFields.AuthoredResponseHeaders(Headers); }
         catch (HttpFieldsException refused) { return new(Fault("http.headers.invalid", refused.Message)); }
-        var response = new HttpResponse(StatusCode, ContentType, Body) { Headers = headers };
+        var mediaType = ContentType;
+        if (string.IsNullOrWhiteSpace(mediaType))
+            mediaType = Body?.GetValueKind() == JsonValueKind.String ? "text/plain" : "application/json";
+
+        var response = new HttpResponse(StatusCode, mediaType, Body) { Headers = headers };
         return new(Complete(response).With(new EmitEffect("response", Values.From(response))));
     }
 }
