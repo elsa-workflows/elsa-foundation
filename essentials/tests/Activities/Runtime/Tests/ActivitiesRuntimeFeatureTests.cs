@@ -1,6 +1,9 @@
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Runtime.Tasks;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -13,6 +16,27 @@ namespace Elsa.Activities.Runtime.Tests;
 
 public sealed class ActivitiesRuntimeFeatureTests
 {
+    [Fact]
+    public void Retained_activity_host_registers_one_alias_task_and_keeps_classic_handlers_opt_in()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesRuntimeHostingFeature().ConfigureServices(services);
+
+        Assert.Single(services, IsActivityAliasTask);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IActivityActivator));
+
+        new ActivitiesRuntimeFeature().ConfigureServices(services);
+
+        Assert.Single(services, IsActivityAliasTask);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityActivator));
+        Assert.Contains(services, descriptor => descriptor.ImplementationType == typeof(WorkflowInvokeActivitySchedulerWorkHandler));
+        Assert.Contains(typeof(RegisterActivityTypesStartupTask), typeof(ActivitiesRuntimeFeature).Assembly.GetForwardedTypes());
+
+        static bool IsActivityAliasTask(ServiceDescriptor descriptor) => descriptor.ServiceType == typeof(IStartupTask)
+            && descriptor.ImplementationType == typeof(RegisterActivityTypesStartupTask);
+    }
+
     [Fact]
     public async Task Library_activity_runtime_composes_one_canonical_event_pipeline_with_middleware()
     {
