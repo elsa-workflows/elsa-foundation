@@ -1984,14 +1984,12 @@ describe("workflows module", () => {
     const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
     expect(putCall).toBeTruthy();
     const savedRoot = JSON.parse(String(putCall?.[1]?.body)).state.rootActivity;
-    // The authored list reaches the wire as a JSON array string (the backend's ArgumentValue.Value is a
-    // string) under the "Object" expression type, so the backend JSON-deserializes it into ICollection<T>
-    // rather than failing to convert a scalar literal — and `toLiteralCollection` parses it back into rows
-    // on load.
+    // The authored list reaches the wire as a typed JSON array under Literal; the backend reads a literal as
+    // strict JSON into ICollection<T> (ADR 0091).
     expect(savedRoot.inputs).toEqual([
       {
         referenceKey: "Lines",
-        value: { value: '["First line","Second line"]', expressionType: "Object" }
+        value: { value: ["First line", "Second line"], expressionType: "Literal" }
       }
     ]);
     expect(savedRoot.lines).toBeUndefined();

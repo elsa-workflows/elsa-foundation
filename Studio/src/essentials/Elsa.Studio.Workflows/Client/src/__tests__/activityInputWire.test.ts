@@ -5,7 +5,7 @@ import { buildDraftFromJson, serializeDraftToJson } from "../workflowSerializati
 import type { ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft } from "../workflowTypes";
 
 describe("activity input wire adapter", () => {
-  it.each([{ value: null, wire: null }, { value: false, wire: "false" }, { value: 0, wire: "0" }, { value: "", wire: "" }])("preserves explicit $value through load, an unrelated edit, save and reopen", ({ value, wire }) => {
+  it.each([{ value: null, wire: null }, { value: false, wire: false }, { value: 0, wire: 0 }, { value: "", wire: "" }])("preserves explicit $value through load, an unrelated edit, save and reopen", ({ value, wire }) => {
     const loaded = stateOf({
       ...writeLine("review", {}),
       inputs: [
@@ -22,6 +22,33 @@ describe("activity input wire adapter", () => {
       { referenceKey: "FormVersion", value: { expressionType: "Literal", value: "2" } }
     ]);
     expect(canonicalizeStateForWire(expandStateFromWire(JSON.parse(JSON.stringify(saved))))).toEqual(saved);
+  });
+
+  // Migrated drafts store a JSON-typed Body as a Literal object. Studio presents it as Object JSON text, saves it
+  // untouched as stored, and after an edit in the Object editor sends Object JSON text the backend parses back.
+  it("shows a migrated Literal object Body as JSON, saves it untouched, and sends Object text after an edit", () => {
+    const bodyInput = { name: "Body", referenceKey: "Body", typeName: "System.Text.Json.JsonElement", isWrapped: true };
+    const loaded = stateOf({
+      ...writeLine("respond", {}),
+      inputs: [
+        { referenceKey: "Body", value: { expressionType: "Literal", value: { message: "Hello" } } },
+        { referenceKey: "StatusCode", value: { expressionType: "Literal", value: 200 } }
+      ]
+    });
+    const expanded = expandStateFromWire(loaded);
+    expect(readWrappedInput(expanded.rootActivity!, bodyInput).expression)
+      .toEqual({ type: "Object", value: '{\n  "message": "Hello"\n}' });
+
+    const untouched = { ...expanded, rootActivity: { ...expanded.rootActivity!, StatusCode: wrapped(201, "Literal") } };
+    expect(canonicalizeStateForWire(untouched).rootActivity!.inputs).toEqual([
+      { referenceKey: "Body", value: { expressionType: "Literal", value: { message: "Hello" } } },
+      { referenceKey: "StatusCode", value: { expressionType: "Literal", value: 201 } }
+    ]);
+
+    const edited = { ...expanded, rootActivity: { ...expanded.rootActivity!, Body: wrapped({ message: "Hi" }, "Object") } };
+    expect(canonicalizeStateForWire(edited).rootActivity!.inputs).toContainEqual(
+      { referenceKey: "Body", value: { expressionType: "Object", value: '{"message":"Hi"}' } }
+    );
   });
 
   it("keeps the existing empty editor fallback when a wire argument has no value", () => {
@@ -239,37 +266,65 @@ describe("activity input wire adapter", () => {
     ]);
   });
 
-  it("serializes non-string literal values for the string-typed backend contract", () => {
-    const state = stateOf(writeLine("write-one", { count: wrapped(42, "Literal"), enabled: wrapped(true, "Literal") }));
-
-    const node = canonicalizeStateForWire(state).rootActivity!;
-
-    expect(node.inputs).toEqual([
-      { referenceKey: "count", value: { value: "42", expressionType: "Literal" } },
-      { referenceKey: "enabled", value: { value: "true", expressionType: "Literal" } }
-    ]);
-  });
-
-  it("sends structured literals (collections and objects) as Object expressions the backend can deserialize", () => {
+  it("sends Boolean and number literals as JSON Booleans and numbers, and text as text", () => {
+    // The backend reads literals as strict JSON (ADR 0091): "true" is not a Boolean and "200" is not an Int32.
     const state = stateOf(writeLine("write-one", {
-      lines: wrapped(["Hello", "world"], "Literal"),
-      config: wrapped({ enabled: true }, "Literal")
+      count: wrapped(42, "Literal"),
+      ratio: wrapped(0.5, "Literal"),
+      enabled: wrapped(true, "Literal"),
+      disabled: wrapped(false, "Literal"),
+      text: wrapped("true", "Literal")
     }));
 
     const node = canonicalizeStateForWire(state).rootActivity!;
 
-    // A scalar literal converter can't turn the JSON string form of a list/object into ICollection<T> or a
-    // complex type, so structured literal values ride the "Object" expression instead of "Literal".
     expect(node.inputs).toEqual([
-      { referenceKey: "lines", value: { value: '["Hello","world"]', expressionType: "Object" } },
-      { referenceKey: "config", value: { value: '{"enabled":true}', expressionType: "Object" } }
+      { referenceKey: "count", value: { value: 42, expressionType: "Literal" } },
+      { referenceKey: "ratio", value: { value: 0.5, expressionType: "Literal" } },
+      { referenceKey: "enabled", value: { value: true, expressionType: "Literal" } },
+      { referenceKey: "disabled", value: { value: false, expressionType: "Literal" } },
+      { referenceKey: "text", value: { value: "true", expressionType: "Literal" } }
+    ]);
+    expect(JSON.stringify(node.inputs)).toContain('"value":{"value":true,"expressionType":"Literal"}');
+  });
+
+  it("keeps typed scalars typed through save, load and save again", () => {
+    const saved = canonicalizeStateForWire(stateOf(writeLine("write-one", {
+      statusCode: wrapped(200, "Literal"),
+      canStartWorkflow: wrapped(true, "Literal")
+    })));
+
+    const reopened = expandStateFromWire(JSON.parse(JSON.stringify(saved)));
+    expect((reopened.rootActivity!.statusCode as { expression: { value: unknown } }).expression.value).toBe(200);
+    expect((reopened.rootActivity!.canStartWorkflow as { expression: { value: unknown } }).expression.value).toBe(true);
+    expect(canonicalizeStateForWire(reopened)).toEqual(saved);
+  });
+
+  it("sends a number JSON cannot hold as null rather than as text", () => {
+    const node = canonicalizeStateForWire(stateOf(writeLine("write-one", { count: wrapped(Number.NaN, "Literal") }))).rootActivity!;
+
+    expect(node.inputs).toEqual([{ referenceKey: "count", value: { value: null, expressionType: "Literal" } }]);
+  });
+
+  it("sends structured literals (collections and objects) as typed JSON under Literal", () => {
+    const state = stateOf(writeLine("write-one", {
+      lines: wrapped(["Hello", "world"], "Literal"),
+      config: wrapped({ enabled: true, retries: 3 }, "Literal")
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    // The backend reads a literal as strict JSON into the input's type (ADR 0091), so a list stays a list and an
+    // object stays an object rather than becoming JSON text.
+    expect(node.inputs).toEqual([
+      { referenceKey: "lines", value: { value: ["Hello", "world"], expressionType: "Literal" } },
+      { referenceKey: "config", value: { value: { enabled: true, retries: 3 }, expressionType: "Literal" } }
     ]);
   });
 
   it("returns a structured literal to the editor as a Literal after a full save/load round-trip", () => {
-    // The Object promotion above is a serialization detail. `expandStateFromWire` has no descriptors, so it
-    // faithfully reports what the wire holds; `readWrappedInput` — which does have the descriptor — is where
-    // the authored syntax comes back, keeping the checklist/repeater rather than the raw JSON editor.
+    // A structured literal keeps its syntax and its JSON value through the wire, so the checklist/repeater
+    // reopens with the same list rather than the raw JSON editor.
     const state = stateOf(writeLine("write-one", { lines: wrapped(["Hello", "world"], "Literal") }));
     const descriptor = {
       name: "Lines",
@@ -281,7 +336,7 @@ describe("activity input wire adapter", () => {
 
     const node = expandStateFromWire(canonicalizeStateForWire(state)).rootActivity!;
 
-    expect((node.lines as { expression: unknown }).expression).toEqual({ type: "Object", value: '["Hello","world"]' });
+    expect((node.lines as { expression: unknown }).expression).toEqual({ type: "Literal", value: ["Hello", "world"] });
     expect(readWrappedInput(node, descriptor).expression).toEqual({ type: "Literal", value: ["Hello", "world"] });
   });
 

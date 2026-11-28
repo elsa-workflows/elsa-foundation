@@ -50,7 +50,7 @@ export function createHttpStarterState(catalog: ActivityCatalogItem[]) {
     inputs: [
       { referenceKey: "Path", value: { expressionType: "Literal", value: "/hello" } },
       { referenceKey: "SupportedMethods", value: { expressionType: "Object", value: '["POST"]' } },
-      { referenceKey: "CanStartWorkflow", value: { expressionType: "Literal", value: "true" } }
+      { referenceKey: "CanStartWorkflow", value: { expressionType: "Literal", value: true } }
     ],
     outputs: []
   };
@@ -59,7 +59,7 @@ export function createHttpStarterState(catalog: ActivityCatalogItem[]) {
     inputs: [
       { referenceKey: "Body", value: { expressionType: "Literal", value: '{"message":"Hello from Elsa"}' } },
       { referenceKey: "ContentType", value: { expressionType: "Literal", value: "application/json" } },
-      { referenceKey: "StatusCode", value: { expressionType: "Literal", value: "200" } }
+      { referenceKey: "StatusCode", value: { expressionType: "Literal", value: 200 } }
     ],
     outputs: []
   };
