@@ -8,6 +8,44 @@ namespace Elsa.Workbench.Tests;
 
 public sealed class WorkbenchActorUserTaskWaitTests
 {
+    private const string Qualification = "CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:QualifyActorUserTaskWaits";
+
+    [Fact]
+    public Task Actor_task_resumes_the_exact_form_in_a_reopened_stock_workbench() =>
+        QualifyAsync(() => WorkbenchProcess.StartAsync(WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings)
+            {
+                [Qualification] = "true"
+            }
+        }));
+
+    [SkippableFact]
+    public async Task Actor_task_reopens_on_the_postgresql_compose_profile()
+    {
+        var platform = Environment.GetEnvironmentVariable("ELSA_WORKBENCH_USER_TASKS_PLATFORM_POSTGRES");
+        var actor = Environment.GetEnvironmentVariable("ELSA_WORKBENCH_USER_TASKS_ACTOR_POSTGRES");
+        Skip.If(string.IsNullOrWhiteSpace(platform) || string.IsNullOrWhiteSpace(actor),
+            "Supply two disposable PostgreSQL databases for the platform and Actor stores.");
+        Assert.NotEqual(platform, actor);
+        var shell = WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings)
+            {
+                [Qualification] = "true",
+                ["ConnectionStrings:Elsa"] = platform!,
+                ["ConnectionStrings:ElsaOpenTelemetry"] = platform!,
+                ["ConnectionStrings:ElsaElsa3Import"] = platform!,
+                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:PostgresConnectionString"] = actor!,
+                ["CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminUserName"] = "admin",
+                ["CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword"] = "Password123!"
+            }
+        };
+        await QualifyAsync(() => WorkbenchProcess.StartAsync(shell, directory =>
+            File.Copy(Path.Combine(WorkbenchBuild.RepositoryRoot, "docker/compose/elsa-workbench.shells.json"),
+                Path.Combine(directory, "shells.json"), overwrite: true)));
+    }
+
     internal static async Task QualifyAsync(Func<Task<WorkbenchProcess>> start)
     {
         const string formId = "purchase-approval";
@@ -107,7 +145,8 @@ public sealed class WorkbenchActorUserTaskWaitTests
         Assert.Equal(completionId, (string?)settled["decision"]?["response"]?["completionId"]);
         Assert.Equal(note, (string?)settled["decision"]?["response"]?["data"]?["note"]);
         Assert.Single(settled["history"]!.AsArray(), entry => (string?)entry?["operation"] == "accepted");
-        Assert.Single(settled["history"]!.AsArray(), entry => (string?)entry?["operation"] == "completed");
+        var completion = Assert.Single(settled["history"]!.AsArray(), entry => (string?)entry?["operation"] == "completed");
+        Assert.Equal(reviewer, (string?)completion!["actorId"]);
     }
 
     private static object PurchaseWorkflow(string taskVersion, string flowchartVersion, string reviewer, string title, string formId)
@@ -123,7 +162,7 @@ public sealed class WorkbenchActorUserTaskWaitTests
             SetOutput("branch-reject", "Branch", "String", Literal("value", "Reject")),
             SetOutput("task-id", "TaskId", "String", TaskResult("TaskId")),
             SetOutput("action", "Action", "String", TaskResult("Action")),
-            SetOutput("data", "Data", "JsonElement", TaskResult("Data"))
+            SetOutput("data", "Data", "System.Text.Json.JsonElement", TaskResult("Data"))
         };
         var connections = new[]
         {
@@ -137,7 +176,7 @@ public sealed class WorkbenchActorUserTaskWaitTests
             inputs = Array.Empty<object>(),
             outputs = new[]
             {
-                Output("Branch", "String"), Output("TaskId", "String"), Output("Action", "String"), Output("Data", "JsonElement")
+                Output("Branch", "String"), Output("TaskId", "String"), Output("Action", "String"), Output("Data", "System.Text.Json.JsonElement")
             },
             rootActivity = new
             {
@@ -204,7 +243,7 @@ public sealed class WorkbenchActorUserTaskWaitTests
         return (string)item!["definition"]!["headVersionId"]!;
     }
 
-    private static JsonNode? ReadOutput(JsonNode run, string name) => run["outputs"]?[name]?["value"]?["value"];
+    private static JsonNode? ReadOutput(JsonNode run, string name) => run["outputs"]?[name]?["value"];
 
     private static async Task<HttpClient> SignInAsync(WorkbenchProcess host)
     {

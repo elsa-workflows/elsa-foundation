@@ -23,7 +23,8 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
     ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock,
-    bool protectChildExecutables = false, BoundScope? testTenant = null, KernelEventPublicationRelay? events = null, bool preparedStandaloneStarts = false)
+    bool protectChildExecutables = false, BoundScope? testTenant = null, KernelEventPublicationRelay? events = null,
+    bool preparedStandaloneStarts = false, KernelUserTaskRuntime? userTasks = null)
     : IAsyncDisposable
 {
     private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
@@ -98,6 +99,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             : null;
         await storage.InstallAsync(token, storage.TakesPreparedStarts ? _protection!.ProtectHeldStartAsync : null);
         _foundation = await storage.OpenAsync(token);
+        if (userTasks is not null) await userTasks.BindAsync(_foundation.Ingress, token);
         _schedules = await CreateScheduleWorkerAsync(token);
         if (_protection is not null) await _protection.RequireAsync(token);
         await ServePublicationsAsync(token);
@@ -121,6 +123,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         {
             Scripts = new ScopedScripts(scopes),
             Decisions = serving.Capabilities.Decisions ? new ScopedDecisions(scopes, persistenceScope) : null,
+            UserTaskJobs = userTasks,
             ConsoleOutput = Console.Out,
             Http = new NativeHttpOptions { Client = _client, ApplyConnection = ApplyHttpConnectionAsync },
             Expressions = expressions,
@@ -172,6 +175,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             maintenance.Add(Task.Run(() => expired.RunAsync(maintenanceToken)));
         }
         if (events is not null) maintenance.Add(Task.Run(() => events.RunAsync(protection!, maintenanceToken)));
+        if (userTasks is not null) maintenance.Add(Task.Run(() => userTasks.RunAsync(maintenanceToken)));
         if (storage.TakesAuthoredStandaloneEvents)
         {
             var outbox = storage.BindAuthoredStandaloneEvents(tenant);
