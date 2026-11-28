@@ -281,7 +281,8 @@ public sealed class Elsa3ExpressionRewriterTests
             ResolveVariables, Elsa3JavaScriptMode.Script);
 
         Assert.False(result.Succeeded);
-        Assert.DoesNotContain(result.Issues, issue => issue.Message.StartsWith("JavaScript changes the workflow instance value", StringComparison.Ordinal));
+        var issue = Assert.Single(result.Issues);
+        Assert.StartsWith("JavaScript uses a with statement", issue.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

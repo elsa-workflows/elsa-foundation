@@ -3502,7 +3502,7 @@ public sealed class Elsa3ExpressionRewriter(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
             $"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.",
             $"Copy the value into a local first (let value = {reader}();) and give the local its new value, in the Elsa 3 workflow before import; " +
-            "the value is text, so it has no members to set." +
+            "the value is text or empty, so it has no members to set." +
             (!ConvertsWorkflowState ? string.Empty
                 : reader == "getCorrelationId" ? " To change the instance's correlation ID, call setCorrelationId(value)."
                 : reader == "getWorkflowInstanceName" ? " To change the instance's name, call setWorkflowInstanceName(value)."
