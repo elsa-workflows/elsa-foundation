@@ -104,10 +104,13 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await detail.getByRole("button", { name: "Refresh task", exact: true }).click();
     await expect(detail.getByText("Completed", { exact: true })).toBeVisible();
     await detail.getByText("History", { exact: true }).click();
+    const history = page.getByRole("dialog", { name: "Task history", exact: true });
+    const lastHistoryEntry = history.getByRole("listitem").last();
     // #4068: history names the person, never the raw user ID.
-    await expect(detail.locator("details li").last()).toContainText("completed · Approve · You");
-    await expect(detail.locator("details")).not.toContainText(who.userId);
-    await detail.locator("details li").last().scrollIntoViewIfNeeded(); await capture(page, info, "task-history");
+    await expect(lastHistoryEntry).toContainText("completed · Approve · You");
+    await expect(history).not.toContainText(who.userId);
+    await lastHistoryEntry.scrollIntoViewIfNeeded(); await capture(page, info, "task-history");
+    await history.getByRole("button", { name: "Close", exact: true }).click();
     page.off("request", watchDirectory);
     expect(directoryReads).toEqual([]);
     // #4068: a completed response reads as a record, with no required marker, resize handle or empty action row.
