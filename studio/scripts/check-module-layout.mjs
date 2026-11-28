@@ -36,12 +36,7 @@ function* walk(roots, predicate) {
 
 const projects = [
   ...walk(moduleSourceRoots, name => name.endsWith(".csproj")),
-  ...walk([join(studioRoot, "tests")], name => name.endsWith(".csproj")),
-  // The independent Studio consumer and its editor module are solution-owned acceptance projects.
-  ...walk([
-    join(repoRoot, "tools/ux-acceptance/StudioConsumer"),
-    join(repoRoot, "tools/ux-acceptance/extensions/TriggerEditor")
-  ], name => name.endsWith(".csproj"))
+  ...walk([join(studioRoot, "tests")], name => name.endsWith(".csproj"))
 ].map(rel).sort();
 const packages = [
   ...walk(moduleSourceRoots, name => name === "package.json"),

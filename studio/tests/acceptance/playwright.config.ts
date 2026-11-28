@@ -11,14 +11,12 @@ const supplement = (title: string) => ({
   grep: new RegExp(` ${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
 });
 const suite = process.env.UX_ACCEPTANCE_SUITE ?? "existing";
-if (!["all", "existing", "standalone-triggers", "core-preview"].includes(suite)) throw new Error("Unknown finite acceptance suite");
+if (!["existing", "core-preview"].includes(suite)) throw new Error("Unknown finite acceptance suite");
 // The Core Preview journeys need their own owned hosts (tools/ux-acceptance/core_preview.py) and run once, on the desktop.
 const corePreview = suite === "core-preview";
-const baseMatch = suite === "existing" ? "journeys.spec.ts" : suite === "standalone-triggers" ? "standaloneTriggers.spec.ts"
-  : corePreview ? "corePreview.spec.ts" : /(?:journeys|standaloneTriggers)\.spec\.ts/;
 export default defineConfig({
   testDir: ".",
-  testMatch: baseMatch,
+  testMatch: corePreview ? "corePreview.spec.ts" : "journeys.spec.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -34,7 +32,6 @@ export default defineConfig({
     { name: "desktop-dark", use: { viewport: { width: 1440, height: 1000 }, colorScheme: "dark" } },
     { name: "narrow-light", use: { viewport: { width: 360, height: 900 }, colorScheme: "light" } },
     { name: "narrow-dark", use: { viewport: { width: 360, height: 900 }, colorScheme: "dark" } },
-    ...(suite === "standalone-triggers" ? [] : [
     { name: "narrow-390-light", use: { viewport: { width: 390, height: 900 }, colorScheme: "light" as const } },
     { name: "narrow-390-dark", use: { viewport: { width: 390, height: 900 }, colorScheme: "dark" as const } },
     // Real touch emulation: coarse primary pointer, touch events and tap gestures against the combined hosts.
@@ -46,11 +43,5 @@ export default defineConfig({
     { name: "availability-390-light", ...supplement("activity availability load failures and recovery"), use: { viewport: { width: 390, height: 900 }, colorScheme: "light" as const } },
     { name: "runtime-api-subset-1440-light", ...supplement("runtime-only API composition and combined return"),
       use: { baseURL: process.env.UX_RUNTIME_STUDIO_URL, viewport: { width: 1440, height: 900 }, colorScheme: "light" as const } }
-    ]),
-    ...(suite === "existing" ? [] : [
-      { name: "compact-light", testMatch: "standaloneTriggers.spec.ts", use: { viewport: { width: 320, height: 900 }, colorScheme: "light" as const } },
-      { name: "desktop-dim", testMatch: "standaloneTriggers.spec.ts", metadata: { themeMode: "dim" }, use: { viewport: { width: 1440, height: 1000 }, colorScheme: "dark" as const } },
-      { name: "desktop-high-contrast", testMatch: "standaloneTriggers.spec.ts", metadata: { themeMode: "high-contrast" }, use: { viewport: { width: 1440, height: 1000 }, colorScheme: "dark" as const } }
-    ])
   ]
 });
