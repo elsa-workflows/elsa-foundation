@@ -20,8 +20,8 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     public void Registration_is_explicit_and_uses_the_shared_operational_context()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions
+        WorkflowPublicationDefaults.Add(services);
+        services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions
         {
             Provider = "Sqlite", ConnectionString = "Data Source=:memory:"
         });
@@ -38,8 +38,8 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     public void Registration_rejects_and_rolls_back_an_unowned_trigger_binding_descriptor()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions
+        WorkflowPublicationDefaults.Add(services);
+        services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions
         {
             Provider = "Sqlite", ConnectionString = "Data Source=:memory:"
         });
@@ -54,8 +54,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     public void Registration_rolls_back_provider_owned_state_when_a_selected_backend_withdrawal_fails()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions
+        services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions
         {
             Provider = "Sqlite", ConnectionString = "Data Source=:memory:"
         });
@@ -171,12 +170,11 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     public void Registration_replaces_the_stock_trigger_default_when_the_feature_has_run()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions
+        WorkflowPublicationDefaults.Add(services);
+        services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions
         {
             Provider = "Sqlite", ConnectionString = "Data Source=:memory:"
         });
-        services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
 
         services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
 
