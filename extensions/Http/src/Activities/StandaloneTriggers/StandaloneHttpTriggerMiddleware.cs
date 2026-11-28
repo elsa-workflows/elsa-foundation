@@ -150,9 +150,12 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
         }
         catch (TriggerOperationException exception)
         {
+            var status = exception.Code switch { "unauthorized" => 401, "forbidden" => 403, "conflict" => 409, "validation" => 400, _ => 503 };
             if (accepted is not null && owner is not null) await TryRecordFailureAsync(owner.Scope, acceptedSourceId!, exchangeId,
-                writeCompleted ? RuntimeIngressTransportState.ReceiptUnknown : RuntimeIngressTransportState.WriteFailed, writeCompleted ? context.Response.StatusCode : 503);
-            if (!writeCompleted && !context.Response.HasStarted) await ProblemAsync(context, exception.Code switch { "unauthorized" => 401, "forbidden" => 403, "conflict" => 409, "validation" => 400, _ => 503 }, exception.Code, exception.Message, accepted is null ? null : acceptedSourceId);
+                writeCompleted ? RuntimeIngressTransportState.ReceiptUnknown : RuntimeIngressTransportState.WriteFailed,
+                writeCompleted ? context.Response.StatusCode : status);
+            if (!writeCompleted && !context.Response.HasStarted)
+                await ProblemAsync(context, status, exception.Code, exception.Message, accepted is null ? null : acceptedSourceId);
         }
         catch (Exception exception)
         {

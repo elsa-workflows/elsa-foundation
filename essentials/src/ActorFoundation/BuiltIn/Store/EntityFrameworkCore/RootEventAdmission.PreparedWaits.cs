@@ -65,7 +65,7 @@ internal static partial class RootEventAdmission
             if (delivery.RequiredWaitSuffix is { } suffix
                 ? waits.Any(wait => wait.Wait?.EndsWith(suffix, StringComparison.Ordinal) != true)
                 : delivery.Payload is null)
-                throw new NotSupportedException("A committed wait lacks the exact route authority required by the source.");
+                throw new PreparedWaitAuthorityConflictException();
             if (delivery.Payload is not { } content) continue;
             if (waits.Count > FoundationMetadataLimits.MaxTurnSends - messages.Count) throw FanoutFull();
             foreach (var wait in waits)

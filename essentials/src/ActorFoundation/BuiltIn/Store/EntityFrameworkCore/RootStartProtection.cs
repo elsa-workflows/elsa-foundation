@@ -110,5 +110,12 @@ public sealed record PreparedWaitDelivery(string Key, string? Payload, string? R
             FoundationMetadataLimits.EventContentBytes;
 }
 
+/// <summary>The provider found incompatible physical waits and did not commit any part of the requested cohort.</summary>
+public sealed class PreparedWaitAuthorityConflictException : NotSupportedException
+{
+    internal PreparedWaitAuthorityConflictException()
+        : base("A committed wait lacks the exact route authority required by the source.") { }
+}
+
 /// <summary>The same immutable cohort receipt is returned after a lost acknowledgement, including for an empty cohort.</summary>
 public sealed record PreparedWaitReceipt(string CohortDigest, int Count);

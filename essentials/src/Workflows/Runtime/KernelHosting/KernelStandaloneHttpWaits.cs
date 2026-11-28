@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Hosting;
@@ -14,6 +15,8 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 /// <summary>Reconstructs only the wait keys and request committed by the authorized standalone HTTP source.</summary>
 internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
 {
+    internal const string AuthorityConflict = "actor-http-wait-authority-conflict";
+
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     internal bool CanAccept(RuntimeStandaloneIngressSource source) => Read(source) is { } plan && AllowsNew(plan);
@@ -26,7 +29,15 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
         var operation = RuntimeDeliveryFingerprint.Compute("elsa.runtime.foundation-http-wait-source.v1", source.OutboxItemId);
         // Runtime accepted this detached plan. A later authored publication cannot revoke it. The provider
         // independently checks every matched wait against the captured provenance before committing the cohort.
-        _ = await foundation.DeliverWaitsAsync(operation, source.Fingerprint, plan.Deliveries, allowNew: true, token);
+        try
+        {
+            _ = await foundation.DeliverWaitsAsync(operation, source.Fingerprint, plan.Deliveries, allowNew: true, token);
+        }
+        catch (PreparedWaitAuthorityConflictException error)
+        {
+            throw new RuntimePostCommitDeliveryException(PostCommitFailureKind.Permanent, AuthorityConflict,
+                "The accepted HTTP source is blocked by an incompatible Actor workflow wait.", error);
+        }
     }
 
     private bool AllowsNew(WaitPlan plan) => serving.MatchHttp(plan.Method, plan.Path) switch
