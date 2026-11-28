@@ -34,13 +34,15 @@
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingEntityFrameworkCore": {},
-          "WorkflowsRuntimeEntityFrameworkCore": {},
-          "WorkflowsRuntimeApi": {},
-          "WorkflowsRuntimeResumption": {},
-          "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Balanced"
+          "WorkflowsRuntimeKernelHosting": {
+            "Provider": "SQLite",
+            "SqlitePath": "/app/data/elsa-kernel.db",
+            "Tenant": "default",
+            "PreparedStandaloneStarts": true
           },
-          "WorkflowsRuntimeTriggers": {},
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {},
           "StandaloneTriggersApi": {},
           "StandaloneEventTriggerAuthoring": {},
           "FoundationIdentityAbstractions": {},
@@ -52,14 +54,10 @@
           },
           "IdentityIamEntityFrameworkCore": {},
           "Http": {},
-          "ActivitiesHttp": {},
-          "WorkflowsRuntimeHttp": {},
           "StandaloneHttpTriggerAuthoring": {},
-          "ActivitiesScheduling": {},
-          "WorkflowsRuntimeScheduling": {},
-          "WorkflowsRuntimeRecurringTriggers": {},
+          "KernelActivitiesScheduling": {},
           "StandaloneScheduleTriggerAuthoring": {},
-          "StandaloneScheduleTriggers": {},
+          "PreparedStandaloneScheduleTriggers": {},
           "ExpressionsApi": {},
           "JavaScriptExpressions": {
             "TypeDescriptors": [
@@ -130,7 +128,6 @@
           "JavaScriptWorkflowsDesign": {},
           "HttpJavaScript": {},
           "Liquid": {},
-          "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesDispatchWorkflowDesign": {},
           "Elsa3Mapping": {},
           "Elsa3ImportJsonActivities": {},

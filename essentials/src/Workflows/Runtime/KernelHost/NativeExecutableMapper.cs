@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Native = Kernel.Native;
@@ -202,11 +203,34 @@ public static class NativeExecutableMapper
             }
             catch (Native.NativeActivityUnsupportedException unsupported)
             {
+                if (!unsupported.Hidden && MappedClrAlias(node) is { } mapped)
+                    return mapped;
+
                 var type = node.ActivityType[(node.ActivityType.LastIndexOf('.') + 1)..];
                 throw NativeMappingRefusedException.Activity(id, unsupported.Hidden
                     ? $"{type} does not run on this host in release 1. Remove the node, or replace it with an activity this host runs."
                     : $"{node.ActivityType} is an activity this host does not know. Remove the node, or replace it with an activity this host runs.");
             }
+        }
+
+        // A reconciled catalog may give a built-in a different key. Only its pinned CLR contract can
+        // select an alias already handled by the Native mapper.
+        private static Type? MappedClrAlias(ExecutableNode node)
+        {
+            var kind = typeof(ClrActivityDescriptor).FullName;
+            if (node.DescriptorType != WellKnownRuntimeActivityConsumers.ClrActivity ||
+                node.DescriptorSchemaVersion != RuntimeActivityDescriptor.InitialSchemaVersion ||
+                node.ActivityContract is not { } contract || contract.ActivityTypeKey != node.ActivityType ||
+                contract.ContractVersion != node.ActivityTypeVersion ||
+                contract.DescriptorKind != kind || contract.Activation.DescriptorKind != kind ||
+                node.DescriptorPayload.ValueKind != JsonValueKind.Object ||
+                node.DescriptorPayload.EnumerateObject().Count() != 1 ||
+                !node.DescriptorPayload.TryGetProperty("typeAlias", out var value) ||
+                value.ValueKind != JsonValueKind.String || value.GetString() is not { } alias ||
+                contract.Activation.Capability != alias || !JsonElement.DeepEquals(contract.DescriptorPayload, node.DescriptorPayload))
+                return null;
+
+            return Native.NativeActivityCatalog.Supported.GetValueOrDefault(alias);
         }
 
         // ---- nodes -----------------------------------------------------------------------------------------------
