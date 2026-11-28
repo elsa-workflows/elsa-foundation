@@ -126,6 +126,22 @@ public sealed class Elsa3ScanAfterRefusalTests
     }
 
     [Fact]
+    public async Task An_object_literal_shaped_like_an_activity_is_data_not_a_child()
+    {
+        var body = JsonSerializer.SerializeToElement(new
+        {
+            typeName = "Object",
+            expression = new { type = "Object", value = new { id = "42", nodeId = "42", type = "customer", version = 1 } }
+        });
+        var root = Sequence("root", Activity("unmapped", "Acme.Http", ("body", body)));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal("Acme.Http", error.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    [Fact]
     public async Task A_switch_case_holding_an_unmapped_activity_is_refused_once_for_that_activity()
     {
         var @switch = Activity("switch", "Elsa.Switch", ("mode", Literal("MatchAny")));

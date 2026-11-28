@@ -1213,8 +1213,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
     /// <summary>
     /// Moves the activities an unresolved node's properties embed (an Elsa 3 port, or a list of cases holding one) into
     /// its <c>activities</c>, each with its original JSON path, so the scan visits them. Without the node's contract the
-    /// ports are unknown, so an embedded activity is recognised by its shape: an object with a string <c>type</c> and
-    /// <c>id</c>. A property that embeds one is taken off the node, so its references are not read twice.
+    /// ports are unknown, so an embedded activity is recognised by its shape: an object with a string <c>type</c>,
+    /// <c>id</c> and <c>nodeId</c> and a numeric <c>version</c>, outside any typed value. A property that embeds one is taken off the node, so its references are not read twice.
     /// </summary>
     private void LiftEmbeddedChildren(Elsa3ConversionPlan plan, Elsa3NodePlan nodePlan, Dictionary<Elsa3Activity, string> childPaths)
     {
@@ -1240,6 +1240,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 case JsonValueKind.Object when IsActivity(value):
                     found.Add((value, path));
                     break;
+                // A typed value (a literal, an expression or a memory reference) holds data, never a child activity.
+                case JsonValueKind.Object when value.TryGetProperty("expression", out _) || value.TryGetProperty("memoryReference", out _):
+                    break;
                 case JsonValueKind.Object:
                     foreach (var property in value.EnumerateObject())
                         FindEmbedded(property.Value, $"{path}.{property.Name}", found);
@@ -1252,9 +1255,12 @@ internal sealed partial class Elsa3ActivityNormalizer(
             }
         }
 
+        // Elsa 3 writes a string type, id and nodeId and a numeric version on every serialized activity.
         static bool IsActivity(JsonElement value) =>
             value.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String &&
-            value.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String;
+            value.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String &&
+            value.TryGetProperty("nodeId", out var nodeId) && nodeId.ValueKind == JsonValueKind.String &&
+            value.TryGetProperty("version", out var version) && version.ValueKind == JsonValueKind.Number;
     }
 
     private Elsa3Activity? ReadChild(
