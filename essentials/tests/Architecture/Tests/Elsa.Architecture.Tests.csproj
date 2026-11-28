@@ -268,4 +268,13 @@
   <ItemGroup>
     <ProjectReference Include="../../../../extensions/Identity/src/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The assembly metadata guards inspect every active source project. -->
+    <ProjectReference Include="../../../src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>
