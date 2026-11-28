@@ -20,15 +20,19 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     private static readonly IRuntimeRecoveryContinuationCodec HistoryCapabilityCodec = new HmacRuntimeRecoveryContinuationCodec(
         Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "history-capability-controls-0123456789", AllowEphemeralDevelopmentKey = false }));
 
-    [Fact]
-    public void Source_inspection_requires_the_actual_EF_reader_context_accessor_and_complete_history_model()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Source_inspection_requires_the_actual_EF_reader_context_accessor_and_complete_history_model(bool prepared)
     {
         var services = CompleteHistoryReaderServices(); services.AddRuntimeCheckpointCommitEntityFrameworkCore();
         using var provider = services.BuildServiceProvider(); using var first = provider.CreateScope(); using var second = provider.CreateScope();
         var context = first.ServiceProvider.GetRequiredService<RuntimeDbContext>();
         var access = first.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>();
         var reader = first.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>();
-        IPostCommitOutboxLookupStore lookup = new EfRuntimePostCommitOutboxStore(context, access);
+        IPostCommitOutboxLookupStore lookup = prepared
+            ? new EfRuntimePostCommitOutboxStorage(context, access, TimeProvider.System, null, null, preparedStandaloneOnly: true)
+            : new EfRuntimePostCommitOutboxStore(context, access);
         Assert.True(lookup.CanInspectHistorySources(reader));
         Assert.False(lookup.CanInspectHistorySources(second.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>()));
         Assert.False(lookup.CanInspectHistorySources(new EfRuntimeHistoryStore(context, new FixedAccessor(access.Current.RequireScope().Value), HistoryCapabilityCodec, RuntimeHistoryEfModule.Chain)));
