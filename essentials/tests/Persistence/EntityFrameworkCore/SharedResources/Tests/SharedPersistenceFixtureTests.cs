@@ -235,8 +235,7 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
             ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
             ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
             [$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{artifacts}"] = "primary",
-            [$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{testScope}"] = "primary",
-            [$"CShells:Shells:default:Features:{preparedStandalone}"] = "true"
+            [$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{testScope}"] = "primary"
         };
         await using var host = new SharedPersistenceHostFixture(targets, settings, ConfigureRuntimeResource);
         await host.StartAsync();
@@ -278,9 +277,10 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
         {
             var shellFile = Path.Combine(contentRoot, "shells.json");
             var root = JsonNode.Parse(File.ReadAllText(shellFile))!;
-            var features = root["CShells"]!["Shells"]!["default"]!["Features"]!;
+            var features = root["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
             Assert.True(features[artifacts]!.AsObject().Remove("Provider"));
             Assert.True(features[testScope]!.AsObject().Remove("Provider"));
+            features[preparedStandalone] = new JsonObject();
             File.WriteAllText(shellFile, root.ToJsonString());
         }
     }

@@ -126,7 +126,7 @@ checkpoint-backed run-health projection and the workflow portfolio in one
 feature. It called `AddWorkflowRunHealthEntityFrameworkCore` in the Dashboard
 EF package's `DependencyInjection/WorkflowRunHealthEntityFrameworkCoreRegistration.cs`.
 Use `385008d6459580ecf0c4566f0e8412bf9b10cf8c` for both the selector and the
-registration's complete-provider and refusal tests:
+registration's complete-provider and refusal tests.
 
 ```sh
 archive="$(mktemp -d)"
@@ -147,8 +147,8 @@ original projection, and physical provider tests.
 The classic Workbench multi-selector case needs the older
 [`workbench-classic-default` checkout](workbench-compatibility-tests.md)
 at `18a16dee878106ac525aa9a861d851a200e43c55`. Its stock shell supplies the
-comprehensive Runtime feature that the test replaces. From that checkout,
-run:
+comprehensive Runtime feature that the test replaces. Run the archived
+case from that checkout.
 
 ```sh
 ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1 \
