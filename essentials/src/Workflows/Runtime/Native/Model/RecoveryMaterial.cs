@@ -58,6 +58,7 @@ internal static class NativeRecoveryMaterial
         // A Switch's cases are part of what it is; a node without any describes as before.
         if (n.Cases.Count != 0) material["Cases"] = DescribeCases(n);
         if (n.Graph is not null) material["Graph"] = DescribeGraph(n);
+        if (n.OutputAssignment is { } assignment) material["OutputAssignment"] = Values.From(assignment);
         return material;
     }
 }

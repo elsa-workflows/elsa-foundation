@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
@@ -244,18 +245,16 @@ public sealed class MappingStructureTests
         };
         var bodyNode = Sequence("body",
             Set("body-set", "v-total", Request("value", "amount")),
-            ScopedSetOutput(assignedOutputReference,
-                new RuntimeInputBinding("value", new(outputType), outputPolicy ?? Durable, RuntimeInputBindingSource.VariableRead,
-                    variable: new RuntimeVariableReference("v-total", WorkflowScope)),
-                isNullable, outputDriver));
+            ScopedSetOutput(assignedOutputReference, VariableRead("value", "v-total", policy: outputPolicy), isNullable, outputDriver, outputType));
         return Node(id, "Acme.Approve", [amount ?? Literal("amount", 7, "Int32")], slots: [Slot("activity-graph", bodyNode)],
             captures: [Capture("result", "out")], descriptorType: "elsa.graph-activity", descriptor: descriptor);
     }
 
     private static ExecutableNode ScopedSetOutput(string? referenceKey, RuntimeInputBinding value, bool isNullable = false,
-        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json) =>
+        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json, string typeAlias = "Int32") =>
         new("body-output", "body-output", "elsa.intrinsic.setoutput", "1.0.0", WellKnownRuntimeActivityConsumers.Intrinsic,
-            JsonSerializer.SerializeToElement(new { kind = "SetOutput", referenceKey, storageDriverKey, isNullable }),
+            JsonSerializer.SerializeToElement(new { kind = "SetOutput", referenceKey, storageDriverKey, isNullable, type = new TypeReference(typeAlias) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             new Dictionary<string, RuntimeInputBinding>
             {
                 [WorkflowIntrinsicInputKeys.Name] = Literal(WorkflowIntrinsicInputKeys.Name, "Published Result", "String"),

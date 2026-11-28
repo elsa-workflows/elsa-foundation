@@ -538,7 +538,20 @@ public static class NativeExecutableMapper
                 throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
                     "This Set Output cannot preserve its value's protection policy. Bind a value that can be stored inline.");
 
-            node.OutputAssignment = new(value.TargetType.Alias, value.TargetType.CollectionKind.ToString(), nullable.GetBoolean());
+            TypeReference? type;
+            try
+            {
+                type = descriptor.TryGetProperty("type", out var typePayload) ? typePayload.Deserialize<TypeReference>(PayloadOptions) : null;
+            }
+            catch (JsonException)
+            {
+                type = null;
+            }
+            if (type is null || string.IsNullOrWhiteSpace(type.Alias) || !Enum.IsDefined(type.CollectionKind))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
+                    "This Set Output has no supported pinned output type. Publish the reusable activity and workflow again.");
+
+            node.OutputAssignment = new(type.Alias, type.CollectionKind.ToString(), nullable.GetBoolean());
             return Native.Binding.Literal(key.GetString());
         }
 

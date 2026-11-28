@@ -134,6 +134,7 @@ internal static class StructuredMigration
 
     private static bool SameAuthoredNode(Node before, Node after) =>
         before.Slot == after.Slot && before.JobTimeout == after.JobTimeout &&
+        before.OutputAssignment == after.OutputAssignment &&
         SameEntries(before.Inputs, after.Inputs, SameBinding) &&
         SameEntries(before.Captures, after.Captures, StringComparer.Ordinal.Equals) &&
         before.Connections.SequenceEqual(after.Connections) &&

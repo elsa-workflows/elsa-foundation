@@ -162,7 +162,15 @@ public sealed class Workflow
             if (node.Type == typeof(GraphActivity)) GraphActivity.Validate(node, id);
             else if (node.Graph is not null) throw new InvalidOperationException($"Node '{node.Id}' in '{id}' declares a boundary and is no GraphActivity.");
             if (node.Type == typeof(Complete)) GraphActivity.ValidateExit(node, Boundary(parent), id);
-            if (node.Type == typeof(SetOutput)) GraphActivity.ValidateOutput(node, Boundary(parent), id);
+            if (node.Type == typeof(SetOutput))
+            {
+                var boundary = Boundary(parent);
+                GraphActivity.ValidateOutput(node, boundary, id);
+                if (node.OutputAssignment is not null && boundary is null)
+                    throw new InvalidOperationException($"Set Output '{node.Id}' in '{id}' needs an enclosing GraphActivity to assign a pinned output.");
+            }
+            else if (node.OutputAssignment is not null)
+                throw new InvalidOperationException($"Node '{node.Id}' in '{id}' declares an output assignment and is no Set Output.");
             if (node.Type == typeof(Finish) && !(node.Inputs.GetValueOrDefault("Outcome") is LiteralBinding { Value: JsonValue outcome } && outcome.TryGetValue<string>(out var named) && !string.IsNullOrWhiteSpace(named)))
                 throw new InvalidOperationException($"Finish '{node.Id}' in '{id}' needs a literal outcome.");
         }
