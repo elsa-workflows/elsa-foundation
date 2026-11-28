@@ -13145,3 +13145,5 @@ override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublic
 override Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.Equals(object? obj) -> bool
 static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? right) -> bool
 static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelEventPublicationScanItem? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.RecurringScheduleInterval
+static Elsa.Workflows.Runtime.Core.Models.RecurringScheduleInterval.ParsePositive(string! expression) -> System.TimeSpan

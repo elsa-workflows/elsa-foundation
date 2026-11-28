@@ -21,11 +21,12 @@ internal abstract class ScheduleTestRunDriver(
     {
         var expression = SchedulingNodeInputs.ReadLiteralString(context.Node, inputName)
             ?? throw new ArgumentException("A test schedule requires its authored literal.");
+        var calculationExpression = PrepareExpression(expression);
         var next = timeProvider.GetUtcNow();
         var occurrences = new List<DateTimeOffset>();
         for (var index = 0; index < 3; index++)
         {
-            if (calculator.ComputeNext(kind, expression, next) is not { } occurrence)
+            if (calculator.ComputeNext(kind, calculationExpression, next) is not { } occurrence)
                 break;
             occurrences.Add(occurrence);
             next = occurrence;
@@ -63,10 +64,28 @@ internal abstract class ScheduleTestRunDriver(
 
     private static TestRunTriggerValidation Refuse(string code, string message) =>
         TestRunTriggerValidation.Failure([new(code, message)]);
+
+    protected virtual string PrepareExpression(string expression) => expression;
 }
 
-internal sealed class TimerTestRunDriver(IRecurringScheduleCalculator calculator, TimeProvider timeProvider)
-    : ScheduleTestRunDriver(calculator, timeProvider, Timer.ActivityType, RecurringScheduleKind.Interval, nameof(Timer.Interval));
+internal sealed class TimerTestRunDriver(IRecurringScheduleCalculator calculator, TimeProvider timeProvider,
+    KernelTimerTestRunIntervalPolicy? kernelIntervals = null)
+    : ScheduleTestRunDriver(calculator, timeProvider, Timer.ActivityType, RecurringScheduleKind.Interval, nameof(Timer.Interval))
+{
+    protected override string PrepareExpression(string expression) => kernelIntervals?.Prepare(expression) ?? expression;
+}
 
 internal sealed class CronTestRunDriver(IRecurringScheduleCalculator calculator, TimeProvider timeProvider)
     : ScheduleTestRunDriver(calculator, timeProvider, Cron.ActivityType, RecurringScheduleKind.Cron, nameof(Cron.Expression));
+
+internal sealed class KernelTimerTestRunIntervalPolicy
+{
+    public string Prepare(string expression)
+    {
+        // The Native Timer trims its authored literal and requires at least one second.
+        var normalized = expression.Trim();
+        if (RecurringScheduleInterval.ParsePositive(normalized) < TimeSpan.FromSeconds(1))
+            throw new FormatException("An Actor Foundation Timer interval must be at least one second.");
+        return normalized;
+    }
+}
