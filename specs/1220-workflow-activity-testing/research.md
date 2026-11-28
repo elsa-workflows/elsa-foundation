@@ -117,3 +117,9 @@ This supports feasibility of the ordinary parentless scheduling/completion primi
 ## Resume audit — 12 November 2026
 
 The original temporary probe paths above are historical and are no longer available in this session. Their reported results are feasibility context, not reproducible current-head acceptance. The local implementation is preserved at snapshot `ef20ce0e37`; #3903 closed without merge. See [delivery slices](delivery-slices.md) for the current-main comparison and extraction order. Each code slice must regenerate its own source-linked evidence.
+
+## Committed native scheduling witnesses — 12 November 2026
+
+`Essentials/tests/Activities/Sequence/Tests/SelectedOccurrenceSchedulingWitnessTests.cs` replaces the unavailable external probe with five reproducible in-process controls using the normal actor, scheduler, checkpoint, input binding and Sequence owners. Ordinary trigger identity still runs the whole graph; an explicit lower-level parentless schedule runs only the selected leaf or its owned composite children without changing the complete stored artifact. The leaf input and actual completion result remain 42. With an enclosing closed invocation, capture writes 42 to its durable variable row; without that invocation, the selected activity faults with the precise nearest-closed-scope diagnostic. No fake ancestor is supplied.
+
+Locked restore and all 38 tests in `Elsa.Activities.Sequence.Tests` passed with zero skips on the extracted slice. The first compile caught two fixture API mistakes (the invocation ID location and an ambiguous paging overload); both were fixed before execution. This is a normal-runtime feasibility witness, not a trusted start, persisted lexical setup, transport qualification, authorization, public runner or product acceptance. T007–T010 remain open.
