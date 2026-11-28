@@ -240,7 +240,8 @@ public sealed partial class KernelStandalonePreparedStartTests
     private static async Task<RuntimeDeliverySourceContext> ClaimAsync(IServiceProvider stores, string owner, TimeProvider clock, CancellationToken token)
     {
         var outbox = Assert.IsAssignableFrom<IRuntimePostCommitOutboxClaimStore>(stores.GetRequiredService<IRuntimePostCommitOutboxStore>());
-        var claims = await outbox.ClaimAsync(new(owner, clock.GetUtcNow(), TimeSpan.FromMinutes(1), 1), token);
+        var claims = await outbox.ClaimAsync(new(owner, clock.GetUtcNow(), TimeSpan.FromMinutes(1), 1,
+            intentKind: RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind), token);
         return new(Assert.Single(claims), Persistence);
     }
 
