@@ -24,10 +24,6 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Use the same authored BPMN fixture builders for old-writer and EF restart witnesses. -->
-    <Compile Include="../../../../../../../extensions/Bpmn/tests/Tests/BpmnRuntimeFixture.cs" Link="Fixtures/BpmnRuntimeFixture.cs" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="../../../../../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="../../../../../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
