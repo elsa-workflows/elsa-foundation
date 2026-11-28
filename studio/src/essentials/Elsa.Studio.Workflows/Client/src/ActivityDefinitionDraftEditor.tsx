@@ -7,7 +7,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffe
 import { createPortal, flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudioButton, tabElementIds, StudioAlert, StudioResultState, StudioShellBreadcrumbs, StudioField, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Code2, CopyPlus, ListTree, LogIn, LogOut, MoreHorizontal, Play, Save, Variable, Workflow as WorkflowIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Code2, CopyPlus, Info, ListTree, LogIn, LogOut, MoreHorizontal, Play, Save, Variable, Workflow as WorkflowIcon } from "lucide-react";
 import {
   studioNavigationRequestedEvent,
   authSessionStartedEvent,
@@ -32,6 +32,7 @@ import { activityDesignKeys, createActivityDefinitionDraft, createActivityDefini
 import { createActivityDefinitionRecoveryStore, type ActivityDefinitionRecoverySnapshot } from "./activityDefinitionRecovery";
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
 import { ActivityDefinitionContractEditor, type ActivityDefinitionContractEditorHandle } from "./ActivityDefinitionContractEditor";
+import { ClrActivityDefinitionOverview, type ClrOverviewPort } from "./ClrActivityDefinitionOverview";
 import { ActivityDefinitionDiagnosticsPanel, type ActivityDraftValidationFailure } from "./ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionPublicationReview } from "./ActivityDefinitionPublicationReview";
 import { ActivityDefinitionContractProposalReview } from "./ActivityDefinitionContractProposalReview";
@@ -244,6 +245,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   const [workspaceTestHostPanel, setWorkspaceTestHostPanel] = useState<"editor" | "test">("editor");
   const [boundaryMappingsRequested, setBoundaryMappingsRequested] = useState(false);
   const [activeView, setActiveView] = useState<ActivityDefinitionAuthoringView>("designer");
+  const pendingOverviewPort = useRef<ClrOverviewPort | null>(null);
   const [canvasToolsHost, setCanvasToolsHost] = useState<HTMLElement | null>(null);
   const [authoringTabsHost, setAuthoringTabsHost] = useState<HTMLDivElement | null>(null);
   const [authoringViewHost, setAuthoringViewHost] = useState<HTMLDivElement | null>(null);
@@ -825,6 +827,8 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     publicationFocusPendingRef.current = false;
     moreActionsTriggerRef.current?.focus();
   }, [draft.status, draftIsActive]);
+  const showClrOverview = Boolean(initialVersion) && !draftIsActive && draft.provider.providerKey === "elsa.clr-activity";
+  const implementationTabLabel = showClrOverview ? "Overview" : "Designer";
   const graphDesignerViewActive = activeView === "designer" && draft.provider.providerKey === "elsa.activity-graph";
   const hasGraphVariables = hasPayload && Boolean(contribution) && draft.provider.providerKey === "elsa.activity-graph" && ["1", "2"].includes(draft.provider.schemaVersion);
   const authoringViewTabIndices: Record<ActivityDefinitionAuthoringView, number> = {
@@ -837,7 +841,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   };
   const activeViewTabIndex = authoringViewTabIndices[activeView];
   const authoringTabs: StudioTabItem[] = [
-    { id: "designer", label: "Designer", icon: <WorkflowIcon size={14} />, disabled: !contractLocallyValid && activeView !== "designer" },
+    { id: "designer", label: implementationTabLabel, icon: showClrOverview ? <Info size={14} /> : <WorkflowIcon size={14} />, disabled: !contractLocallyValid && activeView !== "designer" },
     { id: "inputs", label: `Inputs (${draft.contract.inputs.length})`, icon: <LogIn size={14} />, panelIndex: 1 },
     { id: "outputs", label: `Outputs (${draft.contract.outputs.length})`, icon: <LogOut size={14} />, panelIndex: 1 },
     { id: "outcomes", label: `Outcomes (${draft.contract.outcomes.length})`, icon: <ListTree size={14} />, panelIndex: 1 },
@@ -856,9 +860,20 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     setCenterViewHost: setAuthoringViewHost
   }), [activeView, authoringTabsId, authoringViewTabIndices.designer]);
   const selectAuthoringView = (id: string) => {
+    pendingOverviewPort.current = null;
     authoringTabFocusTransferRef.current = true;
     setActiveView(id as ActivityDefinitionAuthoringView);
   };
+  const openOverviewPort = (port: ClrOverviewPort) => {
+    pendingOverviewPort.current = port;
+    setActiveView(`${port.kind}s`);
+  };
+  useLayoutEffect(() => {
+    const port = pendingOverviewPort.current;
+    if (!port || activeView !== `${port.kind}s` || capabilitiesQuery.isPending) return;
+    pendingOverviewPort.current = null;
+    contractEditorHandle.current?.revealMember(port.kind, port.referenceKey, true);
+  }, [activeView, capabilitiesQuery.isPending]);
   const authoringViewTablist = <StudioTabs
     tabs={authoringTabs}
     activeTab={activeView}
@@ -1188,11 +1203,17 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
       id={authoringTabsShouldBeHosted ? undefined : tabElementIds(authoringTabsId, 0).panelId}
       className="ad-designer-view"
       role={authoringTabsShouldBeHosted ? undefined : "tabpanel"}
-      aria-label={authoringTabsShouldBeHosted ? undefined : "Designer"}
+      aria-label={authoringTabsShouldBeHosted ? undefined : implementationTabLabel}
       aria-labelledby={authoringTabsShouldBeHosted ? undefined : tabElementIds(authoringTabsId, 0).tabId}
       hidden={!authoringTabsShouldBeHosted && activeView !== "designer"}
     >
-    {!hasPayload ? <StudioResultState tone="danger" headingLevel={2} icon={<AlertTriangle size={22} aria-hidden />} title={<>Implementation payload unavailable</>} description={<>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</>} actions={<></>} /> : !contribution || !Editor ? <StudioResultState tone="danger" headingLevel={2} icon={<AlertTriangle size={22} aria-hidden />} title={<>Implementation editor unavailable</>} description={<>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</>} actions={<></>} /> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><NativeBlockAuthorityProvider value={{
+    {showClrOverview && initialVersion ? <ClrActivityDefinitionOverview
+      context={context}
+      version={initialVersion}
+      contract={draft.contract}
+      capabilities={capabilitiesQuery.data}
+      onOpenPort={openOverviewPort}
+    /> : !hasPayload ? <StudioResultState tone="danger" headingLevel={2} icon={<AlertTriangle size={22} aria-hidden />} title={<>Implementation payload unavailable</>} description={<>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</>} actions={<></>} /> : !contribution || !Editor ? <StudioResultState tone="danger" headingLevel={2} icon={<AlertTriangle size={22} aria-hidden />} title={<>Implementation editor unavailable</>} description={<>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</>} actions={<></>} /> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><NativeBlockAuthorityProvider value={{
       sourceKey: JSON.stringify([draft, blockAuthoringAllowed, providerReadOnly, proposalApplying, publicationPending]),
       canEdit: Boolean(draft.draftId) || canStartEditing ? blockAuthoringAllowed && !providerReadOnly : false,
       canApply: () => {
