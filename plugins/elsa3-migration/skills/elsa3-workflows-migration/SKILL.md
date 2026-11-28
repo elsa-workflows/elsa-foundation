@@ -151,7 +151,7 @@ the shape). Then read the result:
    calls appears only in a later report, once that activity is ported. Every report adds rows (stage 3).
 3. Show the user the components with their counts.
 4. Mark the Elsa 3 built-ins: a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as
-   `Elsa.SetVariable`), the storage driver named only `MemoryStorageDriver` (Elsa 3's Memory driver), and a
+   `Elsa.SetVariable`), a storage driver whose type name before the comma is exactly `MemoryStorageDriver` (Elsa 3's Memory driver), and a
    JavaScript function that case 14 of the porting catalog lists as one Elsa 3 defined itself. Record their source as
    `Elsa 3 built-in` and do not search for them.
 5. Ask for the folders or repositories of the Elsa 3 source (asking once per folder before searching it) and record
@@ -260,20 +260,22 @@ the user:
 
   In `shells.Local.json` the same settings are
   `{ "CShells": { "Shells": { "default": { "Features": { "JsonWorkflowReconciliation": { "Options": { "FolderPath": "<output>/migrated/workflows" } }, "JsonActivityReconciliation": { "Options": { "FilePath": "<output>/migrated/activities/activities.json" } } } } } } }`.
-  The host listens on `http://localhost:5096` and is ready when `GET /health/ready` returns 200. It refuses to start
-  when a folder or file is missing or a listed feature is unknown, and its log names the cause. HTTP-triggered
+  The host listens on `http://localhost:5096` and is ready when `GET /health/ready` returns 200. When a folder or file is
+  missing or a listed feature is unknown, the process keeps running but never becomes ready (`/health/ready` stays
+  503), and its log names the cause. HTTP-triggered
   workflows answer under `/workflows/http/`. The host's README (`apps/Elsa.Migration.Host/README.md` in the clone)
   has more, including signing in and connecting Studio.
 - **Changing a migrated workflow** on the host: change the Elsa 3 definition and run the assessment again, so the
   migrated files and the report stay in step. The converted definition keeps its version number, so delete the host's
   `data/` folder before restarting it. Otherwise a changed workflow keeps the version the host loaded first, and a
-  changed reusable workflow (exported as an activity) makes the host refuse to start: the same activity version now
-  has different content.
+  changed reusable workflow (exported as an activity) keeps the host from becoming ready (`/health/ready` stays 503,
+  the log names the cause): the same activity version now has different content.
 - This local setup is a temporary development setup, not the production go-live. The go-live comes with an Elsa 3
   migration app profile once Elsa 4's distribution channels are decided, and this guide will be updated then.
 - Moving the clone to another commit means running the assessment again before trying the result.
 - The host keeps its data between runs (in its git-ignored `data/` folder). If you change a ported activity after the
-  host has loaded it, the host refuses to start, because the same activity version now has different content. Either
+  host has loaded it, the host does not become ready (`/health/ready` stays 503, the log names the cause), because the same activity
+  version now has different content. Either
   give the activity a higher version with `[Version("1.0.1")]` (from `Elsa.Activities.Runtime.Core.Attributes`), or
   delete the host's `data/` folder before starting it again. The assessment is not affected: each run starts from an
   empty store.

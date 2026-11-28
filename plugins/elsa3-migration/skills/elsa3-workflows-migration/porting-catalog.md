@@ -955,7 +955,8 @@ internal sealed class AcmeVariableTypes : IVariableTypeDescriptorProvider
 
 **Search**: for a custom driver, the type name before the comma in its assembly-qualified name, as the report names it
 (`Acme.BlobStorageDriver, Acme` → class `BlobStorageDriver` in namespace `Acme`), and `IStorageDriver`,
-`AddStorageDriver`. Elsa 3's own drivers (type name starting with `Elsa.`) need no search.
+`AddStorageDriver`. Elsa 3's own drivers (type name starting with `Elsa.`, or exactly `MemoryStorageDriver` before the comma)
+need no search.
 
 **Before (Elsa 3)**
 ```csharp
