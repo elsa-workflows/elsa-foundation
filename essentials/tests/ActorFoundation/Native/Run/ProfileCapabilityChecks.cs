@@ -565,7 +565,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.RetainedRootResponse] = RootCapabilities.PreparedStarts | RootCapabilities.StableBody,
             [RootCapabilities.AuthoredStandaloneEvents] = RootCapabilities.PagedPublicEvents | RootCapabilities.PublicEventHost,
             [RootCapabilities.PreparedWaitDelivery] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
-            [RootCapabilities.UserTaskWaits] = RootCapabilities.JobProtocol | RootCapabilities.ReplyProtocol | RootCapabilities.StableBody,
+            [RootCapabilities.UserTaskWaits] = RootCapabilities.TimedJobPreview | RootCapabilities.StableBody |
+                RootCapabilities.Timers | RootCapabilities.ParkRecovery,
             [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.HeldEphemeralHttpTestRuns] = RootCapabilities.DirectTestRuns | RootCapabilities.InlinePromotion |
                 RootCapabilities.ReplyProtocol | RootCapabilities.Children,

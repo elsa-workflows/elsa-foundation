@@ -66,6 +66,7 @@ if (args is ["user-task-wait-format", var userTaskProvider] && userTaskProvider 
     return await UserTaskWaitFormatChecks.RunAsync(userTaskProvider);
 if (args is ["user-task-wait-opens"]) return await NativeUserTaskWaitChecks.RunAsync();
 if (args is ["user-task-wait-park"]) return await NativeUserTaskWaitChecks.RunAsync(park: true);
+if (args is ["user-task-wait-portability"]) return await NativeUserTaskWaitChecks.RunAsync(portability: true);
 if (args is ["direct-test-run-profile", var testRunProfileProvider and ("postgres" or "sqlite")])
     return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(testRunProfileProvider == "postgres");
 if (args is ["ephemeral-test-run-profile", var ephemeralTestRunProvider and ("postgres" or "sqlite")])

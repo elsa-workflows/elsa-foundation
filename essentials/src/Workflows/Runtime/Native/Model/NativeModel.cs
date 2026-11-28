@@ -187,6 +187,9 @@ public sealed partial class NativeState
     [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     internal Dictionary<string, NativeUserTaskWaits.Consumption>? UserTaskConsumptions { get; set; }
 
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal bool RequiresUserTaskModel { get; set; }
+
     public Dictionary<string, JsonNode?> Variables { get; set; } = new(StringComparer.Ordinal);
     /// <summary>The correlation id Set Correlation Id set, which an expression's instance parameter reads; the label holds it too.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -313,6 +316,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case Contract.Kinds.Start when !_s.Started:
             {
                 _s.Started = true;
+                _s.RequiresUserTaskModel = options.UserTaskJobs is not null && NativeUserTaskWaits.RequiresTaskModel(_wf);
                 InitializeIntervention();
                 var start = System.Text.Json.JsonSerializer.Deserialize<NativeStart>(m.Payload ?? "{}")!;
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();

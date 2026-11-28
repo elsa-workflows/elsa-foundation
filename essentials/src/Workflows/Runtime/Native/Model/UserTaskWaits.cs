@@ -44,6 +44,13 @@ internal static class NativeUserTaskWaits
     private const string OpenJobPrefix = "native.user-task.open/";
     private const string SettleJobPrefix = "native.user-task.settle/";
 
+    internal static bool RequiresTaskModel(Workflow workflow) =>
+        workflow.Nodes.Values.Any(node => node.Type == typeof(CreateUserTask));
+
+    internal static bool NeedsTaskModel(NativeState native) =>
+        native.RequiresUserTaskModel || native.UserTaskConsumptions is { Count: > 0 } ||
+        native.Waits.Values.Any(wait => wait.Kind == Kind);
+
     internal static bool TryGetJob(string jobKey, out string wait, out bool settling)
     {
         settling = jobKey.StartsWith(SettleJobPrefix, StringComparison.Ordinal);

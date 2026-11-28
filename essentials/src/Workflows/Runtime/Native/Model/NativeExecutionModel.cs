@@ -19,6 +19,9 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     private const int PreviousStateVersion = 14;
     private const int UserTaskStateVersion = 15;
     public int StateVersion => _options.UserTaskJobs is null ? PreviousStateVersion : UserTaskStateVersion;
+    public int CheckpointVersion(object state) => state is NativeState native && NativeUserTaskWaits.NeedsTaskModel(native)
+        ? StateVersion
+        : PreviousStateVersion;
 
     /// <param name="workflow">The workflow to run (<see cref="Workflow.Id"/>).</param>
     /// <param name="definition">
@@ -57,7 +60,10 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         var definition = source.ExecutableSelection is null ? before.Definition : source.Definition ?? before.Definition;
         if (definition != after.Definition && (definition != before.Id || after.Definition != after.Id))
             return "DefinitionChanged";
-        if (StructuredMigration.Validate(before, after, (NativeState)state) is { } finding)
+        var native = (NativeState)state;
+        if (NativeUserTaskWaits.RequiresTaskModel(after) != native.RequiresUserTaskModel)
+            return "UserTaskCapabilityChanged";
+        if (StructuredMigration.Validate(before, after, native) is { } finding)
             return finding.ToString();
         if (source.ExecutableSelection is not null) targetExecutableSelection = after.ExecutableSelection;
         return null;
@@ -72,8 +78,9 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
         if (fromVersion < 4 && LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
-        if (native.UserTaskConsumptions is not null || native.Waits.Values.Any(wait => wait.Kind == NativeUserTaskWaits.Kind))
+        if (NativeUserTaskWaits.NeedsTaskModel(native))
             throw new InvalidOperationException("Legacy native state contains unsupported user task waits.");
+        if (fromVersion == PreviousStateVersion) return native;
         if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
         if (fromVersion < 6 && NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
         if (fromVersion < 7 && native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");

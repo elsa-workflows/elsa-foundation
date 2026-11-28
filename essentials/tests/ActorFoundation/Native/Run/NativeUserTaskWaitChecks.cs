@@ -12,7 +12,7 @@ namespace Kernel.Native.Run;
 internal static class NativeUserTaskWaitChecks
 {
     private const string Receipt = "accepted-response-7";
-    internal static async Task<int> RunAsync(bool park = false)
+    internal static async Task<int> RunAsync(bool park = false, bool portability = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var token = timeout.Token;
@@ -26,8 +26,13 @@ internal static class NativeUserTaskWaitChecks
             KernelDb Open() => KernelDb.ForSqliteRootRuntime(options, definitions);
             var store = new EfStore(Open, postgres: false);
             var jobs = new OpenJobWitness(store);
-            var workflows = new WorkflowRegistry().Add(Wf.Workflow("review", Wf.Node<CreateUserTask>("approval",
-                ("Title", "Review"), ("AssigneeId", "person"), ("FormId", "review-form"), ("FormVersion", "7"))));
+            var task = Wf.Node<CreateUserTask>("approval", ("Title", "Review"), ("AssigneeId", "person"),
+                ("FormId", "review-form"), ("FormVersion", "7"));
+            var workflows = new WorkflowRegistry()
+                .Add(Wf.Workflow("review", task))
+                .Add(Wf.Workflow("ordinary-wait", Wf.Event("waiting", "continue-workflow")))
+                .Add(Wf.Workflow("task-after-wait", Wf.Sequence("sequence", Wf.Event("waiting", "continue-workflow"),
+                    Wf.Node<CreateUserTask>("approval", ("Title", "Review"), ("AssigneeId", "person")))));
             var ordinary = new NativeExecutionModel(workflows);
             var qualified = new NativeExecutionModel(workflows, new NativeExecutionOptions { UserTaskJobs = jobs });
             Require(qualified.StateVersion == ordinary.StateVersion + 1, "The durable task wait needs its own Native state version.");
@@ -41,6 +46,40 @@ internal static class NativeUserTaskWaitChecks
             await owner.StartAsync(token);
             var ingress = await foundation.OpenIngressAsync(token);
             var tenant = EmbeddedTenant.Bind("user-task-tenant");
+            if (portability)
+            {
+                var plain = await StartPortableAsync("ordinary-wait");
+                var taskBearing = await StartPortableAsync("task-after-wait");
+                var plainOwner = new WorkflowActor.WorkflowActor([ordinary]);
+                var plainView = await foundation.CreateReads().GetAsync(tenant, plain, token);
+                var bearingView = await foundation.CreateReads().GetAsync(tenant, taskBearing, token);
+                Require(plainView is not null && !plainOwner.Withholds(plainView.Header) &&
+                    bearingView is not null && plainOwner.Withholds(bearingView.Header) && jobs.OpenCalls == 0,
+                    "A task-capable owner must mark the task-bearing executable before its task opens and preserve the task-free version.");
+
+                await owner.StopAsync(token);
+                await using var successor = foundation.CreateHostedService(plainOwner, error => throw new InvalidOperationException(error));
+                await successor.StartAsync(token);
+                Require(await ingress.SendAsync(tenant, new Contract.Target.Ref(plain), "ordinary-owner-resume", NativeKinds.Resume,
+                    JsonSerializer.Serialize(new ResumeStimulus("continue-workflow")), cancellationToken: token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "The no-task owner must accept the task-free continuation.");
+                await ObserveAsync(store, tenant.Tenant, plain, row => row.Status == InstanceStatus.Finished, token);
+                await successor.StopAsync(token);
+                Console.WriteLine("A task-free persisted workflow continues on the common format when its next owner has no task runtime.");
+                return 0;
+            }
+
+            async Task<Contract.ActorRef> StartPortableAsync(string workflow)
+            {
+                var started = await ingress.SendAsync(tenant, new Contract.Target.Start(WorkflowActor.WorkflowActor.Start(
+                    NativeExecutionModel.Start(workflow))), workflow, Contract.Kinds.Start, cancellationToken: token);
+                Require(started is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "The verified owner must admit the workflow.");
+                var reference = started.Actor!.Value;
+                await ObserveAsync(store, tenant.Tenant, reference,
+                    row => row.State?.Contains("continue-workflow", StringComparison.Ordinal) == true, token);
+                return reference;
+            }
+
             var result = await ingress.SendAsync(tenant, new Contract.Target.Start(WorkflowActor.WorkflowActor.Start(
                 NativeExecutionModel.Start("review"))), "open-review", Contract.Kinds.Start, cancellationToken: token);
             Require(result.Outcome == Contract.AdmissionOutcome.Accepted && result.Actor is not null, "The private profile must admit the test workflow.");

@@ -6,8 +6,6 @@ namespace Elsa.Workflows.Runtime.Api.UserTasks;
 
 internal static class UserTaskHttpApi
 {
-    internal const string CapabilityId = "elsa.api.user-tasks";
-
     // Route discovery is also the contract for clients that connect to different execution backends.
     internal static readonly ApiCapabilityLink[] ArchiveLinks =
     [

@@ -64,7 +64,7 @@ public sealed class WorkflowsRuntimeKernelUserTasksApiFeature : IWebShellFeature
         ApiCapabilityLink[] links = participantActions
             ? [.. UserTaskHttpApi.ArchiveLinks, .. UserTaskHttpApi.ParticipantLinks]
             : UserTaskHttpApi.ArchiveLinks;
-        services.AddApiCapability(new ApiCapabilityDeclaration(UserTaskHttpApi.CapabilityId, 1, links, "WorkflowsRuntimeKernelUserTasksApi"));
+        services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.user-tasks", 1, links, "WorkflowsRuntimeKernelUserTasksApi"));
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)

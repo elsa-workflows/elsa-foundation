@@ -26,6 +26,8 @@ public interface IExecutionModel
     string Key { get; }
     Type StateType { get; }
     int StateVersion { get; }
+    /// <summary>The format needed by this checkpoint, bounded by the model's maximum readable version.</summary>
+    int CheckpointVersion(object state) => StateVersion;
     object CreateState(WorkflowStart start);
     object UpgradeState(string state, int fromVersion);
     ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken);
