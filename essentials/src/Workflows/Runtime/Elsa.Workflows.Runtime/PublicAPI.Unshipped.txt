@@ -1626,18 +1626,18 @@ const Elsa.Workflows.Runtime.Services.WorkHandlers.WorkflowRetryActivityBoundary
 const Elsa.Workflows.Runtime.Services.WorkHandlers.WorkflowScheduleActivitySchedulerWorkHandler.HandlerName = "WorkflowScheduleActivitySchedulerWorkHandler" -> string!
 const Elsa.Workflows.Runtime.Services.WorkHandlers.WorkflowStartActivitySchedulerWorkHandler.HandlerName = "WorkflowStartActivitySchedulerWorkHandler" -> string!
 const Elsa.Workflows.Runtime.Services.WorkHandlers.WorkflowStartSchedulerWorkHandler.HandlerName = "WorkflowStartSchedulerWorkHandler" -> string!
-override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.Equals(object? obj) -> bool
-override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.GetHashCode() -> int
-override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.ToString() -> string!
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.Equals(object? obj) -> bool
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.GetHashCode() -> int
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.ToString() -> string!
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Equals(object? obj) -> bool
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.GetHashCode() -> int
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.ToString() -> string!
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Equals(object? obj) -> bool
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.GetHashCode() -> int
-override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.ToString() -> string!
+override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.Equals(object? obj) -> bool (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.GetHashCode() -> int (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.ToString() -> string! (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.Equals(object? obj) -> bool (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.GetHashCode() -> int (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.ToString() -> string! (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Equals(object? obj) -> bool (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.GetHashCode() -> int (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.ToString() -> string! (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Equals(object? obj) -> bool (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.GetHashCode() -> int (forwarded, contained in Elsa.Workflows.Runtime.Attention)
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.ToString() -> string! (forwarded, contained in Elsa.Workflows.Runtime.Attention)
 override Elsa.Workflows.Runtime.Services.ActivityExecutions.ActivitySubtreeCancellationPlan.Equals(object? obj) -> bool
 override Elsa.Workflows.Runtime.Services.ActivityExecutions.ActivitySubtreeCancellationPlan.GetHashCode() -> int
 override Elsa.Workflows.Runtime.Services.ActivityExecutions.ActivitySubtreeCancellationPlan.ToString() -> string!
@@ -1828,7 +1828,7 @@ static Elsa.Workflows.Runtime.Services.WorkHandlers.SchedulerWorkHandlerHelpers.
 static Elsa.Workflows.Runtime.Services.WorkHandlers.SchedulerWorkHandlerHelpers.ResolveExecutableNode(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! workItem, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! executable, string! executableNodeId, string! commandLabel) -> Elsa.Workflows.Runtime.Core.Models.ExecutableNode!
 static Elsa.Workflows.Runtime.Services.WorkHandlers.SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! workItem, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! pinnedExecutable, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! loadedExecutable) -> void
 static Elsa.Workflows.Runtime.Services.WorkHandlers.WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(System.ArgumentException! exception) -> bool
-static readonly Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecords.UrgencyComparer -> System.Collections.Generic.IComparer<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!>!
+static readonly Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecords.UrgencyComparer -> System.Collections.Generic.IComparer<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!>! (forwarded, contained in Elsa.Workflows.Runtime.Attention)
 static readonly Elsa.Workflows.Runtime.Diagnostics.NullWorkflowEngineTracer.Instance -> Elsa.Workflows.Runtime.Diagnostics.NullWorkflowEngineTracer!
 static readonly Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames -> System.Collections.Generic.IReadOnlySet<string!>!
 static readonly Elsa.Workflows.Runtime.Services.Executions.NoopWorkflowExecutionCommandExecutor.Instance -> Elsa.Workflows.Runtime.Services.Executions.NoopWorkflowExecutionCommandExecutor!

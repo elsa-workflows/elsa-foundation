@@ -91,3 +91,16 @@ static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecords.MapIncid
 static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Unavailable(string! errorCode, string? detail = null) -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot!
 static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.operator !=(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? left, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? right) -> bool
 static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.operator ==(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? left, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? right) -> bool
+override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.ToString() -> string!
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.ToString() -> string!
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.ToString() -> string!
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.ToString() -> string!
+static readonly Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecords.UrgencyComparer -> System.Collections.Generic.IComparer<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!>!
