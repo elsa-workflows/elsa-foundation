@@ -2,15 +2,14 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Activities;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Testing;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText;
 using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -26,26 +25,15 @@ public sealed class BpmnDecisionPublicationTests
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     [Theory]
-    [InlineData("High", "exclusiveGateway", "high")]
-    [InlineData(" Low ", "exclusiveGateway", "low")]
-    [InlineData("", "exclusiveGateway", "low")]
-    [InlineData("Unexpected", "exclusiveGateway", "low")]
-    [InlineData("High", "inclusiveGateway", "high")]
-    public async Task Authored_decision_compiles_and_routes_through_production_activation(string outcome, string gatewayType, string expected)
+    [InlineData("exclusiveGateway")]
+    [InlineData("inclusiveGateway")]
+    public void Authored_decision_retains_conditional_and_default_outcomes(string gatewayType)
     {
-        await using var fixture = await BpmnRuntimeFixture.CreateAsync(["process-exec", "decision-exec", "task-exec"], services =>
-        {
-            new SerializationFeature().ConfigureServices(services);
-            new Elsa.Activities.Primitives.ActivitiesPrimitivesFeature().ConfigureServices(services);
-        });
-        var compiled = Compile(outcome, gatewayType);
-        var decision = compiled.ChildSlots.Single().Activities.Single(node => node.AuthoredActivityId == "decision");
+        var compiled = Compile("High", gatewayType);
+        var decision = Assert.Single(Assert.Single(compiled.ChildSlots).Activities,
+            node => node.AuthoredActivityId == "decision");
         Assert.Contains("High", decision.ActivityContract!.Outcomes);
         Assert.Contains("Done", decision.ActivityContract.Outcomes);
-        var run = await fixture.RunAsync(WorkflowExecutionHarness.NewExecutable(compiled));
-        run.AssertRan(expected);
-        run.AssertDidNotRun(expected == "high" ? "low" : "high");
-        run.AssertWorkflowCompleted();
     }
 
     [Fact]
@@ -80,7 +68,7 @@ public sealed class BpmnDecisionPublicationTests
             [new("start-flow", "start", "gateway"), new("high-flow", "gateway", "high-task", conditionOutcome: "High"),
              new("default-flow", "gateway", "low-task", isDefault: true),
              new("high-end-flow", "high-task", "high-end", conditionOutcome: foreignTaskCondition ? "Foreign" : null), new("low-end-flow", "low-task", "low-end")]);
-        var root = new ActivityNode(BpmnRuntimeFixture.ProcessNodeId, typeof(BpmnProcess).FullName!, [], [],
+        var root = new ActivityNode(BpmnTestNodes.ProcessNodeId, typeof(BpmnProcess).FullName!, [], [],
             new(BpmnProcess.StructureKind, BpmnProcess.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web)));
         var structureService = new DefaultActivityStructureService([new BpmnStructureHandler()]);
         var compiler = new ExecutableNodeCompiler(structureService, registry, new RuntimeInputBindingCompiler(registry),

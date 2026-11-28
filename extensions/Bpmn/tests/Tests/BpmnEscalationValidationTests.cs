@@ -19,21 +19,21 @@ public sealed class BpmnEscalationValidationTests
     private static BpmnElement[] MinimalElements(
         BpmnElement? boundary = null, BpmnElement? thrower = null, BpmnElement? host = null, params BpmnElement[] extra) =>
     [
-        BpmnRuntimeFixture.StartEvent(),
-        host ?? BpmnRuntimeFixture.SubProcess("sub", childNodeId: "node-sub"),
-        boundary ?? BpmnRuntimeFixture.EscalationBoundary("b-esc", "sub", "E1"),
-        thrower ?? BpmnRuntimeFixture.EscalationThrow("throw", "E1"),
-        BpmnRuntimeFixture.EndEvent("end"),
-        BpmnRuntimeFixture.EndEvent("bnd-end"),
+        BpmnTestNodes.StartEvent(),
+        host ?? BpmnTestNodes.SubProcess("sub", childNodeId: "node-sub"),
+        boundary ?? BpmnTestNodes.EscalationBoundary("b-esc", "sub", "E1"),
+        thrower ?? BpmnTestNodes.EscalationThrow("throw", "E1"),
+        BpmnTestNodes.EndEvent("end"),
+        BpmnTestNodes.EndEvent("bnd-end"),
         .. extra
     ];
 
     private static readonly BpmnSequenceFlow[] MinimalFlows =
     [
-        BpmnRuntimeFixture.Flow("flow-1", "start", "sub"),
-        BpmnRuntimeFixture.Flow("flow-2", "sub", "throw"),
-        BpmnRuntimeFixture.Flow("flow-3", "throw", "end"),
-        BpmnRuntimeFixture.Flow("flow-b", "b-esc", "bnd-end")
+        BpmnTestNodes.Flow("flow-1", "start", "sub"),
+        BpmnTestNodes.Flow("flow-2", "sub", "throw"),
+        BpmnTestNodes.Flow("flow-3", "throw", "end"),
+        BpmnTestNodes.Flow("flow-b", "b-esc", "bnd-end")
     ];
 
     [Fact]
@@ -57,15 +57,15 @@ public sealed class BpmnEscalationValidationTests
         // A code-less escalation end (no outbound, as an end event requires).
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.SubProcess("sub", childNodeId: "node-sub"),
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.SubProcess("sub", childNodeId: "node-sub"),
                 new BpmnElement("esc-end", BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation)])
             ],
             "must declare a non-empty escalation code",
             flows:
             [
-                BpmnRuntimeFixture.Flow("flow-1", "start", "sub"),
-                BpmnRuntimeFixture.Flow("flow-2", "sub", "esc-end")
+                BpmnTestNodes.Flow("flow-1", "start", "sub"),
+                BpmnTestNodes.Flow("flow-2", "sub", "esc-end")
             ]);
 
     [Fact]
@@ -81,18 +81,18 @@ public sealed class BpmnEscalationValidationTests
         // A task host is dead by construction: its bound child is a leaf that can never escalate.
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("task-a", childNodeId: "node-sub"),
-                BpmnRuntimeFixture.EscalationBoundary("b-esc", "task-a", "E1"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EndEvent("bnd-end")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.Task("task-a", childNodeId: "node-sub"),
+                BpmnTestNodes.EscalationBoundary("b-esc", "task-a", "E1"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EndEvent("bnd-end")
             ],
             "only attach to a subprocess or call activity host",
             flows:
             [
-                BpmnRuntimeFixture.Flow("flow-1", "start", "task-a"),
-                BpmnRuntimeFixture.Flow("flow-2", "task-a", "end"),
-                BpmnRuntimeFixture.Flow("flow-b", "b-esc", "bnd-end")
+                BpmnTestNodes.Flow("flow-1", "start", "task-a"),
+                BpmnTestNodes.Flow("flow-2", "task-a", "end"),
+                BpmnTestNodes.Flow("flow-b", "b-esc", "bnd-end")
             ]);
 
     [Fact]
@@ -111,37 +111,37 @@ public sealed class BpmnEscalationValidationTests
             "must have at least one outbound",
             flows:
             [
-                BpmnRuntimeFixture.Flow("flow-1", "start", "sub"),
-                BpmnRuntimeFixture.Flow("flow-2", "sub", "throw"),
-                BpmnRuntimeFixture.Flow("flow-3", "throw", "end")
+                BpmnTestNodes.Flow("flow-1", "start", "sub"),
+                BpmnTestNodes.Flow("flow-2", "sub", "throw"),
+                BpmnTestNodes.Flow("flow-3", "throw", "end")
             ]);
 
     [Fact]
     public void EscalationBoundary_DuplicateCode_OnOneHost_IsRejected() =>
         AssertRejects(
-            MinimalElements(extra: BpmnRuntimeFixture.EscalationBoundary("b-esc-2", "sub", "E1")),
+            MinimalElements(extra: BpmnTestNodes.EscalationBoundary("b-esc-2", "sub", "E1")),
             "escalation boundary codes on one host must be distinct",
-            flows: [.. MinimalFlows, BpmnRuntimeFixture.Flow("flow-b2", "b-esc-2", "end")]);
+            flows: [.. MinimalFlows, BpmnTestNodes.Flow("flow-b2", "b-esc-2", "end")]);
 
     [Fact]
     public void EscalationBoundary_TwoCatchAlls_OnOneHost_IsRejected() =>
         AssertRejects(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.SubProcess("sub", childNodeId: "node-sub"),
-                BpmnRuntimeFixture.EscalationBoundary("b-all-1", "sub"),
-                BpmnRuntimeFixture.EscalationBoundary("b-all-2", "sub"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EndEvent("bnd-1"),
-                BpmnRuntimeFixture.EndEvent("bnd-2")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.SubProcess("sub", childNodeId: "node-sub"),
+                BpmnTestNodes.EscalationBoundary("b-all-1", "sub"),
+                BpmnTestNodes.EscalationBoundary("b-all-2", "sub"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EndEvent("bnd-1"),
+                BpmnTestNodes.EndEvent("bnd-2")
             ],
             "at most one",
             flows:
             [
-                BpmnRuntimeFixture.Flow("flow-1", "start", "sub"),
-                BpmnRuntimeFixture.Flow("flow-2", "sub", "end"),
-                BpmnRuntimeFixture.Flow("flow-a1", "b-all-1", "bnd-1"),
-                BpmnRuntimeFixture.Flow("flow-a2", "b-all-2", "bnd-2")
+                BpmnTestNodes.Flow("flow-1", "start", "sub"),
+                BpmnTestNodes.Flow("flow-2", "sub", "end"),
+                BpmnTestNodes.Flow("flow-a1", "b-all-1", "bnd-1"),
+                BpmnTestNodes.Flow("flow-a2", "b-all-2", "bnd-2")
             ]);
 
     [Fact]
@@ -149,19 +149,19 @@ public sealed class BpmnEscalationValidationTests
     {
         var graph = BpmnGraphAdapter.Build(NewNode(
             [
-                BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.SubProcess("sub", childNodeId: "node-sub"),
-                BpmnRuntimeFixture.EscalationBoundary("b-coded", "sub", "E1"),
-                BpmnRuntimeFixture.EscalationBoundary("b-all", "sub"),
-                BpmnRuntimeFixture.EndEvent("end"),
-                BpmnRuntimeFixture.EndEvent("bnd-1"),
-                BpmnRuntimeFixture.EndEvent("bnd-2")
+                BpmnTestNodes.StartEvent(),
+                BpmnTestNodes.SubProcess("sub", childNodeId: "node-sub"),
+                BpmnTestNodes.EscalationBoundary("b-coded", "sub", "E1"),
+                BpmnTestNodes.EscalationBoundary("b-all", "sub"),
+                BpmnTestNodes.EndEvent("end"),
+                BpmnTestNodes.EndEvent("bnd-1"),
+                BpmnTestNodes.EndEvent("bnd-2")
             ],
             [
-                BpmnRuntimeFixture.Flow("flow-1", "start", "sub"),
-                BpmnRuntimeFixture.Flow("flow-2", "sub", "end"),
-                BpmnRuntimeFixture.Flow("flow-c", "b-coded", "bnd-1"),
-                BpmnRuntimeFixture.Flow("flow-a", "b-all", "bnd-2")
+                BpmnTestNodes.Flow("flow-1", "start", "sub"),
+                BpmnTestNodes.Flow("flow-2", "sub", "end"),
+                BpmnTestNodes.Flow("flow-c", "b-coded", "bnd-1"),
+                BpmnTestNodes.Flow("flow-a", "b-all", "bnd-2")
             ],
             ["node-sub"]));
 
@@ -192,5 +192,5 @@ public sealed class BpmnEscalationValidationTests
                 JsonSerializer.SerializeToElement(new BpmnStructure(elements, flows))));
 
     private static ExecutableNode WorkflowChild(string nodeId) =>
-        Elsa.Activities.Testing.WorkflowExecutionHarness.NewProbeNode(nodeId);
+        BpmnTestNodes.Probe(nodeId);
 }
