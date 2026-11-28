@@ -632,12 +632,15 @@ public static class RuntimeCoreServiceCollectionExtensions
     public static IServiceCollection AddWorkflowActivationDefaults(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.AddActivationChannelOptions();
-        services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
-        services.TryAddScoped<IWorkflowActivationSwitch, InMemoryWorkflowActivationSwitch>();
-        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
-        WorkflowActivationSwitchCompositionValidator.Register(services);
+        services.TryAddSingleton<IInMemoryPublicationReservationStateSource, CheckpointReservationStateSource>();
+        WorkflowPublicationDefaults.AddActivationServices<InMemoryWorkflowActivationSwitch>(services);
         return services;
+    }
+
+    private sealed class CheckpointReservationStateSource(InMemoryRuntimeCheckpointStoreState? checkpoint = null)
+        : IInMemoryPublicationReservationStateSource
+    {
+        public InMemoryPublicationReservationState? PublicationReservations => checkpoint?.PublicationReservations;
     }
 
     // Applies the DI-collected module contributions to the (built-in-seeded) builder, builds the plan, and logs it.

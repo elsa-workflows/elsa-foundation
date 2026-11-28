@@ -24,7 +24,7 @@ public static class RuntimeWorkflowStateSeed
     // collision would have to share both the value-id prefix and the tag; keep these prefixes reserved.
     // The variable: prefix is no longer written as a durable value id — it survives solely as the compiled
     // output-capture marker identifying workflow-variable capture targets (#972).
-    public const string VariableValueIdPrefix = "variable:";
+    public const string VariableValueIdPrefix = RuntimeOutputCapture.WorkflowVariableValueIdPrefix;
     public const string InputValueIdPrefix = "input:";
     public const string OutputValueIdPrefix = "output:";
     private const string DurableValueIdPrefix = "durable-";
