@@ -103,7 +103,6 @@ public sealed class FeatureCompositionTests
         "JsonWorkflowArtifactReconciliation",
         "RulesWorkflowsRuntime",
         "WorkflowsExecutionEvidence",
-        "WorkflowsRuntimeDistributed",
         "WorkflowsRuntimeHistory",
         "WorkflowsRuntimeRecurringTriggers",
         "WorkflowsRuntimeReferenceGarbageCollection",
