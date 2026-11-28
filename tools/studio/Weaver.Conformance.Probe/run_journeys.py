@@ -33,8 +33,9 @@ Native controls, each a fresh session and turn:
 
 The packaged consumer cannot prune activity evidence (its in-memory runtime stores keep a Run's evidence for the process
 lifetime) and composes activity execution inspection as part of WorkflowsRuntimeApi, so a pruned execution and a backend
-without activity execution inspection are proven by WorkflowRunInspectionTests (Runtime API) and WorkflowRunWeaverTests
-(Elsa.Weaver.Workflows.Runtime.Tests); natively the Fault's state view is reported unavailable by reason and the Runtime-side
+without activity execution inspection have separate proof. WorkflowRunInspectionTests runs from the classic Runtime API
+archive at af562301713e49d879c7c0bf362efdbfaeb8a94e. WorkflowRunWeaverTests remains in the Weaver Runtime suite.
+In the packaged consumer the Fault's state view is reported unavailable by reason and the Runtime-side
 deployment shape is deselected. The deselection reloads the shell, which empties the consumer's in-memory run stores, so it
 runs after the browser journey, last. The canary is searched, raw, in every disclosed payload, stream frame, adapter trace and
 retained evidence file of the case, and in the browser journey's own Weaver traffic. The Write Line writes its text to the
