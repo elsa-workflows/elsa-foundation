@@ -17,6 +17,7 @@ param(
     [string] $Message  = "Hello World from the single-activity flow!"
 )
 . "$PSScriptRoot/_ElsaCommon.ps1"
+. "$PSScriptRoot/_WorkflowSmokeActivityEvidence.ps1"
 . "$PSScriptRoot/_WorkflowFlowVerdict.ps1"
 
 Write-Host "== Single WriteLine workflow ==  -> $BaseUrl" -ForegroundColor Cyan
@@ -38,9 +39,10 @@ $run = Invoke-Step "execute" { Invoke-Artifact -Ctx $ctx -ArtifactId $pub.artifa
 Write-Host ("[execute] execution={0} dispatch={1}" -f $run.workflowExecutionId, $run.commandDispatchStatus)
 
 Write-Host "[observe] instance detail:"
-$inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId
+$inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId -AwaitAdmission
 Show-WorkflowInstance -Instance $inst
-Assert-WorkflowFlowResult -Instance $inst
+$deferred = Get-DeferredWorkflowSmokeActivities -Ctx $ctx -Instance $inst -ExecutionId $run.workflowExecutionId -Publication $pub -ExpectedCount 1
+Assert-WorkflowFlowResult -Instance $inst -DeferredActivities $deferred
 
 Write-Host ""
 Write-Host "SUCCESS - workflow completed. Look for this line in the SERVER console:" -ForegroundColor Green

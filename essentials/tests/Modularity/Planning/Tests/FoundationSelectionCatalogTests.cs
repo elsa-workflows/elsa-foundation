@@ -68,12 +68,12 @@ public sealed class FoundationSelectionCatalogTests
     private const string PreviousCatalogDigest = "42afc8ccd1f18c972d882f1e214c961d5aad0788a6f0974e8964bb6e012bda15";
     private const string WorkerProfileDigest = "e46f8092771171ad63b0ca81bf307f5ad7ad7a9ca4929dd311bfac6af3cf8fa1";
     private const string VersionThreeCatalogDigest = "6563d77f116b7aefb2a67425f28b72cab736297d4e46df964bf9fb507cf91c3c";
-    private const string CurrentCatalogDigest = "a4f4545f3d90da5deb27a0b7a6634ac4c8ad555e275239977193a4576135ecf0";
+    private const string ClassicCatalogDigest = "a4f4545f3d90da5deb27a0b7a6634ac4c8ad555e275239977193a4576135ecf0";
 
     [Fact]
     public void Bundled_profile_plans_to_the_exact_reviewed_set_with_profile_provenance()
     {
-        var catalog = FoundationSelectionCatalog.Load();
+        var catalog = LoadClassic();
         var profile = Assert.Single(catalog.Profiles, x => x.Id == "embedded-runtime");
         var authored = Authored(catalog, profile, profile.Members);
         var plan = SelectionPlanner.Plan(catalog, authored);
@@ -101,13 +101,13 @@ public sealed class FoundationSelectionCatalogTests
     [Fact]
     public void Bundled_worker_profile_plans_exact_reviewed_members_with_provenance_and_dependencies()
     {
-        var catalog = FoundationSelectionCatalog.Load();
+        var catalog = LoadClassic();
         var profile = Assert.Single(catalog.Profiles, x => x.Id == "worker-http");
         var authored = Authored(catalog, profile, profile.Members);
         var plan = SelectionPlanner.Plan(catalog, authored);
 
         Assert.Equal("4", catalog.Version);
-        Assert.Equal(CurrentCatalogDigest, catalog.Digest);
+        Assert.Equal(ClassicCatalogDigest, catalog.Digest);
         Assert.Equal("1", profile.Version);
         Assert.Equal(WorkerProfileDigest, profile.Digest);
         Assert.Equal(s_workerMembers, profile.Members.ToArray());
@@ -132,7 +132,7 @@ public sealed class FoundationSelectionCatalogTests
         Assert.Contains(plan.Findings, finding => finding.Code == "inventory-unverified");
         Assert.Contains(plan.Findings, finding => finding.Code == "persistence-unverified");
         Assert.Equal(WorkerProfileDigest, SelectionDigest.ComputeDefinitionDigest(profile));
-        Assert.Equal(CurrentCatalogDigest, SelectionDigest.ComputeCatalogDigest(catalog));
+        Assert.Equal(ClassicCatalogDigest, SelectionDigest.ComputeCatalogDigest(catalog));
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class FoundationSelectionCatalogTests
         Assert.DoesNotContain("signingKey", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("migrationAuthorization", json, StringComparison.OrdinalIgnoreCase);
         var group = Assert.Single(catalog.Groups, x => x.Id == "diagnostics-ef");
-        Assert.Equal("4", catalog.Version);
+        Assert.Equal("5", catalog.Version);
         Assert.Equal("diagnostics-ef", group.Id);
         Assert.Equal("2", group.Version);
         Assert.Equal(s_diagnosticsMembers, group.Members.ToArray());
@@ -177,8 +177,8 @@ public sealed class FoundationSelectionCatalogTests
         Assert.Equal("84765f93718964b00ee47f4dae07dbf2572f60d53741fd7ba68426bc696928ea", originalProfile.Digest);
         Assert.Equal(s_expectedMembers, originalProfile.Members.ToArray());
 
-        Assert.Equal("4", FoundationSelectionCatalog.LoadFor(originalPin with { Digest = new string('0', 64) }).Version);
-        Assert.Equal("4", FoundationSelectionCatalog.LoadFor(originalPin with { Version = "unknown" }).Version);
+        Assert.Equal("5", FoundationSelectionCatalog.LoadFor(originalPin with { Digest = new string('0', 64) }).Version);
+        Assert.Equal("5", FoundationSelectionCatalog.LoadFor(originalPin with { Version = "unknown" }).Version);
     }
 
     [Fact]
@@ -205,14 +205,14 @@ public sealed class FoundationSelectionCatalogTests
         Assert.Equal(current.Digest, FoundationSelectionCatalog.LoadFor(mismatchedDigestPin).Digest);
         Assert.Equal(current.Digest, FoundationSelectionCatalog.LoadFor(unknownVersionPin).Digest);
 
-        var workerProfile = Assert.Single(current.Profiles, x => x.Id == "worker-http");
-        var authored = Authored(current, workerProfile, workerProfile.Members)
-            with { Catalog = mismatchedDigestPin, Accepted = new AcceptedSelection(mismatchedDigestPin.Digest, workerProfile.Members, []) };
+        var actorProfile = Assert.Single(current.Profiles, x => x.Id == "actor-foundation");
+        var authored = Authored(current, actorProfile, actorProfile.Members)
+            with { Catalog = mismatchedDigestPin, Accepted = new AcceptedSelection(mismatchedDigestPin.Digest, actorProfile.Members, []) };
         Assert.Contains(SelectionPlanner.Plan(current, authored).Findings, finding => finding.Code == "catalog-pin-unresolved");
         authored = authored with
         {
             Catalog = unknownVersionPin,
-            Accepted = new AcceptedSelection(unknownVersionPin.Digest, workerProfile.Members, [])
+            Accepted = new AcceptedSelection(unknownVersionPin.Digest, actorProfile.Members, [])
         };
         Assert.Contains(SelectionPlanner.Plan(current, authored).Findings, finding => finding.Code == "catalog-pin-unresolved");
     }
@@ -283,7 +283,7 @@ public sealed class FoundationSelectionCatalogTests
     public void Bundled_catalog_reader_rejects_modified_same_version_content()
     {
         var catalog = FoundationSelectionCatalog.Load();
-        var profile = Assert.Single(catalog.Profiles, x => x.Id == "embedded-runtime");
+        var profile = Assert.Single(catalog.Profiles, x => x.Id == "actor-foundation");
         var changedProfile = profile with { Description = profile.Description + " changed" };
         var changedCatalog = catalog with
         {
@@ -293,6 +293,9 @@ public sealed class FoundationSelectionCatalogTests
 
         Assert.Equal("digest-mismatch", Assert.Throws<SelectionDocumentException>(() => SelectionJsonReader.ParseCatalog(json)).Code);
     }
+
+    private static SelectionCatalog LoadClassic() =>
+        FoundationSelectionCatalog.LoadFor(new CatalogPin("elsa-foundation", "4", ClassicCatalogDigest));
 
     private static AuthoredComposition Authored(
         SelectionCatalog catalog,

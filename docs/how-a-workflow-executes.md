@@ -87,4 +87,4 @@ For workloads kept on the earlier runtime, see the
 [pinned Full compatibility deployment record](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7232199720)
 and the
 [earlier scheduler walkthrough](https://github.com/elsa-workflows/elsa-foundation/blob/fbac64815d6c7fc25e9576ed6ba40bcba56af3ba/docs/how-a-workflow-executes.md).
-[Program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) tracks the remaining K14 retirement.
+[Program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) records the retirement and release evidence.

@@ -203,14 +203,6 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "elsa.activities.runtime.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Expressions.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )"
-        }
-      },
       "elsa.api.aspnetcore": {
         "type": "Project",
         "dependencies": {
@@ -262,26 +254,10 @@
       "elsa.diagnostics.opentelemetry.core": {
         "type": "Project"
       },
-      "elsa.diagnostics.opentelemetry.workflows": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Diagnostics.OpenTelemetry": "[4.0.0-dev, )",
-          "Elsa.Diagnostics.OpenTelemetry.Core": "[4.0.0-dev, )",
-          "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
-      },
       "elsa.events.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Pipelines.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.expressions.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
       "elsa.foundation.identity": {
@@ -301,25 +277,6 @@
       },
       "elsa.primitives": {
         "type": "Project"
-      },
-      "elsa.serialization.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.tasks.core": {
-        "type": "Project"
-      },
-      "elsa.workflows.runtime.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Expressions.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Elsa.Serialization.Core": "[4.0.0-dev, )"
-        }
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",

@@ -3,6 +3,7 @@ using Elsa.Activities.Bpmn.Design;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -11,35 +12,22 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed class ActivitiesBpmnFeatureTests
 {
     [Fact]
-    public async Task Duplicate_runtime_replacements_are_rejected_at_shell_startup()
-    {
-        var services = new ServiceCollection();
-        new ActivitiesBpmnFeature().ConfigureServices(services);
-        services.AddScoped<IBpmnProcessRuntime, BpmnProcessRuntime>();
-        using var provider = services.BuildServiceProvider();
-
-        var initializer = Assert.Single(provider.GetServices<CShells.Lifecycle.IShellInitializer>());
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => initializer.InitializeAsync(CancellationToken.None));
-        Assert.Contains("exactly one IBpmnProcessRuntime", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Runtime_registration_excludes_authoring_and_compilation_contributions()
+    public void Composite_registers_publication_metadata_without_classic_execution()
     {
         var services = new ServiceCollection();
         new ActivitiesBpmnFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        var runtime = Assert.Single(services, service => service.ServiceType == typeof(IBpmnProcessRuntime));
-        Assert.Equal(typeof(BpmnProcessRuntime), runtime.ImplementationType);
-        Assert.Equal(ServiceLifetime.Scoped, runtime.Lifetime);
-        Assert.Single(services, service => service.ServiceType == typeof(BpmnStateCodec));
-        Assert.Single(services, service => service.ServiceType == typeof(BpmnWorkLedger));
-
+        Assert.IsType<BpmnProcessTriggerStimulusProvider>(Assert.Single(provider.GetServices<IActivityTriggerStimulusProvider>()));
+        Assert.IsType<BpmnProcessRecurringScheduleProvider>(Assert.Single(provider.GetServices<IRecurringTriggerScheduleProvider>()));
+        Assert.DoesNotContain(services, service => service.ServiceType == typeof(IBpmnProcessRuntime));
+        Assert.DoesNotContain(services, service => service.ServiceType == typeof(BpmnStateCodec));
+        Assert.DoesNotContain(services, service => service.ServiceType == typeof(BpmnWorkLedger));
+        Assert.Empty(provider.GetServices<CShells.Lifecycle.IShellInitializer>());
         Assert.Empty(provider.GetServices<IActivityStructureHandler>());
         Assert.DoesNotContain(services, service => service.ServiceType == typeof(IExecutableCompilationSource));
-
     }
+
     [Fact]
     public void Design_registration_provides_authoring_without_runtime_services_and_is_repeatable()
     {
@@ -68,7 +56,7 @@ public sealed class ActivitiesBpmnFeatureTests
     }
 
     [Fact]
-    public void Composite_owns_runtime_without_reaching_classic_execution()
+    public void Composite_keeps_the_existing_CLR_type_owners()
     {
         var composite = typeof(ActivitiesBpmnFeature).Assembly;
         Assert.Equal("Elsa.Activities.Bpmn.Composite", composite.GetName().Name);

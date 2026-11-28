@@ -38,14 +38,10 @@ same-target validation, wrong-target refusal, and a split-layout refusal before 
 `diagnostics/Test-OpenTelemetryApiMigration.ps1` remains the separate route/authentication/accepted-OTLP smoke
 against a running Workbench; its empty OTLP payloads do not prove persisted diagnostic data.
 
-The three scripts that restart a server also own it: `durability/Test-RestartRecovery.ps1`,
-`runtime-alterations/Test-AlterationReplayAndRestart.ps1` and `file-deployment/Test-FileBasedDeployment.ps1`.
-Build Workbench first; each script copies the committed configuration to a temporary content root, starts the
-built Workbench on a free loopback port, and restarts and stops only that process. They do not use the
-separately started server above. See "Running these tests" below for the rules.
-`Test-RestartRecovery.ps1` additionally checks that the copied configuration is the legacy SQLite one, and its
-post-restart resume currently takes a precise `KNOWN ISSUE #1761` tracker branch for the pre-existing defect;
-see [the issue](https://github.com/elsa-workflows/elsa-foundation/issues/1761) and [the durability suite](durability/README.md).
+`file-deployment/Test-FileBasedDeployment.ps1` owns the Workbench process it restarts. Build Workbench
+first. The script copies the committed configuration to a temporary content root and starts Workbench on a
+free loopback port. The previous engine's restart and stimulus workflows use the
+[classic REST checkout](../docs/contributing/workbench-compatibility-tests.md#classic-workflow-rest-journeys).
 
 ## Hosted Windows and Linux source journey
 
@@ -69,10 +65,10 @@ It also does not perform the temporary source-edit exercise, prove a clean bare 
 Windows acceptance or a .NET support policy. Use the [backend source quickstart](../docs/contributing/backend-source-quickstart.md)
 for the interactive contributor route.
 
-The opt-in [Activity data selection proof](activity-data-selection/README.md) is a separate, currently blocked
-checkpoint lane. It requires Python 3 and **PowerShell 7.3+ (`pwsh`)**, including on Windows; the general
-Windows PowerShell 5.1 invocation above does not apply to that folder. Its typed fixture is not part of
-default Workbench builds. No Windows qualification or complete five-family runtime pass is claimed.
+The opt-in [Activity data selection proof](activity-data-selection/README.md) requires a separate evidence
+directory, Python 3 and **PowerShell 7.3+ (`pwsh`)**, including on Windows. Its runtime probes use the
+[classic REST checkout](../docs/contributing/workbench-compatibility-tests.md#classic-workflow-rest-journeys).
+Its typed fixture is outside default Workbench builds.
 
 ## Running these tests — READ THIS (agents included)
 
@@ -84,10 +80,8 @@ default Workbench builds. No Windows qualification or complete five-family runti
 >
 > - **`-BaseUrl` is the only place a server location is given.** The port always derives from it. No script has
 >   a separate `-Port`, and nothing falls back to 5095 for a process it is about to stop.
-> - **A script that restarts a server owns that server.** The three restart-style scripts
->   (`durability/Test-RestartRecovery.ps1`, `runtime-alterations/Test-AlterationReplayAndRestart.ps1`,
->   `file-deployment/Test-FileBasedDeployment.ps1`) launch the already-built Workbench themselves, keep the
->   process they launched, and stop only that process. The shared helper is `_ServerLifecycle.ps1`.
+> - **A script that restarts a server owns that server.** The file deployment and classic restart witnesses
+>   launch the matching built Workbench and stop only that process. The shared helper is `_ServerLifecycle.ps1`.
 > - **An occupied port is an error, never a takeover.** If the port is held by a process the script did not
 >   start, the script fails with the port and the pid in the message and leaves that process running. There is
 >   deliberately no `-TakeOverPort` switch: no journey needs to replace a running server, because the owned
@@ -108,48 +102,29 @@ Safe invocations:
 # An ordinary script against your own server, on any port. It only sends requests.
 pwsh ./e2e-tests/Test-WorkflowFlow.ps1 -BaseUrl http://localhost:5295
 
-# A restart-style script: no server arguments. It starts, restarts and stops its own Workbench on a free port.
-pwsh ./e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1
-
-# The same, on a port you choose. The port must be free, otherwise the script fails and names the port and pid.
-pwsh ./e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1 -BaseUrl http://127.0.0.1:5395
-
-# The weaker no-restart run against a server you started. External mode never stops a process.
-pwsh ./e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1 -UseExternalServer -RestartServer:$false -BaseUrl http://localhost:5295
+# A restart-style script that starts, restarts and stops its own Workbench on a free port.
+pwsh ./e2e-tests/file-deployment/Test-FileBasedDeployment.ps1
 ```
 
-`Test-RestartRecovery.ps1` takes the same `-UseExternalServer -RestartServer:$false -BaseUrl <url>` form.
-`Test-FileBasedDeployment.ps1` always owns its server, because restarting with a mounted folder is the journey.
-
-**The whole suite against a server on a non-default port.** Start your server on that port, then pass the same
-`-BaseUrl` to every script that talks to an external server. The scripts that own their server, or need none,
-take no server argument and can run while yours is up:
+**Run the two stock Actor workflow smokes against your Workbench on a non-default port.**
+They read the committed activity evidence through the retained Runtime API.
 
 ```powershell
-# After building, start the server on 5295 instead of the launch profile's 5095 (separate terminal):
+# After building, start Workbench in a separate terminal:
 #   dotnet run --no-build --project server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
-# In another terminal, wait until http://localhost:5295/health/ready reports ready, then use the same $base for each script.
+# Wait for http://localhost:5295/health/ready before invoking the smokes.
 $base = 'http://localhost:5295'
-$selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
-              'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
-              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1', 'Test-WorkflowTemplates.ps1', 'Test-SetVariableLoop.ps1'
-# Package-backed Rules is qualified separately with an immutable feed and deployment receipt.
-$packageQualified = 'Test-DurableRules.ps1', 'Test-NativeRulesInstallation.ps1', 'Test-RulesAdmissionRecovery.ps1'
-$failed = @()
-Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
-    if ($_.Name -in $packageQualified) {
-        Write-Host "Separate package qualification required: $($_.Name) (not counted as passed)"
-        return
-    }
-    if ($_.Name -in $selfHosted) { pwsh -NoProfile -File $_.FullName }
-    else { pwsh -NoProfile -File $_.FullName -BaseUrl $base }
-    if ($LASTEXITCODE -ne 0) { $failed += $_.Name }
-}
-if ($failed) { "FAILED: $($failed -join ', ')" } else { 'all source-suite scripts passed; package qualification remains separate' }
+pwsh -NoProfile -File e2e-tests/Test-WorkflowFlow.ps1 -BaseUrl $base
+if ($LASTEXITCODE -ne 0) { throw 'WorkflowFlow smoke failed.' }
+pwsh -NoProfile -File e2e-tests/Test-SequenceWorkflow.ps1 -BaseUrl $base
+if ($LASTEXITCODE -ne 0) { throw 'SequenceWorkflow smoke failed.' }
 ```
 
-Each script runs in its own process, so one failure does not end the loop. The two `Test-Shared*` journeys need
-Docker. On Windows replace `pwsh -NoProfile -File` with `powershell -NoProfile -ExecutionPolicy Bypass -File`.
+Run other scenarios individually using the instructions and evidence requirements for that scenario.
+Use the [classic REST checkout](../docs/contributing/workbench-compatibility-tests.md#classic-workflow-rest-journeys)
+for scripts that assert inline activity rows or classic stimuli, bookmarks and incident routes.
+The opt-in `Test-Shared*` journeys need Docker. Rules package qualification and Activity data
+selection have their own package and evidence requirements.
 
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
@@ -158,8 +133,7 @@ Docker. On Windows replace `pwsh -NoProfile -File` with `powershell -NoProfile -
   disposable data, following the exact file inventory and allowlist in the [backend quickstart](../docs/contributing/backend-source-quickstart.md#reset-disposable-sqlite-data).
   Preserve valuable workflows in their existing checkout and use a separate disposable checkout; do not
   delete database files with a wildcard or treat this reset as an in-place data migration.
-- **Opt-in features:** `DispatchWorkflow` and `bpmn` require the DispatchWorkflow features (see
-  “Composition change” below). The [classic scheduling witnesses](scheduling/README.md) use their pinned Workbench.
+- The [classic scheduling witnesses](scheduling/README.md) use their pinned Workbench.
 
 **A failing e2e test is a signal, not a verdict.** It means one of two things: (1) a genuine **regression** in the
 server, or (2) the test is **stale** because the codebase moved — a contract/response shape changed, a tracked bug
@@ -176,23 +150,24 @@ A candidate is retired from here only once its in-process replacement exists.
 
 | Suite | Category | Why |
 |---|---|---|
-| root `Test-WorkflowFlow/Sequence/If/Switch/Http/ChildWorkflow` | true e2e | full lifecycle, real HTTP trigger, dispatch |
+| root `Test-WorkflowFlow/Sequence/If/Switch/Http` | true e2e | full lifecycle and real HTTP trigger |
 | `branching`, `single-outcome`, `variables`, `javascript` | true e2e | real publish + runtime of composites / intrinsics / JS sandbox |
-| `events`, `stimuli`, `orchestration-controls`, `correlate` | true e2e | stimulus / bookmark / resume + correlation runtime |
+| `events`, `stimuli`, and stimulus-driven orchestration controls | classic replay | previous stimulus, bookmark and resume contracts |
+| `correlate` | true e2e | workflow correlation |
 | `fault-handling`, `persistence-querying` | true e2e | incident recording + instance query over the runtime |
 | `reusable-activities` | true e2e | authoring lifecycle + graph inlining at runtime |
 | `scheduling` | true e2e | hosted durable-timer / recurring-trigger pumps |
-| `runtime-alterations` | true e2e | durable plan admission, capture, hosted orchestration, checkpoint outcomes, replay and restart |
-| `bpmn`, `composition` | true e2e | waited `DispatchWorkflow` + BPMN error boundary |
+| `runtime-alterations` | classic replay | durable plan admission, checkpoint outcomes, replay and restart |
+| `bpmn` | classic runtime replay | waited child dispatch and BPMN error boundaries |
 | `composition/Test-SharedPersistence.ps1` | true e2e | disposable PostgreSQL, real Workbench HTTP design/publish/execute/restart, authored-resource reload, and same-target CLI validation |
 | `diagnostics/Test-SharedDiagnosticsPersistence.ps1` | true e2e | disposable PostgreSQL, real Workbench OTLP and structured-log writes, restart, two-target placement, scoped CLI validation and negative layout refusal |
-| `logging` | mixed | `Test-ValueCapture` is runtime e2e; `Test-DiagnosticsSettings` is a read-only contract check |
+| `logging` | classic replay | value capture and the legacy read-only diagnostics settings contract |
 | `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
 | `file-deployment` | true e2e | server restart with a mounted definitions folder; startup reconcile + publish-on-reconcile, readiness gate, restart idempotency (spec 147) |
 
 The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-shape checks) were retired on
 2026-09-10: that coverage now runs in-process as the `*ApiContractTests` classes under `tests/` (for example
-`ActivitiesDesignApiContractTests`, `PublishingApiContractTests`, `RuntimeAlterationApiContractTests`,
+`ActivitiesDesignApiContractTests`, `PublishingApiContractTests`,
 `SecretsApiContractTests`, `StructuredLogsApiContractTests`, `StudioPreferencesApiContractTests`,
 `WorkflowsDesignApiContractTests`). Their shared mutation harness survives as `_WriteCommon.ps1` because the
 `workflow-version-override` and `reusable-activities` suites dot-source it.
@@ -220,12 +195,8 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `http/Test-SendHttpRequestStatusOutcomes.ps1` | the per-status outcome ports the compiler pins from `SendHttpRequest.ExpectedStatusCodes` are connectable on the PUBLISHED node and route correctly, including the `Unmatched status code` catch-all (#1119) |
 | [Classic BPMN broadcast recovery](bpmn/RecoveryProbe/README.md) | Matching archived Workbench and checked reader reproduce the SQLite source, cohort, and delivery recovery cases. |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
-| `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
-| `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
-| `logging/Test-DiagnosticsSettings.ps1` | read-only `GET runtime/workflows/diagnostics/settings` — the capture policy that governs what value snapshots are captured |
+| [Actor Event hosting](../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelInstalledEventStartsTests.cs) | installed-provider Event starts and authored publication |
 | `diagnostics/Test-OpenTelemetryApiMigration.ps1` | live Workbench smoke: eight query/SSE plus three OTLP routes in the real shell, authorized query/SSE, and accepted OTLP 204 |
-| `runtime-alterations/Test-AlterationPlans.ps1` | bulk `CancelWorkflow`, root `ModifyVariable`, Sequence `ScheduleActivity` with visible child completion, `RescheduleActivity` with visible supersession, retained-identity `Migrate` smoke path; plus paging, cooperative cancellation, and redacted reads |
-| `runtime-alterations/Test-AlterationReplayAndRestart.ps1` | idempotency replay and restart-safe continuation from a durably captured first target page against a real SQLite server the script owns |
 | `Test-ServerLifecycleGuard.ps1` | no server needed: a restart-style launch refuses a port held by a bystander process, names the port and pid, and leaves the bystander running (#2329) |
 | `_ElsaCommon.ps1`           | shared helpers (dot-sourced): login, activity lookup, submit/publish/execute, structures, observability |
 | `_ServerLifecycle.ps1`      | owned-server lifecycle (dot-sourced by the restart-style scripts): port derived from the base URL, temporary content root, start / restart / stop of the one process the script launched |
@@ -235,10 +206,8 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `file-deployment/Test-JsonSourceComposition.ps1` | fresh owned Workbench: two independent JSON catalogs import at readiness through exactly one workflow reconcile startup pass |
 | `composition/Test-UnknownFeatures.ps1` | owned Workbench with an unknown requested feature: readiness stays lenient and the feature catalog reports its missing runtime descriptor explicitly |
 
-**Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
-you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash:"sha256:"+hex(SHA256(eventName)), mode:"StartOnly" }`
-to `runtime/workflows/stimuli` (modes: `StartOnly`/`ResumeOnly`/`StartAndResume`). The response returns the
-started `workflowExecutionId` directly.
+Current Actor hosts support authored `Event` and `PublishEvent`. Replay the previous stimulus HTTP
+endpoint using the [classic REST checkout](../docs/contributing/workbench-compatibility-tests.md#classic-workflow-rest-journeys).
 
 **HTTP finding (resolved):** request-data **echo** now works (`http/Test-HttpEcho.ps1` — request-body,
 route-parameter, query-parameter, and header). This was originally deferred under issue #972: capturing an `HttpEndpoint` output forced a
@@ -339,11 +308,11 @@ instead of faulting at the 64-cycle drain limit.
 The classic JTest "advanced" suites target Elsa 3.x persistence/observability primitives that Foundation
 does not have. One maps to a Foundation-native equivalent; the other is a genuine architectural gap.
 
-### logging -> per-activity value capture + diagnostics policy (reproduced)
+### Archived per-activity value capture and diagnostics policy
 
-Classic Elsa configured *what activity state is persisted* per activity via `logPersistenceConfig`
-(Include/Exclude). Foundation has **no `logPersistenceConfig`**. Its equivalent is a runtime **value-capture**
-model governed by a server-wide **diagnostics settings** policy:
+The previous Foundation engine reproduced Elsa 3 activity capture with a runtime value-capture model
+and a server-wide diagnostics policy. Replay the following contract on the
+[classic REST checkout](../docs/contributing/workbench-compatibility-tests.md#classic-workflow-rest-journeys).
 
 - Each activity execution captures **value snapshots** (`captureMode` `DiagnosticSnapshot`) for its inputs;
   the activity-execution detail lists them (`name`, `subject`, `evidenceId`, `captureState`) and the full

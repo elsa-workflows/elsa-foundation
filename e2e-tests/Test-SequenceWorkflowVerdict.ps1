@@ -3,6 +3,7 @@ param([switch] $SkipMutationProof)
 
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/_SequenceWorkflowVerdict.ps1"
+. "$PSScriptRoot/_WorkflowSmokeActivityEvidence.ps1"
 
 function New-ValidSequenceResult {
     param([int] $LineCount = 1)
@@ -66,6 +67,53 @@ $jsonResult = (New-ValidSequenceResult -LineCount 1 | ConvertTo-Json -Depth 8) |
 Assert-SequenceWorkflowResult -Instance $jsonResult -ExpectedLineCount 1
 Write-Host '  ACCEPT JSON-deserialized REST-shaped result'
 
+function Assert-DeferredSequenceEvidence {
+    $result = New-ValidSequenceResult
+    $rows = $result.activities
+    $result.activities = @()
+    $result.instance.activityCount = 0
+    $result.instance.workflowExecutionId = 'fixture/run'
+    $result.instance.artifactId = 'fixture-artifact'
+    $result.instance.sourceReferenceId = 'fixture-source'
+    $result.activitiesDeferred = $true
+    $rows[0].workflowExecutionId = 'fixture/run'
+    $rows[0].activityExecutionId = 'root'
+    $rows[1].workflowExecutionId = 'fixture/run'
+    $rows[1].activityExecutionId = 'child'
+
+    function Invoke-RestMethod {
+        param($Uri, $WebSession)
+        $first = 'http://fixture/runtime/workflows/instances/fixture%2Frun/activity-executions?limit=50'
+        if ($Uri -ceq $first) {
+            return @{ totalCount = 2; items = @(@{ execution = $rows[1]; position = 2 }); previousCursor = 'previous+page' }
+        }
+        if ($Uri -ceq "$first&cursor=previous%2Bpage") {
+            return @{ totalCount = 2; items = @(@{ execution = $rows[0]; position = 1 }, @{ execution = $rows[1]; position = 2 }) }
+        }
+        throw "Unexpected evidence request '$Uri'."
+    }
+
+    $ctx = @{ BaseUrl = 'http://fixture' }
+    $publication = @{ artifactId = 'fixture-artifact'; sourceReferenceId = 'fixture-source' }
+    $activities = Get-DeferredWorkflowSmokeActivities -Ctx $ctx -Instance $result -ExecutionId 'fixture/run' -Publication $publication -ExpectedCount 2
+    Assert-SequenceWorkflowResult -Instance $result -ExpectedLineCount 1 -DeferredActivities $activities
+    if ($result.instance.activityCount -ne 0 -or $result.activities.Count -ne 0) {
+        throw 'Reading deferred evidence altered the instance response.'
+    }
+
+    $rows[0].workflowExecutionId = 'foreign-run'
+    try {
+        Get-DeferredWorkflowSmokeActivities -Ctx $ctx -Instance $result -ExecutionId 'fixture/run' -Publication $publication -ExpectedCount 2
+    } catch {
+        if ($_.Exception.Message -notlike '*foreign execution*') { throw }
+        return
+    }
+    throw 'Deferred activity evidence accepted a foreign run.'
+}
+
+Assert-DeferredSequenceEvidence
+Write-Host '  ACCEPT two deferred pages without changing the instance response; REJECT a foreign execution'
+
 $cases = @(
     @{ Name = 'non-completed instance status'; Mutate = { param($r) $r.instance.status = 'Finished' } },
     @{ Name = 'missing instance status'; Mutate = { param($r) [void]$r.instance.Remove('status') } },
@@ -90,7 +138,7 @@ $cases = @(
 )
 foreach ($case in $cases) { Assert-SequenceRejected -Name $case.Name -Mutate $case.Mutate }
 
-$passed = 3 + $cases.Count
+$passed = 5 + $cases.Count
 if (-not $SkipMutationProof) {
     $mutationRoot = Join-Path ([IO.Path]::GetTempPath()) "elsa-sequence-verdict-$([guid]::NewGuid().ToString('N'))"
     New-Item -Path $mutationRoot -ItemType Directory -Force | Out-Null
@@ -100,6 +148,7 @@ if (-not $SkipMutationProof) {
         $smokeLog = Join-Path $mutationRoot 'smoke.log'
         $canonicalSmoke = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Test-SequenceWorkflow.ps1') -Raw
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot '_SequenceWorkflowVerdict.ps1') -Destination (Join-Path $mutationRoot '_SequenceWorkflowVerdict.ps1')
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot '_WorkflowSmokeActivityEvidence.ps1') -Destination $mutationRoot
         $canonicalSmoke | Set-Content -LiteralPath $smokePath
         @'
 $ErrorActionPreference = 'Stop'

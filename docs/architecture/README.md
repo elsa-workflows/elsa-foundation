@@ -3,7 +3,7 @@
 The published Curated Essentials server defaults to the built-in Actor Foundation for Native and
 Flowchart workflows on SQLite and PostgreSQL. The default switch (K13) was published in
 `4.0.0-preview.3013`. The shared-format Curated profile was subsequently published in
-`4.0.0-preview.3019`. Earlier-runtime removal (K14) is in progress. See the
+`4.0.0-preview.3019`. K14 removes the earlier engine from the active source tree. See the
 [K13 receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7231238178),
 [shared-format receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7231935018)
 and [program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).

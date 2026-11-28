@@ -1,5 +1,10 @@
 # Elsa.Agent
 
+Agent workflow execution used the classic runner. Use the [pinned Agent execution
+witness](../../../../docs/contributing/classic-runtime-witnesses.md#classic-agent-execution-and-dispatch-checkpoints)
+for that deployment. The runtime registration below is callable in programmatic compositions.
+`AgentInMemoryJournal` remains available independently for development and tests.
+
 Executes published agents through the existing native activity/background-work protocol and
 Microsoft Agent Framework. See [runtime extension points](EXTENSION_POINTS.md) for configured
 providers, protected continuity, journal ownership and the current qualification boundaries.

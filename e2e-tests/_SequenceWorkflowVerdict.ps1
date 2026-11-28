@@ -37,7 +37,8 @@ function Assert-SequenceWorkflowResult {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][AllowNull()] $Instance,
-        [Parameter(Mandatory)][int] $ExpectedLineCount
+        [Parameter(Mandatory)][int] $ExpectedLineCount,
+        [AllowNull()][object[]] $DeferredActivities
     )
     if ($ExpectedLineCount -lt 0) { throw 'Expected Sequence child count cannot be negative.' }
 
@@ -49,7 +50,7 @@ function Assert-SequenceWorkflowResult {
 
     $expectedActivityCount = $ExpectedLineCount + 1
     $reportedActivityCount = Get-SequenceWorkflowCount -Instance $workflow -Name 'activityCount'
-    if ([decimal]$reportedActivityCount -ne $expectedActivityCount) {
+    if ($null -eq $DeferredActivities -and $reportedActivityCount -ne $expectedActivityCount) {
         throw "Expected reported activity count $expectedActivityCount; got '$reportedActivityCount'."
     }
 
@@ -59,6 +60,12 @@ function Assert-SequenceWorkflowResult {
     }
 
     $activitiesValue = Get-SequenceWorkflowRequiredProperty -Object $Instance -Name 'activities'
+    if ($null -ne $DeferredActivities) {
+        if ($Instance.activitiesDeferred -isnot [bool] -or -not $Instance.activitiesDeferred) {
+            throw 'Separate activity evidence requires a deferred instance response.'
+        }
+        $activitiesValue = $DeferredActivities
+    }
     if ($null -eq $activitiesValue -or $activitiesValue -is [string]) {
         throw 'Expected a returned Sequence activity collection; the collection is missing or invalid.'
     }
@@ -66,7 +73,7 @@ function Assert-SequenceWorkflowResult {
     if ($activities.Count -ne $expectedActivityCount) {
         throw "Expected exactly $expectedActivityCount returned activities; got $($activities.Count)."
     }
-    if ([decimal]$reportedActivityCount -ne $activities.Count) {
+    if ($null -eq $DeferredActivities -and $reportedActivityCount -ne $activities.Count) {
         throw "Reported activity count $reportedActivityCount does not match the $($activities.Count) returned activities."
     }
 

@@ -18,20 +18,20 @@ traces one request from `Program.cs` to a durable checkpoint.
   immutable versions, plus the activity catalog and validations. Nothing here runs a workflow.
 - **Publishing** (`essentials/src/Workflows/Publishing`): compiles a definition version into a content-addressed
   `WorkflowExecutable` and saves it through `IWorkflowExecutableStore`. This is the only bridge from Design to Runtime.
-- **Runtime** (`essentials/src/Workflows/Runtime`, `essentials/src/Activities/Runtime`): executes executables. Contracts and
-  models live in `essentials/src/Workflows/Runtime/Core`; the engine (dispatcher, mailbox, drainer, work handlers,
-  checkpoint committer) lives in `essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services`, one folder per concept; the API in
-  `essentials/src/Workflows/Runtime/Api`. Runtime must not depend on Design.
+- **Runtime** executes published workflows. [Actor Foundation](essentials/src/ActorFoundation) owns durable messages,
+  jobs, and checkpoint commits. [KernelHosting](essentials/src/Workflows/Runtime/KernelHosting) binds the selected
+  provider to the [Native execution model](essentials/src/Workflows/Runtime/Native) and Flowchart. Runtime contracts live
+  in [Core](essentials/src/Workflows/Runtime/Core), and [KernelApi](essentials/src/Workflows/Runtime/KernelApi) serves
+  execution and inspection. Runtime must not depend on Design.
 
 Activity implementations (`HttpEndpoint`, `Sequence`, `Flowchart`, ...) live under `essentials/src/Activities/<Name>`.
 
 ## Persistence
 
-Every store contract has an in-memory default registered by `AddWorkflowRuntime()` in
-`essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`. [ADR 0073](docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
-establishes EF Core as the only first-party durable persistence destination, and it is the only one
-that ships: every runtime, design, publishing, identity, secrets, diagnostics and dashboard store has
-an EF Core implementation, selected per module by its own shell feature. The Workbench defaults to
-SQLite through `ConnectionStrings:Elsa`; each module can override its provider and connection.
+`WorkflowsRuntimeKernelHosting` selects the built-in Actor store for the shell. Stock Workbench uses a dedicated
+SQLite file for Actor execution. The Workbench Compose profile uses a separate PostgreSQL database for Actor
+execution. Other durable stores use their module's EF Core feature and control-plane connection, which defaults
+to `ConnectionStrings:Elsa` in Workbench. [ADR 0073](docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+describes the first-party persistence family.
 
 Decisions are recorded in [`docs/adr/`](docs/adr/README.md).

@@ -26,8 +26,8 @@ and [Workbench Compose setup](https://github.com/elsa-workflows/elsa-foundation/
 If a workload still needs the earlier runtime, use the tested
 [pinned Full profile](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/profiles/full-compatibility.md)
 with its matching data. The [architecture tour](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture-tour.md)
-explains the new execution layers. [Program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229)
-tracks the remaining retirement work.
+explains the execution layers. [Program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229)
+records the earlier engine's retirement from active source and the release evidence.
 
 ---
 

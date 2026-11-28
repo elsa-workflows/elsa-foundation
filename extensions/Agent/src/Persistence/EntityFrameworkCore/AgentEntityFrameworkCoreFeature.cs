@@ -10,7 +10,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore;
 [ManifestFeatureCategory("Agent")]
 [ManifestFeatureCategory("Persistence")]
 [ShellFeature(name: "AgentEntityFrameworkCore", DisplayName = "Agents Entity Framework Core Persistence",
-    Description = "Persists scoped agent turn records with database state, deadline and fence checks.", DependsOn = new object[] { "AgentRuntime" })]
+    Description = "Persists scoped agent turn records with database state, deadline and fence checks.", DependsOn = new object[] { "Tasks" })]
 [UsesEfModule("Agent")]
 public class AgentEntityFrameworkCoreFeature : IShellFeature
 {

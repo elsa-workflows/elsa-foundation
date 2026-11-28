@@ -1,5 +1,3 @@
-extern alias ArchitectureWitness;
-
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -26,7 +24,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using MinimalEndpoints;
 using Xunit;
-using WorkflowsRuntimeApiFeature = ArchitectureWitness::Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature;
 
 namespace Elsa.Architecture.Tests;
 
@@ -56,13 +53,11 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
         typeof(Elsa.Agent.Api.AgentApiFeature),
-        typeof(Elsa.Agent.Inspection.Api.AgentInspectionApiFeature),
         typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
         typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature),
         typeof(ModularityApiFeature),
         typeof(WorkflowsDesignApiFeature),
         typeof(WorkflowsPublishingApiFeature),
-        typeof(WorkflowsRuntimeApiFeature),
         typeof(WorkflowsRuntimeKernelRetainedApiFeature),
         typeof(Elsa3ImportActivitiesFeature)
     ];

@@ -89,7 +89,7 @@ public sealed class DependencyMapTests
     /// <summary>Ownership on paths that need no file to exist: the deeper project owns its subtree, and nothing is guessed.</summary>
     [Theory]
     [InlineData("essentials/src/Workflows/Runtime/Core/Services/Foo.cs", "Elsa.Workflows.Runtime.Core")]
-    [InlineData("essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Foo.cs", "Elsa.Workflows.Runtime")]
+    [InlineData("essentials/src/Workflows/Runtime/Publications/Services/Foo.cs", "Elsa.Workflows.Runtime.Publications")]
     [InlineData("essentials/src/Workflows/Runtime/Elsa.Workflows.RuntimeExtras/Foo.cs", null)]
     [InlineData("essentials/src/Workflows/Foo.cs", null)]
     [InlineData("essentials/tests/Directory.Build.props", null)]

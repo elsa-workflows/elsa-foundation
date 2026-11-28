@@ -2,7 +2,9 @@
 
 `embedded-runtime@1` is an immutable classic profile. Use these instructions with its matching packages and [pinned classic Runtime EF source](../../essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/README.md). It expands to [16 explicit feature IDs](../../specs/178-embedded-runtime-profile/contracts/embedded-profile-v1.md), including `FileSystemDistributedLocking` and `WorkflowsRuntimeApi`. Your authored composition pins the definition. Adding or removing individual IDs remains possible, and the planner shows why each feature is selected.
 
-For a new local composition, use the bundled catalog:
+For a new Actor Foundation composition, start with `dotnet elsa composition init --profile actor-foundation@1 --output composition.json`. This profile uses the resolved Lean Essentials selection for Native and Flowchart. Supply the named workflow control stores, identity settings and dedicated Actor database through your host configuration.
+
+To prepare a classic composition against the archived host and packages, use the bundled catalog with the explicit classic profile:
 
 ```bash
 dotnet elsa composition init --profile embedded-runtime@1 --output embedded-composition.json

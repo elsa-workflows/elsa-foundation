@@ -111,6 +111,7 @@ function Assert-WorkflowFlowResult {
         $canonicalSmoke = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Test-WorkflowFlow.ps1') -Raw
         $canonicalSmoke | Set-Content -LiteralPath $smokePath
         Copy-Item -LiteralPath $VerdictModulePath -Destination $mutantPath -Force
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot '_WorkflowSmokeActivityEvidence.ps1') -Destination $mutationRoot
         @'
 $ErrorActionPreference = 'Stop'
 function Invoke-Step { param($Step, [scriptblock] $Action) & $Action }

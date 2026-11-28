@@ -1,4 +1,3 @@
-using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Publishing.Releases.Runtime.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -48,8 +47,8 @@ namespace Elsa.Architecture.Tests;
 /// so what it logs as an error, or as a skip, fails the test as well.
 /// </para>
 /// <para>
-/// Features may require one of the workflow runners or have an <see cref="Alternatives"/> conflict. Separate shells
-/// exercise each supported combination and the suite still requires every feature to compose and resolve.
+/// Features may have an <see cref="Alternatives"/> conflict. Separate shells exercise the supported compositions
+/// and the suite requires every feature to compose and resolve.
 /// </para>
 /// <para>
 /// Attribution: CShells constructs each feature through <see cref="IShellFeatureFactory"/> immediately before calling its
@@ -61,44 +60,12 @@ namespace Elsa.Architecture.Tests;
 /// </remarks>
 public sealed class FeatureCompositionTests
 {
-    private static readonly Alternative RuntimePersistence = new(
-        "The complete runtime EF family and its per-family features register the same stores.",
-        [
-            "WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence",
-            "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
-            "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence",
-            "WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence",
-            "WorkflowsRuntimeAlterationEntityFrameworkCorePersistence",
-            "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence",
-            "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
-        ], ["WorkflowsRuntimeEntityFrameworkCore"]);
-
     /// <summary>Features that own the same contract and refuse to share a shell.</summary>
     private static readonly Alternative[] Alternatives =
     [
-        RuntimePersistence,
         new("A shell runs exactly one Weaver harness.", ["WeaverAnthropic"], ["WeaverGitHubCopilot"]),
         new("Agent source-only persistence and combined source/journal persistence select the same source ports.",
             ["AgentSourcesEntityFrameworkCore"], ["AgentEntityFrameworkCore"]),
-        new("Legacy and retained workflow APIs own the same routes and their task journals have separate lifecycle authority.",
-            [WorkflowsRuntimeKernelRetainedApiFeature.FeatureName, "WorkflowsRuntimeUserTaskArchiveEntityFrameworkCore"],
-            ["WorkflowsRuntimeApi"]),
-        new("Legacy and retained workflow attention provide the same contributor.",
-            ["WorkflowsRuntimeRetainedAttention"], ["WorkflowsRuntimeAttention"]),
-    ];
-
-    // These features use the previous runner's dispatch, checkpoint, resume, or stimulus services.
-    private static readonly string[] RequiresLegacyRuntime =
-    [
-        "ActivitiesBpmn",
-        "ActivitiesPrimitives",
-        "ActivitiesRuntime",
-        "AgentRuntime",
-        "WorkflowsExecutionEvidence",
-        "WorkflowsRuntimeHistory",
-        "WorkflowsRuntimeRecurringTriggers",
-        "WorkflowsRuntimeResumption",
-        "WorkflowsRuntimeScheduling"
     ];
 
     [Fact]
@@ -133,7 +100,6 @@ public sealed class FeatureCompositionTests
         var names = features.Select(ShellBuilder.ResolveFeatureName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         failures.AddRange(Alternatives
             .SelectMany(alternative => alternative.First.Concat(alternative.Second))
-            .Concat(RequiresLegacyRuntime)
             .Concat(host.Settings.FeatureNames)
             .Where(name => !names.Contains(name))
             .Select(name => $"'{name}' is named in this test's alternatives or settings but is not a feature."));
@@ -189,7 +155,7 @@ public sealed class FeatureCompositionTests
 
     private sealed record Composition(string Shell, IReadOnlyList<Type> Features);
 
-    /// <summary>Compose both Actor hosts and the earlier runner with complete or per-family persistence.</summary>
+    /// <summary>Compose the two Actor hosts with alternate owners for conflicting feature pairs.</summary>
     private static (IReadOnlyList<Composition> Main, Composition OptionalHttp) Compositions(IReadOnlyList<Type> features)
     {
         var catalog = FeatureDiscovery.DiscoverFeatures(features.Select(feature => feature.Assembly).Distinct())
@@ -209,19 +175,11 @@ public sealed class FeatureCompositionTests
                 .ToArray();
         }
 
-        var actorExclusions = Alternatives.SelectMany(alternative => alternative.Second).Concat(RequiresLegacyRuntime);
-        var legacyExclusions = Alternatives.Where(alternative => alternative != RuntimePersistence)
-            .SelectMany(alternative => alternative.First)
-            .Concat([WorkflowsRuntimeKernelHostingFeature.FeatureName, WorkflowsRuntimeKernelOptionalHttpHostingFeature.FeatureName,
-                "WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence"])
-            .ToArray();
-
-        return (
-        [
-            new("default", Without(actorExclusions.Append(WorkflowsRuntimeKernelOptionalHttpHostingFeature.FeatureName))),
-            new("legacy-complete", Without(legacyExclusions.Concat(RuntimePersistence.First))),
-            new("legacy-granular", Without(legacyExclusions.Concat(RuntimePersistence.Second)))
-        ], new("default", Without(actorExclusions.Append(WorkflowsRuntimeKernelHostingFeature.FeatureName))));
+        var main = Alternatives.SelectMany(alternative => alternative.Second)
+            .Append(WorkflowsRuntimeKernelOptionalHttpHostingFeature.FeatureName);
+        var optionalHttp = Alternatives.SelectMany(alternative => alternative.First)
+            .Append(WorkflowsRuntimeKernelHostingFeature.FeatureName);
+        return ([new("default", Without(main))], new("default", Without(optionalHttp)));
     }
 
     /// <summary>A service type with its key, as one <see cref="ServiceDescriptor"/> registers it.</summary>
