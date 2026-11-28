@@ -55,6 +55,7 @@ public static partial class PostgresPreviewHosting
         // asking initial installation to create its default number of partitions.
         await using var current = CreateShippedContext(options, actorType, protectsStarts, publisherScope);
         await using var transaction = await current.Database.BeginTransactionAsync(cancellationToken);
+        await EfStore.LockCompatibleStoreFormatAsync(current, cancellationToken, exclusive: true);
         await PostgresRootAdmission.VerifyEstablishedShippedSourceAsync(current, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return changed;

@@ -195,7 +195,8 @@ internal static class UserTaskWaitFormatChecks
                     await current.Database.ExecuteSqlRawAsync("""ALTER TABLE "WithheldTaskUpgradeKeyReceipts" RENAME TO "FoundationKeyReceipts" """, token);
                 }
                 Require(await UpgradeAsync(), "A stopped prior PostgreSQL store must advance and reopen exactly once.");
-                Require(!await UpgradeAsync(), "A resumed PostgreSQL upgrade must verify current authority and be idempotent.");
+                var repeated = await Task.WhenAll(UpgradeAsync(), UpgradeAsync());
+                Require(repeated.All(changed => !changed), "Concurrent PostgreSQL upgrade retries must verify current authority without changing the format.");
                 Task<bool> UpgradeAsync() => PostgresPreviewHosting.UpgradeShippedFormatAsync(staged, EventHost.ActorType,
                     EventHost.ProtectsStarts, publisherScope: null, token);
                 await VerifyMarkersAsync(other, current, token);
