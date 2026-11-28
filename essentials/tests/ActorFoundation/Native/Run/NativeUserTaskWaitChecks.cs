@@ -26,7 +26,8 @@ internal static class NativeUserTaskWaitChecks
             KernelDb Open() => KernelDb.ForSqliteRootRuntime(options, definitions, StoreFormat.RootUserTaskWaitsQualification);
             var store = new EfStore(Open, postgres: false);
             var jobs = new OpenJobWitness(store);
-            var workflows = new WorkflowRegistry().Add(Wf.Workflow("review", Wf.Node<ProbeWait>("approval")));
+            var workflows = new WorkflowRegistry().Add(Wf.Workflow("review", Wf.Node<CreateUserTask>("approval",
+                ("Title", "Review"), ("AssigneeId", "person"), ("FormId", "review-form"), ("FormVersion", "7"))));
             var ordinary = new NativeExecutionModel(workflows);
             var qualified = new NativeExecutionModel(workflows, new NativeExecutionOptions { UserTaskJobs = jobs });
             Require(qualified.StateVersion == ordinary.StateVersion + 1, "The durable task wait needs its own Native state version.");
@@ -225,16 +226,5 @@ internal static class NativeUserTaskWaitChecks
             turn.Inbox.Any(message => message.Kind == "force-test-park")
                 ? ValueTask.FromException(new InvalidOperationException("Task Park witness"))
                 : actor.TurnAsync(turn, cancellationToken);
-    }
-
-    private sealed class ProbeWait : StatefulActivity<NativeUserTaskResponse, Unit, NativeUserTaskResponse>
-    {
-        protected override ValueTask<Transition> ExecuteAsync(StartContext<NativeUserTaskResponse> context) => new(Suspend(default,
-            new UserTaskWaitTrigger(new("Review", null, "person", null, ["Approve", "Reject"], [], [], "review-form", "7"))));
-
-        protected override ValueTask<Transition> ResumeAsync(ResumeContext<Unit, NativeUserTaskResponse> context) =>
-            context.Trigger is { CompletionId: Receipt, Action: "Approve" } response
-                ? new(Complete(response, response.Action))
-                : new(Fault("UnexpectedResponse", "The activity resumed without the exact accepted response."));
     }
 }

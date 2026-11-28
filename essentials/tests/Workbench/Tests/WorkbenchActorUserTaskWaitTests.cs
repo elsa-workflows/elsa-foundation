@@ -39,6 +39,7 @@ public sealed class WorkbenchActorUserTaskWaitTests
                 ["ConnectionStrings:ElsaOpenTelemetry"] = platform!,
                 ["ConnectionStrings:ElsaElsa3Import"] = platform!,
                 ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:PostgresConnectionString"] = actor!,
+                ["CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:IsDevelopmentOrDemo"] = "true",
                 ["CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminUserName"] = "admin",
                 ["CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword"] = "Password123!"
             }

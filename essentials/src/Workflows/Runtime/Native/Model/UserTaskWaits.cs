@@ -37,6 +37,7 @@ public interface INativeUserTaskJobs
 internal static class NativeUserTaskWaits
 {
     internal const string Kind = "user-task";
+    internal const int OutstandingLimit = 64;
     internal const string RetryKind = "native.user-task.retry";
     internal static readonly TimeSpan JournalJobTimeout = TimeSpan.FromMinutes(1);
     internal static readonly TimeSpan JournalRetryDelay = TimeSpan.FromSeconds(5);
@@ -70,10 +71,17 @@ internal static class NativeUserTaskWaits
 
 internal sealed partial class Burst
 {
-    private bool CanOpenUserTask(Transition transition) =>
-        options.UserTaskJobs is not null && turn.HasExactIdentity && turn.SavesWaitRecipes &&
-        turn.TestScopeId is null && _s.Mode != Modes.Ephemeral &&
-        transition.Triggers is [UserTaskWaitTrigger] && transition.Effects is null or [];
+    private ActivityFault? CheckUserTaskWait(Frame frame, Transition transition)
+    {
+        if (options.UserTaskJobs is null || !turn.HasExactIdentity || !turn.SavesWaitRecipes || turn.TestScopeId is not null ||
+            _s.Mode == Modes.Ephemeral || _wf.Nodes[frame.Node].Type != typeof(CreateUserTask) ||
+            transition.Triggers is not [UserTaskWaitTrigger] || transition.Effects is not (null or []))
+            return new("user-task.wait-unavailable", "This workflow run cannot open an Actor user task.");
+
+        var outstanding = _s.Waits.Values.Count(wait => wait.Kind == NativeUserTaskWaits.Kind) + (_s.UserTaskConsumptions?.Count ?? 0);
+        return outstanding < NativeUserTaskWaits.OutstandingLimit ? null :
+            new("user-task.wait-capacity", "This workflow run has reached its limit of outstanding Actor user tasks.");
+    }
 
     private void RegisterUserTask(Frame frame, string wait, NativeUserTaskRequest request)
     {

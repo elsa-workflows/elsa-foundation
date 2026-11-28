@@ -568,7 +568,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         var context = Context(frame);
         var state = frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State;
         var transition = await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload));
-        if (wait.Kind == NativeUserTaskWaits.Kind && transition.Kind == TransitionKind.Complete)
+        if (wait.Kind == NativeUserTaskWaits.Kind && node.Type == typeof(CreateUserTask) &&
+            transition is { Kind: TransitionKind.Complete, Effects: null or [] })
             RecordUserTaskConsumption(frame, work.Wait!, wait, work.Payload);
         await ApplyAsync(frame, transition);
     }
@@ -682,9 +683,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             Exit(frame, exit);
             return;
         }
-        if (t.Kind == TransitionKind.Suspend && t.Triggers?.Any(trigger => trigger is UserTaskWaitTrigger) == true && !CanOpenUserTask(t))
+        if (t.Kind == TransitionKind.Suspend && t.Triggers?.Any(trigger => trigger is UserTaskWaitTrigger) == true &&
+            CheckUserTaskWait(frame, t) is { } refusal)
         {
-            Fail(frame, new ActivityFault("user-task.wait-unavailable", "This workflow run cannot open an Actor user task."));
+            Fail(frame, refusal);
             return;
         }
         foreach (var effect in t.Effects ?? []) Do(frame, effect, children);

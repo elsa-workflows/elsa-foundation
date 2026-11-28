@@ -293,10 +293,11 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     async ValueTask<bool> Models.IModelTerminalDeletionGuard.ProtectsTerminalDeletionAsync(Contract.ActorHeader header, object state,
         long now, CancellationToken cancellationToken)
     {
+        if (state is null) return false;
         if (state is not NativeState native || InvocationLifetime.Protected(native, now, new ModelReceiptClock(now, header.EndedAt)))
             return true;
         if (native.UserTaskConsumptions is not { Count: > 0 } consumptions) return false;
-        if (_options.UserTaskJobs is not { } jobs) return true;
+        if (consumptions.Count > NativeUserTaskWaits.OutstandingLimit || _options.UserTaskJobs is not { } jobs) return true;
 
         foreach (var (taskId, consumed) in consumptions)
         {
