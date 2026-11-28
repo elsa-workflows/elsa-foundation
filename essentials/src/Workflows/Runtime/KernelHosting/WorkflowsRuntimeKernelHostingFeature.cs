@@ -151,7 +151,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
                 sp.GetRequiredService<IServiceScopeFactory>(), persistenceScope, tenant,
                 sp.GetRequiredService<KernelServing>().Capabilities, sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts,
                 PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses ? sp.GetRequiredService<KernelServing>() : null,
-                PreparedStandaloneHttpFanOut, PreparedStandaloneHttpResponses));
+                PreparedStandaloneHttpFanOut, PreparedStandaloneHttpResponses,
+                storage.TakesPreparedHttpWaits ? new KernelStandaloneHttpWaits(sp.GetRequiredService<KernelServing>()) : null));
             if (PreparedStandaloneHttpResponses)
                 services.AddScoped<IRuntimeStandaloneHttpResponseReader>(sp => new KernelStandaloneHttpResponseReader(persistenceScope, tenant,
                     sp.GetRequiredService<IRuntimeIngressDeliveryStore>(), sp.GetRequiredService<IRuntimePreparedStandaloneRecipient>(),

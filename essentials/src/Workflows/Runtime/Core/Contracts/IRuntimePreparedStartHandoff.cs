@@ -29,6 +29,10 @@ public interface IRuntimePreparedStartHandoff
 public interface IRuntimePreparedStandaloneRecipient
 {
     bool Selects(RuntimeStandaloneIngressSource source, RuntimeSubscriptionRecipient recipient);
+    /// <summary>Validates new source admission while keeping the selected adapter stable for accepted sources.</summary>
+    bool CanAdmit(RuntimeStandaloneIngressSource source, RuntimeSubscriptionRecipient recipient) => Selects(source, recipient);
+    /// <summary>Completes a source-owned obligation even when every selected root was cancelled or already transferred.</summary>
+    ValueTask PrepareSourceAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken) => ValueTask.CompletedTask;
     ValueTask<RuntimePostCommitOutboxItem> DeliverAsync(RuntimeDeliverySourceContext source, string recipientId, CancellationToken cancellationToken);
 }
 

@@ -13219,3 +13219,6 @@ Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Missing
 Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.TooLarge = 3 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
 Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Ready = 4 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeIngressDeliveryStore.RequiresEmptyHttpWaitCohort.get -> bool
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.StandaloneHttpExactPath = "runtime.standaloneHttpExactPath" -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.PrepareSourceAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.CanAdmit(Elsa.Workflows.Runtime.Core.Models.RuntimeStandaloneIngressSource! source, Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionRecipient! recipient) -> bool

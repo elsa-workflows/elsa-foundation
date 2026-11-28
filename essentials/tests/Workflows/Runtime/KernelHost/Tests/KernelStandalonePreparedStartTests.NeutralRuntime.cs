@@ -82,7 +82,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.Null(services.GetService<IWorkflowExecutionStateStore>());
                 Assert.Null(services.GetService<IWorkflowSchedulerWorkQueue>());
                 Assert.Null(services.GetService<IRuntimeCheckpointCommitStore>());
-                Assert.Null(services.GetService<IWorkflowStartDispatcher>());
+                var directTests = Assert.IsType<KernelDirectTestRunDispatcher>(services.GetRequiredService<IWorkflowDirectTestRunDispatcher>());
+                Assert.Same(directTests, services.GetRequiredService<IWorkflowStartDispatcher>());
                 Assert.Null(services.GetService<IRuntimeIngressWaitTarget>());
                 Assert.Null(services.GetService<IStimulusRouter>());
                 await services.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);

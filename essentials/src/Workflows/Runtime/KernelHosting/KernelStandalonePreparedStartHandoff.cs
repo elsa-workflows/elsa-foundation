@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 /// <summary>Qualifies a private source-owned start without registering a live standalone target.</summary>
 internal sealed class KernelStandalonePreparedStartHandoff(IServiceScopeFactory scopes, PersistenceScope persistence,
     BoundScope actors, KernelHostCapabilities capabilities, Func<IPreparedRootStartHandoff> foundation,
-    KernelServing? standaloneHttpRoutes = null, bool httpFanOut = false, bool httpResponses = false) : IRuntimePreparedStandaloneRecipient
+    KernelServing? standaloneHttpRoutes = null, bool httpFanOut = false, bool httpResponses = false, KernelStandaloneHttpWaits? actorHttpWaits = null) : IRuntimePreparedStandaloneRecipient
 {
     public bool Selects(RuntimeStandaloneIngressSource source, RuntimeSubscriptionRecipient recipient) =>
         source.Scope == persistence && (source.TenantId ?? PersistenceScope.DefaultValue) == actors.Tenant &&
@@ -25,14 +25,32 @@ internal sealed class KernelStandalonePreparedStartHandoff(IServiceScopeFactory 
             source.CanonicalPayload.TryGetProperty("trigger", out var trigger) && trigger.ValueKind == JsonValueKind.Object &&
             trigger.TryGetProperty("typeKey", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() is "event" or "timer" or "cron");
 
+    public bool CanAdmit(RuntimeStandaloneIngressSource source, RuntimeSubscriptionRecipient recipient) =>
+        Selects(source, recipient) && (actorHttpWaits is null || !PreparedStandaloneHttp.IsHttp(source) || actorHttpWaits.CanAccept(source));
+
     private bool SelectsHttp(RuntimeStandaloneIngressSource source) =>
         httpFanOut && PreparedStandaloneHttp.IsAsyncFanOut(source) || httpResponses && PreparedStandaloneHttp.IsWorkflowResponse(source);
+
+    public async ValueTask PrepareSourceAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken)
+    {
+        if (actorHttpWaits is null || source.Claim.Item.StandaloneIngress is not { } claimed || !PreparedStandaloneHttp.IsHttp(claimed)) return;
+        RequireScope(source);
+        if (!SelectsHttp(claimed)) throw new NotSupportedException("The selected host has disabled the accepted standalone HTTP source.");
+        await using var runtime = await scopes.CreateAsyncScopeAsync(persistence);
+        var accepted = await runtime.ServiceProvider.GetRequiredService<IRuntimeIngressDeliveryStore>().ReadSourceAsync(source, cancellationToken);
+        await actorHttpWaits.DeliverAsync(foundation(), accepted, cancellationToken);
+    }
+
+    private void RequireScope(RuntimeDeliverySourceContext source)
+    {
+        if (source.Scope != persistence || persistence.Value != actors.Tenant)
+            throw new InvalidOperationException("The standalone source is outside this Foundation owner's scope.");
+    }
 
     public async ValueTask<RuntimePostCommitOutboxItem> DeliverAsync(RuntimeDeliverySourceContext source, string recipientId,
         CancellationToken token)
     {
-        if (source.Scope != persistence || persistence.Value != actors.Tenant)
-            throw new InvalidOperationException("The standalone source is outside this Foundation owner's scope.");
+        RequireScope(source);
         await using var runtime = await scopes.CreateAsyncScopeAsync(persistence);
         var services = runtime.ServiceProvider;
         var handoff = RequireHandoff(services);
@@ -40,8 +58,11 @@ internal sealed class KernelStandalonePreparedStartHandoff(IServiceScopeFactory 
         if (source.Claim.Item.StandaloneIngress is { } standalone && PreparedStandaloneHttp.IsHttp(standalone))
         {
             var accepted = await deliveryStore.ReadSourceAsync(source, token);
-            if (!SelectsHttp(standalone) || standaloneHttpRoutes is null || PreparedStandaloneHttp.AcceptedRoute(accepted) is not { } route ||
-                Progress(accepted).Seal is null && standaloneHttpRoutes.MatchHttp(route.Method, "/" + route.Path.TrimStart('/')) is not null)
+            if (!SelectsHttp(standalone) || standaloneHttpRoutes is null || PreparedStandaloneHttp.AcceptedRoute(accepted) is not { } route)
+                throw new NotSupportedException("The standalone HTTP source does not have a qualified route.");
+            if (actorHttpWaits is not null)
+                await actorHttpWaits.DeliverAsync(foundation(), accepted, token);
+            else if (Progress(accepted).Seal is null && standaloneHttpRoutes.MatchHttp(route.Method, "/" + route.Path.TrimStart('/')) is not null)
                 throw new NotSupportedException("The standalone HTTP source does not have a qualified independent route.");
         }
         var committed = await handoff.CommitPreparedStartAsync(source, recipientId, token);

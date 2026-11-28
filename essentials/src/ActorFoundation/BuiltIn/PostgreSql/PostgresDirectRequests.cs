@@ -66,6 +66,10 @@ public sealed class PostgresDirectRequests : IReplyTransport
             (operation, spec, token, caller) => admission.AdmitProtectedRootStartAsync(scope.Tenant, operation, spec, protect, token, caller));
     }
 
+    internal Task<PreparedWaitReceipt> DeliverPreparedWaitsAsync(Contract.BoundScope scope, string operation, string sourceDigest,
+        IReadOnlyList<PreparedWaitDelivery> deliveries, bool allowNew, CancellationToken token) =>
+        admission.DeliverPreparedWaitsAsync(scope, operation, sourceDigest, deliveries, allowNew, token);
+
     internal Requests Pending => edge.Pending;
     internal HeldRootRequests HeldEdge => edge;
     internal RootAdmissionPressure? Pressure => admission.Pressure;

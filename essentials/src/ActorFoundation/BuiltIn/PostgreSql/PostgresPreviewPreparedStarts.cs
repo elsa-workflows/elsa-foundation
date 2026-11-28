@@ -20,7 +20,8 @@ public static partial class PostgresPreviewHosting
         return new BoundPreparedRootStartHandoff(protect => requests.BindProtectedRootStarts(scope, protect),
             (actor, issuance, token) => HasAcceptedPreparedStartAsync(open, scope, actor, issuance, token),
             (actor, issuance, token) => ConfirmPreparedStartAsync(open, scope, actor, issuance, token),
-            (actor, issuance, key, token) => ReadRetainedRootResponseAsync(open, scope, actor, issuance, key, token));
+            (actor, issuance, key, token) => ReadRetainedRootResponseAsync(open, scope, actor, issuance, key, token),
+            (operation, sourceDigest, deliveries, allowNew, token) => requests.DeliverPreparedWaitsAsync(scope, operation, sourceDigest, deliveries, allowNew, token));
     }
 
     /// <summary>Creates the private PostgreSQL profile for retaining the first response of a prepared root.</summary>
@@ -34,6 +35,18 @@ public static partial class PostgresPreviewHosting
     public static Task InstallRetainedResponseQualificationAsync(DbContextOptions<KernelDb> options, string actorType,
         CancellationToken cancellationToken = default) =>
         InstallPreviewFormatAsync(() => CreateRetainedResponseQualificationContext(options, actorType), cancellationToken);
+
+    /// <summary>Creates the private PostgreSQL profile with source-owned ordinary wait admission.</summary>
+    public static KernelDb CreatePreparedWaitQualificationContext(DbContextOptions<KernelDb> options, string actorType)
+    {
+        RootPublicEventHost.RequireConfiguredActorType(actorType);
+        return KernelDb.ForPostgresPreparedWaitQualification(options, new(actorType, true));
+    }
+
+    /// <summary>Installs the private prepared wait profile.</summary>
+    public static Task InstallPreparedWaitQualificationAsync(DbContextOptions<KernelDb> options, string actorType,
+        CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreatePreparedWaitQualificationContext(options, actorType), cancellationToken);
 
     private static async Task<PreparedRootResponse?> ReadRetainedRootResponseAsync(Func<KernelDb> open, Contract.BoundScope scope,
         Contract.ActorRef actor, string issuance, string responseKey, CancellationToken token)

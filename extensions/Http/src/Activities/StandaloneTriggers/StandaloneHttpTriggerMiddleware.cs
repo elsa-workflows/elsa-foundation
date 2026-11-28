@@ -88,7 +88,8 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
             if (key.Length > 128 || key.Any(char.IsControl)) { await ProblemAsync(context, 400, "InvalidIdempotencyKey", "The idempotency key is invalid."); return; }
             var metadata = JsonSerializer.SerializeToElement(new { method = request.Method, path = request.Path, query = request.Query,
                 routeValues = request.RouteData, contentType = context.Request.ContentType }, Json);
-            sourceContext.CaptureRequest(request, hash, waits.Select(RuntimeIngressWaitObservation.From).ToArray());
+            sourceContext.CaptureRequest(request, hash, waits.Select(RuntimeIngressWaitObservation.From).ToArray(),
+                deliveryStore.RequiresEmptyHttpWaitCohort ? relativePath : null);
             acceptedSourceId = RuntimeStandaloneIngressSource.BuildOutboxItemId(owner.Scope.Persistence, owner.Scope.TenantId, owner.OwnerId,
                 StandaloneHttpTriggerSource.Descriptor.SourceFamily, key);
             accepted = await ingress.AdmitAsync(new(owner.OwnerId, key, StandaloneHttpTriggerSource.Descriptor.PayloadSchema, payload.Value, metadata), context.RequestAborted);
