@@ -93,8 +93,12 @@ public static partial class SqliteEmbeddedHosting
         var format = requests?.QualificationFormat;
         var eventHost = requests?.PublicEventHost ?? (format is null ? new(actorType, false) : null);
         var pressure = requests?.Pressure;
+        bool publicEvents;
         using (var db = KernelDb.ForSqliteRootShipped(file.Options, format))
+        {
+            publicEvents = db.UsesRootPublicEventStarts;
             if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
+        }
         var admission = CreateAdmission(file, window, pressure, format, eventHost);
         await admission.VerifyAsync(cancellationToken);
         var path = file.Path;
@@ -103,7 +107,7 @@ public static partial class SqliteEmbeddedHosting
             await ReadPressureAsync(cancellationToken);
             pressure.RefreshOnDemand(ReadPressureAsync);
         }
-        return new Ingress(path, actorType, window, requests, pressure, eventHost, authorizeOperator);
+        return new Ingress(path, actorType, window, requests, pressure, eventHost, authorizeOperator, publicEvents);
 
         async Task ReadPressureAsync(CancellationToken token)
         {
@@ -126,7 +130,7 @@ public static partial class SqliteEmbeddedHosting
         new(() => KernelDb.ForSqliteRootShipped(file.Options, format, publicEventHost), window, file.AdmissionDefinitions, pressure);
 
     private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests, RootAdmissionPressure? pressure,
-        RootPublicEventHost? eventHost, Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator) : Contract.IIngress
+        RootPublicEventHost? eventHost, Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator, bool publicEvents) : Contract.IIngress
     {
         public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
             string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
@@ -149,10 +153,7 @@ public static partial class SqliteEmbeddedHosting
             ArgumentNullException.ThrowIfNull(kind);
             cancellationToken.ThrowIfCancellationRequested();
             var format = requests?.QualificationFormat;
-            if (target is Contract.Target.Event publish && (format == StoreFormat.RootPublicEventStartsQualification ||
-                format == StoreFormat.RootPublicEventHostQualification ||
-                format == StoreFormat.RootPagedPublicEventsQualification ||
-                format is null && RootProfiles.Shipped.HasFlag(RootCapabilities.PublicEventStarts)))
+            if (target is Contract.Target.Event publish && publicEvents)
             {
                 using var writer = AcquireFile(path);
                 var publications = CreateAdmission(writer, window, pressure, format, eventHost);

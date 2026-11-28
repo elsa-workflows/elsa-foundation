@@ -2,7 +2,7 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private sealed record AuthoredRootPublication(EventRow Event, Message Ticket);
+    private sealed record AuthoredRootPublication(WorkerRoot Root, EventRow Event, Message Ticket);
 
     private static class RootEventWaits
     {
@@ -50,7 +50,7 @@ public sealed partial class EfStore
                     publication.FoundationTenant != root.Tenant ||
                     !FoundationMetadataLimits.FitsContent(publication.Payload, FoundationMetadataLimits.EventContentBytes))
                     throw RootShape();
-                publications.Add(new(publication, ticket));
+                publications.Add(new(root, publication, ticket));
                 previousOrdinal = ordinal;
             }
         }

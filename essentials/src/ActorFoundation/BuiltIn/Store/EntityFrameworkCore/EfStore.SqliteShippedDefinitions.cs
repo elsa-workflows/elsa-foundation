@@ -59,6 +59,7 @@ public sealed partial class EfStore
 
             RequireSqliteDefinitions(installed, expected);
             if (db.UsesRootPublicEventHost) await RootPublicEventHost.InstallAsync(db, db.PublicEventHost, create, token);
+            if (db.UsesAuthoredStandaloneEvents) await RootAuthoredStandaloneEvents.InstallAsync(db, create, token);
             if (!await db.Database.SqlQuery<bool>($"""
                 SELECT
                     (SELECT count(*) FROM "Partitions") = {partitions}
@@ -467,6 +468,12 @@ public sealed partial class EfStore
         yield return new("trigger", "kernel_job_generation", "Instances", "CREATE TRIGGER " + SqliteGenerationClause);
         foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
         foreach (var projector in SqliteRootProjectors()) yield return projector;
+        if (db.UsesAuthoredStandaloneEvents)
+        {
+            yield return Table(RootAuthoredStandaloneEvents.Host, RootAuthoredStandaloneEvents.HostColumns(sqlite: true));
+            yield return Table(RootAuthoredStandaloneEvents.Transfers, RootAuthoredStandaloneEvents.TransferColumns(sqlite: true));
+            yield return Index(RootAuthoredStandaloneEvents.PageIndex, RootAuthoredStandaloneEvents.Transfers, RootAuthoredStandaloneEvents.PageColumns);
+        }
         foreach (var history in SqliteRootWorkflowHistoryDefinitions(db)) yield return history;
         if (db.UsesRootSequencedJournal)
             foreach (var segment in SqliteSequencedJournalDefinitions()) yield return segment;

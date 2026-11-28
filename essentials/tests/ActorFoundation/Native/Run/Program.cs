@@ -195,6 +195,8 @@ if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-
     return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
 if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunHeldRepliesAsync(sqliteReplyFence == "in-batch");
+if (args is ["root-authored-standalone-events", var bridgeProvider and ("postgres" or "sqlite"), var bridgeFence and ("checked" or "in-batch")])
+    return await AuthoredStandaloneEventOutboxChecks.RunAsync(bridgeProvider == "postgres", bridgeFence == "in-batch");
 if (args is ["sqlite-prepared-starts", var preparedFence and ("checked" or "in-batch")])
     return await SqlitePreparedStartChecks.RunAsync(preparedFence == "in-batch");
 if (args is ["sqlite-held-reply-peer", var sqliteReplyPath, var sqlitePeerFence and ("checked" or "in-batch")])
