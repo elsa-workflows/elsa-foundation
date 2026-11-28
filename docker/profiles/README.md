@@ -9,6 +9,20 @@ A profile runs `Elsa.Foundation.Host.dll`. `packages.txt` selects the NuGet pack
 | [Elsa 3 import](elsa3-import/shells.json) | Analyze and import Elsa 3 reusable activity definitions through the migration API. Includes mapping, publishing, persistence and expressions used by the import path. Native and Flowchart consumers execute on the built-in Actor Foundation. The same image can [run already-converted Elsa 4 files](elsa3-import/migrated-files.md) from a read-only `migrated/` mount. |
 | [Archived Full](full-compatibility.md) | The published classic server composition for deployments that still need the previous runner. Use its exact image and matching deployment data. |
 
+## Build Essentials from your checkout
+
+From the repository root in Rider's terminal or a shell on macOS or Linux, run:
+
+```sh
+python3 tools/docker-profiles/local-server-profile.py
+```
+
+The helper takes a scratch snapshot of the working tree, including saved staged and unstaged changes and new files Git has not ignored. It computes versions, packs the profile's Elsa dependencies into a local NuGet feed, and builds Foundation and the profile with both generated locks. The build uses the normal external dependencies and needs Git, Python 3, the repository's .NET SDK, and Docker with BuildKit.
+
+The default recipe is `essentials` on Linux ARM64. Select the release composition with `--profile essentials-curated` or build an AMD64 image with `--platform linux/amd64`. The helper prints the image tag and a `source` command for loading the scratch directory and image names into the current shell.
+
+For a demo, pass `--output-root` with an existing directory outside the checkout. The helper preserves its source snapshot, local feed, and locks there. You can load `demo.env` and replay the Docker builds using those inputs.
+
 ## Use a released profile
 
 Select a published profile and set `ELSA_VERSION` to its release tag suffix, such as `4.0.0-preview.1234.1`. The same release pairs `elsaworkflows/elsa-foundation-host:$ELSA_VERSION` with `elsaworkflows/elsa-foundation-host:builder-$ELSA_VERSION`. Each Elsa NuGet package has its own version, selected by the builder's release plan.
