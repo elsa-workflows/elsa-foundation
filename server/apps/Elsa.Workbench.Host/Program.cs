@@ -373,6 +373,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
 
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(AttentionApiFeature).Assembly,
+            typeof(WorkflowsRuntimeRetainedAttentionFeature).Assembly,
             typeof(Elsa.Studio.Dashboard.Api.DashboardResourcesApiFeature).Assembly,
             typeof(Elsa.Studio.Dashboard.Management.DashboardManagementFeature).Assembly,
             typeof(Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature).Assembly,

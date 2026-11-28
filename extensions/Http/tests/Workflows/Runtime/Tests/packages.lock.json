@@ -389,6 +389,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Attention": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.PreparedSchedules": "[4.0.0-dev, )",
@@ -397,6 +398,15 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Options": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.runtime.attention": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
       },
       "elsa.workflows.runtime.core": {

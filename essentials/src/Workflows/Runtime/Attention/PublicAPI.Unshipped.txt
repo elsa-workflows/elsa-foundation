@@ -1,0 +1,93 @@
+#nullable enable
+Elsa.Workflows.Runtime.Attention.IWorkflowRuntimeAttentionQuery
+Elsa.Workflows.Runtime.Attention.IWorkflowRuntimeAttentionQuery.QueryAsync(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot!>
+Elsa.Workflows.Runtime.Attention.IWorkflowRuntimePlacementAttention
+Elsa.Workflows.Runtime.Attention.IWorkflowRuntimePlacementAttention.ListUnplaceableWorkAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport!>!>
+Elsa.Workflows.Runtime.Attention.UnavailableWorkflowRuntimeAttentionQuery
+Elsa.Workflows.Runtime.Attention.UnavailableWorkflowRuntimeAttentionQuery.QueryAsync(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot!>
+Elsa.Workflows.Runtime.Attention.UnavailableWorkflowRuntimeAttentionQuery.UnavailableWorkflowRuntimeAttentionQuery() -> void
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.<Clone>$() -> Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport!
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.Deconstruct(out string! Requirement, out int WaitingExecutions, out System.DateTimeOffset FirstObservedAt, out System.DateTimeOffset LastObservedAt) -> void
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.Equals(Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport? other) -> bool
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.FirstObservedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.FirstObservedAt.init -> void
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.LastObservedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.LastObservedAt.init -> void
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.Requirement.get -> string!
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.Requirement.init -> void
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.UnplaceableWorkReport(string! Requirement, int WaitingExecutions, System.DateTimeOffset FirstObservedAt, System.DateTimeOffset LastObservedAt) -> void
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.WaitingExecutions.get -> int
+Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.WaitingExecutions.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionContributor
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionContributor.Descriptor.get -> Elsa.Attention.Core.AttentionContributorDescriptor!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionContributor.EvaluateAsync(Elsa.Attention.Core.AttentionContributorContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Attention.Core.AttentionContribution!>
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionContributor.WorkflowRuntimeAttentionContributor(Elsa.Workflows.Runtime.Attention.IWorkflowRuntimeAttentionQuery! query, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Attention.IWorkflowRuntimePlacementAttention!>? placementAttention = null) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind.BlockingIncident = 2 -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind.FaultedExecution = 0 -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind.OpenIncident = 1 -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.<Clone>$() -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.Context.get -> Elsa.Attention.Core.AttentionQueryContext!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.Context.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.Deconstruct(out Elsa.Attention.Core.AttentionQueryContext! Context, out int MaximumItems) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.Equals(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery? other) -> bool
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.MaximumItems.get -> int
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.MaximumItems.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.TenantId.get -> string?
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.WorkflowRuntimeAttentionQuery(Elsa.Attention.Core.AttentionQueryContext! Context, int MaximumItems) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.<Clone>$() -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Count.get -> int
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Count.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Deconstruct(out string! WorkflowExecutionId, out string! WorkflowDefinitionId, out string? IncidentId, out Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind Kind, out string! Generation, out System.DateTimeOffset OccurredAt, out System.DateTimeOffset LastObservedAt, out int Count, out string? SanitizedSummary) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Equals(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord? other) -> bool
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Generation.get -> string!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Generation.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.IncidentId.get -> string?
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.IncidentId.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Kind.get -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.Kind.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.LastObservedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.LastObservedAt.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.OccurredAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.OccurredAt.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.SanitizedSummary.get -> string?
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.SanitizedSummary.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.WorkflowDefinitionId.get -> string!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.WorkflowDefinitionId.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.WorkflowExecutionId.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.WorkflowRuntimeAttentionRecord(string! WorkflowExecutionId, string! WorkflowDefinitionId, string? IncidentId, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionKind Kind, string! Generation, System.DateTimeOffset OccurredAt, System.DateTimeOffset LastObservedAt, int Count, string? SanitizedSummary) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecords
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.<Clone>$() -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Deconstruct(out int TotalCount, out System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!>! Records, out string? ErrorCode, out string? Detail) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Detail.get -> string?
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Detail.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Equals(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? other) -> bool
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.ErrorCode.get -> string?
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.ErrorCode.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.IsAvailable.get -> bool
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Records.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!>!
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Records.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.TotalCount.get -> int
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.TotalCount.init -> void
+Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.WorkflowRuntimeAttentionSnapshot(int TotalCount, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!>! Records, string? ErrorCode = null, string? Detail = null) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature
+Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature.WorkflowsRuntimeRetainedAttentionFeature() -> void
+const Elsa.Workflows.Runtime.Attention.WorkflowsRuntimeRetainedAttentionFeature.FeatureName = "WorkflowsRuntimeRetainedAttention" -> string!
+static Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.operator !=(Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport? left, Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport? right) -> bool
+static Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport.operator ==(Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport? left, Elsa.Workflows.Runtime.Attention.UnplaceableWorkReport? right) -> bool
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.operator !=(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery? left, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery? right) -> bool
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery.operator ==(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery? left, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery? right) -> bool
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.operator !=(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord? left, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord? right) -> bool
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord.operator ==(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord? left, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord? right) -> bool
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecords.MapFault(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! execution, System.DateTimeOffset observedAt) -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecords.MapIncident(Elsa.Workflows.Runtime.Core.Models.IncidentState! incident, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! execution, System.DateTimeOffset observedAt) -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecord!
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.Unavailable(string! errorCode, string? detail = null) -> Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot!
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.operator !=(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? left, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? right) -> bool
+static Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot.operator ==(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? left, Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot? right) -> bool
