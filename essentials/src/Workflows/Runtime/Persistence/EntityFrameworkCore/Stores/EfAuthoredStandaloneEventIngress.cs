@@ -7,10 +7,12 @@ using Elsa.Workflows.Runtime.Services.Triggers;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed class EfAuthoredStandaloneEventIngress(IRuntimeIngressDeliveryStore delivery, IStandaloneTriggerStore resources,
-    IPersistenceAccessContextAccessor access, StandaloneTriggerAdmission admission,
-    IEnumerable<StandaloneTriggerSourceCapability> sourceCapabilities) : IRuntimeAuthoredStandaloneEventIngress
+    IPersistenceAccessContextAccessor access, StandaloneTriggerAdmission admission, IRuntimePostCommitOutboxProcessor processor,
+    IRuntimePostCommitIntentDispatcher dispatcher, IEnumerable<StandaloneTriggerSourceCapability> sourceCapabilities) : IRuntimeAuthoredStandaloneEventIngress
 {
-    internal const string BroadcastFamily = "Elsa.Event.Broadcast";
+    public bool SupportsAdmission => delivery is EfRuntimeIngressDeliveryStore { SupportsAuthoredEventAdmission: true } &&
+        TriggerSourcePipeline.Supports(processor, dispatcher, RuntimeDeliverySourceKind.StandaloneIngress,
+            RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind);
 
     public async ValueTask AdmitAsync(RuntimeAuthoredStandaloneEvent source, CancellationToken cancellationToken = default)
     {
@@ -27,11 +29,12 @@ internal sealed class EfAuthoredStandaloneEventIngress(IRuntimeIngressDeliverySt
             source.CommittedAt != DateTimeOffset.FromUnixTimeMilliseconds(source.CommittedAt.ToUnixTimeMilliseconds()))
             throw new ArgumentException("The committed authored Event lacks its exact scope, source or body.", nameof(source));
         access.Current.EnsureTenantScope(tenant);
-        if (delivery is not EfRuntimeIngressDeliveryStore store)
+        if (!SupportsAdmission || delivery is not EfRuntimeIngressDeliveryStore store)
             throw new NotSupportedException("This host does not own a physical authored Event cohort writer.");
 
         var descriptor = sourceCapabilities.SingleOrDefault(capability => capability.SupportsResourceAuthorization &&
-            capability.WorkflowIntentKind is not null && capability.Descriptor is { TypeKey: "event", SourceFamily: BroadcastFamily })?.Descriptor
+            capability.WorkflowIntentKind == RuntimeAuthoredStandaloneEvent.BroadcastIntent &&
+            capability.Descriptor is { TypeKey: "event", SourceFamily: RuntimeAuthoredStandaloneEvent.BroadcastFamily })?.Descriptor
             ?? throw new NotSupportedException("The composing workflow module did not register its ordinary broadcast Event source.");
         var payload = source.Payload.Clone();
         var metadata = JsonSerializer.SerializeToElement(new { eventName = source.EventName });

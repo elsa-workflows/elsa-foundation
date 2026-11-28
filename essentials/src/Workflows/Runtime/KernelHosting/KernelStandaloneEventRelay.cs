@@ -65,12 +65,15 @@ internal sealed class KernelStandaloneEventRelay(IAuthoredStandaloneEventOutbox 
 
     private async Task RelayAsync(AuthoredStandaloneEvent item, CancellationToken token)
     {
-        if (item.EventName.StartsWith(WorkflowEventPrefix, StringComparison.Ordinal))
+        var eventName = item.EventName.StartsWith(WorkflowEventPrefix, StringComparison.Ordinal)
+            ? item.EventName[WorkflowEventPrefix.Length..]
+            : null;
+        if (!string.IsNullOrWhiteSpace(eventName))
         {
             var publisher = item.Publisher.Id;
             var authority = WorkflowExecutionAuthoritySnapshot.CreateRoot("workflow-actor:" + publisher);
             var source = new RuntimeAuthoredStandaloneEvent(scope, new(scope.Persistence.Value), item.Occurrence,
-                publisher, item.EventName[WorkflowEventPrefix.Length..], JsonSerializer.Deserialize<JsonElement>(item.Payload ?? "null"),
+                publisher, eventName, JsonSerializer.Deserialize<JsonElement>(item.Payload ?? "null"),
                 DateTimeOffset.FromUnixTimeMilliseconds(item.CommittedAt), authority);
             await using var runtime = await scopes.CreateAsyncScopeAsync(scope.Persistence);
             await runtime.ServiceProvider.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>().AdmitAsync(source, token);

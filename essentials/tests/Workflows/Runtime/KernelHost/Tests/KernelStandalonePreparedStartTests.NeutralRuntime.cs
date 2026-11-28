@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
+using Elsa.Activities.Primitives;
 using Elsa.Activities.Scheduling.StandaloneTriggers;
 using Elsa.Events;
 using Elsa.Serialization.Core;
@@ -178,7 +179,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.Null(item.DeliveringOwnerId);
             }
 
-            ServiceProvider OpenHost(bool neutral)
+            ServiceProvider OpenHost(bool neutral, bool authoredOnly = false, PersistenceScope? relayScope = null)
             {
                 var services = new ServiceCollection();
                 services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
@@ -188,9 +189,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                 new EventsFeature().ConfigureServices(services);
                 if (neutral)
                 {
-                    services.AddScoped(_ => new StandaloneTriggerSourceCapability(
-                        new("event", 1, "Elsa.Event.Broadcast", new("Elsa.EventPayload", schemaVersion: 1)), true)
-                    { WorkflowIntentKind = "publish-stimulus" });
+                    new ActivitiesPrimitivesFeature().ConfigureServices(services);
+                    if (relayScope is not null)
+                        services.AddSingleton<IRuntimeAuthoredStandaloneEventAvailability>(new PublishedEventAvailability(relayScope));
                     services.AddWorkflowActivationDefaults();
                     new RuntimeArtifactsEntityFrameworkCoreFeature
                     {
@@ -212,10 +213,13 @@ public sealed partial class KernelStandalonePreparedStartTests
                         RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
                     });
                 }
-                services.AddStandaloneTriggerIngress<FixtureEvent>(new("event", 1, EventFamily, EventSchema));
-                services.AddScoped<IStandaloneTriggerSourceContext<FixtureEvent>, EventContext>();
-                services.AddStandaloneTriggerIngress<UnqualifiedWaitEvent>(new("event", 1, WaitSourceFamily, EventSchema));
-                services.AddScoped<IStandaloneTriggerSourceContext<UnqualifiedWaitEvent>, UnqualifiedWaitEventContext>();
+                if (!authoredOnly)
+                {
+                    services.AddStandaloneTriggerIngress<FixtureEvent>(new("event", 1, EventFamily, EventSchema));
+                    services.AddScoped<IStandaloneTriggerSourceContext<FixtureEvent>, EventContext>();
+                    services.AddStandaloneTriggerIngress<UnqualifiedWaitEvent>(new("event", 1, WaitSourceFamily, EventSchema));
+                    services.AddScoped<IStandaloneTriggerSourceContext<UnqualifiedWaitEvent>, UnqualifiedWaitEventContext>();
+                }
                 new WorkflowsRuntimeKernelHostingFeature
                 {
                     Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = neutral
@@ -242,10 +246,26 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var context = services.GetRequiredService<RuntimeDbContext>();
                 var slot = Assert.IsType<WorkflowActivationSlot>(await services.GetRequiredService<IWorkflowActivationAuthority>()
                     .FindAsync(Definition, KernelServing.DefaultSlotName, token));
-                var resources = services.GetRequiredService<ITriggerSourceResourceCommitStore>();
                 await port.AdmitAsync(empty, token);
-                await WriteTriggerAsync(resources, slot, first, "event", new { eventName });
-                await WriteTriggerAsync(resources, slot, second, "event", new { eventName });
+                var firstWrite = TriggerWrite(slot, first, "event", new { eventName }) with { ObservedTargets = null };
+                foreach (var wrongScope in new PersistenceScope?[] { null, new("another-tenant") })
+                {
+                    await using var inactive = OpenHost(neutral: true, authoredOnly: true, relayScope: wrongScope);
+                    await using var operation = await inactive.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                    var committer = operation.ServiceProvider.GetRequiredService<ITriggerManagementCommitter>();
+                    Assert.False(committer.CanActivateType("event", 1));
+                    var unavailable = await Assert.ThrowsAsync<TriggerOperationException>(() =>
+                        committer.CommitAsync(DeliveryScope, firstWrite, token).AsTask());
+                    Assert.Equal("unavailable", unavailable.Code);
+                }
+
+                await using var active = OpenHost(neutral: true, authoredOnly: true, relayScope: Persistence);
+                await using var management = await active.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                var authoring = management.ServiceProvider.GetRequiredService<ITriggerManagementCommitter>();
+                Assert.True(authoring.CanActivateType("event", 1));
+                Assert.False(authoring.CanActivateType("event", 2));
+                await CommitAuthoredTriggerAsync(firstWrite);
+                await CommitAuthoredTriggerAsync(TriggerWrite(slot, second, "event", new { eventName }) with { ObservedTargets = null });
                 await port.AdmitAsync(empty, token);
                 Assert.Null(await FindAsync(sourceStore, empty, first));
 
@@ -276,7 +296,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                     thirdModel.RootActivity, thirdModel.ResumeTargets, thirdModel.CreatedAt, thirdModel.CompatibilityMetadata,
                     current.InputContract!, thirdModel.Dependencies, thirdModel.IncidentStrategy);
                 var republished = await PublishAsync(services, third, slot.Revision, clock.GetUtcNow(), token);
-                await WriteTriggerAsync(resources, republished, later, "event", new { eventName });
+                await CommitAuthoredTriggerAsync(TriggerWrite(republished, later, "event", new { eventName }) with { ObservedTargets = null });
                 await using (var fresh = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence))
                 {
                     var reopened = fresh.ServiceProvider.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
@@ -294,6 +314,15 @@ public sealed partial class KernelStandalonePreparedStartTests
                     var delivered = Assert.IsType<RuntimePostCommitOutboxItem>(await FindAsync(sourceStore, firstEvent, trigger));
                     Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
                     Assert.Equal(current.Identity, Progress(delivered).Receipt?.Material);
+                }
+
+                async Task CommitAuthoredTriggerAsync(TriggerStoreWrite write)
+                {
+                    var receipt = await authoring.CommitAsync(DeliveryScope, write, token);
+                    Assert.Equal((write.Trigger.Id, 1L), (receipt.TriggerId, receipt.Revision));
+                    var stored = await management.ServiceProvider.GetRequiredService<IStandaloneTriggerStore>().FindAsync(DeliveryScope,
+                        write.Trigger.Id, token);
+                    Assert.True(stored?.Trigger.HasActivated);
                 }
 
                 async Task AssertPinnedAsync(IRuntimeIngressDeliveryStore store, string trigger)
@@ -369,6 +398,12 @@ public sealed partial class KernelStandalonePreparedStartTests
             async Task WriteTriggerAsync<TConfiguration>(ITriggerSourceResourceCommitStore store, WorkflowActivationSlot activation,
                 string id, string type, TConfiguration configuration)
             {
+                var receipt = await store.CommitAsync(DeliveryScope, TriggerWrite(activation, id, type, configuration), [], token);
+                Assert.Equal((id, 1L), (receipt.TriggerId, receipt.Revision));
+            }
+
+            TriggerStoreWrite TriggerWrite<TConfiguration>(WorkflowActivationSlot activation, string id, string type, TConfiguration configuration)
+            {
                 var now = clock.GetUtcNow();
                 var origin = new TriggerManagementOrigin(TriggerManagementKind.Studio);
                 var trigger = new StandaloneTrigger(id, id, type, 1, JsonSerializer.SerializeToElement(configuration),
@@ -379,12 +414,10 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var observedTarget = new TriggerTargetObservation(Definition, activation.SlotName, activation.Revision,
                     activation.ActiveActivationId, RuntimeIngressAdmission.ComputeInputContractFingerprint(material.InputContract!),
                     "native", TriggerTargetState.Available);
-                var receipt = await store.CommitAsync(DeliveryScope,
-                    new(id + "-neutral-create", id + "-neutral-create", "qualification", null, trigger, [subscription])
-                    {
-                        ObservedTargets = [observedTarget]
-                    }, [], token);
-                Assert.Equal((id, 1L), (receipt.TriggerId, receipt.Revision));
+                return new(id + "-neutral-create", id + "-neutral-create", "qualification", null, trigger, [subscription])
+                {
+                    ObservedTargets = [observedTarget]
+                };
             }
         }
         finally { directory?.Delete(recursive: true); }
@@ -419,6 +452,11 @@ public sealed partial class KernelStandalonePreparedStartTests
 
         static string SourceId(StandaloneTriggerSignal signal) =>
             RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, EventId, WaitSourceFamily, signal.SourceKey);
+    }
+
+    private sealed class PublishedEventAvailability(PersistenceScope owner) : IRuntimeAuthoredStandaloneEventAvailability
+    {
+        public bool Supports(PersistenceScope scope) => scope == owner;
     }
 
     private sealed class UnqualifiedWaitEvent;

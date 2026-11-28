@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../../../../src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="../../../../../src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="../../../../../src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
     <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj" />

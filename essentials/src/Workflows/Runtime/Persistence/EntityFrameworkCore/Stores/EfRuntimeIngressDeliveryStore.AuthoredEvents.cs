@@ -11,6 +11,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfRuntimeIngressDeliveryStore
 {
+    internal bool SupportsAuthoredEventAdmission => PreparedStandaloneOnly && SupportsAdmission;
+
     internal async ValueTask<bool> AdmitAuthoredEventAsync(RuntimeAuthoredStandaloneEvent source,
         Func<CancellationToken, ValueTask<IReadOnlyList<TriggerAggregate>>> readMatching,
         Func<TriggerAggregate, CancellationToken, ValueTask<RuntimeIngressAdmissionRequest>> prepare,
@@ -42,7 +44,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
                 PreparedStandaloneAdmission.RequireSource(request.Candidate);
                 var ingress = request.Candidate.StandaloneIngress!;
                 if (request.Scope != source.Scope || ingress.SourceKey != source.Occurrence ||
-                    ingress.RecordedAt != source.CommittedAt || ingress.SourceFamily != EfAuthoredStandaloneEventIngress.BroadcastFamily ||
+                    ingress.RecordedAt != source.CommittedAt || ingress.SourceFamily != RuntimeAuthoredStandaloneEvent.BroadcastFamily ||
                     request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => !preparedTarget!.Selects(ingress, recipient)))
                     throw new InvalidDataException("A prepared resource does not belong to the committed authored Event.");
                 candidates.Add(request);

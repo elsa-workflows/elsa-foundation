@@ -8,7 +8,8 @@ internal sealed class ProtectedTriggerManagementCommitter(IStandaloneTriggerStor
     IEnumerable<StandaloneTriggerSourceCapability> installedSources, IEnumerable<ITriggerReservationPlanner> reservationPlanners,
     IStandaloneTriggerTargetDiscovery? targets = null, IEnumerable<IStandaloneSchedulePlanner>? schedulePlanners = null,
     IRuntimeIngressDeliveryStore? ingress = null, IRuntimePostCommitOutboxProcessor? processor = null,
-    IRuntimePostCommitIntentDispatcher? dispatcher = null) : ITriggerManagementCommitter
+    IRuntimePostCommitIntentDispatcher? dispatcher = null, IRuntimeAuthoredStandaloneEventIngress? authoredEventIngress = null,
+    IRuntimeAuthoredStandaloneEventAvailability? authoredEventRelay = null, IPersistenceAccessContextAccessor? access = null) : ITriggerManagementCommitter
 {
     // Several independently bound producers can supply the same trigger family.
     // Their source identities remain distinct; activation needs an installed type/schema pair.
@@ -21,8 +22,14 @@ internal sealed class ProtectedTriggerManagementCommitter(IStandaloneTriggerStor
             (item.WorkflowIntentKind is null
                 ? ingress?.SupportsAdmission == true && TriggerSourcePipeline.Supports(processor, dispatcher,
                     RuntimeDeliverySourceKind.StandaloneIngress, RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind)
-                : ingress?.SupportsWorkflowCohort(item.WorkflowIntentKind) == true && TriggerSourcePipeline.Supports(processor, dispatcher,
-                    RuntimeDeliverySourceKind.WorkflowCheckpoint, item.WorkflowIntentKind)));
+                : SupportsWorkflowSource(item)));
+
+    private bool SupportsWorkflowSource(StandaloneTriggerSourceCapability source) =>
+        (ingress?.SupportsWorkflowCohort(source.WorkflowIntentKind!) == true && TriggerSourcePipeline.Supports(processor, dispatcher,
+            RuntimeDeliverySourceKind.WorkflowCheckpoint, source.WorkflowIntentKind!)) ||
+        (source.WorkflowIntentKind == RuntimeAuthoredStandaloneEvent.BroadcastIntent &&
+            source.Descriptor is { TypeKey: "event", SourceFamily: RuntimeAuthoredStandaloneEvent.BroadcastFamily } &&
+            access?.Current.Scope is { } scope && authoredEventRelay?.Supports(scope) == true && authoredEventIngress?.SupportsAdmission == true);
     public bool CanStopType(string typeKey, int schemaVersion) => physical.SupportsActivatedType(typeKey) && (CanActivateType(typeKey, schemaVersion) ||
         planners.ContainsKey(typeKey) || schedulePlanners?.Any(planner => planner.Supports(typeKey)) == true);
 

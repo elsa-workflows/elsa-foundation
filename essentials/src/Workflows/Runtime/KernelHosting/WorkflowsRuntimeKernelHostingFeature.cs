@@ -141,6 +141,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPo
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
             persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables, testTenant,
             sp.GetService<KernelEventPublicationRelay>(), PreparedStandaloneStarts));
+        if (storage.TakesAuthoredStandaloneEvents)
+            services.AddSingleton<IRuntimeAuthoredStandaloneEventAvailability>(sp => sp.GetRequiredService<KernelShellRuntime>());
         if (PreparedStandaloneStarts)
         {
             services.AddScoped<IRuntimePreparedStartAttemptProof>(sp => new KernelStandalonePreparedStartProof(persistenceScope, tenant,

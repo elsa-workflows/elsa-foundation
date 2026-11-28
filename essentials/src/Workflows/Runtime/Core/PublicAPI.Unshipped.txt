@@ -11816,8 +11816,11 @@ Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent.Sc
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerAdmissionRefusedException
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerSourceDescriptor
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerSourceDescriptor.Deconstruct(out string! TypeKey, out int SchemaVersion, out string! SourceFamily, out Elsa.Primitives.Models.ValueTypeDescriptor! PayloadSchema) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventAvailability
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventAvailability.Supports(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> bool
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventIngress
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventIngress.AdmitAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeAuthoredStandaloneEvent! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeAuthoredStandaloneEventIngress.SupportsAdmission.get -> bool
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerIngress<TSource>
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerSignal.PayloadSchema.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerInvocationContext.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
