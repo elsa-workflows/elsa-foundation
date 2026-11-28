@@ -276,7 +276,7 @@ public static class NativeExecutableMapper
             foreach (var binding in source.InputBindings.Values)
             {
                 var safeSource = binding.Source == RuntimeInputBindingSource.Literal ||
-                    binding.Source == RuntimeInputBindingSource.WorkflowRequest && scope.Graph is null;
+                    scope.Graph is null && binding.Source is (RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember);
                 if (!safeSource || binding.EffectivePolicy.HidesValue() || binding.Literal?.Policy.HidesValue() == true)
                     throw NativeMappingRefusedException.Binding(id, binding.InputKey,
                         "Use a plain literal or an unprotected workflow input for Evaluate Decision.");

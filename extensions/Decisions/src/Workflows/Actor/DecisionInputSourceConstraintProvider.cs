@@ -6,7 +6,7 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Decisions.Workflows.Design;
 
-/// <summary>Exposes the same publication-fixed selector restriction enforced by DecisionPinSource.</summary>
+/// <summary>Offers the selector and value sources supported by the Actor decision activity.</summary>
 internal sealed class DecisionInputSourceConstraintProvider : IActivityInputSourceConstraintProvider
 {
     public ValueTask<ActivityDataInputConstraint?> GetConstraintAsync(
@@ -16,12 +16,20 @@ internal sealed class DecisionInputSourceConstraintProvider : IActivityInputSour
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(activityVersion);
-        var applies = IsEvaluateDecision(activityVersion)
-            && StringComparer.Ordinal.Equals(inputKey, nameof(EvaluateDecision.Decision));
-        return ValueTask.FromResult<ActivityDataInputConstraint?>(applies
-            ? new("Elsa.Decisions", ["Literal"], "decisions.selector-fixed-at-publication",
-                "Select the decision to evaluate before publishing.")
-            : null);
+        if (!IsEvaluateDecision(activityVersion))
+            return ValueTask.FromResult<ActivityDataInputConstraint?>(null);
+
+        ActivityDataInputConstraint? constraint = inputKey switch
+        {
+            nameof(EvaluateDecision.Decision) => new("Elsa.Decisions", ["Literal"], "decisions.selector-fixed-at-publication",
+                "Select the decision to evaluate before publishing."),
+            nameof(EvaluateDecision.Inputs) => new("Elsa.Decisions", ["Literal", "Object", "Input", "WorkflowRequest"],
+                "decisions.plain-source-required", "Use a plain literal or an unprotected top-level workflow input."),
+            nameof(EvaluateDecision.OperationBudget) => new("Elsa.Decisions", ["Literal", "Input", "WorkflowRequest"],
+                "decisions.plain-source-required", "Use a plain literal or an unprotected top-level workflow input."),
+            _ => null
+        };
+        return ValueTask.FromResult(constraint);
     }
 
     // Catalog FindVersion often returns the version row without the definition navigation. Identify
