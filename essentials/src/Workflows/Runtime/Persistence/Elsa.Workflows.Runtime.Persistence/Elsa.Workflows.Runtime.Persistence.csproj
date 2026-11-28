@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Tests" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests" />
