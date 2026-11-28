@@ -37,7 +37,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
         RequireWaitBoundary();
         return await RuntimeIngressWaitCapture.ReadAsync(request.Candidate.StandaloneIngress!, request.WaitCandidate,
             (IBookmarkStimulusIndex)waitEvidence!.PhysicalBookmarks, waitEvidence.PhysicalBookmarks.ObserveAsync,
-            executions, waitEvidence.PhysicalActivities, executables, resumeResolver, time, token);
+            LegacyExecutions, waitEvidence.PhysicalActivities, executables, resumeResolver, time, token);
     }
 
     private async ValueTask<BookmarkStateObservation?> ObserveWaitAsync(string executionId, string bookmarkId, CancellationToken token)
@@ -70,7 +70,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
         RequireWaitBoundary();
         // The indexed stimulus range read is part of this SERIALIZABLE transaction, including an empty range.
         var current = await RuntimeIngressWaitCapture.ReadAsync(request.Candidate.StandaloneIngress!, expected.Candidate,
-            (IBookmarkStimulusIndex)waitEvidence!.PhysicalBookmarks, ObserveWaitAsync, executions, waitEvidence.PhysicalActivities,
+            (IBookmarkStimulusIndex)waitEvidence!.PhysicalBookmarks, ObserveWaitAsync, LegacyExecutions, waitEvidence.PhysicalActivities,
             executables, null, time, token);
         RuntimeIngressWaitCapture.Compare(expected, current);
         foreach (var recipient in expected.Recipients)
@@ -93,7 +93,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.Revision, row => row.Revision), token) != 1)
                 throw new TriggerOperationException("conflict", "An ordinary wait activity changed before source acceptance.");
             await ((EfRuntimePostCommitOutboxStore)outbox).FenceExecutionDependencyAsync(scope, recipient.Identity.WorkflowExecutionId, token);
-            if (await executions.IsDeletionTombstonedAsync(recipient.Identity.WorkflowExecutionId, token))
+            if (await LegacyExecutions.IsDeletionTombstonedAsync(recipient.Identity.WorkflowExecutionId, token))
                 throw new InvalidDataException("An ordinary wait owner was retired before source acceptance.");
         }
     }
