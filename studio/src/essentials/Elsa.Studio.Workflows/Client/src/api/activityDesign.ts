@@ -185,10 +185,11 @@ export function useActivityDefinitionVersion(context: StudioEndpointContext, def
   });
 }
 
-export function useWorkflowActivities(context: StudioEndpointContext) {
+export function useWorkflowActivities(context: StudioEndpointContext, enabled = true) {
   return useQuery({
     queryKey: activityDesignKeys.catalog,
     queryFn: () => listActivities(context),
+    enabled,
     staleTime: 60_000
   });
 }
