@@ -76,7 +76,7 @@ A `Secret` binding is not evaluated as an expression. Publish compiles it into a
 and no value, the persisted activity input holds only that reference, and the workflow runtime resolves it each time the
 activity is activated, through its own `IRuntimeSecretResolver` contract (spec 188).
 
-The bridge [`Elsa.Secrets.Workflows`](../Workflows/README.md) (feature `SecretsWorkflows`) implements that contract over
+The bridge [`Elsa.Secrets.Workflows`](../Workflows/README.md) (feature `ActorSecretsWorkflows`) implements that contract over
 `ISecretValueResolver`, so replacing `ISecretValueResolver` also changes what workflows resolve:
 
 - The tenant is the one the runtime hands over: the execution partition read at activation, which on the background
@@ -96,7 +96,7 @@ The bridge [`Elsa.Secrets.Workflows`](../Workflows/README.md) (feature `SecretsW
   throw, with a fixed error that carries nothing from the exception; a canceled token still propagates as a
   cancellation. A name `ISecretNameValidator` refuses is `NotFound`, before the repository is read. The full table is
   in spec 188's `contracts/runtime-secret-resolution.md`.
-- A shell that does not compose `SecretsWorkflows` cannot resolve secrets: a secret-bound activity waits with an
+- In the pinned classic runtime, a secret-bound activity without a resolver waits with an
   activation-failure incident instead of faulting. A shell that composes another `IRuntimeSecretResolver` beside it
   does not activate: the bridge refuses one registered before it, and the activities runtime's startup check refuses
   one registered after it, each naming both.

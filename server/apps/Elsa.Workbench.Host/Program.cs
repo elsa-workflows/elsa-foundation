@@ -385,7 +385,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             // Available for durable local/model connections when explicitly selected in the shell.
             typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature).Assembly,
             typeof(ConnectionsDesignFeature).Assembly,
-            typeof(ConnectionsWorkflowsFeature).Assembly,
+            typeof(ActorHttpConnectionsFeature).Assembly,
             // User-defined agents: authoring, the editor's model reads and the model connection types.
             typeof(Elsa.Agent.Design.AgentDesignFeature).Assembly,
             typeof(Elsa.Agent.Api.AgentApiFeature).Assembly,

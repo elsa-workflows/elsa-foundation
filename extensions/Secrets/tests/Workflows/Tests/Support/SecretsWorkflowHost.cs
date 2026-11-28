@@ -49,7 +49,7 @@ public enum SecretsWorkflowHostStore
 
 /// <summary>
 /// An embedded workflow runtime host for the Secrets bridge, dedicated to one tenant: the in-process
-/// runtime, the Secrets module with its encrypted store and, unless a test leaves it out, the <c>SecretsWorkflows</c>
+/// runtime, the Secrets module with its encrypted store and, unless a test leaves it out, the <c>ActorSecretsWorkflows</c>
 /// bridge.
 /// </summary>
 /// <remarks>
@@ -166,7 +166,7 @@ public sealed class SecretsWorkflowHost : IAsyncDisposable
         services.Replace(ServiceDescriptor.Scoped<ISecretValueResolver>(provider =>
             new RecordingSecretValueResolver(resolutions, provider.GetRequiredService<DefaultSecretValueResolver>())));
         if (composeBridge)
-            new SecretsWorkflowsFeature().ConfigureServices(services);
+            new ActorSecretsWorkflowsFeature().ConfigureServices(services);
         services.AddSingleton(values);
         configure?.Invoke(services);
         // What a composed shell does once every feature is registered: add the persistence-mode services, which every

@@ -1,6 +1,7 @@
 using System.Net;
 using CShells.Features;
 using Elsa.Activities.Http.Constants;
+using Elsa.Connections.Workflows.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Secrets.Workflows.Tests.Support;
@@ -72,14 +73,12 @@ internal sealed class CanaryHttpEndpointHandler(CanaryHttpEndpoint endpoint) : H
     name: Name,
     DisplayName = "Secrets canary HTTP transport",
     Description = "Test-only local endpoint behind the HTTP activities' named client in the spec 188 canary.",
-    DependsOn = new object[] { "KernelActivitiesHttp" })]
+    DependsOn = new object[] { "KernelActivitiesHttp", "Connections", "ActorSecretsWorkflows" })]
 public sealed class SecretsCanaryHttpTransportFeature : IShellFeature, IPostConfigureShellServices
 {
     public const string Name = "SecretsCanaryHttpTransport";
 
-    public void ConfigureServices(IServiceCollection services)
-    {
-    }
+    public void ConfigureServices(IServiceCollection services) => services.AddConnectionsWorkflows();
 
     public void PostConfigureServices(IServiceCollection services) =>
         services.AddHttpClient(HttpActivityConstants.HttpClientName)

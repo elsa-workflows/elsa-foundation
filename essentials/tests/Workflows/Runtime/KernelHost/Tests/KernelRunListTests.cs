@@ -143,35 +143,20 @@ public sealed class KernelRunListTests
         Run("run-5", ActorStatus.Cancelled, "invoices@2", "invoices", 5_000, 5_200),
     ];
 
-    /// <summary>A kernel shell: the runtime API's default list beside the host's kernel runs, with the feature applied.</summary>
+    /// <summary>A shell with retained Actor workflow reads and the request's persistence scope.</summary>
     private static ServiceProvider Shell(Reads reads, PersistenceAccessContext access, IActivityInspectionContextAsync? authorization = null,
         IWorkflowRuntimeOperatorAccess? operatorAccess = null)
     {
         var services = new ServiceCollection();
-        var executables = new InMemoryWorkflowExecutableStore();
-        services.AddSingleton<IWorkflowExecutableStore>(executables);
+        services.AddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddSingleton<IPersistenceAccessContextAccessor>(new Access(access));
-        services.AddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
-        services.AddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.AddSingleton<IActivityInspectionContextAsync>(authorization ?? new AllowAllActivityExecutionInspectionAuthorizationContext());
         if (operatorAccess is not null) services.AddSingleton(operatorAccess);
         services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(reads)));
-        // The runtime API's default reads.
-        services.AddScoped<IWorkflowInstanceListService, WorkflowInstanceListService>();
-        services.AddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
-        services.AddSingleton<IActivityExecutionInspectionStore, InMemoryActivityExecutionInspectionStore>();
-        services.AddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
-        services.AddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
-        services.AddSingleton(new RuntimePersistenceModeInspector([new PersistenceModeOptions()]));
-        services.AddScoped<WorkflowInstanceDetailsService>();
-        services.AddScoped<ActivityExecutionInspectionService>();
         services.AddSingleton(TimeProvider.System);
-        services.AddScoped<RuntimeHistoryInspectionService>();
-        services.AddScoped<IWorkflowInstanceDetailsService, WorkflowInstanceDetailsService>();
         services.AddFoundationIdentityAbstractions();
 
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        var feature = new WorkflowsRuntimeKernelApiFeature();
+        var feature = new WorkflowsRuntimeKernelRetainedApiFeature();
         feature.ConfigureServices(services);
         feature.PostConfigureServices(services);
         return services.BuildServiceProvider();
@@ -914,65 +899,6 @@ public sealed class KernelRunListTests
         });
     }
 
-    [Fact]
-    public async Task Run_inspection_falls_back_only_to_authorized_legacy_authoring_test_runs()
-    {
-        var reads = new Reads(Views[0], Views[0] with { Header = Views[0].Header with { Ref = new ActorRef("schedule"), Type = "schedule" } })
-        {
-            Sequence = []
-        };
-        var management = new ManageAccess();
-        using var shell = Shell(reads, HostTenant, operatorAccess: management);
-        var legacy = shell.GetRequiredService<IWorkflowExecutionStateStore>();
-        await legacy.SaveAsync(Legacy("test", Tenant, WorkflowRunKind.TestRun));
-        await legacy.SaveAsync(Legacy("old-published", Tenant, WorkflowRunKind.PublishedRun));
-        await legacy.SaveAsync(Legacy("other-tenant", "other", WorkflowRunKind.TestRun));
-        await legacy.SaveAsync(Legacy("schedule", Tenant, WorkflowRunKind.TestRun));
-        await ((InMemoryActivityExecutionInspectionStore)shell.GetRequiredService<IActivityExecutionInspectionStore>()).SaveAsync(
-            new ActivityExecutionInspectionProjection("legacy-activity", "test", "node", "node", "Sequence", "1",
-                ActivityExecutionStatus.Completed, null, 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
-                "first", "last", DateTimeOffset.UnixEpoch, ActivitySchedulingProvenance.Empty, [], [], [], [],
-                new Dictionary<string, string>()));
-        using var scope = shell.CreateScope();
-        var service = scope.ServiceProvider.GetRequiredService<IWorkflowInstanceDetailsService>();
-        var preserved = await service.GetAsync(new("test"), CancellationToken.None);
-        Assert.NotNull(preserved);
-        Assert.Equal(("test", "TestRun"), (preserved.Instance.WorkflowExecutionId, preserved.Instance.RunKind));
-        Assert.False(preserved.ActivitiesDeferred);
-        var browse = scope.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
-        var point = scope.ServiceProvider.GetRequiredService<IActivityExecutionInspectionService>();
-        var history = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
-        var historyPage = Assert.IsType<RuntimeHistoryPageView>(await history.ReadAsync(new("test")));
-        Assert.Equal("This host does not provide run history.", historyPage.Coverage.Limitation);
-        var test = (await browse.FindWorkflowAsync("test", CancellationToken.None))!;
-        var activity = Assert.Single((await test.BrowseAsync(new("test", 10), null, CancellationToken.None))!.Page.Items);
-        Assert.Equal("legacy-activity", activity.Execution.ActivityExecutionId);
-        Assert.Equal("last", (await point.GetAsync(new("test", "legacy-activity"), CancellationToken.None))!.LastCheckpointId);
-        Assert.True(preserved.Permissions!.CanManage);
-        foreach (var id in new[] { "old-published", "other-tenant", "schedule" })
-        {
-            Assert.Null(await service.GetAsync(new(id), CancellationToken.None));
-            Assert.Null(await browse.FindWorkflowAsync(id, CancellationToken.None));
-            Assert.Null(await point.GetAsync(new(id, "legacy-activity"), CancellationToken.None));
-            Assert.Null(await history.ReadAsync(new(id)));
-        }
-        Assert.Empty(reads.Tails);
-        Assert.Equal(0, reads.SequenceReads);
-        Assert.Equal(["test"], management.Checks);
-
-        var authorization = new InspectionAccess(structure: false, values: true);
-        using var hidden = Shell(new Reads(Views[0]), HostTenant, authorization);
-        var hiddenStore = hidden.GetRequiredService<IWorkflowExecutionStateStore>();
-        await hiddenStore.SaveAsync(Legacy("run-1", Tenant, WorkflowRunKind.TestRun));
-        await hiddenStore.SaveAsync(Legacy("hidden-test", Tenant, WorkflowRunKind.TestRun));
-        using var hiddenScope = hidden.CreateScope();
-        var hiddenService = hiddenScope.ServiceProvider.GetRequiredService<IWorkflowInstanceDetailsService>();
-        Assert.Null(await hiddenService.GetAsync(new("run-1"), CancellationToken.None));
-        Assert.Null(await hiddenService.GetAsync(new("hidden-test"), CancellationToken.None));
-        Assert.Equal(["run-1", "hidden-test"], authorization.StructureChecks);
-        Assert.Empty(authorization.ValueChecks);
-    }
-
     private static WorkflowExecutionState Legacy(string id, string tenant, WorkflowRunKind kind) =>
         new(id, new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
             WorkflowExecutionStatus.Completed, null, DateTimeOffset.UnixEpoch, null, null, null, null, null, tenant,
@@ -1077,29 +1003,29 @@ public sealed class KernelRunListTests
     public void The_feature_needs_the_hosts_kernel_runs_and_refuses_other_runtime_read_implementations()
     {
         var bare = new ServiceCollection();
-        Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(bare));
+        Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelRetainedApiFeature().PostConfigureServices(bare));
 
         var custom = new ServiceCollection();
         custom.AddSingleton(new KernelRuns(Scope, _ => throw new NotSupportedException()));
         custom.AddScoped<IWorkflowInstanceListService, CustomList>();
-        var refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(custom));
+        var refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelRetainedApiFeature().PostConfigureServices(custom));
         Assert.Contains("registers another", refused.Message, StringComparison.Ordinal);
 
         custom.RemoveAll<IWorkflowInstanceListService>();
         custom.AddScoped<IWorkflowInstanceDetailsService, CustomDetails>();
-        refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(custom));
+        refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelRetainedApiFeature().PostConfigureServices(custom));
         Assert.Contains(nameof(IWorkflowInstanceDetailsService), refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Hybrid_keeps_keyed_readers_and_refuses_a_foreign_factory_even_for_the_known_concrete_reader()
+    public void Retained_api_keeps_keyed_readers_and_refuses_a_foreign_factory_even_for_the_known_concrete_reader()
     {
         var services = new ServiceCollection();
         services.AddSingleton(new KernelRuns(Scope, _ => throw new NotSupportedException()));
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        var retained = new WorkflowsRuntimeKernelRetainedApiFeature();
+        retained.ConfigureServices(services);
         services.AddKeyedScoped<IWorkflowInstanceDetailsService, CustomDetails>("other");
-        var hybrid = new WorkflowsRuntimeKernelApiFeature();
-        hybrid.PostConfigureServices(services);
+        retained.PostConfigureServices(services);
 
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowInstanceDetailsService) &&
             descriptor.ServiceKey is "other" && descriptor.KeyedImplementationType == typeof(CustomDetails));
@@ -1108,10 +1034,10 @@ public sealed class KernelRunListTests
 
         var foreign = new ServiceCollection();
         foreign.AddSingleton(new KernelRuns(Scope, _ => throw new NotSupportedException()));
-        new WorkflowsRuntimeApiFeature().ConfigureServices(foreign);
+        retained.ConfigureServices(foreign);
         foreign.AddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
 
-        var refused = Assert.Throws<InvalidOperationException>(() => hybrid.PostConfigureServices(foreign));
+        var refused = Assert.Throws<InvalidOperationException>(() => retained.PostConfigureServices(foreign));
         Assert.Contains(nameof(IWorkflowInstanceDetailsService), refused.Message, StringComparison.Ordinal);
     }
 

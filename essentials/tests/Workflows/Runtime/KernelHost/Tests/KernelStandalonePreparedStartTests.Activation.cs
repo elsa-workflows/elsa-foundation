@@ -226,7 +226,9 @@ public sealed partial class KernelStandalonePreparedStartTests
             var kernel = new WorkflowsRuntimeKernelFeature();
             kernel.ConfigureServices(services);
             kernel.PostConfigureServices(services);
-            new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(services);
+            var retainedApi = new WorkflowsRuntimeKernelRetainedApiFeature();
+            retainedApi.ConfigureServices(services);
+            retainedApi.PostConfigureServices(services);
             var api = new StandaloneTriggersApiFeature();
             api.ConfigureServices(services);
             api.PostConfigureServices(services);

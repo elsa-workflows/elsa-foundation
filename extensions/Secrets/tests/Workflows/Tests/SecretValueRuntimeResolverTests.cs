@@ -129,7 +129,7 @@ public sealed class SecretValueRuntimeResolverTests
     {
         var services = new ServiceCollection();
 
-        new SecretsWorkflowsFeature().ConfigureServices(services);
+        new ActorSecretsWorkflowsFeature().ConfigureServices(services);
 
         // No type-domain contract or any other runtime seam rides along: the resolver is the bridge's only
         // contribution to the runtime.

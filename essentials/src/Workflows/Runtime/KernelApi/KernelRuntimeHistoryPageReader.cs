@@ -8,12 +8,11 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
-using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, KernelRuns host, KernelHistoryCursor cursor,
-    IActivityInspectionContextAsync authorization, TimeProvider time, KernelPreviewRunReads? preview = null) : IRuntimeHistoryPageReader
+    IActivityInspectionContextAsync authorization, TimeProvider time) : IRuntimeHistoryPageReader
 {
     public async Task<RuntimeHistoryPageView?> ReadAsync(GetRuntimeHistory request, CancellationToken cancellationToken = default) =>
         (await ReadPageAsync(request, currentPermission: null, cancellationToken)).Page;
@@ -24,15 +23,7 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         var run = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
         if (run is null) return (null, null);
         var access = await AccessBindingAsync(cancellationToken);
-        if (run.Header is not { } header)
-        {
-            if (currentPermission is not null) return (null, StatusCodes.Status501NotImplemented);
-            if (KernelHistoryCursor.IsKernelCursor(request.Cursor) || preview?.History is not { } legacy) return (null, null);
-            var legacyPage = await legacy.ReadAsync(request, cancellationToken);
-            var current = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
-            return (current is { Header: null } && current.State.TenantId == run.State.TenantId &&
-                await AccessBindingAsync(cancellationToken) == access ? legacyPage : null, null);
-        }
+        var header = run.Header;
 
         if (currentPermission is not null && await currentPermission(run.State) is { } denied)
             return (null, denied);
@@ -49,8 +40,9 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         if (page is null) return (null, null);
 
         var verified = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
-        if (verified is not { Header: { } currentHeader } || currentHeader.Workflow != header.Workflow ||
-            currentHeader.Model != header.Model || currentHeader.History != header.History || currentHeader.TestStart != header.TestStart ||
+        if (verified is null || verified.Header.Workflow != header.Workflow ||
+            verified.Header.Model != header.Model || verified.Header.History != header.History ||
+            verified.Header.TestStart != header.TestStart ||
             verified.State.TenantId != run.State.TenantId ||
             await AccessBindingAsync(cancellationToken) != access)
             return (null, null);

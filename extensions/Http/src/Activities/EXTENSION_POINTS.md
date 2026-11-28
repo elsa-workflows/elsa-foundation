@@ -17,6 +17,7 @@ Outbound logging (not an extension point): `KernelActivitiesHttpFeature` calls `
 - **Kind:** Replacement. `KernelActivitiesHttpFeature` registers `UnboundHttpConnectionApplicator` with `TryAdd`.
 - **Usage:** `SendHttpRequest` applies a bound `ConnectionReference` through this seam after `RequestHeaders`. The unbound default is a no-op when the input is empty and refuses a bound name when Connections is not composed.
 - **Usage on Actor Foundation:** the Actor HTTP effect applies the selected connection through `ActorHttpConnections` for supported bindings. The [Connections workflow catalog](../../../Connections/src/Workflows/EXTENSION_POINTS.md) describes its scope.
+- **Replace:** `AddConnectionsWorkflows()` calls `services.Replace` with `HttpConnectionApplicator`, which resolves the http connection for the execution partition and applies the registered `IHttpRequestAuthenticator`.
 
 ---
 
