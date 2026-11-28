@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Api.Authorization;
 
 public sealed class WorkflowRuntimePermissionContributor : IPermissionContributor
 {
-    public string OwnerId => "Elsa.Workflows.Runtime.Api";
+    public string OwnerId => WorkflowsRuntimeApi.OwnerId;
 
     public IEnumerable<Permission> Contribute() =>
     [
@@ -15,6 +15,17 @@ public sealed class WorkflowRuntimePermissionContributor : IPermissionContributo
         new(UserTaskPermissions.Manage, "Manage user tasks", "User Tasks", "Inspect and reassign tenant work; completion still requires assignment."),
         new(UserTaskPermissions.FormsRead, "Read task forms", "User Tasks", "Use published reusable task form versions."),
         new(UserTaskPermissions.FormsManage, "Manage task forms", "User Tasks", "Create immutable reusable task form versions."),
+        .. RetainedWorkflowRuntimePermissionContributor.RuntimePermissions()
+    ];
+}
+
+internal sealed class RetainedWorkflowRuntimePermissionContributor : IPermissionContributor
+{
+    public string OwnerId => WorkflowsRuntimeApi.OwnerId;
+    public IEnumerable<Permission> Contribute() => RuntimePermissions();
+
+    internal static IEnumerable<Permission> RuntimePermissions() =>
+    [
         new(WorkflowRuntimePermissions.WorkflowRuntimeRead, "Read workflow runtime", "Workflow runtime", "Read executable and workflow-instance runtime state."),
         new(WorkflowRuntimePermissions.WorkflowRuntimeExecute, "Execute workflows", "Workflow runtime", "Start and interact with workflow executions."),
         new(WorkflowRuntimePermissions.WorkflowRuntimeManage, "Manage workflow runtime", "Workflow runtime", "Alter, cancel, and administer workflow executions."),

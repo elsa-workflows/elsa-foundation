@@ -56,7 +56,8 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
-        services.AddWorkflowRuntimeApiHttpServices();
+        services.TryAddSingleton(new LegacyRuntimeApiSelected());
+        services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: true);
         // The runtime execution spine is host-agnostic: it is composed here so the API endpoints can drive it,
         // but a non-HTTP host (worker, test harness, another module) can compose the same runtime via
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
@@ -122,11 +123,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowInstanceListService>(sp => sp.GetRequiredService<WorkflowInstanceListService>());
         services.TryAddScoped<WorkflowIncidentListService>();
         services.TryAddScoped<IWorkflowIncidentListService>(sp => sp.GetRequiredService<WorkflowIncidentListService>());
-        // The exact Run read for other domains through Workflows Runtime Core (spec 1193 slice G, D4), over the services the run
-        // endpoints use. One implementation per shell, rejected at configuration and at startup.
-        WorkflowRunInspectionStartupTask.Validate(services);
-        services.TryAddScoped<IWorkflowRunInspection, WorkflowRunInspection>();
-        AddRunInspectionValidator(services);
+        services.AddRunInspectionServices();
         services.TryAddScoped<WorkflowDispatchInspectionService>();
         services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
         services.TryAddScoped<RuntimeDiagnosticsSettingsService>();
@@ -166,21 +163,6 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
     /// WorkflowsRuntimeCheckpointPersistence feature registered, whichever of the two features CShells composes first.
     /// </summary>
     public virtual void PostConfigureServices(IServiceCollection services) => services.AddPersistenceModes();
-
-    // One validator per configuring collection, as for the Executable inspection.
-    private static void AddRunInspectionValidator(IServiceCollection services)
-    {
-        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowRunInspectionStartupTask))
-                ?.ImplementationInstance is not WorkflowRunInspectionStartupTask validator || !validator.Owns(services))
-            validator = new WorkflowRunInspectionStartupTask(services);
-        services.RemoveAll<WorkflowRunInspectionStartupTask>();
-        services.AddSingleton(validator);
-        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
-                     && (item.ImplementationInstance is WorkflowRunInspectionStartupTask
-                         || item.ImplementationType == typeof(WorkflowRunInspectionStartupTask))).ToArray())
-            services.Remove(previous);
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
-    }
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(endpoints);

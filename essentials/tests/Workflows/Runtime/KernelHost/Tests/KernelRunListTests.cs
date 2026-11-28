@@ -2,8 +2,22 @@ using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.ActorFoundation.Hosting;
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Contracts;
+using Elsa.Events;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
+using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Publishing.Api.Authorization;
+using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -26,6 +40,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -163,8 +178,11 @@ public sealed class KernelRunListTests
 
     private static readonly PersistenceAccessContext HostTenant = PersistenceAccessContext.Scoped(new PersistenceScope(Tenant));
 
-    [Fact]
-    public async Task Retained_http_reads_activate_and_serve_without_legacy_execution_services()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Retained_http_reads_activate_and_serve_without_legacy_execution_services(bool publishingPermissions, bool lateExecute)
     {
         const string scheme = "KernelExecuteFixture";
         var reads = new Reads(Views[0]);
@@ -174,23 +192,40 @@ public sealed class KernelRunListTests
             .AddScheme<AuthenticationSchemeOptions, KernelPublishedExecuteTests.FixtureAuthentication>(scheme, _ => { });
         builder.Services.AddAuthorization();
         builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string> { scheme });
+        new ApiCapabilitiesFeature().ConfigureServices(builder.Services);
+        if (publishingPermissions)
+            builder.Services.AddPermissionContributor<WorkflowPublishingPermissionContributor>();
         builder.Services.AddPersistenceCore();
         builder.Services.AddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         builder.Services.AddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         builder.Services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(reads)));
-        WorkflowsRuntimeKernelApiFeature.ConfigureRetainedServices(builder.Services);
-        new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(builder.Services);
+        var feature = new WorkflowsRuntimeKernelRetainedApiFeature();
+        feature.ConfigureServices(builder.Services);
+        feature.PostConfigureServices(builder.Services);
+        if (lateExecute)
+            builder.Services.AddSingleton<IWorkflowExecutionStartService, FixtureStartService>();
 
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        WorkflowsRuntimeKernelApiFeature.MapRetainedEndpoints(app);
+        feature.MapEndpoints(app, app.Environment);
         await app.StartAsync();
         await using var scope = app.Services.CreateAsyncScope();
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowSchedulerDrainer>());
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionActorProvider>());
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
         Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
+        Assert.Single(scope.ServiceProvider.GetServices<IWorkflowRunInspection>());
+        var permissions = scope.ServiceProvider.GetRequiredService<IPermissionCatalog>();
+        Assert.NotNull(permissions.Find(WorkflowRuntimePermissions.WorkflowRuntimeRead));
+        Assert.DoesNotContain(permissions.List(), permission => permission.Category == "User Tasks");
+        var declared = await scope.ServiceProvider.GetRequiredService<IApiCapabilityCatalog>().GetAsync();
+        var links = Assert.Single(declared.Capabilities, capability => capability.Id == "elsa.api.runtime").Links;
+        Assert.Contains(links, link => link.Rel == "workflow-instances-page");
+        Assert.Contains(links, link => link.Rel == "activity-executions");
+        Assert.DoesNotContain(links, link => link.Rel is "runtime-diagnostics" or "workflow-dispatches" or "workflow-instance-delete");
+        Assert.Equal(lateExecute, links.Any(link => link.Rel == "workflow-execute"));
+        Assert.Equal(publishingPermissions, links.Any(link => link.Rel == "workflow-executable-input-sources"));
 
         var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
         using var client = new HttpClient { BaseAddress = new(address) };
@@ -207,6 +242,83 @@ public sealed class KernelRunListTests
         Assert.Equal(HttpStatusCode.NotFound, history.StatusCode);
         using var legacy = await client.GetAsync("/runtime/workflows/diagnostics/settings");
         Assert.Equal(HttpStatusCode.NotFound, legacy.StatusCode);
+        using var start = await client.PostAsJsonAsync("/runtime/workflows/executables/fixture/execute", new { });
+        Assert.Equal(lateExecute ? HttpStatusCode.OK : HttpStatusCode.NotFound, start.StatusCode);
+        if (lateExecute)
+            Assert.Equal("fixture-run", (await start.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>())?.WorkflowExecutionId);
+        using var inputs = await client.GetAsync("/runtime/workflows/executables/missing/source-references/missing/input-sources");
+        Assert.Equal(publishingPermissions ? HttpStatusCode.Forbidden : HttpStatusCode.NotFound, inputs.StatusCode);
+    }
+
+    private sealed class FixtureStartService : IWorkflowExecutionStartService
+    {
+        public Task<WorkflowExecutionStartDispatchView> ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken) =>
+            Task.FromResult(new WorkflowExecutionStartDispatchView("fixture-run", request.ArtifactId, "1.0.0", "fixture-integrity",
+                nameof(WorkflowExecutionCommandDispatchStatus.Accepted), "fixture-envelope", null, "fixture", null));
+    }
+
+    [Fact]
+    public void Retained_api_refuses_co_selection_with_the_broad_runtime_routes()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        var retained = new WorkflowsRuntimeKernelRetainedApiFeature();
+        retained.ConfigureServices(services);
+
+        var error = Assert.Throws<InvalidOperationException>(() => retained.PostConfigureServices(services));
+        Assert.Contains("share Workflow Runtime routes", error.Message);
+    }
+
+    [Fact]
+    public async Task Retained_api_selection_activates_a_shell_without_the_legacy_runner()
+    {
+        const string shellName = "retained-kernel-api";
+        var configuration = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddCShells(shells => shells.WithAssemblies(
+                typeof(RetainedKernelApiTestHost).Assembly,
+                typeof(WorkflowsRuntimeKernelRetainedApiFeature).Assembly,
+                typeof(WorkflowsRuntimeKernelFeature).Assembly,
+                typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(ApiCapabilitiesFeature).Assembly,
+                typeof(WorkflowsPublishingFeature).Assembly,
+                typeof(WorkflowDesignValidationsFeature).Assembly,
+                typeof(EventsFeature).Assembly)
+            .AddShell(shellName, shell => shell.WithFeature(RetainedKernelApiTestHost.Name)
+                .WithFeature(WorkflowsRuntimeKernelRetainedApiFeature.FeatureName)));
+
+        await using var host = services.BuildServiceProvider(validateScopes: true);
+        var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(shellName);
+        await using var scope = shell.ServiceProvider.CreateAsyncScope();
+        var runtime = scope.ServiceProvider;
+        var features = runtime.GetRequiredService<ShellSettings>().EnabledFeatures;
+        Assert.Contains(WorkflowsRuntimeKernelRetainedApiFeature.FeatureName, features);
+        Assert.Contains(WorkflowsRuntimeKernelFeature.FeatureName, features);
+        Assert.Contains("WorkflowsPublishing", features);
+        Assert.DoesNotContain("WorkflowsRuntimeApi", features);
+        Assert.DoesNotContain("WorkflowsRuntimeTriggers", features);
+        Assert.IsType<KernelActivationCoordinator>(runtime.GetRequiredService<IWorkflowActivationCoordinator>());
+        Assert.Single(runtime.GetServices<IWorkflowRunInspection>());
+        Assert.Null(runtime.GetService<IWorkflowSchedulerDrainer>());
+        Assert.Null(runtime.GetService<IWorkflowExecutionActorProvider>());
+        Assert.Null(runtime.GetService<IWorkflowExecutionStateStore>());
+    }
+
+    [ShellFeature(name: Name)]
+    public sealed class RetainedKernelApiTestHost : IShellFeature
+    {
+        internal const string Name = "RetainedKernelApiTestHost";
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddFoundationIdentityAbstractions();
+            services.AddPersistenceCore();
+            services.AddSingleton(new KernelServing());
+            services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
+            services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(new Reads(Views[0]))));
+        }
     }
 
     [Fact]

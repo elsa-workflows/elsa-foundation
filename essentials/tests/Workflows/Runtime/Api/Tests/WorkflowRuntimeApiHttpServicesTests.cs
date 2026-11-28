@@ -27,10 +27,12 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
     [Fact]
     public async Task Retained_mapping_preserves_the_live_runtime_route_contracts()
     {
-        await using var broad = BuildApp();
-        await using var retained = BuildApp();
+        await using var broad = BuildApp(includeLegacyUserTasks: true);
+        await using var retained = BuildApp(includeLegacyUserTasks: false);
+        Assert.Contains(broad.Services.GetServices<IPermissionContributor>().SelectMany(contributor => contributor.Contribute()),
+            permission => permission.Category == "User Tasks");
         WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(broad);
-        WorkflowsRuntimeApi.MapRetainedEndpoints(retained);
+        WorkflowsRuntimeApi.MapRetainedEndpoints(retained, includeExecute: true, includeDelete: true, includeInputSources: true);
 
         var broadRoutes = Routes(broad).ToDictionary(route => route.Key, route => route.Endpoint);
         var retainedRoutes = Routes(retained).ToArray();
@@ -52,10 +54,10 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
             Assert.Equal(ActivityFault(original), ActivityFault(endpoint));
         }
 
-        static WebApplication BuildApp()
+        static WebApplication BuildApp(bool includeLegacyUserTasks)
         {
             var builder = WebApplication.CreateBuilder();
-            builder.Services.AddWorkflowRuntimeApiHttpServices();
+            builder.Services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks);
             return builder.Build();
         }
 
@@ -100,7 +102,8 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
         Assert.IsType<HttpContextActivityExecutionInspectionAuthorizationContext>(runtimeServices.GetRequiredService<IActivityInspectionContextAsync>());
         var operatorAccess = Assert.IsType<HttpContextWorkflowRuntimeOperatorAccess>(runtimeServices.GetRequiredService<IWorkflowRuntimeOperatorAccess>());
         Assert.False(await operatorAccess.CanManageRuntimeAsync());
-        Assert.Single(runtimeServices.GetServices<IPermissionContributor>().OfType<WorkflowRuntimePermissionContributor>());
+        Assert.Single(runtimeServices.GetServices<IPermissionContributor>().OfType<RetainedWorkflowRuntimePermissionContributor>());
+        Assert.DoesNotContain(runtimeServices.GetRequiredService<IPermissionCatalog>().List(), permission => permission.Category == "User Tasks");
         Assert.IsType<WorkflowsRuntimeProblemWriter>(runtimeServices.GetRequiredKeyedService<IEndpointProblemWriter>(WorkflowsRuntimeApi.OwnerId));
         Assert.IsType<WorkflowsRuntimeFaultRenderer>(runtimeServices.GetRequiredKeyedService<IEndpointFaultRenderer>(WorkflowsRuntimeApi.OwnerId));
         Assert.Single(runtimeServices.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions.TypeInfoResolverChain
@@ -119,7 +122,7 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddFoundationIdentityAbstractions();
-            services.AddWorkflowRuntimeApiHttpServices();
+            services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: false);
         }
     }
 }
