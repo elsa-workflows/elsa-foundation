@@ -29,7 +29,6 @@ public sealed class DispatchWorkflowArchitectureTests
         var forbidden = new[]
         {
             "MassTransit",
-            "Elsa.Workflows.Runtime.Distributed",
             "Elsa.Studio",
             "elsa-foundation-studio"
         };

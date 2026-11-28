@@ -35,7 +35,6 @@
     <ProjectReference Include="..\..\..\essentials\src\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\essentials\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\essentials\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\essentials\src\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\essentials\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 

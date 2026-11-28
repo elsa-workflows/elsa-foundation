@@ -615,12 +615,6 @@
     <Project Path="essentials/src/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj" />
   </Folder>
-  <Folder Name="/essentials/src/Workflows/Runtime/Distributed/">
-    <Project Path="essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
-  </Folder>
-  <Folder Name="/essentials/src/Workflows/Runtime/Distributed/Persistence/">
-    <Project Path="essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
-  </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/Persistence/">
     <Project Path="essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
@@ -914,9 +908,6 @@
   <Folder Name="/essentials/tests/Workbench/">
     <Project Path="essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
   </Folder>
-  <Folder Name="/essentials/tests/Workbench/BackgroundActivities/">
-    <Project Path="essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj" />
-  </Folder>
   <Folder Name="/essentials/tests/Workbench/Fixtures/">
     <Project Path="essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj" />
     <Project Path="essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj" />
@@ -1017,14 +1008,6 @@
   <Folder Name="/essentials/tests/Workflows/Runtime/Reconciliation/">
     <Project Path="essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj" />
     <Project Path="essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj" />
-  </Folder>
-  <Folder Name="/essentials/tests/Workflows/Runtime/Distributed/">
-    <Project Path="essentials/tests/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj" />
-  </Folder>
-  <Folder Name="/essentials/tests/Workflows/Runtime/Distributed/Persistence/" />
-  <Folder Name="/essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/">
-    <Project Path="essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj" />
-    <Project Path="essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/">
     <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/TimerHistoryRestartHost/TimerHistoryRestartHost.csproj" />

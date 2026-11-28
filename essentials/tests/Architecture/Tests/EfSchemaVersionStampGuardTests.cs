@@ -37,8 +37,6 @@ public sealed class EfSchemaVersionStampGuardTests
         "elsa_secrets",
         "elsa_studio_preferences",
         "elsa_workflow_definitions_v2",
-        "elsa_distributed_execution_placement",
-        "elsa_distributed_command_transport",
         "elsa_publication_records",
         "elsa_publication_snapshot_reviews"
     ];
