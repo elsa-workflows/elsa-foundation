@@ -78,28 +78,32 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
         services.AddScoped<KernelPlaybackCursor>();
         services.AddApiCapabilitySource<KernelHistoryCapabilitySource>();
         services.AddApiCapabilitySource<KernelParkInspectionCapabilitySource>();
-        ReplaceService(typeof(IWorkflowInstanceListService), typeof(WorkflowInstanceListService), typeof(KernelWorkflowInstanceListService));
-        ReplaceService(typeof(IWorkflowInstanceDetailsService), typeof(WorkflowInstanceDetailsService), typeof(KernelWorkflowInstanceDetailsService));
-        ReplaceService(typeof(IActivityExecutionBrowseSource), typeof(ActivityExecutionBrowseSource), typeof(KernelActivityExecutionBrowseSource));
-        ReplaceService(typeof(IActivityExecutionInspectionService), typeof(ActivityExecutionInspectionService), typeof(KernelActivityExecutionInspectionService));
-        ReplaceService(typeof(IRuntimeHistoryPageReader), typeof(RuntimeHistoryInspectionService), typeof(KernelRuntimeHistoryPageReader));
-        ReplaceService(typeof(IRuntimeHistoryOccurrencePageReader), typeof(RuntimeHistoryInspectionService), typeof(KernelPlaybackPageReader));
+        var legacyReaders = services
+            .Where(descriptor => descriptor.ServiceType == typeof(LegacyRuntimeApiReaderOwnership) && !descriptor.IsKeyedService)
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<LegacyRuntimeApiReaderOwnership>()
+            .SingleOrDefault();
+        ReplaceService(typeof(IWorkflowInstanceListService), typeof(KernelWorkflowInstanceListService));
+        ReplaceService(typeof(IWorkflowInstanceDetailsService), typeof(KernelWorkflowInstanceDetailsService));
+        ReplaceService(typeof(IActivityExecutionBrowseSource), typeof(KernelActivityExecutionBrowseSource));
+        ReplaceService(typeof(IActivityExecutionInspectionService), typeof(KernelActivityExecutionInspectionService));
+        ReplaceService(typeof(IRuntimeHistoryPageReader), typeof(KernelRuntimeHistoryPageReader));
+        ReplaceService(typeof(IRuntimeHistoryOccurrencePageReader), typeof(KernelPlaybackPageReader));
         if (services.Any(descriptor => descriptor.ServiceType == typeof(KernelOperatorIngress) && !descriptor.IsKeyedService))
         {
-            ReplaceService(typeof(IWorkflowInstanceDeletionService), typeof(WorkflowInstanceDeletionService), typeof(KernelWorkflowInstanceDeletionService));
+            ReplaceService(typeof(IWorkflowInstanceDeletionService), typeof(KernelWorkflowInstanceDeletionService));
             services.TryAddSingleton<SelectedRunDeletionAvailable>();
             services.TryAddScoped<KernelParkRecovery>();
             services.AddApiCapabilitySource<KernelParkRecoveryCapabilitySource>();
         }
-        ReplaceService(typeof(IWorkflowExecutableRetentionReader), typeof(LegacyWorkflowExecutableRetentionReader),
+        ReplaceService(typeof(IWorkflowExecutableRetentionReader),
             typeof(KernelWorkflowExecutableRetentionReader));
 
-        void ReplaceService(Type service, Type runtimeImplementation, Type kernelImplementation)
+        void ReplaceService(Type service, Type kernelImplementation)
         {
             foreach (var descriptor in services.Where(descriptor => descriptor.ServiceType == service && !descriptor.IsKeyedService).ToArray())
             {
-                // The runtime API registers each default by type or through a factory within its own assembly.
-                if (descriptor.ImplementationType != runtimeImplementation && descriptor.ImplementationFactory?.Method.DeclaringType?.Assembly != runtimeImplementation.Assembly)
+                if (!RuntimeHttpInspectionServices.OwnsStoredReader(descriptor) && legacyReaders?.Owns(descriptor) != true)
                     throw new InvalidOperationException(
                         $"The {featureName} feature replaces the shell's {service.Name} with the kernel's, and this shell registers another for it. " +
                         $"One implementation serves per shell: remove that registration, or leave the {featureName} feature out of the shell.");
