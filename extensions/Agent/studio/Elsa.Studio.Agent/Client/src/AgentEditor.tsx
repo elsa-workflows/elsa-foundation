@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { StudioHttpError, type StudioActivityDefinitionImplementationEditorProps } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioAlert, StudioButton, StudioCheckboxField, StudioField } from "@elsa-workflows/studio-ui";
 import {
   connectionPickerLimit, listModelConnections, listModelProviders, readModelCapabilities,
   type ModelCapabilities, type ModelConnection, type ModelProvider
@@ -82,6 +82,7 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
   const groups = connections.kind === "ready" || connections.kind === "loading" ? lastGroups.current : [];
   const selected = groups.find(group => group.provider.providerKey === providerKey)?.items.find(item => item.name === connectionName);
   const savedMissing = Boolean(connectionName) && !selected;
+  const savedConnectionUnavailable = savedMissing && connections.kind === "ready" && capabilities.kind === "unusable";
   // Once offered, the search stays: clearing or narrowing it must not unmount the field being typed in.
   const searchOffered = useRef(false);
   if (groups.some(group => group.items.length >= connectionPickerLimit) || search !== "" || query !== "") searchOffered.current = true;
@@ -150,8 +151,6 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
 
   const advancedHasProblems = ["tokens", "calls", "timeout"].some(field => fieldMessage(field as NumberField,
     field === "tokens" ? problems.outputTokens : field === "calls" ? problems.modelCalls : problems.timeout));
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  useEffect(() => { if (advancedHasProblems) setAdvancedOpen(true); }, [advancedHasProblems]);
 
   const retry = <StudioButton size="sm" onClick={() => setReload(current => current + 1)}>Retry</StudioButton>;
 
@@ -208,10 +207,11 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
           </select>
           {problems.model ? <small id={`${id}-model-problem`} className="agent-field-problem">{problems.model}</small> : null}
         </StudioField>
-        {connections.kind === "ready" && groups.every(group => group.items.length === 0) ? <StudioAlert tone="info">{query ? `No model connections match “${query}”.` : "There are no model connections you can use yet. Create one in Connections, then choose it here."}</StudioAlert> : null}
+        {connections.kind === "ready" && !savedMissing && groups.every(group => group.items.length === 0) ? <StudioAlert tone="info">{query ? `No model connections match “${query}”.` : "There are no model connections you can use yet. Create one in Connections, then choose it here."}</StudioAlert> : null}
         {connections.kind === "denied" ? <StudioAlert tone="info">Listing connections needs permission to read workflow designs or manage connections. The saved connection is kept.</StudioAlert> : null}
         {connections.kind === "unavailable" ? <StudioAlert tone="warning">Connections could not be loaded. The saved connection is kept. {retry}</StudioAlert> : null}
-        {savedMissing && connections.kind === "ready" ? <StudioAlert tone="warning">The saved connection “{connectionName}” is not {query ? "among the connections matching this search" : "available to you"}. It is kept until you choose another one.</StudioAlert> : null}
+        {savedConnectionUnavailable ? <StudioAlert tone="warning">The saved connection “{connectionName}” is unavailable. It’s still saved. Review it in Connections or set up a replacement. {retry}</StudioAlert> : null}
+        {savedMissing && connections.kind === "ready" && !savedConnectionUnavailable ? <StudioAlert tone="warning">The saved connection “{connectionName}” is not {query ? "among the connections matching this search" : "available to you"}. It is kept until you choose another one.</StudioAlert> : null}
         {selected && selected.modelId && selected.modelId !== modelId ? (
           <StudioAlert tone="warning">
             This connection now uses {selected.modelId}, but the agent still names {modelId || "no model"}.{" "}
@@ -219,12 +219,12 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
           </StudioAlert>
         ) : null}
         {capabilities.kind === "denied" ? <StudioAlert tone="info">Reading what this model supports needs permission to author agents.</StudioAlert> : null}
-        {capabilities.kind === "unusable" ? <StudioAlert tone="warning">This model connection isn't available for agents right now — for example, credentials may be missing or the endpoint is unreachable. Review the connection in Connections, or pick a different model. {retry}</StudioAlert> : null}
+        {capabilities.kind === "unusable" && !savedConnectionUnavailable ? <StudioAlert tone="warning">This model connection isn't available for agents right now. Review the connection in Connections, or pick a different model. {retry}</StudioAlert> : null}
         {capabilities.kind === "unavailable" ? <StudioAlert tone="warning">What this model supports could not be read. {retry}</StudioAlert> : null}
         {model && !model.supportsJsonSchema ? <StudioAlert tone="warning">This model does not declare structured JSON results, so the agent cannot be published with it.</StudioAlert> : null}
         {modelId || connectionName ? (
           <p className="agent-model-summary" data-testid="agent-model">
-            Model: <code>{modelId || "none"}</code>{provider ? ` from ${provider.displayName}` : ""}{model ? ` · up to ${model.maximumOutputTokens.toLocaleString()} output tokens` : ""}
+            {modelId ? <>Model: <code>{modelId}</code>{provider ? ` from ${provider.displayName}` : ""}</> : "No model selected"}{model ? ` · up to ${model.maximumOutputTokens.toLocaleString()} output tokens` : ""}
           </p>
         ) : null}
         {temperature ? numberInput("temperature", "Temperature", `Optional.${temperature.minimum != null || temperature.maximum != null ? ` This model accepts ${[temperature.minimum != null ? `from ${temperature.minimum}` : "", temperature.maximum != null ? `up to ${temperature.maximum}` : ""].filter(Boolean).join(" ")}.` : ""}`,
@@ -239,23 +239,20 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
       </fieldset>
 
       </div>
-      <details className="agent-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
-        <summary>Advanced settings<span>Limits and conversation</span></summary>
+      <AdvancedSection label="Advanced settings" summary="Limits and conversation" hasError={Boolean(advancedHasProblems)}>
       <fieldset className="agent-limits" disabled={readOnly}>
         <legend>Limits</legend>
-        {numberInput("tokens", "Maximum output tokens", model ? `Optional. At most ${model.maximumOutputTokens.toLocaleString()} for this model.` : "Optional.", problems.outputTokens, { min: 1, max: model?.maximumOutputTokens })}
+        {numberInput("tokens", "Maximum output tokens", model ? `At most ${model.maximumOutputTokens.toLocaleString()} for this model.` : undefined, problems.outputTokens, { min: 1, max: model?.maximumOutputTokens })}
         {numberInput("calls", "Maximum model calls", "Per invocation.", problems.modelCalls, { min: agentBounds.modelCalls.minimum, max: agentBounds.modelCalls.maximum })}
         {numberInput("timeout", "Timeout (seconds)", undefined, problems.timeout, { min: agentBounds.timeoutSeconds.minimum, max: agentBounds.timeoutSeconds.maximum })}
       </fieldset>
 
       {providerSchemaVersion === continuitySchemaVersion ? (
-        <label className="agent-continuity">
-          <input type="checkbox" checked={manifest.allowContinuity === true} disabled={readOnly}
-            onChange={event => patch({ allowContinuity: event.target.checked })} />
-          <span>Allow callers to continue a conversation. Each invocation is fresh unless a caller explicitly continues one.</span>
-        </label>
+        <StudioCheckboxField className="agent-continuity" checked={manifest.allowContinuity === true} disabled={readOnly}
+          onChange={allowContinuity => patch({ allowContinuity })}
+          label="Allow callers to continue a conversation. Each invocation is fresh unless a caller explicitly continues one." />
       ) : null}
-      </details>
+      </AdvancedSection>
     </div>
   );
 }

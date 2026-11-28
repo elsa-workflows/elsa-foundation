@@ -110,7 +110,7 @@ internal static class ActivityCancellationCheckpointService
             Metadata: metadata) { HistorySourceFacts = historySourceFacts };
 
         if (childControlContribution is not null)
-            commit = childControlContribution.Apply(commit);
+            commit = await childControlContribution.ApplyAsync(commit, checkpointCommitter, cancellationToken);
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 

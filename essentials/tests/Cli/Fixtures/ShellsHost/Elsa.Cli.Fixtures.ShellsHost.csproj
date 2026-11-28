@@ -6,7 +6,7 @@
     <Description>
       A host that carries shell configuration beside its build output, which is what the per-feature
       provider-agreement check reads (spec 171 FR-035). It references the module projects whose features
-      the check has to tell apart: the eight separately configured Workflows.Runtime features, the
+      the check has to tell apart: two separately configured Workflows.Runtime features, the
       Workflows.Design feature, the dashboard feature that declares no Provider setting at all, and Secrets,
       whose feature reaches AddEfModuleMigrations through its registration class.
     </Description>
@@ -20,10 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\extensions\Secrets\src\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\Artifacts\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>

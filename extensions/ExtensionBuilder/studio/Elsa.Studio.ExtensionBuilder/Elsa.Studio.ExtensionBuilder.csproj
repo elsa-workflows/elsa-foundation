@@ -18,8 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\Studio\src\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\Studio\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\studio\src\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\studio\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

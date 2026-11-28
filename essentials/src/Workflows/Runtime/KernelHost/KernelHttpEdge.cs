@@ -1,0 +1,137 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Kernel.Model.Contracts;
+using Kernel.Native;
+using Contract = Kernel.Foundation.Contracts;
+
+namespace Elsa.Workflows.Runtime.KernelHost;
+
+/// <summary>A request's start on a kernel host: the start of the workflow its route serves, and whether it answers before the commit.</summary>
+public sealed record KernelHttpStart(Contract.StartSpec Spec, string Workflow, bool RespondBeforeCommit);
+
+/// <summary>A matched HTTP request to the resolved key of a waiting workflow.</summary>
+public sealed record KernelHttpWait(string Key, string Payload, bool RespondBeforeCommit);
+
+/// <summary>What an HTTP edge writes back for a held request's reply.</summary>
+public sealed record KernelHttpAnswer(int StatusCode, string ContentType, string? Body, IReadOnlyDictionary<string, string> Headers);
+
+/// <summary>
+/// The framework-free half of a kernel host's HTTP edge. A request's path, relative to the edge's base path, is matched
+/// against the routes of what serves now (<see cref="KernelServing.Routes"/>). A start match uses the request as its
+/// trigger. A wait match uses the resolved event key when the host supports held event requests.
+/// </summary>
+public static class KernelHttpEdge
+{
+    /// <summary>The existing Elsa HTTP header for the exact workflow instance created by a request.</summary>
+    public const string WorkflowInstanceIdHeader = "x-elsa-workflow-instance-id";
+
+    // Before NotFound: static fields initialize in order.
+    private static readonly IReadOnlyDictionary<string, string> NoHeaders = new Dictionary<string, string>();
+
+    /// <summary>The route of what serves now that a request's method and path match, or null when none does.</summary>
+    /// <param name="path">The request path as the client sent it, relative to the edge's base path.</param>
+    /// <remarks>An edge matches the route before it reads the request's body, so a path no route serves reads none.</remarks>
+    public static NativeHttpRouteMatch? Route(KernelServing serving, string method, string path)
+    {
+        ArgumentNullException.ThrowIfNull(serving);
+        return serving.MatchHttp(method, path)?.Route;
+    }
+
+    /// <summary>
+    /// The start a request on a matched route makes, or null when the route's workflow no longer serves (a republish between
+    /// the match and the start).
+    /// </summary>
+    /// <param name="request">The request, built by the edge from the wire; its route values are filled in from the match.</param>
+    public static KernelHttpStart? Start(KernelServing serving, NativeHttpRouteMatch match, HttpRequest request)
+        => SelectStart(serving, match, request, null) is { } selected
+            ? new(Kernel.WorkflowActor.WorkflowActor.Start(selected.Start), selected.Workflow, selected.RespondBeforeCommit)
+            : null;
+
+    internal static (WorkflowStart Start, string Workflow, bool RespondBeforeCommit)? SelectStart(KernelServing serving,
+        NativeHttpRouteMatch match, HttpRequest request, KernelServedSlot? expected)
+    {
+        ArgumentNullException.ThrowIfNull(serving);
+        ArgumentNullException.ThrowIfNull(match);
+        ArgumentNullException.ThrowIfNull(request);
+        // What serves now: the route the match found, still served by the same workflow's node.
+        if (match.Route is not { Start: true } matched || serving.HttpStart(matched) is not { } startBinding ||
+            expected is not null && startBinding.Slot != expected) return null;
+        var (route, slot) = startBinding;
+        var workflow = slot.Workflow;
+        var trigger = Values.From(request with { RouteValues = match.Values });
+        var start = NativeExecutionModel.Start(workflow.Id, Modes.Balanced, null, route.Node, trigger, workflow.Definition) with
+        {
+            ExecutableSelection = workflow.ExecutableSelection
+        };
+        return (start, workflow.Id, route.RespondBeforeCommit);
+    }
+
+    /// <summary>The start a request makes, or null when no start route of what serves matches its method and path.</summary>
+    /// <param name="path">The request path as the client sent it, relative to the edge's base path.</param>
+    public static KernelHttpStart? Match(KernelServing serving, HttpRequest request, string path)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return Route(serving, request.Method, path) is { } match ? Start(serving, match, request) : null;
+    }
+
+    /// <summary>The event a request delivers to a matched wait route while that route still serves.</summary>
+    public static KernelHttpWait? Wait(KernelServing serving, NativeHttpRouteMatch match, HttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(serving);
+        ArgumentNullException.ThrowIfNull(match);
+        ArgumentNullException.ThrowIfNull(request);
+        if (!serving.Capabilities.HttpWaits || match.Route is not { Start: false } route ||
+            !serving.Routes.Routes.Any(current => current == route ||
+                !current.Start && current.Method == route.Method && current.Workflow == route.Workflow && current.Node == route.Node &&
+                current.RespondBeforeCommit == route.RespondBeforeCommit && current.Template.Text == route.Template.Text)) return null;
+        var message = request with { RouteValues = match.Values };
+        return new(HttpRoutes.WaitKey(route.Method, route.Template, message.RouteValues), JsonSerializer.Serialize(message), route.RespondBeforeCommit);
+    }
+
+    /// <summary>The HTTP answer to a held request's reply.</summary>
+    public static KernelHttpAnswer Answer(Contract.Reply reply)
+    {
+        ArgumentNullException.ThrowIfNull(reply);
+        if (reply is { RetryAfter: { } retry, RefusalReason: Contract.RefusalReason.RateLimited or
+            Contract.RefusalReason.NodeBusy or Contract.RefusalReason.InboxFull })
+        {
+            var seconds = Math.Max(1, Math.Ceiling(retry.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+            var status = reply.RefusalReason == Contract.RefusalReason.RateLimited ? 429 : 503;
+            return Text(status, reply.RefusalReason.Value.ToString()) with
+            {
+                Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Retry-After"] = seconds }
+            };
+        }
+        KernelHttpAnswer answer = reply switch
+        {
+            { Error: "no waiter" or "missing" } => Text(404, "no workflow serves this route"),
+            { Error: "timeout" } => Text(504, "the workflow did not answer in time"),
+            { Error: "lost" } => Text(503, "the workflow's owner was lost"),
+            { Status: Contract.ActorStatus.Faulted } => Text(500, "the workflow faulted"),
+            { Error: null, Channel: "response", Item: JsonNode item } when Values.To<HttpResponse>(item) is { } response => Designed(response),
+            // Terminated before it answered: no response, which a 204 would pass off as one.
+            { Error: null, Item: null, Status: Contract.ActorStatus.Cancelled } => Text(503, "The workflow was terminated before it answered."),
+            { Error: null, Item: null } => new(204, "text/plain", null, NoHeaders),
+            _ => Text(500, "the workflow answered with something this edge cannot send")
+        };
+
+        // The edge owns the run link. A workflow can have authored this field in an earlier version.
+        if (reply.Actor is null && !answer.Headers.Keys.Contains(WorkflowInstanceIdHeader, StringComparer.OrdinalIgnoreCase))
+            return answer;
+        var headers = new Dictionary<string, string>(answer.Headers, StringComparer.OrdinalIgnoreCase);
+        headers.Remove(WorkflowInstanceIdHeader);
+        if (reply.Actor is { } actor)
+            headers.Add(WorkflowInstanceIdHeader, actor.Id);
+        return answer with { Headers = headers };
+    }
+
+    /// <summary>The answer for a request no route serves.</summary>
+    public static KernelHttpAnswer NotFound { get; } = Text(404, "no workflow serves this route");
+
+    private static KernelHttpAnswer Designed(HttpResponse response) => new(response.StatusCode, response.ContentType,
+        response.Body is JsonValue scalar && response.ContentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) &&
+        scalar.TryGetValue<string>(out var text) ? text : response.Body?.ToJsonString(), response.Headers);
+
+    private static KernelHttpAnswer Text(int status, string text) => new(status, "text/plain; charset=utf-8", text, NoHeaders);
+}

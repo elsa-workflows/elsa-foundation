@@ -4,31 +4,16 @@
 checkpointing, durable runtime state, scheduling, recovery, and runtime alterations. It does not load Design
 definitions at execution time.
 
-Direct model hosting (spec1017) is in progress. Model state and accepted-input receipts participate in the
-existing fenced checkpoint transaction through the Runtime EF provider; native commits without a model
-participant retain their wire and fingerprint. The EF artifact provider also stores native/model material with
-actual incarnations, model content hashes, full dependency leases, fenced sources and retention roots.
-The explicit `ActivitiesBpmnHosting` feature supplies the released-library driver and authenticated model commands.
-Its [declared profiles](../../../Activities/Bpmn/Elsa.Activities.Bpmn/README.md) cover human parallel work,
-one closed native service worker with typed outcomes and bounded incident retry, interrupting duration boundaries,
-and named native Event catches. Native `RunBpmn` uses that same model lifecycle and retains its exact parent result
-until consumption and settlement are proven. New model admission defaults off.
-Model input uses a protected queue format that predecessor readers reject. The drainer refuses unselected
-model/unknown work before claiming it. EF validates the exact head on its existing claim read; coalescing
-forwards that validation. Accepted first inputs retain their material before the first model checkpoint. Native
-and model dispatch share lease/heartbeat/release mechanics while preserving native lifecycle and fault policies.
-See the [model reader and checkpoint boundary](EXTENSION_POINTS.md) and
-[current delivery objective](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858).
+## Classic BPMN hosting archive
 
-Actual owned-host journeys use EF SQLite and the built-in single-node actor. The
-[runtime-only/admission-off receipt](../../../../../specs/1017-direct-bpmn-hosting/evidence/retention/runtime-only-rollback/README.md)
-recovers accepted native workers with Design unavailable and new admission disabled; retained dependency pins
-survive source retirement and collection. The separate
-[provider/storage matrix](../../../../../specs/1017-direct-bpmn-hosting/evidence/providers/model-storage/README.md)
-qualifies common persistence contracts and migrations on all four engines. Actual legacy/Studio compatibility
-retains [its own executing sources](../../../../../specs/1017-direct-bpmn-hosting/evidence/final-compatibility/README.md).
-These receipts do not establish non-SQLite upgraded-host recovery, clustered placement or first-class direct-model
-Studio acceptance under #2907. Final integration review and required CI remain delivery gates.
+Direct model hosting (spec 1017), the `ActivitiesBpmnHosting` feature and the
+embedded `RunBpmn` activity are preserved by the
+[classic BPMN execution archive](../../../../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution).
+That source carries the released profiles, model wire and checkpoint
+contracts, historical provider tests, and the matching workflow data readers.
+The [retention receipts](../../../../../specs/1017-direct-bpmn-hosting/evidence/retention/runtime-only-rollback/README.md)
+and [provider/storage matrix](../../../../../specs/1017-direct-bpmn-hosting/evidence/providers/model-storage/README.md)
+record the tested profiles and storage boundaries.
 
 ## Activation channels
 
@@ -167,7 +152,7 @@ At run time:
   here.
 
 The run inspector and execution evidence render a withheld value by its marker; see the
-[Runtime API](../Api/README.md#withheld-and-protected-values) and
+[Runtime API](../Api/Elsa.Workflows.Runtime.Api/README.md#withheld-and-protected-values) and
 [execution evidence](../../ExecutionEvidence/README.md#value-dispositions) documentation.
 
 ## Delayed child schedules
@@ -180,3 +165,11 @@ Call `AddWorkflowRuntime()` for the host-agnostic runtime. It supplies in-memory
 process-local payload key only. A durable host must compose a durable alteration store and configure a retained
 AES-256 key ring before admitting plans that must survive restart. See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for
 replaceable contracts.
+
+### Timer history ownership
+
+`AddRuntimeDurableTimerScheduler` preserves explicit replacements and composes scoped memory adapters over the native checkpoint state when the selected history and liveness owners match. Scheduling honors the original captured or uncaptured admission and resolves history collaborators only when that choice needs them. The public parameterless memory store remains an uncaptured, process-local option.
+
+Optional `IDurableTimerHistoryStore` ownership retains deterministic schedule/terminal observations until durable acknowledgement, keeps retired sources out of due work, and separately fences bounded discharge for successful Ephemeral completion without a native record. Native deletion owns cleanup of indexed timer sources. Capability defaults are conservative; custom decorators must preserve and qualify the actual owner chain. See [the timer extension contracts](EXTENSION_POINTS.md#idurabletimerhistorystore-core--elsaworkflowsruntimecore).
+
+This memory-owner integration does not enable the expanded timer capture profile. The recurring pump, provider model/migrations, real Delay execution and restart checks qualify that composed behavior separately.

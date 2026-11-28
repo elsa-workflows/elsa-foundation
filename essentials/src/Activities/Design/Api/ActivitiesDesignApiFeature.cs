@@ -11,6 +11,7 @@ using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Contracts;
@@ -62,7 +63,8 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.EnsureReplacementContract<IActivityAuthoringContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.AddOptions<ActivityAvailabilityOptions>()
-            .Configure(options => ApplyFeatureOptions(ActivityAvailability, options));
+            .Configure(options => ApplyFeatureOptions(ActivityAvailability, options))
+            .PostConfigure<IEnumerable<RuntimeActivityExclusion>>(ApplyRuntimeExclusions);
         services.TryAddSingleton<IActivityAvailabilityEvaluator>(sp =>
             new DefaultActivityAvailabilityEvaluator(sp.GetRequiredService<IOptions<ActivityAvailabilityOptions>>().Value));
         services.TryAddSingleton<IActivityAvailabilityDiagnosticsProjector, DefaultActivityAvailabilityDiagnosticsProjector>();
@@ -167,6 +169,16 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
                          || item.ImplementationType == typeof(ActivityAuthoringCatalogStartupTask))).ToArray())
             services.Remove(previous);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Elsa.Tasks.Core.IStartupTask>(validator));
+    }
+
+    private static void ApplyRuntimeExclusions(ActivityAvailabilityOptions options, IEnumerable<RuntimeActivityExclusion> exclusions)
+    {
+        foreach (var exclusion in exclusions.Where(exclusion => exclusion.ActivityTypeKeys.Count > 0))
+        {
+            options.Sets[exclusion.SetName] = [.. exclusion.ActivityTypeKeys];
+            if (!options.Exclude.Sets.Contains(exclusion.SetName, StringComparer.Ordinal))
+                options.Exclude.Sets = [.. options.Exclude.Sets, exclusion.SetName];
+        }
     }
 
     private static void ApplyFeatureOptions(ActivityAvailabilityOptions? source, ActivityAvailabilityOptions target)

@@ -1,10 +1,7 @@
-using System.Text.Json;
 using Elsa.Activities.Flowchart.Internal;
 using Elsa.Activities.Flowchart.Models;
-using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
-using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 
 namespace Elsa.Activities.Flowchart.Tests;
 
@@ -87,13 +84,14 @@ public sealed class FlowchartRoutingTableDifferentialTests
     [Fact]
     public void Memo_BuildsRoutingStructureOnce_AndNeverDivergesFromAFreshBuild()
     {
-        var node = NewFlowchartNode(
+        var node = FlowchartExecutableNodes.Create(
             "branch",
             ["a", "b", "c"],
             [
                 Connection("a", "b", "True"),
                 Connection("a", "c", "False")
-            ]);
+            ],
+            startNodeId: "a");
 
         var materializations = 0;
         FlowchartGraph Build(ExecutableNode executableNode)
@@ -143,7 +141,7 @@ public sealed class FlowchartRoutingTableDifferentialTests
     }
 
     private static FlowchartGraph Graph(string id, IReadOnlyList<string> childIds, IReadOnlyList<FlowchartConnection> connections) =>
-        FlowchartGraph.From(NewFlowchartNode(id, childIds, connections));
+        FlowchartGraph.From(FlowchartExecutableNodes.Create(id, childIds, connections, childIds.FirstOrDefault()));
 
     private static (string, string, string, string?)[] Fingerprint(IReadOnlyCollection<FlowchartConnection> connections) =>
         connections
@@ -152,34 +150,4 @@ public sealed class FlowchartRoutingTableDifferentialTests
 
     private static FlowchartConnection Connection(string source, string target, string? port = null) =>
         new(new FlowchartEndpoint(source, port), new FlowchartEndpoint(target));
-
-    private static ExecutableNode NewFlowchartNode(string id, IReadOnlyList<string> childIds, IReadOnlyList<FlowchartConnection> connections)
-    {
-        var children = childIds.Select(NewLeaf).ToArray();
-        return new ExecutableNode(
-            $"node-flowchart-{id}",
-            $"authored-flowchart-{id}",
-            typeof(FlowchartActivity).FullName!,
-            "1.0.0",
-            "elsa.flowchart",
-            JsonSerializer.SerializeToElement(new { }),
-            new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, children)],
-            structure: new ExecutableActivityStructure(
-                FlowchartActivity.StructureKind,
-                FlowchartActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new FlowchartStructure(connections: connections, startNodeId: childIds.FirstOrDefault()))));
-    }
-
-    private static ExecutableNode NewLeaf(string id) =>
-        new(
-            id,
-            $"authored-{id}",
-            "leaf",
-            "1.0.0",
-            "clr",
-            JsonSerializer.SerializeToElement(new { }),
-            new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, string>());
 }

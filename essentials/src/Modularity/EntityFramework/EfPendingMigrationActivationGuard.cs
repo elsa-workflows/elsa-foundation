@@ -138,7 +138,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
     /// <summary>
     /// The enabled feature(s) whose configuration decides how <paramref name="module"/> connects, and so
     /// what this guard probes. Ordinarily that is the feature itself. A feature with no <c>Provider</c>
-    /// setting of its own — <c>WorkflowsDashboardEntityFrameworkCoreFeature</c> reads two modules' contexts
+    /// setting of its own — <c>WorkflowsDashboardPortfolioEntityFrameworkCoreFeature</c> reads two modules' contexts
     /// and registers neither module's migrations — is evaluated through whichever enabled features in the
     /// same shell do register them. When none is enabled, this yields nothing and the guard passes
     /// for that module: the feature's own startup check is what refuses a dashboard whose backends are not

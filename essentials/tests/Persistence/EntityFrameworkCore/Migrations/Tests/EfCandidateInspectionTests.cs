@@ -27,8 +27,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
 {
     private const string Shell = "candidate-probe";
     private const string Environment = "Production";
-    private const string Runtime = "WorkflowsRuntimeEntityFrameworkCore";
-    private const string RuntimeWorkflowExecution = "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence";
+    private const string Runtime = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+    private const string RuntimeTestScope = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
     private const string StructuredLogs = "DiagnosticsStructuredLogsEntityFrameworkCore";
     private const string OpenTelemetry = "DiagnosticsOpenTelemetryEntityFrameworkCore";
     private const string ConnectionCanary = "candidate-connection-private-2177";
@@ -1662,7 +1662,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
         if (isDisabledRemoval)
             directFeatureIds.Remove(OpenTelemetry);
         if (isContextSplit)
-            directFeatureIds.Add(RuntimeWorkflowExecution);
+            directFeatureIds.Add(RuntimeTestScope);
 
         var orderedFeatureIds = new FeatureDependencyResolver()
             .GetOrderedFeatures(directFeatureIds, featureDescriptors).ToArray();
@@ -1678,7 +1678,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
                 AddLegacyTarget(setting, "LegacyTelemetry");
             if (scenario == "authored-legacy-conflict" && id == Runtime)
                 setting["ConnectionString"] = $"Data Source={DatabasePath};Password={ConnectionCanary}";
-            if (scenario == "shared-context-schema-split" && id is Runtime or RuntimeWorkflowExecution)
+            if (scenario == "shared-context-schema-split" && id is Runtime or RuntimeTestScope)
                 setting["Schema"] = id == Runtime ? "schema-runtime" : "schema-execution";
             features[id] = setting;
         }
@@ -1783,7 +1783,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
                 [OpenTelemetry] = "logs"
             };
         else if (isContextSplit)
-            shellPersistence["Bindings"] = new JsonObject { [RuntimeWorkflowExecution] = "runtime-other" };
+            shellPersistence["Bindings"] = new JsonObject { [RuntimeTestScope] = "runtime-other" };
 
         var shellSettings = new JsonObject
         {

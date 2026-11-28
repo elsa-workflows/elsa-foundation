@@ -67,8 +67,8 @@ public sealed class MoveAndRenameTests : SyntheticHistory
     [Fact]
     public void A_root_consolidation_preserves_historical_package_identity_and_advances_once()
     {
-        Repo.MoveDirectory("src", "Essentials/src");
-        Repo.MoveDirectory("tests", "Essentials/tests");
+        Repo.MoveDirectory("src", "essentials/src");
+        Repo.MoveDirectory("tests", "essentials/tests");
         Repo.AddProject("Extensions/Example/src/Elsa.Example.Core.csproj");
         Repo.Write("Extensions/Example/src/Example.cs", "public sealed class Example;");
         Repo.Write("Extensions/Example/studio/Elsa.Studio.Example.csproj", "<Project />");
@@ -81,9 +81,9 @@ public sealed class MoveAndRenameTests : SyntheticHistory
         Assert.Contains("Elsa.Example.Core", computation.Packages.Select(package => package.PackageId));
         Assert.Equal("Extensions/Example/src/Elsa.Example.Core.csproj", computation["Elsa.Example.Core"].Path);
         Assert.Equal("4.0.0", computation["Elsa.Example.Core"].Version.ToString());
-        Assert.Equal("Essentials/src/Tasks/Elsa.Tasks.csproj", computation["Elsa.Tasks"].Path);
+        Assert.Equal("essentials/src/Tasks/Elsa.Tasks.csproj", computation["Elsa.Tasks"].Path);
         Assert.Contains("src/Tasks/Scheduler.cs (removed)", computation["Elsa.Tasks"].Reasons);
-        Assert.Contains("Essentials/src/Tasks/Scheduler.cs (added)", computation["Elsa.Tasks"].Reasons);
+        Assert.Contains("essentials/src/Tasks/Scheduler.cs (added)", computation["Elsa.Tasks"].Reasons);
         foreach (var package in computation.Packages.Where(package => AllPackages.Contains(package.PackageId, StringComparer.Ordinal)))
         {
             var lastPublished = Record.Find(package.PackageId)!;
@@ -101,8 +101,8 @@ public sealed class MoveAndRenameTests : SyntheticHistory
     [Fact]
     public void A_legacy_project_left_beside_the_consolidated_layout_is_refused()
     {
-        Repo.MoveDirectory("src", "Essentials/src");
-        Repo.MoveDirectory("tests", "Essentials/tests");
+        Repo.MoveDirectory("src", "essentials/src");
+        Repo.MoveDirectory("tests", "essentials/tests");
         Repo.Write("src/Orphan/Orphan.csproj", "<Project />");
         var commit = Repo.Commit("Leave a project in the old source root");
 

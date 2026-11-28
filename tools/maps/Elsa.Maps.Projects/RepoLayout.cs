@@ -2,7 +2,8 @@ namespace Elsa.Maps.Projects;
 
 /// <summary>Where backend maps look for code, and how they classify its paths.</summary>
 /// <remarks>
-/// Required modules, tests and deployable hosts live under <c>Essentials/</c>; optional backend modules live under
+/// Required modules and tests live under <c>essentials/</c>, deployable hosts under <c>server/apps/</c>,
+/// and optional backend modules under
 /// <c>Extensions/&lt;capability&gt;/src</c> with their tests beside them. Studio has its own tree under
 /// <c>Extensions/&lt;capability&gt;/studio</c> and is deliberately excluded from these backend maps. Matching project
 /// pathspecs at the module roots keeps that exclusion explicit instead of sweeping the whole <c>Extensions/</c> tree.
@@ -11,13 +12,16 @@ public static class RepoLayout
 {
     /// <summary>Pathspecs covering every backend project the maps describe, source and test alike.</summary>
     /// <remarks>
-    /// Current roots are lowercase with hosts under apps/. Historical uppercase roots remain for commit-tree versioning.
+    /// Historical roots remain for commit-tree versioning.
     /// Git's <c>*</c> also matches <c>/</c>, so <c>Extensions/*/src/*.csproj</c> would take in a connector
     /// scaffold under <c>Extensions/&lt;capability&gt;/templates/…/src/…</c>. The exclude keeps those
     /// samples out of the backend inventory the same way Studio trees stay out.
     /// </remarks>
     public static readonly string[] ProjectPathspecs =
     [
+        "server/essentials/src/*.csproj",
+        "server/apps/*.csproj",
+        "server/essentials/tests/*.csproj",
         "essentials/src/*.csproj",
         "apps/*.csproj",
         "essentials/tests/*.csproj",
@@ -48,7 +52,10 @@ public static class RepoLayout
         if (!relativePath.EndsWith(".csproj", StringComparison.Ordinal))
             return false;
 
-        if (relativePath.StartsWith("essentials/src/", StringComparison.Ordinal) ||
+        if (relativePath.StartsWith("server/essentials/src/", StringComparison.Ordinal) ||
+            relativePath.StartsWith("server/apps/", StringComparison.Ordinal) ||
+            relativePath.StartsWith("server/essentials/tests/", StringComparison.Ordinal) ||
+            relativePath.StartsWith("essentials/src/", StringComparison.Ordinal) ||
             relativePath.StartsWith("apps/", StringComparison.Ordinal) ||
             relativePath.StartsWith("essentials/tests/", StringComparison.Ordinal) ||
             relativePath.StartsWith("Essentials/src/", StringComparison.Ordinal) ||
@@ -63,6 +70,8 @@ public static class RepoLayout
     /// <summary>Pathspecs covering production C# source, excluding tests and Studio projects.</summary>
     public static readonly string[] SourceFilePathspecs =
     [
+        "server/essentials/src/*.cs",
+        "server/apps/*.cs",
         "essentials/src/*.cs",
         "apps/*.cs",
         "extensions/*/src/*.cs",
@@ -74,6 +83,8 @@ public static class RepoLayout
     /// <summary>Pathspecs covering extension-point catalogs in backend module roots.</summary>
     public static readonly string[] CatalogPathspecs =
     [
+        "server/essentials/src/EXTENSION_POINTS.md", "server/essentials/src/*/EXTENSION_POINTS.md",
+        "server/apps/EXTENSION_POINTS.md", "server/apps/*/EXTENSION_POINTS.md",
         "essentials/src/EXTENSION_POINTS.md", "essentials/src/*/EXTENSION_POINTS.md",
         "apps/EXTENSION_POINTS.md", "apps/*/EXTENSION_POINTS.md",
         "extensions/*/src/EXTENSION_POINTS.md", "extensions/*/src/*/EXTENSION_POINTS.md",
@@ -88,6 +99,7 @@ public static class RepoLayout
 
     /// <summary>True when the path belongs to backend tests, including extension-owned test trees.</summary>
     public static bool IsTestPath(string relativePath) =>
+        relativePath.StartsWith("server/essentials/tests/", StringComparison.Ordinal) ||
         relativePath.StartsWith("essentials/tests/", StringComparison.Ordinal) ||
         relativePath.StartsWith("Essentials/tests/", StringComparison.Ordinal) ||
         relativePath.Contains("/tests/", StringComparison.Ordinal);
@@ -95,7 +107,8 @@ public static class RepoLayout
     /// <summary>True when a project file belongs to a backend test-project root, never an embedded Studio tree.</summary>
     public static bool IsTestProjectPath(string relativePath)
     {
-        if (relativePath.StartsWith("essentials/tests/", StringComparison.Ordinal) ||
+        if (relativePath.StartsWith("server/essentials/tests/", StringComparison.Ordinal) ||
+            relativePath.StartsWith("essentials/tests/", StringComparison.Ordinal) ||
             relativePath.StartsWith("Essentials/tests/", StringComparison.Ordinal))
             return true;
 
@@ -109,7 +122,9 @@ public static class RepoLayout
     /// <summary>True when the path belongs to an Essentials or extension backend production root.</summary>
     public static bool IsModulePath(string relativePath) =>
         !IsTestPath(relativePath) &&
-        (relativePath.StartsWith("essentials/src/", StringComparison.Ordinal) ||
+        (relativePath.StartsWith("server/essentials/src/", StringComparison.Ordinal) ||
+         relativePath.StartsWith("server/apps/", StringComparison.Ordinal) ||
+         relativePath.StartsWith("essentials/src/", StringComparison.Ordinal) ||
          relativePath.StartsWith("apps/", StringComparison.Ordinal) ||
          relativePath.StartsWith("Essentials/src/", StringComparison.Ordinal) ||
          relativePath.StartsWith("Essentials/apps/", StringComparison.Ordinal) ||

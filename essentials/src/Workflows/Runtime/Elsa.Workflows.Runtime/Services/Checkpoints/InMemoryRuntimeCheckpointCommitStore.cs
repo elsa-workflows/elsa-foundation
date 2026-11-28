@@ -21,7 +21,8 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 /// <summary>Application-wide state shared by scoped in-memory checkpoint-store adapters.</summary>
 public sealed partial class InMemoryRuntimeCheckpointStoreState
 {
-    internal Dictionary<string, RuntimeIngressReservation> IngressReservations { get; } = new(StringComparer.Ordinal);
+    internal InMemoryPublicationReservationState PublicationReservations { get; } = new();
+    internal Dictionary<string, RuntimeIngressReservation> IngressReservations => PublicationReservations.Reservations;
     private readonly AsyncLocal<int> _writeGateDepth = new();
     private readonly AsyncLocal<WorkflowExecutionState?> _ingressCheckpointWrite = new();
 
@@ -39,7 +40,7 @@ public sealed partial class InMemoryRuntimeCheckpointStoreState
         public void Dispose() => state._ingressCheckpointWrite.Value = prior;
     }
 
-    internal object SyncRoot { get; } = new();
+    internal object SyncRoot => PublicationReservations.SyncRoot;
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
@@ -76,6 +77,16 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
     internal InMemoryRuntimeCheckpointStoreState State => _state;
+    ValueTask<bool> IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId); cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(_state.TimerSources.HasHistoryOwner(workflowExecutionId));
+    }
+    internal bool OwnsUnrecordedTimerState(InMemoryRuntimeCheckpointStoreState state,
+        InMemoryWorkflowExecutionStateStore executions, InMemoryExecutionLivenessStateStore liveness,
+        IPersistenceAccessContextAccessor access, TimeProvider clock) => ReferenceEquals(_state, state) &&
+        ReferenceEquals(ExactResumeExecutions, executions) && ReferenceEquals(_operationalStateStore, liveness) &&
+        ReferenceEquals(_persistenceAccessContextAccessor, access) && ReferenceEquals(_timeProvider, clock);
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IActivityExecutionInspectionWriter? _activityExecutionInspectionWriter;
@@ -306,6 +317,9 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
         try { return memory.Uses(_state, _persistenceAccessContextAccessor!.Current.RequireScope()) && memory.UsesAccessor(_persistenceAccessContextAccessor); }
         catch (InvalidOperationException) { return false; }
     }
+
+    bool IPostCommitOutboxLookupStore.CanInspectHistorySources(IRuntimeHistoryStore history) =>
+        ((IRuntimeCheckpointCommitStore)this).CanCommitHistory(history);
 
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume =>
         _bookmarkStateStore is InMemoryBookmarkStateStore bookmarks && bookmarks.Coordinates(_state) &&

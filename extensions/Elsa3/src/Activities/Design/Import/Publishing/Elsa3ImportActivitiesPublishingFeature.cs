@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Publishing.Services;
@@ -25,5 +26,6 @@ public class Elsa3ImportActivitiesPublishingFeature : IShellFeature
         services.Replace(ServiceDescriptor.Scoped<IReusableActivityImportPublisher, PublisherReusableActivityImportPublisher>());
         // The import runs the phase after its commit when a host composes it.
         services.TryAddScoped<ReusableActivityImportPublishPhase>();
+        services.TryAddScoped<IActivityDraftPublicationIdentity, ImportedDraftPublicationIdentity>();
     }
 }

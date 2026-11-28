@@ -1,0 +1,709 @@
+import { describe, expect, it } from "vitest";
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { readWrappedInput } from "../activityProperties";
+import { buildDraftFromJson, serializeDraftToJson } from "../workflowSerialization";
+import type { ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft } from "../workflowTypes";
+
+describe("activity input wire adapter", () => {
+  it("folds a top-level wrapped input into the canonical inputs array", () => {
+    const state = stateOf(writeLine("write-one", { text: wrapped("Hello World!", "Literal") }));
+
+    const wire = canonicalizeStateForWire(state);
+    const node = wire.rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "text", value: { value: "Hello World!", expressionType: "Literal" } }
+    ]);
+    expect("text" in node).toBe(false);
+  });
+
+  it("canonicalizes and expands activities held inside collection items, such as Switch cases and compensation steps", () => {
+    const scope: ActivityNode = {
+      nodeId: "scope",
+      activityVersionId: "scope-version",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.compensation-scope.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          steps: [
+            { name: "Reserve", activity: writeLine("reserve", { text: wrapped("reserved", "Literal") }), compensation: writeLine("release", { text: wrapped("released", "Literal") }) },
+            { name: "Confirm", activity: writeLine("confirm", { text: wrapped("confirmed", "Literal") }), compensation: null }
+          ]
+        }
+      }
+    };
+
+    const wireSteps = canonicalizeStateForWire(stateOf(scope)).rootActivity!.structure!.payload.steps as { name: string; activity: ActivityNode; compensation: ActivityNode | null }[];
+
+    expect(wireSteps.map(step => step.name)).toEqual(["Reserve", "Confirm"]);
+    expect(wireSteps[0].activity.inputs).toEqual([{ referenceKey: "text", value: { value: "reserved", expressionType: "Literal" } }]);
+    expect(wireSteps[0].compensation!.inputs).toEqual([{ referenceKey: "text", value: { value: "released", expressionType: "Literal" } }]);
+    expect(wireSteps[1].compensation).toBeNull();
+    expect("text" in wireSteps[0].activity).toBe(false);
+
+    const expanded = expandStateFromWire(canonicalizeStateForWire(stateOf(scope))).rootActivity!.structure!.payload.steps as { activity: Record<string, { expression: { value: unknown } }> }[];
+    expect(expanded[1].activity.text.expression.value).toBe("confirmed");
+  });
+
+  it("carries the in-memory referenceKey onto the wire verbatim, whatever its shape", () => {
+    const state = stateOf(writeLine("write-one", {
+      "customer-id": wrapped("42", "Literal"),
+      URL: wrapped("https://example.com", "Literal")
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "customer-id", value: { value: "42", expressionType: "Literal" } },
+      { referenceKey: "URL", value: { value: "https://example.com", expressionType: "Literal" } }
+    ]);
+
+    const restored = expandStateFromWire(canonicalizeStateForWire(state)).rootActivity as ActivityNode & Record<string, { expression: { value: unknown } }>;
+    expect(restored["customer-id"].expression.value).toBe("42");
+    expect(restored["URL"].expression.value).toBe("https://example.com");
+  });
+
+  it("overlays a template-seeded default with the edited top-level value under the same referenceKey", () => {
+    const node: ActivityNode = {
+      ...writeLine("write-one", { text: wrapped("edited", "Literal") }),
+      inputs: [{ referenceKey: "text", value: { value: "seeded default", expressionType: "Literal" } }]
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(node)).rootActivity!;
+
+    expect(wire.inputs).toEqual([
+      { referenceKey: "text", value: { value: "edited", expressionType: "Literal" } }
+    ]);
+  });
+
+  it("preserves the authored expression syntax instead of forcing Literal", () => {
+    const state = stateOf(writeLine("write-one", { text: wrapped("user.name", "JavaScript") }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "text", value: { value: "user.name", expressionType: "JavaScript" } }
+    ]);
+  });
+
+  it("round-trips a workflow Input expression as a structured stable-key reference", () => {
+    const reference = { referenceKey: "customer-id" };
+    const state = stateOf(writeLine("write-one", { text: wrapped(reference, "Input") }));
+
+    const wire = canonicalizeStateForWire(state);
+    expect(wire.rootActivity?.inputs).toEqual([
+      { referenceKey: "text", value: { value: reference, expressionType: "Input" } }
+    ]);
+
+    const expanded = expandStateFromWire(wire).rootActivity as ActivityNode & {
+      text: { expression: { type: string; value: unknown } };
+    };
+    expect(expanded.text.expression).toEqual({ type: "Input", value: reference });
+  });
+
+  it("round-trips a Connection expression as a structured reference payload", () => {
+    const reference = { connection: "customer-api", type: "http" };
+    const seeded = stateOf({
+      ...writeLine("send-request", {}),
+      inputs: [{ referenceKey: "Connection", value: { value: reference, expressionType: "Connection" } }]
+    });
+
+    const resaved = canonicalizeStateForWire(expandStateFromWire(seeded));
+
+    expect(resaved.rootActivity?.inputs).toEqual([
+      { referenceKey: "Connection", value: { value: reference, expressionType: "Connection" } }
+    ]);
+  });
+
+  it("round-trips a portable expression definition as a structured value", () => {
+    const definition = {
+      language: "JavaScript",
+      source: "args.status",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { status: { kind: "Literal", value: "ok" } },
+      options: { strict: true },
+      capabilityProfile: "binding-pure-v1"
+    };
+    const seeded = stateOf({
+      ...writeLine("write-result", {}),
+      inputs: [{ referenceKey: "text", value: { value: definition, expressionType: "JavaScript" } }]
+    });
+
+    const resaved = canonicalizeStateForWire(expandStateFromWire(seeded));
+
+    expect(resaved.rootActivity?.inputs).toEqual([
+      { referenceKey: "text", value: { value: definition, expressionType: "JavaScript" } }
+    ]);
+  });
+
+  it("keeps a whole activity-result binding structured through save, Code Apply and reopen", () => {
+    const binding = { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "main", isOptional: false };
+    const authored: WorkflowDraft = {
+      id: "draft-1",
+      definitionId: "definition-1",
+      state: stateOf(writeLine("send-mail", { customer: wrapped(binding, "ActivityResult") })),
+      layout: [],
+      validationErrors: []
+    };
+    const expected = [{ referenceKey: "customer", value: { value: binding, expressionType: "ActivityResult" } }];
+
+    // Save: the binding is an object on the wire, never escaped JSON text.
+    const saved = canonicalizeStateForWire(authored.state);
+    expect(saved.rootActivity?.inputs).toEqual(expected);
+
+    // Code Apply: the Code view shows the same wire shape and applies it back unchanged.
+    const applied = buildDraftFromJson(serializeDraftToJson(authored), authored);
+    expect(applied.ok && canonicalizeStateForWire(applied.draft.state).rootActivity?.inputs).toEqual(expected);
+
+    // Reopen: the loaded draft holds the same identity and saves it again unchanged.
+    const reopened = expandStateFromWire(saved);
+    expect((reopened.rootActivity as ActivityNode & { customer: { expression: unknown } }).customer.expression)
+      .toEqual({ type: "ActivityResult", value: binding });
+    expect(canonicalizeStateForWire(reopened).rootActivity?.inputs).toEqual(expected);
+  });
+
+  it.each([
+    // A member read this client cannot author yet: its path segments are literal names, dots included.
+    ["ActivityResultMember", { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false, memberPath: ["billing.address", ""] }],
+    ["VariableMember", { referenceKey: "customer", declaringScopeId: "scope:root", memberPath: ["a/b", 'quoted"key'] }],
+    ["WorkflowRequestMember", { memberKey: "request", memberPath: ["CustomerId"] }],
+    ["InputMember", { referenceKey: "input-key", memberPath: ["", "literal.dot"] }],
+    ["WorkflowRequest", { memberKey: "order", path: null }],
+    // A source kind a later server adds, and a definition under a known language that is not a portable one.
+    ["FutureSource", { kind: "next", nested: { items: [1, "two", null] } }],
+    ["JavaScript", { language: "JavaScript", source: "args.x", dialect: 2 }],
+    ["FutureSource", ["a", { b: 1 }]]
+  ])("keeps a structured %s definition through save, Code Apply and reopen", (expressionType, definition) => {
+    const seeded = stateOf({
+      ...writeLine("consumer", {}),
+      inputs: [{ referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }]
+    });
+    const authored: WorkflowDraft = {
+      id: "draft-1", definitionId: "definition-1", state: expandStateFromWire(seeded), layout: [], validationErrors: []
+    };
+    const expected = [{ referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }];
+
+    // Save the editor's structured value, then pass that wire state through the real Code-view serializer/parser.
+    const saved = canonicalizeStateForWire(authored.state);
+    expect(saved.rootActivity?.inputs).toEqual(expected);
+    const applied = buildDraftFromJson(serializeDraftToJson({ ...authored, state: saved }), authored);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) throw new Error("Code Apply failed.");
+    const expectedEditorValue = { expression: { type: expressionType, value: definition }, argumentExtras: { futureField: "kept" } };
+    expect(applied.draft.state.rootActivity?.text).toMatchObject(expectedEditorValue);
+    const appliedWire = canonicalizeStateForWire(applied.draft.state);
+    expect(appliedWire.rootActivity?.inputs).toEqual(expected);
+
+    // Reopen a serialized copy of the applied state; every literal segment and unknown field stays structured.
+    const reopened = expandStateFromWire(JSON.parse(JSON.stringify(appliedWire)));
+    expect(reopened.rootActivity?.text).toMatchObject(expectedEditorValue);
+    expect(canonicalizeStateForWire(reopened).rootActivity?.inputs).toEqual(expected);
+  });
+
+  it("keeps Object and Secret values in the JSON-text form they are saved in", () => {
+    const state = stateOf(writeLine("consumer", {
+      config: wrapped({ enabled: true }, "Object"),
+      apiKey: wrapped({ name: "smtp" }, "Secret")
+    }));
+
+    expect(canonicalizeStateForWire(state).rootActivity?.inputs).toEqual([
+      { referenceKey: "config", value: { value: '{"enabled":true}', expressionType: "Object" } },
+      { referenceKey: "apiKey", value: { value: '{"name":"smtp"}', expressionType: "Secret" } }
+    ]);
+  });
+
+  it("serializes non-string literal values for the string-typed backend contract", () => {
+    const state = stateOf(writeLine("write-one", { count: wrapped(42, "Literal"), enabled: wrapped(true, "Literal") }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "count", value: { value: "42", expressionType: "Literal" } },
+      { referenceKey: "enabled", value: { value: "true", expressionType: "Literal" } }
+    ]);
+  });
+
+  it("sends structured literals (collections and objects) as Object expressions the backend can deserialize", () => {
+    const state = stateOf(writeLine("write-one", {
+      lines: wrapped(["Hello", "world"], "Literal"),
+      config: wrapped({ enabled: true }, "Literal")
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    // A scalar literal converter can't turn the JSON string form of a list/object into ICollection<T> or a
+    // complex type, so structured literal values ride the "Object" expression instead of "Literal".
+    expect(node.inputs).toEqual([
+      { referenceKey: "lines", value: { value: '["Hello","world"]', expressionType: "Object" } },
+      { referenceKey: "config", value: { value: '{"enabled":true}', expressionType: "Object" } }
+    ]);
+  });
+
+  it("returns a structured literal to the editor as a Literal after a full save/load round-trip", () => {
+    // The Object promotion above is a serialization detail. `expandStateFromWire` has no descriptors, so it
+    // faithfully reports what the wire holds; `readWrappedInput` — which does have the descriptor — is where
+    // the authored syntax comes back, keeping the checklist/repeater rather than the raw JSON editor.
+    const state = stateOf(writeLine("write-one", { lines: wrapped(["Hello", "world"], "Literal") }));
+    const descriptor = {
+      name: "Lines",
+      referenceKey: "lines",
+      typeName: "System.String",
+      collectionKind: "List",
+      isWrapped: true
+    };
+
+    const node = expandStateFromWire(canonicalizeStateForWire(state)).rootActivity!;
+
+    expect((node.lines as { expression: unknown }).expression).toEqual({ type: "Object", value: '["Hello","world"]' });
+    expect(readWrappedInput(node, descriptor).expression).toEqual({ type: "Literal", value: ["Hello", "world"] });
+  });
+
+  it("leaves non-input extras and structure untouched while canonicalizing nested activities", () => {
+    const child = writeLine("child", { text: wrapped("nested", "Literal") });
+    const root: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "sequence-version",
+      inputs: [],
+      outputs: [],
+      structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [child] } }
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(root)).rootActivity!;
+    const nested = (wire.structure!.payload.activities as ActivityNode[])[0];
+
+    expect(nested.inputs).toEqual([
+      { referenceKey: "text", value: { value: "nested", expressionType: "Literal" } }
+    ]);
+  });
+
+  it("canonicalizes inputs on a single child-slot activity", () => {
+    const body = writeLine("body", { text: wrapped("Item X", "Literal") });
+    const root: ActivityNode = {
+      nodeId: "foreach",
+      activityVersionId: "foreach-version",
+      inputs: [],
+      outputs: [],
+      structure: { kind: "elsa.foreach.structure", schemaVersion: "1.0.0", payload: { body } }
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(root)).rootActivity!;
+    const nested = wire.structure!.payload.body as ActivityNode;
+
+    expect(nested.inputs).toEqual([
+      { referenceKey: "text", value: { value: "Item X", expressionType: "Literal" } }
+    ]);
+    expect("text" in nested).toBe(false);
+  });
+
+  it("does not treat flowchart connections as activities", () => {
+    const root: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "flowchart-version",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.flowchart.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          activities: [writeLine("a", { text: wrapped("hi", "Literal") })],
+          connections: [{ id: "c1", source: { nodeId: "a", port: "Done" }, target: { nodeId: "b" } }]
+        }
+      }
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(root)).rootActivity!;
+
+    expect(wire.structure!.payload.connections).toEqual(root.structure!.payload.connections);
+  });
+
+  it("round-trips canonical inputs back into editable top-level wrapped values", () => {
+    const state = stateOf(writeLine("write-one", { text: wrapped("Hello World!", "Literal") }));
+
+    const restored = expandStateFromWire(canonicalizeStateForWire(state)).rootActivity!;
+
+    expect(restored.inputs).toEqual([]);
+    expect(restored.text).toEqual({ typeName: "", expression: { type: "Literal", value: "Hello World!" } });
+  });
+});
+
+describe("authored conversion request round-trip", () => {
+  it("folds an authored conversion request onto the wire argument state", () => {
+    const state = stateOf(writeLine("write-one", {
+      text: { ...wrapped('{"name":"Grace"}', "Literal"), conversion: { mode: "json" } }
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "text", value: { value: '{"name":"Grace"}', expressionType: "Literal" }, conversion: { mode: "json" } }
+    ]);
+  });
+
+  it("round-trips a loaded conversion request and forward-compatible ArgumentState fields losslessly", () => {
+    const wireArgument = {
+      referenceKey: "payload",
+      value: { value: '{"name":"Grace"}', expressionType: "Literal" },
+      conversion: { mode: "profile", profile: { id: "partner.customer-json", version: "3" }, limits: { maxDepth: 8 }, futureField: true },
+      autoEvaluate: false,
+      isSensitive: true,
+      someFutureArgumentField: { nested: 1 }
+    };
+    const loaded: WorkflowDefinitionState = {
+      rootActivity: { nodeId: "n1", activityVersionId: "v1", inputs: [wireArgument], outputs: [], structure: null }
+    };
+
+    const expanded = expandStateFromWire(loaded).rootActivity as ActivityNode & { payload: Record<string, unknown> };
+    expect(expanded.payload.conversion).toEqual(wireArgument.conversion);
+    expect(expanded.payload.argumentExtras).toEqual({
+      autoEvaluate: false,
+      isSensitive: true,
+      someFutureArgumentField: { nested: 1 }
+    });
+
+    const saved = canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!;
+    expect(saved.inputs).toEqual([wireArgument]);
+  });
+
+  it("omits the conversion field when the author cleared it in the editor", () => {
+    const state = stateOf(writeLine("write-one", { text: wrapped("plain", "Literal") }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "text", value: { value: "plain", expressionType: "Literal" } }
+    ]);
+    expect("conversion" in (node.inputs![0] as object)).toBe(false);
+  });
+
+  it("keeps a template-seeded conversion and extras when the palette overlays only the value", () => {
+    const node: ActivityNode = {
+      ...writeLine("write-one", { text: wrapped("edited", "Literal") }),
+      inputs: [{
+        referenceKey: "text",
+        value: { value: "seeded default", expressionType: "Literal" },
+        conversion: { mode: "xml" },
+        evaluatorType: "seeded-evaluator"
+      }]
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(node)).rootActivity!;
+
+    expect(wire.inputs).toEqual([
+      {
+        referenceKey: "text",
+        value: { value: "edited", expressionType: "Literal" },
+        conversion: { mode: "xml" },
+        evaluatorType: "seeded-evaluator"
+      }
+    ]);
+  });
+
+  it("leaves a foreign non-variable output argument state untouched on both directions", () => {
+    // Only Variable-expression outputs are the authored variable captures the editor models; any other
+    // output binding rides through the outputs array verbatim so a document authored elsewhere is lossless.
+    const outputs = [{
+      referenceKey: "response",
+      value: { value: "wf-out", expressionType: "Output" },
+      conversion: { mode: "json" }
+    }];
+    const loaded: WorkflowDefinitionState = {
+      rootActivity: { nodeId: "n1", activityVersionId: "v1", inputs: [], outputs, structure: null }
+    };
+
+    expect(expandStateFromWire(loaded).rootActivity!.outputs).toEqual(outputs);
+    expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.outputs).toEqual(outputs);
+  });
+});
+
+describe("activity output-capture wire round-trip", () => {
+  it("folds an authored top-level output capture into the canonical outputs array", () => {
+    const state = stateOf(readLine("read-one", {
+      Result: { target: { referenceKey: "line", declaringScopeId: "workflow" } }
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.outputs).toEqual([
+      { referenceKey: "Result", value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" } }
+    ]);
+    expect("Result" in node).toBe(false);
+  });
+
+  it("produces no output entry for an unbound output", () => {
+    const state = stateOf(readLine("read-one", {}));
+    expect(canonicalizeStateForWire(state).rootActivity!.outputs).toEqual([]);
+  });
+
+  it("folds an authored conversion request onto the output capture and omits the default", () => {
+    const withConversionState = stateOf(readLine("read-one", {
+      Result: { target: { referenceKey: "line", declaringScopeId: "workflow" }, conversion: { mode: "json" } }
+    }));
+    const plainState = stateOf(readLine("read-two", {
+      Result: { target: { referenceKey: "line", declaringScopeId: "workflow" } }
+    }));
+
+    expect(canonicalizeStateForWire(withConversionState).rootActivity!.outputs).toEqual([
+      { referenceKey: "Result", value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" }, conversion: { mode: "json" } }
+    ]);
+    expect("conversion" in (canonicalizeStateForWire(plainState).rootActivity!.outputs![0] as object)).toBe(false);
+  });
+
+  it("expands a Variable-expression output back into the in-memory capture model on load", () => {
+    const outputs = [{
+      referenceKey: "Result",
+      value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" },
+      conversion: { mode: "json" }
+    }];
+    const loaded: WorkflowDefinitionState = {
+      rootActivity: { nodeId: "n1", activityVersionId: "v1", inputs: [], outputs, structure: null }
+    };
+
+    const expanded = expandStateFromWire(loaded).rootActivity as ActivityNode & { Result: Record<string, unknown> };
+    expect(expanded.Result).toEqual({
+      target: { referenceKey: "line", declaringScopeId: "workflow" },
+      conversion: { mode: "json" }
+    });
+    expect(expanded.outputs).toEqual([]);
+
+    // Re-canonicalize is lossless.
+    expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.outputs).toEqual(outputs);
+  });
+
+  it("preserves forward-compatible output ArgumentState extras through expand and canonicalize", () => {
+    const outputs = [{
+      referenceKey: "Result",
+      value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" },
+      autoEvaluate: false,
+      someFutureOutputField: { nested: 1 }
+    }];
+    const loaded: WorkflowDefinitionState = {
+      rootActivity: { nodeId: "n1", activityVersionId: "v1", inputs: [], outputs, structure: null }
+    };
+
+    const expanded = expandStateFromWire(loaded).rootActivity as ActivityNode & { Result: Record<string, unknown> };
+    expect(expanded.Result.argumentExtras).toEqual({ autoEvaluate: false, someFutureOutputField: { nested: 1 } });
+    expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.outputs).toEqual(outputs);
+  });
+
+  it("folds captures and input bindings independently on the same node", () => {
+    const state = stateOf({
+      ...readLine("mixed", { prompt: wrapped("Name?", "Literal") }),
+      Result: { target: { referenceKey: "line", declaringScopeId: "workflow" } }
+    });
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+    expect(node.inputs).toEqual([{ referenceKey: "prompt", value: { value: "Name?", expressionType: "Literal" } }]);
+    expect(node.outputs).toEqual([
+      { referenceKey: "Result", value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" } }
+    ]);
+  });
+});
+
+describe("argument collection wire adapter", () => {
+  it("emits the canonical type shape for variables/inputs/outputs and drops isArray/assembly", () => {
+    const state: WorkflowDefinitionState = {
+      variables: [{ referenceKey: "v1", name: "Items", type: { alias: "String", collectionKind: "List" }, storageDriverType: "Elsa.Memory.MemoryStorageDriver", default: null }],
+      inputs: [{ name: "Tags", type: { alias: "String", collectionKind: "HashSet" }, displayName: "Tags", storageDriverType: null }],
+      outputs: [{ name: "Result", type: { alias: "Boolean", collectionKind: "Single" }, displayName: "Result" }]
+    };
+
+    const wire = canonicalizeStateForWire(state);
+
+    expect(wire.variables![0]).toMatchObject({
+      referenceKey: "v1",
+      name: "Items",
+      type: { alias: "String", collectionKind: "List" },
+      storageDriverType: "Elsa.Memory.MemoryStorageDriver"
+    });
+    expect(wire.inputs![0]).toMatchObject({ name: "Tags", type: { alias: "String", collectionKind: "HashSet" }, storageDriverType: null });
+    expect(wire.outputs![0]).toMatchObject({ name: "Result", type: { alias: "Boolean", collectionKind: "Single" } });
+    // Outputs are minimal — no storage driver.
+    expect("storageDriverType" in (wire.outputs![0] as object)).toBe(false);
+  });
+
+  it("backfills a referenceKey, preserves workflow input defaults, and drops unsupported legacy fields", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [{ name: "OrderId", type: { alias: "String", collectionKind: "Single" }, displayName: "OrderId", defaultValue: "x", defaultSyntax: "Literal", isReadOnly: true }] as unknown[],
+      outputs: [{ name: "Result", type: { alias: "Boolean", collectionKind: "Single" }, displayName: "Result", defaultValue: false, defaultSyntax: "Literal" }] as unknown[]
+    };
+
+    const wire = canonicalizeStateForWire(state);
+    const input = wire.inputs![0] as Record<string, unknown>;
+    const output = wire.outputs![0] as Record<string, unknown>;
+
+    expect(typeof input.referenceKey).toBe("string");
+    expect((input.referenceKey as string).length).toBeGreaterThan(0);
+    expect(typeof output.referenceKey).toBe("string");
+    expect(input.defaultValue).toBe("x");
+    expect(input.defaultSyntax).toBe("Literal");
+    expect("defaultValue" in output).toBe(false);
+    expect("defaultSyntax" in output).toBe(false);
+    expect("isReadOnly" in input).toBe(false);
+  });
+
+  it("preserves false, zero, empty-string and null input defaults in canonical and expanded states", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [
+        { referenceKey: "count", name: "Count", type: { alias: "Int32", collectionKind: "Single" }, defaultValue: 0, defaultSyntax: "Literal" },
+        { referenceKey: "enabled", name: "Enabled", type: { alias: "Boolean", collectionKind: "Single" }, defaultValue: false, defaultSyntax: "Literal" },
+        { referenceKey: "name", name: "Name", type: { alias: "String", collectionKind: "Single" }, defaultValue: "", defaultSyntax: "Literal" },
+        { referenceKey: "value", name: "Value", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: "Literal" }
+      ] as unknown[]
+    };
+
+    const wire = canonicalizeStateForWire(state);
+    const inputs = wire.inputs as Record<string, unknown>[];
+
+    expect(inputs.map(input => input.defaultValue)).toEqual([0, false, "", null]);
+    expect(inputs.map(input => input.defaultSyntax)).toEqual(["Literal", "Literal", "Literal", "Literal"]);
+    expect((expandStateFromWire(wire).inputs as Record<string, unknown>[]).map(input => input.defaultValue)).toEqual([0, false, "", null]);
+  });
+
+  it("keeps legacy null-without-syntax defaults absent when reopening and saving", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [
+        { name: "Legacy", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: null },
+        { name: "LegacyCasing", type: { alias: "String", collectionKind: "Single" }, DefaultValue: null },
+        { name: "ExplicitNull", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: "Literal" }
+      ]
+    };
+
+    for (const normalized of [canonicalizeStateForWire(state), expandStateFromWire(state)]) {
+      const inputs = normalized.inputs as Record<string, unknown>[];
+      expect(inputs[0]).not.toHaveProperty("defaultValue");
+      expect(inputs[0]).not.toHaveProperty("defaultSyntax");
+      expect(inputs[1]).not.toHaveProperty("defaultValue");
+      expect(inputs[1]).not.toHaveProperty("defaultSyntax");
+      expect(inputs[2]).toMatchObject({ defaultValue: null, defaultSyntax: "Literal" });
+    }
+  });
+
+  it("sends required output nullability for new, reopened and legacy definitions without changing explicit values", () => {
+    const rows = [
+      { referenceKey: "missing", name: "Missing", type: { alias: "String", collectionKind: "Single" } },
+      { referenceKey: "nullable", name: "Nullable", type: { alias: "String", collectionKind: "Single" }, isNullable: true },
+      { referenceKey: "legacy", name: "Legacy", type: { alias: "String", collectionKind: "Single" }, IsNullable: false }
+    ];
+    for (const state of [canonicalizeStateForWire({ outputs: rows }), expandStateFromWire({ outputs: rows })]) {
+      const outputs = state.outputs as Record<string, unknown>[];
+      expect(outputs.map(row => row.isNullable)).toEqual([false, true, false]);
+      expect(outputs.every(row => !("IsNullable" in row))).toBe(true);
+    }
+  });
+
+  it("defaults missing input nullability without overriding explicit booleans", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [
+        { referenceKey: "missing", name: "Missing", type: { alias: "String", collectionKind: "Single" } },
+        { referenceKey: "nullable", name: "Nullable", type: { alias: "String", collectionKind: "Single" }, isNullable: true },
+        { referenceKey: "required", name: "Required", type: { alias: "String", collectionKind: "Single" }, isNullable: false },
+        { referenceKey: "legacy", name: "Legacy", type: { alias: "String", collectionKind: "Single" }, IsNullable: true }
+      ] as unknown[]
+    };
+
+    const inputs = canonicalizeStateForWire(state).inputs as Record<string, unknown>[];
+
+    expect(inputs.map(input => input.isNullable)).toEqual([false, true, false, true]);
+    expect(inputs.every(input => !("IsNullable" in input))).toBe(true);
+  });
+
+  it("preserves an existing referenceKey instead of regenerating it (idempotent)", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [{ referenceKey: "in-1", name: "OrderId", type: { alias: "String", collectionKind: "Single" }, displayName: "OrderId" }] as unknown[]
+    };
+
+    const once = canonicalizeStateForWire(state).inputs![0] as Record<string, unknown>;
+    const twice = canonicalizeStateForWire(canonicalizeStateForWire(state)).inputs![0] as Record<string, unknown>;
+
+    expect(once.referenceKey).toBe("in-1");
+    expect(twice.referenceKey).toBe("in-1");
+  });
+
+  it("converts a legacy variable (typeInformation + isArray + object storage) on read", () => {
+    const state: WorkflowDefinitionState = {
+      variables: [{
+        referenceKey: "v1",
+        name: "Numbers",
+        typeInformation: { typeName: "Int32", namespace: "System", assemblyName: "System.Private.CoreLib", assemblyVersion: "" },
+        isArray: true,
+        storageDriverType: { typeName: "MemoryStorageDriver", namespace: "Elsa.Memory" },
+        default: null
+      }] as unknown as VariableDefinition[]
+    };
+
+    const expanded = expandStateFromWire(state);
+    const variable = expanded.variables![0] as Record<string, unknown>;
+
+    expect(variable.type).toEqual({ alias: "Int32", collectionKind: "Array" });
+    expect(variable.storageDriverType).toBe("Elsa.Memory.MemoryStorageDriver");
+    expect("typeInformation" in variable).toBe(false);
+    expect("isArray" in variable).toBe(false);
+  });
+
+  it("converts a legacy input (bare-string type + isArray) and preserves an unknown alias", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [{ name: "Blob", type: "Some.Unresolved.Type", isArray: true, displayName: "Blob" }] as unknown[]
+    };
+
+    const input = expandStateFromWire(state).inputs![0] as Record<string, unknown>;
+
+    expect(input.type).toEqual({ alias: "Some.Unresolved.Type", collectionKind: "Array" });
+    expect("isArray" in input).toBe(false);
+  });
+
+  it("normalizes container-scoped variable declarations in the activity tree", () => {
+    const root: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "sequence-version",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.sequence.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          activities: [],
+          variables: [{ referenceKey: "c1", name: "Scoped", typeInformation: { typeName: "Boolean", namespace: "System" }, isArray: false }]
+        }
+      }
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(root)).rootActivity!;
+    const scoped = (wire.structure!.payload.variables as Record<string, unknown>[])[0];
+
+    expect(scoped.type).toEqual({ alias: "Boolean", collectionKind: "Single" });
+    expect("typeInformation" in scoped).toBe(false);
+  });
+
+  it("leaves state without argument collections untouched", () => {
+    const state = stateOf(writeLine("root", {}));
+    expect(canonicalizeStateForWire(state).variables).toBeUndefined();
+    expect(canonicalizeStateForWire(state).inputs).toBeUndefined();
+  });
+});
+
+function stateOf(rootActivity: ActivityNode): WorkflowDefinitionState {
+  return { rootActivity };
+}
+
+function writeLine(nodeId: string, properties: Record<string, unknown>): ActivityNode {
+  return {
+    nodeId,
+    activityVersionId: `${nodeId}-version`,
+    inputs: [],
+    outputs: [],
+    structure: null,
+    ...properties
+  };
+}
+
+// A regular activity carrying authored output captures as top-level properties (keyed by output
+// referenceKey), the output-side mirror of writeLine's top-level input properties.
+function readLine(nodeId: string, properties: Record<string, unknown>): ActivityNode {
+  return writeLine(nodeId, properties);
+}
+
+function wrapped(value: unknown, type: string) {
+  return { typeName: "System.String", expression: { type, value } };
+}

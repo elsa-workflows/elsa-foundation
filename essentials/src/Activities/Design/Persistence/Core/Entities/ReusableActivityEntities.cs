@@ -25,6 +25,8 @@ public sealed class ActivityDefinitionAuthoringState : TenantEntity
     /// independent of publication head and version ordering.
     /// </summary>
     public string? RecommendedVersionId { get; set; }
+
+    public DateTimeOffset? ArchivedAt { get; set; }
 }
 
 public sealed class ActivityDefinitionDraft : TenantEntity

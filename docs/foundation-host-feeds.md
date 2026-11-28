@@ -6,6 +6,44 @@
 
 This page used to hold the whole reference. It is now split into the pages below; the old section links on this page still work and point to the new location.
 
+## Profile settings and shell overlays
+
+A profile image can supply its settings in `/app/appsettings.json` and `/app/appsettings.<environment>.json`.
+Foundation then loads `/app/shells.json` and the environment-specific shell overlay. Environment variables
+and command-line arguments take precedence.
+
+For a browser-based Studio, set `Cors:AllowedOrigins` to the Studio origins. For shell-provided sign-in, see
+[Identity configuration](reference/identity-configuration.md). `Elsa:ModuleManagement:PackageApiEnabled` enables the
+credential-protected package management API, including the registry, uploads, pruning, feed settings and retention.
+`Elsa:ModuleManagement:Enabled` also enables the static API key endpoints for manual reconciliation and shell reload.
+`Elsa:Persistence:EntityFramework:Migrate:GuardFeatureActivation` enables the migration guard for features
+activated through module management.
+
+### Foundation source host workflow runtime
+
+The default source shell serves Native and Flowchart on Actor Foundation. Its SQLite database path
+defaults to `elsa-kernel.db` and resolves against the process working directory. The
+`CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__` settings select the provider,
+database and tenant. To use PostgreSQL, set `Provider` to `PostgreSQL`, clear `SqlitePath`, and
+provide `PostgresConnectionString`. The shell's EF control-plane connection remains separately configured.
+
+For a shell that enables Runtime artifact persistence, supply the recovery continuation signing key in operator
+configuration. The default shell's environment key is
+`CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey`.
+Use at least 32 UTF-8 bytes and share the key with nodes that consume the same durable runtime pages.
+
+For fresh authoring, point
+`CShells__Shells__default__Features__ClrActivityReconciliation__Options__FolderPath`
+to a directory of CLR activity assemblies. For a public-feed deployment, use the managed `net10.0`
+runtime DLLs selected by the [locked package restore](host-feeds/pinning-and-closures.md#generating-the-closure),
+with one copy of each assembly name. The CLR source scans that directory. The Docker profiles already stage it.
+
+The Studio dashboard and saved-question APIs stay available. The `elsa.workflows.runs` dataset
+counts authorized runs retained by Actor Foundation, including eligible isolated Test Runs. Earlier
+execution rows from a legacy runtime are outside that dataset's totals. The retained Runtime History
+endpoint provides committed activity evidence. The legacy execution evidence buffer and phase trace
+contributions belong to shells that select the legacy engine.
+
 ## Pages
 
 | Page | Read it when you want to… |
@@ -78,7 +116,7 @@ Moved to [Running several hosts as a cluster](host-feeds/clustering.md).
 
 ## Where this lives in the code
 
-- `Essentials/apps/Elsa.Foundation.Host/` — the host, its `appsettings.json` and the module-management endpoints.
+- `server/apps/Elsa.Foundation.Host/` — the host, its `appsettings.json` and the module-management endpoints.
 - `Nuplane:*` configuration — feeds, capabilities, lock file (Nuplane package).
 - `Elsa:Shells:*` configuration — shell reload behaviour (CShells).
 

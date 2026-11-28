@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 
 namespace Elsa.Integrations.Connectors.OAuth2;
@@ -10,6 +11,7 @@ namespace Elsa.Integrations.Connectors.OAuth2;
 internal static class OAuth2TokenError
 {
     public const int MaxFieldLength = 200;
+    public const string InvalidGrant = "invalid_grant";
 
     public static string MissingAccessTokenMessage(JsonElement root)
     {
@@ -21,6 +23,29 @@ internal static class OAuth2TokenError
         var detail = description is null ? error : error is null ? description : $"{error}: {description}";
         return $"Token endpoint returned no access_token ({detail}).";
     }
+
+    public static string? TryReadError(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            return ReadTrustedField(document.RootElement, "error");
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public static bool IsPermanentGrantLoss(string? errorCode) =>
+        string.Equals(errorCode, InvalidGrant, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsTransientStatus(HttpStatusCode status) => (int)status >= 500;
+
+    public static string? ReadError(JsonElement root) => ReadTrustedField(root, "error");
 
     private static string? ReadTrustedField(JsonElement root, string name)
     {

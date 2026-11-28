@@ -101,6 +101,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | 17 Nov | Kernel schema changes that a running version cannot read use a coordinated stop, and each release's notes state its rollback floor. | Owner card ([plan, schema compatibility](../program-goals/clean-slate-kernel.md#kernel-schema-and-protocol-compatibility-proposed)) |
 | 16 Nov | The BPMN prototype stream is parked until after release 1. | [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) program state |
 | 16 Nov | #2531's M5 qualification and the budgets of 32 SQLite commands and 16 PostgreSQL round trips (ten WriteLines, Balanced) move to gate 3. | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917342686) |
+| 23 Nov | MongoDB-specific implementation and qualification are on hold, including the MongoDB part of K4. Keep the prototype and its evidence, and continue relational K4 work behind the provider-neutral storage contract. | [Owner direction on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7108927599) |
 
 ## The seven design-now answers (16–17 November)
 
@@ -341,6 +342,43 @@ contract's count of 38 types and 167 members.
 | 20 Nov | A migration plan's state keeps counts only, as the migration page's cost argument requires, and those counts are progress only: after a repeat beyond the deduplication window they may overcount. Completion and the final totals are judged from the plan-outcomes read model, which records one outcome per instance by exact ref; "not at source" never overwrites a decisive one. Each instance's state records the id of the last plan whose `Migrate` it answered, which stops a repeat from the same plan in the ordinary case. The projector records each batch's instances from the plan's batch journal entries (the plan runs at `Full` history), so the read model holds the selected set after the plan drops each batch's instance list. A plan's run ends when the read model shows every selected instance with an outcome of any kind, "not at source" included (a decisive outcome is never overwritten): the plan runner, outside any turn, reads the read model and sends the plan a "complete" message, deduplicated by plan id, since a turn reads no read models. It also ends at the plan's deadline, or when an operator closes it; instances that never answered are reported as "no answer". | Coordinator design choice; [migrating running instances](migrating-running-instances.md#plans-and-bulk-migration) |
 | 20 Nov | A start subscription on the key counts as a live waiter for `RequestAsync(Event(key))`: the actor it starts is reached like any other waiter, and the first live output of any waiter, the started one included, answers (FC-14). "No waiter" means no live wait and no start subscription matched, and then nothing was published. `SendAsync` and `RequestAsync` to `Event(key)` stay symmetric. | Coordinator design choice under the FC-C2 card; [the foundation contract](foundation-contract.md#ingress-iingress), FC-6 |
 | 20 Nov | Under the pending give-up card: a refused retake means another owner holds the partition, so the pending entry ends and nothing is released; a retake that fails, or whose answer is lost, leaves the partition pending and given up. The card's "the host keeps passing that Worker until its pending set is empty" holds while the process lives. A dispose does not wait for it, and if the process ends with a partition still pending, the node lease lapses and the next taker counts the deaths (NL-6). | Coordinator reading of the pending give-up card; [ownership and fencing](ownership-and-fencing.md#the-nodes-heartbeat) |
+
+## Owner decision on the terminal header (21 November)
+
+Every actor's opaque `TypeData` is limited to 16 KiB in UTF-8 at creation and when replaced. Every live
+checkpoint reserves room for the full permitted `TypeData` and label set beside the state-only
+`TerminalGrowth` declared by the actor type. The owner accepted this in the K2 terminal-envelope decision
+card. [Foundation contract, FC-17](foundation-contract.md#what-a-foundation-adapter-must-supply)
+states the rule. [#4971](https://github.com/elsa-workflows/elsa-foundation/pull/4971) carries the in-memory witness,
+with provider encoding qualified at K4.
+
+## Owner decisions for K2 acceptance (21 November)
+
+| Rule | Source |
+|---|---|
+| FC-1 serializes each actor's turns within an owner. An already-running stale turn can overlap its successor. All durable outcomes are fenced. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [foundation contract](foundation-contract.md#what-a-foundation-adapter-must-supply) |
+| K2 qualifies the in-memory clauses of FC-1 to FC-18 assigned to it in the plan. The existing milestones keep each remaining clause and its explicit acceptance evidence. The full adapter qualification still includes all clauses and the contract workloads. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [K2 evidence](../program-goals/clean-slate-kernel.md#k2-foundation-contract-evidence) |
+| Release 1 requires cooperative cancellation for bounded in-process progress. A recovered job must physically exit before it yields poison trial isolation to eligible termination. A yield leaves the job logically pending without recording a process death. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [job workers](job-workers.md#what-is-built) |
+
+## Owner decision on broadcast ordering (22 November)
+
+Each wait receives broadcasts in the order their match pages commit. Two overlapping broadcasts can reach
+different waits in different orders. A publication receipt acknowledges acceptance. Direct messages retain
+FIFO from one sender to one target. [Owner decision on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7080391053)
+
+## Owner decisions on recovery ordering (23 November)
+
+A finite Park deadline makes expiry eligible. The first resolution to open in a fenced commit owns the Park. Recovery may open after the deadline and recalls the outstanding expiry in that same commit.
+
+A job restarted at Open becomes eligible after recovery completes. The D-2(a) case follows its completion, reuse of the same job key at a higher generation, and recovery from a later Park. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091685100)
+
+## Owner decisions on the release 1 activities and labels (25 November)
+
+The four palette intrinsics besides Set Variable run on the kernel: Set Output, Set Correlation Id, Set Instance Name and Finish. A model sets its own labels through `ITurn.SetLabel`; the workflow actor gives a model two of the header's four, and keeps the state version in its type data only. Backwards compatibility is not a concern before GA. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153124235)
+
+## Owner decisions on definitions on the kernel (25 November)
+
+A kernel host replaces `IWorkflowActivationCoordinator` with a kernel coordinator that maps the compiled executable to a Native workflow and serves it. Designer expressions, JavaScript and Liquid, run as one host-evaluated binding kind through the portable expression evaluator. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153650829); [Designer definitions on the kernel](definitions-on-the-kernel.md)
 
 ## Process
 

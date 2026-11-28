@@ -25,6 +25,16 @@ the unpinned `:latest` commands here are not that recorded run.
 > Studio NuGet/npm releases remain manual. There are no `4` / `4.0` / `4.0.0` release tags
 > yet; to pin a version, use a preview or commit tag.
 
+> **Studio flavors.** `elsaworkflows/elsa-studio` runs the Studio Essentials profile, which pairs with `elsaworkflows/elsa-essentials-host`.
+> Against Workbench it shows the screens of the curated modules. The Studio app with every module compiled in publishes as
+> `elsaworkflows/elsa-studio-workbench`, and the bare shell publishes as `elsaworkflows/elsa-studio-foundation`.
+> See [Studio Docker](../studio/docs/docker.md).
+> The three Studio images take their preview numbers from one shared counter, so one commit often carries the same
+> preview number in all three. During rapid merges each image's queue can run at a different pace, and the same preview
+> number can then name different commits in different repositories. A manual publish whose number sits between the
+> images' highest numbers has the same effect: the images already at or above it refuse it, the others publish it. Pair
+> images by their `sha-<commit>` tag.
+
 > **Development posture.** The `docker run` examples below set `ASPNETCORE_ENVIRONMENT=Development`
 > so they can rely on the image's baked-in `shells.json` demo defaults. The canonical published-image
 > stack ([`docker-compose.images.yml`](../docker/compose/docker-compose.images.yml)) runs
@@ -82,6 +92,8 @@ docker run -d --name elsa-workbench \
   -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__2=http://localhost:14000 \
   -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
   -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__SqlitePath=/app/data/elsa-workbench-actors.db \
+  -e "ConnectionStrings__Elsa=Data Source=/app/data/elsa.db" \
   -v elsa-workbench-packages:/app/packages \
   -v elsa-data:/app/data \
   elsaworkflows/elsa-workbench:latest
@@ -114,12 +126,10 @@ The non-obvious settings:
   entries, matching `docker-compose.images.yml`.
 - `elsa-workbench-packages:/app/packages` is the Nuplane directory feed: drop `.nupkg`
   activity/extension packages into that volume to load them.
-- `Elsa__DataProtection__EntityFrameworkCore__*` and `elsa-data:/app/data` keep the Data Protection key ring, which
-  protects the sign-in cookie and the antiforgery tokens, in a SQLite file on the `elsa-data` volume. The keys survive a
-  restart and a recreate of `elsa-workbench` for as long as that volume exists; the rest of its data stays in the
-  container. A recreate still signs you out here: the users live in the container too, so a recreated container seeds
-  them again and an earlier session no longer matches a user. Only a stack whose identity store is on a persistent
-  database, such as the PostgreSQL [reference stack](docker.md), keeps everyone signed in across a recreate. See
+- `elsa-data:/app/data` holds the Actor database, the shared Elsa platform database, and the
+  Data Protection key ring. Retaining the volume across container recreation keeps Actor state and
+  its publication material together. Separately configured SQLite files outside `/app/data`,
+  including diagnostics and Studio dashboards, are container-local. See
   [Data Protection keys](docker.md#data-protection-keys).
 - The `elsa-data` volume needs an image built after #2191, which creates `/app/data` owned by the image's `$APP_UID`
   (1654). With an older image the volume starts out owned by root and the container cannot write to it: pull the newer
@@ -140,7 +150,7 @@ no `"Enabled": false` convention:
       "default": {
         "Name": "default",
         "Features": {
-          "ActivitiesHttp": {},                          // enabled, default config
+          "KernelActivitiesHttp": {},                          // enabled, default config
           "FastEndpoints": { "EndpointRoutePrefix": "" } // enabled, with settings
           // "WeatherForecastSample" absent => disabled
         }
@@ -225,7 +235,7 @@ definitions folder and enable the `JsonWorkflowReconciliation` feature:
 Each `*.json` file is an array of workflow-version envelopes; **pin `definitionId`** in every envelope
 (an omitted id is regenerated per restart, duplicating the definition) and use resolved `actver_*`
 activity ids — authoring rules and the id recipe live in the
-[feature README](../Essentials/src/Workflows/Design/Reconciliation/Json/README.md).
+[feature README](../essentials/src/Workflows/Design/Reconciliation/Json/README.md).
 
 > **Readiness:** deployment completes during shell activation. Wait on **`GET /health/ready`**
 > (200 = every definition imported and, with `PublishOnReconcile`, published). `GET /` returns 200

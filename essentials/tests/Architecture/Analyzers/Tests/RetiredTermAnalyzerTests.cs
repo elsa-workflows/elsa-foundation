@@ -138,7 +138,7 @@ public sealed class RetiredTermAnalyzerTests
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}node_modules{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Select(path => AnalyzerConfig.Parse(File.ReadAllText(path), path))
             .ToImmutableArray());
-        var probes = new[] { "essentials/src", "apps" }
+        var probes = new[] { "essentials/src", "server/apps" }
             .Select(root => Path.Join(repoRoot, root))
             .Concat(Directory.EnumerateDirectories(Path.Join(repoRoot, "extensions"))
                 .Select(extension => Path.Join(extension, "src"))

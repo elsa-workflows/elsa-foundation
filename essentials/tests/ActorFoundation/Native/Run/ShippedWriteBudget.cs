@@ -1,0 +1,463 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
+using Kernel.Foundation.Sqlite;
+using Kernel.Runtime.Hosting;
+using Kernel.WorkflowActor;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
+using SQLitePCL;
+using Contract = Kernel.Foundation.Contracts;
+using PublicActor = Kernel.WorkflowActor.WorkflowActor;
+
+namespace Kernel.Native.Run;
+
+// Exercise the shipped one-way edge and owned Worker, with passes called explicitly to exclude idle polling and heartbeats.
+internal static class ShippedWriteBudget
+{
+    private const int Lines = 10;
+    private const int Samples = 3;
+    private const string Node = "shipped-write-budget";
+
+    internal sealed record ForEachScenario(string Mode, int Count)
+    {
+        internal const int ItemBytes = 50;
+        internal string[] Items() => Enumerable.Range(0, Count)
+            .Select(index => index.ToString("D4", CultureInfo.InvariantCulture).PadRight(ItemBytes, 'x')).ToArray();
+    }
+
+    internal static async Task<int> RunAsync(bool postgres, bool inBatch, bool requireBudget, ForEachScenario? forEach = null)
+    {
+        using var timeout = new CancellationTokenSource(forEach is null ? TimeSpan.FromSeconds(90) : TimeSpan.FromMinutes(8));
+        var token = timeout.Token;
+        var directory = postgres ? null : Directory.CreateTempSubdirectory(Node);
+        var path = directory is null ? null : Path.Combine(directory.FullName, "kernel.db");
+        var counter = new Counting();
+        using var sqlite = path is null ? null : new SqliteMeter(path);
+        var options = new DbContextOptionsBuilder<KernelDb>();
+        var observerOptions = new DbContextOptionsBuilder<KernelDb>();
+        Wire? wire = null;
+        if (postgres)
+        {
+            var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
+                throw new InvalidOperationException("Set KERNEL_PREVIEW_POSTGRES to a fresh disposable PostgreSQL database.");
+            var settings = new NpgsqlConnectionStringBuilder(connection);
+            if (settings.Host != "127.0.0.1" || settings.SslMode != SslMode.Disable ||
+                settings.GssEncryptionMode == GssEncryptionMode.Require)
+                throw new ArgumentException("The wire meter requires a disposable plaintext loopback PostgreSQL connection.");
+            observerOptions.UseNpgsql(connection);
+            wire = Wire.Start("postgres", $"Host=127.0.0.1;Port={settings.Port}");
+            settings.Port = wire.LocalPort;
+            settings.GssEncryptionMode = GssEncryptionMode.Disable;
+            settings.Pooling = true;
+            options.UseNpgsql(settings.ConnectionString).AddInterceptors(counter, counter.Transactions);
+        }
+        else
+        {
+            var connection = new SqliteConnectionStringBuilder
+            {
+                DataSource = path!, ForeignKeys = true, Mode = SqliteOpenMode.ReadWrite, DefaultTimeout = 2
+            }.ConnectionString;
+            options.UseSqlite(connection);
+            observerOptions.UseSqlite(connection);
+        }
+
+        var definitions = new SqliteAdmissionDefinitions();
+        IDisposable? sqliteFile = null;
+        DbContextOptions<KernelDb>? hostedOptions = null;
+        KernelDb At(DbContextOptions<KernelDb> settings) => postgres ? PostgresPreviewHosting.CreateShippedContext(settings, PublicActor.ActorType, protectsStarts: false)
+            : KernelDb.ForSqliteRootRuntime(settings, definitions);
+        KernelDb Open() => At(hostedOptions ?? options.Options);
+        KernelDb Observe() => At(observerOptions.Options);
+        var observer = new EfStore(Observe, postgres);
+        var previousOutput = WriteLine.Out;
+        try
+        {
+            Contract.IIngress ingress;
+            Contract.IActorReads reads;
+            IReplyTransport transport;
+            RootAdmissionPressure? pressure;
+            if (postgres)
+            {
+                await using var empty = Observe();
+                Check(await PostgresFixtureDatabase.IsEmptyAsync(empty, token), "The PostgreSQL database must be empty.");
+                await observer.CreateAsync(1);
+                await observer.InstallPreviewRootSchemaAsync(token);
+                var requests = PostgresPreviewHosting.CreateRequests(Open, Node, PublicActor.ActorType);
+                var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, PublicActor.ActorType, requests, cancellationToken: token);
+                (ingress, reads, transport, pressure) = (foundation, foundation, requests, requests.Pressure);
+            }
+            else
+            {
+                await SqliteEmbeddedHosting.InstallShippedAsync(path!, PublicActor.ActorType, protectsStarts: false, token);
+                (sqliteFile, hostedOptions, definitions) = HoldSqliteFile(path!, token);
+                await using (var hosted = Open()) sqlite!.Path = hosted.Database.GetDbConnection().DataSource;
+                var requests = SqliteEmbeddedHosting.CreateRequests(path!, Node, PublicActor.ActorType);
+                ingress = await SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(path!, PublicActor.ActorType, requests, token);
+                (reads, transport, pressure) = (SqliteEmbeddedHosting.CreateFoundationReads(path!), requests, requests.Pressure);
+            }
+            await using (var db = Observe())
+            {
+                var markers = await db.StoreVersions.AsNoTracking()
+                    .Where(row => row.Id == StoreVersionEntity.MarkerId || row.Id == StoreDefinitionsRevision.MarkerId)
+                    .OrderBy(row => row.Id).ToListAsync(token);
+                Check(markers is [var family, _] && family.Format == StoreFormat.RootShipped && db.UsesRootDueBacklog,
+                    "The fixture must run the shipped profile with its pressure capability.");
+                Console.WriteLine($"{(postgres ? "PostgreSQL" : "SQLite")} shipped {markers[0].Format}, definitions " +
+                    $"{markers[1].StoreSchema}/{markers[1].MessageProtocol}/{markers[1].JournalCodec}, owned SQL, " +
+                    $"{(inBatch ? "in-batch" : "checked")} fence, one warm partition.");
+            }
+
+            var store = new EfStore(Open, postgres, inBatch) { CommitSql = CommitSql.Owned, AdmissionPressure = pressure };
+            Check(store.OwnedCommit && store.FenceInBatch == inBatch && pressure is not null, "The measurement must use the requested owned writer.");
+            await store.EnableRootSelfSendsAsync(token);
+            await store.EnableRootJobsAsync(token);
+            await store.EnableRootChildrenAsync(token);
+            var items = forEach?.Items();
+            var definition = items is null ? Reference.WriteLines(Lines) : Wf.Workflow("for-each-budget",
+                Wf.ForEach("each", Binding.Literal(new JsonArray([.. items.Select(item => (JsonNode?)item)])),
+                    Wf.Sequence("body", Wf.Delay("wait", 2), Wf.WriteLine("write-item", Binding.Expr("currentItem")))));
+            var sequenced = reads is Contract.IActorSequencedJournalReads { SupportsSequencedJournal: true } reader ? reader : null;
+            var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition),
+                new() { SelfSends = true, UseStructuralJournal = sequenced is not null });
+            Console.WriteLine($"The selected writer records {(sequenced is null ? "legacy" : "structural")} Native journal entries.");
+            var actor = new PublicActor([model]);
+            var roots = postgres ? store.BindWorkerNode(actor.Withholds) : store.BindSqliteWorkerNode(actor.Withholds);
+            var adapter = new ActorAdapter(store.WorkerHeaders(roots), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
+                rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
+            var lease = TimeSpan.FromMinutes(forEach is null ? 2 : 10);
+            // The cadence clock stays fixed across the three warm samples. Database time, ownership and all SQL remain real.
+            var sampledAt = Environment.TickCount64;
+            await using var worker = new Worker(Node, 0, store, adapter, new WorkerOptions
+            {
+                Partitions = 1, Lease = lease, Backlog = pressure!.Backlog, Transport = transport,
+                Monotonic = forEach is null ? () => sampledAt : () => Environment.TickCount64
+            });
+            var host = new DurableHost([worker]);
+            await host.HeartbeatAsync(lease, token);
+            Check(await host.ActivateAsync(0, token) == worker, "The benchmark owner could not take the partition.");
+            await store.PrimeAdmissionPressureAsync(token);
+
+            var scope = EmbeddedTenant.Bind(Node);
+            var runtime = new WorkflowRuntime(ingress, reads);
+            if (forEach is not null)
+            {
+                await MeasureForEachAsync(forEach, items!);
+                return 0;
+            }
+            var spec = NativeExecutionModel.Start(definition.Id, Modes.Balanced);
+            Console.WriteLine("Window starts before public admission and ends after the worker pass that lands revision 1. " +
+                "Installation, take, pressure priming, warm-up and verification reads are outside the window.");
+            var measured = new List<long>(Samples);
+            for (var sample = 0; sample <= Samples; sample++)
+            {
+                using var stdout = new StringWriter();
+                WriteLine.Out = stdout;
+                if (sample > 0)
+                {
+                    counter.Trace = [];
+                    sqlite?.Begin();
+                }
+                var baseline = Read();
+                var accepted = await runtime.StartAsync(scope, $"budget-{sample}", spec, cancellationToken: token);
+                Check(accepted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "The public start was not admitted.");
+                var reference = accepted.Actor!.Value;
+                var admitted = Read();
+                await worker.WokenAsync(null, token);
+                var written = admitted;
+                List<Measurement> passCosts = [];
+                EfStore.RootImage? landed = null;
+                var passes = 0;
+                while (landed is null && passes < 8)
+                {
+                    if (sample > 0) sqlite?.Resume();
+                    await worker.RunAsync(token);
+                    passes++;
+                    var afterPass = Read();
+                    passCosts.Add(afterPass - written);
+                    written = afterPass;
+                    sqlite?.End();
+                    landed = await observer.ReadFirstRootAsync(scope.Tenant, reference.Id, token);
+                }
+
+                Check(landed is { Revision: 1, TerminalRevision: 1, TerminalAt: > 0, Status: InstanceStatus.Finished },
+                    "The measured passes must land the terminal checkpoint at revision 1.");
+                Check(stdout.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+                    .SequenceEqual(Enumerable.Range(1, Lines).Select(line => $"line {line}")),
+                    "The ten Native WriteLines must execute once in authored order.");
+                var journal = await reads.TailAsync(scope, reference, cancellationToken: token);
+                var completions = sequenced is null
+                    ? journal.Items.Select(PostgresPublicPreview.Decode)
+                        .Where(entry => entry.StartsWith("c:", StringComparison.Ordinal) && entry.Contains(":write-", StringComparison.Ordinal))
+                        .Select(entry => entry[(entry.LastIndexOf(':') + 1)..])
+                    : journal.Items.Select(StructuralWriteLineCompletion).OfType<string>();
+                Check(journal.Items.All(entry => entry.Revision == 1) &&
+                    completions.SequenceEqual(Enumerable.Range(1, Lines).Select(line => $"write-{line}")) &&
+                    journal.Items.Select(PostgresPublicPreview.Decode).Count(entry => entry == "end") == 1,
+                    "The public journal must expose ten ordered completions and one end in revision 1.");
+                if (sequenced is not null)
+                {
+                    var page = await sequenced.ReadSequencedJournalAsync(scope, reference, 0, null, 64, token);
+                    Check(page is not null && page.UpperSequence == journal.Items.Count && page.Items.Count == journal.Items.Count &&
+                        page.Items.Zip(journal.Items).All(pair => pair.First.Revision == pair.Second.Revision &&
+                            pair.First.CommitOrdinal == pair.Second.CommitOrdinal && pair.First.Entry == pair.Second.Entry),
+                        "The sequenced reader must retain every entry of the measured structural commit in order.");
+                }
+                if (sample == 0) continue;
+
+                var total = written - baseline;
+                var admission = admitted - baseline;
+                var owner = written - admitted;
+                if (postgres) Check(total.Connections == 0 && total.Groups > 0, "The sample must use warmed PostgreSQL connections.");
+                else Check(total.Begun > 0 && total.Ended == total.Begun && total.Statements >= total.ProviderCalls,
+                    $"The SQLite trace must cover both raw and EF transactions and the measured provider calls. {total}");
+                Check(total.ProviderCalls > 0 && total.BudgetUnits(postgres) > 0, "The sample must contain measured database work.");
+                measured.Add(total.BudgetUnits(postgres));
+                Report($"sample {sample} admission", admission, postgres);
+                Report($"sample {sample} worker poll and fenced commit ({passes} passes)", owner, postgres);
+                Report($"sample {sample} total", total, postgres);
+                if (sample == 1)
+                {
+                    for (var pass = 0; pass < passCosts.Count; pass++)
+                        Report($"  worker pass {pass + 1}", passCosts[pass], postgres);
+                    var sql = postgres ? counter.Trace! : sqlite!.Trace;
+                    for (var i = 0; i < total.Commands; i++)
+                        Console.WriteLine($"  {(i < admission.Commands ? "edge" : "owner")} {sql[i]}");
+                }
+            }
+            var count = measured.Max();
+            var budget = postgres ? 16 : 32;
+            Console.WriteLine($"{Samples} warm samples: maximum {count} {(postgres ? "wire round trips" : "SQLite provider calls")}, " +
+                $"budget {budget} ({(count <= budget ? "met" : "missed")}).");
+            return requireBudget && count > budget ? 1 : 0;
+
+            async Task MeasureForEachAsync(ForEachScenario scenario, string[] expected)
+            {
+                using var stdout = new StringWriter();
+                WriteLine.Out = stdout;
+                await using var db = Observe();
+                // This connection is independent of the measured owner and sees only committed rows.
+                await db.Database.OpenConnectionAsync(token);
+                Console.WriteLine($"ForEach {scenario.Mode}, {scenario.Count} distinct {ForEachScenario.ItemBytes}-byte ASCII items, " +
+                    "one authored Delay and one WriteLine per item.");
+                var elapsed = Stopwatch.StartNew();
+                sqlite?.Begin();
+                var baseline = Read();
+                var accepted = await runtime.StartAsync(scope, "for-each", NativeExecutionModel.Start(definition.Id, scenario.Mode),
+                    cancellationToken: token);
+                Check(accepted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "The ForEach start was not admitted.");
+                var reference = accepted.Actor!.Value;
+                var admitted = Read();
+                await worker.WokenAsync(null, token);
+                var passes = 0;
+                var observed = 0L;
+                var active = new List<long>();
+                var timerIds = new HashSet<string>(StringComparer.Ordinal);
+                CheckpointBytes? checkpoint = null;
+                while (checkpoint?.Status != InstanceStatus.Finished)
+                {
+                    sqlite?.Resume();
+                    var next = await worker.RunAsync(token);
+                    passes++;
+                    sqlite?.End();
+                    token.ThrowIfCancellationRequested();
+                    Check(next is not null, "The ForEach worker lost the partition.");
+                    checkpoint = await db.Database.SqlQuery<CheckpointBytes>($"""
+                        SELECT i."Id", i."Revision", i."Status", i."FoundationTerminalRevision" AS "TerminalRevision",
+                            CAST(octet_length(i."State") AS bigint) + coalesce(octet_length(i."FoundationStateWire"), 0)
+                                + coalesce(octet_length(i."FoundationHeader"), 0) + coalesce(octet_length(i."Jobs"), 0) AS "Bytes",
+                            (SELECT max(m."Id") FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
+                                AND m."InboxScope" = {EfStore.RootSelfScope} AND m."Due" > 0 AND NOT m."Done") AS "Timer"
+                        FROM "Instances" i
+                        WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {reference.Id} AND NOT i."Retired"
+                        """).SingleOrDefaultAsync(token);
+                    if (checkpoint is null || checkpoint.Revision == observed)
+                    {
+                        if (next is { Ticks: > 0 }) await Task.Delay(next.Value, token);
+                        continue;
+                    }
+                    Check(checkpoint.Revision == ++observed, "The observer must see every committed ForEach checkpoint.");
+                    Check(checkpoint.Status is InstanceStatus.Running or InstanceStatus.Finished,
+                        $"ForEach stopped at revision {observed} with status {checkpoint.Status}.");
+                    if (checkpoint.Status == InstanceStatus.Running) active.Add(checkpoint.Bytes);
+                    if (checkpoint.Timer is { } timer) timerIds.Add(timer);
+                }
+
+                Check(checkpoint is { Timer: null } && checkpoint.TerminalRevision == observed && timerIds.Count == expected.Length,
+                    "Each item must land a distinct timer and the final checkpoint must complete without a pending timer.");
+                Check(stdout.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).SequenceEqual(expected),
+                    "The ForEach body must complete once per item in authored order.");
+                var written = Read();
+                var total = written - baseline;
+                if (postgres) Check(total.Connections == 0 && total.Groups > 0, "ForEach must use warmed PostgreSQL connections.");
+                else Check(total.Begun > 0 && total.Ended == total.Begun && total.Statements >= total.ProviderCalls,
+                    "The ForEach SQLite trace must cover the measured provider calls and all transaction boundaries.");
+                var journal = await db.Database.SqlQueryRaw<long>(
+                    """SELECT CAST(coalesce(sum(octet_length("Entries")), 0) AS bigint) AS "Value" FROM "Journal" WHERE "Instance" = {0}""",
+                    checkpoint.Id).SingleAsync(token);
+                var first = active[0];
+                active.Sort();
+                Console.WriteLine($"CHECKPOINTS revisions={observed} active={active.Count} timers={timerIds.Count} passes={passes} elapsed_ms={elapsed.ElapsedMilliseconds}");
+                Console.WriteLine($"BYTES active_first={first} active_median={active[active.Count / 2]} active_max={active[^1]} " +
+                    $"active_total={active.Sum()} terminal={checkpoint.Bytes} journal={journal}");
+                Report("ForEach admission", admitted - baseline, postgres);
+                Report("ForEach owner passes", written - admitted, postgres);
+                Report("ForEach total", total, postgres);
+            }
+        }
+        finally
+        {
+            WriteLine.Out = previousOutput;
+            sqliteFile?.Dispose();
+            if (directory is not null)
+            {
+                using var observerDb = Observe();
+                SqliteConnection.ClearPool((SqliteConnection)observerDb.Database.GetDbConnection());
+                directory.Delete(recursive: true);
+            }
+        }
+
+        Measurement Read() => wire is null ? sqlite!.Read() : new(wire.Trips, wire.ProtocolRequests, wire.Connections,
+            counter.Commands, counter.Transactions.Begun, counter.Transactions.Ended, 0, 0);
+    }
+
+    private sealed record CheckpointBytes(string Id, long Revision, InstanceStatus Status, long? TerminalRevision, long Bytes, string? Timer);
+
+    private static string? StructuralWriteLineCompletion(Contract.JournalEntry entry)
+    {
+        const int completed = 3;
+        using var document = JsonDocument.Parse(entry.Entry);
+        var value = document.RootElement;
+        return value.ValueKind == JsonValueKind.Object && value.TryGetProperty("NativeStructure", out var version) &&
+            version.GetInt32() == 1 && value.GetProperty("Kind").GetInt32() == completed &&
+            value.GetProperty("Node").GetString() is { } node && node.StartsWith("write-", StringComparison.Ordinal)
+            ? node
+            : null;
+    }
+
+    // The stepped owner shares the shipped host's file lease, options and verified definitions with its public edge.
+    private static (IDisposable Lease, DbContextOptions<KernelDb> Options, SqliteAdmissionDefinitions Definitions) HoldSqliteFile(string path,
+        CancellationToken token)
+    {
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
+        var lease = (IDisposable)typeof(SqliteEmbeddedHosting).GetMethod("AcquireFile", BindingFlags.Static | BindingFlags.NonPublic)!
+            .Invoke(null, [path, null, token])!;
+        var type = lease.GetType();
+        try
+        {
+            return (lease, (DbContextOptions<KernelDb>)type.GetProperty("Options", instance)!.GetValue(lease)!,
+                (SqliteAdmissionDefinitions)type.GetProperty("AdmissionDefinitions", instance)!.GetValue(lease)!);
+        }
+        catch
+        {
+            lease.Dispose();
+            throw;
+        }
+    }
+
+    private static void Check(bool satisfied, string message)
+    {
+        if (!satisfied) throw new InvalidOperationException(message);
+    }
+
+    private static void Report(string phase, Measurement m, bool postgres) => Console.WriteLine(postgres
+        ? $"{phase}: {m.Trips} wire round trips, {m.Groups} Sync/Query groups, {m.Connections} connections, {m.Commands} EF commands, {m.Ended} transaction completions."
+        : $"{phase}: {m.ProviderCalls} provider calls ({m.Commands} commands, {m.Begun} begins, {m.Ended} ends), " +
+          $"{m.Statements} top-level SQLite statements, {m.Internal} internal trace records.");
+
+    private readonly record struct Measurement(long Trips, long Groups, long Connections, int Commands, int Begun, int Ended,
+        int Statements, int Internal)
+    {
+        internal int ProviderCalls => Commands + Begun + Ended;
+        internal long BudgetUnits(bool postgres) => postgres ? Trips : ProviderCalls;
+
+        public static Measurement operator -(Measurement after, Measurement before) => new(after.Trips - before.Trips,
+            after.Groups - before.Groups, after.Connections - before.Connections, after.Commands - before.Commands,
+            after.Begun - before.Begun, after.Ended - before.Ended, after.Statements - before.Statements, after.Internal - before.Internal);
+    }
+
+    private sealed class SqliteMeter : IDisposable
+    {
+        internal string Path { private get; set; }
+        private readonly IDisposable _all;
+        private IDisposable? _events;
+        private bool _enabled;
+        private int _begun, _ended, _statements, _internal;
+        internal List<string> Trace { get; } = [];
+
+        internal SqliteMeter(string path)
+        {
+            Path = path;
+            _all = DiagnosticListener.AllListeners.Subscribe(new Observer<DiagnosticListener>(listener =>
+            {
+                if (listener.Name == "Microsoft.EntityFrameworkCore")
+                    _events = listener.Subscribe(new Observer<KeyValuePair<string, object?>>(Observe));
+            }));
+        }
+
+        internal void Begin()
+        {
+            (_begun, _ended, _statements, _internal) = (0, 0, 0, 0);
+            Trace.Clear();
+            _enabled = true;
+        }
+
+        internal void End() => _enabled = false;
+        internal void Resume() => _enabled = true;
+
+        internal Measurement Read() => new(0, 0, 0, Trace.Count, _begun, _ended, _statements, _internal);
+
+        private void Observe(KeyValuePair<string, object?> entry)
+        {
+            if (entry.Key == RelationalEventId.ConnectionClosing.Name && entry.Value is ConnectionEventData closing &&
+                closing.Connection is SqliteConnection releasing && releasing.DataSource == Path && releasing.Handle is { } handle)
+                raw.sqlite3_trace(handle, (strdelegate_trace)null!, this);
+            if (!_enabled) return;
+            if (entry.Key == RelationalEventId.ConnectionOpened.Name && entry.Value is ConnectionEndEventData opened &&
+                opened.Connection is SqliteConnection connection && connection.DataSource == Path)
+                raw.sqlite3_trace(connection.Handle!, (strdelegate_trace)Statement, this);
+            if (entry.Key == RelationalEventId.CommandExecuting.Name && entry.Value is CommandEventData command &&
+                command.Command.Connection is SqliteConnection sql && sql.DataSource == Path)
+            {
+                var text = command.Command.CommandText;
+                Trace.Add(text[..Math.Min(text.Length, 160)].ReplaceLineEndings(" "));
+            }
+        }
+
+        // The public SQLite start begins and commits directly on SqliteConnection, so EF transaction events alone miss it.
+        // Count top-level executed statements separately. Trigger and virtual table callbacks are reported as internal records.
+        private void Statement(object _, string sql)
+        {
+            if (!_enabled) return;
+            var text = sql.AsSpan().TrimStart();
+            if (text.StartsWith("--", StringComparison.Ordinal))
+            {
+                _internal++;
+                return;
+            }
+            _statements++;
+            if (text.StartsWith("BEGIN", StringComparison.OrdinalIgnoreCase)) _begun++;
+            if (text.StartsWith("COMMIT", StringComparison.OrdinalIgnoreCase) ||
+                text.StartsWith("ROLLBACK", StringComparison.OrdinalIgnoreCase)) _ended++;
+        }
+
+        public void Dispose()
+        {
+            _all.Dispose();
+            _events?.Dispose();
+        }
+    }
+
+    private sealed class Observer<T>(Action<T> receive) : IObserver<T>
+    {
+        public void OnNext(T value) => receive(value);
+        public void OnCompleted() { }
+        public void OnError(Exception error) { }
+    }
+}

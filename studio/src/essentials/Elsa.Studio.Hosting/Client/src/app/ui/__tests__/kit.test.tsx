@@ -1,0 +1,560 @@
+import React, { useState } from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { StudioButton } from "../forms/Button";
+import { StudioIconButton } from "@elsa-workflows/studio-ui";
+import { StudioDialogFooter } from "../layout/DialogFooter";
+import { StudioCollectionFooter } from "../layout/Page";
+import { StudioSearchInput } from "../forms/SearchInput";
+import { StudioActionNotice } from "../feedback/ActionNotice";
+import { StatusChip } from "../feedback/StatusChip";
+import { StatusPill } from "../feedback/StatusPill";
+import { StudioListContainer, StudioListRow } from "../list/ListRow";
+import { StudioVersionHistory } from "../layout/VersionHistory";
+import { StudioSparkline, StudioStatTile } from "../stat/StatTile";
+import { CopyableIdentifier } from "../identity/CopyableIdentifier";
+
+let cleanup: (() => void) | null = null;
+
+afterEach(() => {
+  cleanup?.();
+  cleanup = null;
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+function mount(node: React.ReactElement): HTMLElement {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  flushSync(() => root.render(node));
+  cleanup = () => {
+    flushSync(() => root.unmount());
+    host.remove();
+  };
+  return host;
+}
+
+describe("StudioButton", () => {
+  it("emits the shared class plus variant/size data-attributes and defaults to type=button", () => {
+    const host = mount(<StudioButton variant="primary" size="sm">Save</StudioButton>);
+    const button = host.querySelector("button")!;
+    expect(button.classList.contains("studio-button")).toBe(true);
+    expect(button.getAttribute("data-variant")).toBe("primary");
+    expect(button.getAttribute("data-size")).toBe("sm");
+    expect(button.getAttribute("type")).toBe("button");
+  });
+
+  it("merges a caller className and forwards native props", () => {
+    let clicks = 0;
+    const host = mount(<StudioButton className="danger" onClick={() => clicks++}>Delete</StudioButton>);
+    const button = host.querySelector("button")!;
+    expect(button.className).toBe("studio-button danger");
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(clicks).toBe(1);
+  });
+
+  it("renders danger without a workaround class and respects native disabled behavior", () => {
+    const onDelete = vi.fn();
+    const host = mount(<>
+      <StudioButton variant="danger" onClick={onDelete}>Delete draft</StudioButton>
+      <StudioButton variant="danger" onClick={onDelete} disabled>Delete published version</StudioButton>
+    </>);
+    const [enabled, disabled] = host.querySelectorAll("button");
+
+    expect(enabled.dataset.variant).toBe("danger");
+    expect(enabled.className).toBe("studio-button");
+    expect(disabled.dataset.variant).toBe("danger");
+    expect(disabled.disabled).toBe(true);
+    disabled.click();
+    expect(onDelete).not.toHaveBeenCalled();
+    enabled.click();
+    expect(onDelete).toHaveBeenCalledOnce();
+  });
+});
+
+describe("StudioCollectionFooter", () => {
+  it("keeps caller content and native footer props without opting into any controls", () => {
+    const host = mount(<StudioCollectionFooter className="custom-footer" aria-label="Results">
+      12 loaded workflows <a href="/workflows">Browse workflows</a>
+    </StudioCollectionFooter>);
+    const footer = host.querySelector('footer[aria-label="Results"]')!;
+
+    expect(footer.classList.contains("custom-footer")).toBe(true);
+    expect(footer.firstChild?.textContent).toBe("12 loaded workflows ");
+    expect(footer.querySelector(":scope > a")?.textContent).toBe("Browse workflows");
+    expect(footer.querySelector("select, button")).toBeNull();
+  });
+
+  it("labels the controlled page-size select and reports a numeric selection", () => {
+    const onChange = vi.fn();
+    function Collection() {
+      const [value, setValue] = useState(25);
+      return <StudioCollectionFooter summary={<span aria-live="polite">Showing {value} workflows</span>}
+        pageSize={{ label: "Rows per page", value, sizes: [10, 25, 50], onChange: size => { onChange(size); setValue(size); } }}>
+        <button type="button">Next</button>
+      </StudioCollectionFooter>;
+    }
+    const host = mount(<Collection />);
+    const select = host.querySelector("select")!;
+    const summary = host.querySelector('footer > [aria-live="polite"]');
+
+    expect(summary?.textContent).toBe("Showing 25 workflows");
+    expect(select.labels?.[0]?.textContent).toBe("Rows per page");
+    expect(select.closest(".studio-form-field")).not.toBeNull();
+    expect(Array.from(select.options, option => option.value)).toEqual(["10", "25", "50"]);
+    expect(select.value).toBe("25");
+    expect(Array.from(host.querySelectorAll("footer :is(select, button)"))).toEqual([select, host.querySelector("button")]);
+
+    flushSync(() => {
+      select.value = "50";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onChange.mock.calls).toEqual([[50]]);
+    expect(select.value).toBe("50");
+    expect(summary?.textContent).toBe("Showing 50 workflows");
+  });
+
+  it("loads only when ready, then disables the action while busy or exhausted", () => {
+    const load = vi.fn();
+    function Collection() {
+      const [busy, setBusy] = useState(false);
+      const [hasMore, setHasMore] = useState(true);
+      return <form>
+        <StudioCollectionFooter loadMore={{ hasMore, busy, onLoadMore: () => { load(); setBusy(true); } }} />
+        <button type="button" onClick={() => { setBusy(false); setHasMore(false); }}>Finish loading</button>
+      </form>;
+    }
+    const host = mount(<Collection />);
+    const button = host.querySelector<HTMLButtonElement>("footer button")!;
+
+    expect(button.type).toBe("button");
+    expect(button.textContent).toBe("Load more");
+    expect(button.disabled).toBe(false);
+    flushSync(() => button.click());
+    expect(button.textContent).toBe("Loading…");
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.disabled).toBe(true);
+    button.click();
+
+    flushSync(() => host.querySelector<HTMLButtonElement>("form > button")!.click());
+    expect(button.textContent).toBe("Load more");
+    expect(button.getAttribute("aria-busy")).toBeNull();
+    expect(button.disabled).toBe(true);
+    button.click();
+    expect(load).toHaveBeenCalledOnce();
+  });
+});
+
+describe("StudioIconButton", () => {
+  it("requires an aria-label and renders only the icon with a matching default title", () => {
+    expectTypeOf<React.ComponentProps<typeof StudioIconButton>>().toMatchTypeOf<{ "aria-label": string }>();
+    const host = mount(<StudioIconButton aria-label="Edit feed"><svg aria-hidden="true" /></StudioIconButton>);
+    const button = host.querySelector("button")!;
+
+    expect(button.className).toBe("studio-icon-button");
+    expect(button.dataset.variant).toBe("default");
+    expect(button.type).toBe("button");
+    expect(button.getAttribute("aria-label")).toBe("Edit feed");
+    expect(button.title).toBe("Edit feed");
+    expect(button.childNodes).toHaveLength(1);
+    expect(button.firstElementChild?.localName).toBe("svg");
+  });
+
+  it("forwards a ref and native props while supporting an explicit title and danger variant", () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const onClick = vi.fn();
+    const host = mount(<>
+      <StudioIconButton ref={ref} aria-label="Delete feed" title="Delete from Studio" variant="danger"
+        type="submit" form="feed-form" className="row-action" onClick={onClick}><svg /></StudioIconButton>
+      <StudioIconButton aria-label="Delete another feed" onClick={onClick} disabled><svg /></StudioIconButton>
+    </>);
+    const [enabled, disabled] = host.querySelectorAll("button");
+
+    expect(ref.current).toBe(enabled);
+    expect(enabled.className).toBe("studio-icon-button row-action");
+    expect(enabled.dataset.variant).toBe("danger");
+    expect(enabled.title).toBe("Delete from Studio");
+    expect(enabled.type).toBe("submit");
+    expect(enabled.getAttribute("form")).toBe("feed-form");
+    expect(disabled.disabled).toBe(true);
+    disabled.click();
+    expect(onClick).not.toHaveBeenCalled();
+    enabled.click();
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+});
+
+describe("CopyableIdentifier", () => {
+  it("exposes the exact identifier and copies it with a local accessible confirmation", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const value = "activity-node-0123456789abcdef";
+    const host = mount(<CopyableIdentifier label="Node ID" value={value} />);
+
+    const renderedValue = host.querySelector<HTMLElement>(".studio-copyable-identifier__value")!;
+    expect(renderedValue.title).toBe(value);
+    expect(renderedValue.getAttribute("aria-label")).toBe(`Node ID: ${value}`);
+
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent).toBe("Node ID copied"));
+  });
+
+  it("supports an externally rendered label without changing copy semantics", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const value = "definition-version-0123456789abcdef";
+    const host = mount(<CopyableIdentifier label="Definition version ID" value={value} labelPlacement="external" />);
+
+    expect(host.querySelector(".studio-copyable-identifier")?.getAttribute("data-label-placement")).toBe("external");
+    expect(host.querySelector(".studio-copyable-identifier__label")).toBeNull();
+    expect(host.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition version ID: ${value}`);
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent).toBe("Definition version ID copied"));
+  });
+
+  it("announces a local failure when clipboard and fallback copying are unavailable", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: vi.fn().mockReturnValue(false)
+    });
+    const host = mount(<CopyableIdentifier label="Activity Type" value="Elsa.WriteLine" />);
+
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent)
+        .toBe("Could not copy Activity Type"));
+    Reflect.deleteProperty(document, "execCommand");
+  });
+
+  it("middle-truncates constrained identifiers while retaining and copying the exact value", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(70);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      font: "",
+      measureText: (text: string) => ({ width: text.length * 8 })
+    } as CanvasRenderingContext2D);
+    const value = "activity-node-0123456789abcdef";
+    const host = mount(<CopyableIdentifier label="Node ID" value={value} />);
+    const renderedValue = host.querySelector<HTMLElement>(".studio-copyable-identifier__value")!;
+
+    await vi.waitFor(() => expect(renderedValue.textContent).toContain("…"));
+    expect(renderedValue.textContent).not.toBe(value);
+    expect(renderedValue.title).toBe(value);
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
+  });
+
+  it("resets the copied glyph after its visible confirmation interval", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    const host = mount(<CopyableIdentifier label="Node ID" value="node-1" />);
+    const button = host.querySelector<HTMLButtonElement>("button")!;
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent).toBe("Node ID copied"));
+    await vi.waitFor(
+      () => expect(host.querySelector("[role='status']")?.textContent).toBe(""),
+      { timeout: 2_000 });
+  });
+});
+
+describe("StudioListRow", () => {
+  it("renders a plain listitem with title/subtitle and no activation affordance", () => {
+    const host = mount(
+      <StudioListContainer>
+        <StudioListRow title="Workflows" subtitle="Full-stack" />
+      </StudioListContainer>
+    );
+    const list = host.querySelector(".studio-list")!;
+    expect(list.getAttribute("role")).toBe("list");
+    const row = host.querySelector(".studio-list-row")!;
+    expect(row.getAttribute("role")).toBe("listitem");
+    expect(row.hasAttribute("tabindex")).toBe(false);
+    expect(row.getAttribute("aria-selected")).toBeNull();
+    expect(host.querySelector(".studio-list-row-title")?.textContent).toBe("Workflows");
+    expect(host.querySelector(".studio-list-row-subtitle")?.textContent).toBe("Full-stack");
+  });
+
+  it("becomes selectable when onSelect is provided and activates via click and keyboard", () => {
+    let activations = 0;
+    const host = mount(
+      <StudioListRow title="Dashboard" selected onSelect={() => activations++} trailing={<span>x</span>} />
+    );
+    const row = host.querySelector(".studio-list-row")!;
+    expect(row.classList.contains("selected")).toBe(true);
+    expect(row.getAttribute("tabindex")).toBe("0");
+    expect(row.getAttribute("aria-selected")).toBe("true");
+    expect(host.querySelector(".studio-list-row-trailing")?.textContent).toBe("x");
+
+    row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    row.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    expect(activations).toBe(3);
+  });
+});
+
+describe("StudioVersionHistory", () => {
+  it("renders selectable versions, their status, and a separate selected detail panel", () => {
+    const onSelect = vi.fn();
+    const host = mount(
+      <StudioVersionHistory
+        label="Workflow versions"
+        items={[
+          { id: "v1", ariaLabel: "Select version 1.0.0", title: "Version 1.0.0", subtitle: "June 1", status: <StatusChip>Saved</StatusChip> },
+          { id: "v2", ariaLabel: "Select version 2.0.0", title: "Version 2.0.0", subtitle: "June 2", status: <StatusChip tone="success">Latest</StatusChip> }
+        ]}
+        selectedId="v2"
+        onSelect={onSelect}
+        detail={<p>Immutable snapshot details</p>}
+      />
+    );
+
+    const selected = host.querySelector<HTMLButtonElement>('button[aria-label="Select version 2.0.0"]')!;
+    expect(selected.getAttribute("aria-pressed")).toBe("true");
+    expect(selected.textContent).toContain("Latest");
+    expect(host.querySelector('[aria-label="Workflow versions preview"]')?.textContent).toContain("Immutable snapshot details");
+    host.querySelector<HTMLButtonElement>('button[aria-label="Select version 1.0.0"]')!.click();
+    expect(onSelect).toHaveBeenCalledWith("v1");
+  });
+
+  it("shows an empty message and a selection hint without inventing a selected version", () => {
+    const host = mount(<StudioVersionHistory label="Form versions" items={[]} selectedId={null} onSelect={vi.fn()} emptyState="No published form versions." />);
+
+    expect(host.textContent).toContain("No published form versions.");
+    expect(host.textContent).toContain("Choose a version to inspect.");
+    expect(host.querySelector("button")).toBeNull();
+  });
+});
+
+describe("StudioDialogFooter", () => {
+  it("renders Cancel as the default StudioButton and the confirm action as primary", () => {
+    const host = mount(
+      <StudioDialogFooter cancelLabel="Cancel" confirmLabel="Create" />
+    );
+    const buttons = [...host.querySelectorAll("button")];
+    expect(buttons.map(button => [button.textContent, button.getAttribute("data-variant"), button.getAttribute("type")])).toEqual([
+      ["Cancel", "default", "button"],
+      ["Create", "primary", "submit"]
+    ]);
+    expect(host.querySelector("footer")?.classList.contains("studio-dialog-footer")).toBe(true);
+  });
+
+  it("omits the confirm action when no label is provided and keeps leading/extra in order", () => {
+    const host = mount(
+      <StudioDialogFooter
+        leading={<StudioButton>Reload</StudioButton>}
+        extra={<StudioButton>Delete</StudioButton>}
+        cancelLabel="Close"
+      />
+    );
+    expect([...host.querySelectorAll("button")].map(button => button.textContent)).toEqual(["Reload", "Delete", "Close"]);
+    expect(host.querySelector("button[data-variant='primary']")).toBeNull();
+  });
+});
+
+describe("StudioSearchInput", () => {
+  it("renders a searchbox input with a decorative icon", () => {
+    const host = mount(<StudioSearchInput placeholder="Filter" />);
+    const input = host.querySelector("input")!;
+    expect(input.getAttribute("type")).toBe("search");
+    expect(input.getAttribute("role")).toBe("searchbox");
+    expect(input.getAttribute("placeholder")).toBe("Filter");
+    expect(host.querySelector(".studio-search-icon")?.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("StatusPill", () => {
+  it("renders an outlined pill carrying the tone", () => {
+    const host = mount(<StatusPill tone="warning">Beta</StatusPill>);
+    const pill = host.querySelector(".studio-status-pill")!;
+    expect(pill.getAttribute("data-tone")).toBe("warning");
+    expect(pill.textContent).toBe("Beta");
+  });
+
+  it("defaults to the neutral tone", () => {
+    const host = mount(<StatusPill>Tag</StatusPill>);
+    expect(host.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("neutral");
+  });
+});
+
+describe("StudioActionNotice", () => {
+  it("announces its message politely and provides accessible action and dismiss controls", () => {
+    const host = mount(
+      <StudioActionNotice message="Entry removed" actionLabel="Undo" onAction={() => undefined} />
+    );
+    const notice = host.querySelector<HTMLElement>(".studio-action-notice")!;
+
+    expect(notice.getAttribute("role")).toBe("status");
+    expect(notice.getAttribute("aria-live")).toBe("polite");
+    expect(notice.getAttribute("aria-atomic")).toBe("true");
+    expect(notice.textContent).toContain("Entry removed");
+    expect(host.querySelector<HTMLButtonElement>(".studio-action-notice-action")?.textContent).toBe("Undo");
+    expect(host.querySelector<HTMLButtonElement>(".studio-action-notice-dismiss")?.getAttribute("aria-label"))
+      .toBe("Dismiss notification");
+  });
+
+  it("runs its optional action and dismisses the notice", () => {
+    const onAction = vi.fn();
+    const onDismiss = vi.fn();
+    const host = mount(
+      <StudioActionNotice message="Entry removed" actionLabel="Undo" onAction={onAction} onDismiss={onDismiss} />
+    );
+
+    flushSync(() => {
+      host.querySelector<HTMLButtonElement>(".studio-action-notice-action")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("supports explicit dismissal", () => {
+    const onDismiss = vi.fn();
+    const host = mount(<StudioActionNotice message="JSON copied" onDismiss={onDismiss} />);
+
+    flushSync(() => {
+      host.querySelector<HTMLButtonElement>(".studio-action-notice-dismiss")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("dismisses automatically after its configured lifetime", () => {
+    vi.useFakeTimers();
+    const onDismiss = vi.fn();
+    const host = mount(<StudioActionNotice durationMs={1_000} message="Entry removed" onDismiss={onDismiss} />);
+
+    flushSync(() => vi.advanceTimersByTime(999));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("uses an eight-second lifetime by default", () => {
+    vi.useFakeTimers();
+    const host = mount(<StudioActionNotice message="Entry removed" />);
+
+    flushSync(() => vi.advanceTimersByTime(7_999));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("pauses its remaining lifetime while hovered", () => {
+    vi.useFakeTimers();
+    const host = mount(<StudioActionNotice durationMs={1_000} message="Entry removed" />);
+    const notice = host.querySelector<HTMLElement>(".studio-action-notice")!;
+
+    flushSync(() => vi.advanceTimersByTime(400));
+    flushSync(() => notice.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+    flushSync(() => vi.advanceTimersByTime(1_000));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+
+    flushSync(() => notice.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })));
+    flushSync(() => vi.advanceTimersByTime(599));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("pauses its remaining lifetime while focus is inside", () => {
+    vi.useFakeTimers();
+    const host = mount(
+      <StudioActionNotice durationMs={1_000} message="Entry removed" actionLabel="Undo" onAction={() => undefined} />
+    );
+    const action = host.querySelector<HTMLButtonElement>(".studio-action-notice-action")!;
+
+    flushSync(() => vi.advanceTimersByTime(250));
+    flushSync(() => action.focus());
+    flushSync(() => vi.advanceTimersByTime(1_000));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+
+    flushSync(() => action.blur());
+    flushSync(() => vi.advanceTimersByTime(749));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("replaces its content and restarts its lifetime when the message changes", () => {
+    vi.useFakeTimers();
+
+    function ReplacementHarness() {
+      const [message, setMessage] = useState("First entry removed");
+      return (
+        <>
+          <button type="button" onClick={() => setMessage("Second entry removed")}>Replace</button>
+          <StudioActionNotice durationMs={1_000} message={message} />
+        </>
+      );
+    }
+
+    const host = mount(<ReplacementHarness />);
+    flushSync(() => vi.advanceTimersByTime(800));
+    flushSync(() => {
+      host.querySelector<HTMLButtonElement>("button")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).not.toContain("First entry removed");
+    expect(host.textContent).toContain("Second entry removed");
+    flushSync(() => vi.advanceTimersByTime(999));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+});
+
+describe("StudioStatTile", () => {
+  it("renders label, value, toned delta and a sparkline when a trend is supplied", () => {
+    const host = mount(
+      <StudioStatTile label="Executions" value="12.4k" delta="+8%" deltaTone="success" trend={[1, 3, 2, 5]} />
+    );
+    expect(host.querySelector(".studio-stat-tile-label")?.textContent).toBe("Executions");
+    expect(host.querySelector(".studio-stat-tile-value")?.textContent).toBe("12.4k");
+    const delta = host.querySelector(".studio-stat-tile-delta")!;
+    expect(delta.getAttribute("data-tone")).toBe("success");
+    expect(delta.textContent).toBe("+8%");
+    expect(host.querySelector(".studio-sparkline path")).not.toBeNull();
+  });
+
+  it("omits the delta and sparkline when not provided", () => {
+    const host = mount(<StudioStatTile label="Faulted" value="0" />);
+    expect(host.querySelector(".studio-stat-tile-delta")).toBeNull();
+    expect(host.querySelector(".studio-sparkline")).toBeNull();
+  });
+});
+
+describe("StudioSparkline", () => {
+  it("draws a multi-segment path stroked with the chart token for >= 2 points", () => {
+    const host = mount(<StudioSparkline points={[0, 5, 2, 8]} />);
+    const path = host.querySelector("path")!;
+    expect(path.getAttribute("stroke")).toBe("var(--chart-1)");
+    // One move + three line commands.
+    expect((path.getAttribute("d")?.match(/L/g) ?? []).length).toBe(3);
+  });
+
+  it("falls back to a flat baseline for fewer than two points", () => {
+    const host = mount(<StudioSparkline points={[7]} width={100} height={20} />);
+    expect(host.querySelector("path")?.getAttribute("d")).toBe("M0 10 L100 10");
+  });
+});

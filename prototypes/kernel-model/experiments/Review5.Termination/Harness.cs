@@ -156,8 +156,9 @@ sealed class Harness
     public InboxKey SeedTicket(string actor, long creation, string key, long generation)
     {
         var id = Derive(actor, key, creation, generation);
-        var ticket = new Message(id.Id, new InstanceRef(actor), Kinds.Job, Json.Write(new { Model = "rt", Key = key, Arguments = (string?)null }), actor,
-            TargetCreation: creation, SenderCreation: creation).WithInboxScope(id.Scope);
+        var ticket = ModeledTicket.Issue(new Message(id.Id, new InstanceRef(actor), Kinds.Job,
+            Json.Write(new { Model = "rt", Key = key, Arguments = (string?)null }), actor,
+            TargetCreation: creation, SenderCreation: creation).WithInboxScope(id.Scope));
         var result = Commit(new InstanceRef(actor).Partition, [new TurnCommit(actor, null, null, [], [], [ticket], [], [], null)], null, "setup ticket");
         if (!result.Landed) throw new InvalidOperationException("setup ticket refused: " + result.Error);
         return id;
@@ -692,8 +693,9 @@ sealed class Harness
         }
         if (page.More && Rules.NextControl)
         {
-            page.Sends.Add(new Message(FormattableString.Invariant($"{origin}#cascade.{ob.NextControl}"), new InstanceRef(ob.Actor), CascadeKind,
-                Json.Write(new { Page = ob.NextControl }), ob.Actor, TargetCreation: ob.Creation, SenderCreation: ob.Creation).WithInboxScope(CascadeScope));
+            page.Sends.Add(ModeledTicket.Issue(new Message(FormattableString.Invariant($"{origin}#cascade.{ob.NextControl}"),
+                new InstanceRef(ob.Actor), CascadeKind, Json.Write(new { Page = ob.NextControl }), ob.Actor,
+                TargetCreation: ob.Creation, SenderCreation: ob.Creation).WithInboxScope(CascadeScope)));
             page = page with { SentControl = true };
         }
         return page;

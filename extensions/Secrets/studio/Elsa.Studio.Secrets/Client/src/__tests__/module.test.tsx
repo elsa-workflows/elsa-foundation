@@ -46,6 +46,7 @@ describe("secrets module", () => {
     const routes = api.featureAreas.list().flatMap(area => area.routes ?? []);
     const key = (id: string, path: string) => routes.find(route => route.id === id)?.workspace?.resourceKey?.(new URL(path, "https://studio.example/"));
     const createKey = key("/security/secrets.create", "/security/secrets/new");
+    expect(createKey).toBeUndefined();
     expect(key("/security/secrets.edit", "/security/secrets/Db%3AConnection/edit")).toBe("secret:db:connection");
     expect(key("/security/secrets.edit", "/security/secrets/db%3Aconnection/edit")).toBe("secret:db:connection");
     for (const name of ["create", "Create", "new"]) expect(key("/security/secrets.edit", `/security/secrets/${name}/edit`)).not.toBe(createKey);
@@ -68,6 +69,7 @@ function stubApi(): ElsaStudioModuleApi {
     routes: createContributionRegistry({ slot: studioSlots.routes }),
     dashboardWidgets,
     homeWidgets: dashboardWidgets,
+    homeSections: createContributionRegistry({ slot: studioSlots.homeSections }),
     diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),

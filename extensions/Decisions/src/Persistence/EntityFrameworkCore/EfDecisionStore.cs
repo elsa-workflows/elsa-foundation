@@ -50,9 +50,10 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
             if (existing is null && command.ExpectedRevision is not null) throw Conflict();
             if (existing is null && await Query(db, operation.TenantId, "asset").CountAsync(token) >= MaximumInventory) throw Invalid();
             var current = existing is null ? null : Read<DecisionAsset>(existing);
+            if (current?.DeletedAt is not null) throw Conflict();
             var now = DateTimeOffset.UtcNow; var revision = Revision();
             var asset = new DecisionAsset(id, command.Name.Trim(), command.Description, revision, command.Xml, command.SourceHash,
-                command.IsSensitive, current?.PublishedVersionId, current?.CreatedAt ?? now, now);
+                command.IsSensitive, current?.PublishedVersionId, current?.CreatedAt ?? now, now, current?.DeletedAt);
             Upsert(db, existing, operation.TenantId, "asset", id, id, revision, asset);
             return new(id, revision);
         }, ct);
@@ -63,6 +64,7 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
             var row = await Required(db, operation.TenantId, "asset", command.AssetId, null, token);
             if (row.Revision != command.ExpectedRevision) throw Conflict();
             var asset = Read<DecisionAsset>(row);
+            if (asset.DeletedAt is not null) throw Conflict();
             if (asset.SourceHash != command.Artifact.SourceHash) throw Conflict();
             var versions = await Query(db, operation.TenantId, "version").Where(x => x.OwnerId == command.AssetId).ToArrayAsync(token);
             if (versions.Length >= MaximumInventory) throw Invalid();
@@ -75,10 +77,65 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
             return new(id, revision);
         }, ct);
 
+    public ValueTask<DecisionWriteConfirmation> UnpublishAsync(DecisionOperation operation, DecisionAssetLifecycle command, CancellationToken ct = default) =>
+        Mutate(operation, "asset.unpublish", command, async (db, token) =>
+        {
+            var row = await Required(db, operation.TenantId, "asset", command.AssetId, null, token);
+            if (row.Revision != command.ExpectedRevision) throw Conflict();
+            var asset = Read<DecisionAsset>(row);
+            if (asset.DeletedAt is not null || asset.PublishedVersionId is null) throw Conflict();
+            var revision = Revision();
+            Upsert(db, row, operation.TenantId, "asset", asset.Id, asset.Id, revision,
+                asset with { Revision = revision, PublishedVersionId = null, UpdatedAt = DateTimeOffset.UtcNow });
+            return new(asset.Id, revision);
+        }, ct);
+
+    public ValueTask<DecisionWriteConfirmation> RecycleAsync(DecisionOperation operation, DecisionAssetLifecycle command, CancellationToken ct = default) =>
+        Mutate(operation, "asset.recycle", command, async (db, token) =>
+        {
+            var row = await Required(db, operation.TenantId, "asset", command.AssetId, null, token);
+            if (row.Revision != command.ExpectedRevision) throw Conflict();
+            var asset = Read<DecisionAsset>(row);
+            if (asset.DeletedAt is not null) throw Conflict();
+            var revision = Revision(); var now = DateTimeOffset.UtcNow;
+            Upsert(db, row, operation.TenantId, "asset", asset.Id, asset.Id, revision,
+                asset with { Revision = revision, PublishedVersionId = null, DeletedAt = now, UpdatedAt = now });
+            return new(asset.Id, revision);
+        }, ct);
+
+    public ValueTask<DecisionWriteConfirmation> RestoreAsync(DecisionOperation operation, DecisionAssetLifecycle command, CancellationToken ct = default) =>
+        Mutate(operation, "asset.restore", command, async (db, token) =>
+        {
+            var row = await Required(db, operation.TenantId, "asset", command.AssetId, null, token);
+            if (row.Revision != command.ExpectedRevision) throw Conflict();
+            var asset = Read<DecisionAsset>(row);
+            if (asset.DeletedAt is null) throw Conflict();
+            var revision = Revision(); var now = DateTimeOffset.UtcNow;
+            Upsert(db, row, operation.TenantId, "asset", asset.Id, asset.Id, revision,
+                asset with { Revision = revision, PublishedVersionId = null, DeletedAt = null, UpdatedAt = now });
+            return new(asset.Id, revision);
+        }, ct);
+
+    public ValueTask<DecisionWriteConfirmation> PurgeAsync(DecisionOperation operation, DecisionAssetLifecycle command, CancellationToken ct = default) =>
+        Mutate(operation, "asset.purge", command, async (db, token) =>
+        {
+            var row = await Required(db, operation.TenantId, "asset", command.AssetId, null, token);
+            if (row.Revision != command.ExpectedRevision) throw Conflict();
+            var asset = Read<DecisionAsset>(row);
+            if (asset.DeletedAt is null) throw Conflict();
+            var versions = await Query(db, operation.TenantId, "version").Where(x => x.OwnerId == command.AssetId).ToArrayAsync(token);
+            var cases = await Query(db, operation.TenantId, "case").Where(x => x.OwnerId == command.AssetId).ToArrayAsync(token);
+            var runs = await Query(db, operation.TenantId, "run").Where(x => x.OwnerId == command.AssetId).ToArrayAsync(token);
+            foreach (var child in versions.Concat(cases).Concat(runs)) EfSchemaVersion.EnsureCurrent(DecisionsEfModule.Chain, child.SchemaVersion);
+            db.RemoveRange(versions); db.RemoveRange(cases); db.RemoveRange(runs); db.Remove(row);
+            return new(asset.Id, asset.Revision);
+        }, ct);
+
     public ValueTask<DecisionWriteConfirmation> SaveCaseAsync(DecisionOperation operation, SaveDecisionCase command, CancellationToken ct = default) =>
         Mutate(operation, "case.save", command, async (db, token) =>
         {
-            _ = await Required(db, operation.TenantId, "asset", command.AssetId, null, token);
+            var asset = Read<DecisionAsset>(await Required(db, operation.TenantId, "asset", command.AssetId, null, token));
+            if (asset.DeletedAt is not null) throw Conflict();
             Text(command.Name, 2048); Text(command.ExpectedStatus, 64);
             if (command.Inputs.Count > 32 || Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(command.Inputs, Json)) > 256 * 1024 ||
                 command.ExpectedResult.ValueKind == JsonValueKind.Undefined || command.ExpectedResult.GetRawText().Length > 256 * 1024) throw Invalid();
@@ -105,7 +162,8 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
         Mutate(operation, "test", new { receipt.AssetId, receipt.RequestFingerprint }, async (db, token) =>
         {
             if (receipt.ActorId != operation.ActorId || receipt.EvaluatedAt > receipt.CompletedAt || receipt.Comparisons.Count > MaximumInventory) throw Invalid();
-            _ = await Required(db, operation.TenantId, "asset", receipt.AssetId, null, token);
+            var asset = Read<DecisionAsset>(await Required(db, operation.TenantId, "asset", receipt.AssetId, null, token));
+            if (asset.DeletedAt is not null) throw Conflict();
             if (await Query(db, operation.TenantId, "run").CountAsync(row => row.OwnerId == receipt.AssetId, token) >= MaximumInventory)
                 throw new DecisionDesignException("limit", "Retained decision test history reached its limit of 1000 runs. Delete a retained run before testing again.");
             Upsert(db, null, operation.TenantId, "run", receipt.Id, receipt.AssetId, "1", receipt);
@@ -212,7 +270,8 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
             DecisionCase item => row.Kind == "case" && item.Id == row.Id && item.AssetId == row.OwnerId && item.Revision == row.Revision,
             DecisionTestReceipt run => row.Kind == "run" && run.Id == row.Id && run.AssetId == row.OwnerId,
             DecisionOperationReceipt operation => row.Kind == "operation" && operation.Fingerprint is { Length: 64 } && operation.Confirmation is not null &&
-                operation.Kind is "save" or "publish" or "case.save" or "case.delete" or "test" or "run.delete",
+                operation.Kind is "save" or "publish" or "asset.unpublish" or "asset.recycle" or "asset.restore" or "asset.purge" or
+                    "case.save" or "case.delete" or "test" or "run.delete",
             _ => false
         };
         if (!consistent) throw new DecisionDesignException("corrupt", "The retained decision content does not match its physical identity.");

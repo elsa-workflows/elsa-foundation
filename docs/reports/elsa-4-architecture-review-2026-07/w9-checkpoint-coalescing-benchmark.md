@@ -68,7 +68,7 @@ checkpoint count reaches the cap an intermediate flush is forced. This bounds tw
 Lowering the cap narrows the crash-replay window and memory footprint at the cost of more durable commits
 (toward Immediate); raising it trades a wider replay window for fewer writes. `50` is a middle default; tune
 per workload. In-segment activity re-execution after a mid-segment crash is expected and documented in
-[`docs/runtime-durable-resumption.md`](../../runtime-durable-resumption.md#coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10).
+[`docs/runtime-durable-resumption.md`](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/docs/runtime-durable-resumption.md#coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10).
 
 ## Correctness evidence
 

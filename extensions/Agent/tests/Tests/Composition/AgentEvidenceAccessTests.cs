@@ -6,7 +6,7 @@ using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -19,10 +19,7 @@ public sealed class AgentEvidenceAccessTests
     [Fact]
     public async Task Structure_and_values_are_granted_separately_and_only_in_the_callers_tenant()
     {
-        var workflows = new InMemoryWorkflowExecutionStateStore();
-        await workflows.SaveAsync(Run("own", "tenant-1"));
-        await workflows.SaveAsync(Run("foreign", "tenant-2"));
-        await workflows.SaveAsync(Run("shared", null));
+        var workflows = new WorkflowReads(Run("own", "tenant-1"), Run("foreign", "tenant-2"), Run("shared", null));
 
         Assert.Equal(new AgentEvidenceGrant(true, true, true),
             await Access(workflows, AgentEvidenceAccess.InspectStructure, AgentEvidenceAccess.InspectValues).AuthorizeAsync("own", default));
@@ -63,9 +60,9 @@ public sealed class AgentEvidenceAccessTests
             WorkflowExecutionStatus.Completed, null, now, now, now, now, null, null, tenant, new Dictionary<string, string>());
     }
 
-    private static AgentEvidenceAccess Access(InMemoryWorkflowExecutionStateStore workflows, params string[] granted) => Access(workflows, granted, trusted: true);
+    private static AgentEvidenceAccess Access(IWorkflowExecutionStateStore workflows, params string[] granted) => Access(workflows, granted, trusted: true);
 
-    private static AgentEvidenceAccess Access(InMemoryWorkflowExecutionStateStore workflows, string[] granted, bool trusted, string? tenant = "tenant-1")
+    private static AgentEvidenceAccess Access(IWorkflowExecutionStateStore workflows, string[] granted, bool trusted, string? tenant = "tenant-1")
     {
         var claims = new List<Claim>();
         if (tenant is not null) claims.Add(new(IdentityClaimTypes.TenantId, tenant));
@@ -73,6 +70,27 @@ public sealed class AgentEvidenceAccessTests
         var context = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test")) };
         var options = Options.Create(new FoundationIdentityOptions { NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "test" } });
         return new(new HttpContextAccessor { HttpContext = context }, new NormalizedPrincipalValidator(options), new Grants(granted), workflows);
+    }
+
+    private sealed class WorkflowReads(params WorkflowExecutionState[] states) : IWorkflowExecutionStateStore
+    {
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(states.SingleOrDefault(state => state.WorkflowExecutionId == workflowExecutionId));
+
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class Grants(string[] granted) : IPermissionAuthorizationService

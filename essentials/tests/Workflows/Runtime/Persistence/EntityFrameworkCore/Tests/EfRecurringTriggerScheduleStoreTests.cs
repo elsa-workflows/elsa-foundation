@@ -318,9 +318,16 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         Assert.Equal(snapshot, services);
     }
 
-    private static IServiceCollection OperationalComposition() => new ServiceCollection()
-        .AddWorkflowRuntime()
-        .AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=:memory:", RecoveryContinuationSigningKey = new string('k', 32) });
+    private static IServiceCollection OperationalComposition()
+    {
+        var services = new ServiceCollection();
+        WorkflowPublicationDefaults.Add(services);
+        new RuntimeArtifactsEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite", ConnectionString = "Data Source=:memory:", RecoveryContinuationSigningKey = new string('k', 32)
+        }.ConfigureServices(services);
+        return services;
+    }
 
     private static RecurringTriggerOccurrenceClaimRequest Claim(DateTimeOffset now, int limit = 10) => new("pump", now, TimeSpan.FromMinutes(1), limit);
 

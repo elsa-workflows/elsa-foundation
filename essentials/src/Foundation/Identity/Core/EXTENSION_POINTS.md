@@ -43,12 +43,12 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 ### `IPermissionContributor`
 
-- **Cross-domain:** `TriggerPermissionContributor` in `Elsa.Workflows.Runtime.Api` contributes the seven standalone trigger management/delivery permissions. `StandaloneTriggersApiFeature` registers it through `AddPermissionContributor`; see the [contribution note](../../../Workflows/Runtime/Api/StandaloneTriggers/README.md#cross-domain-contributions).
+- **Cross-domain:** `TriggerPermissionContributor` in `Elsa.Workflows.Runtime.Api.StandaloneTriggers` contributes the seven standalone trigger management/delivery permissions. `StandaloneTriggersApiFeature` registers it through `AddPermissionContributor`; see the [contribution note](../../../Workflows/Runtime/Api/StandaloneTriggers/README.md#cross-domain-contributions).
 
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
 - **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; keys that are not one concrete `{resource}:{verb}` permission, canonical duplicates, padded keys, and wildcard definitions fail during catalog construction with both ownership sources in the diagnostic. The catalog carries no implications; see [Elsa 3.9 to Elsa 4 permission mapping](../../../../../docs/reference/elsa3-permission-mapping.md) for the matching rules.
-- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.ExtensionBuilder.Api`, optional) — the two host-control features that own the `module-management` / `extension-builder` permissions per ADR 0037 *(cross-domain)*; `HumanReviewPermissionContributor` (`Elsa.Agent.Review.Api`) for `agent-reviews:read` / `agent-reviews:decide` *(cross-domain)*; `DecisionsPermissionContributor` (`Elsa.Decisions.Api`) for the independent Decisions read/manage/publish/evaluate/test/history/source/sensitive-values grants *(cross-domain)*. `DashboardResourcePermissionContributor` (`Elsa.Studio.Dashboard.Api`) contributes saved question/dashboard operation grants *(cross-domain)*; see its [owning catalog](../../../Studio/Dashboard/Api/EXTENSION_POINTS.md). `WorkflowDashboardQueryPermissionExtension` (`Elsa.Workflows.Dashboard.Queries`) contributes the independent source read grant *(cross-domain)*; see its [owning catalog](../../../Workflows/Dashboard/Queries/EXTENSION_POINTS.md).
+- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.ExtensionBuilder.Api`, optional) — the two host-control features that own the `module-management` / `extension-builder` permissions per ADR 0037 *(cross-domain)*; `HumanReviewPermissionContributor` (`Elsa.Agent.Review.Api`) for `agent-reviews:read` / `agent-reviews:decide` *(cross-domain)*; `DecisionsPermissionContributor` (`Elsa.Decisions.Api`) for the independent Decisions read/manage/publish/evaluate/test/history/source/sensitive-values grants *(cross-domain)*. `DashboardResourcePermissionContributor` (`Elsa.Studio.Dashboard.Api`) contributes saved question/dashboard operation grants *(cross-domain)*; see its [owning catalog](../../../../../extensions/Dashboard/src/Api/EXTENSION_POINTS.md). `WorkflowDashboardQueryPermissionExtension` (`Elsa.Workflows.Dashboard.Queries`) contributes the independent source read grant *(cross-domain)*; see its [owning catalog](../../../../../extensions/Dashboard/src/Workflows/Queries/EXTENSION_POINTS.md).
 
 `ProcessingPermissionExtension` (`Acme.Processing`) contributes independent record/create/category/query permissions *(cross-domain)*; see the [module-owned catalog](../../../../../extensions/Examples/src/Acme.Processing/Module/EXTENSION_POINTS.md).
 
@@ -143,12 +143,12 @@ The optional `LoginPageOptions.Renderer` callback is a single presentation repla
 `Elsa.Foundation.Identity.AspNetCoreIdentity` (Layer 3), not a provider-neutral authentication contract.
 Its default is `LoginPage.Render`, configured through `Identity:Login`. `Artwork` selects one of the
 bundled images; `unfolding-map` is the default and unknown-name fallback. A valid `ImageUrl` overrides
-the selection. See the [artwork choices and configuration examples](../../../../../Studio/docs/branding.md#configure-the-actual-credential-page).
+the selection. See the [artwork choices and configuration examples](../../../../../studio/docs/branding.md#configure-the-actual-credential-page).
 Register once with
 `PostConfigure<LoginPageOptions>`; it receives a `LoginPageContext` after return URL sanitization and
 antiforgery issuance. Keeping `FormHtml` retains the standard POST fields. The login endpoint consumes
 the callback; credential/CSRF/return-url validation remains endpoint-owned. No event or contributor is
-registered. See the [branding guide](../../../../../Studio/docs/branding.md#replace-login-presentation).
+registered. See the [branding guide](../../../../../studio/docs/branding.md#replace-login-presentation).
 
 `IPrincipalFactory` projects an already admitted `(tenant, Elsa user ID, optional provider metadata)` from
 stored user, role and membership authority. It does not accept an external principal or provision unknown users.

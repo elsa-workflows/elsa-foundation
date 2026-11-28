@@ -17,7 +17,7 @@ BACKEND_EXTERNAL = (
     "CShells.AspNetCore", "CShells.Nuplane", "Nuplane", "Nuplane.Admin", "Nuplane.Loading",
     "Nuplane.Sources.Directory", "Microsoft.EntityFrameworkCore.Sqlite", "OpenIddict.EntityFrameworkCore",
 )
-STUDIO_EXTERNAL = ("CShells.Nuplane", "Nuplane", "Nuplane.Admin", "Nuplane.Loading", "Nuplane.Sources.Directory")
+STUDIO_EXTERNAL = ("CShells.Nuplane", "Nuplane", "Nuplane.Admin", "Nuplane.Loading")
 BACKEND_SHARED = (
     "Nuplane.Abstractions", "Nuplane.Loading.Abstractions", "CShells.Abstractions",
     "CShells.AspNetCore.Abstractions", "Elsa.Weaver.Core", "Elsa.Foundation.Identity.Core",
@@ -155,13 +155,13 @@ def stage_native_archives(run, name, archives):
     return staged
 
 
-def references(run, products, externals):
+def references(run, products, externals, *, scope):
     values = {}
     for package in products:
         check(package in run.packages, "Missing genuine consumer candidate: " + package)
         values[package] = run.packages[package]["version"]
     for package in externals:
-        values[package] = run.pin(package)
+        values[package] = run.pin(package, scope=scope) if package.startswith("Nuplane") else run.pin(package)
     return "\n".join(f'    <PackageReference Include="{escape(package)}" Version="[{escape(version)}]" />'
                      for package, version in values.items())
 
@@ -342,7 +342,7 @@ def prepare_consumers(run):
         ("studio", "StudioConsumer", STUDIO_PACKAGES, STUDIO_EXTERNAL, STUDIO_SHARED, "__STUDIO_REFERENCES__"),
     ):
         owned_name = name + suffix
-        source = run.materialize(owned_name + "-consumer", relative, {token: references(run, products, externals)})
+        source = run.materialize(owned_name + "-consumer", relative, {token: references(run, products, externals, scope=name)})
         attempt_record["profiles"][name] = {"source": str(source), "status": "preparing"}
         run.save()
         for ancestor in source.parents:

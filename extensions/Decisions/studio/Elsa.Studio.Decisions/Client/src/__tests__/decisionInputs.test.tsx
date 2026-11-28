@@ -176,7 +176,7 @@ describe("Evaluate Decision Inputs editor", () => {
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v1") ? published : { ...asset, publishedVersionId: "v1" });
     const { host } = mount(<DecisionInputsEditor api={api} descriptor={descriptor} syntax="Literal" value={{ amount: { kind: "number", value: "0" } }} context={expressionContext(pin("approval@v1"))} onChange={onChange} />);
     await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).not.toBeNull());
-    click(host.querySelector("summary")!);
+    click(button(host, "Advanced JSON"));
     const json = host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!;
     type(json, '{"amount":{"kind":"number","value":"15000"}}');
     expect(onChange).toHaveBeenLastCalledWith({ amount: { kind: "number", value: "15000" } });
@@ -195,7 +195,7 @@ describe("Evaluate Decision Inputs editor", () => {
     }
     const { host } = mount(<Harness />);
     await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).not.toBeNull());
-    click(host.querySelector("summary")!);
+    click(button(host, "Advanced JSON"));
     const json = host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!;
     type(json, "{}");
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({}));
@@ -339,6 +339,7 @@ describe("Evaluate Decision Inputs editor", () => {
 describe("Evaluate Decision version picker", () => {
   it("explains that an unpublished draft cannot be pinned before Review & publish", async () => {
     const api = stubApi(), onChange = vi.fn(), onValidationChange = vi.fn();
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/decisions") ? { items: [{ ...asset, publishedVersionId: null }] } : path.endsWith("/versions") ? { items: [] } : asset as never);
     const { host, update } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled={false} onChange={onChange} onValidationChange={onValidationChange} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Approval"));
     select(host.querySelector<HTMLSelectElement>('[aria-label="Business decision"]')!, asset.id);
@@ -586,7 +587,7 @@ describe("Evaluate Decision draft validation collection", () => {
 
   it("does not seed a new @latest clause when Advanced JSON is cleared after table growth", async () => {
     const { host, onChange, added } = await mountLatestThenGrow();
-    click(host.querySelector("summary")!);
+    click(button(host, "Advanced JSON"));
     type(host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!, "{}");
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({}));
     expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
@@ -620,7 +621,7 @@ describe("Evaluate Decision draft validation collection", () => {
     window.dispatchEvent(new Event("focus"));
     await vi.waitFor(() => expect(release).toEqual(expect.any(Function)));
     expect(host.textContent).toContain("InvalidValue");
-    expect(host.textContent).not.toContain("Loading input fields");
+    expect(host.querySelector('[role="status"][aria-label="Loading input fields"]')).toBeNull();
     expect(host.querySelector("fieldset")?.disabled).toBe(false);
     expect(document.activeElement).toBe(amount);
     release!();

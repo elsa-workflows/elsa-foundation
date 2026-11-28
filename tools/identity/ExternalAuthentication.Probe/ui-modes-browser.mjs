@@ -13,7 +13,7 @@ const root = process.env.ELSA_EXTERNAL_AUTH_PROBE_ROOT;
 if (!root || readFileSync(join(root, ".elsa-3579-owned-probe"), "utf8") !== "elsa-external-authentication-probe/v1") throw new Error("An owned Studio runner root is required.");
 const settings = JSON.parse(readFileSync(join(root, "probe-settings.json"), "utf8"));
 const buildProvenance = await verifyUiBuild();
-const { chromium, expect: baseExpect } = await import(pathToFileURL(join(repo, "Studio/node_modules/@playwright/test/index.mjs")));
+const { chromium, expect: baseExpect } = await import(pathToFileURL(join(repo, "studio/node_modules/@playwright/test/index.mjs")));
 const expect = baseExpect.configure({ timeout: 30_000 });
 const instance = randomUUID(); const log = openSync(join(root, "host.log"), "w", 0o600);
 const host = spawn(buildProvenance.toolchain.dotnet.launcher.path, [join(repo, "tools/identity/ExternalAuthentication.Probe/bin/Debug/net10.0/ExternalAuthentication.Probe.dll"),
@@ -114,7 +114,7 @@ try {
     }
     await expect(page.getByText("Loading user access…", { exact: true })).toHaveCount(0);
   }
-  await page.addScriptTag({ path: join(repo, "Studio/node_modules/axe-core/axe.min.js") });
+  await page.addScriptTag({ path: join(repo, "studio/node_modules/axe-core/axe.min.js") });
   async function accessibility() {
     return page.evaluate(async () => (await globalThis.axe.run(globalThis.document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations.map(item => ({ id: item.id, impact: item.impact, targets: item.nodes.map(node => node.target) })));
   }

@@ -13,6 +13,11 @@ public interface IRuntimeCheckpointCommitStore
     /// <summary>Qualifies the actual scoped reader used by this atomic history writer, including shared backend/context/state ownership.</summary>
     bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => false;
 
+    /// <summary>Whether this native owner retains a timer capture choice that must be checked before
+    /// unrecorded completion, independently of the proposed checkpoint's capture fields.</summary>
+    ValueTask<bool> RequiresUnrecordedTimerDischargeAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(false);
+
     /// <summary>Whether model state and accepted input share this checkpoint's atomic authority.</summary>
     bool SupportsModelCheckpoint => false;
 

@@ -155,7 +155,7 @@
     compiles with essentials/build/Analyzers, which refuses retired terms in type and namespace names. Which
     terms apply is configured per domain in the root .editorconfig (key elsa_naming.retired_terms); a file no
     section configures is held to nothing. The analyzer lives outside the module roots on purpose: it is build
-    tooling, not a domain or a production project, and every Docker build context that copies Essentials/
+    tooling, not a domain or a production project, and every Docker build context that copies essentials/
     reaches it.
 
     OutputItemType="Analyzer" with ReferenceOutputAssembly="false" hands the analyzer to the compiler
@@ -172,7 +172,7 @@
     <_ElsaProjectDirectoryFromRoot>$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)/'))</_ElsaProjectDirectoryFromRoot>
     <_ElsaProjectDirectoryFromRoot>$(_ElsaProjectDirectoryFromRoot.Replace('\', '/'))</_ElsaProjectDirectoryFromRoot>
     <ElsaIsProductionProject>false</ElsaIsProductionProject>
-    <ElsaIsProductionProject Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_ElsaProjectDirectoryFromRoot)', '^(essentials/src|apps|extensions/[^/]+/src)/'))">true</ElsaIsProductionProject>
+    <ElsaIsProductionProject Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_ElsaProjectDirectoryFromRoot)', '^(essentials/src|server/apps|extensions/[^/]+/src)/'))">true</ElsaIsProductionProject>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(ElsaIsProductionProject)' == 'true'">

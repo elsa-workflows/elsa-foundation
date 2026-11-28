@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\extensions\Http\src\Activities\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />

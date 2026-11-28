@@ -5,7 +5,6 @@ using CShells.Features;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Runtime.Tasks;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -86,29 +85,27 @@ public sealed class ActivityIoTypeRegistrationTests
     }
 
     [Fact]
-    public void RuntimeHandlerNestedTypes_DoNotEnterActivityCatalog()
+    public void NestedNonActivityMetadata_DoesNotEnterActivityCatalog()
     {
-        var handlerTypePrefix = typeof(WorkflowInvokeActivitySchedulerWorkHandler).FullName + "+";
         var models = CreateScanner().Scan(AppContext.BaseDirectory);
 
         Assert.Contains(models, model => model.ActivityTypeKey == typeof(ComplexInputFixtureActivity).FullName);
-        Assert.DoesNotContain(models, model => model.ActivityTypeKey.StartsWith(handlerTypePrefix, StringComparison.Ordinal));
+        Assert.DoesNotContain(models, model => model.ActivityTypeKey == typeof(NonActivityFixtureHost.NestedMetadata).FullName);
     }
 
     [Fact]
-    public async Task RuntimeHandlerNestedTypes_DoNotEnterActivityTypeRegistry()
+    public async Task NestedNonActivityMetadata_DoesNotEnterActivityTypeRegistry()
     {
-        var handlerType = typeof(WorkflowInvokeActivitySchedulerWorkHandler);
-        var handlerTypePrefix = handlerType.FullName + "+";
         var registry = SeedPrimitives(SerializationServices.TypeRegistry());
         await CreateTask(
             registry,
-            baseAssemblies: () => [handlerType.Assembly, typeof(ComplexInputFixtureActivity).Assembly])
+            baseAssemblies: () => [typeof(ComplexInputFixtureActivity).Assembly])
             .ExecuteAsync(CancellationToken.None);
 
         var registeredTypes = registry.ListTypes().ToArray();
         Assert.Contains(typeof(ComplexInputFixtureActivity), registeredTypes);
-        Assert.DoesNotContain(registeredTypes, type => type.FullName?.StartsWith(handlerTypePrefix, StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(typeof(NonActivityFixtureHost.NestedMetadata), registeredTypes);
+        Assert.DoesNotContain(typeof(NonActivityFixtureHost.MetadataPayload), registeredTypes);
     }
 
     [Fact]

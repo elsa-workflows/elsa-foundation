@@ -43,7 +43,7 @@ public sealed class ValueConversionPlanResolver(
             return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.Identity, null, limits, options);
         }
 
-        if (mode is ValueConversionMode.Json or ValueConversionMode.Xml or ValueConversionMode.Profile)
+        if (mode is ValueConversionMode.Json or ValueConversionMode.JsonString or ValueConversionMode.Xml or ValueConversionMode.Profile)
             return ResolveExplicitProfile(sourceType, sourceRepresentation, targetType, mode, profile, limits, options, binding);
 
         if (ValueConversionCompatibility.SameType(sourceType, targetType))
@@ -103,7 +103,9 @@ public sealed class ValueConversionPlanResolver(
         JsonElement? options,
         ValueConversionBindingContext? binding)
     {
-        if (sourceRepresentation != ValueRepresentation.FormattedContent)
+        var jsonStringProfileRequested = mode == ValueConversionMode.JsonString ||
+                                         StringComparer.Ordinal.Equals(profile?.Id, "elsa.json-string");
+        if (!jsonStringProfileRequested && sourceRepresentation != ValueRepresentation.FormattedContent)
             throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, binding,
                 ValueConversionRejectionReason.ExplicitProfileRequiresFormattedContent,
                 "an explicit conversion profile requires a source declared as formatted content; ordinary text and binary values are not format-sniffed.");
@@ -111,6 +113,7 @@ public sealed class ValueConversionPlanResolver(
         var pinnedProfile = mode switch
         {
             ValueConversionMode.Json => new ValueConversionProfileReference("elsa.json", "1"),
+            ValueConversionMode.JsonString => new ValueConversionProfileReference("elsa.json-string", "1"),
             ValueConversionMode.Xml => new ValueConversionProfileReference("elsa.xml", "1"),
             ValueConversionMode.Profile when profile is not null => profile,
             _ => throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, binding,
@@ -127,6 +130,12 @@ public sealed class ValueConversionPlanResolver(
             throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile, binding,
                 ValueConversionRejectionReason.ProfileNotAvailable,
                 "the requested profile id and version are not available to publication.");
+
+        if (StringComparer.Ordinal.Equals(pinnedProfile.Id, "elsa.json-string") &&
+            !ValueConversionCompatibility.IsPlainString(targetType))
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile, binding,
+                ValueConversionRejectionReason.JsonStringTargetRequired,
+                "JSON serialization requires a plain scalar String target.");
 
         if (!definition.Supports(sourceRepresentation, targetType))
             throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile, binding,
@@ -237,6 +246,10 @@ public sealed class BuiltInValueConversionProfileRegistry : IValueConversionProf
                 new ValueConversionProfileReference("elsa.json", "1"),
                 new HashSet<ValueRepresentation> { ValueRepresentation.FormattedContent, ValueRepresentation.StructuredValue },
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "*" }),
+            [("elsa.json-string", "1")] = new(
+                new ValueConversionProfileReference("elsa.json-string", "1"),
+                new HashSet<ValueRepresentation> { ValueRepresentation.TypedValue, ValueRepresentation.StructuredValue },
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "String", "System.String" }),
             [("elsa.xml", "1")] = new(
                 new ValueConversionProfileReference("elsa.xml", "1"),
                 new HashSet<ValueRepresentation> { ValueRepresentation.FormattedContent },
@@ -280,6 +293,7 @@ public enum ValueConversionRejectionReason
     TransientResourceBinding,
     NoneModeContractMismatch,
     JsonTypedTargetRequired,
+    JsonStringTargetRequired,
     ExplicitProfileRequiresFormattedContent,
     NamedProfileReferenceRequired,
     XmlCanonicalAnyUnsupported,

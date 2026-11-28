@@ -7,6 +7,13 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowStartDispatcher
 {
+    /// <summary>Explicitly qualify native child source preservation through awaited actor activation; legacy transports refuse.</summary>
+    bool CanDispatchChildHistorySource(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
+    /// <summary>Qualifies saved-source causal transport against the selected history pair; does not invent a target receipt.</summary>
+    /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException">Selected provider qualification failed; preserves kind, cause and unavailable classification.</exception>
+    bool CanPreserveHistoryCausation(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
     /// <summary>Qualify the actual source/material/execution services for saved stimulus starts; legacy dispatchers refuse.</summary>
     bool CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => false;
@@ -41,4 +48,40 @@ public interface IWorkflowStartDispatcher
         WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>A host's dispatcher for direct authoring Test Runs in an exact runtime test scope.</summary>
+public interface IWorkflowDirectTestRunDispatcher : IWorkflowStartDispatcher
+{
+    /// <summary>Keyed trigger discovery for private Test Runs. The ordinary publication extractor stays separate.</summary>
+    const string TriggerBindingKey = "workflow-test-run";
+
+    /// <summary>Whether this host can admit the exact scoped trigger driver.</summary>
+    bool SupportsTrigger(string driverId);
+
+    /// <summary>Observes the isolated root selected by durable Test Run scope and source evidence.</summary>
+    /// <returns>The observed state, or null when the scope, source or actor do not agree.</returns>
+    ValueTask<WorkflowDirectTestRunObservation?> ObserveAsync(WorkflowTestScopeRecord scope, WorkflowExecutableSourceReference source,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Requests cancellation of the exact isolated actor after its authoring scope closes.</summary>
+    ValueTask RequestStopAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken = default);
+
+    /// <summary>Observes whether the exact isolated test actor is terminal.</summary>
+    ValueTask<bool> IsStoppedAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The durable evidence for a scoped Test Run's isolated root.</summary>
+public enum WorkflowDirectTestRunObservation
+{
+    Prepared,
+    Pending,
+    Disarmed,
+    Started,
+    Ended,
+    Retired,
+    CompletedWithoutRecord,
+    Unavailable,
+    Refused,
+    RateLimited
 }

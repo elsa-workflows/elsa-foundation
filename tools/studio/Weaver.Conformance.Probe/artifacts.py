@@ -114,7 +114,7 @@ class ConformanceRun:
 
     def pin(self, package, *, scope=None):
         """Read the owning central graph; an unscoped lookup must agree across graphs."""
-        sources = {"backend": REPO / "Directory.Packages.props", "studio": REPO / "Studio/Directory.Packages.props"}
+        sources = {"backend": REPO / "Directory.Packages.props", "studio": REPO / "studio/Directory.Packages.props"}
         check(scope is None or scope in sources, "Unknown central pin scope: " + str(scope))
         values = []
         for path in ([sources[scope]] if scope is not None else sources.values()):
@@ -150,11 +150,11 @@ class ConformanceRun:
         producer.mkdir()
         self.run("archive", ["git", "archive", "--format=tar", "--output=" + str(self.root / "source.tar"), self.source], REPO)
         self.run("extract", ["tar", "-xf", str(self.root / "source.tar"), "-C", str(producer)], REPO)
-        self.run("frontend-install", ["pnpm", "install", "--frozen-lockfile"], producer / "Studio")
-        self.run("frontend-build", ["pnpm", "build"], producer / "Studio")
-        self.run("sdk-build", ["pnpm", "--filter", "@elsa-workflows/studio-sdk", "build:lib"], producer / "Studio")
-        sdk = producer / "Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk"
-        self.run("sdk-manifest", ["node", "scripts/prepare-npm-package.mjs", str(sdk), self.version], producer / "Studio")
+        self.run("frontend-install", ["pnpm", "install", "--frozen-lockfile"], producer / "studio")
+        self.run("frontend-build", ["pnpm", "build"], producer / "studio")
+        self.run("sdk-build", ["pnpm", "--filter", "@elsa-workflows/studio-sdk", "build:lib"], producer / "studio")
+        sdk = producer / "studio/src/essentials/Elsa.Studio.Hosting/StudioSdk"
+        self.run("sdk-manifest", ["node", "scripts/prepare-npm-package.mjs", str(sdk), self.version], producer / "studio")
         npm_feed = self.root / "npm-artifacts"
         npm_feed.mkdir()
         self.run("sdk-pack", ["pnpm", "pack", "--pack-destination", str(npm_feed)], sdk)

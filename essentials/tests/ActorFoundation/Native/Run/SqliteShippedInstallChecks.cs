@@ -1,0 +1,651 @@
+using Elsa.ActorFoundation.TestSupport;
+using Kernel.Durable;
+using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
+using Kernel.Foundation.Sqlite;
+using Kernel.Runtime;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+
+namespace Kernel.Native.Run;
+
+internal static class SqliteShippedInstallChecks
+{
+    private const int SqliteError = 1;
+    private const int CheckConstraint = 275;
+    private const int ForeignKeyConstraint = 787;
+    private const int TriggerConstraint = 1811;
+    private const int DataTypeConstraint = 3091;
+    private const string IncreasingJournalRevisions = "Sequenced journal requires increasing revisions";
+
+    internal static async Task<int> RunAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var token = deadline.Token;
+        var folder = Directory.CreateTempSubdirectory("sqlite-shipped-install");
+        var path = Path.Combine(folder.FullName, "kernel.db");
+        DbContextOptions<KernelDb> Options(bool foreignKeys = true) =>
+            new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
+            { DataSource = path, ForeignKeys = foreignKeys, Pooling = false }.ToString()).Options;
+        KernelDb New(bool foreignKeys = true) => KernelDb.ForSqliteRootShipped(Options(foreignKeys), publicEventHost: new("workflow", false));
+
+        try
+        {
+            await RefusedAsync<ArgumentException>(() => SqliteEmbeddedHosting.InstallShippedAsync(path, "", false, token),
+                "the public SQLite install refuses an empty root actor type");
+            await RefusedAsync<ArgumentException>(() => SqliteEmbeddedHosting.InstallShippedAsync(path, "actor\0type", false, token),
+                "the public SQLite install refuses a malformed root actor type");
+            Require(!File.Exists(path), "invalid root actor types leave the SQLite path untouched");
+
+            await using var db = New();
+            await EfStore.InstallSqliteShippedAsync(db, 2, token);
+            var initialKey = await IssuerKeyAsync();
+            await EfStore.InstallSqliteShippedAsync(db, 2, token);
+            var reinstalledKey = await IssuerKeyAsync();
+            Require(initialKey.SequenceEqual(reinstalledKey) && await db.Partitions.CountAsync(token) == 2,
+                "a clean SQLite shipped install and its reinstall keep one issuer and the requested partitions");
+
+            const string invalidTenant = "tenant\0invalid";
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "FoundationRootBirths" ("Reference", "Tenant", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
+                VALUES ('tenant-test', {invalidTenant}, 'tenant-test', 0, 1, 'creator', 'fingerprint')
+                """, token), "SQLite refuses an embedded NUL in a tenant name", CheckConstraint);
+            await CheckGuardsAsync(db, token);
+            var staged = new EfStore(() => New(), postgres: false);
+            var ordinary = new EfStore(() => new KernelDb(Options()), postgres: false);
+            (string Name, Func<EfStore, Task> Run)[] operations =
+            [
+                ("generic install", store => store.CreateAsync(2)),
+                ("take", store => store.TakeAsync(0, "owner", TimeSpan.FromSeconds(10), token).AsTask()),
+                ("heartbeat", store => store.HeartbeatAsync("owner", TimeSpan.FromSeconds(10), token).AsTask()),
+                ("fence", store => store.FenceAsync([new(0, 0, 0, 1)], token).AsTask()),
+                ("release", store => store.ReleaseAsync([new(0, 0, 0)], token).AsTask()),
+                ("single poll", store => store.PollAsync(0, 1, TimeSpan.Zero, 1, token).AsTask()),
+                ("set poll", store => store.PollAsync([new(0, 1, 0)], TimeSpan.Zero, 1, token).AsTask()),
+                ("ordinary send", store => store.AddAsync(new("ordinary", InstanceRef.In(0, "root"), "advance"), token).AsTask()),
+                ("event publish", store => store.PublishAsync(new("topic", "event", null, 10), token).AsTask()),
+                ("subscription", store => store.SubscribeAsync(new("topic", "root", "wait"), token).AsTask())
+            ];
+            foreach (var (name, run) in operations)
+            {
+                await RefusedAsync<NotSupportedException>(() => run(staged), $"the SQLite install profile refuses {name}");
+                await RefusedAsync<StoreFormatException>(() => run(ordinary), $"the ordinary SQLite profile refuses {name} on the shipped file");
+            }
+            await using (var wrongProvider = PostgresPreviewHosting.CreateShippedContext(Options()))
+                await RefusedAsync<NotSupportedException>(() => Task.FromResult(wrongProvider.Model),
+                    "the PostgreSQL shipped context refuses SQLite at model build");
+
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE "KernelStoreVersions" SET "MessageProtocol" = 'wrong-revision'
+                """, token), "SQLite requires integer version fields", DataTypeConstraint);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE "FoundationRootIssuer" SET "Key" = 'abcdefghijklmnopqrstuvwxyzabcdef'
+                """, token), "SQLite requires a BLOB issuer key", DataTypeConstraint);
+            var versions = db.StoreVersions.Where(row => row.Id == StoreVersionEntity.MarkerId);
+
+            var verified = new SqliteAdmissionDefinitions();
+            Task VerifyOperationalFormatAsync() => EfStore.RequireSqliteRootAdmissionAsync(db, verified, token);
+            await VerifyOperationalFormatAsync();
+            await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, StoreFormat.RootShipped.MessageProtocol - 1), token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses the previous shipped protocol");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check still reads the live protocol marker");
+            var tenant = ContractScopes.Bind("retention-compatibility");
+            var policy = new EfStore(() => KernelDb.ForSqliteRootRuntime(Options(), verified), postgres: false);
+            await RefusedAsync<StoreFormatException>(() => policy.ReadRootRetentionPolicyAsync(tenant, "workflow", token),
+                "the SQLite retention policy reader refuses the previous shipped protocol");
+            await RefusedAsync<StoreFormatException>(() => policy.TryApplyRootRetentionPolicyAsync(tenant, "workflow", 0, new(), 0, confirmation: null, token),
+                "the SQLite retention policy activation refuses the previous shipped protocol");
+            await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, StoreFormat.RootShipped.MessageProtocol), token);
+            var marker = StoreDefinitionsRevision.Seed(db)!;
+            await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(
+                row => row.SetProperty(x => x.MessageProtocol, marker.MessageProtocol - 1), token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses the previous install-only definitions revision");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check still reads the live definitions revision");
+            await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(
+                row => row.SetProperty(x => x.MessageProtocol, marker.MessageProtocol + 1), token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses an unsupported definitions revision");
+            await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(
+                row => row.SetProperty(x => x.StoreSchema, marker.StoreSchema + 1)
+                    .SetProperty(x => x.MessageProtocol, marker.MessageProtocol), token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses a definitions marker for a different engine");
+            await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteDeleteAsync(token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses an absent definitions marker");
+            db.StoreVersions.Add(marker);
+            await db.SaveChangesAsync(token);
+
+            await using (var uncheckedForeignKeys = New(foreignKeys: false))
+                await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(uncheckedForeignKeys, 2, token),
+                    "SQLite refuses a connection with foreign keys disabled");
+
+            await db.Database.OpenConnectionAsync(token);
+            await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode = OFF", token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses installation without a durable journal");
+            await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode = DELETE", token);
+            await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = ON", token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses installation with CHECK constraints disabled");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check refuses disabled CHECK constraints");
+            await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = OFF", token);
+            await db.Database.ExecuteSqlRawAsync("""CREATE TEMP TABLE "Instances" ("Id" TEXT)""", token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses temporary objects that can shadow the main schema");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check still refuses temporary objects");
+            await db.Database.ExecuteSqlRawAsync("""DROP TABLE temp."Instances" """, token);
+            await db.Database.ExecuteSqlRawAsync("""ATTACH DATABASE ':memory:' AS unexpected""", token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses an attached database");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check still refuses an attachment");
+            await db.Database.ExecuteSqlRawAsync("DETACH DATABASE unexpected", token);
+            await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_physical_retirement", token);
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TRIGGER kernel_physical_retirement BEFORE UPDATE ON Instances BEGIN SELECT 1; END
+                """, token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses a trigger whose name is intact and whose body changed");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "a SQLite schema change forces the warm operational check to read the full catalog");
+            return 0;
+
+            Task<byte[]> IssuerKeyAsync() => db.Database.SqlQueryRaw<byte[]>("""
+                SELECT "Key" AS "Value" FROM "FoundationRootIssuer" WHERE "Singleton" = 1
+                """).SingleAsync(token);
+        }
+        finally { folder.Delete(recursive: true); }
+    }
+
+    internal static async Task CheckGuardsAsync(KernelDb db, CancellationToken token)
+    {
+        await CheckStopLookupPlanAsync();
+        await SeedAsync("direct", InstanceStatus.Running, qualified: false);
+        await SeedAsync("atomic", InstanceStatus.Running);
+        await SeedAsync("parked", InstanceStatus.Faulted);
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Retired" = 1 WHERE "Id" = 'direct'
+            """, token), "a direct retirement refuses a running instance");
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "NextJobGeneration" = 0 WHERE "Id" = 'direct'
+            """, token), "the job generation trigger refuses a rewind");
+
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Retired" = 2 WHERE "Id" = 'direct'
+            """, token), "SQLite keeps the retirement flag in the Boolean domain", CheckConstraint);
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "NextJobGeneration" = 'wrong-type' WHERE "Id" = 'direct'
+            """, token), "SQLite keeps job generations in the integer domain", DataTypeConstraint);
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "FoundationParkClearing" = 'operation' WHERE "Id" = 'direct'
+            """, token), "the Park clearing columns require the paired count and a parked root", CheckConstraint);
+
+        foreach (var id in new[] { "atomic", "parked" })
+        {
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Retired" = 1, "Status" = {(int)InstanceStatus.Cancelled}, "Revision" = 2,
+                    "FoundationWriteRevision" = 2 WHERE "Id" = {id}
+                """, token), "an atomic retirement requires its terminal mark");
+            if (id == "parked")
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ('key', 'parked', 'wait', 0)
+                    """, token);
+                await RefusedAsync<SqliteException>(() => RetireAsync(id),
+                    "a marked parked retirement refuses a checkpoint with an outstanding subscription");
+                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Subscriptions" WHERE "Instance" = 'parked'""", token);
+            }
+            await RetireAsync(id);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Retired" = 0 WHERE "Id" = {id}
+                """, token), "the retirement trigger refuses a reversal");
+        }
+        Require(await db.Instances.CountAsync(instance => instance.Retired, token) == 2,
+            "the physical guard accepts qualified running and parked atomic retirements");
+
+        await SeedAsync("terminal", InstanceStatus.Finished, jobs: "[]");
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Retired" = 1, "Revision" = 2, "FoundationWriteRevision" = 2,
+                "State" = 'null', "FoundationHeader" = NULL, "Jobs" = NULL WHERE "Id" = 'terminal'
+            """, token), "a marked terminal retirement refuses outstanding jobs on the previous SQLite checkpoint");
+
+        await SeedAsync("checkpoint", InstanceStatus.Running);
+        Require(await db.Database.SqlQueryRaw<bool>("""
+            SELECT wr AS "Value" FROM pragma_table_list WHERE schema = 'main' AND name = 'Instances'
+            """).SingleAsync(token), "the SQLite checkpoint table uses only its declared primary key for row identity");
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "State" = '[]' WHERE "Id" = 'checkpoint'
+            """, token), "the checkpoint guard refuses an update without a qualified revision");
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            DELETE FROM "Instances" WHERE "Id" = 'checkpoint'
+            """, token), "the checkpoint guard refuses physical deletion of a qualified root");
+        await db.Database.OpenConnectionAsync(token);
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("PRAGMA recursive_triggers = OFF", token);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                INSERT OR REPLACE INTO "Instances" SELECT * FROM "Instances" WHERE "Id" = 'checkpoint'
+                """, token), "an insert cannot replace a qualified checkpoint");
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE OR REPLACE "Instances" SET "Id" = 'checkpoint' WHERE "Id" = 'direct'
+                """, token), "a key move cannot replace a qualified checkpoint");
+        }
+        finally { await db.Database.CloseConnectionAsync(); }
+        await RefusedAsync<SqliteException>(() => JournalAsync("checkpoint", revision: 4, "[]"),
+            "the journal guard requires the next running checkpoint revision");
+        await JournalAsync("checkpoint", revision: 2, "[]");
+        Require(await db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2, "State" = '[]' WHERE "Id" = 'checkpoint'
+            """, token) == 1, "the checkpoint and journal guards accept a qualified running revision");
+
+        await SeedAsync("refusal", InstanceStatus.Faulted);
+        await RefusedAsync<SqliteException>(() => JournalAsync("refusal", revision: 2, """{"Outcome":"REFUSED","Reason":"parked"}"""),
+            "the journal guard compares outcome prefixes using ordinal case");
+        const string refused = """{"Outcome":"refused","Reason":"parked"}""";
+        var stopped = FoundationRootParkFacts.ProtectionStopped("123", 1);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("refusal", revision: 2, refused);
+            await RefusedAsync<SqliteException>(() => JournalAsync("refusal", revision: 2, stopped),
+                "the journal cannot add a stop outcome to an idle Park beside a valid refusal");
+            await write.RollbackAsync(token);
+        }
+        await SeedAsync("first-park", InstanceStatus.Faulted, qualified: false);
+        await RefusedAsync<SqliteException>(() => JournalAsync("first-park", revision: 1, stopped),
+            "a stop outcome cannot be attached before a root is first bound");
+        await BindAsync("first-park", InstanceStatus.Faulted);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("refusal", revision: 2, refused);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2, "Children" = '[]' WHERE "Id" = 'refusal'
+                """, token), "a parked refusal preserves a null checkpoint field beside its new revision");
+            Require(await db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2 WHERE "Id" = 'refusal'
+                """, token) == 1, "the checkpoint guard accepts a journalled refusal on the unchanged parked root");
+            await write.CommitAsync(token);
+        }
+
+        await SeedAsync("first-bind", InstanceStatus.Running, qualified: false);
+        if (db.UsesRootParkRecovery)
+        {
+            const string recovered = """{"Outcome":"recovered","Operation":"birth","Restored":0,"Cleared":0,"AlreadyRearmed":0}""";
+            await using (var write = await db.Database.BeginTransactionAsync(token))
+            {
+                await JournalAsync("first-bind", revision: 1, recovered);
+                await RefusedAsync<SqliteException>(() => BindAsync("first-bind", InstanceStatus.Running),
+                    "binding a fresh root refuses a Recover journal at its own revision");
+                await write.RollbackAsync(token);
+            }
+            await using (var write = await db.Database.BeginTransactionAsync(token))
+            {
+                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Instances" WHERE "Id" = 'first-bind'""", token);
+                await JournalAsync("first-bind", revision: 1, recovered);
+                await RefusedAsync<SqliteException>(InsertFirstQualifiedAsync,
+                    "inserting a fresh qualified root refuses a Recover journal at its own revision");
+                await write.RollbackAsync(token);
+            }
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("first-bind", revision: 2, refused);
+            await RefusedAsync<SqliteException>(() => BindAsync("first-bind", InstanceStatus.Running),
+                "binding a fresh root refuses an outcome for the wrong checkpoint revision");
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Instances" WHERE "Id" = 'first-bind'""", token);
+            await JournalAsync("first-bind", revision: 2, refused);
+            await RefusedAsync<SqliteException>(InsertFirstQualifiedAsync,
+                "inserting a qualified root refuses a previously journalled outcome at the wrong revision");
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("first-bind", revision: 1, refused);
+            await BindAsync("first-bind", InstanceStatus.Running);
+            await write.CommitAsync(token);
+        }
+        Require(await db.Journal.AnyAsync(entry => entry.Instance == "first-bind" && entry.Revision == 1, token)
+            && await ReadProjectionAsync("first-bind") is { Status: InstanceStatus.Running, Header: ProjectionHeader },
+            "binding a fresh root commits its matching journal outcome and actor projection");
+
+        await SeedAsync("projected", InstanceStatus.Running);
+        var initial = await ReadProjectionAsync("projected");
+        Require(initial is { Status: InstanceStatus.Running, EndedAt: null, TerminalRevision: null, ParkAt: null, ParkFault: null, ParkRevision: null }
+            && initial.Header == ProjectionHeader
+            && initial.Type == "\"model\\u0000suffix\\\\escape\""
+            && initial.Labels == """[{"Key":"label\u0000key","Value":"value\\escape"}]""",
+            "the actor list projects public header fields with their encoded strings intact");
+        await db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Status" = 2, "Revision" = 2, "FoundationWriteRevision" = 2,
+                "FoundationParkAt" = 200, "FoundationParkRevision" = 2, "Fault" = 'opened'
+            WHERE "Id" = 'projected'
+            """, token);
+        Require(await ReadProjectionAsync("projected") is { Status: InstanceStatus.Faulted, ParkAt: 200, ParkFault: "opened", ParkRevision: 2 },
+            "the actor list projects Park metadata alongside the changed checkpoint status");
+        Require(!await db.Database.SqlQueryRaw<bool>("""
+            SELECT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Reference" IN ('atomic', 'parked')) AS "Value"
+            """).SingleAsync(token), "retirement removes the running and parked actor projections");
+
+        await SeedAsync("unpaired", InstanceStatus.Faulted);
+        await SeedAsync("other", InstanceStatus.Running);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("unpaired", revision: 2, refused);
+            await db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2 WHERE "Id" = 'other'
+                """, token);
+            await RefusedAsync<SqliteException>(() => write.CommitAsync(token),
+                "an outcome fails commit when only another actor reached its revision", ForeignKeyConstraint);
+            await write.RollbackAsync(token);
+        }
+        Require(!await db.Journal.AnyAsync(entry => entry.Instance == "unpaired", token)
+            && await db.Instances.Where(row => row.Id == "other").Select(row => row.Revision).SingleAsync(token) == 1,
+            "rolling back an unpaired outcome also rolls back the checkpoint of the other actor");
+
+        const string clearing = """{"Outcome":"clearing","Operation":"123","Cleared":1}""";
+        const string terminated = """{"Outcome":"terminated","Operation":"operator/test","Cleared":1}""";
+        const string discarded = """{"Outcome":"protected","Disposition":"discarded","Operation":"operator/test","Cleared":1}""";
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("other", revision: 2, clearing);
+            await db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2 WHERE "Id" = 'other'
+                """, token);
+            await RefusedAsync<SqliteException>(() => write.CommitAsync(token),
+                "a clearing outcome requires its checkpoint to open the clearing", ForeignKeyConstraint);
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("projected", revision: 3, clearing);
+            await db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 3, "FoundationWriteRevision" = 3,
+                    "FoundationParkClearing" = '123', "FoundationParkClearingKind" = 'kernel.delete', "FoundationParkCleared" = 1
+                WHERE "Id" = 'projected'
+                """, token);
+            await write.CommitAsync(token);
+        }
+        Require(await ReadProjectionAsync("projected") is { ParkAt: 200, ParkFault: "opened", ParkRevision: 2 },
+            "opening a clearing commits its outcome and preserves the projected Park mark");
+
+        var unavailable = FoundationRootParkFacts.ProtectionRefusal("123");
+        var copies = Enumerable.Repeat(unavailable, FoundationRootParkFacts.MaxProtectionRefusals - 1).ToArray();
+        await RequireEarlyStopRefusedAsync([copies], "repeated attempts to write refusal rows at one revision");
+        (string Entry, string Shape)[] invalidRefusals =
+        [
+            ("""{"Outcome":"refused","Operation":"123","Reason":"unavailable","Extra":true}""", "an extra refusal field"),
+            ("""{"Outcome":"refused","Operation":123,"Reason":"unavailable"}""", "a numeric operation in place of its text ID")
+        ];
+        foreach (var (entry, shape) in invalidRefusals)
+        {
+            var prior = Enumerable.Repeat(new[] { unavailable }, FoundationRootParkFacts.MaxProtectionRefusals - 2).ToList();
+            prior.Add([entry]);
+            await RequireEarlyStopRefusedAsync(prior, shape);
+        }
+        const string malformedRefusal = """{"Outcome":"refused","Operation":"123","Reason":"unavailable", """;
+        var priorToMalformed = Enumerable.Repeat(new[] { unavailable }, FoundationRootParkFacts.MaxProtectionRefusals - 2).ToArray();
+        if (db.UsesRootSequencedJournal)
+            await RequireEarlyStopRefusedAsync(priorToMalformed, "a rejected malformed refusal", malformed: malformedRefusal);
+        else
+            await RequireEarlyStopRefusedAsync([.. priorToMalformed, [malformedRefusal]], "a retained malformed refusal");
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4, "FoundationParkCleared" = 2,
+                "FoundationParkClearingKind" = 'kernel.terminate' WHERE "Id" = 'projected'
+            """, token), "a continuation must keep its original clearing kind");
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("projected", revision: 4, terminated);
+            await RefusedAsync<SqliteException>(() => EndParkAsync("projected", 4, InstanceStatus.Cancelled),
+                "an open Delete cannot commit a Terminate checkpoint");
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await RefusedAsync<SqliteException>(() => RetireClearingAsync(InstanceStatus.Cancelled),
+                "an open Delete cannot retire with a compound Terminate disposition");
+            Require(await RetireClearingAsync(InstanceStatus.Faulted) == 1, "the matching Delete disposition retires the open clearing");
+            await write.RollbackAsync(token);
+        }
+        await SeedAsync("kept-creator", InstanceStatus.Faulted);
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Start",
+                "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+            VALUES ('root:kept-creator', 0, 'kept-creator', 0, 1, 'start', 0, 'kept', 1, 0, 0, 0, 0, 0)
+            """, token);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("kept-creator", revision: 2, terminated);
+            await RefusedAsync<SqliteException>(() => EndParkAsync("kept-creator", 2, InstanceStatus.Cancelled),
+                "a Park cannot end while a retained creator is still present");
+            await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" = 'root:kept-creator' AND "InboxScope" = 0""", token);
+            Require(await EndParkAsync("kept-creator", 2, InstanceStatus.Cancelled) == 1, "the Park can end after the kept creator leaves");
+            await write.CommitAsync(token);
+        }
+        await SeedAsync("mixed", InstanceStatus.Faulted);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("mixed", revision: 2, terminated);
+            if (db.UsesRootSequencedJournal)
+                await RefusedAsync<SqliteException>(() => JournalAsync("mixed", revision: 2, discarded),
+                    "the sequenced journal refuses a second outcome at the paired revision", sqliteMessage: IncreasingJournalRevisions);
+            else
+                await JournalAsync("mixed", revision: 2, discarded);
+            Require(await EndParkAsync("mixed", 2, InstanceStatus.Cancelled) == 1,
+                "the terminated outcome admits the matching checkpoint update");
+            if (!db.UsesRootSequencedJournal)
+                await RefusedAsync<SqliteException>(() => write.CommitAsync(token),
+                    "a conflicting second outcome prevents the matching terminal checkpoint from committing", ForeignKeyConstraint);
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("mixed", revision: 2, discarded);
+            await RefusedAsync<SqliteException>(() => EndParkAsync("mixed", 2, InstanceStatus.Cancelled),
+                "a protected discard cannot authorize a Cancelled checkpoint");
+            await write.RollbackAsync(token);
+        }
+        Require(!await db.Journal.AnyAsync(entry => entry.Instance == "mixed" && entry.Revision == 2, token)
+            && await ReadProjectionAsync("mixed") is { Status: InstanceStatus.Faulted, ParkAt: not null, TerminalRevision: null },
+            "rolling back the outcome checks preserves the parked checkpoint, projection, and earlier journal");
+
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("projected", revision: 4, discarded);
+            Require(await EndParkAsync("projected", 4, InstanceStatus.Faulted) == 1, "the protected discard admits its Faulted terminal checkpoint");
+            await write.CommitAsync(token);
+        }
+        Require(await ReadProjectionAsync("projected") is { Status: InstanceStatus.Faulted, EndedAt: 300, TerminalRevision: 4,
+            ParkAt: null, ParkRevision: null, ParkFault: null },
+            "the protected discard projects the terminal mark and clears the Park metadata");
+        await SeedAsync("terminated", InstanceStatus.Faulted);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("terminated", revision: 2, terminated);
+            Require(await EndParkAsync("terminated", 2, InstanceStatus.Cancelled) == 1,
+                "a standalone terminated outcome admits its Cancelled checkpoint");
+            await write.CommitAsync(token);
+        }
+        Require(await ReadProjectionAsync("terminated") is { Status: InstanceStatus.Cancelled, EndedAt: 300, TerminalRevision: 2, ParkAt: null },
+            "the terminated outcome commits the Cancelled projection and terminal mark");
+        Require(!await db.Database.SqlQueryRaw<bool>("""
+            SELECT EXISTS (SELECT 1 FROM "FoundationRootPendingOutcomes") AS "Value"
+            """).SingleAsync(token), "successful outcome commits leave no pending rows");
+
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_project_root_actor_list", token);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2 WHERE "Id" = 'other'
+                """, token), "a qualified checkpoint requires the actor projection trigger");
+            await write.RollbackAsync(token);
+        }
+
+        Task<ActorProjection> ReadProjectionAsync(string reference) => db.Database.SqlQuery<ActorProjection>($"""
+            SELECT "Status", "EndedAt", "TerminalRevision", "Header", "Type", "Labels", "ParkAt", "ParkFault", "ParkRevision"
+            FROM "FoundationActorList" WHERE "Tenant" = 'tenant' AND "Reference" = {reference}
+            """).SingleAsync(token);
+
+        Task<int> EndParkAsync(string id, long revision, InstanceStatus status) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "Status" = {(int)status}, "Revision" = {revision}, "FoundationWriteRevision" = {revision},
+                "FoundationTerminalRevision" = {revision}, "FoundationTerminalAt" = 300, "FoundationParkAt" = NULL,
+                "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL
+            WHERE "Id" = {id}
+            """, token);
+
+        Task<int> RetireClearingAsync(InstanceStatus status) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
+                "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal}, "NextJobGeneration" = NULL,
+                "Suspended" = 0, "Retired" = 1, "Revision" = 4, "FoundationWriteRevision" = 4, "Status" = {(int)status},
+                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL,
+                "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL, "FoundationTerminalRevision" = 4, "FoundationTerminalAt" = 300
+            WHERE "Id" = 'projected'
+            """, token);
+
+        Task<int> RetireAsync(string id) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "Retired" = 1, "Status" = {(int)InstanceStatus.Cancelled}, "Revision" = 2,
+                "FoundationWriteRevision" = 2, "FoundationTerminalRevision" = 2, "FoundationTerminalAt" = 100,
+                "FoundationHeader" = NULL, "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL
+            WHERE "Id" = {id}
+            """, token);
+
+        async Task RequireEarlyStopRefusedAsync(IReadOnlyList<string[]> prior, string shape, string? malformed = null)
+        {
+            var revision = 4;
+            await using var write = await db.Database.BeginTransactionAsync(token);
+            foreach (var group in prior)
+            {
+                await JournalAsync("projected", revision, group[0]);
+                foreach (var duplicate in group.Skip(1))
+                {
+                    if (db.UsesRootSequencedJournal)
+                        await RefusedAsync<SqliteException>(() => JournalAsync("projected", revision, duplicate),
+                            "the sequenced journal refuses a duplicate refusal at one revision", sqliteMessage: IncreasingJournalRevisions);
+                    else
+                        await JournalAsync("projected", revision, duplicate);
+                }
+                if (!db.UsesRootSequencedJournal && group.Length > 1)
+                    Require(await db.Journal.CountAsync(row => row.Instance == "projected" && row.Revision == revision, token) == group.Length,
+                        "the journal without sequencing contains every duplicate refusal at one revision");
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision} WHERE "Id" = 'projected'
+                    """, token);
+                revision++;
+            }
+            if (malformed is not null)
+                await RefusedAsync<SqliteException>(() => JournalAsync("projected", revision, malformed),
+                    "the sequenced journal refuses malformed refusal JSON", sqliteCode: SqliteError, sqliteMessage: "malformed JSON");
+            await JournalAsync("projected", revision, stopped);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision}, "FoundationParkClearing" = NULL,
+                    "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL WHERE "Id" = 'projected'
+                """, token), $"the SQLite guard rejects an early stop after {shape}");
+            await write.RollbackAsync(token);
+        }
+
+        async Task CheckStopLookupPlanAsync()
+        {
+            var trigger = await db.Database.SqlQueryRaw<string>("""
+                SELECT sql AS "Value" FROM sqlite_master WHERE name = 'kernel_require_root_checkpoint_writer'
+                """).SingleAsync(token);
+            const string prefix = """CASE WHEN EXISTS (SELECT 1 FROM "Journal" j WHERE """;
+            var start = trigger.IndexOf(prefix, StringComparison.Ordinal);
+            Require(start >= 0, "the checkpoint guard selects a stop outcome before ordinary writes");
+            var predicateStart = start + prefix.Length;
+            var end = trigger.IndexOf(") THEN", predicateStart, StringComparison.Ordinal);
+            var predicate = trigger[predicateStart..end]
+                .Replace("""NEW."Partition" """, "0 ", StringComparison.Ordinal)
+                .Replace("""NEW."Id" """, "'fixture' ", StringComparison.Ordinal)
+                .Replace("""NEW."Revision" """, "1 ", StringComparison.Ordinal);
+            await db.Database.OpenConnectionAsync(token);
+            try
+            {
+                await using var plan = db.Database.GetDbConnection().CreateCommand();
+                plan.CommandText = """EXPLAIN QUERY PLAN SELECT 1 FROM "Journal" j WHERE """ + predicate;
+                await using var reader = await plan.ExecuteReaderAsync(token);
+                Require(await reader.ReadAsync(token) &&
+                    reader.GetString(3).Contains("IX_FoundationRootJournal_Outcome (Instance=? AND Partition=? AND Revision=?)", StringComparison.Ordinal),
+                    "the stop-outcome guard seeks the actor's exact journal revision through the partial index");
+            }
+            finally { await db.Database.CloseConnectionAsync(); }
+        }
+
+        Task<int> InsertFirstQualifiedAsync() => db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Instances" ("Id", "Partition", "Model", "Definition", "State", "Status", "Revision",
+                "StateVersion", "Suspended", "Retired", "History", "NextJobGeneration",
+                "FoundationReference", "FoundationTenant", "FoundationHeader")
+            SELECT 'first-bind', "Partition", "Model", "Definition", "State", "Status", "Revision",
+                "StateVersion", "Suspended", "Retired", "History", "NextJobGeneration",
+                'first-bind', 'tenant', {ProjectionHeader}
+            FROM "Instances" WHERE "Id" = 'direct'
+            """, token);
+
+        Task<int> JournalAsync(string id, long revision, string entries) =>
+            db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries")
+                VALUES (0, (SELECT coalesce(max("Position"), 0) + 1 FROM "Journal"), {id}, {revision}, {entries})
+                """, token);
+
+        async Task SeedAsync(string id, InstanceStatus status, bool qualified = true, string? jobs = null)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "FoundationRootBirths" ("Reference", "Tenant", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
+                VALUES ({id}, 'tenant', {id}, 0, 1, {id}, 'fingerprint')
+                """, token);
+            db.Instances.Add(new InstanceEntity
+            {
+                Id = id, Partition = 0, Model = "model", Definition = "definition", State = "null",
+                Status = status, Revision = 1, NextJobGeneration = 1, Jobs = jobs,
+                Fault = status == InstanceStatus.Faulted ? "seeded fault" : null
+            });
+            await db.SaveChangesAsync(token);
+            if (qualified) await BindAsync(id, status);
+        }
+
+        async Task BindAsync(string id, InstanceStatus status)
+        {
+            var parkedAt = status == InstanceStatus.Faulted ? (long?)100 : null;
+            var parkRevision = parkedAt.HasValue ? (long?)1 : null;
+            var terminalRevision = status == InstanceStatus.Finished ? (long?)1 : null;
+            var terminalAt = terminalRevision.HasValue ? (long?)100 : null;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "FoundationReference" = {id}, "FoundationTenant" = 'tenant', "FoundationHeader" = {ProjectionHeader},
+                    "FoundationParkAt" = {parkedAt}, "FoundationParkRevision" = {parkRevision},
+                    "FoundationTerminalRevision" = {terminalRevision}, "FoundationTerminalAt" = {terminalAt} WHERE "Id" = {id}
+                """, token);
+        }
+    }
+
+    private const string ProjectionHeader = """{"Model":"model\u0000suffix\\escape","Definition":"definition","TypeData":"","Labels":[{"Key":"label\u0000key","Value":"value\\escape"}],"EscapedState":false}""";
+
+    private sealed record ActorProjection(InstanceStatus Status, long? EndedAt, long? TerminalRevision, string Header,
+        string Type, string Labels, long? ParkAt, string? ParkFault, long? ParkRevision);
+
+    private static async Task RefusedAsync<T>(Func<Task> action, string witness, int sqliteCode = TriggerConstraint, string? sqliteMessage = null)
+        where T : Exception
+    {
+        try { await action(); }
+        catch (T error) when (error is not SqliteException sqlite || sqlite.SqliteExtendedErrorCode == sqliteCode &&
+            (sqliteMessage is null || sqlite.Message.Contains(sqliteMessage, StringComparison.Ordinal)))
+        {
+            Require(true, witness);
+            return;
+        }
+        throw new InvalidOperationException(witness);
+    }
+
+    private static void Require(bool ok, string witness)
+    {
+        if (!ok) throw new InvalidOperationException(witness);
+        Console.WriteLine($"ok {witness}");
+    }
+}

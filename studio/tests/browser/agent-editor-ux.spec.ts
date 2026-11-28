@@ -1,0 +1,171 @@
+import { expect, test } from "@playwright/test";
+
+for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
+  test(`agent editing leads with instructions and preserves saved settings at ${width}px ${theme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1100 });
+    const url = `/?mode=activity-authoring&provider=agent&theme=${theme}`;
+    await page.goto(url);
+    const editor = page.getByTestId("agent-editor");
+    await expect(editor.getByRole("textbox", { name: /^Instructions/ })).toBeVisible();
+    const advanced = editor.locator(".studio-disclosure-fold").filter({ has: page.getByRole("button", { name: /Advanced settings/ }) });
+    await expect(advanced.getByRole("button", { name: /Advanced settings/ })).toHaveAttribute("aria-expanded", "false");
+    await expect(editor.getByRole("combobox", { name: /^Model connection/ })).toBeEnabled();
+    if (width >= 1440) {
+      const [instructions, model] = await editor.locator(".agent-instructions, .agent-model").evaluateAll(elements => elements.map(element => { const b = element.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width }; }));
+      expect(model.x).toBeGreaterThan(instructions.x + instructions.width);
+      expect(Math.abs(model.y - instructions.y)).toBeLessThan(20);
+    }
+    await editor.getByRole("textbox", { name: /^Instructions/ }).fill("Proofread the text and return concise suggestions.");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await advanced.getByRole("button", { name: /Advanced settings/ }).press("Enter");
+    const calls = advanced.getByRole("textbox", { name: /^Maximum model calls/ });
+    await calls.fill("2");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await page.reload();
+    await expect(editor.getByRole("textbox", { name: /^Instructions/ })).toHaveValue("Proofread the text and return concise suggestions.");
+    await advanced.getByRole("button", { name: /Advanced settings/ }).click();
+    await expect(calls).toHaveValue("2");
+    await advanced.getByRole("button", { name: /Advanced settings/ }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("agent-designer.png"), fullPage: true });
+    await page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ }).click();
+    const outcome = page.getByRole("region", { name: "Outcomes editor", exact: true });
+    const requiredOutcome = outcome.locator("[data-contract-kind='outcome'][data-contract-reference-key='done']").filter({ visible: true });
+    await expect(outcome.getByRole("columnheader", { name: "Emitted", exact: true })).toBeVisible();
+    await expect(requiredOutcome).toHaveCount(1);
+    await expect(requiredOutcome.getByRole("checkbox")).toBeChecked();
+    await expect(requiredOutcome.getByRole("checkbox")).toBeDisabled();
+    await expect(requiredOutcome.getByRole("button", { name: "Remove outcome" })).toHaveCount(0);
+    await expect(requiredOutcome.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
+    const contract = page.locator(".ad-contract-editor");
+    const tabs = page.locator(".ad-authoring-view-tabs");
+    expect(Math.abs((await contract.boundingBox())!.x - (await tabs.boundingBox())!.x)).toBeLessThanOrEqual(2);
+    await expect(page.getByRole("button", { name: /Advanced interface details/ })).toHaveAttribute("aria-expanded", "false");
+    await page.screenshot({ path: testInfo.outputPath("agent-inputs-outputs.png"), fullPage: true });
+  });
+}
+
+for (const width of [390, 1440]) {
+  test(`consolidates an unavailable saved connection warning at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1100 });
+    await page.goto("/?mode=activity-authoring&provider=agent&unavailable-connection");
+    const editor = page.getByTestId("agent-editor");
+    const model = editor.getByRole("combobox", { name: /^Model connection/ });
+    await expect(model).toHaveValue("azure-openai|openai");
+    await expect(model.locator("option:checked")).toHaveText("openai (saved)");
+
+    const alerts = editor.locator(".agent-model > .studio-alert");
+    await expect(alerts).toHaveCount(1);
+    const warning = alerts.first();
+    await expect(warning).toHaveAttribute("data-tone", "warning");
+    await expect(warning).toContainText('The saved connection “openai” is unavailable.');
+    await expect(warning).toContainText("It’s still saved.");
+    await expect(warning).toContainText("Review it in Connections or set up a replacement.");
+    await expect(warning.getByRole("button", { name: "Retry", exact: true })).toBeEnabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("unavailable-connection.png"), fullPage: true });
+
+    await warning.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(model).toHaveValue("azure-openai|openai");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await expect(alerts).toHaveCount(1);
+  });
+}
+
+test("rejected informational validation stays truthful and compact", async ({ page }) => {
+  await page.goto("/?mode=activity-authoring&provider=agent&invalid");
+  const panel = page.locator(".ad-diagnostics-panel");
+  await expect(panel.getByRole("heading", { name: "Draft diagnostics", exact: true })).toHaveCount(1);
+  await expect(panel.getByLabel("Diagnostic severity counts")).toHaveText("1 info");
+  await expect(panel).not.toContainText("0 errors");
+  await expect(panel).not.toContainText("Correct the errors");
+  await expect(panel).toContainText("did not pass validation");
+  await expect(panel.locator(".ad-diagnostic-help")).not.toHaveAttribute("open");
+});
+
+test("module-owned icons reach all three main navigation entries", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/?mode=activity-authoring&provider=agent");
+  await expect(page.getByTestId("agent-editor")).toBeVisible();
+  for (const [name, icon] of [["Agents", "bot"], ["Secrets", "key-round"], ["Connections", "cable"]]) {
+    const entry = page.getByRole("link", { name, exact: true });
+    // Named groups start open; preserved user choices can still close a section.
+    if (!await entry.isVisible()) await page.getByRole("button", { name: name === "Agents" ? "Build" : "Integrations", exact: true }).click();
+    await expect(entry.locator(`svg.lucide-${icon}`)).toBeVisible();
+  }
+});
+
+test("saved invalid limits are revealed and read-only settings remain inspectable", async ({ page }) => {
+  await page.goto("/?mode=activity-authoring&provider=agent&invalid-limits");
+  const editor = page.getByTestId("agent-editor");
+  const advanced = editor.locator(".studio-disclosure-fold").filter({ has: page.getByRole("button", { name: /Advanced settings/ }) });
+  await expect(advanced.getByRole("button", { name: /Advanced settings/ })).toHaveAttribute("aria-expanded", "true");
+  await expect(advanced.getByRole("textbox", { name: /^Maximum model calls/ })).toHaveAttribute("aria-invalid", "true");
+  await page.goto("/?mode=activity-authoring&provider=agent&read-only");
+  await expect(editor.getByRole("textbox", { name: /^Instructions/ })).toBeDisabled();
+  await advanced.getByRole("button", { name: /Advanced settings/ }).click();
+  await expect(advanced.getByRole("textbox", { name: /^Maximum model calls/ })).toBeDisabled();
+  await expect(advanced.getByRole("textbox", { name: /^Timeout/ })).toBeDisabled();
+});
+
+
+for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
+  test(`blocked publication explains corrections and focuses settings at ${width}px ${theme}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-authoring&provider=agent&publication-blocked&theme=${theme}`);
+    const editor = page.getByTestId("agent-editor");
+    const trigger = page.locator(".studio-split-button-primary");
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
+    const blockers = dialog.locator(".ad-publication-blockers");
+    await expect(blockers.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
+    await expect(blockers.locator(".ad-publication-diagnostics li")).toHaveCount(2);
+    await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(1);
+    await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeDisabled();
+    await expect(dialog.getByText("agent.manifest.model", { exact: true })).toBeHidden();
+    await page.screenshot({ path: info.outputPath("blocked.png"), fullPage: true });
+    await blockers.getByRole("button", { name: "Edit instructions", exact: true }).press("Enter");
+    const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
+    await expect(dialog).toBeHidden();
+    await expect(instructions).toBeFocused();
+    await instructions.fill("Proofread the supplied text.");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await trigger.click();
+    await expect(dialog.getByRole("alert")).toContainText("The draft changed after review");
+    await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
+    await expect(blockers.locator(".ad-publication-diagnostics li")).toHaveCount(1);
+    await blockers.getByRole("button", { name: "Choose model connection", exact: true }).click();
+    const model = editor.getByRole("combobox", { name: /^Model connection/ });
+    await expect(model).toBeFocused();
+    await model.selectOption("azure-openai|proofreader");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await trigger.click();
+    await expect(dialog.getByRole("alert")).toContainText("The draft changed after review");
+    await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
+    await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeEnabled();
+    await expect(blockers).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath("ready.png"), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+
+for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
+  test(`rejected publication does not reuse earlier readiness at ${width}px ${theme}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-authoring&provider=agent&theme=${theme}`);
+    await page.locator(".studio-split-button-primary").click();
+    const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
+    await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Publish 1.0.0", exact: true }).click();
+    await expect(dialog.locator(".ad-publication-blockers")).toContainText("Publication did not complete");
+    await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeDisabled();
+    await page.screenshot({ path: info.outputPath("rejected.png"), fullPage: true });
+    await dialog.getByText("Technical readiness checks", { exact: true }).click();
+    const readiness = dialog.locator(".ad-publication-readiness");
+    await expect(readiness.getByRole("heading", { name: "Checks from the earlier review", exact: true })).toBeVisible();
+    await expect(readiness).not.toContainText("Ready to publish");
+    await readiness.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath("earlier-readiness.png"), fullPage: true });
+  });
+}

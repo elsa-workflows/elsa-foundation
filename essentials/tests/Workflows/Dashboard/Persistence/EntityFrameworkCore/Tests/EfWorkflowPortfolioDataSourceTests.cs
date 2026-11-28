@@ -177,7 +177,7 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
     public void Registration_refuses_mixed_runtime_backend()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(services);
         services.AddPersistenceCore(Tenant);
         services.AddWorkflowsDesignEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
 
@@ -188,7 +188,6 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
     public void Registration_refuses_replaced_design_context_without_mutating_services()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
         services.AddPersistenceCore(Tenant);
         services.AddSingleton<IPayloadSerializer>(PayloadSerializer);
         services.AddWorkflowsDesignEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
@@ -206,7 +205,7 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
     public void Registration_replaces_the_default_source_when_both_ef_lanes_own_their_contexts()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
+        services.AddScoped<IWorkflowPortfolioDataSource, UnavailableWorkflowPortfolioDataSource>();
         services.AddPersistenceCore(Tenant);
         services.AddSingleton<IPayloadSerializer>(PayloadSerializer);
         services.AddWorkflowsDesignEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });

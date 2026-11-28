@@ -1,6 +1,6 @@
 # Worker HTTP starting profile
 
-`worker-http@1` is a Foundation-reviewed starting selection for a single HTTP worker with durable workflow execution, event resumption, local filesystem locking and external bearer normalization. It selects [19 explicit feature IDs](../../specs/191-worker-http-profile/contracts/worker-profile.md), including identity abstractions, OIDC and the separate IAM EF feature. It contains no authority, audience, tenant, database connection, signing key or lock-directory value.
+`worker-http@1` is an immutable classic profile for a single HTTP worker with durable workflow execution, event resumption, local filesystem locking and external bearer normalization. Use these instructions with its matching packages and [pinned classic Runtime EF source](../../essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/README.md). The profile selects [19 explicit feature IDs](../../specs/191-worker-http-profile/contracts/worker-profile.md), including identity abstractions, OIDC and the separate IAM EF feature. It contains no authority, audience, tenant, database connection, signing key or lock-directory value.
 
 The profile is a pinned starting point. Individual additions/removals remain available, and the planner explains exact membership and missing required dependencies. The new catalog retains both earlier catalog pins and unchanged Embedded/diagnostics definitions. Package availability and runtime readiness require their own evidence.
 
@@ -26,7 +26,7 @@ Prepare the host source with feature settings as objects before generation. The 
 
 ## Host prerequisites
 
-- Configure the existing [OIDC feature](../../Essentials/src/Foundation/Identity/Oidc/README.md): nonblank Authority and independent Audience, fixed ProviderId/TenantId and opt-in NormalizeBearerClaims. Deployment metadata uses HTTPS. ClientId is unnecessary for a bearer-only worker; authentication defaults remain the host's choice.
+- Configure the existing [OIDC feature](../../essentials/src/Foundation/Identity/Oidc/README.md): nonblank Authority and independent Audience, fixed ProviderId/TenantId and opt-in NormalizeBearerClaims. Deployment metadata uses HTTPS. ClientId is unnecessary for a bearer-only worker; authentication defaults remain the host's choice.
 - Initialize the ordinary persistence context for that same static tenant before shell activation. Incoming token claims cannot choose or overwrite that context. Configure legitimate IAM claim-mapping rules; a valid external token without a grant is forbidden by the existing permission policy.
 - Configure a named Runtime persistence resource and its connection reference. Configure IAM's Provider/ConnectionName/connection and schema/migration provisioning independently; the Runtime default resource does not enroll IAM automatically.
 - Supply a writable local `LocksFolderPath` and required Runtime signing/protection configuration. Local filesystem locking does not certify a distributed topology. Review migration policy before starting the host.

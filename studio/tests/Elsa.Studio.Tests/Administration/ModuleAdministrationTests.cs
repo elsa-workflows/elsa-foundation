@@ -1,0 +1,559 @@
+using System.IO.Compression;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json.Nodes;
+using Elsa.Studio.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Nuplane.Admin;
+using Nuplane.Feeds.Configuration;
+using Nuplane.Feeds.Setup;
+using Nuplane.Sources.Directory.Builder;
+
+namespace Elsa.Studio.Tests.Administration;
+
+public sealed class ModuleAdministrationTests
+{
+    private const string Prefix = "/_elsa/module-management";
+
+    [Theory]
+    [InlineData("GET", "/registry")]
+    [InlineData("POST", "/packages/upload")]
+    [InlineData("DELETE", "/packages/drop-folder/probe.nupkg")]
+    [InlineData("POST", "/feeds")]
+    [InlineData("PUT", "/feeds/probe")]
+    [InlineData("DELETE", "/feeds/probe")]
+    [InlineData("POST", "/reconcile")]
+    [InlineData("POST", "/prune")]
+    [InlineData("PUT", "/retention-policy")]
+    public async Task Every_administration_route_rejects_anonymous_requests_before_any_write(string method, string path)
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder => builder.Configuration.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["Studio:Auth:Enabled"] = "true" }));
+        using var request = new HttpRequestMessage(new HttpMethod(method), Prefix + path);
+        if (path == "/packages/upload")
+        {
+            var form = new MultipartFormDataContent();
+            form.Add(new ByteArrayContent(Package()), "package", "Acme.StudioUpload.1.0.0.nupkg");
+            request.Content = form;
+        }
+        else if (method is "POST" or "PUT") request.Content = JsonContent.Create(new { });
+        using var response = await host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.False(File.Exists(Path.Combine(host.Root, "nuplane-management.json")));
+        Assert.Empty(Dropped(host));
+    }
+
+    [Theory]
+    [InlineData("native")]
+    [InlineData("ordinary")]
+    [InlineData("oversized")]
+    [InlineData("linked")]
+    public async Task Registry_nuspec_reads_use_verified_archives_and_the_metadata_bound(string profile)
+    {
+        await using var host = await AdministrationHost.StartAsync(nativeStore: profile != "ordinary", configureNuplane: nuplane =>
+        {
+            if (profile == "ordinary") nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); });
+        });
+        PackageAssetTests.Pack(host, "1.0.0", "payload", oversizedNuspec: profile == "oversized");
+        await PackageAssetTests.Reconcile(host);
+        var installed = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);
+        var nuspec = Assert.Single(Directory.EnumerateFiles(installed.InstallPath, "*.nuspec"));
+        if (profile == "linked")
+        {
+            var outside = Path.Combine(host.Root, "outside.nuspec");
+            await File.WriteAllTextAsync(outside, "outside-metadata-sentinel");
+            File.Delete(nuspec);
+            File.CreateSymbolicLink(nuspec, outside);
+        }
+        var result = await Registry(host);
+        var package = Assert.Single(result["packages"]!.AsArray())!;
+        Assert.DoesNotContain("outside-metadata-sentinel", result.ToJsonString());
+        if (profile != "oversized")
+        {
+            Assert.Equal("nuspec", (string?)package["manifest"]?["kind"]);
+            Assert.Contains(PackageAssetTests.PackageId, (string)package["manifest"]!["text"]!);
+        }
+        else
+        {
+            Assert.Equal("manifest-error", (string?)package["manifest"]?["kind"]);
+            Assert.Contains(result["diagnostics"]!.AsArray(), item => (string?)item!["status"] == "metadata-unavailable");
+        }
+    }
+
+    [Fact]
+    public async Task Registry_uses_public_host_composition_without_a_Web_identity()
+    {
+        await using var host = await AdministrationHost.StartAsync();
+        var registry = await Registry(host);
+        Assert.Equal(host.Root, (string?)registry["host"]?["contentRootPath"]);
+        Assert.NotEqual("Elsa.Studio.Workbench.Host", (string?)registry["host"]?["runtime"]);
+        Assert.NotEqual("Elsa.Studio.Web", (string?)registry["host"]?["runtime"]);
+        Assert.Equal("Supported", (string?)registry["retentionPolicy"]?["status"]);
+        Assert.Null(registry["retentionPolicy"]?["keepNewestInactiveVersionsPerPackage"]);
+        Assert.True((bool)registry["capabilities"]!["canManageFeeds"]!);
+        Assert.True((bool)registry["capabilities"]!["canManageRetentionPolicy"]!);
+    }
+
+    [Fact]
+    public async Task Upload_and_delete_use_the_installed_directory_after_a_pending_feed_edit()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"preserve":"unrelated","Nuplane":{"Setup":{"Feeds":[{"Name":"local","DirectoryPath":"current","IncludeAll":true,"extra":"preserved","Directory":{"Watch":false,"Role":"DesiredAndCache"}}]}}}"""));
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/local", Feed("local", "pending"));
+        edit.EnsureSuccessStatusCode();
+        Assert.True((bool)JsonNode.Parse(await edit.Content.ReadAsStringAsync())!["requiresRestart"]!);
+        using var upload = await Upload(host, "Acme.StudioUpload.1.0.0.nupkg", Package());
+        upload.EnsureSuccessStatusCode();
+        var expected = Path.Combine(host.Root, "current", "Acme.StudioUpload.1.0.0.nupkg");
+        Assert.Equal(expected, (string?)JsonNode.Parse(await upload.Content.ReadAsStringAsync())!["path"]);
+        Assert.True(File.Exists(expected));
+        Assert.False(Directory.Exists(Path.Combine(host.Root, "pending")));
+        var stored = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(host.Root, "nuplane-management.json")))!;
+        Assert.Equal("unrelated", (string?)stored["preserve"]);
+        Assert.Equal("preserved", (string?)stored["Nuplane"]!["Setup"]!["Feeds"]![0]!["extra"]);
+        Assert.Equal("DesiredAndCache", (string?)stored["Nuplane"]!["Setup"]!["Feeds"]![0]!["Directory"]!["Role"]);
+        using var deleted = await host.Client.DeleteAsync(Prefix + "/packages/drop-folder/Acme.StudioUpload.1.0.0.nupkg");
+        deleted.EnsureSuccessStatusCode();
+        Assert.False(File.Exists(expected));
+    }
+
+    [Fact]
+    public async Task A_configured_cache_is_read_only_and_does_not_compete_with_an_editable_upload_feed()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """
+                {
+                  "Nuplane": { "Setup": { "Feeds": [
+                    { "Name": "baked", "DirectoryPath": "baked", "Directory": { "Watch": false, "Role": "Cache" } },
+                    { "Name": "local", "DirectoryPath": "uploads", "IncludeAll": true, "Directory": { "Watch": false } }
+                  ] } }
+                }
+                """));
+        var configuration = Path.Combine(host.Root, "nuplane-management.json");
+        var before = await File.ReadAllBytesAsync(configuration);
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/BAKED", Feed("baked", "replacement"));
+        using var delete = await host.Client.DeleteAsync(Prefix + "/feeds/baked");
+        Assert.Equal(HttpStatusCode.Conflict, edit.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, delete.StatusCode);
+        Assert.Equal("configuration-read-only", (string?)JsonNode.Parse(await edit.Content.ReadAsStringAsync())!["code"]);
+        Assert.Equal(before, await File.ReadAllBytesAsync(configuration));
+
+        using var addEditable = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("other", "other"));
+        using var editEditable = await host.Client.PutAsJsonAsync(Prefix + "/feeds/other", Feed("other", "updated"));
+        using var deleteEditable = await host.Client.DeleteAsync(Prefix + "/feeds/other");
+        addEditable.EnsureSuccessStatusCode();
+        editEditable.EnsureSuccessStatusCode();
+        deleteEditable.EnsureSuccessStatusCode();
+        var feeds = (await Registry(host))["feeds"]!.AsArray();
+        Assert.Equal(2, feeds.Count);
+        Assert.Contains(feeds, feed => (string?)feed!["name"] == "baked" && (string?)feed["directoryPath"] == "baked");
+        Assert.Contains(feeds, feed => (string?)feed!["name"] == "local");
+
+        const string archive = "Acme.StudioUpload.1.0.0.nupkg";
+        using var upload = await Upload(host, archive, Package());
+        upload.EnsureSuccessStatusCode();
+        Assert.True(File.Exists(Path.Combine(host.Root, "uploads", archive)));
+        Assert.False(File.Exists(Path.Combine(host.Root, "baked", archive)));
+    }
+
+    [Fact]
+    public async Task Configured_cache_only_feeds_leave_the_writable_fallback_available()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"baked","DirectoryPath":"baked","Directory":{"Watch":false,"Role":"Cache"}}]}}}"""));
+        const string archive = "Acme.StudioUpload.1.0.0.nupkg";
+        using var upload = await Upload(host, archive, Package());
+        upload.EnsureSuccessStatusCode();
+        Assert.True(File.Exists(Path.Combine(host.Root, "packages", archive)));
+        Assert.False(File.Exists(Path.Combine(host.Root, "baked", archive)));
+    }
+
+    [Fact]
+    public async Task A_keyed_cache_preserves_configuration_and_leaves_the_writable_fallback_available()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """
+                {
+                  "Nuplane": { "Setup": { "Feeds": {
+                    "0": { "Name": "baked", "DirectoryPath": "ignored", "IncludeAll": true, "Directory": { "Watch": false } },
+                    "baked": { "DirectoryPath": "baked", "Directory": { "Watch": false, "Role": "Cache" } }
+                  } } }
+                }
+                """));
+        var configuration = Path.Combine(host.Root, "nuplane-management.json");
+        var before = await File.ReadAllBytesAsync(configuration);
+        var registry = await Registry(host);
+        var listed = Assert.Single(registry["feeds"]!.AsArray())!;
+        Assert.Equal("baked", (string?)listed["name"]);
+        Assert.Equal("baked", (string?)listed["directoryPath"]);
+        Assert.False((bool)registry["capabilities"]!["canManageFeeds"]!);
+
+        using var add = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("other", "other"));
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/baked", Feed("baked", "replacement"));
+        using var delete = await host.Client.DeleteAsync(Prefix + "/feeds/baked");
+        foreach (var response in new[] { add, edit, delete })
+        {
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal("configuration-read-only", (string?)JsonNode.Parse(await response.Content.ReadAsStringAsync())!["code"]);
+        }
+        Assert.Equal(before, await File.ReadAllBytesAsync(configuration));
+
+        const string archive = "Acme.StudioUpload.1.0.0.nupkg";
+        using var upload = await Upload(host, archive, Package());
+        upload.EnsureSuccessStatusCode();
+        Assert.True(File.Exists(Path.Combine(host.Root, "packages", archive)));
+        Assert.False(File.Exists(Path.Combine(host.Root, "baked", archive)));
+    }
+
+    [Fact]
+    public async Task An_empty_feed_object_accepts_the_first_feed_as_an_editable_array()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":{}}}}"""));
+        var registry = await Registry(host);
+        Assert.True((bool)registry["capabilities"]!["canManageFeeds"]!);
+        Assert.Empty(registry["feeds"]!.AsArray());
+
+        using var add = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("local", "uploads"));
+        add.EnsureSuccessStatusCode();
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(host.Root, "nuplane-management.json")))!;
+        var stored = Assert.Single(document["Nuplane"]!["Setup"]!["Feeds"]!.AsArray());
+        Assert.Equal("local", (string?)stored!["Name"]);
+    }
+
+    [Fact]
+    public async Task Numeric_feed_keys_are_converted_in_configuration_order_after_a_successful_edit()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """
+                {
+                  "Nuplane": { "Setup": { "Feeds": {
+                    "10": { "Name": "later", "DirectoryPath": "cache-later", "Directory": { "Watch": false, "Role": "Cache" } },
+                    "2": { "Name": "earlier", "DirectoryPath": "cache-earlier", "Directory": { "Watch": false, "Role": "Cache" } }
+                  } } }
+                }
+                """));
+        var configuration = Path.Combine(host.Root, "nuplane-management.json");
+        var before = await File.ReadAllBytesAsync(configuration);
+        var registry = await Registry(host);
+        Assert.True((bool)registry["capabilities"]!["canManageFeeds"]!);
+
+        using var missing = await host.Client.DeleteAsync(Prefix + "/feeds/missing");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(before, await File.ReadAllBytesAsync(configuration));
+
+        using var add = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("local", "uploads"));
+        add.EnsureSuccessStatusCode();
+        var original = JsonNode.Parse(before)!["Nuplane"]!["Setup"]!["Feeds"]!;
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(configuration))!;
+        var feeds = document["Nuplane"]!["Setup"]!["Feeds"]!.AsArray();
+        Assert.Collection(feeds,
+            earlier => Assert.True(JsonNode.DeepEquals(original["2"], earlier)),
+            later => Assert.True(JsonNode.DeepEquals(original["10"], later)),
+            added => Assert.Equal("local", (string?)added!["Name"]));
+    }
+
+    [Fact]
+    public async Task A_configured_cache_cannot_be_named_as_the_upload_feed()
+    {
+        await Assert.ThrowsAsync<StudioHostingException>(async () =>
+        {
+            await using var host = await AdministrationHost.StartAsync(
+                beforeStudio: builder => File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                    """{"Nuplane":{"Setup":{"Feeds":[{"Name":"baked","DirectoryPath":"baked","Directory":{"Watch":false,"Role":"Cache"}}]}}}"""),
+                configureAdministration: options => options.DirectoryFeedName = "BAKED");
+        });
+    }
+
+    [Fact]
+    public async Task The_fallback_cannot_share_a_configured_cache_path()
+    {
+        var error = await Assert.ThrowsAsync<StudioHostingException>(async () =>
+        {
+            await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+                File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                    """{"Nuplane":{"Setup":{"Feeds":[{"Name":"baked","DirectoryPath":"packages/","Directory":{"Watch":false,"Role":"Cache"}}]}}}"""));
+        });
+        Assert.Contains("separate from configured cache-only feeds", error.Message);
+    }
+
+    [Theory]
+    [InlineData("package.zip")]
+    [InlineData("package.dll")]
+    [InlineData("package")]
+    [InlineData("../outside.nupkg")]
+    [InlineData("nested/evil.nupkg")]
+    [InlineData("nested\\evil.nupkg")]
+    [InlineData("C:outside.nupkg")]
+    public async Task Upload_rejects_nonpackages_and_path_qualified_names(string fileName)
+    {
+        await using var host = await AdministrationHost.StartAsync();
+        var sentinel = Path.Combine(host.Root, "outside.nupkg");
+        await File.WriteAllTextAsync(sentinel, "outside-sentinel");
+        using var response = await Upload(host, fileName, Package());
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("outside-sentinel", await File.ReadAllTextAsync(sentinel));
+        Assert.Empty(Dropped(host));
+    }
+
+    [Fact]
+    public async Task Malformed_or_missing_uploads_do_not_leave_staged_files()
+    {
+        await using var host = await AdministrationHost.StartAsync();
+        using var malformed = await Upload(host, "broken.nupkg", Encoding.UTF8.GetBytes("not a ZIP"));
+        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+        using var empty = new MultipartFormDataContent();
+        using var missing = await host.Client.PostAsync(Prefix + "/packages/upload", empty);
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        Assert.Empty(Dropped(host));
+    }
+
+    [Fact]
+    public async Task Concurrent_feed_and_retention_edits_preserve_both_sections_and_reject_duplicate_without_a_write()
+    {
+        await using var host = await AdministrationHost.StartAsync();
+        var pending = await Task.WhenAll(host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("local", "next")),
+            host.Client.PutAsJsonAsync(Prefix + "/retention-policy", new { keepNewestInactiveVersionsPerPackage = 0 }));
+        try { Assert.All(pending, response => response.EnsureSuccessStatusCode()); }
+        finally { foreach (var response in pending) response.Dispose(); }
+        var file = Path.Combine(host.Root, "nuplane-management.json");
+        var before = await File.ReadAllBytesAsync(file);
+        var document = JsonNode.Parse(before)!;
+        Assert.Equal("local", (string?)document["Nuplane"]!["Setup"]!["Feeds"]![0]!["Name"]);
+        Assert.Equal(0, (int)document["Studio"]!["PackageManagement"]!["RetentionPolicy"]!["KeepNewestInactiveVersionsPerPackage"]!);
+        using var duplicate = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("LOCAL", "another"));
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.Equal(before, await File.ReadAllBytesAsync(file));
+    }
+
+    [Fact]
+    public async Task An_overlaid_feed_configuration_is_read_only_and_not_found_does_not_create_a_file()
+    {
+        await using (var host = await AdministrationHost.StartAsync(afterStudio: builder => builder.Configuration.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["Nuplane:Setup:Feeds:0:Name"] = "application", ["Nuplane:Setup:Feeds:0:DirectoryPath"] = "application-feed" })))
+        {
+            using var response = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("extra", "extra"));
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.False(File.Exists(Path.Combine(host.Root, "nuplane-management.json")));
+        }
+        await using (var host = await AdministrationHost.StartAsync())
+        {
+            using var response = await host.Client.DeleteAsync(Prefix + "/feeds/missing");
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.False(File.Exists(Path.Combine(host.Root, "nuplane-management.json")));
+        }
+    }
+
+    [Fact]
+    public async Task The_registry_never_returns_a_configured_feed_credential()
+    {
+        const string credential = "private-feed-credential-sentinel-3735";
+        await using var host = await AdministrationHost.StartAsync(afterStudio: builder => builder.Configuration.AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Nuplane:Setup:Feeds:0:Name"] = "private", ["Nuplane:Setup:Feeds:0:DirectoryPath"] = "private-feed",
+                ["Nuplane:Setup:Feeds:0:Credentials"] = credential
+            }));
+        using var response = await host.Client.GetAsync(Prefix + "/registry");
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(credential, body, StringComparison.Ordinal);
+        var feed = Assert.Single(JsonNode.Parse(body)!["feeds"]!.AsArray(), feed => (string?)feed!["name"] == "private")!.AsObject();
+        Assert.Equal("private-feed", (string?)feed["directoryPath"]);
+        Assert.DoesNotContain(feed, property => property.Key.Contains("credential", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task A_feed_edit_without_a_credential_keeps_the_stored_one_and_still_never_returns_it()
+    {
+        const string credential = "stored-feed-credential-sentinel-3735";
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"local","DirectoryPath":"current","Credentials":"CREDENTIAL","IncludeAll":true,"Directory":{"Watch":false}}]}}}""".Replace("CREDENTIAL", credential)));
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/local", Feed("local", "edited"));
+        edit.EnsureSuccessStatusCode();
+        var stored = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(host.Root, "nuplane-management.json")))!;
+        var feed = stored["Nuplane"]!["Setup"]!["Feeds"]![0]!;
+        Assert.Equal("edited", (string?)feed["DirectoryPath"]);
+        Assert.Equal(credential, (string?)feed["Credentials"]);
+        using var registry = await host.Client.GetAsync(Prefix + "/registry");
+        registry.EnsureSuccessStatusCode();
+        Assert.DoesNotContain(credential, await registry.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Feed_trust_is_explicit_and_only_inherited_for_the_same_address()
+    {
+        await using var host = await AdministrationHost.StartAsync();
+        var source = Feed("candidate", "one");
+        source["trust"] = "Trusted";
+        using (var create = await host.Client.PostAsJsonAsync(Prefix + "/feeds", source))
+            create.EnsureSuccessStatusCode();
+
+        using (var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "one")))
+            edit.EnsureSuccessStatusCode();
+        using (var registry = await host.Client.GetAsync(Prefix + "/registry"))
+        {
+            var feeds = JsonNode.Parse(await registry.Content.ReadAsStringAsync())!["feeds"]!.AsArray();
+            Assert.Equal("Trusted", (string?)Assert.Single(feeds)!["trust"]);
+        }
+
+        using (var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "two")))
+            edit.EnsureSuccessStatusCode();
+        using var updated = await host.Client.GetAsync(Prefix + "/registry");
+        var updatedFeeds = JsonNode.Parse(await updated.Content.ReadAsStringAsync())!["feeds"]!.AsArray();
+        Assert.Equal("Untrusted", (string?)Assert.Single(updatedFeeds)!["trust"]);
+
+        var invalidSource = Feed("invalid", "three");
+        invalidSource["trust"] = "1";
+        using var invalid = await host.Client.PostAsJsonAsync(Prefix + "/feeds", invalidSource);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_feed_with_package_trust_overrides_cannot_change_address_or_be_deleted()
+    {
+        await using var host = await AdministrationHost.StartAsync(
+            nuplane => nuplane.Services.Configure<Nuplane.Feeds.Configuration.FeedResolutionOptions>(options =>
+                options.TrustOverrides.Add(new() { FeedName = "candidate", PackageId = "Elsa.Example", Reason = "Fixture approval" })),
+            beforeStudio: builder => File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"candidate","DirectoryPath":"one","Trust":"Untrusted","Directory":{"Watch":false}}]}}}"""));
+
+        using var same = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "one"));
+        same.EnsureSuccessStatusCode();
+
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "two"));
+        Assert.Equal(HttpStatusCode.Conflict, edit.StatusCode);
+        using var delete = await host.Client.DeleteAsync(Prefix + "/feeds/candidate");
+        Assert.Equal(HttpStatusCode.Conflict, delete.StatusCode);
+    }
+
+    [Fact]
+    public async Task Feed_address_changes_check_pending_overrides_in_the_management_file()
+    {
+        const string original = """{"Nuplane":{"Setup":{"Feeds":[{"Name":"candidate","DirectoryPath":"one","Trust":"Untrusted","Directory":{"Watch":false}}]}}}""";
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"), original));
+        var file = Path.Combine(host.Root, "nuplane-management.json");
+        var document = JsonNode.Parse(original)!;
+        document["Nuplane"]!["FeedResolution"] = JsonNode.Parse(
+            """{"TrustOverrides":[{"FeedName":"candidate","PackageId":"Elsa.Example","Reason":"Fixture approval"}]}""");
+        await File.WriteAllTextAsync(file, document.ToJsonString());
+
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "two"));
+        Assert.Equal(HttpStatusCode.Conflict, edit.StatusCode);
+        Assert.Equal("one", JsonNode.Parse(await File.ReadAllTextAsync(file))!["Nuplane"]!["Setup"]!["Feeds"]![0]!["DirectoryPath"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_feed_edit_that_changes_the_service_index_drops_the_stored_credential()
+    {
+        const string credential = "secrets://vault/issued-for-private-host-3735";
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"remote","ServiceIndex":"https://private.example/v3/index.json","Credentials":"CREDENTIAL","IncludeAll":true}]}}}""".Replace("CREDENTIAL", credential)));
+        var edited = new JsonObject
+        {
+            ["name"] = "remote", ["serviceIndex"] = "https://public.example/v3/index.json", ["includeAll"] = true,
+            ["includePatterns"] = new JsonArray("*"), ["directory"] = new JsonObject { ["watch"] = false, ["debounceWindow"] = "00:00:01" }
+        };
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/remote", edited);
+        edit.EnsureSuccessStatusCode();
+        var feed = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(host.Root, "nuplane-management.json")))!["Nuplane"]!["Setup"]!["Feeds"]![0]!.AsObject();
+        Assert.Equal("https://public.example/v3/index.json", (string?)feed["ServiceIndex"]);
+        Assert.False(feed.ContainsKey("Credentials"));
+    }
+
+    [Fact]
+    public async Task A_named_cache_directory_accepts_uploads_without_claiming_desired_state_discovery()
+    {
+        await using var host = await AdministrationHost.StartAsync(
+            configureNuplane: nuplane => nuplane.AddDirectoryFeed("cache", "cache", feed => { feed.Role = DirectoryFeedRole.Cache; feed.Watch = false; }),
+            configureAdministration: options => options.DirectoryFeedName = "cache");
+        using var response = await Upload(host, "Acme.StudioUpload.1.0.0.nupkg", Package());
+        response.EnsureSuccessStatusCode();
+        Assert.True(File.Exists(Path.Combine(host.Root, "cache", "Acme.StudioUpload.1.0.0.nupkg")));
+        await ReconcileAfterUpload(host);
+        Assert.Empty((await Registry(host))["packages"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task A_source_only_feed_cannot_be_selected_as_a_package_resolver_drop_directory()
+    {
+        await Assert.ThrowsAsync<StudioHostingException>(async () =>
+        {
+            await using var host = await AdministrationHost.StartAsync(
+                configureNuplane: nuplane => nuplane.AddDirectoryFeed("source", "source", feed => { feed.Role = DirectoryFeedRole.Desired; feed.Watch = false; feed.IncludeAll(); }),
+                configureAdministration: options => options.DirectoryFeedName = "source");
+        });
+    }
+
+    private static async Task<JsonObject> Registry(AdministrationHost host)
+    {
+        using var response = await host.Client.GetAsync(Prefix + "/registry");
+        response.EnsureSuccessStatusCode();
+        return JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
+    }
+
+    private static async Task<HttpResponseMessage> Upload(AdministrationHost host, string fileName, byte[] bytes)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(bytes), "package", fileName);
+        return await host.Client.PostAsync(Prefix + "/packages/upload", form);
+    }
+
+    private static IEnumerable<string> Dropped(AdministrationHost host)
+    {
+        var directory = Path.Combine(host.Root, "packages");
+        return Directory.Exists(directory) ? Directory.EnumerateFiles(directory) : [];
+    }
+
+    private static async Task ReconcileAfterUpload(AdministrationHost host)
+    {
+        // The accepted upload schedules its own reconciliation. Wait for that ownership to leave
+        // before requiring another complete public reconciliation of the now-present cache file.
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            using var response = await host.Client.PostAsync(Prefix + "/reconcile", null);
+            response.EnsureSuccessStatusCode();
+            var result = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+            if ((string?)result["reconcile"]?["outcome"] != "Unavailable")
+            {
+                Assert.Equal("Completed", (string?)result["reconcile"]?["outcome"]);
+                Assert.False((bool)result["reconcile"]!["isDegraded"]!);
+                return;
+            }
+            Assert.True(DateTimeOffset.UtcNow < deadline, result.ToJsonString());
+            await Task.Delay(25);
+        }
+    }
+
+    private static JsonObject Feed(string name, string path) => new()
+    {
+        ["name"] = name, ["directoryPath"] = path, ["includeAll"] = true,
+        ["includePatterns"] = new JsonArray("*"),
+        ["directory"] = new JsonObject { ["watch"] = false, ["debounceWindow"] = "00:00:01" }
+    };
+
+    private static byte[] Package()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = archive.CreateEntry("Acme.StudioUpload.nuspec");
+            using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
+            writer.Write("<package><metadata><id>Acme.StudioUpload</id><version>1.0.0</version><authors>tests</authors><description>Studio upload probe</description></metadata></package>");
+        }
+        return stream.ToArray();
+    }
+}

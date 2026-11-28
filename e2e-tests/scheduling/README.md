@@ -1,6 +1,18 @@
-# scheduling - Delay / Timer / Cron
+# Classic Delay, Timer and Cron witnesses
 
-Backend tests for the three `Elsa.Activities.Scheduling` activities, driven through the REST API.
+These REST witnesses run against the pinned classic Workbench. The deadline script
+starts its own loopback host, verifies restart on a disposable SQLite store, and
+runs the Delay, Timer and Cron checks in that same host.
+
+```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" 18a16dee878106ac525aa9a861d851a200e43c55
+(
+  cd "$archive/source"
+  dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Debug -p:RestoreLockedMode=true
+  pwsh -NoProfile -File e2e-tests/scheduling/Test-DelayDeadline.ps1 -EvidencePath "$archive/scheduling.json"
+)
+```
 
 | Script | What it exercises |
 |--------|-------------------|
@@ -10,24 +22,9 @@ Backend tests for the three `Elsa.Activities.Scheduling` activities, driven thro
 | `Test-Cron.ps1` | `Cron` - a recurring **start trigger** on a cron schedule (UTC); same pump. Asserts an instance is auto-started and completes. |
 | `_SchedulingCommon.ps1` | shared helpers (node builders, pump-driven instance waiters). |
 
-## Required server features (opt-in)
-
-These activities are **discoverable in the design catalog by default, but do not run** unless the scheduling
-features are composed - a `Delay` faults at construction (`IDurableTimerScheduler` unresolved) and `Timer`/`Cron`
-never fire. The `Essentials/apps/Elsa.Workbench/shells.json` default shell must enable:
-
-```json
-"ActivitiesScheduling": {},
-"WorkflowsRuntimeScheduling": {},
-"WorkflowsRuntimeRecurringTriggers": {}
-```
-
-`ActivitiesScheduling` depends on both runtime features; the runtime features register the `IDurableTimerStore` /
-`IDurableTimerScheduler` + `DurableTimerPumpTask` and the recurring schedule store + `RecurringTriggerPumpTask`
-respectively. The durable timer pump wakes at known eligible deadlines and retains roughly ten-second recovery
-sweeps for missed/other-host notifications. Timer/Cron retain their roughly ten-second recurring sweep cadence;
-their fires can land within `interval|occurrence` **+ up to ~10s** of sweep jitter. Host load, retries and claims
-can delay execution further; these are durable scheduling semantics, not real-time guarantees.
+The archived shell selects `ActivitiesScheduling`. Its runtime dependencies own the
+durable Timer and recurring schedules. The recurring checks allow for the pump's
+roughly ten-second sweep cadence.
 
 ## Input value formats
 

@@ -81,5 +81,8 @@ public enum TriggerCardinality
     Exclusive,
 
     /// <summary>Multiple authoritative publications may intentionally receive the stimulus.</summary>
-    FanOut
+    FanOut,
+
+    /// <summary>An activation claim that is never available to the stimulus router.</summary>
+    ReservationOnly
 }

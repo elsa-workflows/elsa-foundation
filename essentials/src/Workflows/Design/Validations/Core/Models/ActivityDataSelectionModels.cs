@@ -82,6 +82,14 @@ public sealed record ActivityDataSelectionQuery
         init => _memberPath = value.IsDefault ? [] : value;
     }
     public ActivitySerializedShapeLimits ShapeLimits { get; init; } = new();
+    /// <summary>
+    /// Server-only opt-in for expression authoring help. When true, a source's
+    /// <see cref="ActivitySerializedShapeState.Declared"/> shape (advisory members of its declared type) is returned
+    /// as described. When false, the default, it is answered as the profile-unbound Unknown shape without members,
+    /// so pickers, validation and publication see only what the stored value proves. Ignored by JSON.
+    /// </summary>
+    [JsonIgnore]
+    public bool IncludeDeclaredMembers { get; init; }
 }
 
 /// <summary>Actual target metadata. It intentionally contains no authored literal or runtime business value.</summary>
@@ -181,4 +189,4 @@ public sealed record ActivityDataInputConstraint(
 
 /// <summary>The planned operation or publication rejection for a known, authored result-to-input binding.</summary>
 public sealed record ActivityBindingConversionPreview(TypeReference SourceType, TypeReference TargetType,
-    string? Operation, string? ReasonCode = null, string? Rejection = null);
+    string? Operation, string? ReasonCode = null, string? Rejection = null, bool CanSerializeJsonString = false);

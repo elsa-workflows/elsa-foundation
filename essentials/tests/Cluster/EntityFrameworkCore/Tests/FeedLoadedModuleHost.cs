@@ -26,7 +26,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 {
     public const string FoundationHost = "Elsa.Foundation.Host";
-    public const string Workbench = "Elsa.Workbench";
+    public const string Workbench = "Elsa.Workbench.Host";
     private const string ShellName = "default";
 
     private readonly ServiceProvider _root;
@@ -189,7 +189,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 
     /// <summary>The host's <c>Nuplane:Loading:SharedAssemblies</c>, from its <c>appsettings.json</c>, as Nuplane binds and validates them.</summary>
     public static NuplaneSharedAssemblyPolicy SharedAssemblies(string host) =>
-        NuplaneSharedAssemblyPolicy.FromHostAppSettings(Path.Join(FoundationHostProcess.RepoRoot, "apps", host, "appsettings.json"));
+        NuplaneSharedAssemblyPolicy.FromHostAppSettings(Path.Join(FoundationHostProcess.RepoRoot, "server/apps", host, "appsettings.json"));
 }
 
 /// <summary>

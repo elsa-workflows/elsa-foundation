@@ -391,7 +391,8 @@ sealed class Ev1(string variant, EvRules rules)
     {
         var id = $"{Real.Origin(Publisher.Id, 1)}#{Revision(w, Publisher.Id)}.0000";
         var e = new EventRow(key, id, payload, w.Now + keep);
-        var ticket = new Message(id, Publisher, Kinds.Publish, Json.Write(e), Publisher.Id, TargetCreation: 1, SenderCreation: 1).AsIssued();
+        var ticket = ModeledTicket.Issue(new Message(id, Publisher, Kinds.Publish, Json.Write(e), Publisher.Id,
+            TargetCreation: 1, SenderCreation: 1).AsIssued());
         await Commit(w, new TurnCommit(Publisher.Id, null, null, [], [], [ticket], [], [], null));
         w.AtAcceptance[(e.Key, e.Id)] = w.Store.Subscriptions.Select(r => (r.Key, r.Instance, r.Wait)).ToHashSet();
         return (e, ticket);
@@ -443,8 +444,8 @@ sealed class Ev1(string variant, EvRules rules)
     {
         var p0 = rules == EvRules.NoHorizon ? w.Now : Math.Max(w.Now, w.Horizon == long.MinValue ? long.MinValue : w.Horizon + 1);
         Message? meet = keep
-            ? new Message($"{Real.Origin(wait.Instance, wait.Creation)}#{Revision(w, wait.Instance)}.0000", new InstanceRef(wait.Instance), Kinds.Meet,
-                Json.Write(new MeetPage([wait], null, p0)), wait.Instance, TargetCreation: wait.Creation, SenderCreation: wait.Creation).AsIssued()
+            ? ModeledTicket.Issue(new Message($"{Real.Origin(wait.Instance, wait.Creation)}#{Revision(w, wait.Instance)}.0000", new InstanceRef(wait.Instance), Kinds.Meet,
+                Json.Write(new MeetPage([wait], null, p0)), wait.Instance, TargetCreation: wait.Creation, SenderCreation: wait.Creation).AsIssued())
             : null;
         var committed = await Commit(w, new TurnCommit(wait.Instance, null, null, [], [], meet is null ? [] : [meet], [wait], [], null));
         if (committed.Now != w.Now) throw new InvalidOperationException("harness schedule: the commit clock differs from the harness clock");
@@ -494,8 +495,8 @@ sealed class Ev1(string variant, EvRules rules)
         var instance = new InstanceRef(page.Waits[0].Instance);
         var nextP0 = rules == EvRules.P0AtPageCommit ? Math.Max(w.Now, w.Horizon == long.MinValue ? long.MinValue : w.Horizon + 1) : page.P0;
         Message? next = ordered.Count == PageLimit
-            ? new Message($"{Real.Origin(instance.Id, 1)}#{Revision(w, instance.Id)}.0000", instance, Kinds.Meet,
-                Json.Write(page with { AfterEvent = ordered[^1].Event.Id, P0 = nextP0 }), instance.Id, TargetCreation: 1, SenderCreation: 1).AsIssued()
+            ? ModeledTicket.Issue(new Message($"{Real.Origin(instance.Id, 1)}#{Revision(w, instance.Id)}.0000", instance, Kinds.Meet,
+                Json.Write(page with { AfterEvent = ordered[^1].Event.Id, P0 = nextP0 }), instance.Id, TargetCreation: 1, SenderCreation: 1).AsIssued())
             : null;
         await Commit(w, new TurnCommit(instance.Id, null, null, [meet.InboxKey], [], next is null ? [] : [next], [], [], null));
         _report.Line($"  meet step at {w.Now}: {(CatchUpByP0 ? $"KeepUntil >= P0 {page.P0}" : "real KeptMatchesAsync (KeepUntil >= now)")} -> page [{string.Join(", ", ordered.Select(m => m.Event.Payload))}]{(next is null ? "" : $", next ticket sent (P0 {nextP0})")}");

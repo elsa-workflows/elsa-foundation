@@ -9,6 +9,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IDurableTimerScheduler
 {
+    /// <summary>Qualifies the selected producer against its actual native history owner and reader.</summary>
+    bool CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
     /// <summary>Persists <paramref name="timer"/> so the hosted pump can fire it at its due time.</summary>
     ValueTask<DurableTimer> ScheduleAsync(DurableTimer timer, CancellationToken cancellationToken = default);
 }

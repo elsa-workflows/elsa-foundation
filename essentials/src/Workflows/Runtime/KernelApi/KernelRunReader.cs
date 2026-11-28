@@ -1,0 +1,92 @@
+using System.Runtime.CompilerServices;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Inspection.Core;
+using Elsa.Workflows.Runtime.KernelHost;
+using Kernel.Foundation.Contracts;
+using Kernel.WorkflowActor;
+
+namespace Elsa.Workflows.Runtime.KernelApi;
+
+internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access,
+    KernelTestRuns? testRuns = null,
+    IWorkflowTestScopeStore? testScopes = null, IWorkflowExecutionPartitionAccessor? partitions = null, TimeProvider? clock = null)
+    : IWorkflowRetainedRunSource
+{
+    internal sealed record Run(WorkflowExecutionState State, WorkflowRunHeader Header, WorkflowExecutable? Executable,
+        ActorView View, KernelRuns? IsolatedReads = null);
+
+    internal ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(Run run, bool includeValues, CancellationToken cancellationToken) =>
+        run.State is { Status: WorkflowExecutionStatus.Completed, CompletedAt: { } ended }
+            ? (run.IsolatedReads ?? runs).ReadTerminalOutputAsync(new ActorRef(run.State.WorkflowExecutionId),
+                ended.ToUnixTimeMilliseconds(), includeValues, cancellationToken)
+            : ValueTask.FromResult<ActorTerminalOutput?>(null);
+
+    async IAsyncEnumerable<WorkflowExecutionState?> IWorkflowRetainedRunSource.ReadAsync(string tenant,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (tenant != runs.Tenant.Tenant || !KernelRunStates.CanReadTenant(access.Current, runs.Tenant)) yield break;
+
+        var identities = new Dictionary<string, WorkflowExecutableIdentity?>(StringComparer.Ordinal);
+        await foreach (var candidate in runs.ListCandidatesAsync(definition: null, isolated: false, cancellationToken))
+            yield return candidate is { } selected ? await ProjectAsync(selected.View, selected.Run) : null;
+
+        if (testRuns is not { Reads: { } isolated } || testScopes is null) yield break;
+        await foreach (var candidate in isolated.ListCandidatesAsync(definition: null, isolated: true, cancellationToken))
+            yield return candidate is { } selected && await HasTestScopeAsync(selected.View.Header, selected.Run.TestStart, tenant, cancellationToken)
+                ? await ProjectAsync(selected.View, selected.Run)
+                : null;
+
+        async ValueTask<WorkflowExecutionState> ProjectAsync(ActorView view, WorkflowRunHeader run)
+        {
+            if (!identities.TryGetValue(run.Workflow, out var identity))
+                identities[run.Workflow] = identity = (await executables.FindAsync(run.Workflow, cancellationToken))?.Identity;
+            return KernelRunStates.From(view, run, identity, tenant);
+        }
+    }
+
+    internal async ValueTask<Run?> GetAsync(string id, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        if (access.Current is not { AccessPolicy: PersistenceAccessPolicy.Ordinary, AcrossScopes: false, Scope.Value: { } tenant })
+            return null;
+        if (tenant != runs.Tenant.Tenant) return null;
+        var actor = new ActorRef(id);
+        var (missing, found) = await runs.GetAsync(actor, cancellationToken);
+        if (missing)
+        {
+            if (testRuns is { Reads: { } isolated })
+            {
+                var test = await isolated.GetAsync(actor, cancellationToken);
+                if (!test.Missing)
+                {
+                    if (test.Run is not { } selected || !await HasTestScopeAsync(selected.View.Header, selected.Run.TestStart, tenant, cancellationToken))
+                        return null;
+                    var testExecutable = await executables.FindAsync(selected.Run.Workflow, cancellationToken);
+                    return new Run(KernelRunStates.From(selected.View, selected.Run, testExecutable?.Identity, tenant),
+                        selected.Run, testExecutable, selected.View, isolated);
+                }
+            }
+            return null;
+        }
+        if (found is not { Run.TestStart: null } kernel) return null;
+
+        var (view, run) = kernel;
+        var executable = await executables.FindAsync(run.Workflow, cancellationToken);
+        return new Run(KernelRunStates.From(view, run, executable?.Identity, tenant), run, executable, view);
+    }
+
+    private async ValueTask<bool> HasTestScopeAsync(ActorHeader header, WorkflowTestStart? test, string tenant, CancellationToken token)
+    {
+        if (test is null || testScopes is null || test.ScopeId != test.SourceReferenceId ||
+            (test.Tenant ?? PersistenceScope.DefaultValue) != tenant ||
+            test.Partition != (partitions?.Current.Value ?? WorkflowExecutionPartition.DefaultValue) ||
+            test.ExpiresAt <= (clock ?? TimeProvider.System).GetUtcNow())
+            return false;
+        var stored = await testScopes.FindAsync(test.ScopeId, token);
+        // The attached-birth transaction proved this stamp against the actual provider parent and the durable root binding.
+        var root = header.Parent is null ? header.Ref.Id : test.RootActor;
+        return stored is { IsolatedActor: { } binding } && binding.ActorReference == root &&
+            WorkflowTestScope.ContextEquals(stored.Scope, new(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition)));
+    }
+}

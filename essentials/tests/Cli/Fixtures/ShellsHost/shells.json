@@ -5,47 +5,47 @@
       "agree": {
         "Name": "agree",
         "Features": {
-          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" },
-          "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": { "Provider": "PostgreSql" },
           "WorkflowsDesignEntityFrameworkCore": { "Provider": "PostgreSql" },
-          "WorkflowsDashboardEntityFrameworkCore": {}
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {}
         }
       },
       "one-offender": {
         "Name": "one-offender",
         "Features": {
-          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" },
-          "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence": { "Provider": "Sqlite" }
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": { "Provider": "Sqlite" }
         }
       },
       "unset-offender": {
         "Name": "unset-offender",
         "//": "User Story 1 scenario 5: one feature set to PostgreSql, another left at its own Sqlite default.",
         "Features": {
-          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" },
-          "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence": {}
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {}
         }
       },
       "dashboard-only": {
         "Name": "dashboard-only",
-        "//": "The one mapped feature with no Provider setting at all. It is skipped, not defaulted to Sqlite.",
+        "//": "The portfolio reader has no Provider setting. It is skipped in the provider comparison.",
         "Features": {
-          "WorkflowsDashboardEntityFrameworkCore": {}
+          "WorkflowsDashboardPortfolioEntityFrameworkCore": {}
         }
       },
       "disabled-offender": {
         "Name": "disabled-offender",
         "//": "A feature that would disagree, turned off. A feature a shell does not enable is ignored.",
         "Features": {
-          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" },
-          "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence": false
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": false
         }
       },
       "overlay": {
         "Name": "overlay",
         "//": "Sqlite here, PostgreSql in shells.Production.json. Which one the check sees proves which files it read.",
         "Features": {
-          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "Sqlite" }
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "Provider": "Sqlite" }
         }
       },
       "secrets": {
@@ -62,8 +62,8 @@
         "Name": "array-shape",
         "//": "CShells also accepts an array of feature entries. A host that authored this shape must not read as 'nothing enabled'.",
         "Features": [
-          { "Name": "WorkflowsRuntimeEntityFrameworkCore", "Provider": "Sqlite" },
-          "WorkflowsDashboardEntityFrameworkCore"
+          { "Name": "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "Provider": "Sqlite" },
+          "WorkflowsDashboardPortfolioEntityFrameworkCore"
         ]
       }
     }

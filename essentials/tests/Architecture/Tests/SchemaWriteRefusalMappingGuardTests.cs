@@ -5,12 +5,16 @@ using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
+using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Modularity.Api;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.KernelApi;
+using Elsa.Workflows.Runtime.KernelHost;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa3.Activities.Design.Import;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -46,19 +50,16 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     /// <summary>Every first-party feature that registers failure services for its owner.</summary>
     private static readonly Type[] OwnersWithTheirOwnFailureServices =
     [
-        typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature),
-        typeof(ActivitiesBpmnDirectPublishingFeature),
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
         typeof(Elsa.Agent.Api.AgentApiFeature),
         typeof(Elsa.Agent.Inspection.Api.AgentInspectionApiFeature),
-        typeof(Elsa.Agent.Review.Api.AgentReviewApiFeature),
         typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
         typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature),
         typeof(ModularityApiFeature),
         typeof(WorkflowsDesignApiFeature),
         typeof(WorkflowsPublishingApiFeature),
-        typeof(WorkflowsRuntimeApiFeature),
+        typeof(WorkflowsRuntimeKernelRetainedApiFeature),
         typeof(Elsa3ImportActivitiesFeature)
     ];
 
@@ -149,13 +150,24 @@ public sealed class SchemaWriteRefusalMappingGuardTests
             .Where(type =>
             {
                 var services = new ServiceCollection();
+                DirectoryInfo? kernelDirectory = null;
                 try
                 {
-                    ((IShellFeature)Activator.CreateInstance(type)!).ConfigureServices(services);
+                    var feature = (IShellFeature)Activator.CreateInstance(type)!;
+                    if (feature is WorkflowsRuntimeKernelHostingFeature kernel)
+                    {
+                        kernelDirectory = Directory.CreateTempSubdirectory(nameof(SchemaWriteRefusalMappingGuardTests));
+                        kernel.SqlitePath = Path.Combine(kernelDirectory.FullName, "kernel.db");
+                    }
+                    feature.ConfigureServices(services);
                 }
                 catch (InvalidOperationException exception) when (!typeof(IWebShellFeature).IsAssignableFrom(type))
                 {
                     unconfigurable.Add($"{type.FullName}: {exception.Message}");
+                }
+                finally
+                {
+                    kernelDirectory?.Delete(recursive: true);
                 }
                 return services.Any(registration => registration.IsKeyedService && failureContracts.Contains(registration.ServiceType));
             })
@@ -230,6 +242,13 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         var builder = WebApplication.CreateSlimBuilder();
         var shellFeature = (IWebShellFeature)Activator.CreateInstance(feature)!;
         shellFeature.ConfigureServices(builder.Services);
+        if (shellFeature is WorkflowsRuntimeKernelRetainedApiFeature kernel)
+        {
+            builder.Services.AddSingleton<NormalizedPrincipalValidator>();
+            builder.Services.AddSingleton(new KernelRuns(EmbeddedTenant.Bind("default"),
+                _ => throw new NotSupportedException("The refusal mapping probe does not read runs.")));
+            kernel.PostConfigureServices(builder.Services);
+        }
         var app = builder.Build();
         shellFeature.MapEndpoints(app, null);
         var endpoints = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();

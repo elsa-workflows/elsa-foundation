@@ -1,12 +1,15 @@
 # Elsa Foundation architecture tour
 
-> **Current core.** This page describes the current Elsa core, which stays the default until the switch to the clean-slate kernel (milestone K13). The kernel is in development, tracked in [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229); its design is in the [kernel architecture pages](architecture/README.md). This page will be rewritten for the new core as part of that switch.
-
-A short orientation for developers new to this repository: what Elsa 4 is made of, the few patterns that hold it together, and where to go next. You do not need to read the project's rulebooks (the "constitution", explained below) first.
+The published Curated Essentials server runs Native and Flowchart workflows on the built-in Actor
+Foundation. The stock Workbench source configuration uses the same engine. The default switch
+(K13) is published. Retirement of the earlier runtime (K14) is in progress. See the
+[K13 publication receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7231238178)
+and [program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
 
 ## What Elsa 4 is made of
 
-Elsa is being rebuilt as a set of **modular domains**. Each domain publishes its contracts in a `.Core` library, keeps its implementations behind those contracts, and talks to other domains only through a handful of approved patterns, never by reaching into another domain's implementation.
+Elsa is made of **modular domains**. Each domain publishes contracts and keeps its implementations
+behind them. Workflow authoring, publication and execution have separate responsibilities.
 
 The biggest split is between **designing** workflows and **running** them:
 
@@ -15,28 +18,48 @@ flowchart LR
     subgraph Design["Workflows.Design (authoring)"]
         D[Definitions, drafts, versions]
     end
-    subgraph Runtime["Workflows.Runtime (execution)"]
-        E[Executions, bookmarks, checkpoints]
-    end
     D -->|publish| X[Published executable]
-    X --> E
+    X --> E[Elsa workflow actor]
+    E -->|turn contract| A[Built-in Actor Foundation]
 ```
 
-- `Elsa.Workflows.Design.*` owns authoring and saved workflow definitions.
-- `Elsa.Workflows.Runtime.*` owns execution.
-- Runtime must not depend on Design directly. The **published executable** is the boundary between them: Design produces it, Runtime runs it.
+- [Workflows.Design](../essentials/src/Workflows/Design/) owns authoring and saved workflow definitions.
+- [Workflows.Publishing](../essentials/src/Workflows/Publishing/) compiles an authored version into an
+  immutable executable and records which publication serves it.
+- [Workflows.Runtime](../essentials/src/Workflows/Runtime/) starts a run against an exact published
+  executable. The executable is the boundary between authoring and execution.
 
-A running server is a **shell**: a service container built from a list of **features** named in configuration. The reference server, the Workbench, reads that list from its `shells.json`. A feature that is not listed registers nothing. [How a workflow executes](how-a-workflow-executes.md) follows one request through the Workbench to a saved checkpoint.
+### The three execution layers
 
-Generated maps track the current Design/Runtime reference signals. Known, deferred exceptions are recorded in reports, not here. For a worked example of how two domains connect, read [seams and bridges](seams.md).
+| Layer | Responsibility |
+| --- | --- |
+| 1. Actor runtime | Assigns and activates ownership scopes and schedules work for the owner. |
+| 2. Durable actors | Stores the inbox and commits each turn's state, recorded effects and journal under the ownership fence. |
+| 3. Elsa workflow actor and execution model | Interprets a published Native or Flowchart workflow, evaluates activities and waits, and produces workflow outcomes and History events. |
+
+Layers 1 and 2 form the [built-in Actor Foundation](../essentials/src/ActorFoundation/README.md).
+Layer 3 uses the [foundation contracts](../essentials/src/ActorFoundation/Contracts/README.md)
+through the [workflow actor](../essentials/src/Workflows/Runtime/WorkflowActor/README.md).
+SQLite hosts use one process per file. PostgreSQL supplies database-backed ownership. The Actor
+store and the module stores for definitions, publications and identity have separate connections
+or paths. See the [Curated Essentials deployment settings](../docker/profiles/essentials-curated/README.md#workflow-execution).
+
+A **shell** is a service container composed from selected features and their declared dependencies.
+The Workbench reads its selections from [`shells.json`](../server/apps/Elsa.Workbench.Host/shells.json).
+`WorkflowsRuntimeKernelHosting` runs the Actor Foundation and supplies workflow execution to the
+retained Runtime API. [Follow a workflow request](how-a-workflow-executes.md) or read the
+[execution architecture index](architecture/README.md).
+
+Generated maps track the Design and Runtime project references. For a worked example of how two
+domains connect, read [seams and bridges](seams.md).
 
 ## The patterns to recognise
 
 | Pattern | In one line | Example |
 |---|---|---|
-| **Feature inheritance** | A feature builds on another when the relationship is explicit and stable. | The database runtime feature depends on the resumption feature, so choosing database storage always brings the recovery pump. |
-| **Replacement** | A consumer swaps the one default implementation of a contract. | The EF Core feature replaces the in-memory work queue with a database queue. |
-| **Contribution** | Consumers add implementations; one owner aggregates them. | Each activity module contributes its scheduler work handlers; the drain picks the one that accepts each work item. |
+| **Feature inheritance** | A feature builds on another when the relationship is explicit and stable. | Actor workflow hosting depends on the retained Runtime API feature. |
+| **Replacement** | A consumer selects the implementation of a contract. | An Actor host selects SQLite or PostgreSQL for its store. |
+| **Contribution** | Consumers add implementations that the owner aggregates. | Module authors contribute startup tasks to the shell's task registry. |
 | **Events** | One `IEvent` concept; the delivery strategy defines how it is delivered. | A domain publishes an event without knowing who listens. |
 | **Startup tasks** | Composition and registry population that happen at start-up. | Filling a registry from contributed descriptors when the shell starts. |
 | **Adapters and bridges** | Integration code sits *above* the two sides it connects. | See [seams and bridges](seams.md). |
@@ -50,11 +73,11 @@ Every domain documents what you can replace, what you can contribute, and which 
 
 | Folder | What is in it |
 |---|---|
-| `Essentials/apps/` | Runnable hosts. `Elsa.Workbench` is the reference server and the process entry point. |
-| `Essentials/src/` | The core libraries and default implementations. |
-| `Essentials/tests/` | Focused tests for that behaviour. |
-| `Extensions/` | Optional modules, including `Elsa.Integrations.Sdk`. |
-| `Studio/` | The Studio front end. |
+| `server/apps/` | Runnable hosts, including the `Elsa.Workbench` reference server and `Elsa.Foundation.Host`. |
+| `essentials/src/` | The core libraries and default implementations. |
+| `essentials/tests/` | Focused tests for that behaviour. |
+| `extensions/` | Optional modules, including `Elsa.Integrations.Sdk`. |
+| `studio/` | The Studio front end. |
 | `docs/` | Lookup knowledge: glossary, skills, maps, reports, reference docs and programme goals. |
 | `docs/program-goals/` | The shared backlog, the registry of mid-term goal buckets, and roadmap notes. |
 | `specs/` | Work units and feature plans written with **Speckit**, the spec-driven planning tool this repo uses. |

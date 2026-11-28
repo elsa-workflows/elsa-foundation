@@ -13,7 +13,7 @@
   truly dead-letters → operator redrives → the child materializes) is **not reachable over REST with the default
   server**: producing a real `DispatchFailed` needs delivery-failure injection, and a bogus child id fails at parent
   *publish* (pinned then), not at runtime. The redrive endpoint's bogus-id no-op is covered in-process by
-  `WorkflowDispatchRedriveContractTests`. This is a harness limitation, not missing behavior — see the gap
-  analysis; the redrive path is heavily covered by the in-process C# tests (`WorkflowDispatchRedriveTests`, etc.).
+  `WorkflowDispatchRedriveContractTests`. The [classic Runtime archive](../../docs/contributing/classic-runtime-witnesses.md#classic-runtime-internals-and-collectible-material)
+  contains the original full redrive loop and its `WorkflowDispatchRedriveTests`.
 
 Requires the server from source (see ../README.md). `Test-IncidentTroubleshooting.ps1` requires an exclusively owned fresh database and host; it scopes its three runs by their creation time.

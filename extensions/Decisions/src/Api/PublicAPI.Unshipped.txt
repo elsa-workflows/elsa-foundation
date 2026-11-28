@@ -15,10 +15,12 @@ Elsa.Decisions.Api.DecisionCasesResponse.Items.get -> System.Collections.Generic
 Elsa.Decisions.Api.DecisionCasesResponse.Items.init -> void
 Elsa.Decisions.Api.DecisionProblem
 Elsa.Decisions.Api.DecisionProblem.<Clone>$() -> Elsa.Decisions.Api.DecisionProblem!
+Elsa.Decisions.Api.DecisionProblem.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Core.DecisionDiagnostic!>?
+Elsa.Decisions.Api.DecisionProblem.Diagnostics.init -> void
 Elsa.Decisions.Api.DecisionProblem.Code.get -> string!
 Elsa.Decisions.Api.DecisionProblem.Code.init -> void
-Elsa.Decisions.Api.DecisionProblem.DecisionProblem(string! Code, string! Message) -> void
-Elsa.Decisions.Api.DecisionProblem.Deconstruct(out string! Code, out string! Message) -> void
+Elsa.Decisions.Api.DecisionProblem.DecisionProblem(string! Code, string! Message, System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Core.DecisionDiagnostic!>? Diagnostics = null) -> void
+Elsa.Decisions.Api.DecisionProblem.Deconstruct(out string! Code, out string! Message, out System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Core.DecisionDiagnostic!>? Diagnostics) -> void
 Elsa.Decisions.Api.DecisionProblem.Equals(Elsa.Decisions.Api.DecisionProblem? other) -> bool
 Elsa.Decisions.Api.DecisionProblem.Message.get -> string!
 Elsa.Decisions.Api.DecisionProblem.Message.init -> void

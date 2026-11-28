@@ -1,10 +1,24 @@
 # Execution architecture
 
-> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
-> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
-> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+The published Curated Essentials server defaults to the built-in Actor Foundation for Native and
+Flowchart workflows on SQLite and PostgreSQL. The default switch (K13) was published in
+`4.0.0-preview.3013`. The shared-format Curated profile was subsequently published in
+`4.0.0-preview.3019`. Earlier-runtime removal (K14) is in progress. See the
+[K13 receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7231238178),
+[shared-format receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7231935018)
+and [program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
 
-These pages describe the clean-slate execution kernel's approved design. They are design references; replacing Elsa's current runtime is gate 4, the switch. [Program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) tracks the proposal, qualification and switch. The [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md) records the owner's decisions and release scope.
+Start with the [architecture tour](../architecture-tour.md) and
+[how a workflow executes](../how-a-workflow-executes.md) for the shipped path. Deployment settings
+and data custody are in the [Curated Essentials profile guide](../../docker/profiles/essentials-curated/README.md#workflow-execution).
+The [pinned earlier Full deployment record](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7232199720)
+covers compatibility workloads still using the earlier runtime.
+
+The references below preserve the design decisions and prototype work, including values by
+reference, remote job workers, StateMachine and Park operations beyond recovery. Each page keeps
+its design status. Consult the [owner's trimmed release scope](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)
+for which work is part of this delivery. The [architecture verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)
+records design approval with conditions at `addffea7c850063d1ebe710b07866ff1640a93cb`.
 
 ## Reading order
 
@@ -22,17 +36,24 @@ These pages describe the clean-slate execution kernel's approved design. They ar
 12. [Tenancy](tenancy.md) — **Approved design**: where the kernel takes the tenant from, tenant-qualified names, and the uniqueness and authorization rule of every ingress, match, read and administrative operation.
 13. [The foundation contract](foundation-contract.md) — **Approved design, with conditions** (19 November, at `2825b0ed1`): the contract between a foundation (what layers 1 and 2 provide) and layer 3, in plain domain words; its vocabulary, the built-in foundation's mapping, the leak inventory and conformance cases FC-1 to FC-18.
 14. [StateMachine on the kernel](statemachine-on-the-kernel.md) — **Owner decisions** (19 November): #3815's decisions OD1 to OD49 on the kernel, the four owner answers, and K7's invariants S1 to S4.
-15. [Decision register](decisions.md) — **Approved design**: every owner decision that binds the kernel, by topic, with its date and source.
+15. [Designer definitions on the kernel](definitions-on-the-kernel.md) — **Owner decisions** (25 November): K10's definitions-to-kernel path; a kernel activation coordinator, the executable mapper and host-evaluated JavaScript and Liquid bindings.
+16. [Decision register](decisions.md) — **Approved design**: every owner decision that binds the kernel, by topic, with its date and source.
 
 The walkthrough's data cards link to the storage reference. Its ownership chapter links to the fencing explanation. These references explain the contract; experiment reports carry implementation status and measured results.
 
-The architecture references carried a Proposed banner until design approval, and carry the Approved design banner from gate 2's approval on 18 November 2026. They become Current when Elsa switches to the new core; prototype publication alone does not change their status.
-
 ## Implementation and evidence
+
+- [Installed Actor Foundation packages](../../essentials/src/ActorFoundation/README.md) and [workflow hosting composition](../../essentials/src/Workflows/Runtime/KernelHosting/).
+- [Retained Curated production journeys on both providers](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7231333589).
+- [K14 retirement inventory](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7231865702) and [first production removal](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7232157480).
+
+The following reports record prototype scope, settings and measurements.
 
 - [Prototype README](../../prototypes/kernel-model/README.md): components, runnable checks and commands.
 - [Prototype design](../../prototypes/kernel-model/DESIGN.md): implemented contracts and invariants.
 - [Findings](../../prototypes/kernel-model/FINDINGS.md): qualified results, limitations and counterexamples.
 - [Write volume](../../prototypes/kernel-model/WRITES.md): PostgreSQL write and bloat measurements under the stated workload and settings.
 
-Successful prototype checks do not approve a provider policy or a new default. Implementation starts at K1, the prototype Worker refactor, before product wiring. Product slices follow from K2, behind a host switch, with the old core the default until gate 4. The work follows the [program plan](../program-goals/clean-slate-kernel.md#milestones) milestone by milestone, and each milestone closes on its own evidence. At the switch, a shorter user-facing architecture section is published under `website/docs/`, linking to the engineering references here.
+The [program plan](../program-goals/clean-slate-kernel.md#milestones) records the milestones and
+their acceptance criteria. The [Essentials workflow execution guide](../../website/docs/essentials/workflow-execution.md)
+covers the release from a user's perspective.

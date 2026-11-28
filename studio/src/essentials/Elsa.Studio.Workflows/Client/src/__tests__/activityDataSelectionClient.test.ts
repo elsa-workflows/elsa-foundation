@@ -1,0 +1,530 @@
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { flowchartStructureKind } from "../flowchartStartNode";
+import {
+  hasWorkflowActivityDataSelection,
+  readActivityDataContextResult,
+  requestActivityDefinitionActivityData,
+  requestWorkflowActivityData,
+  wholeValueSourceQuery
+} from "../api/activityDataSelection";
+import { clearApiCapabilityCache } from "../api/capabilities";
+import { updateDraft } from "../api/workflowDesign";
+import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
+import { collectSourcePages, maximumSourcePages } from "../activityDataSelection";
+import type { ActivityDataContextResult } from "../api/activityDataSelection";
+import { describeInferredSource } from "../conversionSource";
+
+function page(state: ActivityDataContextResult["state"], ids: string[], hasMoreSources: boolean): ActivityDataContextResult {
+  return {
+    state, code: null, documentRevision: "rev", baseRevision: "base", target: null, hasMoreSources,
+    sources: ids.map(id => ({ id, displayName: id, binding: null, reasonCode: null, availability: null, activityResultSource: null, type: null }))
+  };
+}
+
+describe("reading sources page by page", () => {
+  it("reads on while the server has more and joins the pages in order", async () => {
+    const skips: number[] = [];
+    const result = await collectSourcePages(async skip => {
+      skips.push(skip);
+      return skip === 0 ? page("supported", ["input:a"], true) : page("supported", ["activity:p:$result"], false);
+    }, new AbortController().signal);
+    expect(skips).toEqual([0, 100]);
+    expect(result.sources.map(source => source.id)).toEqual(["input:a", "activity:p:$result"]);
+    expect(result.hasMoreSources).toBe(false);
+  });
+
+  it("stops at the bound and keeps saying more exist", async () => {
+    const request = vi.fn(async (skip: number) => page("supported", [`source:${skip}`], true));
+    const result = await collectSourcePages(request, new AbortController().signal);
+    expect(request).toHaveBeenCalledTimes(maximumSourcePages);
+    expect(result.sources).toHaveLength(maximumSourcePages);
+    expect(result.hasMoreSources).toBe(true);
+  });
+
+  it("rejects a read whose pages answer different documents", async () => {
+    const result = await collectSourcePages(async skip => ({ ...page("supported", [`source:${skip}`], skip === 0), documentRevision: skip === 0 ? "rev-1" : "rev-2" }),
+      new AbortController().signal);
+    expect(result).toMatchObject({ state: "stale", code: "activity-data.revision-changed", sources: [], target: null });
+  });
+
+  it.each([
+    { baseRevision: "other" }, { snapshotHash: "other" }, { resourceId: "other" },
+    { contractRevision: "other" }, { memberReadsEnabled: true }
+  ])("withholds pages whose authority facts change (%j)", async changed => {
+    const result = await collectSourcePages(async skip => ({ ...page("supported", [String(skip)], skip === 0),
+      ...(skip > 0 ? changed : {}) }), new AbortController().signal);
+    expect(result).toMatchObject({ state: "stale", sources: [], memberReadsEnabled: false });
+  });
+
+  it("does not compare query-specific context revisions across pages or claim a common context", async () => {
+    const result = await collectSourcePages(async skip => ({ ...page("supported", [String(skip)], skip === 0),
+      contextRevision: `context-for-page-${skip}`, memberReadsEnabled: true }), new AbortController().signal);
+    expect(result).toMatchObject({ state: "supported", contextRevision: null, memberReadsEnabled: true });
+    expect(result.sources).toHaveLength(2);
+  });
+
+  it("returns the first refusal and stops when cancelled", async () => {
+    const refusal = await collectSourcePages(async skip => skip === 0 ? page("supported", ["a"], true) : page("stale", [], false),
+      new AbortController().signal);
+    expect(refusal.state).toBe("stale");
+    const controller = new AbortController();
+    const request = vi.fn(async () => { controller.abort(); return page("supported", ["a"], true); });
+    await expect(collectSourcePages(request, controller.signal)).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("conversion caption", () => {
+  it("names a stored activity output as such, not as an expression result", () => {
+    expect(describeInferredSource("ActivityResult", { producerNodeId: "p", projectionKey: "$result" }, "auto")).toBe("Activity output");
+  });
+});
+
+// The language-neutral source client (spec 1215 T018) and the structured wire it feeds (T019): one capability with a
+// relation per resource kind, metadata-only answers bound to the requested document, and a chosen binding that
+// survives save, Code Apply and reopen exactly as the server returned it.
+
+afterEach(() => clearApiCapabilityCache());
+
+const capabilityDocument = {
+  capabilities: [
+    {
+      id: "elsa.api.activity-data-selection",
+      contractVersion: "1",
+      links: [
+        { rel: "activity-data-context", href: "design/activities/drafts/{draftId}/activity-data/context", templated: true },
+        { rel: "workflow-data-context", href: "design/workflows/activity-data/context" }
+      ]
+    },
+    {
+      id: "elsa.api.workflow-design",
+      contractVersion: "1",
+      links: [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }]
+    }
+  ]
+};
+
+function context(postJson = vi.fn(), document: unknown = capabilityDocument, putJson = vi.fn()) {
+  return {
+    baseUrl: `test://activity-data-${Math.random()}`,
+    http: {
+      getJson: vi.fn(async (path: string) => {
+        if (path === "/capabilities") return document;
+        throw new Error(`Unexpected GET ${path}`);
+      }),
+      postJson,
+      putJson
+    }
+  } as unknown as StudioEndpointContext;
+}
+
+const binding = { expressionType: "ActivityResult", value: { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false } };
+
+function supportedResponse(documentRevision: string) {
+  return {
+    contractVersion: "1",
+    state: "supported",
+    code: "activity-data.metadata",
+    resourceKind: "WorkflowDefinition",
+    resourceId: "draft-1",
+    baseRevision: "base-1",
+    documentRevision,
+    snapshotHash: "hash",
+    contextRevision: "context",
+    analysis: {
+      contractRevision: "contract",
+      target: { target: { nodeId: "consumer", inputKey: "customerId" }, displayName: "Customer ID", type: { alias: "String" },
+        isNullable: false, isRequired: true, isStructureOwned: false, constraint: null },
+      sources: [
+        { id: "activity:get-customer:$result", displayName: "get-customer", scopeId: null, binding, availability: "definite",
+          shape: { state: "known", kind: "object", type: { alias: "Acme.Customer", collectionKind: "Single" } }, reasonCode: null,
+          activityResultSource: { kind: "ActivityResult", producerNodeId: "get-customer", projectionKey: "$result", isOptional: false } },
+        { id: "activity:loop:$result", displayName: "loop", scopeId: "flow", binding: null, availability: "definite",
+          shape: { state: "unknown" }, reasonCode: "EarlierProducerRun",
+          activityResultSource: { producerNodeId: "loop", projectionKey: "$result", isOptional: false } }
+      ],
+      findings: [],
+      hasMoreSources: true
+    }
+  };
+}
+
+const state: WorkflowDefinitionState = {
+  variables: [],
+  inputs: [],
+  outputs: [],
+  rootActivity: {
+    nodeId: "root",
+    activityVersionId: "sequence",
+    inputs: [],
+    outputs: [],
+    structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [
+      { nodeId: "get-customer", activityVersionId: "get-customer-v1", inputs: [], outputs: [] },
+      { nodeId: "consumer", activityVersionId: "invoice-v1", inputs: [], outputs: [],
+        customerId: { typeName: "System.String", expression: { type: "ActivityResult", value: binding.value } } }
+    ] } }
+  } as ActivityNode
+};
+
+describe("activity data source client", () => {
+  it("analyzes the current workflow snapshot against the acknowledged base through the advertised relation", async () => {
+    const postJson = vi.fn(async (_path: string, body: { documentRevision: string }, _init?: unknown) => supportedResponse(body.documentRevision));
+    const endpoint = context(postJson);
+    const snapshot = canonicalizeStateForWire(state);
+    const controller = new AbortController();
+
+    expect(await hasWorkflowActivityDataSelection(endpoint)).toBe(true);
+    const result = await requestWorkflowActivityData(endpoint, {
+      definitionId: "definition-1",
+      draftId: "draft-1",
+      expectedBaseRevision: "base-1",
+      documentRevision: "rev-7",
+      target: { nodeId: "consumer", inputKey: "customerId" },
+      snapshot
+    }, controller.signal);
+
+    expect(postJson).toHaveBeenCalledTimes(1);
+    const [path, body, init] = postJson.mock.calls[0]!;
+    expect(path).toBe("/design/workflows/activity-data/context");
+    expect(body).toEqual({
+      contractVersion: "1",
+      definitionId: "definition-1",
+      draftId: "draft-1",
+      expectedBaseRevision: "base-1",
+      documentRevision: "rev-7",
+      nodeId: "consumer",
+      inputKey: "customerId",
+      snapshot,
+      query: wholeValueSourceQuery
+    });
+    expect(init).toEqual({ signal: controller.signal });
+    expect(result.state).toBe("supported");
+    expect(result.hasMoreSources).toBe(true);
+    expect(result.sources.map(source => [source.id, source.binding != null, source.reasonCode])).toEqual([
+      ["activity:get-customer:$result", true, null],
+      ["activity:loop:$result", false, "EarlierProducerRun"]
+    ]);
+    // The binding is the server's, untouched.
+    expect(result.sources[0]!.binding).toEqual(binding);
+    expect(result.sources[0]!.type).toEqual({ alias: "Acme.Customer", collectionKind: "Single" });
+  });
+
+  it("sends an Activity Definition request with exactly the fields its endpoint declares", async () => {
+    const postJson = vi.fn(async (_path: string, body: { documentRevision: string }) => ({ ...supportedResponse(body.documentRevision), resourceKind: "ActivityDefinition", resourceId: "ad draft/1", baseRevision: "4" }));
+    const snapshot = { provider: { providerKey: "graph" }, contract: {} };
+    await requestActivityDefinitionActivityData(context(postJson), {
+      draftId: "ad draft/1",
+      expectedBaseRevision: 4,
+      documentRevision: "rev-2",
+      target: { nodeId: "consumer", inputKey: "customerId" },
+      currentSnapshot: snapshot
+    });
+
+    const [path, body] = postJson.mock.calls[0]!;
+    expect(path).toBe("/design/activities/drafts/ad%20draft%2F1/activity-data/context");
+    expect(Object.keys(body).sort()).toEqual(["contractVersion", "currentSnapshot", "documentRevision", "expectedBaseRevision", "query", "target"]);
+    expect(body).toMatchObject({ expectedBaseRevision: 4, currentSnapshot: snapshot, target: { nodeId: "consumer", inputKey: "customerId" } });
+  });
+
+  it("reports no capability on a server that does not advertise it", async () => {
+    expect(await hasWorkflowActivityDataSelection(context(vi.fn(), { capabilities: [] }))).toBe(false);
+  });
+
+  it.each([
+    ["another document", { ...supportedResponse("rev-other") }],
+    ["another contract", { ...supportedResponse("rev-1"), contractVersion: "2" }],
+    ["an unknown state", { ...supportedResponse("rev-1"), state: "partial" }],
+    ["no body", null]
+  ])("discloses nothing from an answer for %s", (_name, response) => {
+    const result = readActivityDataContextResult(response, "rev-1");
+    expect(result.state).toBe("incompatible");
+    expect(result.sources).toEqual([]);
+    expect(result.target).toBeNull();
+  });
+
+  it("keeps refusals free of analysis content", () => {
+    const result = readActivityDataContextResult({ ...supportedResponse("rev-1"), state: "stale", code: "activity-data.base-changed" }, "rev-1");
+    expect(result).toMatchObject({ state: "stale", code: "activity-data.base-changed", baseRevision: "base-1", sources: [], target: null });
+  });
+
+  it("only accepts literal true for JSON-string conversion eligibility", () => {
+    const response = supportedResponse("rev-1");
+    const bindingConversion = {
+      sourceType: { alias: "Customer", collectionKind: "Single" },
+      targetType: { alias: "String", collectionKind: "Single" },
+      operation: null,
+      rejection: "No automatic conversion is available."
+    };
+    expect(readActivityDataContextResult({ ...response, analysis: { ...response.analysis,
+      bindingConversion: { ...bindingConversion, canSerializeJsonString: true } } }, "rev-1")
+      .bindingConversion?.canSerializeJsonString).toBe(true);
+    expect(readActivityDataContextResult({ ...response, analysis: { ...response.analysis,
+      bindingConversion: { ...bindingConversion, canSerializeJsonString: "true" } } }, "rev-1")
+      .bindingConversion?.canSerializeJsonString).toBe(false);
+  });
+});
+
+describe("a chosen activity output on the wire", () => {
+  it("keeps the activity id, not its BPMN element id, through save and reopen", async () => {
+    const bindingValue = { producerNodeId: "producer-activity", projectionKey: "$result", isOptional: false };
+    const producer: ActivityNode = { nodeId: "producer-activity", activityVersionId: "get-customer-v1", inputs: [], outputs: [] };
+    const consumer: ActivityNode = {
+      nodeId: "consumer-activity", activityVersionId: "invoice-v1", inputs: [], outputs: [],
+      customerId: { typeName: "System.String", expression: { type: "ActivityResult", value: bindingValue } }
+    };
+    const process: ActivityNode = {
+      nodeId: "bpmn-process", activityVersionId: "bpmn@1", inputs: [], outputs: [],
+      structure: { kind: bpmnStructureKind, schemaVersion: "1.0.0", payload: {
+        elements: [
+          { elementId: "producer-element", elementType: "task", childNodeId: producer.nodeId },
+          { elementId: "consumer-element", elementType: "task", childNodeId: consumer.nodeId }
+        ],
+        sequenceFlows: [{ flowId: "linear-flow", sourceRef: "producer-element", targetRef: "consumer-element" }],
+        activities: [producer, consumer]
+      } }
+    };
+    const authored: WorkflowDefinitionState = {
+      variables: [], inputs: [], outputs: [],
+      rootActivity: {
+        nodeId: "workflow-root", activityVersionId: "sequence", inputs: [], outputs: [],
+        structure: { kind: flowchartStructureKind, schemaVersion: "1.0.0", payload: { activities: [process], startNodeId: process.nodeId } }
+      }
+    };
+
+    const wire = canonicalizeStateForWire(authored);
+    const wireProcess = (wire.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[0]!;
+    const wireConsumer = (wireProcess.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    expect(wireConsumer.inputs).toEqual([{ referenceKey: "customerId", value: { expressionType: "ActivityResult", value: bindingValue } }]);
+
+    const reopened = expandStateFromWire(JSON.parse(JSON.stringify(wire)));
+    const reopenedProcess = (reopened.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[0]!;
+    const reopenedConsumer = (reopenedProcess.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    expect((reopenedConsumer.customerId as { expression: unknown }).expression)
+      .toEqual({ type: "ActivityResult", value: bindingValue });
+    expect(JSON.stringify(canonicalizeStateForWire(reopened))).toBe(JSON.stringify(wire));
+
+    const putJson = vi.fn(async (_path: string, body: { state: WorkflowDefinitionState; layout: [] }) => ({
+      id: "draft-1", definitionId: "definition-1", state: body.state, layout: body.layout, validationErrors: [], authoringRevision: "base-2"
+    }));
+    await updateDraft(context(vi.fn(), capabilityDocument, putJson), {
+      id: "draft-1", definitionId: "definition-1", state: authored, layout: [], validationErrors: []
+    });
+    expect(putJson.mock.calls[0]![1].state).toEqual(wire);
+  });
+
+  it("survives save, Code Apply and reopen as the same object, legacy scope included", async () => {
+    const legacy = { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "scope:root", isOptional: false };
+    const authored: WorkflowDefinitionState = JSON.parse(JSON.stringify(state));
+    const consumer = (authored.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    consumer.customerId = { typeName: "System.String", expression: { type: "ActivityResult", value: legacy } };
+
+    const wire = canonicalizeStateForWire(authored);
+    const wireConsumer = (wire.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    expect(wireConsumer.inputs).toEqual([{ referenceKey: "customerId", value: { expressionType: "ActivityResult", value: legacy } }]);
+
+    // Code Apply parses the serialized document; reopen expands the server's copy.
+    const applied = expandStateFromWire(JSON.parse(JSON.stringify(wire)));
+    const reopened = (applied.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    expect((reopened.customerId as { expression: unknown }).expression).toEqual({ type: "ActivityResult", value: legacy });
+    expect(JSON.stringify(canonicalizeStateForWire(applied))).toBe(JSON.stringify(wire));
+
+    const putJson = vi.fn(async (_path: string, body: { state: WorkflowDefinitionState; layout: [] }) => ({
+      id: "draft-1", definitionId: "definition-1", state: body.state, layout: body.layout, validationErrors: [], authoringRevision: "base-2"
+    }));
+    const saved = await updateDraft(context(vi.fn(), capabilityDocument, putJson), {
+      id: "draft-1", definitionId: "definition-1", state: authored, layout: [], validationErrors: []
+    });
+    expect(putJson.mock.calls[0]![1].state).toEqual(wire);
+    expect(saved.authoringRevision).toBe("base-2");
+  });
+});
+
+
+describe("member metadata and focused queries", () => {
+  const memberPath = ["billing.address", "", "a/b", 'quoted"key'];
+  const memberBinding = { expressionType: "ActivityResultMember", value: { ...binding.value, memberPath } };
+  const shape = {
+    state: "known", kind: "object", type: { alias: "Customer", collectionKind: "Single" },
+    sourceContractRevision: "source-1", profileRevision: "json-1", metadataRevision: "metadata-1",
+    isNullable: true, presence: "optional", representation: "StructuredValue", isSensitive: false, isCredential: null,
+    members: [{ serializedName: "billing.address", displayName: "Billing address", shape: {
+      state: "truncated", kind: "map", type: { alias: "String", collectionKind: "Dictionary" },
+      presence: "unknown", isNullable: null, reasonCode: "activity.shape.member-limit", members: [],
+      mapValue: { state: "unknown", kind: "scalar", presence: "optional", type: { alias: "String", collectionKind: "Single" } }
+    } }]
+  };
+
+  function memberResponse(revision: string) {
+    const response = supportedResponse(revision);
+    return { ...response, analysis: { ...response.analysis, memberReadsEnabled: true,
+      sources: [{ ...response.analysis.sources[0]!, binding: memberBinding, shape }] } };
+  }
+
+  it("keeps bounded serialized names, uncertainty, protection and target type without reading business values", () => {
+    const result = readActivityDataContextResult(memberResponse("rev-1"), "rev-1");
+    expect(result.memberReadsEnabled).toBe(true);
+    expect(result).toMatchObject({ resourceKind: "WorkflowDefinition", resourceId: "draft-1", snapshotHash: "hash", contextRevision: "context", contractRevision: "contract" });
+    expect(result.target).toMatchObject({ type: { alias: "String" }, isNullable: false, isRequired: true });
+    expect(result.sources[0]!.shape).toMatchObject(shape);
+    expect(result.sources[0]!.shape!.members[0]!.serializedName).toBe("billing.address");
+    expect(result.sources[0]!.shape!.members[0]!.shape.mapValue!.isNullable).toBeNull();
+  });
+
+  it.each([undefined, false, "true", 1, null])("requires literal true for member capability (%s)", advertised => {
+    const response = memberResponse("rev-1");
+    const result = readActivityDataContextResult({ ...response, analysis: { ...response.analysis, memberReadsEnabled: advertised } }, "rev-1");
+    expect(result.memberReadsEnabled).toBe(false);
+  });
+
+  it.each(["invalid", "denied", "stale", "unavailable"])("does not learn capability or offer sources from %s analysis", state => {
+    const result = readActivityDataContextResult({ ...memberResponse("rev-1"), state }, "rev-1");
+    expect(result.memberReadsEnabled).toBe(false);
+    expect(result.sources).toEqual([]);
+    expect(result.target).toBeNull();
+  });
+
+  it("sends focused literal paths and bounded shape budgets to both owners, preserving the canonical offer", async () => {
+    const postJson = vi.fn(async (_path: string, body: { documentRevision: string }) => memberResponse(body.documentRevision));
+    const request = { definitionId: "definition-1", draftId: "draft-1", expectedBaseRevision: "base-1", documentRevision: "rev-1",
+      target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state,
+      query: { source: binding, memberPath } };
+    const result = await requestWorkflowActivityData(context(postJson), request);
+    expect(postJson.mock.calls[0]![1]).toMatchObject({ query: { source: binding, memberPath,
+      shapeLimits: { maximumDepth: 4, maximumMembers: 128 } } });
+    expect(result.sources[0]!.binding).toEqual(memberBinding);
+
+    const adPost = vi.fn(async (_path: string, body: { documentRevision: string }) => ({ ...memberResponse(body.documentRevision), resourceKind: "ActivityDefinition", baseRevision: "2" }));
+    await requestActivityDefinitionActivityData(context(adPost), { draftId: "draft-1", expectedBaseRevision: 2, documentRevision: "rev-1",
+      target: request.target, currentSnapshot: {}, query: request.query });
+    expect(adPost.mock.calls[0]![1]).toMatchObject({ query: { source: binding, memberPath } });
+  });
+
+  it.each([
+    ["whole fallback", { ...binding }],
+    ["different path", { ...memberBinding, value: { ...memberBinding.value, memberPath: ["other"] } }],
+    ["different producer", { ...memberBinding, value: { ...memberBinding.value, producerNodeId: "other" } }]
+  ])("withholds a focused answer carrying a %s", async (_name, offered) => {
+    const postJson = vi.fn(async () => { const response = memberResponse("rev-1"); return { ...response,
+      analysis: { ...response.analysis, sources: [{ ...response.analysis.sources[0]!, binding: offered }] } }; });
+    const result = await requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state,
+      query: { source: binding, memberPath } });
+    expect(result).toMatchObject({ state: "incompatible", sources: [], memberReadsEnabled: false });
+  });
+
+  it("withholds focused bindings when member capability is off", async () => {
+    const postJson = vi.fn(async () => { const response = memberResponse("rev-1"); return { ...response,
+      analysis: { ...response.analysis, memberReadsEnabled: false } }; });
+    const result = await requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state,
+      query: { source: binding, memberPath } });
+    expect(result.sources).toEqual([]);
+  });
+
+  it("bounds the entire returned member tree and marks the unread suffix truncated", () => {
+    const response = memberResponse("rev-1");
+    const members = Array.from({ length: 140 }, (_, i) => ({ serializedName: String(i), displayName: String(i), shape: { state: "known", kind: "scalar" } }));
+    const result = readActivityDataContextResult({ ...response, analysis: { ...response.analysis,
+      sources: [{ ...response.analysis.sources[0]!, shape: { ...shape, members } }] } }, "rev-1");
+    expect(result.sources[0]!.shape!.members).toHaveLength(128);
+    expect(result.sources[0]!.shape!.state).toBe("truncated");
+  });
+
+  it.each([
+    ["Variable", { referenceKey: "customer", declaringScopeId: "root" }, "VariableMember"],
+    ["WorkflowRequest", { memberKey: "Customer", path: null }, "WorkflowRequestMember"],
+    ["Input", { referenceKey: "customer" }, "InputMember"]
+  ])("retains the canonical focused %s member offer", async (expressionType, value, memberType) => {
+    const whole = { expressionType, value };
+    const offered = { expressionType: memberType, value: { ...value, memberPath } };
+    const postJson = vi.fn(async () => { const response = memberResponse("rev-1"); return { ...response,
+      analysis: { ...response.analysis, sources: [{ ...response.analysis.sources[0]!, binding: offered }] } }; });
+    const result = await requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state,
+      query: { source: whole, memberPath } });
+    expect(result.sources[0]!.binding).toEqual(offered);
+  });
+
+  it.each([
+    { resourceId: "another-draft" }, { resourceKind: "ActivityDefinition" }, { baseRevision: "base-2" },
+    { analysis: { ...memberResponse("rev-1").analysis, target: { target: { nodeId: "other", inputKey: "customerId" } } } }
+  ])("withholds an answer for another owner, base or target (%j)", async changed => {
+    const postJson = vi.fn(async () => ({ ...memberResponse("rev-1"), ...changed }));
+    const result = await requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state });
+    expect(result).toMatchObject({ state: "incompatible", sources: [], target: null });
+  });
+
+  it("cancels even if an HTTP implementation ignores the signal", async () => {
+    const controller = new AbortController();
+    const postJson = vi.fn(async () => { controller.abort(); return memberResponse("rev-1"); });
+    await expect(requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state }, controller.signal))
+      .rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("retains safe invalid findings while withholding sources and capability", () => {
+    const response = memberResponse("rev-1");
+    const result = readActivityDataContextResult({ ...response, state: "invalid", analysis: { ...response.analysis,
+      findings: [{ path: "consumer/inputs/customerId", type: "ActivityData/UnsupportedMemberBinding", message: "Unavailable." }] } }, "rev-1");
+    expect(result.findings).toEqual([{ path: "consumer/inputs/customerId", type: "ActivityData/UnsupportedMemberBinding", message: "Unavailable." }]);
+    expect(result).toMatchObject({ sources: [], target: null, memberReadsEnabled: false });
+  });
+
+});
+
+
+describe("canonical portable expression metadata", () => {
+  const parameter = { kind: "ActivityResult" as const, producerNodeId: "get-customer", projectionKey: "$result", isOptional: false };
+  const path = ["a.b", "", "quoted\"key"];
+  function response() {
+    const base = supportedResponse("rev-1");
+    return { ...base, analysis: { ...base.analysis, hasMoreSources: false, memberReadsEnabled: false,
+      expressionParametersEnabled: true, expressionType: "JavaScript",
+      sources: [{ ...base.analysis.sources[0], binding: null, reasonCode: "EarlierProducerRun", parameterSource: parameter, parameterPath: path }] } };
+  }
+  function request() {
+    return { definitionId: "definition-1", draftId: "draft-1", expectedBaseRevision: "base-1", documentRevision: "rev-1",
+      target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: {} as WorkflowDefinitionState,
+      query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path, expectedSnapshotHash: "hash" } };
+  }
+  it("accepts a fresh portable-only path with native member reads off and pins the root snapshot", async () => {
+    const post = vi.fn(async (_path: string, _body: unknown) => response()); const result = await requestWorkflowActivityData(context(post), request());
+    expect(result.state).toBe("supported"); expect(result.memberReadsEnabled).toBe(false); expect(result.expressionParametersEnabled).toBe(true);
+    expect(result.sources[0].binding).toBeNull(); expect(result.sources[0].parameterSource).toEqual(parameter);
+    expect(result.sources[0].parameterPath).toEqual(path);
+    expect(post.mock.calls[0][1]).toMatchObject({ expectedSnapshotHash: "hash", query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path } });
+    expect((post.mock.calls[0][1] as { query: unknown }).query).not.toHaveProperty("source");
+    expect(parameter).not.toHaveProperty("memberPath");
+  });
+  it("uses the activity-definition owner's snapshotHash field for the same shared query", async () => {
+    const post = vi.fn(async (_path: string, _body: unknown) => ({ ...response(), resourceKind: "ActivityDefinition", baseRevision: "5" }));
+    const result = await requestActivityDefinitionActivityData(context(post), { draftId: "draft-1", expectedBaseRevision: 5, documentRevision: "rev-1",
+      target: request().target, currentSnapshot: {}, query: request().query });
+    expect(result.state).toBe("supported"); expect(post.mock.calls[0][1]).toMatchObject({ snapshotHash: "hash", query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path } });
+    expect(post.mock.calls[0][1]).not.toHaveProperty("expectedSnapshotHash");
+  });
+  it.each(["old-server", "wrong-syntax", "wrong-path", "wrong-source", "wrong-optional", "wrong-snapshot", "no-offer"])("refuses %s without inventing a portable offer", async scenario => {
+    const post = vi.fn(async () => {
+      const value = response();
+      if (scenario === "old-server") value.analysis.expressionParametersEnabled = false;
+      if (scenario === "wrong-syntax") value.analysis.expressionType = "Liquid";
+      if (scenario === "wrong-path") value.analysis.sources[0].parameterPath = [];
+      if (scenario === "wrong-source") value.analysis.sources[0].parameterSource = { ...parameter, projectionKey: "different" };
+      if (scenario === "wrong-optional") value.analysis.sources[0].parameterSource = { ...parameter, isOptional: true };
+      if (scenario === "wrong-snapshot") value.snapshotHash = "different";
+      if (scenario === "no-offer") value.analysis.sources = [];
+      return value;
+    });
+    expect(await requestWorkflowActivityData(context(post), request())).toMatchObject({ state: "incompatible", sources: [], expressionParametersEnabled: false });
+  });
+  it("rejects mixed modes and unsupported parameter fields before requesting metadata", async () => {
+    const post = vi.fn(); const host = context(post);
+    await expect(requestWorkflowActivityData(host, { ...request(), query: { ...request().query, source: binding } })).rejects.toThrow();
+    await expect(requestWorkflowActivityData(host, { ...request(), query: { ...request().query, parameterSource: { ...parameter, memberPath: ["secret"] } as typeof parameter } })).rejects.toThrow();
+    expect(post).not.toHaveBeenCalled();
+  });
+});

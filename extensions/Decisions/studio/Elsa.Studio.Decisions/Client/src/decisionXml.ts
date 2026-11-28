@@ -47,10 +47,13 @@ export function parseTable(xml: string): Table {
 }
 export type TableEdit =
   | { kind: "cell"; ruleId: string; output: boolean; column: number; text: string }
+  | { kind: "cells"; edits: { ruleId: string; output: boolean; column: number; text: string }[] }
   | { kind: "clause"; id: string; output: boolean; name: string; type: string }
   | { kind: "policy"; value: string }
   | { kind: "annotation"; ruleId: string; text: string }
   | { kind: "add-rule" }
+  | { kind: "duplicate-rule"; ruleId: string }
+  | { kind: "insert-rule"; ruleId: string; direction: -1 | 1 }
   | { kind: "delete-rule"; ruleId: string }
   | { kind: "move-rule"; ruleId: string; direction: -1 | 1 }
   | { kind: "add-clause"; output: boolean }
@@ -65,13 +68,16 @@ const defaultOutput = (type: string | null) => type === "number" ? "0" : type ==
 export function editTable(xml: string, edit: TableEdit): string {
   const { doc, decision, table } = read(xml);
   const rules = children(table, "rule");
-  if (edit.kind === "cell") {
-    const rule = rules.find(item => item.id === edit.ruleId);
-    if (!rule) throw new Error("The selected rule no longer exists.");
-    const cell = children(rule, edit.output ? "outputEntry" : "inputEntry")[edit.column];
-    if (!cell) throw new Error("The selected cell no longer exists.");
-    const text = required(cell, "text");
-    setPlainText(text, edit.text);
+  if (edit.kind === "cell" || edit.kind === "cells") {
+    const edits = edit.kind === "cell" ? [edit] : edit.edits;
+    const updates = edits.map(item => {
+      const rule = rules.find(candidate => candidate.id === item.ruleId);
+      if (!rule) throw new Error("The selected rule no longer exists.");
+      const cell = children(rule, item.output ? "outputEntry" : "inputEntry")[item.column];
+      if (!cell) throw new Error("The selected cell no longer exists.");
+      return { text: required(cell, "text"), value: item.text };
+    });
+    updates.forEach(({ text, value }) => setPlainText(text, value));
   } else if (edit.kind === "policy") table.setAttribute("hitPolicy", edit.value);
   else if (edit.kind === "clause") {
     const clause = children(table, edit.output ? "output" : "input").find(item => item.id === edit.id);
@@ -92,11 +98,26 @@ export function editTable(xml: string, edit: TableEdit): string {
     if (!rule) throw new Error("The selected rule no longer exists.");
     const description = children(rule, "description")[0];
     if (description) setPlainText(description, edit.text); else rule.prepend(textElement(doc, "description", edit.text));
-  } else if (edit.kind === "add-rule") {
+  } else if (edit.kind === "add-rule" || edit.kind === "insert-rule") {
+    if (rules.length >= 1000) throw new Error("The table has reached its rule limit.");
     const rule = doc.createElementNS(dmnNamespace, "rule"); rule.setAttribute("id", `rule_${crypto.randomUUID().replaceAll("-", "")}`);
     children(table, "input").forEach(() => rule.append(entry(doc, false, "-")));
     children(table, "output").forEach(output => rule.append(entry(doc, true, defaultOutput(output.getAttribute("typeRef")))));
-    table.append(rule);
+    if (edit.kind === "add-rule") table.append(rule);
+    else {
+      const index = rules.findIndex(item => item.id === edit.ruleId);
+      if (index < 0) throw new Error("The selected rule no longer exists.");
+      const target = rules[index + (edit.direction < 0 ? 0 : 1)];
+      table.insertBefore(rule, target ?? null);
+    }
+  } else if (edit.kind === "duplicate-rule") {
+    if (rules.length >= 1000) throw new Error("The table has reached its rule limit.");
+    const source = rules.find(item => item.id === edit.ruleId);
+    if (!source) throw new Error("The selected rule no longer exists.");
+    const duplicate = source.cloneNode(true) as Element;
+    const identities = [duplicate, ...Array.from(duplicate.querySelectorAll("[id]"))];
+    identities.forEach(element => element.setAttribute("id", `rule_${crypto.randomUUID().replaceAll("-", "")}`));
+    table.insertBefore(duplicate, source.nextSibling);
   } else if (edit.kind === "delete-rule") {
     if (rules.length <= 1) throw new Error("Keep at least one rule in the table.");
     rules.find(item => item.id === edit.ruleId)?.remove();

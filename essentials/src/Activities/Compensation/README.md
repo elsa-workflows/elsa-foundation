@@ -31,3 +31,7 @@ reaches the scope as a fault of that step (spec 258). Native compensation is sep
 
 The runtime activity class references only the runtime contract surface; the design-side structure handler and
 Draft validator (`Internal/`) reference `Elsa.Workflows.Design.*`.
+
+## Timeline diagnostics
+
+When the host enables qualified run history, new v5 executions retain the scope's registrations, recovery, handler attempts, confirmations and operator decisions in Timeline and the owning activity journal. This is the diagnostic history of the original continuation checkpoints, including after private-state cleanup. [The contribution contract](EXTENSION_POINTS.md#cross-domain-contributions) records its safe fields and retained-profile boundary.

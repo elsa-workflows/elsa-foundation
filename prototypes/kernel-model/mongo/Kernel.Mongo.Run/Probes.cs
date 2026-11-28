@@ -21,10 +21,52 @@ public static class Probes
             case ["crash"]: return await Crash(connection);
             case ["crash-child", var database]: return await CrashChild(connection, database);
             case ["limits"]: return await Limits(connection, options);
+            case ["node-lease-read"]: return await NodeLeaseRead(connection, options);
             default:
-                Console.Error.WriteLine("probe crash | probe limits");
+                Console.Error.WriteLine("probe crash | probe limits | probe node-lease-read");
                 return 2;
         }
+    }
+
+    // NL-2: the owner renews before its old lease expires, between the taker's owner and lease reads.
+    private static async Task<int> NodeLeaseRead(string connection, MongoStoreOptions options)
+    {
+        using var client = MongoProvider.Client(connection, "kernel-lease-owner");
+        using var release = new ManualResetEventSlim();
+        var reading = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var contender = MongoProvider.Client(connection, "kernel-lease-contender", command =>
+        {
+            if (command.CommandName != "find" || command.Command["find"] != "nodes" || !reading.TrySetResult()) return;
+            if (!release.Wait(TimeSpan.FromSeconds(12))) throw new TimeoutException("The renewal did not release the read.");
+        });
+        var database = "kprobe_" + Guid.NewGuid().ToString("N")[..12];
+        var owner = new MongoStore(client, database, options);
+        var taker = new MongoStore(contender, database, options);
+        var brief = TimeSpan.FromSeconds(3);
+        var longLease = TimeSpan.FromSeconds(45);
+        try
+        {
+            await owner.CreateAsync(1);
+            var held = await owner.TakeAsync(0, "p", brief) ?? throw new InvalidOperationException("p did not take its partition.");
+            var initial = await owner.NodeHeartbeatAsync("p", brief, longLease);
+            var take = Task.Run(async () => await taker.TakeAsync(0, "q", longLease));
+            NodeBeat renewed;
+            try
+            {
+                await reading.Task.WaitAsync(TimeSpan.FromSeconds(6));
+                renewed = await owner.NodeHeartbeatAsync("p", longLease, longLease);
+                if (renewed.Now >= initial.Now + brief.TotalMilliseconds)
+                    throw new InvalidOperationException("p did not renew before its previous lease expired.");
+                await Task.Delay(brief);
+            }
+            finally { release.Set(); }
+
+            var result = await take;
+            var landed = (await owner.CommitAsync(new(0, held.Epoch, held.Position, longLease, false, [], [], []))).Landed;
+            Console.WriteLine($"p renewed {renewed.Now - initial.Now} ms after the previous heartbeat, before expiry; q took {result is not null}; p's fence landed {landed}");
+            return result is null && landed ? 0 : 1;
+        }
+        finally { await client.DropDatabaseAsync(database); }
     }
 
     // ---- a process that dies inside a commit ------------------------------------------------------------------------

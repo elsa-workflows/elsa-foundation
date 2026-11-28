@@ -40,16 +40,19 @@ using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.KernelApi;
+using Elsa.Workflows.Runtime.KernelHosting;
+using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Resumption;
-using Elsa.Workflows.Runtime.Scheduling;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Publishing;
 using Elsa3.Mapping;
+using Kernel.Foundation.Contracts;
+using Kernel.WorkflowActor;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -103,30 +106,23 @@ public sealed record PublicationEntry(string VersionId, string SourceVersionId, 
         Of(receipt).ToDictionary(entry => entry.SourceVersionId, entry => entry.Status, StringComparer.Ordinal);
 }
 
-/// <summary>A run's committed state, read through the runtime stores.</summary>
-public sealed record RunState(
-    IReadOnlyCollection<ActivityExecutionState> Activities,
-    WorkflowExecutionState? Workflow,
-    IReadOnlyCollection<IncidentState> Incidents)
+/// <summary>A run and its committed activity summaries from the Actor journal.</summary>
+public sealed record RunState(IReadOnlyCollection<ActivityExecutionInspectionSummaryProjection> Activities, WorkflowExecutionState? Workflow)
 {
-    /// <summary>The executable node ids of every activity execution the run committed.</summary>
-    public IReadOnlyList<string> ExecutedNodeIds => Activities.Select(activity => activity.Execution.ExecutableNodeId).ToArray();
+    public IReadOnlyList<string> ExecutedNodeIds => Activities.Select(activity => activity.AuthoredActivityId).ToArray();
 
     public string Describe() =>
-        $"workflow {Workflow?.Status}, activities {string.Join(", ", Activities.Select(activity => $"{activity.Execution.ExecutableNodeId}={activity.Status}{(activity.Fault is { } fault ? $" (fault {fault.Code}: {fault.Message})" : string.Empty)}"))}" +
-        (Incidents.Count == 0 ? string.Empty : $"; incidents {string.Join("; ", Incidents.Select(incident => $"{incident.FailureType} on {incident.ExecutableNodeId}: {incident.Message}"))}");
+        $"workflow {Workflow?.Status}, activities {string.Join(", ", Activities.Select(activity => $"{activity.ExecutableNodeId}={activity.Status}"))}";
 }
 
 /// <summary>
-/// The Elsa 3 import host (spec 246 R-13): one CShells web host on a test server whose one shell composes the import,
-/// its EF persistence and, unless turned off, its publishing bridge, over activity and workflow design, the graph
-/// activity provider, publishing and the runtime. Activity design, workflow design and the import share one SQLite file
-/// (the import commits through their transaction); publishing and the runtime have their own. Every file is under one
-/// temporary directory, which disposal deletes.
+/// The Elsa 3 import host composes the import, its persistence and optional publishing bridge in the default shell.
+/// The import shares an SQLite file with activity and workflow design for their transaction. Publishing, Runtime
+/// artifacts and Actor storage each have their own file, all under one temporary directory.
 /// </summary>
 public sealed class Elsa3ImportHost : IAsyncDisposable
 {
-    public const string ShellName = "elsa3-import";
+    private const string ShellName = "default";
     public const string TenantId = PersistenceScope.DefaultValue;
     private const string AuthenticationScheme = "Elsa3ImportTest";
     private const string PermissionsHeader = "X-Elsa3-Import-Permissions";
@@ -146,22 +142,21 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     private readonly DirectoryInfo _root;
     private readonly bool _withPublishing;
     private readonly bool _withPublishSeam;
-    private readonly bool _withScheduling;
     private readonly bool _withHttp;
     private bool _ownsRoot = true;
+    private bool _disposed;
 
     private Elsa3ImportHost(WebApplication app, IShell shell, DirectoryInfo root, WarningLog warnings,
-        bool withPublishing, bool withPublishSeam, bool withScheduling, bool withHttp)
+        bool withPublishing, bool withPublishSeam, bool withHttp)
     {
         _app = app;
         _root = root;
         _withPublishing = withPublishing;
         _withPublishSeam = withPublishSeam;
-        _withScheduling = withScheduling;
         _withHttp = withHttp;
         Shell = shell;
         Warnings = warnings;
-        Client = app.GetTestClient();
+        Client = withHttp ? new HttpClient { BaseAddress = new Uri(app.Urls.Single()) } : app.GetTestClient();
     }
 
     /// <summary>
@@ -176,7 +171,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     {
         _ownsRoot = false;
         await DisposeAsync();
-        return await StartAsync(_withPublishing, _withPublishSeam, _withScheduling, _withHttp, reconcileFolder, strict, refuseAllPublications, _root);
+        return await StartAsync(_withPublishing, _withPublishSeam, _withHttp, reconcileFolder, strict, refuseAllPublications, _root);
     }
 
     public IShell Shell { get; }
@@ -198,8 +193,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// Starts a host, activates its shell, waits for its startup tasks (catalog reconciliation among them) and checks the
     /// catalog holds the built-in activities an imported body converts to. Without <paramref name="withPublishing"/> the
     /// shell does not compose <c>Elsa3ImportActivitiesPublishing</c>; with <paramref name="withPublishSeam"/> it composes
-    /// the test's publish seam around it (<see cref="Refusals"/>); with <paramref name="withScheduling"/> it composes the
-    /// scheduling activities (Delay); with <paramref name="withHttp"/> the HTTP activities, whose endpoints listen under
+    /// the test publish seam (<see cref="Refusals"/>). With <paramref name="withHttp"/> the host composes HTTP activities under
     /// <c>/workflows/http</c>. With <paramref name="reconcileFolder"/> the shell composes <c>Elsa3JsonReconciliation</c> on
     /// that folder (spec 235), strict when <paramref name="strict"/>, so the folder is imported while the shell activates.
     /// With <paramref name="refuseAllPublications"/> the publish seam refuses every reusable from the first publication on
@@ -208,12 +202,12 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     public static async Task<Elsa3ImportHost> StartAsync(
         bool withPublishing = true,
         bool withPublishSeam = false,
-        bool withScheduling = false,
         bool withHttp = false,
         string? reconcileFolder = null,
         bool strict = false,
         bool refuseAllPublications = false,
-        DirectoryInfo? existingRoot = null)
+        DirectoryInfo? existingRoot = null,
+        Func<string, CancellationToken, Task>? beforeAcquireLock = null)
     {
         var root = existingRoot ?? Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
@@ -222,7 +216,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             refusals.RefuseAll();
         try
         {
-            var settings = ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling, withHttp);
+            var settings = ShellSettings(root.FullName, withPublishing, withPublishSeam, withHttp);
             if (reconcileFolder is not null)
             {
                 var reconciliation = $"CShells:Shells:{ShellName}:Features:Elsa3JsonReconciliation:Options:";
@@ -233,12 +227,16 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
 
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
-            builder.WebHost.UseTestServer();
+            // The authored HTTP edge matches the raw request target supplied by the actual server.
+            if (withHttp)
+                builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
+            else
+                builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
             builder.Logging.AddProvider(warnings);
             builder.Configuration.AddConfiguration(configuration);
             builder.Services.AddSingleton<IConfiguration>(configuration);
-            builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
+            builder.Services.AddSingleton<IDistributedLockProvider>(new ProcessLockProvider(beforeAcquireLock));
             // An instance, not a type: a shell copies the host's registrations, and the tests read the one its seam uses.
             builder.Services.AddSingleton(refusals);
             // Same host-wide fleet/observed schema boundary as Workbench; the publisher must not infer finalization.
@@ -261,15 +259,14 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(Elsa.Activities.Scripting.ActivitiesScriptingFeature).Assembly,
                     typeof(ApiCapabilitiesFeature).Assembly,
                     typeof(TasksFeature).Assembly,
-                    typeof(ActivitiesRuntimeFeature).Assembly,
+                    typeof(ActivitiesRuntimeHostingFeature).Assembly,
                     typeof(ActivitiesPrimitivesFeature).Assembly,
                     typeof(ActivitiesSequenceFeature).Assembly,
                     typeof(ActivitiesFlowchartFeature).Assembly,
                     typeof(ActivitiesControlFlowFeature).Assembly,
                     typeof(Elsa.Activities.DispatchWorkflow.Design.DispatchWorkflowDesignFeature).Assembly,
-                    typeof(Elsa.Activities.DispatchWorkflow.Runtime.DispatchWorkflowRuntimeFeature).Assembly,
                     typeof(GraphActivitiesDesignFeature).Assembly,
-                    typeof(GraphActivitiesRuntimeFeature).Assembly,
+                    typeof(GraphActivitiesRuntimeHostingFeature).Assembly,
                     typeof(ActivitiesDesignApiFeature).Assembly,
                     typeof(ActivitiesDesignEntityFrameworkCoreFeature).Assembly,
                     typeof(ActivitiesDesignReconciliationFeature).Assembly,
@@ -280,15 +277,15 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(WorkflowsPublishingFeature).Assembly,
                     typeof(WorkflowsPublishingApiFeature).Assembly,
                     typeof(PublishingEntityFrameworkCoreFeature).Assembly,
-                    typeof(WorkflowsRuntimeApiFeature).Assembly,
-                    typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
-                    typeof(WorkflowsRuntimeResumptionFeature).Assembly,
-                    typeof(WorkflowsRuntimeRecurringTriggersFeature).Assembly,
-                    typeof(WorkflowsRuntimeSchedulingFeature).Assembly,
-                    typeof(Elsa.Activities.Scheduling.ActivitiesSchedulingFeature).Assembly,
+                    typeof(Elsa.Workflows.Runtime.KernelHost.WorkflowsRuntimeKernelFeature).Assembly,
+                    typeof(WorkflowsRuntimeKernelRetainedApiFeature).Assembly,
+                    typeof(WorkflowsRuntimeKernelHostingFeature).Assembly,
+                    typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
+                    typeof(Elsa.Workflows.Runtime.Scheduling.WorkflowsRuntimeScheduleCalculationFeature).Assembly,
+                    typeof(Elsa.Activities.Scheduling.KernelActivitiesSchedulingFeature).Assembly,
                     typeof(Elsa.Http.HttpFeature).Assembly,
-                    typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature).Assembly,
-                    typeof(Elsa.Activities.Http.ActivitiesHttpFeature).Assembly,
+                    typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeStandaloneHttpFeature).Assembly,
+                    typeof(Elsa.Activities.Http.KernelActivitiesHttpFeature).Assembly,
                     typeof(Elsa3MappingFeature).Assembly,
                     typeof(Elsa3ImportActivitiesFeature).Assembly,
                     typeof(Elsa3ImportActivitiesEntityFrameworkCoreFeature).Assembly,
@@ -317,7 +314,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             }
 
             // A restarted host takes over the stores and deletes them when it is disposed.
-            var host = new Elsa3ImportHost(app, shell, root, warnings, withPublishing, withPublishSeam, withScheduling, withHttp);
+            var host = new Elsa3ImportHost(app, shell, root, warnings, withPublishing, withPublishSeam, withHttp);
             try
             {
                 await host.RequireCatalogAsync();
@@ -338,10 +335,13 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         }
     }
 
-    private static Dictionary<string, string?> ShellSettings(string root, bool withPublishing, bool withPublishSeam, bool withScheduling, bool withHttp)
+    private static Dictionary<string, string?> ShellSettings(string root, bool withPublishing, bool withPublishSeam, bool withHttp)
     {
         var features = $"CShells:Shells:{ShellName}:Features:";
         var design = Sqlite(Path.Join(root, "design.db"));
+        var hosting = withHttp ? WorkflowsRuntimeKernelHostingFeature.FeatureName
+            : WorkflowsRuntimeKernelOptionalHttpHostingFeature.FeatureName;
+        const string artifacts = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
         var settings = new Dictionary<string, string?>
         {
             [$"CShells:Shells:{ShellName}:Configuration:WebRouting:Path"] = "",
@@ -349,15 +349,15 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             [$"{features}WorkflowsDesignEntityFrameworkCore:ConnectionString"] = design,
             [$"{features}Elsa3ImportActivitiesEntityFrameworkCore:ConnectionString"] = design,
             [$"{features}WorkflowsPublishingEntityFrameworkCore:ConnectionString"] = Sqlite(Path.Join(root, "publishing.db")),
-            [$"{features}WorkflowsRuntimeEntityFrameworkCore:ConnectionString"] = Sqlite(Path.Join(root, "runtime.db")),
-            [$"{features}WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = GeneratedKey(),
-            [$"{features}WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = GeneratedKey()
+            [$"{features}{artifacts}:ConnectionString"] = Sqlite(Path.Join(root, "runtime.db")),
+            [$"{features}{artifacts}:RecoveryContinuationSigningKey"] = GeneratedKey(),
+            [$"{features}{hosting}:SqlitePath"] = Path.Join(root, "kernel.db"),
+            [$"{features}{hosting}:Tenant"] = TenantId
         };
         foreach (var feature in Features
                      .Concat(withPublishing ? ["Elsa3ImportActivitiesPublishing"] : [])
                      .Concat(withPublishSeam ? [Elsa3ImportPublishSeamFeature.Name] : [])
-                     .Concat(withScheduling ? ["ActivitiesScheduling"] : [])
-                     .Concat(withHttp ? ["ActivitiesHttp"] : []))
+                     .Concat(withHttp ? [] : ["KernelActivitiesScheduling"]))
             settings.TryAdd($"{features}{feature}", null);
         return settings;
     }
@@ -376,15 +376,14 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         "ActivitiesScripting",
         "ApiCapabilities",
         "Tasks",
-        "ActivitiesRuntime",
+        "ActivitiesRuntimeHosting",
         "ActivitiesPrimitives",
         "ActivitiesSequence",
         "ActivitiesFlowchart",
         "ActivitiesControlFlow",
         "ActivitiesDispatchWorkflowDesign",
-        "ActivitiesDispatchWorkflowRuntime",
         "ActivitiesGraphDesign",
-        "ActivitiesGraphRuntime",
+        "ActivitiesGraphRuntimeHosting",
         "ActivitiesDesignApi",
         "ActivitiesDesignEntityFrameworkCore",
         "ActivitiesDesignReconciliation",
@@ -395,12 +394,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         "WorkflowsPublishing",
         "WorkflowsPublishingApi",
         "WorkflowsPublishingEntityFrameworkCore",
-        "WorkflowsRuntimeApi",
-        "WorkflowsRuntimeEntityFrameworkCore",
-        "WorkflowsRuntimeResumption",
-        "WorkflowsRuntimeTriggers",
-        // The EF activation switch publishes through the recurring-schedule projection this feature prepares.
-        "WorkflowsRuntimeRecurringTriggers",
+        "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
+        "WorkflowsRuntimePublicationEntityFrameworkCorePersistence",
         "Elsa3Mapping",
         "Elsa3ImportJsonActivities",
         "Elsa3ImportActivitiesEntityFrameworkCore"
@@ -566,39 +561,32 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     public async Task<RunState> RunAsync(PublishedWorkflow workflow, JsonObject? inputs = null) =>
         await WaitForSettledAsync(await ExecuteAsync(workflow, inputs));
 
-    /// <summary>The committed activity states and workflow state of a run.</summary>
-    public async Task<RunState> ReadRunAsync(string workflowExecutionId)
+    /// <summary>The exact run and its bounded committed activity summaries.</summary>
+    private async Task<RunState> ReadRunAsync(string workflowExecutionId)
     {
-        await using var scope = Shell.ServiceProvider.CreateAsyncScope();
-        return new(
-            await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(workflowExecutionId),
-            await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId),
-            await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>().ListAsync(workflowExecutionId));
+        await using var scope = await Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
+            .CreateAsync(new PersistenceScope(TenantId));
+        var source = scope.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
+        var run = await source.FindWorkflowAsync(workflowExecutionId, CancellationToken.None);
+        if (run is null)
+            return new([], null);
+        var result = await run.BrowseAsync(new(workflowExecutionId, RuntimeStorePageRequest.MaximumLimit), null, CancellationToken.None);
+        if (result is null)
+            return new([], run.State);
+
+        Assert.Equal(result.Page.TotalCount, result.Page.Items.Count);
+        return new(result.Page.Items.Select(item => item.Execution).ToArray(), run.State);
     }
 
     /// <summary>
     /// Generous because the tests run on a shared machine whose parallel sessions compete for the CPU (AGENTS.md,
     /// "Builds on a shared machine"). No test relies on reaching it.
     /// </summary>
-    public static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
-
-    /// <summary>Polls the run's committed state until <paramref name="condition"/> holds, for a run that is still waiting.</summary>
-    public async Task<RunState> WaitForAsync(string workflowExecutionId, Func<RunState, bool> condition)
-    {
-        var deadline = Stopwatch.StartNew();
-        while (true)
-        {
-            var run = await ReadRunAsync(workflowExecutionId);
-            if (condition(run))
-                return run;
-            Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not reach the expected state: {run.Describe()}.");
-            await Task.Delay(100);
-        }
-    }
+    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Polls the run's committed state until its workflow is completed, faulted or cancelled; the drain may outlive the
-    /// request that started it. An activity fault or an incident ends the wait at once.
+    /// request that started it.
     /// </summary>
     public async Task<RunState> WaitForSettledAsync(string workflowExecutionId)
     {
@@ -606,14 +594,51 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         while (true)
         {
             var run = await ReadRunAsync(workflowExecutionId);
-            if (run.Workflow?.Status is WorkflowExecutionStatus.Completed or WorkflowExecutionStatus.Faulted or WorkflowExecutionStatus.Cancelled ||
-                run.Activities.Any(activity => activity.Fault is not null) ||
-                run.Incidents.Count > 0)
-                // The read lists activities before the workflow, so a run that settled between the two shows a terminal
-                // workflow with activities still running. Read once more now that it has settled.
+            if (run.Workflow?.Status is WorkflowExecutionStatus.Completed or WorkflowExecutionStatus.Faulted or WorkflowExecutionStatus.Cancelled)
                 return await ReadRunAsync(workflowExecutionId);
             Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not settle: {run.Describe()}.");
             await Task.Delay(100);
+        }
+    }
+
+    /// <summary>Resolves one imported graph-body occurrence in the exact published executable.</summary>
+    public async Task<string> ResolveBodyNodeIdAsync(PublishedWorkflow workflow, string authoredOccurrenceId)
+    {
+        var executable = await ReadAsync(services => services.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(workflow.ArtifactId).AsTask());
+        Assert.NotNull(executable);
+        return Assert.Single(executable.Nodes, node =>
+            node.Metadata.TryGetValue("activity.invocationOrigin", out var origin) &&
+            JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(origin)?
+                .LastOrDefault(segment => segment.Kind == ActivityInvocationOriginSegmentKind.NestedPlacement)?.Id == authoredOccurrenceId)
+            .ExecutableNodeId;
+    }
+
+    /// <summary>Waits until the Actor has committed the start of one activity that has yet to complete.</summary>
+    public async Task WaitForActiveNodeAsync(string workflowExecutionId, string executableNodeId)
+    {
+        using var deadline = new CancellationTokenSource(SettleTimeout);
+        while (true)
+        {
+            var run = await ReadRunAsync(workflowExecutionId);
+            Assert.True(run.Workflow?.Status is null or WorkflowExecutionStatus.Running, run.Describe());
+            if (run.Activities.Any(activity => activity.ExecutableNodeId == executableNodeId && activity.Status == ActivityExecutionStatus.Running))
+                return;
+            await Task.Delay(100, deadline.Token);
+        }
+    }
+
+    /// <summary>Waits for the one Actor run started for an imported definition.</summary>
+    public async Task<(ActorView View, WorkflowRunHeader Run)> WaitForActorAsync(string definitionId)
+    {
+        var reads = Shell.ServiceProvider.GetRequiredService<KernelRuns>();
+        using var deadline = new CancellationTokenSource(SettleTimeout);
+        while (true)
+        {
+            var candidates = await reads.ListAsync(definitionId, deadline.Token).ToListAsync(deadline.Token);
+            if (candidates.Count != 0)
+                return Assert.Single(candidates);
+            await Task.Delay(100, deadline.Token);
         }
     }
 
@@ -706,15 +731,19 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+            return;
+        _disposed = true;
         try
         {
             Client.Dispose();
-            // Disposing the app leaves the shell's recurring tasks running against the stores. A host restarted on the
-            // same stores would then have the old shell's resumption pump re-drive its executions, a second owner that
-            // fences the first out (StaleToken). Stop them first.
             try
             {
-                await Shell.ServiceProvider.GetRequiredService<Elsa.Tasks.Core.ITaskManager>().StopExecutingRegisteredTasks();
+                // Run the normal shell terminators so a restart can claim the same SQLite store.
+                var registry = _app.Services.GetRequiredService<IShellRegistry>();
+                var drain = await registry.DrainAsync(Shell);
+                await drain.WaitAsync();
+                await _app.StopAsync();
             }
             finally
             {
@@ -777,11 +806,16 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     }
 
     /// <summary>A lock provider for one process, which is all one test host needs.</summary>
-    private sealed class ProcessLockProvider : IDistributedLockProvider
+    private sealed class ProcessLockProvider(Func<string, CancellationToken, Task>? beforeAcquireLock) : IDistributedLockProvider
     {
         public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
         public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
-        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+        public async ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            if (beforeAcquireLock is not null)
+                await beforeAcquireLock(name, cancellationToken);
+            return new Handle();
+        }
 
         private sealed class Handle : IDistributedSynchronizationHandle
         {

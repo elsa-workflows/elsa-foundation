@@ -108,7 +108,7 @@ describe("secret picker", () => {
     });
 
     expect(container.textContent).toContain("retired.api");
-    expect(container.textContent).toContain("Loading Secret metadata");
+    expect(container.textContent).toContain("Loading secret metadata");
     expect(container.querySelector("select")?.disabled).toBe(true);
     request.reject(new Error(`provider failed: ${rawSecret}`));
     await waitFor(() => container.textContent?.includes("Secret metadata is unavailable") ?? false);
@@ -154,7 +154,7 @@ describe("secret picker", () => {
     expect(container.textContent).toContain("encrypted");
 
     rerender({ endpointContext: secondContext });
-    expect(container.textContent).toContain("Loading Secret metadata");
+    expect(container.textContent).toContain("Loading secret metadata");
     expect(container.textContent).toContain("payments.api");
     expect(container.textContent).not.toContain("Payments API");
     expect(container.textContent).not.toContain("encrypted");

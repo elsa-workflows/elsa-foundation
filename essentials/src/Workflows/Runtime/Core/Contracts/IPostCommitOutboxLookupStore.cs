@@ -7,6 +7,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IPostCommitOutboxLookupStore
 {
+    /// <summary>
+    /// Whether durable source reads use the supplied history reader's actual provider and ordinary scope.
+    /// This is provider pairing, not authorization or proof that sources have settled. Legacy providers refuse it.
+    /// </summary>
+    bool CanInspectHistorySources(IRuntimeHistoryStore history) => false;
+
     ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
         string outboxItemId,
         CancellationToken cancellationToken = default);

@@ -4,6 +4,7 @@
 * [Run and understand the server](essentials/README.md)
   * [Try Elsa locally](essentials/quickstart.md)
   * [Your first workflow](essentials/first-workflow.md)
+  * [Workflow execution](essentials/workflow-execution.md)
   * [Persistence modes](essentials/persistence-modes.md)
   * [Undo completed steps with a compensation scope](essentials/compensation.md)
 * [Optional modules](extensions/README.md)

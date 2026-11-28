@@ -1,0 +1,42 @@
+/**
+ * Shared, host-agnostic Studio UI primitives.
+ *
+ * This barrel is the public surface of the `@elsa-workflows/studio-ui` package: the
+ * primitives here depend only on `react` and Studio design tokens, so they can be
+ * vendored into the runtime import map and consumed by independently-bundled module
+ * clients (which mark `@elsa-workflows/studio-ui` external).
+ *
+ * `DialogHost` is intentionally excluded: it is wired to the host's singleton dialog
+ * controller (`app/dialogs`) and pulls in `@radix-ui/react-dialog`, so it stays a
+ * host-only component and is re-exported from `./index` for host code only.
+ */
+export * from "./data-grid/DataGrid";
+export * from "./data-grid/rowInteraction";
+export * from "./data-grid/StudioTimestamp";
+export * from "./feedback/FeedbackStates";
+export * from "./feedback/ActionNotice";
+export * from "./feedback/StatusChip";
+export * from "./feedback/StatusPill";
+export * from "./forms/Button";
+export * from "./forms/ChoiceFields";
+export * from "./forms/Field";
+export * from "./forms/StudioNewResourceDialog";
+export * from "./forms/SearchInput";
+export * from "./forms/SettingEditors";
+export * from "./inspector/Inspector";
+export * from "./identity/CopyableIdentifier";
+export * from "./layout/Breadcrumbs";
+export * from "./layout/Tabs";
+export * from "./layout/Stepper";
+export * from "./layout/Toolbar";
+export * from "./layout/Page";
+export * from "./layout/RefreshControl";
+export * from "./layout/DialogFooter";
+export * from "./layout/VersionHistory";
+export * from "./layout/ResizeHandle";
+export * from "./layout/SidePanelLayout";
+export * from "./list/ListRow";
+export * from "./overlay/AnchoredPopover";
+export * from "./overlay/StudioDialog";
+export * from "./stat/StatTile";
+export * from "./disclosure";

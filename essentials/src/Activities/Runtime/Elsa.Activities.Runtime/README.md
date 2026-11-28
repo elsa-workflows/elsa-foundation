@@ -101,3 +101,32 @@ to. Adding an optional input is safe. Renaming or removing an input, or changing
 workflow pinned to an earlier version, and nothing warns of that before such a workflow runs: a renamed or removed input
 then faults the node, since the class has no input property for a key its pinned version declares, and a changed type
 or meaning may not fault at all.
+
+## Saved-resume receiver history
+
+The private `ActivityResumeHistoryObservations` owner contributes through Workflows Runtime Core's
+`IRuntimeHistoryObservationWriter` from `WorkflowResumeBookmarkSchedulerWorkHandler`. Before an exact
+saved recipient which no longer matches is acknowledged, it records the existing `DeliveryUnmatched`
+observation with a closed receiver reason, exact activity/bookmark association and queued causal link.
+It does not consume or authorize a wait. The actual native pinned profile and selected capture/provider
+pair are revalidated under unchanged persistence access; missing Required recording leaves work owed.
+Older vocabularies and uncaptured targets stay unchanged. One identity represents one actual receiver
+invocation; acknowledgement loss can lead to another observed invocation, not another business occurrence.
+No payload or exception text is copied into history. This internal path does not enable a public history
+module or establish provider/host/UX acceptance. See the [domain catalog](EXTENSION_POINTS.md).
+
+The atomic saved-recipient claim can also reject a wait which passed the first receiver check. That
+`BookmarkResumeSupersededException` now produces `DeliveryUnmatched` with the closed reason
+`receiver-admission-superseded` before acknowledgement, under the original native policy/access context.
+It describes only the rejected admission and grants no consumption or callback authority. Required
+recording failure keeps the work owed; later re-entry observes the state then present. The
+[owning catalog](EXTENSION_POINTS.md#atomic-saved-resume-admission-loss-3849-s10i) records controls and limits.
+
+If the workflow became terminal and recording failed, the normal drainer keeps refusing activity execution.
+The existing Runtime resumption cleanup instead observes the queued saved resume as terminal/ineligible
+before deleting its residue. Missing/unacknowledged retained history stops that purge until a later sweep;
+this separate diagnostic observation does not manufacture a callback or bookmark consumption.
+
+A terminal history outage is reported for that execution without stopping unrelated recovery or backlog
+progress. Held terminal work follows the same rule. Its source remains owed; partial cleanup does not mark
+the run fully purged or reap its mailbox. Cancellation or changed access still stops the sweep.

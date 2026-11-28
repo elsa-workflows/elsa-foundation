@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Relational admission and prepared standalone workflow delivery over the shared Runtime EF schema.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHost.Tests" />
+    <ProjectReference Include="../../../Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../Publications/Elsa.Workflows.Runtime.Publications.csproj" />
+    <ProjectReference Include="../../Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj" />
+    <ProjectReference Include="../../Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../Schema/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+</Project>

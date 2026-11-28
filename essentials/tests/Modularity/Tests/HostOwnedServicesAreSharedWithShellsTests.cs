@@ -7,16 +7,16 @@ using CShells.Nuplane;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
+using Elsa.Cluster.Core.Services;
 using Elsa.Cluster.Readability;
 using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.ExtensionBuilder.Api.Extensions;
-using Elsa.Foundation.Host.ModuleManagement;
-using Elsa.Foundation.Host.Shells;
+using Elsa.Foundation.Hosting;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workbench;
-using Elsa.Workbench.OpenIddict;
-using Elsa.Workbench.OpenIddictEngines;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Extensions.Configuration;
@@ -33,10 +33,11 @@ namespace Elsa.Modularity.Tests;
 /// CShells copies every root registration into every shell container, and a registration made by type or by factory is
 /// instantiated again there. A service that holds the host's own state (the trigger queue only the host's dispatcher reads, the
 /// fleet the finalization gates count) is wrong in a shell: the shell's copy waits for a dispatcher that does not exist, or counts
-/// a fleet of its own (#2159). This builds the real <c>Elsa.Foundation.Host</c> and <c>Elsa.Workbench</c> compositions by running
-/// their entry points up to the built host, activates a shell through CShells, and compares every singleton the host registers
-/// under a type of an <c>Elsa.*</c> or <c>Nuplane.*</c> assembly: each must be the same instance in the shell as at the root, or
-/// be named in <see cref="PerShell"/> with the reason it is not, or be explicitly <see cref="RootOnly"/> and absent from the shell.
+/// a fleet of its own (#2159). This builds the real <c>Elsa.Foundation.Host</c> and <c>Elsa.Workbench.Host</c>
+/// compositions by running their entry points up to the built host, activates a shell through CShells, and compares every singleton
+/// the host registers under a type of an <c>Elsa.*</c> or <c>Nuplane.*</c> assembly: each must be the same instance in the shell as
+/// at the root, or be named in <see cref="PerShell"/> with the reason it is not, or be explicitly <see cref="RootOnly"/> and absent
+/// from the shell.
 /// </summary>
 /// <remarks>
 /// The comparison is over what the host registered, so a service someone adds later is held without anyone remembering to list
@@ -59,7 +60,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
 
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     public async Task The_real_host_resolves_one_runner_that_is_excluded_from_its_shells(string host)
     {
         using var content = ContentRoot.For(host);
@@ -124,12 +125,12 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             "unreachable from shell code: a hosted service the host starts once, and a shell container never starts its copy (a disposable one could not be shared in any case)",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Cluster.EntityFrameworkCore.ClusterMembershipDbContext>",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Foundation.DataProtection.EntityFrameworkCore.DataProtectionKeysDbContext>",
-            "Elsa.Workbench.OpenIddict.OpenIddictIdentityStoreInitializer",
+            "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityStoreInitializer",
             "Elsa.Workbench.Readiness.DefaultShellWarmup",
-            "Elsa.Workbench.WorkbenchOpenIddictMigrator"),
+            "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreMigrator"),
         Entries(
             IntentionallyPerShell + "records what its own container's options pipeline resolved the store's AutoMigrate to, for the host's migrator, which a shell never starts",
-            "Elsa.Workbench.WorkbenchOpenIddictMigrationSwitch"),
+            "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictMigrationSwitch"),
         Entries(
             UnreachableFromShells + "; these registrations support the host's reconciliation/loading route, which shells reach only through the shared adapter",
             "Nuplane.Abstractions.PackageStoreProtection.IPackageStoreAdmission",
@@ -155,6 +156,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             "Nuplane.Store.Maintenance.IPackageStoreRootResolver",
             "Nuplane.Store.Maintenance.PackageStoreEnrollmentPreviewService",
             "Nuplane.Store.Maintenance.PackageStoreRootResolver"),
+        Entries(
+            "Nuplane's internal concrete registration only backs its public reader. The public IPackageArchiveReader is shared from the host.",
+            "Nuplane.PackageArchives.PackageArchiveReader"),
         Entries(
             UnreachableFromShells,
         "Nuplane.Abstractions.IActivePackageCatalog", "Nuplane.Abstractions.ICycleFailureContributor", "Nuplane.Abstractions.IDesiredPackageSource", "Nuplane.Abstractions.IDesiredStateContributor", "Nuplane.Abstractions.INuplaneObserver", "Nuplane.Abstractions.IPackageResolver",
@@ -196,9 +200,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     {
         { "Elsa.Foundation.Host", false, false },
         { "Elsa.Foundation.Host", true, false },
-        { "Elsa.Workbench", false, false },
-        { "Elsa.Workbench", true, false },
-        { "Elsa.Workbench", false, true }
+        { "Elsa.Workbench.Host", false, false },
+        { "Elsa.Workbench.Host", true, false },
+        { "Elsa.Workbench.Host", false, true }
     };
 
     [Theory]
@@ -218,7 +222,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         var compared = SingletonServiceTypes(root).Select(type => (Type: type, Difference: Difference(type, root, shell.ServiceProvider))).ToArray();
         var rootOnly = RootOnly;
 #if ELSA_DASHBOARD_QUALIFICATION
-        if (host == "Elsa.Workbench")
+        if (host == "Elsa.Workbench.Host")
         {
             rootOnly = new Dictionary<Type, string>(RootOnly)
             {
@@ -267,7 +271,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// </summary>
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     public async Task A_shell_of_the_real_composition_protects_with_the_hosts_key_ring(string host)
     {
         using var content = ContentRoot.For(host);
@@ -299,7 +303,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     // Kept beside the composition test: ordering, startup validation runs ahead of every host initializer.
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     public async Task A_shell_of_the_real_composition_runs_its_startup_validation_ahead_of_every_initializer_the_host_registers(string host)
     {
         using var content = ContentRoot.For(host);
@@ -318,23 +322,25 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     }
 
     /// <summary>
-    /// Elsa's migration policy for the OpenIddict store is wired in Workbench's own entry point, so deleting that call, or moving it
-    /// ahead of the vendor registration, is caught here and nowhere else: the policy's hosted service must be registered, and after
-    /// the vendor initializer, which turns its own migration off for it and creates the demo store (#2196).
+    /// The root OpenIddict migration policy follows the vendor initializer, which turns its own migration off for it
+    /// and creates the demo store (#2196). Run the same check with the Foundation profile switch enabled.
     /// </summary>
     // Kept beside the composition test: ordering, the migration policy registers after the vendor initializer.
-    [Fact]
-    public void Workbench_registers_the_openiddict_migration_policy_after_the_vendor_initializer()
+    [Theory]
+    [InlineData("Elsa.Foundation.Host")]
+    [InlineData("Elsa.Workbench.Host")]
+    public void The_host_registers_the_openiddict_migration_policy_after_the_vendor_initializer(string host)
     {
-        using var content = ContentRoot.For("Elsa.Workbench");
-        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), content.Arguments(durableMembership: false));
+        using var content = ContentRoot.For(host);
+        using var built = BuiltHost.Run(EntryAssembly(host),
+            [.. content.Arguments(durableMembership: false), .. OpenIddictStoreArguments(host)]);
 
-        var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
+        var hosted = HostedServiceNames(built.Host.Services);
 
-        Assert.Contains(typeof(WorkbenchOpenIddictMigrator), hosted);
-        Assert.Contains(typeof(OpenIddictIdentityStoreInitializer), hosted);
+        Assert.Contains(OpenIddictStoreMigrator, hosted);
+        Assert.Contains(OpenIddictStoreInitializer, hosted);
         Assert.True(
-            hosted.IndexOf(typeof(OpenIddictIdentityStoreInitializer)) < hosted.IndexOf(typeof(WorkbenchOpenIddictMigrator)),
+            hosted.IndexOf(OpenIddictStoreInitializer) < hosted.IndexOf(OpenIddictStoreMigrator),
             "The migration policy starts before the vendor initializer, which would then migrate the store itself.");
     }
 
@@ -343,9 +349,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// coordinator is root-owned and the shell's borrowed observer resolves to that same object.
     /// </summary>
     // Kept beside the composition test: discovery follows the package auto-loader.
-    [Theory(DisplayName = "Both host compositions register and borrow one root-owned Nuplane coordinator")]
+    [Theory(DisplayName = "Each host composition registers and borrows one root-owned Nuplane coordinator")]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     public async Task Each_host_registers_feature_discovery_after_the_package_auto_loader_and_shares_its_coordinator(string host)
     {
         const string AutoLoader = "Nuplane.Loading.PackageAutoLoadingObserver";
@@ -375,50 +381,84 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Assert.Empty(shell.ServiceProvider.GetServices<NuplanePackageGenerationBuildParticipant>());
         var monitor = root.GetRequiredService<IOptionsMonitor<NuplaneIntegrationOptions>>();
         var configuration = (IConfigurationRoot)root.GetRequiredService<IConfiguration>();
-        var initialReload = host == "Elsa.Foundation.Host";
+        var foundationNuplane = host == "Elsa.Foundation.Host";
+        var initialReload = foundationNuplane;
 
         Assert.Equal(initialReload, monitor.CurrentValue.AutoReload);
         Assert.True(monitor.CurrentValue.Enabled);
         Assert.Equal(
-            host == "Elsa.Foundation.Host" ? NuplaneRefreshTrigger.EveryEligibleCompletion : NuplaneRefreshTrigger.ChangedOrPending,
+            foundationNuplane ? NuplaneRefreshTrigger.EveryEligibleCompletion : NuplaneRefreshTrigger.ChangedOrPending,
             monitor.CurrentValue.RefreshTrigger);
 
         content.SetReloadOnPackageChange(!initialReload);
         configuration.Reload();
 
-        Assert.Equal(host == "Elsa.Foundation.Host" ? true : !initialReload, monitor.CurrentValue.AutoReload);
-        Assert.Equal(host == "Elsa.Foundation.Host" ? !initialReload : true, monitor.CurrentValue.Enabled);
+        Assert.Equal(foundationNuplane ? true : !initialReload, monitor.CurrentValue.AutoReload);
+        Assert.Equal(foundationNuplane ? !initialReload : true, monitor.CurrentValue.Enabled);
     }
 
     /// <summary>
-    /// The OpenIddict store's engine and its prune are wired in Workbench's own entry point too: the engine the default shell's
-    /// OpenIddict settings name is the one the store resolves to, and the prune starts after the migration policy, so it prunes a
-    /// store that is migrated (#2201).
+    /// The store resolves the engine named in the default shell's configuration. The pruner starts after migration (#2201).
     /// </summary>
-    [Fact]
-    public void Workbench_selects_the_openiddict_store_engine_and_prunes_the_store_after_it_is_migrated()
+    [Theory]
+    [InlineData("Elsa.Foundation.Host")]
+    [InlineData("Elsa.Workbench.Host")]
+    public void The_host_selects_the_openiddict_store_engine_and_prunes_the_store_after_it_is_migrated(string host)
     {
         const string Settings = "--CShells:Shells:default:Features:FoundationIdentityOpenIddict:";
-        using var content = ContentRoot.For("Elsa.Workbench");
+        using var content = ContentRoot.For(host);
         string[] arguments =
         [
             .. content.Arguments(durableMembership: false),
+            .. OpenIddictStoreArguments(host),
             $"{Settings}IsDevelopmentOrDemo", "false",
             $"{Settings}Provider", "PostgreSql",
             "--ConnectionStrings:Elsa", "Host=wiring-test;Database=elsa;Username=elsa;Password=x"
         ];
-        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), arguments);
+        using var built = BuiltHost.Run(EntryAssembly(host), arguments);
 
-        var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
+        var hosted = HostedServiceNames(built.Host.Services);
         using var scope = built.Host.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>();
 
         Assert.IsType<OpenIddictIdentityPostgreSqlDbContext>(store);
-        Assert.Contains(typeof(WorkbenchOpenIddictPruningService), hosted);
+        Assert.Contains(OpenIddictTokenPruner, hosted);
         Assert.True(
-            hosted.IndexOf(typeof(WorkbenchOpenIddictMigrator)) < hosted.IndexOf(typeof(WorkbenchOpenIddictPruningService)),
+            hosted.IndexOf(OpenIddictStoreMigrator) < hosted.IndexOf(OpenIddictTokenPruner),
             "The prune starts before the migration policy has migrated the store.");
     }
+
+    [Fact]
+    public async Task Foundation_reports_the_shells_runnability_through_its_root_registry()
+    {
+        const string host = "Elsa.Foundation.Host";
+        using var content = ContentRoot.For(host);
+        using var built = BuiltHost.Run(EntryAssembly(host),
+            [.. content.Arguments(durableMembership: false), "--Elsa:Cluster:RunnabilityReport:Enabled", "true"]);
+
+        var root = built.Host.Services;
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell);
+        var registry = shell.ServiceProvider.GetRequiredService<RunnabilityRegistry>();
+        var entry = new RunnabilityEntry([new RunnableConsumer("probe", ["1"])], [], []);
+
+        Assert.Same(root.GetRequiredService<RunnabilityRegistry>(), registry);
+        Assert.True(registry.Record("probe-generation", entry));
+        var source = Assert.Single(root.GetServices<IMemberReportSource<RunnabilitySection>>());
+        Assert.Equal(entry, Assert.Single((await source.ReadAsync()).Entries));
+    }
+
+    private static string[] OpenIddictStoreArguments(string host) =>
+        host == "Elsa.Foundation.Host" ? ["--Elsa:Identity:OpenIddict:EntityFrameworkCore:Enabled", "true"] : [];
+
+    // The OpenIddict store's hosted services are internal to its package, so they are named here rather than referenced.
+    private const string OpenIddictStoreNamespace = "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.";
+    private const string OpenIddictStoreInitializer = OpenIddictStoreNamespace + "OpenIddictIdentityStoreInitializer";
+    private const string OpenIddictStoreMigrator = OpenIddictStoreNamespace + "OpenIddictStoreMigrator";
+    private const string OpenIddictTokenPruner = OpenIddictStoreNamespace + "OpenIddictTokenPruner";
+
+    /// <summary>The full names of the host's hosted services, in registration order.</summary>
+    private static List<string?> HostedServiceNames(IServiceProvider root) =>
+        root.GetServices<IHostedService>().Select(service => service.GetType().FullName).ToList();
 
     /// <summary>The service types the host registered as non-keyed singletons, of an Elsa or Nuplane assembly and closed, which a shell is built with copies of.</summary>
     private static Type[] SingletonServiceTypes(IServiceProvider root) => root.GetRequiredService<IRootServiceCollectionAccessor>().Services
@@ -459,9 +499,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         ? $"{type.Namespace}.{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(Describe))}>"
         : $"{type.Namespace}.{type.Name}";
 
-    private static Assembly EntryAssembly(string host) => host == "Elsa.Workbench"
-        ? typeof(WorkbenchOpenIddictMigrator).Assembly
-        : typeof(ModuleManagementOptions).Assembly;
+    // A host compiles no type of its own the test could name beside its entry point; the test references each host project, so
+    // each loads by its assembly name, which is its directory name under server/apps/.
+    private static Assembly EntryAssembly(string host) => Assembly.Load(host);
 
     /// <summary>A content root of the host's own settings and a shell file of its own, so the shell that is activated enables no feature.</summary>
     private sealed class ContentRoot : IDisposable
@@ -471,7 +511,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         public static ContentRoot For(string host)
         {
             var content = new ContentRoot();
-            var source = Path.Join(RepositoryRoot(), "apps", host);
+            var source = Path.Join(RepositoryRoot(), "server", "apps", host);
             foreach (var file in new[] { "appsettings.json", "appsettings.Development.json" })
                 File.Copy(Path.Join(source, file), Path.Join(content._directory, file));
             Directory.CreateDirectory(Path.Join(content._directory, "packages"));
@@ -487,7 +527,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
                 "--environment", "Development",
                 "--urls", "http://127.0.0.1:0",
                 "--Nuplane:Setup:StateFilePath", Path.Join(_directory, ".nuplane", "store-state.json"),
-                // The Foundation.Host maps and composes its module-management operations only when this is on; Workbench always does.
+                // Enables the real Foundation package management composition. Workbench already enables it.
                 "--Elsa:ModuleManagement:Enabled", "true",
                 "--Elsa:ModuleManagement:ApiKey", "guard-test-key"
             ];

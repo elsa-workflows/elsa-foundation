@@ -1,5 +1,10 @@
+using System.Text;
+using Elsa.Serialization.Testing;
+using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Tests;
@@ -16,6 +21,40 @@ namespace Elsa.Workflows.Publishing.Tests;
 /// </remarks>
 public sealed class WorkflowArtifactClosureFactoryTests
 {
+    [Fact]
+    public async Task Download_roundtrips_exact_published_parent_and_child_material()
+    {
+        var fixture = new WorkflowArtifactExportFixture();
+        var child = WorkflowArtifactExportFixture.Executable("child", WorkflowArtifactExportFixture.Node("child-root"));
+        var childReference = await fixture.PublishThroughProductionAsync(child);
+        var parent = WorkflowArtifactExportFixture.Executable(
+            "parent",
+            WorkflowArtifactExportFixture.Node("parent-root"),
+            dependencies: WorkflowArtifactExportFixture.DependencyOn(child, "parent-root"));
+        var parentReference = await fixture.PublishThroughProductionAsync(parent);
+
+        var closure = await fixture.CreateFactory().CreateAsync(parentReference.DefinitionVersionId);
+        var serializer = new WorkflowArtifactClosureSerializer(SerializationServices.PayloadSerializer());
+        var delivery = await new DownloadWorkflowArtifactExportTarget(serializer).DeliverAsync(closure);
+
+        Assert.Equal(WorkflowArtifactExportDeliveryKind.InlinePayload, delivery.Kind);
+        Assert.NotNull(delivery.Payload);
+        var portable = serializer.Deserialize(Encoding.UTF8.GetString(delivery.Payload.Value.Span));
+        Assert.NotNull(portable);
+        Assert.Equal(WorkflowArtifactClosureFormat.CurrentVersion, portable.FormatVersion);
+        Assert.Equal(parent.Identity.ArtifactId, portable.RootArtifactId);
+        Assert.Equal(2, portable.Artifacts.Count);
+        var parentArtifact = Assert.Single(portable.Artifacts, artifact => artifact.Identity == parent.Identity);
+        Assert.Single(portable.Artifacts, artifact => artifact.Identity == child.Identity);
+        var dependency = Assert.Single(parentArtifact.Dependencies);
+        Assert.Equal(child.Identity.ArtifactId, dependency.ArtifactId);
+        Assert.Equal(child.Identity.ArtifactHash, dependency.ArtifactHash);
+        Assert.Equal("parent-root", Assert.Single(dependency.DispatchNodeIds));
+        Assert.Equal(
+            new[] { childReference.SourceReferenceId, parentReference.SourceReferenceId }.Order(StringComparer.Ordinal),
+            portable.SourceReferences.Select(reference => reference.SourceReferenceId).Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public async Task Walks_the_dependency_closure_transitively_from_parent_to_grandchild()
     {
@@ -108,6 +147,12 @@ public sealed class WorkflowArtifactClosureFactoryTests
             dependencies: WorkflowArtifactExportFixture.DependencyOn(child, "p-root"));
         await fixture.PublishAsync(parent);
         await fixture.AddTriggerBindingAsync(parent, "p-root");
+        await fixture.TriggerBindings.PrepareActivationAsync("schedule-activation",
+            [new("schedule-claim", parent.Identity.ArtifactId, parent.Identity.DefinitionId, parent.Identity.ArtifactVersion,
+                parent.Identity.ArtifactHash, "p-root", "kernel-schedule-publication-v1", "schedule-key", null,
+                new Dictionary<string, string>(), DateTimeOffset.UnixEpoch, "schedule-activation", "schedule-slot",
+                TriggerCardinality.ReservationOnly)]);
+        await fixture.TriggerBindings.ActivateAsync("schedule-activation", null);
 
         var closure = await fixture.CreateFactory().CreateAsync(parent.Identity.DefinitionVersionId);
 

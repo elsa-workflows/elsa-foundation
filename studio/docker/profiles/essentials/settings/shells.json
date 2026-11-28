@@ -1,0 +1,27 @@
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "StudioApi": {},
+          "BackendsStudio": {},
+          "FeatureManagement": {},
+          "ThemeManagement": {},
+          "ThemePicker": {},
+          "ThemeStoreCore": {},
+          "WorkflowsStudio": {},
+          "WorkflowsDashboardStudio": {},
+          "AttentionStudio": {},
+          "SecretsStudio": {},
+          "JavaScriptExpressionEditorStudio": {},
+          "LiquidExpressionEditorStudio": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

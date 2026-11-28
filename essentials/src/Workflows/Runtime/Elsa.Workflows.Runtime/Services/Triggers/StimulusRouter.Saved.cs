@@ -1,11 +1,28 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.History;
 
 namespace Elsa.Workflows.Runtime.Services.Triggers;
 
 public sealed partial class StimulusRouter
 {
+    bool IStimulusRouter.CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentKind); ArgumentNullException.ThrowIfNull(writer); ArgumentNullException.ThrowIfNull(reader);
+        try
+        {
+            return _delivery is { } delivery && delivery.CanRecordHistory(intentKind, writer, reader) &&
+                _startDispatcher.CanDispatchSavedStimulus(delivery.Sources, delivery.Material, delivery.Executions) &&
+                _startDispatcher.CanPreserveHistoryCausation(intentKind, writer, reader) &&
+                _resumeDispatcher.CanDispatchSavedStimulus(delivery.Sources, delivery.Material, delivery.Executions) &&
+                _resumeDispatcher.CanRecordHistory(writer, reader);
+        }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (Exception failure)
+        { throw new RuntimePostCommitSourceBoundaryException(null, intentKind, failure, RuntimeHistoryReadFailures.IsUnavailable(failure)); }
+    }
+
     async ValueTask<StimulusRoutingResult> IStimulusRouter.RouteSourceAsync(PostCommitDeliveryContext supplied, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(supplied); cancellationToken.ThrowIfCancellationRequested();

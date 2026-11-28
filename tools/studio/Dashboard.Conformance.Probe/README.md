@@ -12,6 +12,24 @@ Use Python3.12 or newer and a new absolute output directory outside the checkout
 
 The witness checks installed archive/assembly hashes, native discovery and record creation, independent author/viewer numerical results, tenant/record/field/aggregate/anonymous denials, authorized drill, private saved-question persistence, contribution disable/restore and unchanged common installed bytes. The consumer has no project references; production modules keep their own business storage/authority. The default Acme record store remains ephemeral.
 
-`report.json`, private profile files and raw logs stay private: fixture tokens and response evidence may be present. Only `safe-receipt.json` is intended for shared evidence. It allowlists status/source, case/stage outcomes, package hashes and boundary flags; it omits commands, profile tokens, paths and raw responses. A passing receipt qualifies this independent native package witness only. Live inference, composed Studio/IAM/UX and final #3604 acceptance remain separate gates.
+`report.json`, private profile files and raw logs stay private: fixture tokens and response evidence may be present. Only `safe-receipt.json` is intended for shared evidence. It allowlists status/source, case/stage outcomes, package hashes and boundary flags; it omits commands, profile tokens, paths and raw responses. A passing receipt qualifies this independent native package witness only. Live inference, composed studio/IAM/UX and final #3604 acceptance remain separate gates.
 
 `test_qualification.py` checks refusal of incomplete/duplicated evidence and safe receipt extraction. Those controls do not replace running the package/native witness.
+
+## Classic live provider replay
+
+The original live provider fixture observes the classic start handler so its
+seeded workflow cohort has controlled timestamps. Use the revision that owns
+the fixture, composed host and browser journeys together.
+
+```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" f10bd431ca8884a1c036455a1988c991c2150dde
+cd "$archive/source"
+python3 tools/studio/Dashboard.Conformance.Probe/live_qualify.py \
+  --mode prepare --output "$archive/proof" --model archive-prepare-only
+```
+
+Preparation uses no provider credentials. The pinned runner's help documents
+the separate build and live modes and their evidence requirements. Current
+native browser journeys use `tools/ux-acceptance/run.py`.

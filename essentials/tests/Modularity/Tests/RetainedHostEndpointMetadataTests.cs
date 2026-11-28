@@ -6,12 +6,13 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.ExtensionBuilder.Api;
-using Elsa.Workbench;
+using Elsa.Modularity.Api.ModuleManagement;
 using Elsa.Workbench.Readiness;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Nuplane.Admin;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -30,6 +31,8 @@ public sealed class RetainedHostEndpointMetadataTests
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<ShellReadinessState>();
         builder.Services.AddOptions<ShellReadinessOptions>();
+        builder.Services.AddElsaModuleManagement(options => options.HostOwner = "Elsa.Workbench");
+        builder.Services.AddSingleton<INuplaneAdminOperations>(new FakeNuplaneAdminOperations());
         using var app = builder.Build();
 
         app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workbench" }))
@@ -37,7 +40,7 @@ public sealed class RetainedHostEndpointMetadataTests
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .AllowPublic("health", "Provides the workbench process health response.");
         app.MapShellReadiness();
-        app.MapElsaModuleManagementApi();
+        app.MapElsaModuleManagement();
         app.MapElsaExtensionBuilderApi();
         app.MapShellManagementApi("/_admin/shells")
             .WithHostOwner("Elsa.Workbench")

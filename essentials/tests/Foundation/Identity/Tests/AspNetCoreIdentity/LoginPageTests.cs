@@ -29,6 +29,65 @@ public sealed class LoginPageTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Default_and_explicit_orbital_design_use_the_glass_panel(bool explicitLayout)
+    {
+        var html = explicitLayout
+            ? LoginPage.Render("/studio", false, null, new LoginPageOptions { Layout = "orbital" })
+            : LoginPage.Render("/studio", false);
+
+        Assert.Contains("data-layout=\"orbital\"", html);
+        Assert.Contains("name=\"color-scheme\" content=\"dark\"", html);
+        Assert.Contains("class=\"card\"", html);
+        Assert.Contains("src=\"/_elsa/identity/login-assets/elsa-logo.png\"", html);
+        Assert.DoesNotContain("pocket-orchestra.jpg", html);
+    }
+
+    [Fact]
+    public void Orbital_keeps_custom_branding_encoded_and_preserves_the_standard_form()
+    {
+        var html = LoginPage.Render("/studio?x=1&y=2", true, "a&b", new LoginPageOptions
+        {
+            Layout = "orbital", ProductName = "Northstar <Studio>", Tagline = "A <workflow> among the stars",
+            Description = "Explore & automate.", ImageUrl = "/branding/nebula.webp?x=1&y=2",
+            LogoUrl = "/branding/logo.svg?theme=night&v=2", HelpUrl = "/help?from=login&x=1", PrivacyUrl = "/privacy"
+        });
+
+        Assert.Contains("data-layout=\"orbital\"", html);
+        Assert.Contains("src=\"/branding/nebula.webp?x=1&amp;y=2\"", html);
+        Assert.Contains("src=\"/branding/logo.svg?theme=night&amp;v=2\"", html);
+        Assert.Contains("Northstar &lt;Studio&gt;", html);
+        Assert.Contains("A &lt;workflow&gt; among the stars", html);
+        Assert.Contains("Explore &amp; automate.", html);
+        Assert.Contains("href=\"/help?from=login&amp;x=1\"", html);
+        Assert.Contains("href=\"/privacy\"", html);
+        Assert.Contains("role=\"alert\"", html);
+        Assert.Contains("name=\"__csrf\" value=\"a&amp;b\"", html);
+        Assert.Contains("name=\"username\"", html);
+        Assert.Contains("name=\"password\"", html);
+        Assert.Contains("value=\"/studio?x=1&amp;y=2\"", html);
+        Assert.DoesNotContain("<script", html);
+    }
+
+    [Fact]
+    public void Orbital_rejects_unsafe_custom_asset_and_resource_urls()
+    {
+        var html = LoginPage.Render("/", false, null, new LoginPageOptions
+        {
+            Layout = "orbital", LogoUrl = "javascript:alert(1)", ImageUrl = "data:text/html,unsafe",
+            HelpUrl = "//unsafe.example", PrivacyUrl = "/privacy"
+        });
+
+        Assert.Contains("data-layout=\"orbital\"", html);
+        Assert.Contains("src=\"/_elsa/identity/login-assets/elsa-logo.png\"", html);
+        Assert.DoesNotContain("data:text/html", html);
+        Assert.DoesNotContain("javascript:", html);
+        Assert.DoesNotContain("//unsafe.example", html);
+        Assert.Contains("href=\"/privacy\"", html);
+    }
+
+    [Theory]
     [InlineData("field-guide", "tidal", "ember", "light dark", "field-guide-logo.png")]
     [InlineData("reverse", "field-guide", "canopy", "light", "elsa-logo.png")]
     [InlineData("split", "linen", "field-guide", "light dark", "elsa-logo.png")]
@@ -54,7 +113,7 @@ public sealed class LoginPageTests
     [InlineData("unfolding-map.jpg")]
     public void Unknown_artwork_falls_back_to_pocket_orchestra(string? artwork)
     {
-        var html = LoginPage.Render("/studio", false, null, new LoginPageOptions { Artwork = artwork! });
+        var html = LoginPage.Render("/studio", false, null, new LoginPageOptions { Layout = "parcel-room", Artwork = artwork! });
         Assert.Contains("src=\"/_elsa/identity/login-assets/pocket-orchestra.jpg\"", html);
     }
 

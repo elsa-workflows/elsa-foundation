@@ -65,6 +65,10 @@ public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState,
     [ActivityInput(Key = nameof(CanStartWorkflow), DisplayName = "Start new workflows", Description = "Allow matching events to start new workflow instances. When off, this activity can still wait for events in an existing workflow.", DefaultValue = "true")]
     public bool CanStartWorkflow { get; set; } = true;
 
+    /// <summary>Optional passive deadline for a mid-flow wait; expiry does not wake or cancel it.</summary>
+    [ActivityInput(Key = nameof(ExpiresAt), DisplayName = "Match deadline", Description = "Optional deadline for matching this wait. Expiry does not wake, time out or cancel the activity.")]
+    public DateTimeOffset? ExpiresAt { get; set; }
+
     protected override ValueTask<ActivityTransition<EventResult, EventWaitState>> ExecuteAsync(
         ActivityStartContext<EventReceived> context)
     {
@@ -82,7 +86,7 @@ public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState,
             ResumeTargetId,
             EventStimulus.StimulusType,
             EventStimulus.Hash(EventName),
-            metadata: metadata);
+            metadata: metadata) { ExpiresAt = ExpiresAt };
         return ValueTask.FromResult(Suspend(new EventWaitState(EventName), [registration]));
     }
 

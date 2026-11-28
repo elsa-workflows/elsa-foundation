@@ -22,6 +22,7 @@ public sealed class WorkflowsRuntimeAttentionFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.TryAddSingleton(new LegacyWorkflowRuntimeAttentionSelected());
         services.TryAddSingleton<IWorkflowRuntimeAttentionQuery>(provider =>
         {
             var executionStore = provider.GetRequiredService<IWorkflowExecutionStateStore>();

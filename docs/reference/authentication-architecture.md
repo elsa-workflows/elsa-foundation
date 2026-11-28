@@ -210,7 +210,7 @@ Enable these feature sets per shell. All scenarios also require `FoundationIdent
 Local users and roles, the backend login page, a seeded dev admin (`admin` / `Password123!`, sourced from the
 `SeedAdmin*` settings in `shells.json` under `IsDevelopmentOrDemo` only — no credential constants in code),
 cookie sign-in, and first-party JWT issuance. This is exactly what the
-checked-in `Essentials/apps/Elsa.Workbench/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
+checked-in `server/apps/Elsa.Workbench.Host/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
 the default shell but is inert until you configure an `Authority`/`ClientId`** — with no provider
 configured, its interactive OpenID Connect handler is not even registered, and bearer validation
 stays the default so unauthenticated API calls return `401`.
@@ -237,7 +237,7 @@ The OIDC module registers a `JwtBearer` scheme (for API bearer validation agains
 a `ClientId` is present — an interactive `OpenIdConnect` scheme (for the browser redirect flow).
 See §8 for per-IdP recipes.
 
-External claims still need mapping into Elsa permissions. For a fixed-host API bearer layout, opt in through `NormalizeBearerClaims`, independent `Audience`, `ProviderId` and `TenantId`. The host supplies a matching ordinary persistence scope and explicit IAM mapping backend; the adapter validates the token, filters internal claims and loads current rules before normalization. It does not provision a local user. Without opt-in, the legacy external path remains unchanged. Interactive login/provisioning still requires its own bridge. See the [owning OIDC README](../../Essentials/src/Foundation/Identity/Oidc/README.md) and [canonical contract](../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md); implementation proof is tracked separately under #2308.
+External claims still need mapping into Elsa permissions. For a fixed-host API bearer layout, opt in through `NormalizeBearerClaims`, independent `Audience`, `ProviderId` and `TenantId`. The host supplies a matching ordinary persistence scope and explicit IAM mapping backend; the adapter validates the token, filters internal claims and loads current rules before normalization. It does not provision a local user. Without opt-in, the legacy external path remains unchanged. Interactive login/provisioning still requires its own bridge. See the [owning OIDC README](../../essentials/src/Foundation/Identity/Oidc/README.md) and [canonical contract](../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md); implementation proof is tracked separately under #2308.
 
 ### (c) Custom token issuer
 
@@ -317,10 +317,11 @@ from their own credential check (an endpoint filter or the handler) instead.
 **There is no auth off-switch for API routes.** The `ApiSecurity.AllowAnonymous` kill-switch was removed with the
 FastEndpoints surface ([#1405](https://github.com/elsa-workflows/elsa-foundation/pull/1405)), and no setting
 replaces it. An `ApiSecurity` entry left in a shell's feature list names a feature that no longer exists; CShells
-logs a warning and activates the shell without it. Workflow-defined HTTP endpoints are separate: they are anonymous
-unless their `HttpEndpoint` activity sets `Authorize` (optionally with a `Policy`). For those that do, the
-`WorkflowsRuntimeHttp` feature's `AuthorizationHandlerType` setting chooses how the check runs, and pointing it at
-`AllowAnonymousHttpEndpointAuthorizationHandler` lets every such request through.
+logs a warning and activates the shell without it. The Actor authored HTTP endpoint checks its supported shape at publication and refuses enabled
+`Authorize` and configured `Policy`. Its supported published workflow routes are anonymous. Standalone HTTP
+resources have a separate `sourceAccess` setting and require a saved invocation grant. The
+`WorkflowsRuntimeStandaloneHttp` feature supplies the standalone and TestRun authorization handler.
+See [standalone HTTP management and authorization](../standalone-triggers.md).
 
 **Antiforgery on the login form.** The backend login page embeds an antiforgery token (form field
 `__csrf`) and the paired cookie; the `POST /_elsa/identity/login` HTML-form flow validates it before
@@ -470,11 +471,11 @@ The runtime checks current user and selected-session eligibility before refresh 
 sessions bind the exact admitted link revision; historical content lacking that authority fails closed.
 These are prepared source behaviors, not current-source execution results.
 
-The [managed runtime](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/README.md)
-and [HTTP API](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md) own composition,
+The [managed runtime](../../extensions/Identity/src/Elsa.Foundation.Identity.ExternalAuthentication/README.md)
+and [HTTP API](../../extensions/Identity/src/Api/README.md) own composition,
 full deployment overrides, callbacks, preview and guarded link/session administration. The optional API connects
 admission to the canonical cookie/token pipeline; upstream role names grant no Elsa permissions automatically.
 The [owned qualification sources](../../tools/identity/ExternalAuthentication.Probe/README.md) cover controlled
-providers, Keycloak, composed Studio/Workbench and separate-process stores. Their new split remains unrun.
+providers, Keycloak, composed studio/Workbench and separate-process stores. Their new split remains unrun.
 [Historical evidence](../../specs/1212-external-authentication/evidence.md) is attributed to its original source;
 it does not establish acceptance of these candidates or universal cross-site/deployment compatibility.

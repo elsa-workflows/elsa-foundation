@@ -1,0 +1,16 @@
+using System.Runtime.CompilerServices;
+
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePreparedStandaloneEntityFrameworkCoreFeature))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection.RuntimeStandaloneSourceEntityFrameworkRegistration))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfAuthoredStandaloneEventIngress))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfBookmarkStimulusEvidence))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfOutboxWorkflowDispatchFacts))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeExecutionLivenessRow))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeIngressDeliveryStore))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimePostCommitOutboxStorage))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfStandaloneTriggerStore))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfTriggerSourceResourceCommitStore))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.IEfLegacyRuntimeIngress))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.IEfOutboxWorkflowDispatchCompletion))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.IEfRuntimeHistorySourceOwner))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.IEfRuntimePostCommitOutboxOwner))]

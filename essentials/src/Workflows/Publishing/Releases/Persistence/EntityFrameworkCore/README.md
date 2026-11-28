@@ -70,7 +70,7 @@ provider cancellation. Recover with a fresh read/retry using the original captur
 Run the focused qualification from the repository root:
 
 ```sh
-dotnet test Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj
+dotnet test essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj
 ```
 
 The test project builds its own `RestartProbe`. Its interruption witness kills that process after the uncommitted header

@@ -7,7 +7,7 @@ namespace Elsa.Maps.Generator;
 /// Validates the test tier manifest against the tree (spec 263, FR-015 to FR-018). Every test project is in the
 /// manifest exactly once. A project that reaches Testcontainers, or that launches a child host and takes two minutes or
 /// more, is integration tier. Split classes exist and no shared xUnit collection is split. Every unit runs in exactly one
-/// shard of its tier. CI runs it in "Generated maps fresh".
+/// shard of its tier. CI runs it in "Generated maps".
 /// </summary>
 public static partial class TestTierCheck
 {

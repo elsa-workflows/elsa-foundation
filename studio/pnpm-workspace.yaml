@@ -1,0 +1,17 @@
+packages:
+  - "src/essentials/Elsa.Studio.Hosting/Client"
+  - "src/essentials/Elsa.Studio.Hosting/StudioSdk"
+  - "src/essentials/Elsa.Studio.Hosting/StudioUi"
+  - "../extensions/*/studio/*/Client"
+  - "src/essentials/Elsa.Studio.CodeEditor/Client"
+  - "src/essentials/Elsa.Studio.Workflows/Client"
+  - "src/essentials/Elsa.Studio.Backends/Client"
+  - "examples/react-host"
+  - "examples/vanilla-host"
+overrides:
+  "@codemirror/view": "6.43.6"
+allowBuilds:
+  esbuild: true
+onlyBuiltDependencies:
+  - esbuild
+verifyDepsBeforeRun: false

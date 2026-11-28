@@ -1,5 +1,11 @@
 # Finite file ETL end-to-end journey
 
+The process witnesses that publish and execute `RunEtl` use the
+[immutable classic Workbench checkout](../../docs/contributing/workbench-compatibility-tests.md#classic-reviews-decisions-etl-and-rules-in-workflows).
+Run these commands from that checkout for the matching workflow adapters,
+apphost and local fixtures. The read-only verification scripts still inspect
+retained receipts.
+
 For the execution-model program's source-bound **actual process-loss recovery** of the delivered native ETL path, see [the native HTTP reference](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/native-http-reference/README.md). `qualify_http_recovery.py` uses the normal Workbench/ETL APIs and this directory's loopback fixture; `verify_http_recovery.py` compares its retained whole stores and observations. It covers Sequence/Flowchart success and a real root RunEtl BusinessError without claiming BPMN/model integration.
 
 The later [held-service retry journeys](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/held-service-retry/README.md) qualify one authorized new physical worker/run after a terminal native/ETL fault and two process losses, directly and through all four native RunBpmn parents. `verify_held_service_retry.py` checks their original failed state, active semantic snapshot, pinned budget, exact result/parent consumption and whole stores. [Explicit FinalFault](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/final-service-fault/README.md) separately proves terminal retry refusal. Remaining retry/cancellation/authorization and final upgrade/Studio acceptance is open.
@@ -14,7 +20,7 @@ an ETL definition, publish native workflow definitions, and execute the resultin
 same immutable ETL selection is invoked from a Sequence and a Flowchart; each parent must finish
 its `RunEtl` activity and run the following `WriteLine` activity.
 
-Build `Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj` with the opt-in ETL module references
+Build `server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj` with the opt-in ETL module references
 and assembly discovery enabled, then run from the repository root:
 
 ```powershell
@@ -82,8 +88,8 @@ private Workbench root and its HTTP fixture logs for diagnosis.
 ## Live Studio authoring journey
 
 `Test-FiniteFileEtlStudio.ps1` runs the opt-in browser journey in
-`Studio/tests/live/etl-journey.spec.ts`. Build the Workbench with ETL enabled and build
-`Studio/src/apps/Elsa.Studio.Web` with the ETL Studio module before running:
+`studio/tests/live/etl-journey.spec.ts`. Build the Workbench with ETL enabled and build
+`studio/src/apps/Elsa.Studio.Workbench.Host` with the ETL Studio module before running:
 
 ```powershell
 pwsh ./e2e-tests/etl/Test-FiniteFileEtlStudio.ps1

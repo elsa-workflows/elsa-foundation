@@ -261,6 +261,31 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Logout_On_The_In_Memory_Vendor_Store_Revokes_Every_Live_Entry_Of_The_Subject()
+    {
+        // The fixture's OpenIddict vendor store is EF Core in-memory, as in Workbench development/demo mode (#4913).
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var first = await IssueForAsync(_fixture, accessToken);
+        var second = await IssueForAsync(_fixture, accessToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(LogoutRoute, new { })).StatusCode);
+
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
+        foreach (var issued in new[] { first, second })
+        {
+            var accessEntry = await manager.FindByIdAsync(new Microsoft.IdentityModel.JsonWebTokens.JsonWebToken(issued.AccessToken).GetClaim("oi_tkn_id").Value);
+            var refreshEntry = await manager.FindByReferenceIdAsync(issued.RefreshToken!);
+            Assert.NotNull(accessEntry);
+            Assert.NotNull(refreshEntry);
+            Assert.True(await manager.HasStatusAsync(accessEntry!, OpenIddictConstants.Statuses.Revoked));
+            Assert.True(await manager.HasStatusAsync(refreshEntry!, OpenIddictConstants.Statuses.Revoked));
+        }
+    }
+
+    [Fact]
     public async Task Logout_Revokes_Only_The_Signed_Out_Subjects_Tokens()
     {
         var client = _fixture.Client;

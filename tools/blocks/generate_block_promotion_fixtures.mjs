@@ -5,9 +5,9 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const require = createRequire(resolve(repository, "Studio/package.json"));
+const require = createRequire(resolve(repository, "studio/package.json"));
 const { createServer } = await import(pathToFileURL(require.resolve("vite")).href);
-const client = resolve(repository, "Studio/src/essentials/Elsa.Studio.Workflows/Client");
+const client = resolve(repository, "studio/src/essentials/Elsa.Studio.Workflows/Client");
 const server = await createServer({ root: client, configFile: false, optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
 try {
   const { planBlockPromotion, bindBlockPromotionVersion } = await server.ssrLoadModule(resolve(client, "src/graph-authoring/blockPromotion.ts"));

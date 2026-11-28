@@ -47,28 +47,4 @@ public sealed class DynamicSourceConversionCharacterizationTests
     /// passes through unchanged. Runtime resolution labels every source with the plan's source type before converting,
     /// so a wrong payload under a Known member plan would reach the input snapshot unless #4078's fit check stops it.
     /// </summary>
-    [Theory]
-    [InlineData("42")]
-    [InlineData("""{"customerId":"c-1"}""")]
-    [InlineData("[1,2]")]
-    public void An_identity_plan_passes_a_payload_whose_json_shape_does_not_match_its_source_type(string payload)
-    {
-        var text = new ValueTypeDescriptor("String");
-        var plan = ValueConversionPlan.Identity(text, ValueRepresentation.TextValue);
-        var source = ValueEnvelope.Inline(text, JsonDocument.Parse(payload).RootElement.Clone(), ValueProtectionPolicy.InstanceInline);
-
-        var converted = new RuntimeValueConversionExecutor().Convert(source, plan);
-
-        Assert.Equal("String", converted.Type.Alias);
-        Assert.Equal(payload, converted.InlineValue!.Value.GetRawText());
-    }
-
-    [Fact]
-    public void The_executor_only_refuses_a_mismatched_type_label()
-    {
-        var plan = ValueConversionPlan.Identity(new ValueTypeDescriptor("String"), ValueRepresentation.TextValue);
-        var source = ValueEnvelope.Inline(new ValueTypeDescriptor("Customer"), JsonSerializer.SerializeToElement("c-1"), ValueProtectionPolicy.InstanceInline);
-
-        Assert.ThrowsAny<Exception>(() => new RuntimeValueConversionExecutor().Convert(source, plan));
-    }
 }

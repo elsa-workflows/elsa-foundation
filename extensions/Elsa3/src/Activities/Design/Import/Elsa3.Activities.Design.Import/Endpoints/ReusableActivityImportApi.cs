@@ -38,6 +38,9 @@ public sealed record ReusableActivityImportSelectionRequest(string PlanId, IRead
 
 public sealed record ReusableActivityImportApplyHttpRequest(string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds, string IdempotencyKey);
 
+public sealed record ReusableActivityDraftApplyHttpRequest(
+    string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds, string IdempotencyKey, bool? PublishImportedActivities = null);
+
 internal static class Elsa3ImportPermissions
 {
     public const string Read = "elsa3-import:read";
@@ -50,6 +53,8 @@ internal static class Elsa3ImportPermissions
     /// </summary>
     public const string PublishingManage = "workflows/publishing:manage";
 }
+
+internal sealed class RawCollectionOnlyException() : Exception("This import service accepts raw JSON arrays only.");
 
 public static class ReusableActivityImportHttp
 {
@@ -72,11 +77,13 @@ public static class ReusableActivityImportHttp
     {
         var (status, code, title) = exception switch
         {
+            ReusableActivityDraftImportUnavailableException => (501, "elsa3.import.drafts-unavailable", "Draft import unavailable"),
             ReusableActivityImportNotFoundException => (404, "elsa3.import.not-found", "Elsa 3 import resource not found"),
             ReusableActivityImportExpiredException => (410, "elsa3.import.collection-expired", "Elsa 3 import collection expired"),
             ReusableActivityImportIdempotencyConflictException => (409, "elsa3.import.idempotency-conflict", "Idempotency key conflict"),
             ReusableActivityImportCollisionException => (409, "elsa3.import.identity-collision", "Import identity collision"),
             ReusableActivityImportValidationException => (422, "elsa3.import.validation-failed", "Elsa 3 import validation failed"),
+            RawCollectionOnlyException => (415, "elsa3.import.raw-collection-only", "Native export upload unavailable"),
             ReusableActivityImportPayloadException => (400, "elsa3.import.payload-invalid", "Elsa 3 import payload invalid"),
             // The refusal's own stable code, and a detail naming the family and both versions.
             SchemaWriteRefusedException refusal => (SchemaWriteRefusalProblem.StatusCode, refusal.Code, "Schema write refused"),

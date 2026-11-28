@@ -1,3 +1,4 @@
+using Elsa.Locking.Core;
 using System.Collections.Concurrent;
 using System.Data.Common;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
@@ -47,6 +48,25 @@ internal sealed partial class ImportDatabase(
             await third.GetService<IRelationalDatabaseCreator>().CreateTablesAsync();
     }
 
+    private sealed class TestIds : Elsa.Primitives.Contracts.IIdentityGenerator
+    {
+        public string Generate() => Guid.NewGuid().ToString("N");
+    }
+
+    private sealed class ProcessLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
     public EfReusableActivityImportCommand Command(
         IPersistenceAccessContextAccessor access,
         TimeProvider? clock = null,
@@ -60,17 +80,17 @@ internal sealed partial class ImportDatabase(
             Workflows(workflowsInterceptors ?? []),
             access,
             serializer ?? ImportFixtures.Serializer(),
-            clock);
+            clock, () => (new TestIds(), new ProcessLockProvider()));
 
     public EfReusableActivityImportOperationStore OperationStore(IPersistenceAccessContextAccessor access) => new(Import(), access);
 
     /// <param name="converterRevision">The converter revision the import runs at (#3921); 0, the default, is the revision every earlier import used.</param>
-    public IReusableActivityImportOperationService Service(IPersistenceAccessContextAccessor access, TimeProvider? clock = null, IReusableActivityImportCommand? command = null, int converterRevision = 0)
+    public IReusableActivityImportOperationService Service(IPersistenceAccessContextAccessor access, TimeProvider? clock = null, IReusableActivityImportCommand? command = null, int converterRevision = 0, ReusableActivityImportOptions? options = null)
     {
         clock ??= new MutableTimeProvider(ImportFixtures.Now);
         var analyzer = new ReusableActivityCollectionAnalyzer(converterRevision: new ImportFixtures.FixedConverterRevision(converterRevision));
         var importer = new ReusableActivityCollectionImporter(analyzer, ImportFixtures.Materializer(), command ?? Command(access, clock), new NoCredentialInputs());
-        return new ReusableActivityImportOperationService(OperationStore(access), importer, ImportFixtures.Options(), clock, NullLogger<ReusableActivityImportOperationService>.Instance);
+        return new ReusableActivityImportOperationService(OperationStore(access), importer, options is null ? ImportFixtures.Options() : Microsoft.Extensions.Options.Options.Create(options), clock, NullLogger<ReusableActivityImportOperationService>.Instance);
     }
 
     public async Task<LedgerCounts> CountAsync()

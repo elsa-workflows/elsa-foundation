@@ -1,4 +1,10 @@
 using System.Runtime.ExceptionServices;
+using Elsa.Locking.Core;
+using Elsa.Activities.Design.Persistence.Core.Constants;
+using Elsa.Primitives.Versioning;
+using Elsa.Primitives.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -46,8 +52,13 @@ public sealed class EfReusableActivityImportCommand(
     WorkflowsDesignDbContext workflowsDb,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IPayloadSerializer payloadSerializer,
-    TimeProvider? timeProvider = null) : IReusableActivityImportCommand
+    TimeProvider? timeProvider = null,
+    Func<(IIdentityGenerator Identities, IDistributedLockProvider Locks)>? draftServices = null) : IReusableActivityDraftImportCommand
 {
+    public EfReusableActivityImportCommand(Elsa3ImportDbContext importDb, ActivitiesDesignDbContext activitiesDb, WorkflowsDesignDbContext workflowsDb,
+        IPersistenceAccessContextAccessor accessContextAccessor, IPayloadSerializer payloadSerializer, TimeProvider? timeProvider)
+        : this(importDb, activitiesDb, workflowsDb, accessContextAccessor, payloadSerializer, timeProvider, null) { }
+
     private static readonly EfWriteRetry WriteConflicts = new(EfWriteRetry.DefaultMaxAttempts, IsWriteConflict);
     private const int ReconciliationReads = 3;
     private const string DefinitionBindingKind = "elsa3ReusableImportDefinitionBinding";
@@ -72,6 +83,45 @@ public sealed class EfReusableActivityImportCommand(
         var tenantId = WritableTenant(mutation);
         var plan = CreatePlan(mutation, tenantId, scoped);
 
+        // Acquire all definition locks before opening a DB transaction, in the same order as activity upgrade.
+        // A concurrent publication must see either the whole set of reservations or none of it.
+        var locks = new Stack<IDistributedSynchronizationHandle>();
+        try
+        {
+            if (plan.PublishImportedActivities.HasValue && plan.Versions.Count > 0)
+            {
+                var provider = draftServices?.Invoke().Locks ?? throw new InvalidOperationException("Draft import requires workflow authoring services.");
+                foreach (var key in plan.Versions.Select(v => ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(v.DefinitionId))
+                             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+                {
+                    try
+                    {
+                        locks.Push(await provider.AcquireLockAsync(key, null, cancellationToken));
+                    }
+                    catch (Exception error) when (error is not OperationCanceledException)
+                    {
+                        throw Persistence("acquire activity publication lock", mutation, error);
+                    }
+                }
+            }
+            return await CommitPlanAsync(mutation, plan, tenantId, scoped, cancellationToken);
+        }
+        finally
+        {
+            Exception? releaseFailure = null;
+            while (locks.TryPop(out var handle))
+            {
+                try { await handle.DisposeAsync(); }
+                catch (Exception error) { releaseFailure ??= error; }
+            }
+            if (releaseFailure is not null)
+                throw Persistence("release activity publication locks", mutation, releaseFailure);
+        }
+    }
+
+    private async Task<ReusableActivityImportCommitResult> CommitPlanAsync(
+        ReusableActivityImportMutation mutation, ImportPlan plan, string tenantId, bool scoped, CancellationToken cancellationToken)
+    {
         // Every attempt opens its own shared transaction over fresh contexts, so no caller transaction can be in scope.
         return await WriteConflicts.RunUntilSettledAsync<ReusableActivityImportCommitResult>(null, async () =>
         {
@@ -81,8 +131,12 @@ public sealed class EfReusableActivityImportCommand(
                 return outcome.Result;
 
             var failure = outcome.Failure!;
-            if (failure is SchemaWriteRefusedException)
+            if (failure is SchemaWriteRefusedException or ReusableActivityImportCollisionException)
                 ExceptionDispatchInfo.Throw(failure);
+            // SQLSTATE 40001 positively identifies a rolled-back serialization attempt, including at COMMIT.
+            if (plan.PublishImportedActivities.HasValue && failure is EfCommitOutcomeUnknownException
+                { InnerException: System.Data.Common.DbException { SqlState: "40001" } })
+                return EfWriteAttempt<ReusableActivityImportCommitResult>.Retry(failure);
             if (failure is EfCommitOutcomeUnknownException)
                 return await ReconcileUncertainCommitAsync(mutation, scoped, commitAttemptId, failure, cancellationToken);
             if (!WriteConflicts.ShouldRetry(null, failure))
@@ -115,7 +169,9 @@ public sealed class EfReusableActivityImportCommand(
         EfSharedTransaction shared;
         try
         {
-            shared = await EfSharedTransaction.BeginAsync([importDb, activitiesDb, workflowsDb], cancellationToken);
+            shared = mutation.PublishImportedActivities.HasValue
+                ? await EfSharedTransaction.BeginSerializableAsync([importDb, activitiesDb, workflowsDb], cancellationToken)
+                : await EfSharedTransaction.BeginAsync([importDb, activitiesDb, workflowsDb], cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -194,6 +250,20 @@ public sealed class EfReusableActivityImportCommand(
 
         // A catalog row under a plan version id exists only once that version is published (spec 246 FR-004).
         var versionRows = await LoadActivityVersionsAsync(activities, plan.Versions.Select(version => version.Id), tenantId, cancellationToken);
+
+        if (plan.PublishImportedActivities.HasValue)
+        {
+            var headIds = authoringRows.Values.Select(state => state.HeadVersionId).OfType<string>();
+            var heads = await LoadActivityVersionsAsync(activities, headIds, tenantId, cancellationToken);
+            foreach (var version in plan.Versions)
+            {
+                if (versionRows.ContainsKey(version.Id) || authoringRows.GetValueOrDefault(version.DefinitionId)?.HeadVersionId is not { } headId)
+                    continue;
+                if (!heads.TryGetValue(headId, out var head) || !SemVer.TryParse(head.Version, out var published) ||
+                    !SemVer.TryParse(version.Version, out var pending) || pending <= published)
+                    throw Collision($"Cannot reserve version {version.Version} for source '{version.SourceVersionId}'. The activity already has a published head ({head?.Version ?? headId}). Review its versions before importing.", scoped);
+            }
+        }
 
         var existingBindings = new HashSet<string>(StringComparer.Ordinal);
         foreach (var binding in plan.Bindings)
@@ -325,6 +395,28 @@ public sealed class EfReusableActivityImportCommand(
                 entry.State == EntityState.Unchanged && StringComparer.Ordinal.Equals(entry.Entity.Id, version.Id)), WorkflowVersionKind, version.Id);
         }
 
+        if (plan.PublishImportedActivities.HasValue)
+        {
+            var drafts = new EfWorkflowDefinitionDraftStore(workflows, payloadSerializer, accessContextAccessor);
+            var services = draftServices?.Invoke() ?? throw new InvalidOperationException("Draft import requires workflow authoring services.");
+            var clone = new EfCloneDraftFromVersionCommand(workflows, accessContextAccessor, workflowWriter, services.Identities, payloadSerializer, services.Locks);
+            foreach (var group in plan.WorkflowVersions.GroupBy(version => version.DefinitionId))
+            {
+                var newest = group.MaxBy(version => Version.Parse(version.Version))!;
+                var current = await drafts.FindByWorkflowDefinitionIdAsync(group.Key, cancellationToken);
+                if (current is not null)
+                {
+                    if (current.SourceVersionId != newest.Id)
+                        throw new ReusableActivityImportCollisionException($"Workflow '{group.Key}' has an existing current draft. Review it before importing another version.");
+                    continue;
+                }
+                var draftId = await clone.Execute(OperationKey(commitAttemptId, "workflowDraft", newest.Id), newest.Id, cancellationToken);
+                var cloned = await drafts.FindByWorkflowDefinitionIdAsync(group.Key, cancellationToken);
+                if (cloned?.Id != draftId || cloned.SourceVersionId != newest.Id)
+                    throw new ReusableActivityImportCollisionException($"Workflow '{group.Key}' changed while its imported draft was being created.");
+            }
+        }
+
         // Activities Design rows through the lane's own create command and atomic writer: each new definition with
         // its authoring state and the draft of its first imported version, as Studio creates a definition.
         var activityWriter = new EfDesignAtomicWrite(activities, accessContextAccessor, shared.BeginOperationAsync);
@@ -344,6 +436,25 @@ public sealed class EfReusableActivityImportCommand(
                 activities.Entry(draft).State == EntityState.Unchanged,
                 ActivityDefinitionKind,
                 definition.Id);
+        }
+
+        if (plan.PublishImportedActivities == false)
+        {
+            foreach (var version in plan.Versions)
+            {
+                var existing = await ((IActivityDefinitionDraftStore)activityStores).FindAsync(version.DraftId, cancellationToken);
+                if (existing is not null)
+                {
+                    if (existing.Status == ActivityDefinitionDraftStatus.Discarded ||
+                        !ReusableActivityImportPublishPhase.SameContent(existing, version))
+                        throw new ReusableActivityImportCollisionException($"Activity draft '{version.DraftId}' has changed since import. Review it before importing again.");
+                    continue;
+                }
+                var state = await ((IActivityDefinitionAuthoringStore)activityStores).FindAsync(version.DefinitionId, cancellationToken);
+                var head = state?.HeadVersionId;
+                await activityStores.ExecuteAsync(new CreateActivityDraftRequest(
+                    ReusableActivityImportDrafts.Draft(version, head), ReusableActivityImportDrafts.Layout(version), head), shared.BeginOperationAsync, cancellationToken);
+            }
         }
     }
 
@@ -496,7 +607,7 @@ public sealed class EfReusableActivityImportCommand(
                 version => version.Id,
                 version => workflowVersions.First(entry => ReferenceEquals(entry.Version, version)).StateJson,
                 StringComparer.Ordinal),
-            CoalesceBindings(bindings, scoped));
+            CoalesceBindings(bindings, scoped), mutation.PublishImportedActivities);
     }
 
     private TEntity WithTenant<TEntity>(TEntity entity, string tenantId) where TEntity : Elsa.Primitives.Entities.TenantEntity
@@ -726,7 +837,7 @@ public sealed class EfReusableActivityImportCommand(
     /// resolving to more than one row is refused, and each returned row is decoded under the binding identity that
     /// asked for it, so a drifted row fails closed instead of being reported as a different binding.
     /// </summary>
-    private static async Task<Dictionary<string, ReusableActivityImportDefinitionBinding>> LoadBindingsAsync(
+    internal static async Task<Dictionary<string, ReusableActivityImportDefinitionBinding>> LoadBindingsAsync(
         Elsa3ImportDbContext db,
         IEnumerable<string> bindingIds,
         string tenantId,
@@ -1014,7 +1125,8 @@ public sealed class EfReusableActivityImportCommand(
         IReadOnlyList<WorkflowDefinition> WorkflowDefinitions,
         IReadOnlyList<WorkflowDefinitionVersion> WorkflowVersions,
         IReadOnlyDictionary<string, string> WorkflowStateJson,
-        IReadOnlyList<ReusableActivityImportDefinitionBinding> Bindings)
+        IReadOnlyList<ReusableActivityImportDefinitionBinding> Bindings,
+        bool? PublishImportedActivities)
     {
         /// <summary>The definition's lowest selected version: activities are in publish order, ascending per definition.</summary>
         public ImportedActivity ActivityFor(string definitionId) =>

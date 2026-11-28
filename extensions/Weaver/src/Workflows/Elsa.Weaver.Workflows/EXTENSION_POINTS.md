@@ -141,7 +141,7 @@ revision and the client binding. No persisted revision is read in its place.
   module identity with `resourceModuleIds: ["Elsa.Studio.Workflows"]`. The designer-history Undo and the live saved
   state ("Persisted by your explicit save") are Studio Workflows' result control `workflows.weaver.batch-undo`
   (`api.weaver.resultControls`), which the host renders after the renderer. Preparation and the applier share one case
-  file, `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowBatchConformance.json`, run by
+  file, `studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowBatchConformance.json`, run by
   `WorkflowBatchConformanceTests` and `workflowBatchConformance.test.ts`.
 
 **SemVer: Minor.** A new tool contract, result kind and optional snapshot fields; nothing existing changes meaning.
@@ -212,7 +212,7 @@ says so.
   texts name only registered tools and kinds; the Weaver Workflows Vitest `registeredReferences.test.tsx` composes both
   Workflows Studio packages and checks every prompt, starter, renderer, result control and client tool contract against
   it, and each contribution's module identity. Studio's snapshot and the server's admission share
-  `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowExplainSnapshot.json`.
+  `studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowExplainSnapshot.json`.
 - **Studio side.** `Elsa.Studio.Weaver.Workflows` no longer registers the `workflows.proposal` renderer (no tool
   produced that kind, and it was registered under the Workflows module's identity), the explain-executable prompt (it
   named a `get-executable-detail` tool that was never registered; slice F restores it against `workflow_read_executable`)

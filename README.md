@@ -4,11 +4,14 @@
 
 `elsa-foundation` is the transitional Elsa 4 foundation workspace.
 
-It contains the Elsa backend and Studio in three product roots:
+The repository contains the Elsa backend, Studio and extensions:
 
-- `Essentials/`: backend libraries, tests and host applications.
-- `Extensions/<capability>/`: optional backend implementations, tests and Studio components where present.
-- `Studio/`: the Studio shell, shared UI, tests and frontend tooling.
+- `essentials/`: built-in backend libraries, tests and build analyzers.
+- `server/apps/`: deployable backend hosts.
+- `studio/`: the Studio shell, shared UI, tests and frontend tooling.
+- `extensions/<capability>/`: optional backend implementations, tests and Studio components where present.
+
+Open `Elsa.Server.slnx` for the Server and backend extensions, or `studio/Elsa.Studio.slnx` for Studio.
 
 Shared engineering documentation, tools and workflows remain at the root. Public Elsa 4 documentation source lives in `website/docs/` and syncs to GitBook. Server and Studio retain independent builds and package identities.
 
@@ -16,7 +19,7 @@ These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-co
 
 - **Try Elsa 4:** [run Workbench and Studio from published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
 - **Contribute to the server:** follow the [Elsa Foundation contribution guide](CONTRIBUTING.md).
-- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](Studio/CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](studio/CONTRIBUTING.md).
 
 ## Screenshots
 
@@ -38,7 +41,8 @@ Modules should stay opt-in. A shell composes only the capabilities it needs, and
 
 ## Start here
 
-- The process entry point is [`Essentials/apps/Elsa.Workbench/Program.cs`](Essentials/apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`Essentials/apps/Elsa.Workbench/shells.json`](Essentials/apps/Elsa.Workbench/shells.json).
+- The process entry point is [`server/apps/Elsa.Workbench.Host/Program.cs`](server/apps/Elsa.Workbench.Host/Program.cs); which features it composes is decided by [`server/apps/Elsa.Workbench.Host/shells.json`](server/apps/Elsa.Workbench.Host/shells.json).
+- Use `Elsa.Workbench.Host` for local development. Deployment [Docker profiles](docker/profiles/README.md) derive from `Elsa.Foundation.Host`.
 - [How a workflow executes](docs/how-a-workflow-executes.md) traces one request from that entry point to a durable checkpoint, file by file.
 - [AGENTS.md](AGENTS.md) is the provider-neutral entrypoint for AI agents and engineers.
 - [docs/README.md](docs/README.md) routes to glossary, skills, maps, reports, and architecture orientation.
@@ -65,8 +69,8 @@ the completion gate.
 
 To build and run the backend from source, check readiness, and execute a sample workflow, follow the
 [backend source quickstart](docs/contributing/backend-source-quickstart.md). To pair that Workbench with
-Studio from `Studio/` in this repository, follow the
-[Studio source quickstart](Studio/docs/contributing/studio-source-quickstart.md).
+Studio from `studio/` in this repository, follow the
+[Studio source quickstart](studio/docs/contributing/studio-source-quickstart.md).
 
 ## Supported management APIs
 
@@ -74,7 +78,7 @@ Management-client APIs are owned by their Elsa domains and can be composed direc
 `Elsa.Workbench` is a reference composition, not the implementation home of a server-wide management facade.
 
 The canonical areas are Workflow Design, Activity Design, Expressions, Publishing, Runtime, and
-[API Capabilities](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/README.md). An authenticated client loads one shell-relative
+[API Capabilities](essentials/src/Api/Capabilities/Elsa.Api.Capabilities/README.md). An authenticated client loads one shell-relative
 `GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
 capability and expose no routes; endpoint-level action permissions remain authoritative.
 
@@ -82,15 +86,15 @@ See the [domain-owned API specification](specs/220-domain-owned-apis/spec.md),
 [OpenAPI contract](specs/220-domain-owned-apis/contracts/management-api.openapi.yaml), and
 [validation quickstart](specs/220-domain-owned-apis/quickstart.md) for composition and compatibility details.
 
-Opt-in [direct BPMN hosting](Essentials/src/Activities/Bpmn/Api/README.md) adds model publication,
+Opt-in [direct BPMN hosting](extensions/Bpmn/src/Api/README.md) adds model publication,
 execution, human completion, cancellation and service-incident retry APIs. Native workflows can embed a
-published model with `RunBpmn`; the [host adapter](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/README.md)
+published model with `RunBpmn`; the [host adapter](extensions/Bpmn/src/Elsa.Activities.Bpmn/README.md)
 describes its binding profiles, compatibility and recovery evidence. Existing Studio BPMN authoring is
 preserved; first-class direct-model Studio support remains tracked by the execution-model program.
 
-Optional [managed external sign-in](Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md)
+Optional [managed external sign-in](extensions/Identity/src/Api/README.md)
 adds OIDC connections, explicit deployment overrides, prospective preview and guarded link/session administration.
-The [Studio module](Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md) consumes its
+The [Studio module](extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md) consumes its
 capability and public SDK. Integrator provisioning policies assign existing saved Elsa roles to new users;
 subsequent sign-ins use those saved assignments.
 
@@ -101,7 +105,8 @@ without cloning or building the repositories. That guide includes macOS/Linux an
 
 This starts **Elsa.Workbench** (`http://localhost:13000`) and **Elsa Studio**
 (`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-workbench` and
-`elsaworkflows/elsa-studio` (SQLite, ephemeral). The [Docker quickstart](docker/compose/README.md)
+`elsaworkflows/elsa-studio` (SQLite, ephemeral). `elsa-studio` runs the Studio Essentials profile. The Studio app with every
+module compiled in publishes as `elsaworkflows/elsa-studio-workbench` (see [Studio Docker](studio/docs/docker.md)). The [Docker quickstart](docker/compose/README.md)
 covers this plus the build-from-source path with PostgreSQL, and explains the settings that wire
 Studio to the server backend (`Studio__BackendBaseUrl`, the Elsa host management key, CORS). For the
 full container/image reference (environment variables, mounts, persistence composition,

@@ -1,0 +1,158 @@
+using Kernel.Durable;
+using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
+using Contract = Kernel.Foundation.Contracts;
+
+namespace Kernel.Foundation.Postgres;
+
+/// <summary>
+/// The Foundation's ingress and reads on a PostgreSQL Core Preview store: durable starts of the configured actor type,
+/// ordinary sends to exact root references, and the reads of those roots. With <see cref="PostgresDirectRequests"/>, on a
+/// store with held replies, a request starts a root or sends to one and holds its caller until the owner answers.
+/// </summary>
+public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads, Contract.IActorTerminalOutputReads,
+    Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads,
+    Contract.IActorRetentionReads, Contract.IActorRetentionPolicies, Contract.IActorParkInboxReads, ICommittedRootStateReads
+{
+    private readonly PostgresRootAdmission admission;
+    private readonly PostgresRootReads reads;
+    private readonly Func<Contract.BoundScope, string, bool>? authorizeOperator;
+    private readonly Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeExactOperator;
+    private readonly PostgresDirectRequests? directRequests;
+    private readonly PostgresRootIngress ingress;
+    private readonly string actorType;
+    private readonly bool takesKeyedRequests;
+
+    /// <summary>The held requests of this Foundation, and the transport its owner answers through: null without held replies.</summary>
+    public PostgresDirectRequests? Requests => directRequests;
+
+    internal PostgresPreviewFoundation(PostgresRootAdmission admission, PostgresRootReads reads, string actorType,
+        Func<Contract.BoundScope, string, bool>? authorizeOperator = null, PostgresDirectRequests? directRequests = null,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeExactOperator = null, bool takesKeyedRequests = false)
+    {
+        (this.admission, this.reads, this.authorizeOperator, this.directRequests) = (admission, reads, authorizeOperator, directRequests);
+        this.authorizeExactOperator = authorizeExactOperator;
+        this.actorType = actorType;
+        this.takesKeyedRequests = takesKeyedRequests;
+        ingress = new(admission, actorType,
+            (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Terminate) == true,
+            (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Delete) == true,
+            authorizeRecover: (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Recover) == true);
+    }
+
+    /// <summary>Submits a projected terminal selection from the trusted host retention worker.</summary>
+    public ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        string selection, CancellationToken cancellationToken = default) =>
+        admission.AdmitRetentionDeleteAsync(scope, actor, selection, cancellationToken);
+
+    public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+        string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(kind);
+        if ((kind is Contract.Kinds.Suspend or Contract.Kinds.Resume || kind == Contract.Kinds.Terminate && payload is null) &&
+            (target is not Contract.Target.Event || !admission.SupportsPublicEvents()))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (target is not Contract.Target.Ref exact || payload is not null || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
+                !PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id) ||
+                (authorizeExactOperator?.Invoke(scope, exact.Actor, kind) ?? authorizeOperator?.Invoke(scope, kind)) != true)
+                return new(Contract.AdmissionOutcome.Refused);
+            try
+            {
+                var control = await admission.AdmitRootOperatorAsync(scope.Tenant, exact.Actor.Id, id, kind, options?.DueAt,
+                    options?.KeepFor, cancellationToken, requireExactTarget: authorizeExactOperator is not null);
+                return control is null ? new(Contract.AdmissionOutcome.Refused) :
+                    new(control.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(control.Reference));
+            }
+            catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+        }
+        return await ingress.SendAsync(scope, target, id, kind, payload, options, cancellationToken);
+    }
+
+    ValueTask<Contract.ActorRetentionPolicy> Contract.IActorRetentionPolicies.ReadRetentionPolicyAsync(
+        Contract.BoundScope scope, CancellationToken cancellationToken) =>
+        reads.ReadRetentionPolicyAsync(scope, actorType, cancellationToken);
+
+    ValueTask<Contract.ActorRetentionPolicyChange> Contract.IActorRetentionPolicies.TryApplyRetentionPolicyAsync(
+        Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long automaticNewlyEligibleLimit,
+        string? confirmation, CancellationToken cancellationToken) =>
+        reads.TryApplyRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, automaticNewlyEligibleLimit, confirmation, cancellationToken);
+
+    ValueTask<Contract.ActorRetentionQuote> Contract.IActorRetentionReads.ReadRetentionQuoteAsync(Contract.BoundScope scope,
+        string actorType, Contract.ActorRetentionWindows previous, Contract.ActorRetentionWindows proposed,
+        KeyValuePair<string, string>? definitionLabel, long? asOf, CancellationToken cancellationToken) =>
+        reads.ReadRetentionQuoteAsync(scope, actorType, previous, proposed, definitionLabel, asOf, cancellationToken);
+
+    ValueTask<Contract.ActorTerminalOutput?> Contract.IActorTerminalOutputReads.ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        long endedAt, bool includeValues, CancellationToken cancellationToken) =>
+        reads.ReadTerminalOutputAsync(scope, actor, endedAt, includeValues, cancellationToken);
+
+    bool Contract.IActorSequencedJournalReads.SupportsSequencedJournal => reads.SupportsSequencedJournal;
+
+    bool Contract.IActorParkInboxReads.SupportsParkInbox => reads.SupportsParkInbox;
+
+    ValueTask<Contract.Page<Contract.ParkInboxEntry>?> Contract.IActorParkInboxReads.ReadParkInboxAsync(
+        Contract.BoundScope scope, Contract.ActorRef actor, string selection, Contract.PageToken? from,
+        CancellationToken cancellationToken) => reads.ReadParkInboxAsync(scope, actor, selection, from, cancellationToken);
+
+    bool Contract.IActorPlaybackReads.SupportsPlayback => reads.SupportsPlayback;
+    bool Contract.IActorPlaybackReads.SupportsDescendantPlayback => reads.SupportsDescendantPlayback;
+
+    ValueTask<Contract.ActorPlaybackPage?> Contract.IActorPlaybackReads.ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        Contract.ActorPlaybackQuery query, CancellationToken cancellationToken) => reads.ReadPlaybackAsync(scope, actor, query, cancellationToken);
+
+    ValueTask<Contract.ActorSequencedJournalPage?> Contract.IActorSequencedJournalReads.ReadSequencedJournalAsync(
+        Contract.BoundScope scope, Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit,
+        CancellationToken cancellationToken) => reads.ReadSequencedJournalAsync(scope, actor, afterSequence, upperSequence, limit, cancellationToken);
+
+    public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        CancellationToken cancellationToken = default) => reads.GetAsync(scope, actor, cancellationToken);
+
+    ValueTask<(string TypeData, string? State, Contract.ActorStatus Status)?> ICommittedRootStateReads.ReadCommittedStateAsync(
+        Contract.BoundScope scope, Contract.ActorRef actor, CancellationToken cancellationToken) =>
+        reads.ReadCommittedStateAsync(scope, actor, cancellationToken);
+
+    public ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+        reads.TailAsync(scope, actor, from, cancellationToken);
+
+    public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+        string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default)
+    {
+        if (directRequests is null || target is not (Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event or Contract.Target.Key))
+            throw new NotSupportedException("This preview holds requests only with a reply-capable store and its direct requests.");
+        if (target is Contract.Target.Key && !takesKeyedRequests)
+            throw new NotSupportedException("This PostgreSQL Foundation profile does not hold caller-key requests.");
+        // Classify operator commands only when addressed to an exact reference.
+        if (target is not Contract.Target.Ref exact || authorizeExactOperator is null || !Contract.Kinds.IsCommand(kind))
+            return directRequests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken);
+
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (request.Inline || request.ReleaseBeforeCommit || request.Ambient is not null)
+            return ValueTask.FromResult(new Contract.Reply(null, null, Error: "invalid operator request"));
+        if (add?.DueAt is not null)
+            return ValueTask.FromResult(new Contract.Reply(null, null, Error: "requests cannot set a due time"));
+        if (kind == Contract.Kinds.Recover || !ingress.Authorizes(scope, exact.Actor, kind))
+            return ValueTask.FromResult(new Contract.Reply(null, null, Error: "missing"));
+
+        return directRequests.RequestOperatorAsync(scope, exact.Actor, id, add, request,
+            (caller, token) => ingress.AdmitHeldOperatorAsync(scope, exact.Actor, id, kind, payload, add, caller, token), cancellationToken);
+    }
+
+    public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
+        CancellationToken cancellationToken = default) =>
+        ingress.SetStartAsync(scope, key, wait, spec, cancellationToken);
+
+    public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
+        Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+        reads.ListAsync(scope, query, from, cancellationToken);
+
+    public ValueTask<Contract.Page<Contract.DeliveryView>> InboxAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+        reads.InboxAsync(scope, actor, from, cancellationToken);
+}

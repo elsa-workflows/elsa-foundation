@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Plus, RefreshCw, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioSearchInput , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar} from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioSearchInput, StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar } from "@elsa-workflows/studio-ui";
 import { deleteConnection, getConnectionDescriptors, listConnections, revokeConnection, testConnection } from "./connectionsApi";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
 import { ConnectionCreateDialog } from "./ConnectionCreateDialog";
@@ -13,7 +13,7 @@ type Notice = { message: string; error?: boolean };
 export function ConnectionsPage({ context, dialogs, notifications }: { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi }) {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const appliedSearchRef = useRef(appliedSearch); appliedSearchRef.current = appliedSearch;
+  const searchRef = useRef(search); searchRef.current = search;
   const [items, setItems] = useState<ConnectionMetadata[]>([]);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [descriptors, setDescriptors] = useState<ConnectionDescriptorsResponse | null>(null);
@@ -29,6 +29,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   const operationRef = useRef<object | null>(null);
   const searchFormRef = useRef<HTMLFormElement>(null);
   const focusAfterCreate = useRef(false);
+  const createOpener = useRef<HTMLElement | null>(null);
   const owner = useMemo(() => ({ context }), [context]);
   const currentOwner = useRef(owner); currentOwner.current = owner;
   currentContextRef.current = context;
@@ -38,14 +39,14 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   const selected = visibleItems.find(item => item.name === selectedName) ?? null;
   const editingConnection = editingName ? (visibleItems.find(item => item.name === editingName) ?? null) : null;
 
-  const load = useCallback(async (query: string) => {
+  const load = useCallback(async (query: string, knownDescriptors?: ConnectionDescriptorsResponse | null) => {
     const requestContext = context;
     const requestId = ++loadRequestRef.current;
     setLoading(true);
     setLoadError(null);
     try {
       const [list, descriptorResponse] = await Promise.all([
-        listConnections(requestContext, query), getConnectionDescriptors(requestContext)
+        listConnections(requestContext, query), knownDescriptors ?? getConnectionDescriptors(requestContext)
       ]);
       if (requestId !== loadRequestRef.current || currentContextRef.current !== requestContext) return;
       setItems(list.items);
@@ -89,10 +90,9 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   useEffect(() => {
     if (!creating && focusAfterCreate.current) {
       focusAfterCreate.current = false;
-      // Dialog cleanup can restore its opener before React removes the empty result.
-      // Restore to the stable search field after that commit, without refocusing on later loads.
+      // Creating an item can remove the empty-state button that opened the dialog.
       if (!document.activeElement || document.activeElement === document.body)
-        searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        (createOpener.current?.isConnected ? createOpener.current : searchFormRef.current?.querySelector<HTMLInputElement>("input"))?.focus();
     }
   }, [creating]);
 
@@ -112,21 +112,21 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
         setBusy(null);
         return;
       }
-      if (action !== "Test" && !await dialogs.confirm({ message: `${action} ${connection.name}?`, tone: "danger" })) return;
+      if (action !== "Test" && !await dialogs.confirm({ title: `${action} connection`, message: `${action} ${connection.name}?`, confirmLabel: action, tone: "danger" })) return;
       if (!isCurrent()) return;
       if (action === "Test") {
         const result = await testConnection(requestContext, connection.name);
         if (isCurrent()) {
           if (result.succeeded) notifications?.notify({ level: "success", title: "Connection test succeeded.", message: result.message || undefined });
           else setNotice({ message: result.message || "Test failed.", error: true });
-          await load(appliedSearch);
+          await load(searchRef.current);
         }
       } else {
         if (action === "Revoke") await revokeConnection(requestContext, connection.name);
         else await deleteConnection(requestContext, connection.name);
         if (!isCurrent()) return;
         notifications?.notify({ level: "success", title: `Connection '${connection.name}' ${action === "Revoke" ? "revoked" : "deleted"}.` });
-        await load(appliedSearch);
+        await load(searchRef.current);
       }
     } catch (cause) {
       if (isCurrent()) setNotice({ message: cause instanceof Error ? cause.message : `The connection could not be ${action === "Test" ? "tested" : action === "Revoke" ? "revoked" : "deleted"}.`, error: true });
@@ -135,26 +135,22 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
     }
   }
 
-  const notification = contextIsLoaded && notice ? <div className={`connections-notice${notice.error ? " connections-notice--error" : ""}`} role={notice.error ? "alert" : "status"}>
-    <AlertCircle size={16} aria-hidden="true" /><span>{notice.message}</span>
-    <button type="button" className="connections-icon-button" aria-label="Dismiss notification" onClick={() => setNotice(null)}><X size={14} aria-hidden="true" /></button>
-  </div> : null;
+  const notification = contextIsLoaded && notice ? <StudioAlert tone={notice.error ? "danger" : "info"}
+    dismiss={{ label: "Dismiss notification", onDismiss: () => setNotice(null) }}>{notice.message}</StudioAlert> : null;
 
   return <StudioPage className="connections-shell" aria-label="Connections management">
-    <StudioPageHeader title="Connections" headingLevel={2} description="Connect your services once, then reuse them in your workflows." actions={        <div className="studio-page-actions" role="group" aria-label="Connection page actions">
-          <StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />Create connection</StudioButton>
-          <StudioButton size="md" onClick={() => void load(appliedSearch)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Refresh</StudioButton>
-        </div>} />
+    <StudioPageHeader title="Connections" headingLevel={2} description="Connect your services once, then reuse them in your workflows."
+      refresh={{ id: "connections", label: "Refresh connections", refreshing: loading, autoRefresh: true, onRefresh: () => load(searchRef.current) }}
+      actions={<StudioButton variant="primary" size="md" onClick={() => { createOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={16} aria-hidden="true" />New connection</StudioButton>} />
     <StudioCollectionToolbar>
-      <form ref={searchFormRef} className="connections-search" role="search" aria-label="Connections" onSubmit={event => { event.preventDefault(); void load(search); }}>
-        <StudioSearchInput className="connections-search-control" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => setSearch(event.target.value)} />
-        <StudioButton type="submit" size="md" disabled={loading}>Search</StudioButton>
+      <form ref={searchFormRef} className="connections-search" role="search" aria-label="Connections" onSubmit={event => event.preventDefault()}>
+        <StudioSearchInput className="connections-search-control" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => { setSearch(event.target.value); void load(event.target.value, visibleDescriptors); }} />
       </form>
     </StudioCollectionToolbar>
     {!selected ? notification : null}
     {loadError && contextIsLoaded ? <p className="connections-load-error">{loadError}</p> : null}
-    <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onCreate={visibleDescriptors ? () => { setNotice(null); setCreating(true); } : undefined} onOpen={name => { setNotice(null); setSelectedName(name); }} />
-    {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} shown</span></StudioCollectionFooter> : null}
+    <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onCreate={visibleDescriptors ? () => { createOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setNotice(null); setCreating(true); } : undefined} onOpen={name => { setNotice(null); setSelectedName(name); }} />
+    {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} {visibleItems.length === 1 ? "connection" : "connections"}</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
     {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}
     {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={(created, canNotify) => {
@@ -162,9 +158,9 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
       if (canNotify) {
         focusAfterCreate.current = true;
         notifications?.notify({ level: "success", title: `Connection '${created.name}' created.` });
-        setCreating(false); setSelectedName(null); setSearch(appliedSearch);
+        setCreating(false); setSelectedName(null);
       }
-      void load(appliedSearchRef.current);
+      void load(searchRef.current);
     }} /> : null}
     {editingConnection && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} initialConnection={editingConnection} onCancel={() => setEditingName(null)} onCreated={(updated, canNotify) => {
       if (currentOwner.current !== owner) return;
@@ -172,7 +168,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
         notifications?.notify({ level: "success", title: `Connection '${updated.name}' updated.` });
         setEditingName(null); setSelectedName(null);
       }
-      void load(appliedSearchRef.current);
+      void load(searchRef.current);
     }} /> : null}
   </StudioPage>;
 }

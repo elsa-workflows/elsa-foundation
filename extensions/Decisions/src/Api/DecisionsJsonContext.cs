@@ -20,6 +20,8 @@ namespace Elsa.Decisions.Api;
 [JsonSerializable(typeof(DecisionProblem))]
 [JsonSerializable(typeof(SaveDecisionRequest))]
 [JsonSerializable(typeof(PublishDecisionRequest))]
+[JsonSerializable(typeof(DecisionLifecycleRequest))]
+[JsonSerializable(typeof(DecisionWriteConfirmation))]
 [JsonSerializable(typeof(CloneDecisionRequest))]
 [JsonSerializable(typeof(ValidateDecisionRequest))]
 [JsonSerializable(typeof(EvaluateDecisionRequest))]

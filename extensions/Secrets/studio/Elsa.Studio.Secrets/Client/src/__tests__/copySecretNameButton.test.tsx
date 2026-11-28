@@ -32,16 +32,16 @@ it.each(["disposal", "name replacement", "backend replacement"])("does not toast
   else render(change === "name replacement" ? "second" : "first", change === "backend replacement" ? {} : scope);
   finish(); await work; await Promise.resolve();
   expect(notifications.notify).not.toHaveBeenCalled();
-  expect(container.textContent).not.toContain("Copy failed");
+  expect(container.textContent).not.toContain("Could not copy technical name");
 });
 
 it("keeps the current failure inline and toasts a successful retry once", async () => {
   const writeText = vi.fn().mockRejectedValueOnce(new Error("Clipboard unavailable")).mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
   render(); copy();
-  await vi.waitFor(() => expect(container.textContent).toContain("Copy failed"));
+  await vi.waitFor(() => expect(container.textContent).toContain("Could not copy technical name"));
   expect(notifications.notify).not.toHaveBeenCalled();
   copy();
   await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledTimes(1));
-  expect(container.textContent).not.toContain("Copy failed");
+  expect(container.textContent).not.toContain("Could not copy technical name");
 });

@@ -15,6 +15,8 @@ public sealed record RuntimeStressOptions
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromMilliseconds(300);
     public double FaultRate { get; init; } = 0.005;
 
+    /// <summary>K1b: the store keeps the node lease, and the nodes' heartbeat loops renew it.</summary>
+
     /// <summary>How often the chaos does something, in milliseconds (a range).</summary>
     public (int Min, int Max) ChaosEvery { get; init; } = (100, 400);
     public bool BrokenFence { get; init; }

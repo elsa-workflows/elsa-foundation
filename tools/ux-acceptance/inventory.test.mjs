@@ -6,9 +6,9 @@ import { createRequire } from "node:module";
 import { URL, fileURLToPath } from "node:url";
 
 // Compare the tests Playwright discovers with run.py's verdict inventory without starting browsers or hosts.
-const require = createRequire(new URL("../../Studio/package.json", import.meta.url));
+const require = createRequire(new URL("../../studio/package.json", import.meta.url));
 const ts = require("typescript");
-const acceptance = new URL("../../Studio/tests/acceptance/", import.meta.url);
+const acceptance = new URL("../../studio/tests/acceptance/", import.meta.url);
 const configSource = readFileSync(new URL("playwright.config.ts", acceptance), "utf8");
 const compiled = ts.transpileModule(configSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } });
 const env = {
@@ -20,10 +20,10 @@ new Function("require", "module", "exports", "process", compiled.outputText)(
   name => { assert.equal(name, "@playwright/test"); return { defineConfig: value => value }; }, module, module.exports, { env });
 const config = module.exports.default;
 
-function discoveredProjects(composition) {
+function discoveredProjects(composition, pattern) {
   const report = JSON.parse(execFileSync(process.execPath, [require.resolve("@playwright/test/cli"),
-    "test", "--list", "--reporter=json", "--config", fileURLToPath(new URL("playwright.config.ts", acceptance))], {
-    cwd: fileURLToPath(new URL("../../Studio/", import.meta.url)),
+    "test", "--list", "--reporter=json", "--config", fileURLToPath(new URL("playwright.config.ts", acceptance)), ...(pattern ? ["--grep", pattern] : [])], {
+    cwd: fileURLToPath(new URL("../../studio/", import.meta.url)),
     env: { ...process.env, ...env, UX_ACTIVITY_DATA_COMPOSITION: composition },
     encoding: "utf8"
   }));
@@ -45,6 +45,7 @@ import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location("acceptance", sys.argv[1])
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 print(json.dumps({
+    "stockPattern": module.journey_pattern(module.NORMAL_JOURNEYS),
     "normal": {journey: sorted(module.JOURNEY_PROJECTS[journey]) for journey in module.NORMAL_JOURNEYS},
     "minimal": {journey: sorted(projects) for journey, projects in module.JOURNEY_PROJECTS.items()},
 }))
@@ -53,7 +54,7 @@ const expected = JSON.parse(python);
 
 for (const composition of ["normal", "minimal"]) {
   test(`${composition} composition discovers the expected projects for every journey`, () => {
-    assert.deepEqual(discoveredProjects(composition), expected[composition]);
+    assert.deepEqual(discoveredProjects(composition, composition === "normal" ? expected.stockPattern : undefined), expected[composition]);
   });
 }
 

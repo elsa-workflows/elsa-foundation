@@ -1,0 +1,122 @@
+// @vitest-environment jsdom
+
+import React from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { WorkflowEditorToolbar } from "../workflow-editor/WorkflowEditorToolbar";
+
+const mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement }[] = [];
+afterEach(() => {
+  mounted.splice(0).forEach(({ root, container }) => {
+    flushSync(() => root.unmount());
+    container.remove();
+  });
+});
+
+function render(overrides: Partial<React.ComponentProps<typeof WorkflowEditorToolbar>> = {}) {
+  const commands = { onSave: vi.fn(), onPublish: vi.fn(), onRun: vi.fn() };
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  mounted.push({ root, container });
+  const props = {
+    name: "Customer quote", status: "Autosaved", saving: false, busy: false, autosaveEnabled: true,
+    onAutosaveChange: vi.fn(), canUndo: true, canRedo: false, canAutoLayout: true,
+    onUndo: vi.fn(), onRedo: vi.fn(), onAutoLayout: vi.fn(), onBack: vi.fn(),
+    ...commands, canRun: true, runTitle: "Run a transient test", moreActions: [], ...overrides
+  };
+  flushSync(() => root.render(<WorkflowEditorToolbar {...props} />));
+  return { container, commands };
+}
+
+function click(button: HTMLButtonElement) {
+  flushSync(() => button.click());
+}
+
+describe("compact workflow toolbar", () => {
+  it("renders the workflow parent as a breadcrumb link and keeps return handling in the editor", () => {
+    const onBack = vi.fn();
+    const { container } = render({ onBack });
+    const breadcrumbs = container.querySelector<HTMLElement>('nav[aria-label="Breadcrumb"]')!;
+    const parentLink = breadcrumbs.querySelector<HTMLAnchorElement>("a")!;
+
+    expect(parentLink.textContent).toBe("Definitions");
+    expect(parentLink.getAttribute("href")).toContain("/workflows/definitions");
+    expect(breadcrumbs.querySelector('[aria-current="page"]')?.textContent).toContain("Customer quote");
+    parentLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("uses the template parent and preserves its current-item badge", () => {
+    const onBack = vi.fn();
+    const { container } = render({ templateMode: true, onBack });
+    const breadcrumbs = container.querySelector<HTMLElement>('nav[aria-label="Breadcrumb"]')!;
+    const parentLink = breadcrumbs.querySelector<HTMLAnchorElement>("a")!;
+
+    expect(parentLink.textContent).toBe("Templates");
+    expect(parentLink.getAttribute("href")).toContain("/workflows/templates");
+    expect(container.querySelector(".wf-editor-title .studio-status-chip")?.textContent).toBe("Template");
+    parentLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("keeps primary commands directly available with descriptive accessible labels", () => {
+    const { container, commands } = render();
+    const save = container.querySelector<HTMLButtonElement>(".wf-save-button")!;
+    const publish = container.querySelector<HTMLButtonElement>(".studio-split-button-primary")!;
+    const run = container.querySelector<HTMLButtonElement>("[aria-label='Test Run']")!;
+    const publishAccessibleName = publish.getAttribute("aria-label") ?? publish.textContent?.trim();
+    const runAccessibleName = run.getAttribute("aria-label") ?? run.textContent?.trim();
+    expect(save.title).toBe("Save workflow");
+    expect(save.textContent).toBe("Save");
+    expect(save.querySelector(".wf-toolbar-sr-only")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Publish options']")).not.toBeNull();
+    click(save); click(publish); click(run);
+    expect(commands.onSave).toHaveBeenCalledOnce();
+    expect(commands.onPublish).toHaveBeenCalledOnce();
+    expect(commands.onPublish).toHaveBeenCalledWith("review");
+    expect(commands.onRun).toHaveBeenCalledOnce();
+    expect(publishAccessibleName).toBe("Review & publish");
+    expect(runAccessibleName).toBe("Test Run");
+  });
+
+  it("renders the published Run action with its availability reason and invokes it when enabled", () => {
+    const onRunPublished = vi.fn();
+    const { container } = render({
+      onRunPublished,
+      canRunPublished: false,
+      runPublishedTitle: "Publish this workflow to run it"
+    });
+    const runPublished = container.querySelector<HTMLButtonElement>(".wf-run-published-button")!;
+
+    expect(runPublished.textContent).toContain("Run");
+    expect(runPublished.disabled).toBe(true);
+    expect(runPublished.title).toBe("Publish this workflow to run it");
+
+    const enabled = render({ onRunPublished, canRunPublished: true, runPublishedTitle: "Run published version 4" });
+    click(enabled.container.querySelector<HTMLButtonElement>(".wf-run-published-button")!);
+    expect(onRunPublished).toHaveBeenCalledOnce();
+  });
+
+  it("keeps save feedback with the actions and preserves busy and run eligibility guards", () => {
+    const { container, commands } = render({ busy: true, saving: true, canRun: false, status: "Saving before review..." });
+    const status = container.querySelector<HTMLElement>("[role='status']")!;
+    expect(status.closest(".wf-editor-toolbar")).not.toBeNull();
+    expect(status.getAttribute("data-pending")).toBe("true");
+    expect(status.textContent).toBe("Saving before review...");
+    const buttons = [".wf-save-button", ".studio-split-button-primary", "[aria-label='Test Run']"].map(selector => container.querySelector<HTMLButtonElement>(selector)!);
+    expect(buttons.every(button => button.disabled)).toBe(true);
+    buttons.forEach(click);
+    Object.values(commands).forEach(command => expect(command).not.toHaveBeenCalled());
+  });
+  it("explains unsupported publication and test-run operations",() => {
+    const {container,commands} = render({publicationUnavailableReason:"Publishing is not supported by this backend.",canRun:false,runTitle:"Test runs are not supported by this backend."});
+    const publish=container.querySelector<HTMLButtonElement>(".studio-split-button-primary")!;
+    const run=container.querySelector<HTMLButtonElement>("[aria-label='Test Run']")!;
+    expect(publish.disabled).toBe(true);expect(publish.title).toContain("not supported");
+    expect(run.disabled).toBe(true);expect(run.title).toContain("not supported");
+    click(publish);click(run);expect(commands.onPublish).not.toHaveBeenCalled();expect(commands.onRun).not.toHaveBeenCalled();
+  });
+
+});

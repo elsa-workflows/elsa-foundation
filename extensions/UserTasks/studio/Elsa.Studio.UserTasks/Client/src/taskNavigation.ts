@@ -1,5 +1,12 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 
+export interface FormNavigation {
+  formId?: string;
+  navigate?(path: string): void;
+}
+
+export const formsPath = (id?: string) => qualifyStudioBackendPath("/user-tasks/forms" + (id ? `/${encodeURIComponent(id)}` : ""));
+
 export interface TaskBrowseLocation { view: string; search: string; cursor: string | null; focusTask?: string | null }
 export function readTaskBrowseLocation(search: string): TaskBrowseLocation {
   const query = new URLSearchParams(search);

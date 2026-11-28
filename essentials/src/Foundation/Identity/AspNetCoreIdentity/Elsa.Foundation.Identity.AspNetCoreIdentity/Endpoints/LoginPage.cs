@@ -21,6 +21,8 @@ public static class LoginPage
         var form = RenderForm(returnUrl, showError, antiforgeryToken, pathBase, methods);
         if (options.Renderer is { } renderer)
             return renderer(new(options.ProductName, returnUrl, showError, antiforgeryToken, form));
+        if (options.Layout == "orbital")
+            return LoginOrbitalPage.Render(options, form, pathBase);
 
         static string Encode(string? value) => WebUtility.HtmlEncode(value ?? "");
         var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" or "field-guide" or "parcel-room" ? options.Layout : "parcel-room";

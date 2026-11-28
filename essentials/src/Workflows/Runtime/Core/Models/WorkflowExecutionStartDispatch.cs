@@ -5,6 +5,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class WorkflowExecutionStartDispatchRequest
 {
+    /// <summary>In-process native child history responsibility; never serialized and never start authority.</summary>
+    [JsonIgnore]
+    public PostCommitDeliveryContext? ChildHistorySource { get; init; }
+
     public WorkflowExecutionStartDispatchRequest(
         string artifactId,
         string requestedBy,
@@ -507,6 +511,10 @@ public sealed record WorkflowExecutableSourceSelection
 
 public sealed class WorkflowExecutionStartCommandPayload
 {
+    /// <summary>Known diagnostic origin from the verified native start source; never executable admission authority.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeHistoryCapturePolicy? HistoryCapturePolicy { get; init; }
 
@@ -803,4 +811,20 @@ public sealed class WorkflowExecutionStartDispatchResult
     public WorkflowExecutionCommandDispatchResult CommandDispatch { get; }
     public WorkflowExecutionActorDescriptor Agent { get; }
     public WorkflowExecutableSourceProvenance? PinnedSource { get; }
+
+    /// <summary>The response from a synchronous HTTP Test Run, available only to its authenticated request.</summary>
+    [JsonIgnore]
+    public WorkflowTestRunHttpReply? TestRunHttpReply { get; init; }
+
+    /// <summary>The scoped Test Run finished before a workflow execution record was created.</summary>
+    [JsonIgnore]
+    public bool TestRunCompletedWithoutRecord { get; init; }
+}
+
+public sealed record WorkflowTestRunHttpReply(int StatusCode, string ContentType, string? Body,
+    IReadOnlyDictionary<string, string> Headers)
+{
+    /// <summary>The owner supplied a live reply for the held Test Run. The workflow may still be running.</summary>
+    [JsonIgnore]
+    public bool OwnerAccepted { get; init; }
 }

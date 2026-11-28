@@ -25,7 +25,10 @@ public sealed class ReusableFlaggedStartTests
         var run = await host.RunAsync(wrapper, new JsonObject());
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
-        var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal("Approved", activity.Completion?.OutcomeKey);
+        var executed = run.Activities.Select(activity => activity.ExecutableNodeId).ToArray();
+        Assert.Contains(await host.ResolveBodyNodeIdAsync(wrapper, "start"), executed);
+        Assert.Contains(await host.ResolveBodyNodeIdAsync(wrapper, "approved"), executed);
+        Assert.DoesNotContain(await host.ResolveBodyNodeIdAsync(wrapper, "other"), executed);
+        Assert.DoesNotContain(await host.ResolveBodyNodeIdAsync(wrapper, "rejected"), executed);
     }
 }

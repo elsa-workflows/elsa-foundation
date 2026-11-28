@@ -34,6 +34,45 @@ describe("targeted decision XML authoring", () => {
     expect(parseTable(xml).rules[0].outputs).toEqual(['"Manager"']);
     expect(parseTable(xml).rules.every(rule => rule.inputs.length === 1)).toBe(true);
   });
+  it("applies a rectangular cell edit atomically and preserves each exact expression", () => {
+    const xml = editTable(newDecisionXml(), { kind: "add-rule" });
+    const table = parseTable(xml), [first, second] = table.rules;
+    const changed = editTable(xml, { kind: "cells", edits: [
+      { ruleId: first.id, output: false, column: 0, text: "<= 9007199254740993" },
+      { ruleId: second.id, output: false, column: 0, text: "(1..10]" },
+    ] });
+    expect(parseTable(changed).rules.map(rule => rule.inputs[0])).toEqual(["<= 9007199254740993", "(1..10]"]);
+    expect(() => editTable(xml, { kind: "cells", edits: [
+      { ruleId: first.id, output: false, column: 0, text: "changed" },
+      { ruleId: "missing", output: false, column: 0, text: "partial" },
+    ] })).toThrow("no longer exists");
+    expect(parseTable(xml).rules.map(rule => rule.inputs[0])).toEqual(["-", "-"]);
+  });
+  it("duplicates a rule with all descendant identities regenerated and opaque content retained", () => {
+    const original = newDecisionXml().replace("<rule ", '<rule xmlns:extra="urn:other" extra:flag="preserved" ').replace("</rule>", '<extra:opaque xmlns:extra="urn:other" id="opaque_identity">content</extra:opaque></rule>');
+    const source = parseTable(original), originalRule = source.rules[0];
+    const duplicated = editTable(original, { kind: "duplicate-rule", ruleId: originalRule.id });
+    const table = parseTable(duplicated), doc = new DOMParser().parseFromString(duplicated, "application/xml");
+    expect(table.rules).toHaveLength(2);
+    expect(table.rules[1].inputs).toEqual(originalRule.inputs);
+    expect(table.rules[1].outputs).toEqual(originalRule.outputs);
+    expect(table.rules[1].id).not.toBe(originalRule.id);
+    expect(new Set(Array.from(doc.querySelectorAll("[id]"), element => element.id)).size).toBe(doc.querySelectorAll("[id]").length);
+    expect(doc.getElementsByTagNameNS("urn:other", "opaque")[1].textContent).toBe("content");
+    expect(doc.getElementsByTagNameNS(dmnNamespace, "rule")[1].getAttributeNS("urn:other", "flag")).toBe("preserved");
+  });
+  it("inserts a blank rule above or below the selected row while preserving order", () => {
+    let xml = editTable(newDecisionXml(), { kind: "add-rule" });
+    const [first, second] = parseTable(xml).rules;
+    xml = editTable(xml, { kind: "insert-rule", ruleId: second.id, direction: -1 });
+    let rules = parseTable(xml).rules;
+    expect(rules.map(rule => rule.id)).toEqual([first.id, rules[1].id, second.id]);
+    expect(rules[1].inputs).toEqual(["-"]);
+    const inserted = rules[1].id;
+    xml = editTable(xml, { kind: "insert-rule", ruleId: first.id, direction: 1 });
+    rules = parseTable(xml).rules;
+    expect(rules.map(rule => rule.id)).toEqual([first.id, expect.any(String), inserted, second.id]);
+  });
   it("keeps imported input declarations consistent when renaming or retyping a column", () => {
     const xml = newDecisionXml().replace("<decision ", '<inputData id="source" name="Purchase amount"><variable id="source_variable" name="amount" typeRef="number"/></inputData><decision '), table = parseTable(xml);
     const changed = editTable(xml, { kind: "clause", id: table.inputs[0].id, output: false, name: "total", type: "string" });

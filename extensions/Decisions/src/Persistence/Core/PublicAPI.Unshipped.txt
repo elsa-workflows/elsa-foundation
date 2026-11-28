@@ -3,10 +3,12 @@ Elsa.Decisions.Persistence.Core.DecisionAsset
 Elsa.Decisions.Persistence.Core.DecisionAsset.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionAsset!
 Elsa.Decisions.Persistence.Core.DecisionAsset.CreatedAt.get -> System.DateTimeOffset
 Elsa.Decisions.Persistence.Core.DecisionAsset.CreatedAt.init -> void
-Elsa.Decisions.Persistence.Core.DecisionAsset.DecisionAsset(string! Id, string! Name, string? Description, string! Revision, string! Xml, string! SourceHash, bool IsSensitive, string? PublishedVersionId, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt) -> void
-Elsa.Decisions.Persistence.Core.DecisionAsset.Deconstruct(out string! Id, out string! Name, out string? Description, out string! Revision, out string! Xml, out string! SourceHash, out bool IsSensitive, out string? PublishedVersionId, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.DecisionAsset(string! Id, string! Name, string? Description, string! Revision, string! Xml, string! SourceHash, bool IsSensitive, string? PublishedVersionId, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt, System.DateTimeOffset? DeletedAt = null) -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.Deconstruct(out string! Id, out string! Name, out string? Description, out string! Revision, out string! Xml, out string! SourceHash, out bool IsSensitive, out string? PublishedVersionId, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt, out System.DateTimeOffset? DeletedAt) -> void
 Elsa.Decisions.Persistence.Core.DecisionAsset.Description.get -> string?
 Elsa.Decisions.Persistence.Core.DecisionAsset.Description.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.DeletedAt.get -> System.DateTimeOffset?
+Elsa.Decisions.Persistence.Core.DecisionAsset.DeletedAt.init -> void
 Elsa.Decisions.Persistence.Core.DecisionAsset.Equals(Elsa.Decisions.Persistence.Core.DecisionAsset? other) -> bool
 Elsa.Decisions.Persistence.Core.DecisionAsset.Id.get -> string!
 Elsa.Decisions.Persistence.Core.DecisionAsset.Id.init -> void
@@ -24,6 +26,20 @@ Elsa.Decisions.Persistence.Core.DecisionAsset.UpdatedAt.get -> System.DateTimeOf
 Elsa.Decisions.Persistence.Core.DecisionAsset.UpdatedAt.init -> void
 Elsa.Decisions.Persistence.Core.DecisionAsset.Xml.get -> string!
 Elsa.Decisions.Persistence.Core.DecisionAsset.Xml.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle!
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.AssetId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.AssetId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.DecisionAssetLifecycle(string! AssetId, string! ExpectedRevision) -> void
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.Deconstruct(out string! AssetId, out string! ExpectedRevision) -> void
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.Equals(Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle? other) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.Equals(object? obj) -> bool
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.ExpectedRevision.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.ExpectedRevision.init -> void
+override Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.ToString() -> string!
+static Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.operator !=(Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle? left, Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle.operator ==(Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle? left, Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle? right) -> bool
 Elsa.Decisions.Persistence.Core.DecisionCase
 Elsa.Decisions.Persistence.Core.DecisionCase.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionCase!
 Elsa.Decisions.Persistence.Core.DecisionCase.AssetId.get -> string!
@@ -86,8 +102,9 @@ Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Id.init -> void
 Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Revision.get -> string!
 Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Revision.init -> void
 Elsa.Decisions.Persistence.Core.DecisionDesignException
+Elsa.Decisions.Persistence.Core.DecisionDesignException.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Core.DecisionDiagnostic!>?
 Elsa.Decisions.Persistence.Core.DecisionDesignException.Code.get -> string!
-Elsa.Decisions.Persistence.Core.DecisionDesignException.DecisionDesignException(string! code, string! message, System.Exception? innerException = null) -> void
+Elsa.Decisions.Persistence.Core.DecisionDesignException.DecisionDesignException(string! code, string! message, System.Exception? innerException = null, System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Core.DecisionDiagnostic!>? diagnostics = null) -> void
 Elsa.Decisions.Persistence.Core.DecisionOperation
 Elsa.Decisions.Persistence.Core.DecisionOperation.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionOperation!
 Elsa.Decisions.Persistence.Core.DecisionOperation.ActorId.get -> string!
@@ -189,10 +206,14 @@ Elsa.Decisions.Persistence.Core.IDecisionReader.ListVersionsAsync(string! tenant
 Elsa.Decisions.Persistence.Core.IDecisionWriter
 Elsa.Decisions.Persistence.Core.IDecisionWriter.DeleteCaseAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, string! assetId, string! caseId, string! expectedRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
 Elsa.Decisions.Persistence.Core.IDecisionWriter.DeleteRunAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, string! assetId, string! runId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.PurgeAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
 Elsa.Decisions.Persistence.Core.IDecisionWriter.PublishAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.PublishDecision! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.RecycleAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.RestoreAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
 Elsa.Decisions.Persistence.Core.IDecisionWriter.SaveAssetAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.SaveDecision! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
 Elsa.Decisions.Persistence.Core.IDecisionWriter.SaveCaseAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.SaveDecisionCase! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
 Elsa.Decisions.Persistence.Core.IDecisionWriter.SaveCompletedRunAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.DecisionTestReceipt! receipt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.UnpublishAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
 Elsa.Decisions.Persistence.Core.PublishDecision
 Elsa.Decisions.Persistence.Core.PublishDecision.<Clone>$() -> Elsa.Decisions.Persistence.Core.PublishDecision!
 Elsa.Decisions.Persistence.Core.PublishDecision.Artifact.get -> Elsa.Decisions.Core.DecisionArtifact!

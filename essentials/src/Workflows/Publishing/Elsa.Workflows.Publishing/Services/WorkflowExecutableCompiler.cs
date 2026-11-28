@@ -607,7 +607,7 @@ public sealed class WorkflowExecutableCompiler(
                     $"Workflow input '{input.Name}' uses unsupported default syntax '{input.DefaultSyntax}'. Only literal defaults can be compiled.");
             }
 
-            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue);
+            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue, input.IsNullable);
         }).ToArray();
 
         return new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, declarations);

@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Reflection;
 using System.Text;
@@ -27,17 +28,18 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// </remarks>
 public sealed class EfProviderAgreementTests
 {
-    private const string Runtime = "WorkflowsRuntimeEntityFrameworkCore";
-    private const string Bookmarks = "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence";
-    private const string Artifacts = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
-    private const string Dashboard = "WorkflowsDashboardEntityFrameworkCore";
+    private const string Runtime = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+    private const string TestScope = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
+    private const string Dashboard = "WorkflowsDashboardPortfolioEntityFrameworkCore";
     private const string Secrets = "SecretsEntityFrameworkCore";
 
     private static readonly Assembly[] Closure =
     [
         .. ModuleContextCatalog.Modules,
+        typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
+        typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
-        typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly
+        typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly
     ];
 
     private static readonly JsonSerializerOptions RequestJson = new()
@@ -49,7 +51,7 @@ public sealed class EfProviderAgreementTests
     [Fact]
     public async Task Every_enabled_feature_of_a_selected_module_agreeing_is_a_clean_run()
     {
-        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql"), (Bookmarks, "PostgreSql")));
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql"), (TestScope, "PostgreSql")));
 
         Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
     }
@@ -61,7 +63,7 @@ public sealed class EfProviderAgreementTests
             .Where(participant => participant.ModuleNames.Contains("Workflows.Runtime", StringComparer.OrdinalIgnoreCase))
             .ToArray();
         var featureIds = participants.Select(participant => participant.FeatureId).ToArray();
-        Assert.Equal(8, featureIds.Length);
+        Assert.Equal([Runtime, TestScope], featureIds);
         var featureTypes = EfProviderAgreement.Discover(Closure)
             .ToDictionary(usage => usage.Feature, usage => usage.FeatureType, StringComparer.OrdinalIgnoreCase);
         var context = new ShellSettingsPreparationContext(new ShellId("default"),
@@ -77,7 +79,7 @@ public sealed class EfProviderAgreementTests
             ["ConnectionStrings:Shared"] = "Host=localhost;Database=elsa;Username=test;Password=secret-canary"
         }).Build();
 
-        var prepared = EfPersistencePreparation.Prepare(context, configuration);
+        var prepared = EfPersistencePreparation.Prepare(context, configuration, Closure);
 
         Assert.Empty(prepared.RefusalCodes);
         Assert.Equal(featureIds.Length * 2, prepared.Patch.ConfigurationData.Count);
@@ -100,12 +102,12 @@ public sealed class EfProviderAgreementTests
     [Fact]
     public async Task One_feature_configured_for_another_provider_is_refused_by_name_module_and_value()
     {
-        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql"), (Bookmarks, "Sqlite")));
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql"), (TestScope, "Sqlite")));
 
         Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
         Assert.Equal("provider-disagreement", Code(run.Response));
         var offender = Assert.Single(Details(run.Response));
-        Assert.Contains(Bookmarks, offender, StringComparison.Ordinal);
+        Assert.Contains(TestScope, offender, StringComparison.Ordinal);
         Assert.Contains("'Workflows.Runtime'", offender, StringComparison.Ordinal);
         Assert.Contains("'Sqlite'", offender, StringComparison.Ordinal);
         Assert.DoesNotContain(Runtime, offender, StringComparison.Ordinal);
@@ -119,14 +121,11 @@ public sealed class EfProviderAgreementTests
     [Fact]
     public async Task Agreement_by_one_feature_of_a_module_never_masks_disagreement_by_another()
     {
-        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql"), (Bookmarks, null), (Artifacts, "Sqlite")));
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql"), (TestScope, null)));
 
         Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
-        var offenders = Details(run.Response);
-        Assert.Equal(2, offenders.Length);
-        Assert.Contains(offenders, offender => offender.Contains(Artifacts, StringComparison.Ordinal));
-
-        var unset = Assert.Single(offenders, offender => offender.Contains(Bookmarks, StringComparison.Ordinal));
+        var unset = Assert.Single(Details(run.Response));
+        Assert.Contains(TestScope, unset, StringComparison.Ordinal);
         Assert.Contains("'Sqlite'", unset, StringComparison.Ordinal);
         Assert.Contains("its Provider setting is unset", unset, StringComparison.Ordinal);
     }
@@ -176,7 +175,7 @@ public sealed class EfProviderAgreementTests
         var shells = new ShellFeatureBody[]
         {
             new() { Shell = "tenant-b", Feature = Runtime, Provider = "MySql" },
-            new() { Shell = "tenant-a", Feature = Bookmarks, Provider = "Sqlite" },
+            new() { Shell = "tenant-a", Feature = TestScope, Provider = "Sqlite" },
             new() { Shell = "tenant-a", Feature = Runtime, Provider = "PostgreSql" }
         };
 
@@ -185,7 +184,7 @@ public sealed class EfProviderAgreementTests
         var offenders = Details(run.Response);
         Assert.Equal(2, offenders.Length);
         Assert.Contains("tenant-a", offenders[0], StringComparison.Ordinal);
-        Assert.Contains(Bookmarks, offenders[0], StringComparison.Ordinal);
+        Assert.Contains(TestScope, offenders[0], StringComparison.Ordinal);
         Assert.Contains("tenant-b", offenders[1], StringComparison.Ordinal);
         Assert.Contains("'MySql'", offenders[1], StringComparison.Ordinal);
     }
@@ -273,12 +272,12 @@ public sealed class EfProviderAgreementTests
     [Fact]
     public async Task Both_offender_sources_are_listed_in_one_refusal()
     {
-        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Bookmarks, "Sqlite")), ["MySql"]);
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((TestScope, "Sqlite")), ["MySql"]);
 
         Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
         var offenders = Details(run.Response);
         Assert.Equal(2, offenders.Length);
-        Assert.Contains(offenders, offender => offender.Contains(Bookmarks, StringComparison.Ordinal));
+        Assert.Contains(offenders, offender => offender.Contains(TestScope, StringComparison.Ordinal));
         Assert.Contains(offenders, offender => offender.Contains(EfProviderAgreement.CapabilityKey, StringComparison.Ordinal));
     }
 

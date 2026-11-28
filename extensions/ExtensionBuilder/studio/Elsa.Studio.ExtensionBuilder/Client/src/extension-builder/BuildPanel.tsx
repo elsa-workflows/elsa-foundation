@@ -52,13 +52,13 @@ export function BuildPanel({
               <option value="Pack">Pack</option>
             </select></StudioField>
           <StudioField label={<><span>Target path</span></>}><input aria-label="Build target path" placeholder="Repository solution or project path" value={buildTargetPath} disabled={busy || !capabilities.canBuild} onChange={event => onBuildTargetPathChange(event.target.value)} /></StudioField>
-          <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : buildInProgress ? `${buildCommand} in progress` : undefined} onClick={() => onSubmitBuild()}>
+          <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Building requires build permission" : buildInProgress ? `${buildCommand} in progress` : undefined} onClick={() => onSubmitBuild()}>
             {buildInProgress ? <Loader2 size={15} className="is-spinning" aria-hidden="true" /> : <Play size={15} />}
             {buildInProgress ? "Running…" : "Run command"}
           </button>
         </>
       ) : (
-        <button type="button" className="studio-button studio-button-primary" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : buildInProgress ? "Packing in progress" : "Build and pack a NuGet package"} onClick={() => onSubmitBuild("Pack")}>
+        <button type="button" className="studio-button studio-button-primary" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Building requires build permission" : buildInProgress ? "Packing in progress" : "Build and pack a NuGet package"} onClick={() => onSubmitBuild("Pack")}>
           {buildInProgress ? <Loader2 size={15} className="is-spinning" aria-hidden="true" /> : <PackageCheck size={15} />}
           {buildInProgress ? "Packing…" : "Pack NuGet package"}
         </button>

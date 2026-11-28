@@ -22,7 +22,7 @@ the delivery plan owns the detailed milestone gates and evidence matrix. This pa
 
 [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) records the scoped owner instruction,
 "Proceed as proposed". Run alongside active programs, displace none, preserve Foundation/Studio
-consolidation's priority one, and coordinate shared Studio/runtime changes. The owner's
+consolidation's priority one, and coordinate shared studio/runtime changes. The owner's
 [9 November continuation](https://github.com/elsa-workflows/elsa-foundation/issues/3882#issuecomment-6739568560)
 uses one implementation worker at a time: finish the Foundation leaf and its resulting-main qualification
 before starting the remaining delivery leaves. Keep each leaf in an isolated worktree.
