@@ -373,6 +373,25 @@ public sealed class WorkflowDashboardQueryTests
     }
 
     [Fact]
+    public async Task Retained_backend_preserves_the_saved_dataset_and_counts_hidden_candidates_toward_the_scan_bound()
+    {
+        var finished = Run("actor-finished", "wf-a", Current, WorkflowExecutionStatus.Completed);
+        var runningTest = Run("actor-test", "wf-a", Current, WorkflowExecutionStatus.Running) with { RunKind = WorkflowRunKind.TestRun };
+        using var host = new Host(retained: new RetainedRuns([finished, null, runningTest]));
+        await host.Add(Run("legacy-not-selected", "wf-a", Current, WorkflowExecutionStatus.Faulted));
+        var dataset = Assert.Single(await host.Queries.DiscoverAsync(Caller));
+        Assert.Equal("elsa.workflows.runs", dataset.Id);
+        Assert.Equal("runs-v1", dataset.SchemaRevision);
+        var result = Assert.Single((await host.Queries.ExecuteAsync(Caller, Aggregate())).Rows);
+        Assert.Equal(2m, Number(result, "started"));
+        Assert.Empty(host.Store.Requests);
+
+        using var bounded = new Host(limits: new() { MaximumSourceRows = 2 }, retained: new RetainedRuns([finished, null, runningTest]));
+        var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => bounded.Queries.ExecuteAsync(Caller, Aggregate()).AsTask());
+        Assert.Equal("QUERY_LIMIT", failure.Code);
+    }
+
+    [Fact]
     public async Task Group_bound_is_checked_before_output_limit()
     {
         using var host = new Host(limits: new() { MaximumGroups = 1 });
@@ -576,7 +595,7 @@ public sealed class WorkflowDashboardQueryTests
         public WorkflowLibraryProxy Library { get; }
         public IDashboardQueryService Queries { get; }
         public IDashboardDefinitionValidator Validator { get; }
-        public Host(bool includeDesign = true, DashboardQueryLimits? limits = null)
+        public Host(bool includeDesign = true, DashboardQueryLimits? limits = null, IWorkflowRetainedRunSource? retained = null)
         {
             var library = DispatchProxy.Create<IWorkflowLibraryStore, WorkflowLibraryProxy>();
             Library = (WorkflowLibraryProxy)library;
@@ -597,7 +616,13 @@ public sealed class WorkflowDashboardQueryTests
             }
             new EventsFeature().ConfigureServices(services);
             new DashboardManagementFeature().ConfigureServices(services);
-            new WorkflowDashboardQueriesFeature().ConfigureServices(services);
+            if (retained is null)
+                new WorkflowDashboardQueriesFeature().ConfigureServices(services);
+            else
+            {
+                services.AddSingleton(retained);
+                new KernelWorkflowDashboardQueriesFeature().ConfigureServices(services);
+            }
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             _scope = _provider.CreateScope();
             Queries = _scope.ServiceProvider.GetRequiredService<IDashboardQueryService>();
@@ -605,6 +630,21 @@ public sealed class WorkflowDashboardQueryTests
         }
         public ValueTask<WorkflowExecutionState> Add(WorkflowExecutionState state) => Store.SaveAsync(state);
         public void Dispose() { _scope.Dispose(); _provider.Dispose(); }
+    }
+
+    private sealed class RetainedRuns(WorkflowExecutionState?[] candidates) : IWorkflowRetainedRunSource
+    {
+        public async IAsyncEnumerable<WorkflowExecutionState?> ReadAsync(string tenant,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            Assert.Equal(Caller.TenantId, tenant);
+            await Task.CompletedTask;
+            foreach (var candidate in candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return candidate;
+            }
+        }
     }
 
     private sealed class ActorContext : IDashboardActorContext

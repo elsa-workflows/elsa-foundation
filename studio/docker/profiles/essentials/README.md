@@ -1,6 +1,6 @@
 # Studio Essentials image profile
 
-This profile derives from the Studio Foundation image. It applies the Studio Essentials settings and shell composition, and bakes the seven curated Studio modules as NuGet archives.
+This profile derives from the Studio Foundation image. It applies the Studio Essentials settings and shell composition, and bakes the Studio modules listed in [packages.txt](packages.txt) as NuGet archives.
 
 Use the Studio package build artifact and Foundation image from the same version. From the repository root, generate a standalone Docker build context and build the image.
 
@@ -14,7 +14,7 @@ docker build --build-arg "STUDIO_VERSION=$version" -t elsa-studio-essentials:loc
 
 For a local Foundation build, pass its exact `FOUNDATION_IMAGE` reference as a build argument. Build and pack the listed Studio projects using the same Studio version and the generated frontend assets. After preparing the context, Docker needs only that context and the Foundation base image.
 
-The root-owned `/studio-profile` holds the manifest, lock and baked archives. Nuplane resolves the seven exact versions from this cache-only feed and checks each archive against its locked SHA-512. The watched `/app/packages` feed still takes add-ons such as ETL through the Studio Modules page or a directory mount. Nuplane verifies the curated lock entries while allowing packages outside that lock.
+The root-owned `/studio-profile` holds the manifest, lock and baked archives. Nuplane resolves the exact versions recorded in the profile lock from this cache-only feed and checks each archive against its locked SHA-512. The watched `/app/packages` feed still takes add-ons such as ETL through the Studio Modules page or a directory mount. Nuplane verifies the curated lock entries while allowing packages outside that lock.
 
 ## Qualify on GitHub Actions
 
@@ -61,6 +61,6 @@ The separate consolidated package publisher retains its existing authorization.
 
 ## Ordinary Studio Essentials image
 
-The ordinary Studio Docker workflow uses the Foundation Dockerfile and the profile files from the verified source commit. Automatic publication packs the seven modules at the allocated preview version. Manual builds use the selected package artifact after verifying its provenance, inventory, and payload.
+The ordinary Studio Docker workflow uses the Foundation Dockerfile and the profile files from the verified source commit. Automatic publication packs the modules listed in the profile at the allocated preview version. Manual builds use the selected package artifact after verifying its provenance, inventory, and payload.
 
 The publisher pushes a workflow-scoped staging index and qualifies its exact AMD64 and ARM64 children before assigning the ordinary tags. The qualification artifact records the tested image IDs and whether each runtime ran natively or under emulation. The job records the previous `latest` digest, checks that the source is still on main, and verifies that `latest` resolves to the tested index after promotion. Build-only dispatches qualify a locally loaded AMD64 image.

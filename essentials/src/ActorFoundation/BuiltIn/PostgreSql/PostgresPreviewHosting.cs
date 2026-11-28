@@ -150,7 +150,7 @@ public static partial class PostgresPreviewHosting
     {
         await using var guard = open();
         if (!guard.Database.IsNpgsql())
-            throw new NotSupportedException("The shipped Core Preview format installs on PostgreSQL.");
+            throw new NotSupportedException("This Actor Foundation store format requires PostgreSQL.");
         // One install at a time: a session lock held on its own connection around the whole check and install. Its key is
         // apart from the transaction lock the install steps take themselves.
         await guard.Database.OpenConnectionAsync(cancellationToken);
@@ -161,21 +161,20 @@ public static partial class PostgresPreviewHosting
             {
                 if (await db.Database.SqlQueryRaw<bool>("""SELECT pg_catalog.current_schema() IS NULL AS "Value" """).SingleAsync(cancellationToken))
                     throw new InvalidOperationException(
-                        "The Core Preview database has no schema on its search path to install the shipped format into. " +
-                        "Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one.");
+                        "The Actor Foundation PostgreSQL search path has no schema. Configure a dedicated database with an empty schema.");
                 var found = await ObjectsAsync(db, cancellationToken);
                 if (found.Count > 0)
                 {
                     if (!await db.Database.SqlQueryRaw<bool>("""SELECT to_regclass('"KernelStoreVersions"') IS NOT NULL AS "Value" """).SingleAsync(cancellationToken))
                         throw new InvalidOperationException(
-                            $"The Core Preview database is not empty: it holds {string.Join(", ", found.Take(5))}{(found.Count > 5 ? " and more" : "")}, " +
-                            "and no kernel store. Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one: the Workbench installs the shipped format there.");
+                            $"The PostgreSQL database holds {string.Join(", ", found.Take(5))}{(found.Count > 5 ? " and more" : "")} without an Actor Foundation store. " +
+                            "Configure a dedicated empty database for Actor Foundation.");
                     try { await EfStore.RequireStoreVersionsAsync(db, cancellationToken); }
                     catch (StoreFormatException refused)
                     {
                         throw new InvalidOperationException(
-                            $"The Core Preview database holds another kernel store format ({refused.Message}). " +
-                            "Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one: the Workbench installs the shipped format there.",
+                            $"The Actor Foundation database holds another store format ({refused.Message}). " +
+                            "Use an empty dedicated database for this version, or open the existing database with its matching version.",
                             refused);
                     }
                 }
