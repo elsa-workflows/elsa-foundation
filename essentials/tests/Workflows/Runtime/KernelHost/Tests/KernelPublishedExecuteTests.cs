@@ -256,15 +256,12 @@ public sealed partial class KernelPublishedExecuteTests
         builder.Services.Remove(pinDescriptor);
         builder.Services.AddScoped<IRuntimeKernelExecutablePinStore>(services => new FixturePins(
             (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
-        var api = new WorkflowsRuntimeApiFeature();
-        var mapRetainedRoutes = !directTests && !inline;
         var retainedApi = new WorkflowsRuntimeKernelRetainedApiFeature();
-        if (mapRetainedRoutes)
-            retainedApi.ConfigureServices(builder.Services);
-        else
-            api.ConfigureServices(builder.Services);
+        retainedApi.ConfigureServices(builder.Services);
         if (recordEphemeralTestCompletion is { } record)
             builder.Services.AddPersistenceModeOptions(new PersistenceModeOptions { RecordCompletion = record });
+        var kernel = new WorkflowsRuntimeKernelFeature();
+        kernel.ConfigureServices(builder.Services);
         var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
         {
             Provider = provider,
@@ -290,13 +287,8 @@ public sealed partial class KernelPublishedExecuteTests
                 KernelShellStorage.CreateDirectTestRunQualification(provider, kernelHosting.SqlitePath, foundation),
                 protectChildExecutables: true);
         else kernelHosting.ConfigureServices(builder.Services);
-        new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
-        api.PostConfigureServices(builder.Services);
-        var kernelApi = new WorkflowsRuntimeKernelApiFeature();
-        if (mapRetainedRoutes)
-            retainedApi.PostConfigureServices(builder.Services);
-        else
-            kernelApi.PostConfigureServices(builder.Services);
+        kernel.PostConfigureServices(builder.Services);
+        retainedApi.PostConfigureServices(builder.Services);
         if (inline)
         {
             var startDescriptor = builder.Services.Last(item => item.ServiceType == typeof(IWorkflowExecutionStartService));
@@ -329,13 +321,7 @@ public sealed partial class KernelPublishedExecuteTests
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        if (mapRetainedRoutes)
-            retainedApi.MapEndpoints(app, app.Environment);
-        else
-        {
-            WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
-            kernelApi.MapEndpoints(app, app.Environment);
-        }
+        retainedApi.MapEndpoints(app, app.Environment);
         kernelHosting.MapEndpoints(app, app.Environment);
         var scopes = app.Services.GetRequiredService<IServiceScopeFactory>();
         await using var publication = await scopes.CreateAsyncScopeAsync(Scope);

@@ -41,7 +41,7 @@ public abstract class ConnectorActivity<TResult> : Activity<TResult>
 
     /// <summary>
     /// The composed http connection applicator. <c>ActivitiesHttp</c> registers an unbound
-    /// default; <c>ConnectionsWorkflows</c> replaces it. This type does not add a second
+    /// default; <c>AddConnectionsWorkflows()</c> replaces it. This type does not add a second
     /// authenticator or DelegatingHandler on the named client.
     /// </summary>
     protected IHttpConnectionApplicator? ConnectionApplicator { get; }

@@ -13,7 +13,7 @@ The per-domain catalog (framework §2.22.1) for `Elsa.Integrations.Sdk`. Activit
 
 ### `IHttpConnectionApplicator` *(scoped service — `Elsa.Activities.Http.Connections`)*
 - **Kind:** Replacement owned by Activities HTTP / Connections. The SDK consumes it; it does not replace it or add a second auth handler on the named client.
-- **Usage:** HTTP `ConnectorActivity` types call `ApplyConnectionAsync` with a `ConnectionReference` after authored headers. `AddElsaIntegrationsRuntime` `TryAdd`s the unbound default. `ConnectionsWorkflows` replaces it with the resolving applicator and registers the named client's redirect handler.
+- **Usage:** HTTP `ConnectorActivity` types call `ApplyConnectionAsync` with a `ConnectionReference` after authored headers. `AddElsaIntegrationsRuntime` `TryAdd`s the unbound default. `AddConnectionsWorkflows()` replaces it with the resolving applicator and registers the named client's redirect handler.
 - **Catalog:** [`extensions/Http/src/Activities/EXTENSION_POINTS.md`](../../../../Http/src/Activities/EXTENSION_POINTS.md).
 
 ---
