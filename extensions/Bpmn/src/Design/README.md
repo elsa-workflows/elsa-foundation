@@ -9,8 +9,8 @@ the owning contracts and registration lifetimes.
 Enable `ActivitiesBpmnDesign` in an authoring/publishing host. `ActivitiesBpmnInterchange` specializes
 this feature and includes these registrations when configured directly. Repeated composition retains
 one handler per structure kind/schema, two draft validators and one model-reference contribution. Publishing hosts supply their ordinary
-material and source-reference stores. Runtime-only hosts enable `ActivitiesBpmn` and/or
-`ActivitiesBpmnHosting` without this package.
+material and source-reference stores. Runtime-only composite hosts enable `ActivitiesBpmn` without this package.
+Direct BPMN deployments use the [archived classic host](../../../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution).
 
 ## Cross-domain contributions
 

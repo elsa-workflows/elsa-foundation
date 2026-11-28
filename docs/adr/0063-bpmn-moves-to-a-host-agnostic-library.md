@@ -150,7 +150,7 @@ The [parity report and cut ledger](../reports/evidence/bpmn-adoption-0.5.0/cut-l
 distinguish the selected neutral profile from actual Foundation binding support.
 
 The delivered adapter uses `BpmnProcessRuntime`, `BpmnStateCodec` and `BpmnWorkLedger` in
-[`Elsa.Activities.Bpmn`](../../extensions/Bpmn/src/Elsa.Activities.Bpmn/README.md).
+[`Elsa.Activities.Bpmn`](https://github.com/elsa-workflows/elsa-foundation/blob/ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a/extensions/Bpmn/src/Elsa.Activities.Bpmn/README.md).
 They replace the scheduler/persister implementation names anticipated above: the runtime applies
 library commands through normal Foundation scheduling, cancellation, notifications and checkpoint
 authority; the codec and ledger retain supported stored state and exact invocation identities.
