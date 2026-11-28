@@ -80,8 +80,9 @@ public sealed class FeatureCompositionTests
         new("A shell runs exactly one Weaver harness.", ["WeaverAnthropic"], ["WeaverGitHubCopilot"]),
         new("Agent source-only persistence and combined source/journal persistence select the same source ports.",
             ["AgentSourcesEntityFrameworkCore"], ["AgentEntityFrameworkCore"]),
-        new("Legacy and retained workflow APIs own the same routes.",
-            [WorkflowsRuntimeKernelRetainedApiFeature.FeatureName], ["WorkflowsRuntimeApi"]),
+        new("Legacy and retained workflow APIs own the same routes and their task journals have separate lifecycle authority.",
+            [WorkflowsRuntimeKernelRetainedApiFeature.FeatureName, "WorkflowsRuntimeUserTaskArchiveEntityFrameworkCore"],
+            ["WorkflowsRuntimeApi"]),
         new("Legacy and retained workflow attention provide the same contributor.",
             ["WorkflowsRuntimeRetainedAttention"], ["WorkflowsRuntimeAttention"]),
     ];

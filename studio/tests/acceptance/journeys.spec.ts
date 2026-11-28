@@ -26,6 +26,7 @@ import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
+import { userTaskFormsJourney } from "./userTaskFormsJourney";
 import { decisionsJourney } from "./decisionsJourney";
 import { settingsTabsJourney } from "./settingsTabsJourney";
 import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacementHolds } from "./toastPlacementControl";
@@ -94,6 +95,7 @@ test("recorded activity playback ordinal seeking", async ({ page }, info) => pla
 test("recorded activity playback live bounds and waits", async ({ page }, info) => playbackLiveWaitJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
 test("recorded activity playback coverage and access", async ({ page }, info) => playbackCoverageJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
 
+test("open the user task inbox and publish a reusable form", async ({ page }, info) => userTaskFormsJourney(page, info, capture));
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
 test("saved dashboard period comparison and membership", async ({ page }, info) => dashboardComparisonJourney(page, info, capture));

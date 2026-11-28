@@ -65,6 +65,21 @@ async function editFirstForm() {
 async function input(element: HTMLInputElement | HTMLTextAreaElement, value: string) { await act(async () => { const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
 
 describe("task form rendering and decision delivery", () => {
+  it("shows a task record when the backend has no action routes", async () => {
+    const postJson = vi.fn();
+    const archiveLinks = taskLinks.filter(({ rel }) => !["claim", "release", "complete", "reassign", "targets"].includes(rel));
+    const archived = { ...task(), status: "CompletionPending" };
+    await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(archived), postJson, archiveLinks)}
+      id="task" identity={{ ...identity, canManage: true }} />));
+
+    await vi.waitFor(() => expect(container.textContent).toContain("Purchase"));
+    expect(container.textContent).toContain("read-only access to task records");
+    expect(container.textContent).not.toContain("workflow will continue");
+    expect([...container.querySelectorAll("button")].map(button => button.textContent)).not.toContain("Approve");
+    expect(container.querySelector('[aria-label="Task actions"]')).toBeNull();
+    expect(postJson).not.toHaveBeenCalled();
+  });
+
   it("uses the shared outlined-field control contract for scalar fields", async () => {
     const form = { fields: [
       { key: "name", label: "Name", kind: "text" },
