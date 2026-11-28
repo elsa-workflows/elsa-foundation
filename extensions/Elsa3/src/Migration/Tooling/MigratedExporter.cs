@@ -105,7 +105,7 @@ internal static class MigratedExporter
 
     /// <summary>
     /// The workflow file name of each definition id: <c>&lt;definitionId&gt;.json</c>, unless the id holds a character
-    /// outside <c>[A-Za-z0-9._-]</c> or equals another id when case is ignored (Windows and macOS file systems ignore case).
+    /// outside <c>[A-Za-z0-9._-]</c>, is a Windows device name (<c>con</c>, <c>nul</c>, <c>com1</c>…), or equals another id when case is ignored (Windows and macOS file systems ignore case).
     /// Such an id gets its portable characters, the others as '_', and the first 8 hex digits of its SHA-256, so two
     /// definitions never share a file and every platform can write it. The host's folder reader reads every file, whatever
     /// its name.
@@ -115,7 +115,7 @@ internal static class MigratedExporter
         var caseCounts = definitionIds.GroupBy(id => id, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
         return definitionIds.ToDictionary(id => id, id =>
         {
-            var portable = id.Length > 0 && id.All(IsPortable) && id is not ("." or "..");
+            var portable = id.Length > 0 && id.All(IsPortable) && id is not ("." or "..") && !IsWindowsDeviceName(id);
             if (portable && caseCounts[id] == 1)
                 return id + ".json";
             var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(id)))[..8].ToLowerInvariant();
@@ -123,6 +123,14 @@ internal static class MigratedExporter
         }, StringComparer.Ordinal);
 
         static bool IsPortable(char character) => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-';
+
+        // Windows reserves these device names, with any extension: 'con.json' cannot be written as a file.
+        static bool IsWindowsDeviceName(string id)
+        {
+            var stem = id.Split('.')[0].ToUpperInvariant();
+            return stem is "CON" or "PRN" or "AUX" or "NUL"
+                   || (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal)) && stem[3] is >= '0' and <= '9');
+        }
     }
 
     /// <summary>

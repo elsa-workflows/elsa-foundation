@@ -120,8 +120,9 @@ internal sealed class MigrationComposition : IAsyncDisposable
             await DisposeAsync(host, keepAlive, runFolder);
             return (null, new(MigrationRefusal.CompositionFailed, exception.Sentence));
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
         {
+            // A cancellation, also one a feature or EF migration wrapped, stays a cancellation.
             await DisposeAsync(host, keepAlive, runFolder);
             throw;
         }
@@ -144,11 +145,7 @@ internal sealed class MigrationComposition : IAsyncDisposable
         {
             return (await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(shellName, cancellationToken), null);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             return (null, new(MigrationRefusal.CompositionFailed, DescribeFailure(exception, listed)));
         }
@@ -457,6 +454,11 @@ internal sealed class MigrationComposition : IAsyncDisposable
                 await asyncHost.DisposeAsync();
             else
                 host?.Dispose();
+        }
+        catch (Exception)
+        {
+            // Best effort: the run's outcome is already decided (its output committed or refused), and a shell service
+            // that fails to dispose must not turn it into a failure.
         }
         finally
         {

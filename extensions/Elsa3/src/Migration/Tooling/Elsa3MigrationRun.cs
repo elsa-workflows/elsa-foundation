@@ -133,7 +133,14 @@ internal static class Elsa3MigrationRun
             .GroupBy(item => item.SourceVersionId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         // Keyed by file too: two inputs of the same version (a duplicate-input skip) each get their own skip.
-        var skips = results.SelectMany(result => result.Skipped)
+        // Each persistence scope reports the same selection again, so a skip repeated across scopes is one skip; the
+        // duplicate-input skips of one scope are taken from the first scope only, one per input.
+        var duplicateInputs = results.Take(1).SelectMany(result => result.Skipped)
+            .Where(skip => skip.Code == Elsa3ReconciliationDiagnosticCodes.DuplicateInput);
+        var otherSkips = results.SelectMany(result => result.Skipped)
+            .Where(skip => skip.Code != Elsa3ReconciliationDiagnosticCodes.DuplicateInput)
+            .DistinctBy(skip => (skip.Code, skip.SourceVersionId, skip.FilePath, skip.BlockedBy));
+        var skips = duplicateInputs.Concat(otherSkips)
             .Where(skip => skip.SourceVersionId is not null)
             .ToLookup(skip => (skip.SourceVersionId!, skip.FilePath));
         var reusables = results.SelectMany(result => result.ReusablePublications)
@@ -268,7 +275,9 @@ internal static class Elsa3MigrationRun
                 findings));
         }
 
-        var runFindings = refusals.SelectMany(RefusalFindings).ToArray();
+        var runFindings = refusals.SelectMany(RefusalFindings)
+            .DistinctBy(finding => (finding.Code, finding.Path, finding.Message))
+            .ToArray();
         return new CollectedRun(definitions, runFindings, conversionRefused, new ExportCandidates(candidateWorkflows, candidateReusables));
     }
 

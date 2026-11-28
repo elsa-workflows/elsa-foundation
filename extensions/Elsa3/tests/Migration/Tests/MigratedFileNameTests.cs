@@ -25,6 +25,9 @@ public sealed class MigratedFileNameTests
     [InlineData("a*b?")]
     [InlineData("..")]
     [InlineData("räksmörgås")]
+    [InlineData("con")]
+    [InlineData("NUL")]
+    [InlineData("com1")]
     public void A_non_portable_id_gets_a_portable_hashed_name(string id)
     {
         var name = MigratedExporter.FileNames([id])[id];

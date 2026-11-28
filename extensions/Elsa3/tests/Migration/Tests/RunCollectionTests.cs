@@ -76,6 +76,23 @@ public sealed class RunCollectionTests
     }
 
     [Fact]
+    public void A_skip_and_a_refusal_repeated_by_a_second_persistence_scope_are_reported_once()
+    {
+        var skip = new Elsa3SkippedItem(Elsa3ReconciliationDiagnosticCodes.BlockedByDependency, "w.json", "w", 1, "cause", BlockedBy: "a-v1", SourceVersionId: "w-v1");
+        var error = new Elsa3MigrationDiagnostic(Elsa3MigrationDiagnosticSeverity.Error, "VF-IMP-007", "converter message", "$.root");
+        var refusal = new Elsa3ImportRunRefusal(Elsa3ImportRunStage.Apply, "VF-IMP-007", "cause", [error], [], null);
+        var items = new[] { Workflow("w") };
+        var planItems = items.Select(item => new ReusableActivityImportItem(item.Definition.DefinitionId, item.Definition.Id, 1, "fingerprint", false,
+            "wf-w", "wfv-w", null, null, null, [], [], [], [])).ToArray();
+        Elsa3ImportRunResult Scope(string name) => new(new PersistenceScope(name), planItems, [skip], [], [], [], refusal, []);
+
+        var run = Elsa3MigrationRun.Collect(new VersionSelectionResult(items, [], []), [Scope("tenant-a"), Scope("tenant-b")]);
+
+        Assert.Single(run.Definitions.Single().Findings, finding => finding.Code == Elsa3ReconciliationDiagnosticCodes.BlockedByDependency);
+        Assert.Single(run.RunFindings);
+    }
+
+    [Fact]
     public void A_run_refusal_is_an_import_stage_run_finding()
     {
         var error = new Elsa3MigrationDiagnostic(Elsa3MigrationDiagnosticSeverity.Error, "VF-IMP-007", "converter message", "$.root");
