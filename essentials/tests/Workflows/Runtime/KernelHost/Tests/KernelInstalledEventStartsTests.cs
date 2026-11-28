@@ -13,7 +13,7 @@ using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Publishing.Services;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -656,18 +656,12 @@ public sealed class KernelInstalledEventStartsTests
                 services.AddAuthorization();
                 services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
                 services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
-                services.AddWorkflowRuntime();
-                services.RemoveAll<PersistenceModeOptions>();
-                services.AddSingleton(new PersistenceModeOptions { Mode = gate.DefaultMode });
-                services.AddRuntimeEntityFrameworkCore(new()
-                {
-                    Provider = provider, ConnectionString = runtime,
-                    RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
-                });
+                KernelRuntimeFixture.Add(services, provider, runtime);
+                services.Replace(ServiceDescriptor.Singleton(new PersistenceModeOptions { Mode = gate.DefaultMode }));
                 services.AddPublishingEntityFrameworkCore(new() { Provider = provider, ConnectionString = runtime });
                 services.AddScoped<PublicationActivator>();
                 services.AddScoped<UnpublishPublicationSlotRequestHandler>();
-                var api = new WorkflowsRuntimeApiFeature();
+                var api = new WorkflowsRuntimeKernelRetainedApiFeature();
                 api.ConfigureServices(services);
                 var hosting = new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation };
                 if (publicEventHost)
@@ -703,7 +697,7 @@ public sealed class KernelInstalledEventStartsTests
                 var app = builder.Build();
                 app.UseAuthentication();
                 app.UseAuthorization();
-                WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
+                api.MapEndpoints(app, app.Environment);
                 return app;
             }
 

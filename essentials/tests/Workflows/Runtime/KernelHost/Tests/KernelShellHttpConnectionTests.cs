@@ -103,18 +103,14 @@ public sealed class KernelShellHttpConnectionTests
             services.AddSecrets(config);
             services.AddConnections(config);
             new ActorHttpConnectionsFeature().ConfigureServices(services);
-            services.AddWorkflowRuntime();
-            services.AddRuntimeEntityFrameworkCore(new()
+            var runtime = new SqliteConnectionStringBuilder
             {
-                Provider = "Sqlite", ConnectionString = new SqliteConnectionStringBuilder
-                {
-                    DataSource = Path.Combine(directory.FullName, "runtime.db"), Pooling = false
-                }.ToString(),
-                RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
-            });
+                DataSource = Path.Combine(directory.FullName, "runtime.db"), Pooling = false
+            }.ToString();
+            KernelRuntimeFixture.Add(services, "Sqlite", runtime);
             new WorkflowsRuntimeKernelHostingFeature { Provider = "Sqlite", SqlitePath = Path.Combine(directory.FullName, "foundation.db") }
                 .ConfigureServices(services);
-            services.AddPersistenceModes();
+            new WorkflowsRuntimeKernelFeature().ConfigureServices(services);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             await using var host = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             await using (var setup = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(tenant))
