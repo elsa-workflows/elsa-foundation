@@ -1,7 +1,3 @@
-.elsa3-import-pending {
-  padding-block-end: 5.5rem;
-}
-
 .elsa3-import-panel {
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-lg);
@@ -9,6 +5,10 @@
   padding: 1.25rem;
   display: grid;
   gap: 1rem;
+}
+
+.elsa3-import-panel[hidden] {
+  display: none;
 }
 
 .elsa3-import-panel,
@@ -57,11 +57,6 @@
   cursor: default;
 }
 
-.elsa3-import-panel h2[tabindex],
-#elsa3-receipt-title {
-  scroll-margin-block-start: 0.75rem;
-}
-
 .elsa3-import-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
@@ -102,6 +97,20 @@
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.elsa3-import-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border-block-start: 1px solid var(--studio-border);
+  padding-block-start: 1rem;
+}
+
+.elsa3-import-footer > :only-child {
+  margin-inline-start: auto;
 }
 
 .studio-technical-details-body .elsa3-import-identity-grid {
@@ -195,18 +204,6 @@
   gap: 0.25rem;
 }
 
-.elsa3-import-selection-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-  gap: 0.5rem;
-}
-
-.elsa3-import-selection-list > span {
-  display: grid;
-  gap: 0.25rem;
-  overflow-wrap: anywhere;
-}
-
 .elsa3-import-receipt {
   border: 1px solid var(--studio-success);
   border-radius: var(--studio-radius-lg);
@@ -253,14 +250,10 @@
 }
 
 .elsa3-import-status {
-  position: sticky;
-  inset-block-end: 0.75rem;
-  z-index: 1;
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-md);
   background: var(--studio-surface-raised);
   padding: 0.75rem;
-  box-shadow: var(--studio-shadow-sm);
 }
 
 .elsa3-import-success-badge {
