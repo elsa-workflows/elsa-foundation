@@ -177,6 +177,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                     await ExpectStatusAsync(unresolved, HttpStatusCode.GatewayTimeout);
                     expressions.Available = true;
                     await RecoverAsync(host, firstPark, "recover-before-response");
+                    await WaitForAsync(opened.Reads, owner, actor, item => item is { Park: null, Header.Status: Contract.ActorStatus.Running }, token);
+                    await ResumeAsync(opened.Ingress, actor, Proceed, "repeat-after-recover");
                     using var answered = await RequestAsync(client, HeldRoute, HeldKey);
                     await ExpectAnswerAsync(answered, actor);
                     Assert.Equal(Contract.ActorStatus.Running, (await opened.Reads.GetAsync(owner, actor, token))?.Header.Status);
@@ -187,6 +189,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                     await ExpectAnswerAsync(committedBeforePark, actor);
                     expressions.Available = true;
                     await RecoverAsync(host, laterPark, "recover-after-response");
+                    await WaitForAsync(opened.Reads, owner, actor, item => item is { Park: null, Header.Status: Contract.ActorStatus.Running }, token);
+                    await ResumeAsync(opened.Ingress, actor, Finish, "repeat-after-recover");
                     var ended = await WaitForAsync(opened.Reads, owner, actor, item => item.Header.Status == Contract.ActorStatus.Finished, token);
                     var plan = await opened.RetentionPolicies.TryApplyRetentionPolicyAsync(owner, 0,
                         new(Finished: TimeSpan.Zero), long.MaxValue, cancellationToken: token);
@@ -337,9 +341,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                 return await client.SendAsync(request, token);
             }
 
-            async Task ResumeAsync(Contract.IIngress ingress, Contract.ActorRef reference, string name)
+            async Task ResumeAsync(Contract.IIngress ingress, Contract.ActorRef reference, string name, string? attempt = null)
             {
-                var admitted = await ingress.SendAsync(owner, new Contract.Target.Ref(reference), name, NativeKinds.Resume,
+                var admitted = await ingress.SendAsync(owner, new Contract.Target.Ref(reference), attempt is null ? name : name + "-" + attempt, NativeKinds.Resume,
                     JsonSerializer.Serialize(new ResumeStimulus(name)), cancellationToken: token);
                 Assert.Equal(Contract.AdmissionOutcome.Accepted, admitted.Outcome);
             }
