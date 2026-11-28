@@ -105,11 +105,11 @@ internal abstract class KernelShellStorage
         var node = $"foundation-kernel-{Environment.ProcessId}-{Guid.NewGuid():N}";
         return provider?.Trim().ToLowerInvariant() switch
         {
-            "sqlite" when sqlitePath is not null && Path.IsPathFullyQualified(sqlitePath) && string.IsNullOrWhiteSpace(postgresConnectionString) =>
-                new Sqlite(node, sqlitePath, profile, publisherScope),
+            "sqlite" when !string.IsNullOrWhiteSpace(sqlitePath) && string.IsNullOrWhiteSpace(postgresConnectionString) =>
+                new Sqlite(node, Path.GetFullPath(sqlitePath), profile, publisherScope),
             "postgresql" when !string.IsNullOrWhiteSpace(postgresConnectionString) && string.IsNullOrWhiteSpace(sqlitePath) =>
                 new Postgres(node, postgresConnectionString, profile, publisherScope),
-            "sqlite" => throw new InvalidOperationException("Set SqlitePath to an absolute path to a dedicated database and leave PostgresConnectionString empty."),
+            "sqlite" => throw new InvalidOperationException("Set SqlitePath to a dedicated local database file and leave PostgresConnectionString empty."),
             "postgresql" => throw new InvalidOperationException("Set PostgresConnectionString for the dedicated kernel database and leave SqlitePath empty."),
             _ => throw new InvalidOperationException("Use SQLite or PostgreSQL for WorkflowsRuntimeKernelHosting's Provider.")
         };
