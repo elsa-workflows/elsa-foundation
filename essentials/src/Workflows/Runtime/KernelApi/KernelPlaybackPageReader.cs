@@ -118,7 +118,7 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
             };
             var output = new RuntimeHistoryOccurrencePage(null, availability, snapshot.Reason ?? "retained-range-changed",
                 snapshot.UpperSequence, snapshot.RetainedAfterSequence, null, null, [], null, newer);
-            return RuntimeHistoryInspectionService.PresentOccurrences(output, coverage, readAt);
+            return RuntimeHistoryOccurrenceProjection.PresentOccurrences(output, coverage, readAt);
         }
 
         if (snapshot is not { Count: > 0 and var count, LastRecordedAt: not null } ||
@@ -134,8 +134,8 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
         var page = new RuntimeHistoryOccurrencePage(head, RuntimeHistoryOccurrenceAvailability.Partial,
             snapshot.RetainedAfterSequence > 0 ? "retained-prefix-purged" : "capture-not-from-start", snapshot.UpperSequence,
             snapshot.RetainedAfterSequence, count, snapshot.SelectedPosition, items, token, newer);
-        RuntimeHistoryInspectionService.ValidateOccurrences(query, page);
-        return RuntimeHistoryInspectionService.PresentOccurrences(page, coverage, readAt);
+        RuntimeHistoryOccurrenceProjection.ValidateOccurrences(query, page);
+        return RuntimeHistoryOccurrenceProjection.PresentOccurrences(page, coverage, readAt);
     }
 
     private RuntimeHistoryOccurrencePageView Unavailable(string reason) => new("unavailable", reason,

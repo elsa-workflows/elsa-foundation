@@ -109,15 +109,22 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
                         .OfType<IRuntimeHistoryCaptureSupport>().Any(source => source.CanCapture(policy));
             }
         });
-        services.TryAddScoped<IRuntimeHistoryPageReader>(sp => sp.GetRequiredService<RuntimeHistoryInspectionService>());
-        services.TryAddScoped<IRuntimeHistoryOccurrencePageReader>(sp => sp.GetRequiredService<RuntimeHistoryInspectionService>());
+        var history = LegacyRuntimeApiReaderRegistration.Add<IRuntimeHistoryPageReader, RuntimeHistoryInspectionService>(
+            services, static sp => sp.GetRequiredService<RuntimeHistoryInspectionService>());
+        var occurrences = LegacyRuntimeApiReaderRegistration.Add<IRuntimeHistoryOccurrencePageReader, RuntimeHistoryInspectionService>(
+            services, static sp => sp.GetRequiredService<RuntimeHistoryInspectionService>());
         RuntimeHttpInspectionServices.AddStoredActivityInspection(services);
         services.TryAddScoped<WorkflowInstanceDeletionService>();
-        services.TryAddScoped<IWorkflowInstanceDeletionService>(sp => sp.GetRequiredService<WorkflowInstanceDeletionService>());
+        var deletion = LegacyRuntimeApiReaderRegistration.Add<IWorkflowInstanceDeletionService, WorkflowInstanceDeletionService>(
+            services, static sp => sp.GetRequiredService<WorkflowInstanceDeletionService>());
         services.TryAddScoped<WorkflowInstanceDetailsService>();
-        services.TryAddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
+        var details = LegacyRuntimeApiReaderRegistration.Add<IWorkflowInstanceDetailsService, WorkflowInstanceDetailsService>(
+            services, static sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
         services.TryAddScoped<WorkflowInstanceListService>();
-        services.TryAddScoped<IWorkflowInstanceListService>(sp => sp.GetRequiredService<WorkflowInstanceListService>());
+        var list = LegacyRuntimeApiReaderRegistration.Add<IWorkflowInstanceListService, WorkflowInstanceListService>(
+            services, static sp => sp.GetRequiredService<WorkflowInstanceListService>());
+        services.TryAddSingleton(new LegacyRuntimeApiReaderOwnership(history, occurrences, deletion, details, list));
+        services.TryAddScoped<ILegacyRuntimePreviewReaders, LegacyRuntimePreviewReaders>();
         services.TryAddScoped<WorkflowIncidentListService>();
         services.TryAddScoped<IWorkflowIncidentListService>(sp => sp.GetRequiredService<WorkflowIncidentListService>());
         RuntimeHttpInspectionServices.AddRunInspectionServices(services);

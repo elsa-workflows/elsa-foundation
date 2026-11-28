@@ -3055,7 +3055,7 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Workflows.Runtime.Api": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Api.Http": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )"
         }
@@ -3081,6 +3081,7 @@
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
           "Elsa.Modularity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Api": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelApi": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )"
         }
