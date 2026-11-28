@@ -35,4 +35,4 @@ Elsa.Workflows.Runtime.KernelApi
 Elsa.Workflows.Runtime.KernelHost
 Elsa.Workflows.Runtime.KernelHosting
 Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore
-Elsa.Workflows.Runtime.Scheduling.Prepared
+Elsa.Workflows.Runtime.PreparedSchedules

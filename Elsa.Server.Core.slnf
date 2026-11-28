@@ -71,7 +71,7 @@
       "essentials/src/Workflows/Runtime/HttpApi/Elsa.Workflows.Runtime.Api.Http.csproj",
       "essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj",
       "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
-      "essentials/src/Workflows/Runtime/PreparedSchedules/Elsa.Workflows.Runtime.Scheduling.Prepared.csproj",
+      "essentials/src/Workflows/Runtime/PreparedSchedules/Elsa.Workflows.Runtime.PreparedSchedules.csproj",
       "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj",
       "essentials/src/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj",
       "essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj",
