@@ -373,7 +373,8 @@ internal sealed partial class PostgresRootAdmission
         var tables = await ReadPersistentTablesAsync();
         await InstallUnderFormatFenceAsync(db, token, existingAuthoritiesOnly: true);
         await EfStore.InstallRootWorkflowHistoryUnderFormatFenceAsync(db, token);
-        if (!tables.SequenceEqual(await ReadPersistentTablesAsync()))
+        var verifiedTables = await ReadPersistentTablesAsync();
+        if (!tables.SequenceEqual(verifiedTables))
             throw new StoreFormatException("The selected PostgreSQL store is missing established root tables.");
         await transaction.RollbackToSavepointAsync(verification, token);
 
