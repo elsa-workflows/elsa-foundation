@@ -601,15 +601,28 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         }
     }
 
+    /// <summary>Resolves one imported graph-body occurrence in the exact published executable.</summary>
+    public async Task<string> ResolveBodyNodeIdAsync(PublishedWorkflow workflow, string authoredOccurrenceId)
+    {
+        var executable = await ReadAsync(services => services.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(workflow.ArtifactId).AsTask());
+        Assert.NotNull(executable);
+        return Assert.Single(executable.Nodes, node =>
+            node.Metadata.TryGetValue("activity.invocationOrigin", out var origin) &&
+            JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(origin)?
+                .LastOrDefault(segment => segment.Kind == ActivityInvocationOriginSegmentKind.NestedPlacement)?.Id == authoredOccurrenceId)
+            .ExecutableNodeId;
+    }
+
     /// <summary>Waits until the Actor has committed the start of one activity that has yet to complete.</summary>
-    public async Task WaitForActiveNodeAsync(string workflowExecutionId, string authoredActivityId)
+    public async Task WaitForActiveNodeAsync(string workflowExecutionId, string executableNodeId)
     {
         using var deadline = new CancellationTokenSource(SettleTimeout);
         while (true)
         {
             var run = await ReadRunAsync(workflowExecutionId);
             Assert.True(run.Workflow?.Status is null or WorkflowExecutionStatus.Running, run.Describe());
-            if (run.Activities.Any(activity => activity.AuthoredActivityId == authoredActivityId && activity.Status == ActivityExecutionStatus.Running))
+            if (run.Activities.Any(activity => activity.ExecutableNodeId == executableNodeId && activity.Status == ActivityExecutionStatus.Running))
                 return;
             await Task.Delay(100, deadline.Token);
         }
