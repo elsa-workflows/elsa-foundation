@@ -15,7 +15,8 @@ namespace Elsa.Activities.Runtime;
 [ShellFeature(
     name: "ActivitiesRuntimeHosting",
     DisplayName = "Activities Runtime Hosting",
-    Description = "Registers activity CLR aliases and validates workflow secret registrations."
+    Description = "Registers activity CLR aliases and validates workflow secret registrations.",
+    DependsOn = new object[] { "Events", "Tasks", "Serialization" }
 )]
 public sealed class ActivitiesRuntimeHostingFeature : IShellFeature
 {
