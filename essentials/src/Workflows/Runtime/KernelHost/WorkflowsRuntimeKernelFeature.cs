@@ -184,6 +184,6 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(TService) && !descriptor.IsKeyedService))
             throw new InvalidOperationException(
                 $"The {FeatureName} feature serves on the kernel the host composes, and this host composes no {typeof(TService).Name}. " +
-                "Enable the host's kernel composition (on the Workbench, Elsa:CorePreview:Publications), or leave this feature out of the shell.");
+                "Configure the host's Actor Foundation services or select WorkflowsRuntimeKernelHosting to compose them in the shell.");
     }
 }

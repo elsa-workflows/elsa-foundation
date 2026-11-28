@@ -649,6 +649,14 @@
           "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
         }
       },
+      "elsa.workflows.runtime.publications": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )"
+        }
+      },
       "Cronos": {
         "type": "CentralTransitive",
         "requested": "[0.13.0, )",
@@ -864,14 +872,6 @@
         "requested": "[9.0.21, )",
         "resolved": "9.0.21",
         "contentHash": "KD+oHoYIxwNCajjVe58WVwq9cRpum+Pg3tRveDRtkcaw6w3oc7sNBoMRtb5P5OehI3bgv1ucMpgjf8lpj5J96A=="
-      },
-      "elsa.workflows.runtime.publications": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Options": "[10.0.10, )"
-        }
       }
     }
   }

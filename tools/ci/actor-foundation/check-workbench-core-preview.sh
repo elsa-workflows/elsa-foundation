@@ -10,9 +10,13 @@ case "${PG_PREVIEW_PROFILE:-}" in
   ordinary|jobs|timed|timeout|takeover|takeover-complete|publications) profiles=("$PG_PREVIEW_PROFILE") ;;
   *) echo "Choose ordinary, jobs, timed, timeout, takeover, takeover-complete or publications." >&2; exit 2 ;;
 esac
-root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
+root=$(cd "${2:-.}" && git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
 app=server/apps/Elsa.Workbench.Host
+if [[ ! -f "$app/CorePreview/WorkbenchCorePreview.cs" ]]; then
+  echo "Supply the historical Workbench checkout as the second argument. See docs/docker.md." >&2
+  exit 2
+fi
 runner=essentials/tests/ActorFoundation/Native/Run
 dotnet restore --locked-mode "$app"
 dotnet restore --locked-mode "$runner"

@@ -182,17 +182,17 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
-      "Cronos": {
-        "type": "CentralTransitive",
-        "requested": "[0.13.0, )",
-        "resolved": "0.13.0",
-        "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
-      },
       "elsa.workflows.runtime.publications": {
         "type": "Project",
         "dependencies": {
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
+      },
+      "Cronos": {
+        "type": "CentralTransitive",
+        "requested": "[0.13.0, )",
+        "resolved": "0.13.0",
+        "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
       }
     }
   }

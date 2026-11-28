@@ -6,8 +6,11 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Events;
 using Elsa.Locking.Core;
 using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText;
+using Elsa.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -19,18 +22,18 @@ namespace Elsa.Activities.Runtime.Tests.Integration;
 /// package assemblies, which live in a custom PackageAssemblyLoadContext — NOT the default AppDomain) is
 /// actually reachable from a composed shell's DI scope, where <c>RegisterActivityTypesStartupTask</c> runs.
 ///
-/// It boots a REAL CShells shell (Serialization → the well-known type registry + primitive seed; Tasks → the
-/// shell-tasks initializer that replays IStartupTask on activation; Events → the event bus the runtime feature
-/// uses; ActivitiesRuntime → the startup pass under test), registers a stub provider that surfaces this test
-/// assembly's activity, activates the shell, then asserts from the shell scope that (1) the provider is
-/// resolvable there, (2) the startup pass actually consulted it, and (3) the complex/enum I/O types resolved.
+/// The test activates a CShells shell and uses a stub provider to surface an activity from this assembly.
+/// Serialization supplies the type registry, Tasks runs startup tasks during activation, and Events
+/// lets Serialization publish its converter initialization event. The neutral selector brings all three.
 /// </summary>
 public sealed class ShellScopedActivityIoTypeRegistrationTests
 {
     private const string DefaultShellName = "default";
 
-    [Fact]
-    public async Task FeatureAssemblyProvider_IsReachableFromShellScope_AndStartupPassRegistersItsActivityIoTypes()
+    [Theory]
+    [InlineData(typeof(ActivitiesRuntimeFeature))]
+    [InlineData(typeof(ActivitiesRuntimeHostingFeature))]
+    public async Task FeatureAssemblyProvider_IsReachableFromShellScope_AndStartupPassRegistersItsActivityIoTypes(Type runtimeFeature)
     {
         var provider = new RecordingFeatureAssemblyProvider(typeof(ShellExtensionActivity).Assembly);
 
@@ -38,18 +41,25 @@ public sealed class ShellScopedActivityIoTypeRegistrationTests
         services.AddSingleton<IFeatureAssemblyProvider>(provider);
         services.AddCShells(builder => builder
             .WithAssemblies(
-                typeof(Elsa.Serialization.SystemText.SerializationFeature).Assembly,
-                typeof(Elsa.Tasks.TasksFeature).Assembly,
-                typeof(Elsa.Events.EventsFeature).Assembly,
+                typeof(SerializationFeature).Assembly,
+                typeof(TasksFeature).Assembly,
+                typeof(EventsFeature).Assembly,
                 typeof(ActivitiesRuntimeFeature).Assembly,
+                typeof(ActivitiesRuntimeHostingFeature).Assembly,
                 typeof(ShellScopedActivityIoTypeRegistrationTests).Assembly)
             .WithAssemblyProvider<IFeatureAssemblyProvider>()
-            .AddShell(DefaultShellName, shell => shell
-                .WithFeature<Elsa.Serialization.SystemText.SerializationFeature>()
-                .WithFeature<Elsa.Tasks.TasksFeature>()
-                .WithFeature<Elsa.Events.EventsFeature>()
-                .WithFeature<ActivitiesRuntimeFeature>()
-                .WithFeature<TestInfraFeature>()));
+            .AddShell(DefaultShellName, shell =>
+            {
+                if (runtimeFeature == typeof(ActivitiesRuntimeFeature))
+                {
+                    shell.WithFeature<SerializationFeature>();
+                    shell.WithFeature<TasksFeature>();
+                    shell.WithFeature<EventsFeature>();
+                }
+
+                shell.WithFeature(runtimeFeature);
+                shell.WithFeature<TestInfraFeature>();
+            }));
 
         await using var root = services.BuildServiceProvider();
         var registry = root.GetRequiredService<IShellRegistry>();

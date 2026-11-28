@@ -5,6 +5,8 @@
     <SnapshotReaderProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj'))</SnapshotReaderProject>
   </PropertyGroup>
   <ItemGroup>
+    <None Include="../../../../../essentials/tests/Workbench/Fixtures/ClassicRuntime/shells.json"
+          Link="Fixtures/ClassicRuntime/shells.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-10/corrections/delayed-retry-original/queued-result.sqlite.gz"
           Link="Fixtures/delayed-compensation/queued-result.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-9/correctness/prior-cancellation/deliver-worker-result.sqlite.gz"

@@ -780,6 +780,14 @@
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
       },
+      "elsa.workflows.runtime.publications": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )"
+        }
+      },
       "Acornima": {
         "type": "CentralTransitive",
         "requested": "[1.6.1, )",
@@ -996,14 +1004,6 @@
         "requested": "[1.0.0, )",
         "resolved": "1.0.0",
         "contentHash": "Nxn9P89DUkiXNrEjvYtJ5iu9EteQOrfNA/lyfsrsCcZeWu1hUwQDkGpVXFep7KuSA87vdMKfvng5obFDxHqZyQ=="
-      },
-      "elsa.workflows.runtime.publications": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Options": "[10.0.10, )"
-        }
       }
     }
   }

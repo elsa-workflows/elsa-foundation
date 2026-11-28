@@ -259,6 +259,12 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.publications": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "Cronos": {
         "type": "CentralTransitive",
         "requested": "[0.13.0, )",
@@ -279,12 +285,6 @@
         "requested": "[13.0.4, )",
         "resolved": "13.0.4",
         "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
-      },
-      "elsa.workflows.runtime.publications": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
       }
     }
   }

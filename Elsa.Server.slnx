@@ -321,6 +321,7 @@
   <Folder Name="/essentials/src/Activities/Runtime/">
     <Project Path="essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
     <Project Path="essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
+    <Project Path="essentials/src/Activities/Runtime/Hosting/Elsa.Activities.Runtime.Hosting.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Attention/">
     <Project Path="essentials/src/Attention/Core/Elsa.Attention.Core.csproj" />

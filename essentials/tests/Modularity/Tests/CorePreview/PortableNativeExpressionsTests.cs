@@ -1,15 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using CShells.DependencyInjection;
 using CShells.Features;
-using CShells.Lifecycle;
 using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Expressions.Liquid;
-using Elsa.Workbench.CorePreview;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,98 +28,6 @@ public sealed class PortableNativeExpressionsTests
         await using var session = Open(out _);
         var value = session.Evaluate(new HostExpression("JavaScript", "args.a + args.b", "Int32", null), new Dictionary<string, JsonNode?> { ["a"] = 2, ["b"] = 3 }, None);
         Assert.Equal("5", value?.ToJsonString());
-    }
-
-    [Fact]
-    public async Task Workbench_expression_opens_the_replacement_after_the_looked_up_shell_is_disposed()
-    {
-        const string shellName = "default";
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var token = deadline.Token;
-        using var activationBarrier = new ActivationBarrier(token);
-        var services = new ServiceCollection().AddLogging()
-            .AddSingleton<IShellGenerationActivationParticipant>(activationBarrier);
-        services.AddCShells(shells => shells.WithAssemblyContaining<ExpressionProbeFeature>()
-            .AddShell(shellName, shell => shell.WithFeature<ExpressionProbeFeature>()));
-        await using var provider = services.BuildServiceProvider();
-        var registry = provider.GetRequiredService<IShellRegistry>();
-        var settled = Assert.IsAssignableFrom<ISettledShellRegistry>(registry);
-        var original = await registry.GetOrActivateAsync(shellName, token);
-        var lookedUp = new TaskCompletionSource<IShell?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var openScope = new ManualResetEventSlim();
-        var lookups = 0;
-        var expressions = new PortableNativeExpressions(() => WorkbenchCorePreview.OpenExpressionScope(shellName, GetActiveShell, GetSettledShell));
-        var evaluation = Task.Run(async () =>
-        {
-            await using var session = expressions.Open(token);
-            return session.Evaluate(new HostExpression("JavaScript", "args.value + 1", "Int32", null),
-                new Dictionary<string, JsonNode?> { ["value"] = 41 }, None)?.GetValue<int>();
-        }, token);
-
-        try
-        {
-            Assert.Same(original, await lookedUp.Task.WaitAsync(token));
-            var replacement = await registry.ReloadAsync(shellName, token);
-            Assert.Null(replacement.Error);
-            Assert.NotNull(replacement.NewShell);
-            Assert.NotSame(original, replacement.NewShell);
-            Assert.Same(replacement.NewShell, registry.GetActive(shellName));
-            Assert.NotNull(replacement.Drain);
-            await replacement.Drain.WaitAsync(token);
-            Assert.Equal(ShellLifecycleState.Disposed, original.State);
-
-            openScope.Set();
-            Assert.Equal(42, await evaluation.WaitAsync(token));
-            Assert.Equal(2, lookups);
-
-            Assert.Throws<NativeExpressionsUnavailableException>(() => WorkbenchCorePreview.OpenExpressionScope(shellName, () => original, () => original));
-            Assert.Throws<NativeExpressionsUnavailableException>(() => WorkbenchCorePreview.OpenExpressionScope(shellName, () => null, GetSettledShell));
-
-            activationBarrier.PauseNextActivation();
-            var nextReload = Task.Run(() => registry.ReloadAsync(shellName, token), token);
-            try
-            {
-                var provisional = await activationBarrier.Entered.WaitAsync(token);
-                Assert.Same(provisional, registry.GetActive(shellName));
-                Assert.Null(settled.GetSettledActive(shellName));
-                Assert.Throws<NativeExpressionsUnavailableException>(() =>
-                    WorkbenchCorePreview.OpenExpressionScope(shellName, () => original, GetSettledShell));
-            }
-            finally
-            {
-                activationBarrier.Release();
-                var next = await nextReload.WaitAsync(token);
-                Assert.Null(next.Error);
-                Assert.NotNull(next.Drain);
-                await next.Drain.WaitAsync(token);
-            }
-        }
-        finally
-        {
-            openScope.Set();
-            if (registry.GetActive(shellName) is { } active)
-            {
-                var drain = await registry.DrainAsync(active, token);
-                await drain.WaitAsync(token);
-            }
-        }
-
-        IShell? GetActiveShell()
-        {
-            var shell = registry.GetActive(shellName);
-            if (Interlocked.Increment(ref lookups) == 1)
-            {
-                lookedUp.SetResult(shell);
-                openScope.Wait(token);
-            }
-            return shell;
-        }
-
-        IShell? GetSettledShell()
-        {
-            Interlocked.Increment(ref lookups);
-            return settled.GetSettledActive(shellName);
-        }
     }
 
     [Fact]
@@ -192,70 +97,6 @@ public sealed class PortableNativeExpressionsTests
         Assert.Contains("did not complete synchronously", refused.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task The_gate_holds_the_service_until_it_opens_and_a_stop_before_then_starts_nothing()
-    {
-        var gate = new TaskCompletionSource();
-        var inner = new Recording();
-        var gated = new ShellGatedHostedService(inner, token => gate.Task.WaitAsync(token), _ => throw new InvalidOperationException("ended"));
-        await gated.StartAsync(CancellationToken.None);
-        await Task.Delay(50);
-        Assert.False(inner.Started);
-        gate.SetResult();
-        await WaitUntil(() => inner.Started);
-        await gated.StopAsync(CancellationToken.None);
-        Assert.True(inner.Stopped);
-
-        var closed = new Recording();
-        var never = new ShellGatedHostedService(closed, token => Task.Delay(Timeout.Infinite, token), _ => throw new InvalidOperationException("ended"));
-        await never.StartAsync(CancellationToken.None);
-        await never.StopAsync(CancellationToken.None);
-        Assert.False(closed.Started);
-        Assert.False(closed.Stopped);
-    }
-
-    [Fact]
-    public async Task A_stop_while_the_service_is_still_starting_stops_it()
-    {
-        var inner = new Recording { BlockStart = true };
-        var gated = new ShellGatedHostedService(inner, _ => Task.CompletedTask, _ => { });
-        await gated.StartAsync(CancellationToken.None);
-        await WaitUntil(() => inner.Started);
-        await gated.StopAsync(CancellationToken.None);
-        Assert.True(inner.Stopped);
-    }
-
-    [Fact]
-    public async Task A_gate_that_fails_ends_the_process()
-    {
-        string? ended = null;
-        var gated = new ShellGatedHostedService(new Recording(), _ => Task.FromException(new InvalidOperationException("no shell")), reason => ended = reason);
-        await gated.StartAsync(CancellationToken.None);
-        await WaitUntil(() => ended is not null);
-        Assert.Contains("no shell", ended, StringComparison.Ordinal);
-    }
-
-    private static async Task WaitUntil(Func<bool> condition)
-    {
-        for (var i = 0; i < 200 && !condition(); i++) await Task.Delay(10);
-        Assert.True(condition());
-    }
-
-    private sealed class Recording : Microsoft.Extensions.Hosting.IHostedService
-    {
-        public bool Started { get; private set; }
-        public bool Stopped { get; private set; }
-        public bool BlockStart { get; init; }
-
-        public Task StartAsync(CancellationToken cancellationToken)
-        {
-            Started = true;
-            return BlockStart ? Task.Delay(Timeout.Infinite, cancellationToken) : Task.CompletedTask;
-        }
-
-        public Task StopAsync(CancellationToken cancellationToken) { Stopped = true; return Task.CompletedTask; }
-    }
-
     private static INativeExpressionSession Open(out Lifetime lifetime)
     {
         var services = new ServiceCollection();
@@ -309,25 +150,4 @@ public sealed class PortableNativeExpressionsTests
         }
     }
 
-    private sealed class ActivationBarrier(CancellationToken token) : IShellGenerationActivationParticipant, IDisposable
-    {
-        private readonly TaskCompletionSource<IShell> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly ManualResetEventSlim _release = new();
-        private int _pause;
-
-        public Task<IShell> Entered => _entered.Task;
-        public void PauseNextActivation() => Interlocked.Exchange(ref _pause, 1);
-        public void Release() => _release.Set();
-        public void Dispose() => _release.Dispose();
-        public Task PrepareAsync(IShell shell, CancellationToken cancellationToken) => Task.CompletedTask;
-        public void Complete(IShell shell) { }
-        public void Rollback(IShell shell) { }
-
-        public void Commit(IShell shell)
-        {
-            if (Interlocked.Exchange(ref _pause, 0) == 0) return;
-            _entered.SetResult(shell);
-            _release.Wait(token);
-        }
-    }
 }

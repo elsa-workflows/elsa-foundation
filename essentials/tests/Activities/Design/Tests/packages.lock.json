@@ -361,7 +361,6 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Runtime": "[4.0.0-dev, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
@@ -374,6 +373,7 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Hosting": "[4.0.0-dev, )",
           "Elsa.Events": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
@@ -388,6 +388,17 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.runtime.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.activities.scheduling": {
@@ -713,6 +724,12 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.publications": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "Bpmn.Model": {
         "type": "CentralTransitive",
         "requested": "[0.5.0, )",
@@ -819,12 +836,6 @@
         "requested": "[1.0.0, )",
         "resolved": "1.0.0",
         "contentHash": "Nxn9P89DUkiXNrEjvYtJ5iu9EteQOrfNA/lyfsrsCcZeWu1hUwQDkGpVXFep7KuSA87vdMKfvng5obFDxHqZyQ=="
-      },
-      "elsa.workflows.runtime.publications": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
       }
     }
   }

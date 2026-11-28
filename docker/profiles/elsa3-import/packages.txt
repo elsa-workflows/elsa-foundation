@@ -10,7 +10,7 @@ Elsa.Activities.Graph.Design
 Elsa.Activities.Graph.Runtime
 Elsa.Activities.Http
 Elsa.Activities.Primitives
-Elsa.Activities.Runtime
+Elsa.Activities.Runtime.Hosting
 Elsa.Activities.Scheduling
 Elsa.Activities.Sequence
 Elsa.Api.Capabilities

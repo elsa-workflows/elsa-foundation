@@ -8,7 +8,7 @@ Elsa.Activities.Flowchart
 Elsa.Activities.Graph.Design
 Elsa.Activities.Graph.Runtime
 Elsa.Activities.Primitives
-Elsa.Activities.Runtime
+Elsa.Activities.Runtime.Hosting
 Elsa.Activities.Sequence
 Elsa.Api.Capabilities
 Elsa.Caching.Memory
