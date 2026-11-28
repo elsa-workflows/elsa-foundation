@@ -38,7 +38,6 @@ using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
@@ -96,21 +95,18 @@ public sealed class AuthoringCompositionHostEvidenceTests : IDisposable
         "WorkflowsPublishingEntityFrameworkCore"
     ];
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Authoring_routes_mount_and_explicit_legacy_selection_retains_runtime_routes(bool legacyRuntime)
+    [Fact]
+    public async Task Authoring_routes_mount_with_the_current_standalone_selection()
     {
-        await using var host = await StartHostAsync(legacyRuntime: legacyRuntime);
+        await using var host = await StartHostAsync();
         var shell = await host.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
         var enabledFeatures = settings.EnabledFeatures.OrderBy(name => name, StringComparer.Ordinal).ToArray();
         output.WriteLine($"Requested feature IDs ({ExplicitFeatureIds.Length}): {string.Join(", ", ExplicitFeatureIds)}");
         output.WriteLine($"Resolved enabled features ({enabledFeatures.Length}): {string.Join(", ", enabledFeatures)}");
 
-        var selected = legacyRuntime ? ExplicitFeatureIds.Concat(["WorkflowsRuntimeApi", "WorkflowsRuntimeTriggers"]) : ExplicitFeatureIds;
         Assert.Equal(
-            selected.OrderBy(name => name, StringComparer.Ordinal),
+            ExplicitFeatureIds.OrderBy(name => name, StringComparer.Ordinal),
             enabledFeatures);
 
         var endpoints = host.Services.GetServices<EndpointDataSource>()
@@ -136,13 +132,7 @@ public sealed class AuthoringCompositionHostEvidenceTests : IDisposable
         Assert.Contains("/design/activities/catalog", endpoints);
         Assert.Contains("/design/workflows/definitions", endpoints);
         Assert.Contains("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", endpoints);
-        if (legacyRuntime)
-        {
-            Assert.Contains("/runtime/workflows/executables", endpoints);
-            Assert.Contains("/runtime/workflows/stimuli", endpoints);
-        }
-        else
-            Assert.DoesNotContain(endpoints, route => route.StartsWith("/runtime/", StringComparison.Ordinal));
+        Assert.DoesNotContain(endpoints, route => route.StartsWith("/runtime/", StringComparison.Ordinal));
         Assert.Contains("/capabilities", endpoints);
 
         await using var scope = shell.ServiceProvider.CreateAsyncScope();
@@ -151,22 +141,11 @@ public sealed class AuthoringCompositionHostEvidenceTests : IDisposable
             declaration => declaration.Id == "elsa.api.publishing");
         var testRunRoutes = endpoints.Where(route => route.Contains("test-run", StringComparison.Ordinal)).ToArray();
         var testRunLinks = declared.Links.Where(link => link.Rel.Contains("test-run", StringComparison.Ordinal)).ToArray();
-        if (legacyRuntime)
-        {
-            Assert.Equal(13, testRunRoutes.Length);
-            Assert.Equal(13, testRunLinks.Length);
-            Assert.NotNull(provider.GetRequiredService<IWorkflowTestRunStarter>());
-            Assert.NotNull(provider.GetRequiredService<ITestRunWaitOperations>());
-            Assert.NotNull(provider.GetRequiredService<IActivityDraftTestRunService>());
-        }
-        else
-        {
-            Assert.Empty(testRunRoutes);
-            Assert.Empty(testRunLinks);
-            Assert.Null(provider.GetService<IWorkflowTestRunStarter>());
-            Assert.Null(provider.GetService<ITestRunWaitOperations>());
-            Assert.Null(provider.GetService<IActivityDraftTestRunService>());
-        }
+        Assert.Empty(testRunRoutes);
+        Assert.Empty(testRunLinks);
+        Assert.Null(provider.GetService<IWorkflowTestRunStarter>());
+        Assert.Null(provider.GetService<ITestRunWaitOperations>());
+        Assert.Null(provider.GetService<IActivityDraftTestRunService>());
         Assert.Contains("/publishing/incident-strategies", endpoints);
         Assert.Contains(declared.Links, link => link.Rel == "incident-strategies");
         var incidentCatalog = provider.GetRequiredService<IIncidentStrategyCatalog>();
@@ -338,7 +317,7 @@ public sealed class AuthoringCompositionHostEvidenceTests : IDisposable
             File.Delete(path);
     }
 
-    private async Task<WebApplication> StartHostAsync(bool legacyRuntime = false, bool durableRuntime = false, bool exclusiveIngress = false)
+    private async Task<WebApplication> StartHostAsync(bool durableRuntime = false, bool exclusiveIngress = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -353,11 +332,6 @@ public sealed class AuthoringCompositionHostEvidenceTests : IDisposable
         settings["Elsa:Persistence:Resources:primary:Provider"] = "Sqlite";
         settings["Elsa:Persistence:Resources:primary:ConnectionName"] = ResourceName;
         settings[$"ConnectionStrings:{ResourceName}"] = ConnectionString;
-        if (legacyRuntime)
-        {
-            settings[$"{features}:WorkflowsRuntimeApi"] = null;
-            settings[$"{features}:WorkflowsRuntimeTriggers"] = null;
-        }
         if (durableRuntime)
         {
             settings[$"{features}:{RuntimePublicationFeature}"] = null;
@@ -394,8 +368,7 @@ public sealed class AuthoringCompositionHostEvidenceTests : IDisposable
                 typeof(PublishingEntityFrameworkCoreFeature).Assembly,
                 typeof(RuntimePublicationEntityFrameworkCoreFeature).Assembly,
                 typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
-                typeof(TasksFeature).Assembly,
-                typeof(WorkflowsRuntimeApiFeature).Assembly)
+                typeof(TasksFeature).Assembly)
             .WithConfigurationProvider(builder.Configuration)
             .WithWebRouting(options => options.EnablePathRouting = true));
 

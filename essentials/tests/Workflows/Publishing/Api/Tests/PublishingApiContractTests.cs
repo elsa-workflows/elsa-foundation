@@ -192,7 +192,7 @@ internal sealed class PublishingMinimalApiHost(WebApplication app) : IAsyncDispo
         builder.Services.AddLogging();
         builder.Services.AddRouting();
         builder.Services.AddHttpContextAccessor();
-        builder.Services.AddWorkflowRuntime();
+        WorkflowPublicationDefaults.Add(builder.Services);
         builder.Services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
         builder.Services.AddAuthentication(CaptureAuthenticationHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, CaptureAuthenticationHandler>(CaptureAuthenticationHandler.SchemeName, _ => { });

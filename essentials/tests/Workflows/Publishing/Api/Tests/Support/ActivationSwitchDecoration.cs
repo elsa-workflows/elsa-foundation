@@ -13,7 +13,14 @@ internal static class ActivationSwitchDecoration
 {
     public static void Decorate(this IServiceCollection services, Func<IServiceProvider, IWorkflowActivationSwitch, IWorkflowActivationSwitch> decorate)
     {
-        services.RemoveAll<IWorkflowActivationSwitch>();
-        services.AddScoped(sp => decorate(sp, ActivatorUtilities.CreateInstance<InMemoryWorkflowActivationSwitch>(sp)));
+        var original = services.Single(item => item.ServiceType == typeof(IWorkflowActivationSwitch));
+        services.Remove(original);
+        services.AddScoped(sp => decorate(sp, (IWorkflowActivationSwitch)
+            ActivatorUtilities.CreateInstance(sp, original.ImplementationType!)));
     }
+
+    public static IWorkflowActivationSwitch Create(IWorkflowActivationAuthority authority,
+        IWorkflowExecutableSourceReferenceStore references, TimeProvider clock, IWorkflowTriggerBindingStore? bindings = null) =>
+        new PublicationActivationSwitch(authority, references, clock,
+            reservationState: null, reservationAccess: null, reservationPolicies: [], triggerBindingStore: bindings);
 }

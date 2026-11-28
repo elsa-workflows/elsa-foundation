@@ -44,8 +44,9 @@ and restart tests.
 ```
 
 Current test tiers still run stock Workbench process, authoring and configuration
-checks, along with the independent Agent, Compensation, BPMN, ETL and Rules
-module and provider suites.
+checks, along with independent module and provider suites. The
+[classic Compensation test archive](../../essentials/tests/Activities/Compensation/Tests/README.md)
+contains the earlier Runtime's Compensation execution and provider witnesses.
 
 The optional Studio live compensation, nesting and operator journeys require an
 owned classic Workbench and matching Studio. Set `ELSA_CLASSIC_COMPENSATION_LIVE=1`

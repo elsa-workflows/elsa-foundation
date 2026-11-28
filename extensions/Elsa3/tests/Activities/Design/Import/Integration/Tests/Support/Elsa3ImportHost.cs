@@ -562,7 +562,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         await WaitForSettledAsync(await ExecuteAsync(workflow, inputs));
 
     /// <summary>The exact run and its bounded committed activity summaries.</summary>
-    public async Task<RunState> ReadRunAsync(string workflowExecutionId)
+    private async Task<RunState> ReadRunAsync(string workflowExecutionId)
     {
         await using var scope = await Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
             .CreateAsync(new PersistenceScope(TenantId));
@@ -598,6 +598,20 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                 return await ReadRunAsync(workflowExecutionId);
             Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not settle: {run.Describe()}.");
             await Task.Delay(100);
+        }
+    }
+
+    /// <summary>Waits until the Actor has committed the start of one activity that has yet to complete.</summary>
+    public async Task WaitForActiveNodeAsync(string workflowExecutionId, string authoredActivityId)
+    {
+        using var deadline = new CancellationTokenSource(SettleTimeout);
+        while (true)
+        {
+            var run = await ReadRunAsync(workflowExecutionId);
+            Assert.True(run.Workflow?.Status is null or WorkflowExecutionStatus.Running, run.Describe());
+            if (run.Activities.Any(activity => activity.AuthoredActivityId == authoredActivityId && activity.Status == ActivityExecutionStatus.Running))
+                return;
+            await Task.Delay(100, deadline.Token);
         }
     }
 
