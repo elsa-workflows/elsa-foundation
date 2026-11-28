@@ -26,6 +26,11 @@ internal sealed record DecisionWorkflowPin(string Selection, string TenantId, st
         RequiresValueProtection(binding.EffectivePolicy) ||
         binding.Literal is { } literal && RequiresValueProtection(literal.Policy);
 
+    internal bool RequiresInputVerification(ExecutableNode node) =>
+        node.InputBindings.Values.Any(RequiresValueProtection) ||
+        node.InputBindings.Values.Any(IsWorkflowInput) &&
+        !ExecutableDecisionPinMetadata.HasVerifiedWorkflowInputs(node.Metadata, Selection);
+
     private static bool RequiresValueProtection(ValueProtectionPolicy policy) =>
         policy.HidesValue() || policy.RedactionMode is not null || policy.RetentionPolicy is not null ||
         policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom;

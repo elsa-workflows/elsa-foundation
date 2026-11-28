@@ -79,7 +79,7 @@ internal sealed class DecisionWorkflowResources(IServiceProvider services)
             if (node.ActivityType != EvaluateDecision.ActivityType || ExecutableDecisionPinMetadata.Read(node.Metadata) is not { } serialized)
                 throw Missing();
             var pin = DecisionWorkflowPin.Parse(serialized);
-            var protectedValues = node.InputBindings.Values.Any(input => input.EffectivePolicy.HidesValue()) ||
+            var protectedValues = pin.RequiresInputVerification(node) ||
                 node.ActivityContract?.Result.Policy.HidesValue() == true ||
                 node.ActivityContract?.Result.Projections.Values.Any(output => output.Policy.HidesValue()) == true;
             yield return new(pin.TenantId, pin.AssetId, protectedValues);

@@ -24,17 +24,31 @@ public static class ExecutableDecisionPinMetadata
     }
 
     /// <summary>Whether the behaviorally hashed pin attests that its workflow input sources permit a plain read.</summary>
-    public static bool HasVerifiedWorkflowInputs(IReadOnlyDictionary<string, string> metadata)
+    public static bool HasVerifiedWorkflowInputs(IReadOnlyDictionary<string, string> metadata, string selection)
     {
-        if (!metadata.ContainsKey(BehavioralKey) || Read(metadata) is not { } pin)
+        if (string.IsNullOrWhiteSpace(selection) || !metadata.ContainsKey(BehavioralKey) || Read(metadata) is not { } pin)
             return false;
         try
         {
-            using var document = JsonDocument.Parse(pin, new JsonDocumentOptions { MaxDepth = 16 });
-            return document.RootElement.ValueKind == JsonValueKind.Object &&
-                document.RootElement.EnumerateObject().Where(property => property.NameEquals("inputProtectionVersion"))
-                    .Take(2).ToArray() is [{ Value.ValueKind: JsonValueKind.Number } marker] &&
-                marker.Value.TryGetInt32(out var version) && version == 1;
+            using var document = JsonDocument.Parse(pin, new JsonDocumentOptions { MaxDepth = 16, AllowDuplicateProperties = false });
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || root.EnumerateObject().Count() != 6)
+                return false;
+
+            var separator = selection.LastIndexOf('@');
+            var selectedVersion = separator > 0 ? selection[(separator + 1)..] : "";
+            var pinnedVersion = ReadString("versionId");
+            return separator > 0 && selectedVersion.Length > 0 && ReadString("selection") == selection &&
+                ReadString("assetId") == selection[..separator] && !string.IsNullOrWhiteSpace(ReadString("tenantId")) &&
+                !string.IsNullOrWhiteSpace(pinnedVersion) && (selectedVersion == "latest" || selectedVersion == pinnedVersion) &&
+                root.TryGetProperty("artifact", out var artifact) && artifact.ValueKind == JsonValueKind.Object &&
+                artifact.TryGetProperty("contentHash", out var hash) &&
+                hash.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(hash.GetString()) &&
+                root.TryGetProperty("inputProtectionVersion", out var marker) &&
+                marker.ValueKind == JsonValueKind.Number && marker.TryGetInt32(out var version) && version == 1;
+
+            string? ReadString(string key) =>
+                root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
         }
         catch (JsonException)
         {
