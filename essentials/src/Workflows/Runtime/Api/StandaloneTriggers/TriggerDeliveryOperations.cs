@@ -230,7 +230,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         {
             var state = executions is null ? null : await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, ct);
             if (state is null || !await access.HasAsync("workflows/runtime:read", state, ct)) return null;
-            NativeIngressTargetEvidence.ValidateState(new(source, recipient, progress.Seal), state);
+            RuntimeIngressNativeDeliveryEvidence.ValidateState(new(source, recipient, progress.Seal), state);
             return new(state.WorkflowExecutionId, "Workflow", state.Status.ToString(), time.GetUtcNow(),
                 "/workflows/instances/" + Uri.EscapeDataString(state.WorkflowExecutionId));
         }
@@ -238,7 +238,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         if (model is null || model.Scope != access.Scope.Persistence || model.TenantId != access.Scope.TenantId ||
             model.Protocol != recipient.ModelProtocol || model.MaterialIncarnationId != recipient.MaterialIncarnation ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(model.Executable, recipient.Material) ||
-            model.IngressOrigin?.IsEquivalentTo(NativeIngressTargetEvidence.Origin(source, recipient)) != true ||
+            model.IngressOrigin?.IsEquivalentTo(RuntimeIngressNativeDeliveryEvidence.Origin(source, recipient)) != true ||
             !await access.HasAsync("workflows/runtime:read", model, ct)) return null;
         var projectors = (outcomeProjectors ?? []).Where(item => item.ModelKey == recipient.ModelKey).ToArray();
         var terminal = model.Lifecycle is RuntimeModelLifecycle.TerminalPendingSettlement or RuntimeModelLifecycle.TerminalSettled;
