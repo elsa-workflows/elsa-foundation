@@ -18,7 +18,8 @@
       * 'Cancelled'      needs an instance-cancellation control-plane call; the runtime API exposes no such
                          endpoint (see essentials/src/Workflows/Runtime/Api/Endpoints).
       * 'DispatchFailed' needs child-start delivery to exhaust its retries, which no REST surface can force.
-    Both are covered in-process by essentials/tests/Activities/Behavioral/Tests (DispatchWorkflowDrive).
+    The archived DispatchWorkflowDrive covers both cases. See Classic full-library activity drives in
+    essentials/tests/Activities/Testing/README.md for the matching source revision and test command.
 
     The classic BPMN call-activity witness is documented in docs/contributing/workbench-compatibility-tests.md
     under Classic BPMN direct execution. This script exercises the direct dispatch path;

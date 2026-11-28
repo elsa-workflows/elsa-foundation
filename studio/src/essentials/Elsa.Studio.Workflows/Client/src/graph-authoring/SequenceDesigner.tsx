@@ -8,6 +8,7 @@ import { getAvailabilityStateLabel } from "../activityAvailability";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTypes";
 import { WorkflowNodeRuntimeBadges } from "../workflow-editor/WorkflowNodeRuntimeBadges";
+import { WorkflowStatusBadge } from "../workflow-editor/WorkflowStatusBadge";
 import { ExecutionActivityPulse, ExecutionSequencePulse } from "../workflow-editor/ExecutionMotionPulse";
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
 import { isTechnicalActivityLabel } from "../technicalActivityLabel";
@@ -282,6 +283,8 @@ function SequenceStep({
   const title = sequenceCardTitle(data);
   const typeLabel = sequenceTypeCaption(data);
   const summary = data.summary?.trim() || data.description?.trim();
+  const status = data.runtime?.status;
+  const statusId = useId();
 
   const onCardDragStart = (event: DragEvent<HTMLButtonElement>) => {
     if (readOnly) {
@@ -322,6 +325,7 @@ function SequenceStep({
       <ExecutionActivityPulse pulse={data.executionPulse} status={data.runtime?.status} />
       <StudioButton
         type="button"
+        variant={data.runtime ? "ghost" : undefined}
         className="wf-sequence-step"
         data-id={node.id}
         data-graph-node-id={node.id}
@@ -330,6 +334,7 @@ function SequenceStep({
         data-index={index}
         aria-pressed={selected}
         aria-label={`${index + 1}. ${title}${availabilityLabel ? `, ${availabilityLabel}` : ""}`}
+        aria-describedby={status ? statusId : undefined}
         tabIndex={tabIndex}
         draggable={!readOnly}
         onClick={onSelect}
@@ -341,9 +346,12 @@ function SequenceStep({
           {renderActivityIcon(icon, fallback)}
         </span>
         <span className="wf-sequence-step-copy">
-          <span className="wf-sequence-title-row">
-            <span className="wf-sequence-title">{title}</span>
-            {availabilityLabel ? <span className="wf-sequence-availability" role="img" aria-label={availabilityLabel}><AlertTriangle size={14} aria-hidden="true" /></span> : null}
+          <span className="wf-sequence-step-heading">
+            <span className="wf-sequence-title-row">
+              <span className="wf-sequence-title">{title}</span>
+              {availabilityLabel ? <span className="wf-sequence-availability" role="img" aria-label={availabilityLabel}><AlertTriangle size={14} aria-hidden="true" /></span> : null}
+            </span>
+            {status ? <span className="wf-sequence-status" id={statusId}><WorkflowStatusBadge status={status} subStatus={data.runtime?.subStatus} /></span> : null}
           </span>
           {typeLabel && typeLabel !== title ? <span className="wf-sequence-type">{typeLabel}</span> : null}
           {data.activityTypeKey === graphBoundaryCompleteTypeKey ? <span className="wf-sequence-summary" title="Completes the nearest reusable activity and cancels the rest of its body. No outgoing continuation runs.">Ends reusable activity</span> : summary ? <span className="wf-sequence-summary">{summary}</span> : null}
@@ -358,7 +366,7 @@ function SequenceStep({
         </div>
       ) : null}
 
-      {data.runtime ? <WorkflowNodeRuntimeBadges data={data} className="wf-sequence-runtime-strip" /> : null}
+      <WorkflowNodeRuntimeBadges data={data} className="wf-sequence-runtime-strip" includeStatus={false} />
 
       {selected && !readOnly ? (
         <div className="wf-sequence-actions" aria-label={`${data.label} actions`}>

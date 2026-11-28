@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Graph.Runtime;
 using Elsa.Activities.Graph.Runtime.Models;
@@ -9,7 +10,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 
-namespace Elsa.Activities.Flowchart.Tests;
+namespace Elsa.Activities.Behavioral;
 
 public sealed class ReusableBoundaryOutcomeFlowchartTests
 {
