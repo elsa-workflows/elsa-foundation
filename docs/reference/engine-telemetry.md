@@ -1,8 +1,8 @@
 # Engine telemetry vs. the OpenTelemetry ingestion domain
 
-This page records the classic workflow engine's tracing feature. Replay it with
-the [matching classic runtime](../contributing/workbench-compatibility-tests.md).
-The OpenTelemetry ingestion domain is available independently.
+This page records the classic workflow engine's tracing feature. See the
+[archived Workbench producer, bridge, and tests](../contributing/classic-runtime-witnesses.md#classic-workflow-tracing-bridge).
+Current hosts can select the OpenTelemetry ingestion domain independently.
 
 Elsa has two telemetry surfaces that are easy to confuse because both mention "OpenTelemetry".
 They point in opposite directions. This page draws the line and documents the engine's own

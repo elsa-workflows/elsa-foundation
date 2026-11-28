@@ -119,7 +119,6 @@
     <ProjectReference Include="..\..\..\src\Foundation\Hosting\Elsa.Foundation.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Diagnostics.OpenTelemetry\src\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
-    <ProjectReference Include="..\..\..\..\extensions\Diagnostics.OpenTelemetry\src\Workflows\Elsa.Diagnostics.OpenTelemetry.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\Api\Elsa.Modularity.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Http\src\Elsa.Http\Elsa.Http.csproj" />

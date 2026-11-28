@@ -64,6 +64,8 @@ public sealed class FeatureCompositionTests
     private static readonly Alternative[] Alternatives =
     [
         new("A shell runs exactly one Weaver harness.", ["WeaverAnthropic"], ["WeaverGitHubCopilot"]),
+        new("Agent source-only persistence and combined source/journal persistence select the same source ports.",
+            ["AgentSourcesEntityFrameworkCore"], ["AgentEntityFrameworkCore"]),
     ];
 
     [Fact]

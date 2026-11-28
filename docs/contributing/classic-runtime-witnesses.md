@@ -68,20 +68,28 @@ The retained suite verifies contracts and publication services through their
 current owners. Physical provider and Actor cases continue to exercise
 publication pins, History, prepared starts and protected material across restart.
 
-## Classic Runtime tracing producer
+## Classic workflow tracing bridge
 
-Replay the classic engine tracer and its OpenTelemetry bridge on the pinned
-source. The current bridge tests exercise the stable activity source and tags
-directly, including per-drain batching, aged flush and nested traces.
+The classic scheduler emitted `Elsa.Workflows.Runtime` spans through
+`WorkflowsRuntimeTracing`. The optional `DiagnosticsOpenTelemetryEngineBridge`
+listener collected those spans into the generic ingestion store. Use
+`18a16dee878106ac525aa9a861d851a200e43c55` for the matching producer, bridge,
+and Workbench profile that selects both. Use `ec59d1b6728599c7fa44cf0b66eb55cfb2775ece`
+for the bridge's final lifecycle and ingestion tests.
 
 ```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" ec59d1b6728599c7fa44cf0b66eb55cfb2775ece
 (
-  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-tracing" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
-  cd "$compatibility_root/classic-tracing"
+  cd "$archive/source"
   dotnet test extensions/Diagnostics.OpenTelemetry/tests/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj \
-    -c Release -p:RestoreLockedMode=true --filter FullyQualifiedName~EngineTracingBridgeTests
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~EngineTracingBridge'
 )
 ```
+
+See [classic engine telemetry](../reference/engine-telemetry.md) for span
+names and tags. Current hosts can select `DiagnosticsOpenTelemetry` and its
+persistence feature for independent OTLP ingestion and query.
 
 ## Classic Publishing and Runtime integration
 
