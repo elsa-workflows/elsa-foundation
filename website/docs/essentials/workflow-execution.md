@@ -24,7 +24,7 @@ See the [Curated Essentials deployment settings](https://github.com/elsa-workflo
 and [Workbench Compose setup](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/compose/README.md#2-fast-path--elsaworkbench--postgresql).
 
 If a workload still needs the earlier runtime, use the tested
-[pinned Full profile](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7232199720)
+[pinned Full profile](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/profiles/full-compatibility.md)
 with its matching data. The [architecture tour](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture-tour.md)
 explains the new execution layers. [Program #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229)
 tracks the remaining retirement work.

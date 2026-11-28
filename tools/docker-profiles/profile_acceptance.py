@@ -12,7 +12,6 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 IMPORT_FIXTURES = REPOSITORY / "extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures"
 MIGRATED_PROFILE = REPOSITORY / "docker/profiles/elsa3-import"
 MIGRATED_FIXTURE = MIGRATED_PROFILE / "example-migrated"
-DECISION_FIXTURE = REPOSITORY / "specs/1195-business-decisions/evidence/interop/matrix/approval.dmn"
 
 
 class ProfileRequestError(RuntimeError):
@@ -147,23 +146,6 @@ def verify_migrated_files(request_json, find_activities):
             "output": node["inputs"][0]["value"]["value"]}
 
 
-def verify_decisions(request_json):
-    asset = request_json("/decisions", {
-        "name": "Profile smoke approval", "operationId": uuid4().hex,
-        "xml": DECISION_FIXTURE.read_text(encoding="utf-8"),
-    })
-    route = f"/decisions/{quote(asset['id'], safe='')}"
-    version = request_json(f"{route}/publish", {
-        "operationId": uuid4().hex, "expectedRevision": asset["revision"],
-    })
-    evaluation = request_json(f"{route}/evaluate", {
-        "versionId": version["id"], "inputs": {"value": {"kind": "number", "value": "950"}},
-    })
-    if evaluation["status"] != "Success" or evaluation["result"]["value"] != "Automatic":
-        raise RuntimeError(f"Unexpected decision result: {evaluation}")
-    return {"decisionVersion": version["id"], "result": evaluation["result"]["value"]}
-
-
 def verify_secret_store(request_json):
     name = f"profile-smoke-{uuid4().hex}"
     value = secrets.token_urlsafe(32)
@@ -179,6 +161,4 @@ def verify_secret_store(request_json):
 def verify_variant(variant, request_json):
     if variant == "elsa3-import":
         return {"elsa3Import": verify_elsa3_import(request_json)}
-    if variant == "full":
-        return {"decision": verify_decisions(request_json), "secrets": verify_secret_store(request_json)}
     return {}

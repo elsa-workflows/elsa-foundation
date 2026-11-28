@@ -2,7 +2,6 @@
 """Exercise a fresh, network-isolated Elsa image through its authenticated workflow API."""
 
 import argparse
-import base64
 import copy
 import json
 import os
@@ -463,17 +462,8 @@ def verify_profile(args):
             "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword": args.password,
             "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__IsDevelopmentOrDemo": "true",
         }
-        if args.variant in ACTOR_PROFILES:
-            settings["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey"] = secrets.token_hex(32)
-        else:
-            settings.update({
-                "WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey": secrets.token_hex(32),
-                "WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey": secrets.token_hex(32),
-                "WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionActiveKeyId": "local-smoke",
-                "WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionKeys__local-smoke":
-                    base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
-            })
-        if args.variant in ("full", CURATED):
+        settings["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey"] = secrets.token_hex(32)
+        if args.variant == CURATED:
             settings["Secrets__EncryptionKey"] = secrets.token_hex(32)
         lines = [f"{feature}{name}={value}\n" for name, value in settings.items()]
         if args.variant == CURATED:
@@ -513,7 +503,7 @@ def main():
     parser.add_argument("image", help="locally available image reference")
     parser.add_argument("--env-file", type=Path, help="Docker env file with local test configuration")
     parser.add_argument("--username", default="admin", help="local seeded username")
-    parser.add_argument("--variant", choices=("essentials", "elsa3-import", "full", CURATED),
+    parser.add_argument("--variant", choices=("essentials", "elsa3-import", CURATED),
                         help="verify a built profile with generated local test configuration")
     parser.add_argument("--shells", type=Path, help="read-only shells.json override")
     parser.add_argument("--expect-activity", action="append", default=[], help="CLR type key required in the catalog")

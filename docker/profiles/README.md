@@ -7,7 +7,7 @@ A profile runs `Elsa.Foundation.Host.dll`. `packages.txt` selects the NuGet pack
 | [Essentials](essentials/shells.json) | Design, publish and execute a workflow with a small activity set, local identity and SQLite. Actor Foundation serves the runtime API with HTTP, cron and timer triggers switched off. The shell keeps the recurring-schedule projection that publishing requires. |
 | [Curated Essentials](essentials-curated/README.md) | The published server Essentials composition, including the shared token store, package registry, standard Production overlays, and a writable add-on feed. |
 | [Elsa 3 import](elsa3-import/shells.json) | Analyze and import Elsa 3 reusable activity definitions through the migration API. Includes mapping, publishing, persistence and expressions used by the import path. Native and Flowchart consumers execute on the built-in Actor Foundation. The same image can [run already-converted Elsa 4 files](elsa3-import/migrated-files.md) from a read-only `migrated/` mount. |
-| [Full](full/shells.json) | Explore a broader server composition, including import, native BPMN runtime and design, decisions, diagnostics, connections and Studio backend services. XML interchange stays opt-in pending [published activity version support](https://github.com/elsa-workflows/elsa-foundation/issues/5809). The linked shell file is the exact selection. Run a separate compatible Studio for a browser UI. |
+| [Archived Full](full-compatibility.md) | The published classic server composition for deployments that still need the previous runner. Use its exact image and matching deployment data. |
 
 ## Use a released profile
 
@@ -18,7 +18,7 @@ image="elsaworkflows/elsa-foundation-host:essentials-${ELSA_VERSION}"
 docker pull "$image"
 ```
 
-Use that image with the deployment settings below. The `elsa3-import` and `full` profiles use the same tag pattern.
+Use that image with the deployment settings below. The `elsa3-import` profile uses the same tag pattern. For existing Full deployments, use the [archived image pin](full-compatibility.md).
 
 ## Change only the shell defaults
 
@@ -68,7 +68,7 @@ docker build --build-arg "ELSA_VERSION=$ELSA_VERSION" -t "$image" .
 
 If you have both reviewed lock files from a release artifact, you can go straight to this build. Changes to `shells.json` affect only the final layer and leave the package lock set valid. For a package update, change the roots or paired release, generate and review both locks, then build again.
 
-The build generates `/app/profile-desired.json` from the verified Nuplane lock. At startup, Nuplane reads the exact package IDs, versions and feed names from that manifest and verifies the baked archives in `/app/profile-packages` against the strict lock. The Essentials, Elsa 3 import and Full profiles use only the baked manifest. Curated Essentials also watches its separate add-on directory.
+The build generates `/app/profile-desired.json` from the verified Nuplane lock. At startup, Nuplane reads the exact package IDs, versions and feed names from that manifest and verifies the baked archives in `/app/profile-packages` against the strict lock. Essentials and Elsa 3 import use only the baked manifest. Curated Essentials also watches its separate add-on directory.
 
 The build defaults to the local Linux architecture. For a different target, use the same `--platform linux/amd64` or `--platform linux/arm64` on both builds and make sure your BuildKit installation can run that platform. For replay from release tags, set `ELSA_VERSION` to the published pair. To replay the artifact references in `build.json`, load the native builder archive for your platform and pass those exact `PROFILE_BUILDER_IMAGE` and `FOUNDATION_IMAGE` references. The runtime stage checks that the Foundation files match those used to resolve the profile.
 
@@ -91,16 +91,12 @@ docker run --rm --name elsa -p 127.0.0.1:8443:8443 \
   "$image"
 ```
 
-This example expects a TLS certificate in `elsa.pfx` readable by the container user and its `ASPNETCORE_Kestrel__Certificates__Default__Password` in `elsa.env`. Clients use HTTPS on port 8443. Port 8080 remains internal for the Docker health check. This example uses the minimal Essentials profile and its `/app/data/elsa.db` database. See the [curated profile settings](essentials-curated/README.md) for deployments of the existing server Essentials image. Persist the [Data Protection key ring](../../docs/docker.md#data-protection-keys) for deployments that retain sign-in sessions across container replacement. Supply deployment secrets independently of the image. On Full, an administrator with permissions from many modules can receive a chunked cookie whose combined `Cookie` header exceeds 8 KiB. Configure any intermediate proxy to accept the complete header. For the shipped `default` shell, the following feature settings use the environment key prefix `CShells__Shells__default__Features__`.
+This example expects a TLS certificate in `elsa.pfx` readable by the container user and its `ASPNETCORE_Kestrel__Certificates__Default__Password` in `elsa.env`. Clients use HTTPS on port 8443. Port 8080 remains internal for the Docker health check. This example uses the minimal Essentials profile and its `/app/data/elsa.db` database. See the [curated profile settings](essentials-curated/README.md) for deployments of the existing server Essentials image. Persist the [Data Protection key ring](../../docs/docker.md#data-protection-keys) for deployments that retain sign-in sessions across container replacement. Supply deployment secrets independently of the image. For the shipped `default` shell, the following feature settings use the environment key prefix `CShells__Shells__default__Features__`.
 
 | Feature setting (after prefix) | Value |
 | --- | --- |
 | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | Password for the initial `admin` user. |
 | `WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey` | Persistent signing key with at least 32 UTF-8 bytes for Essentials, Curated Essentials and Elsa 3 import. |
-| `WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` and `WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey` | Separate persistent signing keys for Full, each at least 32 UTF-8 bytes. |
-| `WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionActiveKeyId` | ID of the active payload protection key for Full. |
-| `WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionKeys__<id>` | Base64-encoded 32-byte key for that ID. |
-| `Secrets__EncryptionKey` | Supply for shells that enable Secrets, such as Full. |
 
 Lean Essentials persists Actor runs in `/app/data/elsa-kernel.db`, alongside the separate control-plane database.
 When upgrading from the previous lean profile, stop new workflow ingress and settle pending work with the earlier
@@ -128,7 +124,7 @@ Use **build_profiles** on a manual **Docker Images** dispatch to build only the 
 
 Artifacts are retained for seven days. Download the artifact for your architecture and run `docker load -i image.tar.gz` to import the tested runtime image. The profile files and both locks are the build context for replay. To replay using the artifact references, load the native builder artifact's `image.tar.gz` too. Use the `builderImage`, `foundationImage` and `platform` values in the profile artifact's `build.json` as the `PROFILE_BUILDER_IMAGE` and `FOUNDATION_IMAGE` build arguments and the `--platform` option.
 
-To publish the tested images, a maintainer can select **publish_profiles** on `main`. After all eight native builds and smoke tests pass, the workflow stages the tested archives by architecture. It publishes the matching Foundation and builder tags before exposing multi-platform profile tags such as `essentials-4.0.0-preview.<run>.<attempt>`. Foundation maintainers own the packaged profile definitions and their release inputs here.
+To publish the tested images, a maintainer can select **publish_profiles** on `main`. After all six native builds and smoke tests pass, the workflow stages the tested archives by architecture. It publishes the matching Foundation and builder tags before exposing multi-platform profile tags such as `essentials-4.0.0-preview.<run>.<attempt>`. Foundation maintainers own the packaged profile definitions and their release inputs here.
 
 An ordinary `Docker Images` run builds and qualifies the curated Essentials server profile on both native
 architectures. The writer publishes those tested manifests under the existing preview and short SHA tags.
