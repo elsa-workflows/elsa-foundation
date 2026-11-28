@@ -498,14 +498,17 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 }
                 case JsonValueKind.Array:
                 {
-                    var value = _engine.Intrinsics.Array.Construct(Arguments.Empty);
+                    // Built from its items, as an array literal is (#6221): an array filled index by index through
+                    // DefineOwnProperty loses elements in Jint's slice whenever the start is above 0.
+                    var items = new JsValue[element.GetArrayLength()];
                     var index = 0;
                     foreach (var item in element.EnumerateArray())
                     {
-                        value.DefineOwnProperty(index.ToString(CultureInfo.InvariantCulture), new PropertyDescriptor(Create(item, ValuePaths.Index(path, index)), writable: true, enumerable: true, configurable: true));
+                        items[index] = Create(item, ValuePaths.Index(path, index));
                         index++;
                     }
 
+                    var value = new JsArray(_engine, items);
                     _origins[value] = element;
                     _originPaths[value] = path;
                     return value;
