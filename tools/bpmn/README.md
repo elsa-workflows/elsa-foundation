@@ -1,12 +1,12 @@
 # BPMN host qualification tools
 
-`qualify-hosting.py` captures and verifies actual legacy-writer inputs and resumes six legacy upgrade families for [spec1017](../../specs/1017-direct-bpmn-hosting/quickstart.md). Individual commands prove only their declared family. Direct-model/native/ETL journeys use the separate hosting tests and `e2e-tests/bpmn/qualify_*.py` controllers indexed by their receipts.
+`qualify-hosting.py` verifies actual legacy-writer inputs and upgrade receipts for [spec1017](../../specs/1017-direct-bpmn-hosting/quickstart.md). The [classic Workbench replay commands](../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-delivery-inspection-and-recovery-probes) pin host capture, upgrade, checked snapshot readers, and the direct-model controllers to their matching source. Run any command below that builds a reader or starts, stops or upgrades a host from the indicated classic checkout. The current source can verify an existing receipt offline.
 
 The first capture family parks eight normally published/executed partial parallel forks: legacy BpmnProcess root and Sequence/Flowchart/CompensationScope parents, each in Balanced and Durable mode. It completes branch A through the ordinary Event stimulus and retains branch B. It then verifies the explicitly owned host/controller/PID/start/executable/root identity, stops only that host for consistent whole Runtime/Design backups, resumes it even when backup fails, and compares the held API observations again. The frozen authoring verifier reads the closed Design snapshot.
 
 The supplied controller must be `e2e-tests/bpmn/run_owned_broadcast_probe.py`. Capture is currently qualified only for this POSIX/SQLite cut. Credentials come from `ELSA_CAPTURE_USERNAME`/`ELSA_CAPTURE_PASSWORD`, defaulting to the existing isolated-test account; they are not written to evidence. Use an isolated owned content root, never user stores. The runner must be committed without local edits before capture, so its source and content hash can be retained.
 
-Build `DeliveryRecoveryRead/DeliveryRecoveryRead.csproj` through the normal build-slot wrapper. Its metadata-only `--inspect-host-products <actual-workbench-dll>` mode reads the actual nine host/writer product versions and hashes plus three released BPMN library binaries. It executes no target assembly. Supply that JSON to `--product-versions`; the runner verifies every listed binary against the actual host directory.
+For classic capture, build `DeliveryRecoveryRead/DeliveryRecoveryRead.csproj` in the classic-default checkout. Its metadata-only `--inspect-host-products <actual-workbench-dll>` mode reads the actual nine host/writer product versions and hashes plus three released BPMN library binaries. It executes no target assembly. Supply that JSON to `--product-versions`; the runner verifies every listed binary against the actual host directory.
 
 ```sh
 python3 tools/bpmn/qualify-hosting.py capture-baseline \

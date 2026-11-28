@@ -31,12 +31,6 @@
       "medianMinutes": null
     },
     {
-      "project": "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
-      "tier": "integration",
-      "medianMinutes": null,
-      "trait": "child-process"
-    },
-    {
       "project": "essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.54
@@ -971,12 +965,6 @@
           "essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj",
           "essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
           "essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest"
-        ]
-      },
-      {
-        "name": "bpmn-runtime-snapshot-reader",
-        "units": [
-          "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
         ]
       }
     ],

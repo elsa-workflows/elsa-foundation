@@ -1339,7 +1339,10 @@ def main() -> int:
     verified_upgrade.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
     try:
-        if args.phase == "capture-baseline": result = capture(args)
+        if args.phase == "capture-baseline":
+            if not (REPO / "e2e-tests/bpmn/run_owned_broadcast_probe.py").is_file():
+                raise ValueError("Run the classic BPMN capture from the pinned checkout in docs/contributing/workbench-compatibility-tests.md.")
+            result = capture(args)
         elif args.phase == "resume-upgrade":
             if not (REPO / "extensions/Bpmn/tests/Hosting/Tests/OwnedWorkbench.cs").is_file():
                 raise ValueError("Run the classic BPMN apphost upgrade from the pinned checkout in docs/contributing/workbench-compatibility-tests.md.")

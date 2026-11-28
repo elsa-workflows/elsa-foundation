@@ -2,7 +2,7 @@
 
 `Test-BpmnBroadcastRecovery.ps1` creates its own fresh SQLite content root and loopback port. It wraps the actual selected source store and resume dispatcher solely to identify and pause at a completed provider/dispatcher call. The committed source/cohort and actor checkpoints remain the authority. Only processes created by the runner are terminated.
 
-Run these commands in the matching [pinned classic Workbench checkout](../../../docs/contributing/workbench-compatibility-tests.md). The probe requires the archived classic runtime and direct BPMN host.
+Run these commands in the matching [pinned classic Workbench checkout](../../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-delivery-inspection-and-recovery-probes). The probe requires the archived classic runtime and direct BPMN host.
 
 Build two separate Workbench outputs outside the checkout. The fault feature is absent from the standard build; the runner verifies assembly metadata and binds the source files, host/reader dependency manifests and their hashes before/after execution.
 

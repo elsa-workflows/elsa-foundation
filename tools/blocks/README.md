@@ -1,6 +1,6 @@
 # Native block prototype qualification
 
-Supporting proof for [spec 1204](../../specs/1204-named-embedded-blocks/plan.md), S001. These tools use the actual normal studio/Workbench composition, public authoring/publication/runtime APIs, fresh local stores and owned child processes. They do not implement the production extraction or promotion commands.
+The original proof for [spec 1204](../../specs/1204-named-embedded-blocks/plan.md), S001, uses the classic Studio/Workbench composition, public authoring and runtime APIs, disposable stores, and owned child processes. Run the following commands from the [classic-default Workbench checkout](../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-delivery-inspection-and-recovery-probes) with its matching metadata observer.
 
 Build the actual products from a clean committed source, including the existing metadata observer:
 
