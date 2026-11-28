@@ -2,6 +2,7 @@ using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelApi;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -48,6 +49,13 @@ public sealed class RuntimeExecutionSliceDependencyTests
     public void KernelApi_DoesNotReferenceBroadRuntimeApi()
     {
         Assert.DoesNotContain(typeof(WorkflowsRuntimeKernelRetainedApiFeature).Assembly.GetReferencedAssemblies(),
+            reference => reference.Name == "Elsa.Workflows.Runtime.Api");
+    }
+
+    [Fact]
+    public void KernelHosting_DoesNotReferenceBroadRuntimeApi()
+    {
+        Assert.DoesNotContain(typeof(WorkflowsRuntimeKernelHostingFeature).Assembly.GetReferencedAssemblies(),
             reference => reference.Name == "Elsa.Workflows.Runtime.Api");
     }
 
