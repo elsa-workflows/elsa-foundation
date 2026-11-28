@@ -363,7 +363,8 @@ public sealed class ExpressionCapabilityTests
     [Fact]
     public async Task A_local_named_deepClone_hides_the_built_in_so_the_copy_needs_another_name()
     {
-        // value-adapters.md: `const deepClone = deepClone(x)` reads the local before it is set; `const copy = deepClone(x)` works.
+        // A local named deepClone hides the built-in: `const deepClone = deepClone(x)` reads the local before it is set
+        // (temporal dead zone), while `const copy = deepClone(x)` works (value-adapters.md: name the copy something else).
         var (binding, script) = await BothAsync(
             "[(() => { try { const deepClone = deepClone({ a: 1 }); return 'copied'; } catch (e) { return e.name; } })(), " +
             "(() => { const copy = deepClone({ a: 1 }); return copy.a; })()]");
