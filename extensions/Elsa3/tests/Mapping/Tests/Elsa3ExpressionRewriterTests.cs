@@ -187,12 +187,66 @@ public sealed class Elsa3ExpressionRewriterTests
     }
 
     /// <summary>
+    /// #6230: a workflow instance value read with an Elsa 3 built-in is read-only in Elsa 4, so a change through it is
+    /// refused (VF-IMP-005) wherever the script runs: on the value itself or a member chain below it, by assignment,
+    /// update or compound assignment, and through a destructuring target. A computed key on the way only reads.
+    /// </summary>
+    [Theory]
+    [InlineData("getCorrelationId().x++", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
+    [InlineData("getCorrelationId().x++", Elsa3JavaScriptMode.Script, false, "getCorrelationId")]
+    [InlineData("getCorrelationId().x++", Elsa3JavaScriptMode.Script, true, "getCorrelationId")]
+    [InlineData("--getCorrelationId().x", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
+    [InlineData("getCorrelationId().x += 'acme'", Elsa3JavaScriptMode.Script, false, "getCorrelationId")]
+    [InlineData("getCorrelationId() = 'acme'", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
+    [InlineData("getCorrelationId() += 'acme'", Elsa3JavaScriptMode.Script, true, "getCorrelationId")]
+    [InlineData("getCorrelationId().x ??= 'acme'", Elsa3JavaScriptMode.Script, false, "getCorrelationId")]
+    [InlineData("getCorrelationId().lines[getHttpRequestBody().index].quantity = 2", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
+    [InlineData("getWorkflowInstanceId().x = 1", Elsa3JavaScriptMode.Expression, false, "getWorkflowInstanceId")]
+    [InlineData("getWorkflowInstanceId().x = 1", Elsa3JavaScriptMode.Script, false, "getWorkflowInstanceId")]
+    [InlineData("getWorkflowInstanceId().x = 1", Elsa3JavaScriptMode.Script, true, "getWorkflowInstanceId")]
+    [InlineData("getWorkflowInstanceId()[getHttpRequestBody().name]--", Elsa3JavaScriptMode.Script, true, "getWorkflowInstanceId")]
+    [InlineData("getWorkflowInstanceName().x = 1", Elsa3JavaScriptMode.Script, false, "getWorkflowInstanceName")]
+    [InlineData("({ status: getCorrelationId().x } = { status: 'Paid' })", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
+    [InlineData("[getWorkflowInstanceId().x] = [1]", Elsa3JavaScriptMode.Script, false, "getWorkflowInstanceId")]
+    public void Change_through_a_workflow_instance_value_is_refused(string source, Elsa3JavaScriptMode mode, bool reusable, string reader)
+    {
+        var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode, reusableWorkflow: reusable);
+
+        Assert.False(result.Succeeded, result.Definition?.Source);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, issue.Code);
+        Assert.Equal($"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.", issue.Message);
+        Assert.Contains($"var value = {reader}();", issue.Guidance);
+    }
+
+    /// <summary>
+    /// #6230: reading a workflow instance value, changing a local copy of it, using it as a computed key (#6222) and, in
+    /// a Run JavaScript body, writing it into a variable (spec 1231 FR-032) all still convert.
+    /// </summary>
+    [Theory]
+    [InlineData("return getCorrelationId() + '-acme';", Elsa3JavaScriptMode.Expression, false)]
+    [InlineData("var id = getCorrelationId(); id = id + '-acme'; return id;", Elsa3JavaScriptMode.Expression, false)]
+    [InlineData("var id = getWorkflowInstanceId(); id += '-acme'; return id;", Elsa3JavaScriptMode.Script, true)]
+    [InlineData("var name = getWorkflowInstanceName(); name += '-acme'; return name;", Elsa3JavaScriptMode.Script, false)]
+    [InlineData("var result = {}; result[getCorrelationId()] = 1; return result;", Elsa3JavaScriptMode.Expression, false)]
+    [InlineData("var result = {}; result[getWorkflowInstanceId()] = 1; return result;", Elsa3JavaScriptMode.Script, true)]
+    [InlineData("getOrder().correlationId = getCorrelationId();", Elsa3JavaScriptMode.Script, false)]
+    [InlineData("variables.Order[getWorkflowInstanceId()] = 1;", Elsa3JavaScriptMode.Script, false)]
+    public void Read_or_local_copy_of_a_workflow_instance_value_converts(string source, Elsa3JavaScriptMode mode, bool reusable)
+    {
+        var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode, reusableWorkflow: reusable);
+
+        Assert.True(result.Succeeded, string.Join(Environment.NewLine, result.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
+        Assert.Empty(result.Issues);
+    }
+
+    /// <summary>
     /// Every name a test script reads, through getVariable or a generated getter, is a workflow variable, except the
-    /// workflow instance's correlation id, which no variable shadows.
+    /// workflow instance's metadata (correlation id, instance id and name), which no variable shadows.
     /// </summary>
     private static Elsa3ExpressionParameterResolution ResolveVariables(Elsa3AmbientReference reference) => reference.Kind switch
     {
-        Elsa3AmbientReferenceKind.GeneratedAccessor when reference.Name == "CorrelationId" => Elsa3ExpressionParameterResolution.Failure(
+        Elsa3AmbientReferenceKind.GeneratedAccessor when reference.Name is "CorrelationId" or "WorkflowInstanceId" or "WorkflowInstanceName" => Elsa3ExpressionParameterResolution.Failure(
             new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.DanglingReference, "No variable.", "None.")),
         Elsa3AmbientReferenceKind.Variable or Elsa3AmbientReferenceKind.GeneratedAccessor => Elsa3ExpressionParameterResolution.SuccessVariable(
             new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, $"variable-{reference.Name}"), reference.Name),
