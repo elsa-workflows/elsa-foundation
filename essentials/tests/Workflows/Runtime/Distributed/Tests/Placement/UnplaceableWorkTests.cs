@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Core.Models;
-using Elsa.Cluster.Testing.Runtime;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;

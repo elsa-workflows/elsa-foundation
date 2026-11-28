@@ -14,7 +14,7 @@ using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Cluster.Testing.Runtime;
+namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
 /// The durable state a cluster's members share: placement, the command transport, execution liveness, execution state and

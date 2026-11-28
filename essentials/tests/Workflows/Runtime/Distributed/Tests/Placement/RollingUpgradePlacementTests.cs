@@ -1,5 +1,4 @@
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Cluster.Testing.Runtime;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Placement;
 using Elsa.Workflows.Runtime.Distributed.Services;
