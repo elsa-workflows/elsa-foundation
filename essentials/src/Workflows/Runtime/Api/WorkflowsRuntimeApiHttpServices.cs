@@ -19,7 +19,7 @@ internal sealed class LegacyRuntimeApiSelected;
 /// <summary>The Runtime HTTP endpoint conventions and request authority shared by workflow execution backends.</summary>
 internal static class WorkflowsRuntimeApiHttpServices
 {
-    internal static void AddWorkflowRuntimeApiHttpServices(this IServiceCollection services)
+    internal static void AddWorkflowRuntimeApiHttpServices(this IServiceCollection services, bool includeLegacyUserTasks)
     {
         services.AddElsaEndpoints();
         services.AddHttpContextAccessor();
@@ -41,7 +41,10 @@ internal static class WorkflowsRuntimeApiHttpServices
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         services.TryAddScoped<HttpContextWorkflowRuntimeOperatorAccess>();
         services.TryAddScoped<IWorkflowRuntimeOperatorAccess>(sp => sp.GetRequiredService<HttpContextWorkflowRuntimeOperatorAccess>());
-        services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
+        if (includeLegacyUserTasks)
+            services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
+        else
+            services.AddPermissionContributor<RetainedWorkflowRuntimePermissionContributor>();
     }
 
     internal static void AddExecutableInspectionServices(this IServiceCollection services)

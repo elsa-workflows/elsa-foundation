@@ -6,7 +6,6 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,15 +35,15 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
 
     internal static void ConfigureRetainedServices(IServiceCollection services)
     {
-        services.AddWorkflowRuntimeApiHttpServices();
+        services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: false);
         services.AddExecutableInspectionServices();
         services.AddRunInspectionServices();
         services.AddDataProtection();
     }
 
-    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints, bool includeExecute = true, bool includeDelete = true)
+    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints, bool includeExecute, bool includeDelete, bool includeInputSources)
     {
-        WorkflowsRuntimeApi.MapRetainedEndpoints(endpoints, includeExecute, includeDelete);
+        WorkflowsRuntimeApi.MapRetainedEndpoints(endpoints, includeExecute, includeDelete, includeInputSources);
         MapKernelEndpoints(endpoints);
     }
 
