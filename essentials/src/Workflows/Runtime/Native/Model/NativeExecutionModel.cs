@@ -18,7 +18,7 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     public Type StateType => typeof(NativeState);
     private const int PreviousStateVersion = 14;
     private const int UserTaskStateVersion = 15;
-    public int StateVersion => _options.UserTaskOpenJobs is null ? PreviousStateVersion : UserTaskStateVersion;
+    public int StateVersion => _options.UserTaskJobs is null ? PreviousStateVersion : UserTaskStateVersion;
 
     /// <param name="workflow">The workflow to run (<see cref="Workflow.Id"/>).</param>
     /// <param name="definition">
@@ -41,7 +41,7 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         new() { Mode = JsonSerializer.Deserialize<NativeStart>(input ?? "{}")!.Mode };
 
     public object UpgradeState(string state, int fromVersion) =>
-        Upgrade(state, fromVersion, permitsUserTaskWaits: _options.UserTaskOpenJobs is not null);
+        Upgrade(state, fromVersion, permitsUserTaskWaits: _options.UserTaskJobs is not null);
 
     public string? ValidateMigration(Models.InstanceInfo source, object state, string target)
         => ValidateMigration(source, state, target, out _);
@@ -163,8 +163,8 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
 
     public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
     {
-        if (NativeUserTaskWaits.TryGetOpenWait(job.Key, out var wait))
-            return await OpenUserTaskAsync(job, wait, cancellationToken);
+        if (NativeUserTaskWaits.TryGetJob(job.Key, out var wait, out var settling))
+            return await ExecuteUserTaskJobAsync(job, wait, settling, cancellationToken);
         var args = JsonSerializer.Deserialize<BackgroundArgs>(job.Arguments!)!;
         if (args.ExecutableSelection is { } selection)
             return await ExecuteBackground(await SelectAsync(args.Workflow, selection, cancellationToken), job.Actor, args,
@@ -174,15 +174,25 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         return await ExecuteBackground(registry.Get(args.Workflow), job.Actor, args, cancellationToken, _options.Http, job.Tenant);
     }
 
-    private async ValueTask<NativeUserTaskWaits.Opened> OpenUserTaskAsync(Contract.IJob job, string wait, CancellationToken cancellationToken)
+    private async ValueTask<object?> ExecuteUserTaskJobAsync(Contract.IJob job, string wait, bool settling, CancellationToken cancellationToken)
     {
-        if (_options.UserTaskOpenJobs is not { } openJobs || job.Tenant is not { } tenant || string.IsNullOrWhiteSpace(tenant) ||
-            job.Arguments is not { } body || JsonSerializer.Deserialize<NativeUserTaskWaits.OpenArguments>(body) is not { } arguments ||
-            arguments.Recipient.Actor != job.Actor || arguments.Recipient.Wait != wait)
+        if (_options.UserTaskJobs is not { } jobs || job.Tenant is not { } tenant || string.IsNullOrWhiteSpace(tenant) ||
+            job.Arguments is not { } body)
             throw new InvalidOperationException("The job does not own this Actor user task wait.");
 
-        await openJobs.OpenAsync(tenant, arguments.Recipient, arguments.Request, cancellationToken);
-        return new(arguments.Recipient.TaskId);
+        if (settling && JsonSerializer.Deserialize<NativeUserTaskWaits.SettlementArguments>(body) is { } settlement &&
+            OwnsWait(settlement.Recipient))
+            return await jobs.SettleAsync(tenant, settlement.Recipient, settlement.CompletionId, cancellationToken);
+
+        if (!settling && JsonSerializer.Deserialize<NativeUserTaskWaits.OpenArguments>(body) is { } opening && OwnsWait(opening.Recipient))
+        {
+            await jobs.OpenAsync(tenant, opening.Recipient, opening.NodeId, opening.Request, cancellationToken);
+            return new NativeUserTaskWaits.Opened(opening.Recipient.TaskId);
+        }
+
+        throw new InvalidOperationException("The job does not own this Actor user task wait.");
+
+        bool OwnsWait(NativeUserTaskRecipient recipient) => recipient.Actor == job.Actor && recipient.Wait == wait;
     }
 
     internal static ValueTask<object?> ExecuteBackground(WorkflowRegistry registry, Contract.ActorRef actor,

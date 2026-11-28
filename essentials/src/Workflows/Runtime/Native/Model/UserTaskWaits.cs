@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
@@ -6,77 +9,131 @@ namespace Kernel.Native;
 /// <summary>The immutable recipient for one occurrence of a workflow user task.</summary>
 public sealed record NativeUserTaskRecipient(Contract.ActorRef Actor, string Frame, string Wait, string TaskId);
 
-/// <summary>Installs the task after its owning wait commits. A retry of the same recipient must return the same task.</summary>
-public interface INativeUserTaskOpenJobs
+/// <summary>Delivery of the accepted journal receipt to its exact Actor wait.</summary>
+public sealed record NativeUserTaskAccepted(NativeUserTaskRecipient Recipient, string CompletionId);
+
+/// <summary>The response material from the accepted and settled task journal row.</summary>
+public sealed record NativeUserTaskResponse(string TaskId, string CompletionId, string Action, JsonObject Data);
+
+/// <summary>Runs the durable task journal effects of a qualified Actor wait.</summary>
+public interface INativeUserTaskJobs
 {
-    ValueTask OpenAsync(string tenant, NativeUserTaskRecipient recipient, NativeUserTaskRequest request, CancellationToken cancellationToken);
+    /// <summary>Opens the task after its owning wait commits. The same recipient always names the same task.</summary>
+    ValueTask OpenAsync(string tenant, NativeUserTaskRecipient recipient, string nodeId, NativeUserTaskRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Settles the exact accepted reply after Actor acceptance. A repeat returns the same frozen reply.</summary>
+    ValueTask<NativeUserTaskResponse?> SettleAsync(string tenant, NativeUserTaskRecipient recipient, string completionId,
+        CancellationToken cancellationToken);
 }
 
 internal static class NativeUserTaskWaits
 {
     internal const string Kind = "user-task";
-    internal static readonly TimeSpan OpenTimeout = TimeSpan.FromMinutes(1);
+    internal static readonly TimeSpan JournalJobTimeout = TimeSpan.FromMinutes(1);
     private const string OpenJobPrefix = "native.user-task.open/";
+    private const string SettleJobPrefix = "native.user-task.settle/";
 
-    internal static bool TryGetOpenWait(string jobKey, out string wait)
+    internal static bool TryGetJob(string jobKey, out string wait, out bool settling)
     {
-        wait = jobKey.StartsWith(OpenJobPrefix, StringComparison.Ordinal) ? jobKey[OpenJobPrefix.Length..] : "";
+        settling = jobKey.StartsWith(SettleJobPrefix, StringComparison.Ordinal);
+        wait = settling ? jobKey[SettleJobPrefix.Length..] :
+            jobKey.StartsWith(OpenJobPrefix, StringComparison.Ordinal) ? jobKey[OpenJobPrefix.Length..] : "";
         return wait.Length != 0;
     }
 
     internal static string OpenJobKey(string wait) => OpenJobPrefix + wait;
+    internal static string SettleJobKey(string wait) => SettleJobPrefix + wait;
 
-    internal sealed record OpenArguments(NativeUserTaskRecipient Recipient, NativeUserTaskRequest Request);
+    internal sealed record OpenArguments(NativeUserTaskRecipient Recipient, string NodeId, NativeUserTaskRequest Request);
+    internal sealed record SettlementArguments(NativeUserTaskRecipient Recipient, string CompletionId);
     internal sealed record Opened(string TaskId);
+
+    internal static T? Read<T>(string? body) where T : class
+    {
+        try { return body is null ? null : JsonSerializer.Deserialize<T>(body); }
+        catch (JsonException) { return null; }
+    }
 }
 
 internal sealed partial class Burst
 {
     private bool CanOpenUserTask(Transition transition) =>
-        options.UserTaskOpenJobs is not null && turn.HasExactIdentity && turn.SavesWaitRecipes &&
+        options.UserTaskJobs is not null && turn.HasExactIdentity && turn.SavesWaitRecipes &&
         turn.TestScopeId is null && _s.Mode != Modes.Ephemeral &&
         transition.Triggers is [UserTaskWaitTrigger] && transition.Effects is null or [];
 
     private void RegisterUserTask(Frame frame, string wait, NativeUserTaskRequest request)
     {
-        var taskId = Kernel.Model.Contracts.EffectKey.For(turn.Actor.Id, frame.Id, wait, frame.Attempt);
+        var effectKey = Kernel.Model.Contracts.EffectKey.For(turn.Actor.Id, frame.Id, wait, frame.Attempt);
+        var taskId = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectKey)));
         var recipient = new NativeUserTaskRecipient(turn.Actor, frame.Id, wait, taskId);
-        var arguments = new NativeUserTaskWaits.OpenArguments(recipient, request);
-        var timeout = NativeUserTaskWaits.OpenTimeout;
-        var job = new Contract.JobSpec(NativeUserTaskWaits.OpenJobKey(wait), JsonSerializer.Serialize(arguments))
-        {
-            Deadline = checked(turn.Now + (long)timeout.TotalMilliseconds)
-        };
+        var arguments = new NativeUserTaskWaits.OpenArguments(recipient, frame.Node, request);
+        var job = StartUserTaskJob(NativeUserTaskWaits.OpenJobKey(wait), arguments);
         _s.Waits.Add(wait, new WaitEntry(frame.Id, NativeUserTaskWaits.Kind, taskId) { Job = job });
-        turn.StartUserTaskJob(job.Key, arguments, timeout);
     }
 
-    private bool HandleUserTaskOpen(Contract.JobFinished result)
+    private Contract.JobSpec StartUserTaskJob<T>(string key, T arguments) where T : class
     {
-        if (!NativeUserTaskWaits.TryGetOpenWait(result.Key, out var id)) return false;
+        var timeout = NativeUserTaskWaits.JournalJobTimeout;
+        turn.StartUserTaskJob(key, arguments, timeout);
+        return new(key, JsonSerializer.Serialize(arguments)) { Deadline = checked(turn.Now + (long)timeout.TotalMilliseconds) };
+    }
+
+    private void AcceptUserTask(string? payload)
+    {
+        if (options.UserTaskJobs is null || NativeUserTaskWaits.Read<NativeUserTaskAccepted>(payload) is not { } accepted ||
+            accepted.Recipient is not { } recipient || recipient.Actor != turn.Actor || string.IsNullOrEmpty(recipient.Wait) ||
+            string.IsNullOrWhiteSpace(accepted.CompletionId) || !_s.Waits.TryGetValue(recipient.Wait, out var wait) ||
+            wait.Kind != NativeUserTaskWaits.Kind || wait.Frame != recipient.Frame || wait.Key != recipient.TaskId ||
+            wait.AcceptedTaskCompletionId is { } prior && prior != accepted.CompletionId)
+            return;
+
+        wait = wait with { AcceptedTaskCompletionId = accepted.CompletionId };
+        _s.Waits[recipient.Wait] = wait;
+        // The task can be visible before its opening job reports back. Persist the accepted reply
+        // while that job owns its slot, then start settlement from that exact committed wait.
+        if (wait.Job is null && !_s.Agenda.Exists(work => work.Resume && !work.Gone && work.Wait == recipient.Wait))
+            StartSettlement(recipient.Wait, wait);
+    }
+
+    private void StartSettlement(string id, WaitEntry wait)
+    {
+        var recipient = new NativeUserTaskRecipient(turn.Actor, wait.Frame, id, wait.Key);
+        var arguments = new NativeUserTaskWaits.SettlementArguments(recipient, wait.AcceptedTaskCompletionId!);
+        _s.Waits[id] = wait with { Job = StartUserTaskJob(NativeUserTaskWaits.SettleJobKey(id), arguments) };
+    }
+
+    private bool HandleUserTaskJob(Contract.JobFinished result)
+    {
+        if (!NativeUserTaskWaits.TryGetJob(result.Key, out var id, out var settling)) return false;
         if (!_s.Waits.TryGetValue(id, out var wait) || wait.Kind != NativeUserTaskWaits.Kind || wait.Job?.Key != result.Key ||
             !_s.Frames.TryGetValue(wait.Frame, out var frame)) return true;
 
-        if (result.Error is null && result.Result is { } body && OpenedTaskId(body) == wait.Key)
+        _s.Waits[id] = wait with { Job = null };
+        if (settling)
         {
-            _s.Waits[id] = wait with { Job = null };
+            if (result.Error is not null) return true;
+            if (NativeUserTaskWaits.Read<NativeUserTaskResponse>(result.Result) is { } response &&
+                response.TaskId == wait.Key && response.CompletionId == wait.AcceptedTaskCompletionId)
+                Resume(id, Values.From(response));
+            else
+                _s.Waits[id] = wait with { Job = null, AcceptedTaskCompletionId = null };
             return true;
         }
 
-        _s.Waits.Remove(id);
-        Fail(frame, new ActivityFault("user-task.open-unavailable", "The user task could not be opened."));
-        return true;
-    }
+        if (wait.AcceptedTaskCompletionId is not null)
+        {
+            StartSettlement(id, wait);
+            return true;
+        }
 
-    private static string? OpenedTaskId(string body)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<NativeUserTaskWaits.Opened>(body)?.TaskId;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        if (result.Error is null && NativeUserTaskWaits.Read<NativeUserTaskWaits.Opened>(result.Result)?.TaskId == wait.Key)
+            return true;
+
+        // A failed or timed-out job may already have committed the journal record. Retain the
+        // exact wait so a later immutable response can still reach it.
+        turn.Record($"user-task.open-unconfirmed:{frame.Id}");
+        return true;
     }
 }

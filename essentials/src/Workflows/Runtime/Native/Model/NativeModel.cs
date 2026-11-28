@@ -16,6 +16,7 @@ public static class NativeKinds
     public const string Continue = "native.continue";   // a Durable boundary: the burst goes on in the next turn
     public const string Timer = "native.timer";         // a Delay is due
     public const string Resume = "native.resume";       // an outsider resumes a wait by its stimulus, without the event tables
+    public const string UserTaskAccepted = "native.user-task.accepted";
     public const string Cancel = "native.cancel";
 }
 
@@ -77,7 +78,7 @@ public class NativeExecutionOptions
     public bool StampPreparedHttpWaits { get; init; }
 
     /// <summary>Enables the private Actor user-task materialization protocol on a qualified host.</summary>
-    public INativeUserTaskOpenJobs? UserTaskOpenJobs { get; init; }
+    public INativeUserTaskJobs? UserTaskJobs { get; init; }
 
     /// <summary>
     /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
@@ -229,6 +230,9 @@ public sealed record WaitEntry(string Frame, string Kind, string Key, long Creat
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Contract.JobSpec? Job { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AcceptedTaskCompletionId { get; init; }
 }
 
 // ---- the model -----------------------------------------------------------------------------------------------------
@@ -328,6 +332,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 // Friction F-N3, fixed in the merge: the kernel says which wait a delivery is for.
                 if (turn.EventWait(m) is { } eventWait) Resume(eventWait, Values.Parse(m.Payload));
                 break;
+            case NativeKinds.UserTaskAccepted:
+                AcceptUserTask(m.Payload);
+                break;
             case NativeKinds.Resume:
             {
                 var stimulus = Read<ResumeStimulus>(m);
@@ -346,7 +353,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case Contract.Kinds.JobFinished:
             {
                 var finished = Read<Contract.JobFinished>(m);
-                if (!HandleUserTaskOpen(finished)) Resume(finished.Key, Values.From(finished));
+                if (!HandleUserTaskJob(finished)) Resume(finished.Key, Values.From(finished));
                 break;
             }
             case NativeKinds.Cancel:
