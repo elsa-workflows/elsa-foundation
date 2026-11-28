@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,7 +38,11 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
     {
         services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: false);
         services.AddExecutableInspectionServices();
-        services.AddRunInspectionServices();
+        services.AddRunInspectionServices(provider => new WorkflowRunInspection(
+            provider.GetRequiredService<IWorkflowInstanceDetailsService>(),
+            provider.GetRequiredService<IActivityExecutionInspectionService>(),
+            timeProvider: provider.GetRequiredService<TimeProvider>(),
+            executables: provider.GetRequiredService<IWorkflowExecutableInspection>()));
         services.AddDataProtection();
     }
 
