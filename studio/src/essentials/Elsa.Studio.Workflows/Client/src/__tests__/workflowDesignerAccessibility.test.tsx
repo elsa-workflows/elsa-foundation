@@ -9,13 +9,16 @@ import { WorkflowNodeContextToolbar } from "../workflow-editor/WorkflowNodeConte
 import { WorkflowEdgeActionsContext, WorkflowNodeActionsContext } from "../workflow-editor/contexts";
 import type { ActivityCatalogItem } from "../workflowTypes";
 
+const connectionState = vi.hoisted(() => ({ inProgress: false }));
+
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   return {
     ...actual,
     BaseEdge: () => <svg aria-hidden="true" />,
     EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    NodeToolbar: ({ children }: { children: React.ReactNode }) => <>{children}</>
+    NodeToolbar: ({ children, className }: { children: React.ReactNode; className?: string }) => <div className={className}>{children}</div>,
+    useConnection: (selector?: (state: { inProgress: boolean }) => unknown) => selector ? selector(connectionState) : connectionState
   };
 });
 
@@ -29,6 +32,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  connectionState.inProgress = false;
   flushSync(() => root.unmount());
   container.remove();
 });
@@ -384,6 +388,33 @@ describe("selected workflow node actions", () => {
     await nextFrame();
     expect(document.activeElement).toBe(add);
     expect(canvasKeyDown).not.toHaveBeenCalled();
+  });
+
+  it("keeps toolbar chrome from capturing pointers and disables actions while a connection drag is in progress", () => {
+    const actions = { selectedNodeCount: 1, canAddAfter: true, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn() };
+    const data = {
+      label: "Http Endpoint",
+      activityVersionId: "http-v1",
+      childSlots: [],
+      acceptsInbound: true,
+      sourcePorts: [{ name: "Done", displayName: "Done" }]
+    };
+    const renderToolbar = () => flushSync(() => root.render(
+      <WorkflowNodeActionsContext.Provider value={actions}>
+        <WorkflowNodeContextToolbar nodeId="endpoint" data={data} selected />
+      </WorkflowNodeActionsContext.Provider>
+    ));
+
+    renderToolbar();
+    const host = container.querySelector(".wf-node-context-toolbar-host")!;
+    expect(host).toBeTruthy();
+    expect(host.classList.contains("is-connecting")).toBe(false);
+    expect(container.querySelector(".wf-node-context-toolbar")).toBeTruthy();
+    expect(container.querySelector("button[aria-label='Duplicate Http Endpoint']")).toBeTruthy();
+
+    connectionState.inProgress = true;
+    renderToolbar();
+    expect(container.querySelector(".wf-node-context-toolbar-host")!.classList.contains("is-connecting")).toBe(true);
   });
 
   it("hides node actions for multiselection and canvases without authoring actions", () => {
