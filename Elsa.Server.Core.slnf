@@ -70,6 +70,7 @@
       "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
       "essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj",
       "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
+      "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj",
       "essentials/src/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj",
       "essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj",
       "essentials/src/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj",
