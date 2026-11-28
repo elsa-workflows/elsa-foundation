@@ -23,20 +23,23 @@ internal static class JavaScriptPromiseResults
         if (!value.IsPromise())
             return value;
 
-        // Continuations the script queued run as part of its own work, under the same limits. After this, reading the
-        // Promise runs nothing more: the zero wait below only reports its state.
+        // Continuations the script queued run as part of its own work, under the same limits.
         engine.Advanced.ProcessTasks();
+        // Reading the Promise must not wait: nothing is left that could settle it. A timeout cannot say so (Jint rejects
+        // the Promise with a "Timeout ... reached" text on expiry, which a real rejection could carry too, and a zero
+        // timeout waits without end), but a token cancelled up front returns or throws at once by the Promise's state.
+        using var noWait = new CancellationTokenSource();
+        noWait.Cancel();
         try
         {
-            return value.UnwrapIfPromise(TimeSpan.Zero);
+            return value.UnwrapIfPromise(noWait.Token);
         }
         catch (PromiseRejectedException rejected)
         {
             throw new JavaScriptException(rejected.RejectedValue);
         }
-        catch (InvalidOperationException)
+        catch (OperationCanceledException canceled) when (canceled.CancellationToken == noWait.Token)
         {
-            // Jint reports a Promise that is still pending this way.
             throw new PendingPromiseResultException();
         }
     }
