@@ -5544,38 +5544,13 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Api.AspNetCore",
-          "path": "essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Api.Capabilities",
           "path": "essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Events.Core",
-          "path": "essentials/src/Events/Core/Elsa.Events.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity.Core",
-          "path": "essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity",
-          "path": "essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Design.Persistence.Core",
-          "path": "essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Design.Validations.Core",
-          "path": "essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+          "id": "Elsa.Workflows.Dashboard.Retained",
+          "path": "essentials/src/Workflows/Dashboard/Retained/Elsa.Workflows.Dashboard.Retained.csproj"
         },
         {
           "type": "internal",
@@ -5603,14 +5578,14 @@
           "version": "0.0.1-preview.8"
         },
         {
-          "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
-        },
-        {
           "type": "pinned-transitive",
           "id": "Cronos",
           "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
         }
       ]
     },
@@ -5628,8 +5603,8 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Dashboard",
-          "path": "essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj"
+          "id": "Elsa.Workflows.Dashboard.Retained",
+          "path": "essentials/src/Workflows/Dashboard/Retained/Elsa.Workflows.Dashboard.Retained.csproj"
         },
         {
           "type": "internal",
@@ -5743,6 +5718,80 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "path": "essentials/src/Workflows/Dashboard/Retained/Elsa.Workflows.Dashboard.Retained.csproj",
+      "name": "Elsa.Workflows.Dashboard.Retained",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Dashboard.Retained",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Dashboard.Retained",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Persistence.Core",
+          "path": "essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
           "id": "ValenceWorks.MinimalEndpoints",
           "version": "1.0.0"
         }
@@ -7610,6 +7659,11 @@
           "path": "essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Publications",
+          "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
+        },
+        {
           "type": "external",
           "id": "ValenceWorks.MinimalEndpoints",
           "version": "1.0.0"
@@ -7979,13 +8033,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime",
-          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+          "id": "Elsa.Workflows.Runtime.KernelHost",
+          "path": "essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.KernelHost",
-          "path": "essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj"
+          "id": "Elsa.Workflows.Runtime.Persistence",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj"
         },
         {
           "type": "external",
@@ -8004,22 +8058,12 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "Cronos",
-          "version": "0.13.0"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Configuration",
           "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
         {
@@ -8162,8 +8206,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api",
-          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
+          "id": "Elsa.Workflows.Runtime.Api.Http",
+          "path": "essentials/src/Workflows/Runtime/Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj"
         },
         {
           "type": "internal",
@@ -8174,6 +8218,16 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.KernelHost",
           "path": "essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Publications",
+          "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
         },
         {
           "type": "external",
@@ -18430,6 +18484,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Api",
+          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj"
         },
         {
           "type": "internal",
