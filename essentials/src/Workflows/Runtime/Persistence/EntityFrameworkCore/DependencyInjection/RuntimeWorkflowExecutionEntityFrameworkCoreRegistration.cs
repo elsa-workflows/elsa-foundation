@@ -79,21 +79,3 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
     private static bool IsCoreFactory(ServiceDescriptor descriptor) => descriptor.ImplementationFactory is { } factory && (factory.Method.DeclaringType == typeof(RuntimeCoreServiceCollectionExtensions) || factory.Method.DeclaringType?.DeclaringType == typeof(RuntimeCoreServiceCollectionExtensions));
     private static void RemoveOwned(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> owned) { foreach (var descriptor in owned.Where(x => services.Contains(x) && RuntimeArtifactStoreBackend.Find(services)?.Owns(x) != true && RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(x) != true && BookmarkStateStoreBackend.Find(services)?.Owns(x) != true && RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(x) != true && WorkflowTestScopeStoreBackend.Find(services)?.Owns(x) != true && RuntimeOperationalStateStoreBackend.Find(services)?.Owns(x) != true)) services.Remove(descriptor); }
 }
-
-public sealed class RuntimeWorkflowExecutionEntityFrameworkCoreOptions
-{
-    public string Provider { get; set; } = "Sqlite";
-    public string? ConnectionString { get; set; }
-    public string? ConnectionName { get; set; }
-
-    /// <summary>
-    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
-    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
-    /// on MySQL, where a schema is a database.
-    /// </summary>
-    public string? Schema { get; set; }
-
-    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
-    public bool Pooling { get; set; }
-    public string? RecoveryContinuationSigningKey { get; set; }
-}

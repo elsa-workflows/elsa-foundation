@@ -410,7 +410,7 @@ public sealed class EfWorkflowTriggerBindingStore(
 
     /// <summary>
     /// The population <see cref="ListByStimulusTypeAsync"/> pages, projected to its stimulus identities in the database
-    /// under the two rules <see cref="EfBookmarkStateStore.ListWaitingStimulusHashesByTypeAsync"/> explains, over
+    /// under the two rules the bookmark stimulus lookup uses, over
     /// <see cref="RuntimeTriggerBindingEfModule.RouteConvergenceIndexName"/>.
     /// </summary>
     public async ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default)

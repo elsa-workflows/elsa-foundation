@@ -1095,6 +1095,7 @@ public sealed class EfCoreDependencyGuardTests
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
                 ["essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["essentials/src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj"] = CorePackages(),
                 ["essentials/src/Workflows/Runtime/Persistence/Schema/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore.csproj"] = CorePackages(),
                 ["essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [

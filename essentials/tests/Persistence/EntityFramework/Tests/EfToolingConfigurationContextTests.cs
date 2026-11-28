@@ -19,6 +19,7 @@ public sealed class EfToolingConfigurationContextTests
     [
         typeof(RuntimeDbContext).Assembly,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
+        typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsRuntimeResumptionFeature).Assembly,
         typeof(TasksFeature).Assembly
     ];

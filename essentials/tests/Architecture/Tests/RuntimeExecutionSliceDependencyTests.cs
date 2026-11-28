@@ -1,9 +1,11 @@
 using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHosting;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -66,6 +68,14 @@ public sealed class RuntimeExecutionSliceDependencyTests
         foreach (var module in new[] { typeof(WorkflowsRuntimeKernelRetainedApiFeature), typeof(WorkflowsRuntimeKernelHostingFeature) })
             Assert.DoesNotContain(module.Assembly.GetReferencedAssemblies(),
                 reference => reference.Name == "Elsa.Workflows.Runtime");
+    }
+
+    [Fact]
+    public void ArtifactAndPublishingEf_DoNotReferenceClassicRuntimePersistence()
+    {
+        foreach (var module in new[] { typeof(RuntimeArtifactsEntityFrameworkCoreFeature), typeof(PublishingEntityFrameworkCoreFeature) })
+            Assert.DoesNotContain(module.Assembly.GetReferencedAssemblies(),
+                reference => reference.Name is "Elsa.Workflows.Runtime" or "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore");
     }
 
     [Fact]
