@@ -9,8 +9,8 @@
           "ActivitiesBpmnInterchange": {},
           "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
-          "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesDesignApi": {},
+          "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesGraphDesign": {},
           "ActivitiesDesignReconciliation": {},
           "ActivitiesFlowchart": {},
@@ -31,7 +31,6 @@
           "DiagnosticsStructuredLogsEntityFrameworkCore": {
             "ConnectionString": "Data Source=elsa-diagnostics.db"
           },
-          "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
           "Events": {},
           "Expressions": {},

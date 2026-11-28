@@ -32,9 +32,11 @@ if (args is ["workbench-http-waits", var waitsProvider and ("sqlite" or "postgre
         gated: waitsMode is ["gated"], stock: waitsMode is ["stock"]);
     return 0;
 }
-if (args is ["workbench-shipped-children", var childrenProvider and ("sqlite" or "postgres"), var childrenWorkbench])
+if (args is ["workbench-shipped-children", var childrenProvider and ("sqlite" or "postgres"), var childrenWorkbench, .. var childrenMode] &&
+    childrenMode is [] or ["stock"])
 {
-    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedChildrenAsync(childrenWorkbench, childrenProvider == "postgres");
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedChildrenAsync(
+        childrenWorkbench, childrenProvider == "postgres", stock: childrenMode is ["stock"]);
     return 0;
 }
 if (args is ["workbench-terminal-output", var outputsProvider and ("sqlite" or "postgres"), var outputsWorkbench, .. var outputMode] &&

@@ -21,7 +21,10 @@ import {
 // Spec 261 adds a scheduled retry: a scope with a handler retry delay shows "Retry scheduled" with its attempt and due
 // time, offers no action while it waits, and needs action once the attempts run out.
 
-test.skip(!process.env.ELSA_STUDIO_URL, "Set ELSA_STUDIO_URL to a running Studio connected to a Workbench.");
+test.skip(
+  process.env.ELSA_CLASSIC_COMPENSATION_LIVE !== "1" || !process.env.ELSA_STUDIO_URL,
+  "Set ELSA_CLASSIC_COMPENSATION_LIVE=1 and ELSA_STUDIO_URL for an owned classic Workbench and Studio pair."
+);
 test.describe.configure({ mode: "serial" });
 
 let designerUrl = "";

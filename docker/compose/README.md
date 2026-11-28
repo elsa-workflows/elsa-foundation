@@ -383,7 +383,6 @@ container on one database needs the same one.
 
 ## 7. Troubleshooting
 
-The common failure modes — `FeatureNotFoundException: WorkflowsRuntimeResumption`, the
-`Failed to connect to 127.0.0.1:5432` connection-string binding issue, and Studio CORS / backend
-connectivity errors — are documented in
+Troubleshooting covers classic mounted shells that request `WorkflowsRuntimeResumption`,
+`Failed to connect to 127.0.0.1:5432` connection-string binding, and Studio or CORS connectivity in
 [`docs/docker.md`](../../docs/docker.md#troubleshooting). Start there.

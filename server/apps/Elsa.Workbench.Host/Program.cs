@@ -78,14 +78,10 @@ using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Json;
 using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
-using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
-using Elsa.Workflows.Runtime.Resumption;
-using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.Extensions.Configuration.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -198,8 +194,6 @@ builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
 builder.Services.AddSingleton<DefaultShellWarmup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
 #if ELSA_DASHBOARD_QUALIFICATION
-ActivityPlaybackQualificationControls.Register(builder.Services);
-HistoryQualificationControls.Register(builder.Services);
 builder.Services.AddSingleton<DashboardQualificationBootstrap>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());
 builder.Services.AddSingleton<IShellServiceExclusionProvider>(new DashboardQualificationServiceExclusions());
@@ -294,7 +288,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(ActivitiesDesignApiFeature).Assembly,
 
             // Construction seam (Runtime side): the dispatch factory and stable CLR/graph consumers.
-            typeof(ActivitiesRuntimeFeature).Assembly,
+            typeof(ActivitiesRuntimeHostingFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
             typeof(ActivitiesSequenceFeature).Assembly,
             typeof(ActivitiesFlowchartFeature).Assembly,
@@ -320,25 +314,16 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,
+            typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
-            typeof(WorkflowsRuntimeApiFeature).Assembly,
             typeof(StandaloneTriggersApiFeature).Assembly,
+            typeof(Elsa.Workflows.Runtime.Scheduling.WorkflowsRuntimeScheduleCalculationFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeDbContext).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Activities.Bpmn.ActivitiesBpmnHostingFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.ActivitiesBpmnFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature).Assembly,
-            typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature).Assembly,
-
-            // Durable-resumption pump. Every EF Core persistence provider DependsOn this feature, so
-            // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
-            // composed; without it the shell fails to activate with a FeatureNotFoundException.
-            typeof(WorkflowsRuntimeResumptionFeature).Assembly,
-
-            // Reference GC pump. Opt-in like resumption; its assembly is in the catalog so the feature can
-            // be enabled to periodically prune expired/retired references and the artifacts no live reference points at.
-            typeof(WorkflowsRuntimeReferenceGarbageCollectionFeature).Assembly,
 
             // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
             typeof(WeaverFeature).Assembly,
@@ -384,7 +369,6 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Weaver.Dashboard.DashboardWeaverFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
-            typeof(WorkflowsDashboardFeature).Assembly,
             typeof(WorkflowsDashboardRetainedFeature).Assembly,
             // WorkflowsDashboard DependsOn WorkflowDesignValidations — its assembly must be in the catalog or the
             // dependency resolver fails shell activation with FeatureNotFoundException.
@@ -398,17 +382,11 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Decisions.Design.DecisionsDesignFeature).Assembly,
             typeof(Elsa.Decisions.Api.DecisionsApiFeature).Assembly,
             typeof(Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Decisions.Workflows.Design.DecisionsWorkflowsDesignFeature).Assembly,
-            typeof(Elsa.Decisions.Workflows.Runtime.DecisionsWorkflowsRuntimeFeature).Assembly,
-            typeof(Elsa.Decisions.Workflows.Api.DecisionsWorkflowsApiFeature).Assembly,
             typeof(ConnectionsApiFeature).Assembly,
             // Available for durable local/model connections when explicitly selected in the shell.
             typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature).Assembly,
             typeof(ConnectionsDesignFeature).Assembly,
             typeof(ConnectionsWorkflowsFeature).Assembly,
-            // The generic human review wait for user-defined agents and its decision API.
-            typeof(Elsa.Agent.Review.AgentReviewFeature).Assembly,
-            typeof(Elsa.Agent.Review.Api.AgentReviewApiFeature).Assembly,
             // User-defined agents: authoring, the editor's model reads and the model connection types.
             typeof(Elsa.Agent.Design.AgentDesignFeature).Assembly,
             typeof(Elsa.Agent.Api.AgentApiFeature).Assembly,
@@ -419,30 +397,18 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Agent.AgentRuntimeFeature).Assembly,
             typeof(Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Agent.Inspection.Api.AgentInspectionApiFeature).Assembly,
-            // Opt-in finite ETL authoring, native execution and independent runtime inspection.
+            // Opt-in ETL authoring, execution and inspection for standalone ETL applications.
             typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
             typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,
             typeof(Elsa.Etl.Runtime.EtlRuntimeFeature).Assembly,
             typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature).Assembly,
             typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature).Assembly,
-            typeof(Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature).Assembly,
             // Opt-in durable Rules. Package qualification references these same host assemblies from NuGet;
             // the configured deployment receipt must still match the active package graph and loaded assets.
             typeof(Elsa.Rules.Runtime.RulesRuntimeFeature).Assembly,
             typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesRuntimeEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Rules.Workflows.Design.RulesWorkflowsDesignFeature).Assembly,
-            typeof(Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature).Assembly,
-            typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,
-
-            // Engine self-instrumentation: puts the WorkflowsRuntimeTracing feature in the catalog so it can be
-            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The
-            // DiagnosticsOpenTelemetryEngineBridge feature (Elsa.Diagnostics.OpenTelemetry.Workflows, a project reference
-            // WithHostAssemblies() discovers) subscribes that source and forwards the spans into the OpenTelemetry
-            // ingestion store so Studio's timing view is populated.
-            typeof(WorkflowsRuntimeTracingFeature).Assembly,
 
             // Test-host execution evidence: puts the WorkflowsExecutionEvidence feature in the catalog so an automated
             // test suite can query what a workflow actually did over HTTP. Process-local and non-durable by design.
@@ -514,8 +480,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 #if ELSA_DASHBOARD_QUALIFICATION
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), "default", configuration);
-HistoryQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());
-ActivityPlaybackQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());
 // Shell middleware replaces request services; the bootstrap is owned by the root host.
 var dashboardQualification = app.Services.GetRequiredService<DashboardQualificationBootstrap>();
 app.MapGet(DashboardQualificationBootstrap.ReadinessPath, () => dashboardQualification.Ready

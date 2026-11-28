@@ -26,7 +26,6 @@
           },
           "DiagnosticsConsoleLogStreaming": {},
           "DiagnosticsOpenTelemetry": {},
-          "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsOpenTelemetryEntityFrameworkCore": {
             "Provider": "PostgreSql",
             "ConnectionName": "Elsa"

@@ -18,9 +18,19 @@ public sealed record WorkbenchShell(
 
     public static readonly WorkbenchShell Development = new("Development", "shells.json", null, new Dictionary<string, string>());
 
-    internal static readonly WorkbenchShell LegacyRuntime = Development with { UseLegacyRuntime = true };
-
-    internal bool UseLegacyRuntime { get; init; }
+    // Configuration attestation exercises live shell replacement without an owned workflow engine.
+    public static readonly WorkbenchShell Reloadable = Development with
+    {
+        Settings = new Dictionary<string, string>
+        {
+            ["DOTNET_USE_POLLING_FILE_WATCHER"] = "true",
+            [$"{FeaturesPath}:ActorHttpConnections"] = "false",
+            [$"{FeaturesPath}:KernelActivitiesHttp"] = "false",
+            [$"{FeaturesPath}:KernelWorkflowDashboardQueries"] = "false",
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelHosting"] = "false",
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelRetainedApi"] = "false"
+        }
+    };
 
     public static readonly WorkbenchShell Baseline = new("Development", "shells.baseline.json", null, new Dictionary<string, string>());
 

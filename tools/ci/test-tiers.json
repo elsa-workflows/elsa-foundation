@@ -33,7 +33,7 @@
     {
       "project": "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
       "tier": "integration",
-      "medianMinutes": 49.4,
+      "medianMinutes": null,
       "trait": "child-process"
     },
     {
@@ -516,7 +516,7 @@
       "project": "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
       "tier": "integration",
       "trait": "child-process",
-      "medianMinutes": 27.62
+      "medianMinutes": null
     },
     {
       "project": "essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj",
@@ -714,18 +714,6 @@
       "medianMinutes": 0.06
     },
     {
-      "project": "extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj",
-      "tier": "integration",
-      "medianMinutes": null,
-      "trait": "child-process"
-    },
-    {
-      "project": "extensions/Rules/tests/Hosting/Tests/Elsa.Rules.Hosting.Tests.csproj",
-      "tier": "integration",
-      "medianMinutes": null,
-      "trait": "child-process"
-    },
-    {
       "project": "extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
       "tier": "pr",
       "trait": "child-process",
@@ -822,21 +810,6 @@
     }
   ],
   "splits": {
-    "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj": {
-      "groups": [
-        {
-          "name": "workbench-native-hosting",
-          "classes": [
-            "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests",
-            "Elsa.Workbench.Tests.WorkbenchProcessTests"
-          ]
-        },
-        {
-          "name": "workbench-rest",
-          "rest": true
-        }
-      ]
-    },
     "essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj": {
       "groups": [
         {
@@ -874,25 +847,6 @@
         },
         {
           "name": "compensation-rest",
-          "rest": true
-        }
-      ]
-    },
-    "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj": {
-      "groups": [
-        {
-          "name": "bpmn-hosting-journeys",
-          "classes": [
-            "Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests",
-            "Elsa.Activities.Bpmn.Hosting.Tests.SignalWorkbenchTests",
-            "Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests",
-            "Elsa.Activities.Bpmn.Hosting.Tests.InstantBpmnWorkbenchTests",
-            "Elsa.Activities.Bpmn.Hosting.Tests.LegacyBroadcastUpgradeTests",
-            "Elsa.Activities.Bpmn.Hosting.Tests.LegacyNativeParentUpgradeTests"
-          ]
-        },
-        {
-          "name": "bpmn-hosting-rest",
           "rest": true
         }
       ]
@@ -1031,15 +985,9 @@
     ],
     "integration": [
       {
-        "name": "workbench-native-hosting",
+        "name": "workbench",
         "units": [
-          "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj#workbench-native-hosting"
-        ]
-      },
-      {
-        "name": "workbench-rest",
-        "units": [
-          "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj#workbench-rest"
+          "essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj"
         ]
       },
       {
@@ -1058,22 +1006,9 @@
         ]
       },
       {
-        "name": "bpmn-hosting-journeys",
+        "name": "bpmn-runtime-snapshot-reader",
         "units": [
-          "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj#bpmn-hosting-journeys"
-        ]
-      },
-      {
-        "name": "bpmn-hosting-rest",
-        "units": [
-          "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj#bpmn-hosting-rest"
-        ]
-      },
-      {
-        "name": "workbench-extensions-hosting",
-        "units": [
-          "extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj",
-          "extensions/Rules/tests/Hosting/Tests/Elsa.Rules.Hosting.Tests.csproj"
+          "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
         ]
       }
     ],
@@ -1284,11 +1219,5 @@
     "project": "extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj"
   },
   "slowAllowList": [],
-  "quarantine": [
-    {
-      "test": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation",
-      "issue": 3260,
-      "since": "2026-10-22"
-    }
-  ]
+  "quarantine": []
 }

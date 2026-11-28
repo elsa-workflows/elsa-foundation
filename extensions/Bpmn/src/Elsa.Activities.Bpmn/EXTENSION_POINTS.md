@@ -2,7 +2,7 @@
 
 ## Runtime integration
 
-[`IBpmnProcessRuntime`](Contracts/IBpmnProcessRuntime.cs) is the scoped replacement boundary consumed by `BpmnProcess`. `ActivitiesBpmnFeature` uses `TryAddScoped`; an explicit registration before the feature replaces the internal default `BpmnProcessRuntime`. Shell startup rejects competing runtime registrations.
+[`IBpmnProcessRuntime`](../Composite/Contracts/IBpmnProcessRuntime.cs) is the scoped replacement boundary consumed by `BpmnProcess`. `ActivitiesBpmnFeature` uses `TryAddScoped`; an explicit registration before the feature replaces the internal default `BpmnProcessRuntime`. Shell startup rejects competing runtime registrations.
 
 The contract's StartAsync, CompleteAsync, FaultAsync, SignalAsync, ControlAsync and OutcomeAsync operations return Foundation `RuntimeStructuralContinuation` values. A replacement integrates a Foundation runtime context with the released BPMN interpreter. It must preserve the [compatibility contract](../../../../specs/1006-bpmn-library-adoption/contracts/compatibility.md), exact durable child/semantic-token identity, command ordering and transactional state/owed-work staging. The library remains the semantic authority.
 

@@ -12,20 +12,24 @@ namespace Elsa.Workbench.Qualification;
 
 internal static partial class WorkbenchPostgresPreview
 {
-    internal static async Task RunShippedChildrenAsync(string executable, bool postgres)
+    internal static async Task RunShippedChildrenAsync(string executable, bool postgres, bool stock)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var token = deadline.Token;
         var workspace = Directory.CreateTempSubdirectory("elsa-workbench-children-");
         var sqlite = postgres ? null : Path.Combine(workspace.FullName, "kernel.sqlite");
+        var connectionKey = stock ? "KERNEL_WORKBENCH_ACTOR_POSTGRES" : "KERNEL_PREVIEW_POSTGRES";
         var connection = postgres
-            ? Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ?? throw new InvalidOperationException("Supply a disposable PostgreSQL database.")
+            ? Environment.GetEnvironmentVariable(connectionKey) ?? throw new InvalidOperationException("Supply a disposable PostgreSQL database.")
             : "";
         try
         {
-            using var host = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace);
+            using var host = stock
+                ? WorkbenchProcess.StartStock(executable, workspace, sqlite)
+                : WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace);
             await host.WaitReadyAsync(token);
-            await host.WaitForKernelServingAsync(token);
+            if (!stock)
+                await host.WaitForKernelServingAsync(token);
             var address = new Uri(await host.ListeningAsync(token));
             Require(address.IsLoopback && address.Port != 5095, "the Workbench uses a dedicated loopback listener");
             using var client = new HttpClient(new HttpClientHandler { CookieContainer = new(), AllowAutoRedirect = false }) { BaseAddress = address };
