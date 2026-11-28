@@ -268,7 +268,7 @@ public sealed class Elsa3ExpressionRewriterTests
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Issues, issue => issue.Message.StartsWith("JavaScript sets a member of the value 'getCorrelationId()' returns.", StringComparison.Ordinal));
+        Assert.Contains(result.Issues, issue => issue.Message.StartsWith("JavaScript may change a member reached through the value 'getCorrelationId()' returns.", StringComparison.Ordinal));
         Assert.Contains(result.Issues, issue => issue.Message == otherMessage);
     }
 

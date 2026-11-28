@@ -3501,15 +3501,15 @@ public sealed class Elsa3ExpressionRewriter(
             !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, reader.Name["get".Length..])).Succeeded;
 
         /// <summary>
-        /// The refusal of a change through the value <paramref name="reader"/> returns (text or null): a member change, which
-        /// Elsa 3 ignored or failed on and Elsa 4's strict mode throws on, or an assignment to the value itself, which failed in
-        /// Elsa 3 and which the conversion does not reproduce.
+        /// The refusal of a change through the value <paramref name="reader"/> returns (text or null): a change of a member
+        /// reached through it (possibly, where the value comes through a branch), or an assignment to the value itself, which
+        /// failed in Elsa 3. Neither is reproduced.
         /// </summary>
         private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader, bool changesMember) => changesMember
             ? new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                $"JavaScript sets a member of the value '{reader}()' returns. The value is text (or null): Elsa 3 ignored the change " +
-                "or failed on it, and Elsa 4 runs scripts in strict mode, where it throws.",
+                $"JavaScript may change a member reached through the value '{reader}()' returns. That value is the workflow instance's " +
+                "text (or null), which scripts only read; the conversion refuses the change rather than guess what it did in Elsa 3.",
                 "Remove the change, or keep the member on a local object of the script's own, in the Elsa 3 workflow before import.")
             : new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
