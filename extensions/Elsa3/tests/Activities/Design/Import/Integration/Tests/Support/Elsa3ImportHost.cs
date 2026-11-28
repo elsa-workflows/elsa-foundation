@@ -263,6 +263,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(ApiCapabilitiesFeature).Assembly,
                     typeof(TasksFeature).Assembly,
                     typeof(ActivitiesRuntimeFeature).Assembly,
+                    typeof(ActivitiesRuntimeHostingFeature).Assembly,
                     typeof(ActivitiesPrimitivesFeature).Assembly,
                     typeof(ActivitiesSequenceFeature).Assembly,
                     typeof(ActivitiesFlowchartFeature).Assembly,
@@ -270,7 +271,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(Elsa.Activities.DispatchWorkflow.Design.DispatchWorkflowDesignFeature).Assembly,
                     typeof(Elsa.Activities.DispatchWorkflow.Runtime.DispatchWorkflowRuntimeFeature).Assembly,
                     typeof(GraphActivitiesDesignFeature).Assembly,
-                    typeof(GraphActivitiesRuntimeFeature).Assembly,
+                    typeof(GraphActivitiesRuntimeHostingFeature).Assembly,
                     typeof(ActivitiesDesignApiFeature).Assembly,
                     typeof(ActivitiesDesignEntityFrameworkCoreFeature).Assembly,
                     typeof(ActivitiesDesignReconciliationFeature).Assembly,
@@ -286,7 +287,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                     typeof(WorkflowsRuntimeRecurringTriggersFeature).Assembly,
                     typeof(WorkflowsRuntimeSchedulingFeature).Assembly,
-                    typeof(Elsa.Activities.Scheduling.ActivitiesSchedulingFeature).Assembly,
+                    typeof(WorkflowsRuntimeScheduleCalculationFeature).Assembly,
+                    typeof(Elsa.Activities.Scheduling.KernelActivitiesSchedulingFeature).Assembly,
                     typeof(Elsa.Http.HttpFeature).Assembly,
                     typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature).Assembly,
                     typeof(Elsa.Activities.Http.ActivitiesHttpFeature).Assembly,
@@ -357,7 +359,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         foreach (var feature in Features
                      .Concat(withPublishing ? ["Elsa3ImportActivitiesPublishing"] : [])
                      .Concat(withPublishSeam ? [Elsa3ImportPublishSeamFeature.Name] : [])
-                     .Concat(withScheduling ? ["ActivitiesScheduling"] : [])
+                     .Concat(withScheduling ? ["KernelActivitiesScheduling", "WorkflowsRuntimeScheduling"] : [])
                      .Concat(withHttp ? ["ActivitiesHttp"] : []))
             settings.TryAdd($"{features}{feature}", null);
         return settings;
@@ -385,7 +387,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         "ActivitiesDispatchWorkflowDesign",
         "ActivitiesDispatchWorkflowRuntime",
         "ActivitiesGraphDesign",
-        "ActivitiesGraphRuntime",
+        "ActivitiesGraphRuntimeHosting",
         "ActivitiesDesignApi",
         "ActivitiesDesignEntityFrameworkCore",
         "ActivitiesDesignReconciliation",

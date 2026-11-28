@@ -6,7 +6,7 @@ The [operator guide](../../../../../docs/standalone-triggers.md) owns resource/A
 
 ## Composition and occurrence handling
 
-Select `StandaloneScheduleTriggerAuthoring` for Timer/Cron metadata and validation. Select `StandaloneScheduleTriggers` for `ScheduleResourcePlanner`, producer-bound Timer/Cron intake and `ScheduleResourceSource`; it depends on `WorkflowsRuntimeRecurringTriggers`. The latter supplies the existing recurring pump and depends on Runtime triggers and Tasks. Keep the ordinary scheduling, selected protected Runtime storage and recovery composition. `ActivitiesScheduling` supplies embedded activity schedules and does not install this standalone source feature.
+Select `StandaloneScheduleTriggerAuthoring` for Timer/Cron metadata and validation. Select `PreparedStandaloneScheduleTriggers` for `ScheduleResourcePlanner`, producer-bound Timer/Cron intake and `ScheduleResourceSource`. Its `WorkflowsRuntimePreparedStandaloneRecurringTriggers` dependency supplies the recurring pump for prepared Actor Foundation delivery. `KernelActivitiesScheduling` supplies authored Delay, Timer and Cron and their isolated Test Run drivers. Classic scheduler configurations use the [pinned Workbench source](../../../../../docs/contributing/workbench-compatibility-tests.md).
 
 Timer configuration is `{ "interval": "PT5M" }` (a positive ISO-8601 duration or invariant `TimeSpan`). Cron configuration is `{ "expression": "0 17 * * 1-5", "timezone": "Europe/Amsterdam" }`; five fields omit seconds, six include seconds first. Use timezone IDs installed consistently on every participating host. No `http` options apply to either family.
 

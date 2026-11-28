@@ -1,36 +1,12 @@
 using System.Globalization;
 using System.Text.Json;
-using CShells.Features;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Scheduling;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.Scheduling.StandaloneTriggers;
-
-/// <summary>Resource-owned Timer/Cron intake through the ordinary recurring schedule store and pump.</summary>
-[ShellFeature(name: "StandaloneScheduleTriggers", DisplayName = "Standalone schedule triggers",
-    Description = "Run independent Timer and Cron resources through the shared recurring schedule pump.",
-    DependsOn = new object[] { "WorkflowsRuntimeRecurringTriggers" })]
-public class StandaloneScheduleTriggersFeature : IShellFeature
-{
-    public virtual void ConfigureServices(IServiceCollection services) => AddServices(services);
-
-    internal static void AddServices(IServiceCollection services)
-    {
-        services.AddStandaloneTriggerIngress<TimerScheduleSource>(new("timer", 1, ScheduleSourceContext.TimerFamily, ScheduleSourceContext.Schema));
-        services.AddStandaloneTriggerIngress<CronScheduleSource>(new("cron", 1, ScheduleSourceContext.CronFamily, ScheduleSourceContext.Schema));
-        services.TryAddScoped<ScheduleSourceContext>();
-        services.TryAddScoped<IStandaloneTriggerSourceContext<TimerScheduleSource>>(provider => provider.GetRequiredService<ScheduleSourceContext>());
-        services.TryAddScoped<IStandaloneTriggerSourceContext<CronScheduleSource>>(provider => provider.GetRequiredService<ScheduleSourceContext>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStandaloneSchedulePlanner, ScheduleResourcePlanner>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStandaloneScheduleSource, ScheduleResourceSource>());
-    }
-}
 
 internal sealed class TimerScheduleSource;
 internal sealed class CronScheduleSource;

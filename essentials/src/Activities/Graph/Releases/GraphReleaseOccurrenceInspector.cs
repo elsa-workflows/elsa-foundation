@@ -14,6 +14,8 @@ namespace Elsa.Activities.Graph.Releases;
 internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader reader) : IReleaseOccurrenceInspector
 {
     private const string ProviderKey = "elsa.activity-graph";
+    // This release fact is part of the immutable manifest. Shell feature activation uses ActivitiesGraphRuntimeHosting.
+    private const string GraphRuntimePrerequisite = "ActivitiesGraphRuntime";
     private static bool SupportsCompiler(string fingerprint) => fingerprint is "elsa.activity-graph/compiler/4.0.0" or "elsa.activity-graph/compiler/5.0.0" or "elsa.activity-graph/compiler/5.1.0";
     private static readonly string[] PlanFields = ["planSchemaVersion", "entryOccurrenceId", "occurrences", "variables", "outputMappings", "inputs", "outputs",
         "inputReferenceKeys", "outputReferenceKeys", "requiredInputReferenceKeys", "requiredOutputReferenceKeys", "scopeModel", "outcomeMappings", "completeOutcomes"];
@@ -94,8 +96,8 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
             }
             ValidatePlan(captured, content);
             if (site.Site.SiteKind != ReleaseRuntimeSiteKinds.Descriptor) return ValueTask.FromResult(new ReleaseOccurrenceFacts(ReleaseSemanticStatus.Verified));
-            var key = JsonSerializer.Serialize(new object?[] { site.Member.Kind, site.Member.Identity, site.Origin, site.Node, "activity-module", "ActivitiesGraphRuntime" });
-            return ValueTask.FromResult(new ReleaseOccurrenceFacts(ReleaseSemanticStatus.Verified, prerequisites: [new(key, site.Member, "activity-module", "ActivitiesGraphRuntime", "opaque", "required")]));
+            var key = JsonSerializer.Serialize(new object?[] { site.Member.Kind, site.Member.Identity, site.Origin, site.Node, "activity-module", GraphRuntimePrerequisite });
+            return ValueTask.FromResult(new ReleaseOccurrenceFacts(ReleaseSemanticStatus.Verified, prerequisites: [new(key, site.Member, "activity-module", GraphRuntimePrerequisite, "opaque", "required")]));
         }
         catch (OperationCanceledException) { throw; }
         catch (ProfileException exception) { return ValueTask.FromResult(Failed(exception.Code)); }

@@ -31,7 +31,7 @@ public sealed class StandaloneScheduleSourcesTests
             ((ProbeFactory)factory).Services = provider;
             return factory;
         });
-        new StandaloneScheduleTriggersFeature().ConfigureServices(services);
+        new PreparedStandaloneScheduleTriggersFeature().ConfigureServices(services);
         return services.BuildServiceProvider();
     }
 

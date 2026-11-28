@@ -366,7 +366,7 @@ public sealed class GraphBoundaryCompleteTests
 
     internal static WorkflowExecutionHarness NewHarness() =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))

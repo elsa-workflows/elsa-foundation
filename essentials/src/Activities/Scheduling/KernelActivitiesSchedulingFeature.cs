@@ -22,6 +22,16 @@ public sealed class KernelActivitiesSchedulingFeature : IShellFeature
     {
         services.TryAddSingleton<KernelWorkflowScheduleActivities>();
         services.TryAddSingleton<KernelTimerTestRunIntervalPolicy>();
-        ActivitiesSchedulingFeature.ConfigureAuthoredActivities(services);
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Scoped<ITestRunTriggerDriver, TimerTestRunDriver>(),
+            ServiceDescriptor.Scoped<ITestRunTriggerDriver, CronTestRunDriver>()
+        });
+
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, TimerTriggerStimulusProvider>(),
+            ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, CronTriggerStimulusProvider>()
+        });
     }
 }

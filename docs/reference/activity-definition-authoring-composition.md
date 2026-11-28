@@ -10,7 +10,7 @@ and [specification 220](../../specs/221-reusable-activity-definitions/spec.md).
 |---|---|---|
 | Provider-neutral Activity Definition authoring | `Elsa.Activities.Design.Api` | `ActivitiesDesignApi` |
 | Activity Graph authoring, validation, and compilation | `Elsa.Activities.Graph.Design` | `ActivitiesGraphDesign` |
-| Published Activity Graph execution | `Elsa.Activities.Graph.Runtime` | `ActivitiesGraphRuntime` |
+| Published Activity Graph execution | `Elsa.Activities.Graph.Runtime` | `ActivitiesGraphRuntimeHosting` |
 
 `ActivitiesGraphDesign` depends on `ActivitiesDesignApi` and `WorkflowsPublishing` — the endpoint-free
 publish engine, not the `WorkflowsPublishingApi` transport, so an authoring host composes the graph
@@ -23,10 +23,11 @@ default shell supports authoring and execution. A custom authoring host opts in 
 `ActivitiesGraphDesign` in that shell. Enable the feature once; do not also register
 `GraphActivityProvider` manually.
 
-A runtime-only host can catalog and enable `ActivitiesGraphRuntime` without referencing or enabling
+A runtime-only host can catalog and enable `ActivitiesGraphRuntimeHosting` without referencing or enabling
 the Design project. Conversely, an authoring host that intentionally does not support Activity Graph
 authoring omits `ActivitiesGraphDesign`; the authoring-capabilities response then does not advertise
-that provider.
+that provider. Existing classic deployments can replay the former graph selector from the
+[pinned classic Workbench source](../contributing/workbench-compatibility-tests.md).
 
 ## Ending a reusable activity from any depth
 
