@@ -25,6 +25,10 @@ public static class WorkflowsRuntimeApi
         api.MapEndpointsFrom(typeof(WorkflowsRuntimeApi).Assembly);
     }
 
+    // An earlier KernelApi package can still be paired with this package by NuGet.
+    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints, bool includeExecute, bool includeDelete, bool includeInputSources) =>
+        RuntimeHttpApi.MapRetainedEndpoints(endpoints, includeExecute, includeDelete, includeInputSources);
+
     private static EndpointGroup MapGroup(IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);

@@ -58,7 +58,7 @@ public sealed class WorkflowRuntimeApiHttpServicesTests
         {
             var builder = WebApplication.CreateBuilder();
             if (includeLegacyUserTasks)
-                builder.Services.AddWorkflowRuntimeApiHttpServices();
+                builder.Services.AddWorkflowRuntimeApiHttpServices(includeLegacyUserTasks: true);
             else
                 builder.Services.AddRetainedRuntimeHttpServices();
             return builder.Build();

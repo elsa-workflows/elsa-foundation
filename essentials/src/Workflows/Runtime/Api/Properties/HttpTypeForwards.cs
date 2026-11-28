@@ -107,3 +107,10 @@ using System.Runtime.CompilerServices;
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.HttpContextWorkflowRuntimeOperatorAccess))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.IWorkflowExecutableInspector))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.IWorkflowInstanceDeletionService))]
+
+// The published KernelApi friend also references these implementation types.
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Capabilities.SelectedRunDeletionAvailable))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Endpoints.RuntimeResourceMissingSignal))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Endpoints.RuntimeRunDeletionRejectedSignal))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.LegacyRuntimeApiSelected))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Api.Services.RuntimeHistoryOccurrenceAuthorization))]
