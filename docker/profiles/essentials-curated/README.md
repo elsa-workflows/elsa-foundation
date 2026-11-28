@@ -35,8 +35,11 @@ To use a dedicated PostgreSQL database for workflow execution, set these feature
 | `SqlitePath` | Empty |
 | `PostgresConnectionString` | Connection string supplied through your deployment configuration |
 
-For the pre-release switch, use a fresh local development database. To rehearse rollback, restore the
-previous profile and use a separate fresh local database. Keep persistent deployment volumes intact.
+The default shell delivers standalone Event, HTTP, Timer and Cron through the prepared Runtime store and
+the same Actor Foundation execution host. Install a fresh dedicated Actor Foundation database when moving
+to the new store format during the preview. An older Actor Foundation database is refused before its data
+or schema changes. Keep the original volume or PostgreSQL database with the earlier matching image for a
+rollback. Workflow definitions, publication and identity keep their existing module connections.
 
 ## Build
 
