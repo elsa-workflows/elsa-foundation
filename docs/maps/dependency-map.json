@@ -18587,6 +18587,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Events",
+          "path": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Publishing.Api",
           "path": "essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj"
         },
