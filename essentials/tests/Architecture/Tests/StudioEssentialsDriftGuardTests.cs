@@ -30,7 +30,6 @@ public sealed class StudioEssentialsDriftGuardTests
     private const string ServerProject = "server/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
     private const string ServerProfile = "docker/profiles/essentials-curated";
     private const string ServerShells = ServerProfile + "/shells.json";
-    private const string ClassicRuntimeApi = "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/Elsa.Workflows.Runtime.Api.csproj";
     private const string StudioProject = "studio/src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj";
     private const string StudioProfile = "studio/docker/profiles/essentials";
 
@@ -40,11 +39,7 @@ public sealed class StudioEssentialsDriftGuardTests
         ["Elsa.Workflows.Runtime.Api.Http.csproj"] = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             // The shared HTTP library owns this declaration. Each Runtime API host can contribute it.
-            ["elsa.api.runtime"] = ["WorkflowsRuntimeApi", "WorkflowsRuntimeKernelRetainedApi", "WorkflowsRuntimeKernelHosting"]
-        },
-        ["Elsa.Workflows.Runtime.Api.csproj"] = new Dictionary<string, string[]>(StringComparer.Ordinal)
-        {
-            ["elsa.api.user-tasks"] = ["WorkflowsRuntimeApi"]
+            ["elsa.api.runtime"] = ["WorkflowsRuntimeKernelRetainedApi", "WorkflowsRuntimeKernelHosting"]
         }
     };
 
@@ -211,25 +206,24 @@ public sealed class StudioEssentialsDriftGuardTests
     [Fact]
     public void Explicit_capability_selectors_cover_every_declaration_and_name_real_server_features()
     {
-        var projects = ServerProjects(ClassicRuntimeApi)
+        var projects = ServerProjects()
             .ToDictionary(project => Path.GetFileName(project.Path), StringComparer.Ordinal);
         var declaredFeatures = projects.Values.SelectMany(project => project.Features).ToHashSet(StringComparer.Ordinal);
         foreach (var (project, selectors) in ServerCapabilitySelectors)
         {
-            Assert.True(projects.TryGetValue(project, out var declared), $"{project} does not appear in the Curated server or classic Runtime API source.");
+            Assert.True(projects.TryGetValue(project, out var declared), $"{project} does not appear in the Curated server closure.");
             Assert.Equal(declared.Capabilities.Order(StringComparer.Ordinal), selectors.Keys.Order(StringComparer.Ordinal));
             Assert.All(selectors.Values.SelectMany(features => features), feature => Assert.Contains(feature, declaredFeatures));
         }
     }
 
     [Theory]
-    [InlineData(ClassicRuntimeApi, "WorkflowsRuntimeApi", "elsa.api.runtime", "elsa.api.user-tasks")]
-    [InlineData(null, "WorkflowsRuntimeKernelRetainedApi", "elsa.api.runtime")]
-    [InlineData(null, "WorkflowsRuntimeKernelHosting", "elsa.api.runtime")]
-    [InlineData(null, "StandaloneTriggersApi", "elsa.api.standalone-triggers")]
-    public void Runtime_API_capabilities_are_selected_independently(string? additionalProject, string feature, params string[] capabilities) =>
+    [InlineData("WorkflowsRuntimeKernelRetainedApi", "elsa.api.runtime")]
+    [InlineData("WorkflowsRuntimeKernelHosting", "elsa.api.runtime")]
+    [InlineData("StandaloneTriggersApi", "elsa.api.standalone-triggers")]
+    public void Runtime_API_capabilities_are_selected_independently(string feature, params string[] capabilities) =>
         Assert.Equal(capabilities.Order(StringComparer.Ordinal),
-            ServerCapabilities(new HashSet<string>([feature], StringComparer.Ordinal), additionalProject).Order(StringComparer.Ordinal));
+            ServerCapabilities(new HashSet<string>([feature], StringComparer.Ordinal)).Order(StringComparer.Ordinal));
 
     /// <summary>An add-on-owned id stays unserved by the Essentials server; once it is served, the add-on is part of Essentials and the exclusion would hide a real requirement.</summary>
     [Fact]
@@ -291,10 +285,10 @@ public sealed class StudioEssentialsDriftGuardTests
     }
 
     /// <summary>The capability ids contributed by the selected server features.</summary>
-    private static HashSet<string> ServerCapabilities(IReadOnlySet<string>? enabledFeatures = null, string? additionalProject = null)
+    private static HashSet<string> ServerCapabilities(IReadOnlySet<string>? enabledFeatures = null)
     {
         var enabled = enabledFeatures ?? EnabledServerFeatures();
-        return ServerProjects(additionalProject)
+        return ServerProjects()
             .SelectMany(project => ServerCapabilitySelectors.TryGetValue(Path.GetFileName(project.Path), out var selectors)
                 ? SelectedMappedCapabilities(selectors, enabled)
                 : project.Features.Any(enabled.Contains) ? project.Capabilities : [])
@@ -304,11 +298,9 @@ public sealed class StudioEssentialsDriftGuardTests
     private static IEnumerable<string> SelectedMappedCapabilities(IReadOnlyDictionary<string, string[]> selectors, IReadOnlySet<string> enabled) =>
         selectors.Where(entry => entry.Value.Any(enabled.Contains)).Select(entry => entry.Key);
 
-    private static IEnumerable<(string Path, string[] Features, string[] Capabilities)> ServerProjects(string? additionalProject = null)
+    private static IEnumerable<(string Path, string[] Features, string[] Capabilities)> ServerProjects()
     {
         var projects = ServerProjectClosure();
-        if (additionalProject != null)
-            projects.Add(Path.Join(RepoRoot, additionalProject));
 
         foreach (var project in projects)
         {
