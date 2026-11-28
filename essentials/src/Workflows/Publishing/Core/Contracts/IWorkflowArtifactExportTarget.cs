@@ -56,8 +56,7 @@ public sealed record WorkflowArtifactExportDelivery(
 }
 
 /// <summary>
-/// A destination a portable workflow-artifact closure can be delivered to — the export-side mirror of
-/// the import side's <c>IWorkflowArtifactReconciliationSource</c>.
+/// A destination for a portable workflow-artifact closure.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -68,7 +67,7 @@ public sealed record WorkflowArtifactExportDelivery(
 /// producing the closure and deciding where it goes are two decisions with two different lifetimes.
 /// </para>
 /// <para>
-/// <b>Self-identifying, like the import source.</b> <see cref="TargetId"/> is the target's own property rather
+/// <b>Self-identifying.</b> <see cref="TargetId"/> is the target's own property rather
 /// than a key it is registered under, because a caller that selects a destination is naming a behaviour, not a DI
 /// slot, and a registration-supplied key would let the same target answer to two names.
 /// </para>

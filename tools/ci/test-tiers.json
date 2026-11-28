@@ -106,8 +106,7 @@
     {
       "project": "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
       "tier": "integration",
-      "trait": "child-process",
-      "medianMinutes": 7.21
+      "medianMinutes": null
     },
     {
       "project": "extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj",
@@ -578,7 +577,6 @@
     {
       "project": "essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
       "tier": "pr",
-      "trait": "child-process",
       "medianMinutes": 0.08
     },
     {
@@ -633,11 +631,6 @@
       "tier": "integration",
       "trait": "child-process",
       "medianMinutes": 3.85
-    },
-    {
-      "project": "essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.09
     },
     {
       "project": "essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
@@ -954,7 +947,6 @@
           "extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
           "extensions/Dashboard/tests/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
           "essentials/tests/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj",
-          "essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
           "essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
           "essentials/tests/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj",
           "extensions/Diagnostics.StructuredLogs/tests/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj",
