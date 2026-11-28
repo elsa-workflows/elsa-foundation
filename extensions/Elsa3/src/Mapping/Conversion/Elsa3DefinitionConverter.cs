@@ -13,9 +13,10 @@ namespace Elsa3.Mapping.Conversion;
 
 /// <summary>
 /// Converts one Elsa 3 definition: clone → normalize → collect the memory-reference graph and lower value flow → map
-/// to Elsa 4 state (spec FR-015, research R-8). Lowering runs once the activity diagnostics are clear, so an unresolved
-/// node never yields value-flow noise on top of its own error; a deferred graph-level node (Flowchart) does not stop it,
-/// so its children are lowered too. Whole-definition and node conversion share that preparation, so one rule lowers or
+/// to Elsa 4 state (spec FR-015, research R-8). Lowering runs after an activity refusal too: the definition stays
+/// refused, but every script, variable and other node is still analysed, so one run reports every finding (#6231). An
+/// unresolved node has no contract, so lowering reads only its expressions, and a check of the lowered tree adds nothing
+/// on a node already refused. Whole-definition and node conversion share that preparation, so one rule lowers or
 /// refuses every expression on both paths. Diagnostics are ordered by (JSON path, code).
 /// </summary>
 internal sealed class Elsa3DefinitionConverter(
@@ -65,10 +66,7 @@ internal sealed class Elsa3DefinitionConverter(
     private static void RefuseIntrinsics(Elsa3ConversionPlan plan)
     {
         // A node already refused for its own reason (an End outside the root flowchart) is reported once.
-        var refused = plan.Diagnostics
-            .Where(diagnostic => diagnostic.IsError && diagnostic.Metadata.ContainsKey("ActivityNodeId"))
-            .Select(diagnostic => diagnostic.Metadata["ActivityNodeId"])
-            .ToHashSet(StringComparer.Ordinal);
+        var refused = RefusedNodeIds(plan);
         foreach (var node in plan.Nodes.Values
                      .Where(node => node.Intrinsic is not null || node.Resolved?.Source == Elsa3ResolvedSource.Intrinsic)
                      .Where(node => !refused.Contains(node.Node.NodeId))
@@ -187,8 +185,7 @@ internal sealed class Elsa3DefinitionConverter(
         var plan = await normalizer.NormalizeAsync(request, clone, cancellationToken);
         var boundaryOutcomes = request.IsReusable ? Elsa3OutcomeKey.Assemble(plan) : [];
         await LowerAsync(plan, cancellationToken);
-        if (!plan.HasErrors)
-            Elsa3SwitchSafety.Validate(plan);
+        CheckBesideRefusals(plan, Elsa3SwitchSafety.Validate);
         if (request.IsReusable)
             RefuseIntrinsics(plan);
         return (plan, boundaryOutcomes);
@@ -202,16 +199,88 @@ internal sealed class Elsa3DefinitionConverter(
 
     private async ValueTask LowerAsync(Elsa3ConversionPlan plan, CancellationToken cancellationToken)
     {
-        if (plan.Definition.Root is null || plan.HasErrors)
+        if (plan.Definition.Root is null)
             return;
 
-        var jsonPaths = plan.JsonPaths;
-        var inventory = await memoryReferenceGraph.CollectAsync(
-            plan.Definition.Root, node => ContractOf(plan, node), jsonPaths, cancellationToken, plan.SourceName);
-        plan.Diagnostics.AddRange(valueFlowLowerer.Lower(plan, inventory, node => AncestorScopeNames(plan, node)));
-        if (!plan.HasErrors)
-            WarnBulkDispatchOuterWrites(plan);
+        // A refusal before lowering (an unmapped activity, say) still refuses the definition, but the scan goes on, so
+        // one migration run reports every script and component finding (#6231). A plan refused for its shape (duplicate
+        // node ids) may not lower at all; its own refusal then stands for what lowering would have found.
+        var refused = plan.HasErrors;
+        Elsa3MemoryReferenceInventory inventory;
+        IReadOnlyList<Elsa3MigrationDiagnostic> lowered;
+        try
+        {
+            inventory = await memoryReferenceGraph.CollectAsync(
+                plan.Definition.Root, node => ContractOf(plan, node), plan.JsonPaths, cancellationToken, plan.SourceName);
+            lowered = valueFlowLowerer.Lower(plan, inventory, node => AncestorScopeNames(plan, node));
+        }
+        catch (Exception) when (refused && !cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        plan.Diagnostics.AddRange(refused ? WithoutContractlessNoise(plan, inventory, lowered) : lowered);
+        WarnBulkDispatchOuterWrites(plan);
     }
+
+    /// <summary>
+    /// A node the converter did not resolve (an unmapped activity, or a node inside one) has no contract, so lowering
+    /// cannot tell its inputs from its outputs. It would read a memory reference the node carries, such as a captured
+    /// output, as an unsupported shape, and a read of that output elsewhere as dangling. The node's refusal already says
+    /// it needs an Elsa 4 activity, and that guidance would point elsewhere, so those findings are left out. A
+    /// dangling reference no unresolved node could produce is still reported.
+    /// </summary>
+    private static IEnumerable<Elsa3MigrationDiagnostic> WithoutContractlessNoise(
+        Elsa3ConversionPlan plan,
+        Elsa3MemoryReferenceInventory inventory,
+        IEnumerable<Elsa3MigrationDiagnostic> lowered)
+    {
+        var resolved = plan.Nodes.Values
+            .Where(node => node.Resolved is not null)
+            .Select(node => Elsa3ConversionDiagnostics.NodeId(node.Node))
+            .ToHashSet(StringComparer.Ordinal);
+        var unresolved = inventory.Nodes.Select(node => node.ActivityNodeId).Where(nodeId => !resolved.Contains(nodeId)).ToHashSet(StringComparer.Ordinal);
+        if (unresolved.Count == 0)
+            return lowered;
+        var contractless = inventory.Occurrences
+            .Where(occurrence => occurrence.Direction == Elsa3PropertyDirection.Unknown && unresolved.Contains(occurrence.ActivityNodeId))
+            .ToArray();
+        var contractlessMemory = contractless.Select(occurrence => occurrence.MemoryReferenceId).ToHashSet(StringComparer.Ordinal);
+        var contractlessKeys = contractless.Select(occurrence => Elsa3ValueFlowLowerer.ToStableKey(occurrence.StablePropertyKey)).ToHashSet(StringComparer.Ordinal);
+        return lowered.Where(diagnostic => diagnostic.Code switch
+        {
+            Elsa3ImportDiagnosticCodes.UnsupportedShape =>
+                !diagnostic.Metadata.TryGetValue("ActivityNodeId", out var nodeId) || !unresolved.Contains(nodeId),
+            Elsa3ImportDiagnosticCodes.DanglingReference =>
+                !(diagnostic.Metadata.TryGetValue("MemoryReferenceId", out var memoryId) && contractlessMemory.Contains(memoryId)) &&
+                !(diagnostic.Metadata.TryGetValue(Elsa3ValueFlowLowerer.AmbientKindKey, out var kind) && kind == nameof(Elsa3AmbientReferenceKind.ActivityResult) &&
+                  diagnostic.Metadata.TryGetValue(Elsa3ValueFlowLowerer.AmbientKeyKey, out var key) && contractlessKeys.Contains(key)),
+            _ => true
+        });
+    }
+
+    /// <summary>
+    /// Runs a check of the lowered tree after a refusal too, keeping only what it finds on nodes not already refused: a
+    /// check that reads an unresolved node as unproven would otherwise repeat that node's own refusal.
+    /// </summary>
+    private static void CheckBesideRefusals(Elsa3ConversionPlan plan, Action<Elsa3ConversionPlan> check)
+    {
+        var refusedNodes = RefusedNodeIds(plan);
+        var before = plan.Diagnostics.Count;
+        check(plan);
+        if (refusedNodes.Count == 0)
+            return;
+        for (var index = plan.Diagnostics.Count - 1; index >= before; index--)
+            if (plan.Diagnostics[index].Metadata.TryGetValue("ActivityNodeId", out var nodeId) && refusedNodes.Contains(nodeId))
+                plan.Diagnostics.RemoveAt(index);
+    }
+
+    /// <summary>The node ids an error diagnostic already names.</summary>
+    private static HashSet<string> RefusedNodeIds(Elsa3ConversionPlan plan) =>
+        plan.Diagnostics
+            .Where(diagnostic => diagnostic.IsError && diagnostic.Metadata.ContainsKey("ActivityNodeId"))
+            .Select(diagnostic => diagnostic.Metadata["ActivityNodeId"])
+            .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
     /// Spec 1242 FR-020a: Elsa 3 ran a bulk dispatch's branches one at a time, Elsa 4 runs them concurrently, so a branch

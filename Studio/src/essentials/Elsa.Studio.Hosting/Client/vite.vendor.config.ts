@@ -13,6 +13,22 @@ import react from "@vitejs/plugin-react";
 // 'react'" error. So keep `react` external for everyone except the react shim itself.
 const reactShim = resolve(__dirname, "src/vendor/react.ts");
 
+// On Windows `resolve` returns backslashes while the importer ids Vite hands to Rollup use
+// forward slashes, so a raw `importer !== reactShim` never matched there and the shim
+// imported itself. Compare both sides with forward slashes. Unlike Vite's `normalizePath`,
+// this rewrites backslashes on every platform, so the test exercises the Windows case on
+// Linux CI too; real POSIX paths contain no backslashes, so other builds are unaffected.
+const toForwardSlashes = (path: string) => path.replace(/\\/g, "/");
+
+export function externalizeReactExceptShim(reactShimPath: string) {
+  const shim = toForwardSlashes(reactShimPath);
+  return (source: string, importer: string | undefined): boolean => {
+    if (source !== "react") return false;
+    // Bundle React into the react shim; externalize it for every other importer.
+    return importer === undefined || toForwardSlashes(importer) !== shim;
+  };
+}
+
 export default defineConfig({
   // Needed to transform the JSX in the studio-ui primitives; the react/react-query
   // vendor shims are plain .ts and unaffected.
@@ -44,11 +60,7 @@ export default defineConfig({
       // Only the bare `react` specifier is provided by the import map. `react/jsx-runtime`
       // has no import-map entry, so it must stay bundled (into vendor/chunks/jsx-runtime.js)
       // — do not externalize it here.
-      external: (source, importer) => {
-        if (source !== "react") return false;
-        // Bundle React into the react shim; externalize it for every other importer.
-        return importer !== reactShim;
-      },
+      external: externalizeReactExceptShim(reactShim),
       output: {
         entryFileNames: "[name].js",
         chunkFileNames: "vendor/chunks/[name].js",

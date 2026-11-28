@@ -87,6 +87,8 @@ function formatExpression(expressionType: string, value: unknown): string | unde
   if (type === "" || type === "literal" || type === "object") {
     if (typeof value === "string") {
       const trimmed = value.trim();
+      // A structured literal on a scalar input is presented as Object JSON text (#6088, #5373); it stays structured.
+      if (type === "object" && isStructuredJsonText(trimmed)) return undefined;
       return trimmed ? `"${trimmed}"` : undefined;
     }
     if (typeof value === "number" || typeof value === "boolean") return String(value);
@@ -100,6 +102,15 @@ function formatExpression(expressionType: string, value: unknown): string | unde
     return trimmed || undefined;
   }
   return undefined;
+}
+
+function isStructuredJsonText(text: string): boolean {
+  if (!text.startsWith("{") && !text.startsWith("[")) return false;
+  try {
+    return isRecord(JSON.parse(text));
+  } catch {
+    return false;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
