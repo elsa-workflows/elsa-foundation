@@ -13,6 +13,7 @@ Elsa.Activities.Http
 Elsa.Activities.Primitives
 Elsa.Activities.Runtime.Hosting
 Elsa.Activities.Scheduling
+Elsa.Activities.Scripting
 Elsa.Activities.Sequence
 Elsa.Api.Capabilities
 Elsa.Attention.Api

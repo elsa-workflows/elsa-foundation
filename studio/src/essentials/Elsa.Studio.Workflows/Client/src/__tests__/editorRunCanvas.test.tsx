@@ -220,6 +220,24 @@ describe("execution attached to the editor canvas", () => {
     expect(api.browse).toHaveBeenLastCalledWith(context, "run-1", { executableNodeId: "exec-write", ancestorActivityExecutionId: "body-4", anchorActivityExecutionId: "activity-4", limit: 1 }, expect.any(AbortSignal));
   });
 
+  it("waits for the shared observer before reading activities and hides them when that read loses authority", async () => {
+    const observation = { identity: "test:artifact:session", revision: 1, status: "connected",
+      details: null, error: "", waits: [], refresh: vi.fn() } as unknown as TestRunObservation;
+    render({ observation }); await settle();
+    expect(latest.loading).toBe(true);
+    expect(api.instance).not.toHaveBeenCalled();
+    expect(api.browse).not.toHaveBeenCalled();
+
+    render({ observation: { ...observation, details, revision: 2 } });
+    await vi.waitFor(() => expect(latest.nodes[0].data.runtime?.status).toBe("Completed"));
+    expect(api.instance).not.toHaveBeenCalled();
+
+    render({ observation: { ...observation, status: "unavailable", error: "Live runtime state is unavailable on this host." } });
+    expect(latest.nodes).toBe(nodes);
+    expect(latest.activities).toEqual([]);
+    expect(latest.loading).toBe(false);
+  });
+
   it("does not rely on the bounded first activity page to determine node uniqueness", async () => {
     api.instance.mockResolvedValue({ ...details, activities: [activity], activityNextContinuationToken: "more" });
     api.browse.mockResolvedValue({ totalCount: 20, items: [{ execution: activity }] });
