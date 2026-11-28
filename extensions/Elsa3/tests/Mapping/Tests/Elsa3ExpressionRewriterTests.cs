@@ -235,7 +235,7 @@ public sealed class Elsa3ExpressionRewriterTests
     /// elsewhere a Correlate activity for the correlation ID; the instance ID has no route.
     /// </summary>
     [Theory]
-    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "Remove the change, or keep the member on a value of the script's own")]
+    [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "Remove the change, or keep the member on a local object of the script's own, ")]
     [InlineData("getCorrelationId() += 'acme'", Elsa3JavaScriptMode.Script, false, "(let value = getCorrelationId();) and assign to the local; to change the instance's correlation ID, call setCorrelationId(value), ")]
     [InlineData("getCorrelationId() = 'acme'", Elsa3JavaScriptMode.Expression, false, "; to change the instance's correlation ID, use a Correlate activity, ")]
     [InlineData("getCorrelationId() = 'acme'", Elsa3JavaScriptMode.Script, true, "; to change the instance's correlation ID, use a Correlate activity, ")]

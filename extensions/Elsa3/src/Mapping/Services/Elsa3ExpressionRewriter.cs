@@ -3503,18 +3503,17 @@ public sealed class Elsa3ExpressionRewriter(
         /// <summary>
         /// The refusal of a change through the value <paramref name="reader"/> returns (text or null): a member change, which
         /// Elsa 3 ignored on text and Elsa 4's strict mode throws on, or an assignment to the value itself, which failed in
-        /// Elsa 3 and would assign to the script's own read in Elsa 4.
+        /// Elsa 3 and which the conversion does not reproduce.
         /// </summary>
         private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader, bool changesMember) => changesMember
             ? new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                 $"JavaScript sets a member of the value '{reader}()' returns. The value is text (or null): Elsa 3 ignored the change " +
                 "(or failed on null), and Elsa 4 runs scripts in strict mode, where it throws.",
-                "Remove the change, or keep the member on a value of the script's own (a local object or a variable), in the Elsa 3 workflow before import.")
+                "Remove the change, or keep the member on a local object of the script's own, in the Elsa 3 workflow before import.")
             : new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                $"JavaScript assigns to the value '{reader}()' returns. That failed in Elsa 3; converted, it would assign to the script's " +
-                "own read of the workflow instance value instead.",
+                $"JavaScript assigns to the value '{reader}()' returns. Elsa 3 failed on that assignment, and the conversion does not reproduce it.",
                 $"Copy the value into a local first (let value = {reader}();) and assign to the local{InstanceChangeRoute(reader)}, " +
                 "in the Elsa 3 workflow before import.");
 
