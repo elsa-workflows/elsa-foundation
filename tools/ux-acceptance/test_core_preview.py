@@ -63,19 +63,23 @@ class CorePreviewVerdictTests(unittest.TestCase):
 
 
 class CorePreviewCompositionTests(unittest.TestCase):
-    def test_the_kernel_switches_and_store_reach_only_this_composition(self):
-        env = acceptance.kernel_environment("Host=127.0.0.1;Port=1;Database=x")
-        self.assertEqual({"Elsa__CorePreview__Enabled": "true", "Elsa__CorePreview__Publications": "true",
-                          "Elsa__CorePreview__Tenant": acceptance.TENANT,
-                          "ConnectionStrings__KernelCorePreview": "Host=127.0.0.1;Port=1;Database=x"}, env)
+    def test_postgresql_actor_store_uses_the_stock_host_and_a_separate_platform_store(self):
+        connection = "Host=127.0.0.1;Port=1;Database=x"
+        env = acceptance.kernel_environment(Path("/owned/runtime.sqlite"), connection)
+        feature = acceptance.KERNEL_HOSTING_FEATURE
+        self.assertEqual({f"{feature}__Provider": "PostgreSQL", f"{feature}__Tenant": acceptance.TENANT,
+                          f"{feature}__PostgresConnectionString": connection,
+                          "ConnectionStrings__Elsa": "Data Source=/owned/runtime.sqlite"}, env)
 
     def test_sqlite_uses_only_its_owned_database(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "kernel.sqlite"
-            env = acceptance.kernel_environment(sqlite_path=path)
-            self.assertEqual({"Elsa__CorePreview__Enabled": "true", "Elsa__CorePreview__Publications": "true",
-                              "Elsa__CorePreview__Tenant": acceptance.TENANT, "Elsa__CorePreview__Provider": "SQLite",
-                              "Elsa__CorePreview__SqlitePath": str(path)}, env)
+            runtime = Path(directory) / "runtime.sqlite"
+            env = acceptance.kernel_environment(runtime, sqlite_path=path)
+            feature = acceptance.KERNEL_HOSTING_FEATURE
+            self.assertEqual({f"{feature}__Provider": "SQLite", f"{feature}__Tenant": acceptance.TENANT,
+                              f"{feature}__SqlitePath": str(path),
+                              "ConnectionStrings__Elsa": f"Data Source={runtime}"}, env)
             with self.assertRaises(sqlite3.OperationalError):
                 acceptance.sqlite_markers(path, acceptance.sqlite_shipped_markers())
             self.assertFalse(path.exists())
@@ -87,6 +91,9 @@ class CorePreviewCompositionTests(unittest.TestCase):
             internal const int JournalCodecVersion = 1;
             internal static StoreFormat RootShipped => Current with { MessageProtocol = 34 };
             private const int Sqlite = 2;
+            _ when db.RequiredFormat == StoreFormat.RootShipped ||
+                db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventQualification =>
+                sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
         """ + definitions
 
     def test_sqlite_markers_accept_a_decimal_or_a_same_file_alias(self):
@@ -132,20 +139,6 @@ class CorePreviewCompositionTests(unittest.TestCase):
                 store.execute('UPDATE "KernelStoreVersions" SET "MessageProtocol" = "MessageProtocol" + 1 WHERE "Id" = 1')
             with self.assertRaisesRegex(ValueError, "Expected SQLite shipped markers"):
                 acceptance.sqlite_markers(path, expected)
-
-    def test_kernel_serving_is_the_serving_line_and_its_failures_are_named(self):
-        with tempfile.TemporaryDirectory() as directory:
-            log = Path(directory) / "backend.log"
-            process = MagicMock(); process.poll.return_value = None
-            log.write_text("info: x[0]\n      The Core Preview serves the publications of shell default on the kernel: 0 of 0 active slots serve.\n")
-            self.assertIn(acceptance.SERVING_LINE, acceptance.wait_for_kernel_serving(log, process, timeout=1))
-            log.write_text("fail: x[0]\n      The Core Preview could not serve the publications of shell default on the kernel.\n")
-            with self.assertRaises(RuntimeError):
-                acceptance.wait_for_kernel_serving(log, process, timeout=1)
-            log.write_text("info: starting\n")
-            process.poll.return_value = 1
-            with self.assertRaises(RuntimeError):
-                acceptance.wait_for_kernel_serving(log, process, timeout=1)
 
     def test_the_password_stays_out_of_argv_and_an_interrupted_run_still_stops_its_container(self):
         calls = []

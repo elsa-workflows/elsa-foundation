@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Run the Core Preview acceptance journeys against an owned kernel backend, Studio and an HTTP stub.
-The backend is source-built Workbench or a separately staged Nuplane Foundation host. All stores are disposable."""
+"""Run the Actor workflow acceptance journeys against an owned backend, Studio and an HTTP stub.
+The backend is stock source-built Workbench or a separately staged Nuplane Foundation host. All stores are disposable."""
 from __future__ import annotations
 
 import argparse
@@ -49,16 +49,12 @@ EVIDENCE = {
     PARK_RECOVERY_JOURNEY: ['park-recovery.json'],
 }
 JOURNEYS = set(CAPTURES) - {PARK_RECOVERY_JOURNEY}
-# The tenant the Workbench's kernel edge starts workflows in, and its reads list from.
-# The seeded administrator's tenant: the kernel's runs are visible to Studio only in the tenant the host binds.
+# The kernel's execution tenant matches the administrator and Studio's scoped reads.
 TENANT = 'default'
 POSTGRES_IMAGE = os.environ.get('UX_CORE_PREVIEW_POSTGRES_IMAGE', 'postgres:17')
 DATABASE = 'ux_core_preview'
-# The Workbench logs one of these once the default shell's publications are served on the kernel, before its node runs.
-SERVING_LINE = 'serves the publications of shell default on the kernel'
-SERVING_FAILURES = ('could not serve the publications of shell', 'does not compose the WorkflowsRuntimeKernel feature')
 FOUNDATION_HOST = 'Elsa.Foundation.Host.dll'
-FOUNDATION_KERNEL_FEATURE = 'CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting'
+KERNEL_HOSTING_FEATURE = 'CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting'
 KERNEL_PACKAGES = (
     'Elsa.ActorFoundation.Contracts', 'Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore',
     'Elsa.Workflows.Runtime.KernelApi', 'Elsa.Workflows.Runtime.KernelHost', 'Elsa.Workflows.Runtime.KernelHosting',
@@ -72,19 +68,11 @@ def inventory(journeys=None):
     return {(PROJECT, title) for title in selected}
 
 
-def kernel_environment(connection=None, *, sqlite_path=None):
-    """The Core Preview's switches and its own database, for this composition's Workbench only."""
-    switches = {'Elsa__CorePreview__Enabled': 'true', 'Elsa__CorePreview__Publications': 'true',
-                'Elsa__CorePreview__Tenant': TENANT}
-    if sqlite_path is not None:
-        return dict(switches, Elsa__CorePreview__Provider='SQLite', Elsa__CorePreview__SqlitePath=str(sqlite_path))
-    return dict(switches, ConnectionStrings__KernelCorePreview=connection)
-
-
-def installed_environment(runtime_path, connection=None, *, sqlite_path=None):
+def kernel_environment(runtime_path, connection=None, *, sqlite_path=None):
+    """Use the stock Actor hosting feature with separate, owned Actor and platform stores."""
     path_settings = {'SqlitePath': str(sqlite_path)} if sqlite_path is not None else {'PostgresConnectionString': connection}
     kernel_settings = dict(path_settings, Provider='SQLite' if sqlite_path is not None else 'PostgreSQL', Tenant=TENANT)
-    return dict({f'{FOUNDATION_KERNEL_FEATURE}__{key}': value for key, value in kernel_settings.items()},
+    return dict({f'{KERNEL_HOSTING_FEATURE}__{key}': value for key, value in kernel_settings.items()},
                 ConnectionStrings__Elsa=f'Data Source={runtime_path}')
 
 
@@ -127,8 +115,14 @@ def sqlite_shipped_markers():
         raise ValueError(f'Cannot derive SQLite shipped markers from EfStore.Versions.cs at {name}')
 
     protocol = number(r'\bStoreFormat RootShipped\s*=>\s*Current with\s*\{\s*MessageProtocol\s*=\s*(\d+)\s*\}\s*;')
+    shipped = re.search(
+        r'when\s+db\.RequiredFormat\s*==\s*StoreFormat\.RootShipped'
+        r'(?:\s*\|\|\s*db\.RequiredFormat\s*==\s*StoreFormat\.\w+)*'
+        r'\s*=>\s*sqlite\s*\?\s*(\w+)\s*:', source)
+    if not shipped:
+        raise ValueError('Cannot derive SQLite shipped markers from the RootShipped provider definition')
     return [(1, constant('StoreSchemaVersion'), protocol, constant('JournalCodecVersion')),
-            (2, constant('Sqlite'), constant('SqliteShippedRevision'), 0)]
+            (2, constant('Sqlite'), constant(shipped.group(1)), 0)]
 
 
 def sqlite_markers(path, expected):
@@ -220,23 +214,6 @@ def container_gone(container, *, attempts=60):
     return False
 
 
-def wait_for_kernel_serving(log, process, *, timeout=180):
-    """The serving line of the default shell, or the failure the Workbench logged instead of it."""
-    deadline = time.monotonic() + timeout
-    while True:
-        text = log.read_text(errors='replace') if log.exists() else ''
-        for line in text.splitlines():
-            if SERVING_LINE in line:
-                return line.strip()
-            if any(failure in line for failure in SERVING_FAILURES):
-                raise RuntimeError(f'The Workbench did not serve its publications on the kernel: {line.strip()}')
-        if process.poll() is not None:
-            raise RuntimeError(f'The Workbench exited before it served its publications on the kernel; see {log}')
-        if time.monotonic() > deadline:
-            raise TimeoutError(f'The Workbench did not report serving its publications on the kernel; see {log}')
-        time.sleep(.25)
-
-
 class Stub:
     """A local HTTP stub for the workflows' outbound requests: it answers every request with JSON naming what it got,
     and records each one (method, path, body) for the journeys' receipts."""
@@ -286,7 +263,7 @@ class Stub:
 
 
 def overlay(backend, studio_url, history_authority=False):
-    """Local origin routing only, in the owned private copy: the kernel's switches come from the environment."""
+    """Local origin routing and qualification grants in the owned copy."""
     settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
     settings.setdefault('Cors', {})['AllowedOrigins'] = [studio_url]
     if history_authority:
@@ -350,8 +327,8 @@ def run(output, journey=None, provider='postgres', history_authority=False, *, i
               'suite': SUITE, 'project': PROJECT, 'journeys': sorted(title for _, title in inventory(selected)),
               'sharedHostHelperSha256': hashlib.sha256((ROOT / 'tools/ux-acceptance/run.py').read_bytes()).hexdigest(),
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'status': 'failed', 'stage': 'build',
-              'composition': {'corePreview': {'publications': True, 'tenant': TENANT, 'format': f'the shipped {provider_name} format',
-                                              'historyAuthorityControl': history_authority}},
+              'composition': {'actorFoundation': {'tenant': TENANT, 'format': f'the shipped {provider_name} format',
+                                                 'historyAuthorityControl': history_authority}},
               'visualApproval': 'requires independent review', 'ownedPids': {}}
     processes = {}
     try:
@@ -395,10 +372,7 @@ def run(output, journey=None, provider='postgres', history_authority=False, *, i
                 if sqlite_path is None:
                     report['postgres'] = {key: database[key] for key in ('container', 'image', 'database')}
                     connection = database['connection']
-                if installed_foundation_host:
-                    kernel = installed_environment(data / 'runtime.sqlite', connection, sqlite_path=sqlite_path)
-                else:
-                    kernel = kernel_environment(connection, sqlite_path=sqlite_path)
+                kernel = kernel_environment(data / 'runtime.sqlite', connection, sqlite_path=sqlite_path)
                 report.update(stage='host-start', backendUrl=backend_url, studioUrl=studio_url, stubUrl=stub.url)
                 backend_log = output / 'backend.log'
                 backend_dll = FOUNDATION_HOST if installed_foundation_host else 'Elsa.Workbench.Host.dll'
@@ -407,8 +381,6 @@ def run(output, journey=None, provider='postgres', history_authority=False, *, i
                           dict(env, **kernel)) as backend_process:
                     processes['backend'] = backend_process
                     report['ownedPids']['backend'] = backend_process.pid
-                    if not installed_foundation_host:
-                        report['kernelServing'] = wait_for_kernel_serving(backend_log, backend_process)
                     with host(studio, 'Elsa.Studio.Workbench.Host.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                               dict(env, Studio__BackendBaseUrl=backend_url)) as studio_process:
                         processes['studio'] = studio_process
