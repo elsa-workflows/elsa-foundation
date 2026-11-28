@@ -27,6 +27,7 @@ namespace Elsa.Activities.Bpmn.Activities;
 /// replace this rule in the events tier. The faulted leaf keeps its own blocking incident regardless.
 /// </remarks>
 [RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
+[System.ComponentModel.Category("BPMN")]
 [Activity(Icon = "Workflow")]
 [TriggerActivity]
 [ActivityStructure(BpmnActivityIdentities.StructureKind, BpmnActivityIdentities.StructureSchemaVersion, Mode = "bpmn", SupportsScopedVariables = true)]
