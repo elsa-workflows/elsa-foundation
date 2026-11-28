@@ -63,7 +63,10 @@ internal sealed class JintJavaScriptScriptEvaluator(
 
         // Parsed before the count starts, on the caller's thread: a parse (on a cache miss) is not the script's work.
         EvaluationLimits.Start(engine);
-        var returned = engine.Evaluate(prepared);
+        // Issue #5687: a returned Promise yields the value it settled with, as in Elsa 3.
+        var returned = JavaScriptPromiseResults.Settle(engine, engine.Evaluate(prepared));
+        if (completions.TryGet(returned, out var settling))
+            settling.Settle(engine);
         // Writing the result and the variables runs the script's own toJSON and getters: a phase of its own, as before.
         EvaluationLimits.Start(engine);
 
@@ -262,6 +265,11 @@ internal sealed class JintJavaScriptScriptEvaluator(
 
     internal sealed record Completion(JsValue Result, OutcomeArgument Outcomes)
     {
+        public JsValue Result { get; private set; } = Result;
+
+        /// <summary>A Promise passed as the completion's result yields the value it settled with (issue #5687).</summary>
+        public void Settle(Engine engine) => Result = JavaScriptPromiseResults.Settle(engine, Result);
+
         public (JavaScriptOutcomeSelectionState State, IReadOnlyList<string> Names) ResolveSelection()
         {
             if (Outcomes.Invalid is { } reason)
