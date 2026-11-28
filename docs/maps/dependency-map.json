@@ -18582,6 +18582,16 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Primitives",
+          "path": "essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Scheduling",
+          "path": "essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.Hosting",
           "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
         },
@@ -18627,6 +18637,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Scheduling",
+          "path": "essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.TestSupport",
           "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
         },
@@ -18634,6 +18649,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Http",
           "path": "extensions/Http/src/Activities/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Http",
+          "path": "extensions/Http/src/Elsa.Http/Elsa.Http.csproj"
         },
         {
           "type": "internal",
