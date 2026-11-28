@@ -375,6 +375,17 @@ public sealed class GenericFixtureHost<T>
     public sealed class NestedFixtureActivity : FixtureActivity;
 }
 
+public static class NonActivityFixtureHost
+{
+    public sealed class NestedMetadata
+    {
+        [ActivityInput]
+        public MetadataPayload? Payload { get; init; }
+    }
+
+    public sealed class MetadataPayload;
+}
+
 /// <summary>An open generic base activity, abstract and so never cataloged itself.</summary>
 public abstract class GenericFixtureActivityBase<T> : FixtureActivity;
 

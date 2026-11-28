@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Routing;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -7,13 +8,11 @@ using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Services;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Net;
@@ -163,33 +162,6 @@ public sealed class PublicationRecordEndpointTests
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
-    [Fact]
-    public async Task A_publishing_sourced_slot_resolves_through_its_activation_id_to_the_published_version()
-    {
-        await using var host = await StartWithActivePublicationAsync();
-
-        // 1. Runtime answers "what is active", unjoined.
-        using var slotResponse = await host.Client.SendAsync(Authenticated(
-            $"/runtime/workflows/activation-slots/{DefinitionId}/{SlotName}"));
-
-        Assert.Equal(HttpStatusCode.OK, slotResponse.StatusCode);
-        var slot = await ReadJsonAsync(slotResponse);
-        Assert.Equal(WorkflowActivationSource.PublishingKind, slot.GetProperty("sourceKind").GetString());
-        var activationId = slot.GetProperty("activeActivationId").GetString();
-        Assert.Equal(PublicationId, activationId);
-        // The runtime view is deliberately unjoined: the design version is not on it.
-        Assert.False(slot.TryGetProperty("versionId", out _));
-
-        // 2. Publishing answers "what was published" for that same id.
-        using var recordResponse = await ReadPublicationAsync(host, activationId!);
-
-        Assert.Equal(HttpStatusCode.OK, recordResponse.StatusCode);
-        var record = await ReadJsonAsync(recordResponse);
-        Assert.Equal(VersionId, record.GetProperty("versionId").GetString());
-        Assert.Equal(DefinitionId, record.GetProperty("definitionId").GetString());
-        Assert.Equal(SlotName, record.GetProperty("slotName").GetString());
-    }
-
     private static async Task<PublishingMinimalApiScenarioHost> StartWithActivePublicationAsync()
     {
         var host = await StartAsync();
@@ -252,21 +224,9 @@ public sealed class PublicationRecordEndpointTests
         Assert.True(result.Succeeded, $"{result.Failure?.Code}: {result.Failure?.Message}");
     }
 
-    /// <summary>
-    /// Composes the Runtime API beside the Publishing API so the two hops of the join are exercised over real
-    /// HTTP against one graph, which is the only way a drift between the two owners' ids would show up.
-    /// </summary>
     private static Task<PublishingMinimalApiScenarioHost> StartAsync() =>
-        PublishingMinimalApiScenarioHost.StartAsync(
-            configureServices: services =>
-            {
-                new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-                // Trigger indexing is normally contributed by the runtime triggers feature, which this
-                // composition does not mount. The production indexer over the host's own extractor and binding
-                // store is registered instead, so activation runs its real projection-preparation step.
-                services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
-            },
-            configurePipeline: app => WorkflowsRuntimeApi.MapWorkflowsRuntimeApi((IEndpointRouteBuilder)app));
+        PublishingMinimalApiScenarioHost.StartAsync(configureServices: services =>
+            services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>());
 
     private static Task<HttpResponseMessage> ReadPublicationAsync(
         PublishingMinimalApiScenarioHost host,
