@@ -137,6 +137,7 @@ public sealed class WorkbenchShellActivationTests
             Assert.Contains("ActorHttpConnections", active);
             Assert.Contains("WorkflowsRuntimeStandaloneHttp", active);
             Assert.Contains("ActivitiesRuntimeHosting", active);
+            Assert.Contains("ActivitiesScripting", active);
             Assert.Contains("ActivitiesGraphRuntimeHosting", active);
             Assert.Contains("ActorSecretsWorkflows", active);
             Assert.Contains("DecisionsDesign", active);

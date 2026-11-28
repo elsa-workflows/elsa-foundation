@@ -7,6 +7,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Extensions;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -222,9 +223,8 @@ public sealed class ClrAssemblyScanner(
             Id: null,
             Version: version,
             ActivityTypeKey: type.FullName!,
-            // No CLR-side display-name attribute exists yet, so derive a friendly label from the simple type
-            // name (SendHttpRequest → "Send Http Request") instead of letting the catalog fall back to the raw
-            // dotted type key. A feature that adds an explicit activity display-name annotation overrides this.
+            // Preserve the definition name used by persisted version hashes. A CLR display name is
+            // authoring presentation and can be refreshed separately through the palette facet.
             DisplayName: type.Name.Humanize(),
             Category: category,
             Description: null,
@@ -267,16 +267,21 @@ public sealed class ClrAssemblyScanner(
         }
 
         var paletteAttribute = attributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == typeof(ActivityPaletteAttribute).FullName);
-        if (paletteAttribute is not null)
+        var displayName = attributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == typeof(DisplayNameAttribute).FullName)?
+            .ConstructorArguments.FirstOrDefault().Value as string;
+        if (paletteAttribute is not null || !string.IsNullOrWhiteSpace(displayName))
         {
-            var payload = new
+            var payload = new Dictionary<string, object?>(StringComparer.Ordinal);
+            if (paletteAttribute is not null)
             {
-                ContainerModes = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ContainerModes)),
-                SlotIds = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.SlotIds)),
-                AncestorActivityTypes = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.AncestorActivityTypes)),
-                ResourceKinds = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ResourceKinds)),
-                Description = ReadNamedStringArgument(paletteAttribute, nameof(ActivityPaletteAttribute.Description))
-            };
+                payload["containerModes"] = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ContainerModes));
+                payload["slotIds"] = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.SlotIds));
+                payload["ancestorActivityTypes"] = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.AncestorActivityTypes));
+                payload["resourceKinds"] = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ResourceKinds));
+                payload["description"] = ReadNamedStringArgument(paletteAttribute, nameof(ActivityPaletteAttribute.Description));
+            }
+            if (!string.IsNullOrWhiteSpace(displayName))
+                payload["displayName"] = displayName.Trim();
             facets.Add(new ActivityDesignFacet("elsa.activity-palette", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions)));
         }
 
