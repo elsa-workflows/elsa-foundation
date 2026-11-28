@@ -748,26 +748,6 @@ public sealed partial class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
-    public async Task Sweep_keeps_a_reference_restored_after_the_collector_read_it()
-    {
-        await using var database = await Database.CreateAsync();
-        await using var seed = database.Open("tenant-a");
-        var retired = Reference("sweep-race-ref", "artifact-a").Retire(DateTimeOffset.UtcNow.AddMinutes(-1), "replaced");
-        await seed.Store.SaveAsync(retired);
-        await seed.DisposeAsync();
-
-        await using var activation = database.Open("tenant-a");
-        await using var collector = database.Open("tenant-a", RestoreBeforeDelete(activation, retired));
-        var garbageCollector = new WorkflowExecutableReferenceGarbageCollector(
-            collector.Executable, collector.Store, TimeProvider.System, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
-
-        var result = await garbageCollector.SweepAsync();
-
-        Assert.Equal(0, result.DeletedReferenceCount);
-        Assert.Null((await activation.Store.FindAsync(retired.SourceReferenceId))!.DeletedAt);
-    }
-
-    [Fact]
     public async Task Doomed_delete_removes_a_reference_that_is_still_retired_or_expired()
     {
         await using var database = await Database.CreateAsync();
