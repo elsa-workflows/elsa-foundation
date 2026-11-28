@@ -65,7 +65,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             var shells = JsonNode.Parse(await File.ReadAllTextAsync(shellPath))!;
             var features = DefaultFeatures(shells);
             // These BPMN journeys use the legacy in-process Runtime and its saved execution data.
-            var legacy = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(source, "shells.CorePreview.json")))!;
+            var legacy = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ClassicRuntime", "shells.json")))!;
             foreach (var (name, settings) in DefaultFeatures(legacy))
                 features[name] = settings?.DeepClone();
             if (recoverySweepSeconds is { } interval)
