@@ -28,13 +28,13 @@ internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore 
         if (tenant != runs.Tenant.Tenant || !KernelRunStates.CanReadTenant(access.Current, runs.Tenant)) yield break;
 
         var identities = new Dictionary<string, WorkflowExecutableIdentity?>(StringComparer.Ordinal);
-        await foreach (var (view, run) in runs.ListAsync(definition: null, cancellationToken))
-            yield return await ProjectAsync(view, run);
+        await foreach (var candidate in runs.ListCandidatesAsync(definition: null, isolated: false, cancellationToken))
+            yield return candidate is { } selected ? await ProjectAsync(selected.View, selected.Run) : null;
 
         if (testRuns is not { Reads: { } isolated } || testScopes is null) yield break;
-        await foreach (var (view, run) in isolated.ListTestRunsAsync(definition: null, cancellationToken))
-            yield return await HasTestScopeAsync(view.Header, run.TestStart, tenant, cancellationToken)
-                ? await ProjectAsync(view, run)
+        await foreach (var candidate in isolated.ListCandidatesAsync(definition: null, isolated: true, cancellationToken))
+            yield return candidate is { } selected && await HasTestScopeAsync(selected.View.Header, selected.Run.TestStart, tenant, cancellationToken)
+                ? await ProjectAsync(selected.View, selected.Run)
                 : null;
 
         async ValueTask<WorkflowExecutionState> ProjectAsync(ActorView view, WorkflowRunHeader run)

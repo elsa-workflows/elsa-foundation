@@ -189,21 +189,45 @@ public sealed class KernelRunListTests
         {
             IsolatedActor = new("run-bound", "issued")
         });
-        var ordinary = new Reads(Views);
-        var tests = new Reads(TestRun("run-bound", "bound"), TestRun("run-unbound", "bound"), TestRun("run-unknown-scope", "missing"));
-        IWorkflowRetainedRunSource source = new KernelRunReader(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(ordinary)),
-            new InMemoryWorkflowExecutableStore(), new Access(HostTenant),
+        var malformed = Views[0] with { Header = Views[0].Header with { TypeData = "invalid" } };
+        var misplacedTest = TestRun("misplaced-test", "bound");
+        misplacedTest = misplacedTest with { Header = misplacedTest.Header with { Tenant = Tenant } };
+        var misplacedRun = Views[1] with { Header = Views[1].Header with { Tenant = isolated.Tenant } };
+        var ordinary = new Reads([malformed, misplacedTest, .. Views]);
+        var tests = new Reads(misplacedRun, TestRun("run-bound", "bound"), TestRun("run-unbound", "bound"),
+            TestRun("run-unknown-scope", "missing"));
+        var runs = new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(ordinary));
+        IWorkflowRetainedRunSource source = new KernelRunReader(runs, new InMemoryWorkflowExecutableStore(), new Access(HostTenant),
             testRuns: new KernelTestRuns(new KernelRuns(isolated, _ => ValueTask.FromResult<IActorReads>(tests))),
             testScopes: scopeStore);
+
+        // A one-row dashboard budget must see both physical candidates in this hidden-only page.
+        await using (var bounded = source.ReadAsync(Tenant).GetAsyncEnumerator())
+        {
+            for (var examined = 0; examined < 2; examined++)
+            {
+                Assert.True(await bounded.MoveNextAsync());
+                Assert.Null(bounded.Current);
+            }
+        }
+        Assert.Single(ordinary.Queries);
+        Assert.Empty(tests.Queries);
+        ordinary.Queries.Clear();
 
         var returned = new List<WorkflowExecutionState?>();
         await foreach (var state in source.ReadAsync(Tenant)) returned.Add(state);
         Assert.Equal(Views.Select(view => view.Header.Ref.Id).Append("run-bound"),
             returned.OfType<WorkflowExecutionState>().Select(state => state.WorkflowExecutionId));
-        Assert.Equal(2, returned.Count(candidate => candidate is null));
+        Assert.Equal(5, returned.Count(candidate => candidate is null));
         Assert.Equal(WorkflowRunKind.TestRun, returned.OfType<WorkflowExecutionState>().Last().RunKind);
-        Assert.Equal(Views.Length / 2 + 1, ordinary.Queries.Count);
+        Assert.Equal(4, ordinary.Queries.Count);
         Assert.Equal(2, tests.Queries.Count);
+
+        var listed = new List<ActorRef>();
+        await foreach (var (view, _) in runs.ListAsync(definition: null))
+            listed.Add(view.Header.Ref);
+        Assert.Equal(Views.Select(view => view.Header.Ref), listed);
+
         await foreach (var _ in source.ReadAsync("foreign"))
             throw new InvalidOperationException("A foreign request returned an Actor candidate.");
 
