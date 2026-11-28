@@ -1,34 +1,33 @@
-using Elsa.Workbench.Readiness;
 using Elsa.Workflows.Runtime.KernelHosting;
 
-namespace Elsa.Workbench.CorePreview;
+namespace Elsa.Workbench.Composition;
 
-/// <summary>Resolves Workbench's local Actor store and the explicit developer preview composition.</summary>
+/// <summary>Resolves the Workbench store and hardens production runtime settings.</summary>
 internal static class WorkbenchRuntimeProfile
 {
     internal static void Configure(ConfigurationManager configuration, IHostEnvironment environment, string[] args)
     {
+        if (configuration.GetValue<bool>("Elsa:CorePreview:Enabled"))
+            throw new InvalidOperationException("The Workbench mixed Core Preview has been retired. Use its pinned image " +
+                "to drain the existing stores. See the Workbench compatibility guidance in docs/docker.md.");
+
         var features = configuration.GetSection("CShells:Shells:default:Features");
         var hosting = features.GetSection(WorkflowsRuntimeKernelHostingFeature.FeatureName);
         var actors = IsSelected(hosting);
-        var readinessShell = configuration[$"{ShellReadinessOptions.SectionName}:{nameof(ShellReadinessOptions.DefaultShellName)}"];
-        var preview = actors && (readinessShell is null or "default") && configuration.GetValue<bool>(WorkbenchCorePreview.EnabledKey);
-        if (preview)
-            configuration.AddJsonFile("shells.CorePreview.json", optional: false, reloadOnChange: true);
 
         if (environment.IsProduction())
         {
-            if (preview || !actors && features.GetChildren().Any(feature =>
+            if (!actors && features.GetChildren().Any(feature =>
                     feature.Key is "WorkflowsRuntimeApi" or "WorkflowsRuntimeEntityFrameworkCore"))
                 configuration.AddJsonFile("shells.CorePreview.Production.json", optional: false, reloadOnChange: true);
             else if (actors && IsSelected(features.GetSection("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence")))
                 configuration.AddJsonFile("shells.Actor.Production.json", optional: false, reloadOnChange: true);
+
+            // Host-supplied credentials and explicit arguments take precedence over the selected profile.
+            configuration.AddEnvironmentVariables().AddCommandLine(args);
         }
 
-        // Host-supplied credentials and explicit arguments take precedence over the selected profile.
-        if (preview || environment.IsProduction())
-            configuration.AddEnvironmentVariables().AddCommandLine(args);
-        if (!actors || preview || !string.Equals(hosting["Provider"] ?? "SQLite", "SQLite", StringComparison.OrdinalIgnoreCase) ||
+        if (!actors || !string.Equals(hosting["Provider"] ?? "SQLite", "SQLite", StringComparison.OrdinalIgnoreCase) ||
             !string.IsNullOrWhiteSpace(hosting["SqlitePath"]))
             return;
 

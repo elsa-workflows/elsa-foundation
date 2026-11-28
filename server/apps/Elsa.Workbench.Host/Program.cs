@@ -71,7 +71,6 @@ using Elsa.Tasks;
 using Elsa.Workbench;
 using Elsa.Workbench.Boot;
 using Elsa.Workbench.Composition;
-using Elsa.Workbench.CorePreview;
 using Elsa.Workbench.Readiness;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Api;
@@ -127,9 +126,6 @@ builder.Configuration
     .AddCommandLine(args);
 var configuration = builder.Configuration;
 WorkbenchRuntimeProfile.Configure(configuration, builder.Environment, args);
-// With the Core Preview serving publications (Elsa:CorePreview:Publications), the default shell composes the kernel's shell
-// feature, so the one switch composes the host's serving state below and the shell's coordinator.
-var kernelShell = WorkbenchCorePreview.ComposeKernelShell(builder.Configuration);
 
 // OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF token store is host-owned: one store on the
 // root container, which CShells copies into every shell. It binds the default shell's OpenIddict settings, selects the engine
@@ -467,12 +463,7 @@ builder.Services.AddSingleton<IAttentionContributor>(new ShellActivationAttentio
 builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
 
-// Registered after the shell hosting on purpose: the host stops hosted services in reverse order, so the Core Preview node
-// stops (and its turns end) before CShells drains the default shell its host expressions are evaluated in.
-builder.Services.AddWorkbenchCorePreview(configuration);
-
 var app = builder.Build();
-if (kernelShell is not null) WorkbenchCorePreview.LogKernelShell(app.Logger, kernelShell);
 
 if (bootTimeline is not null)
 {
@@ -514,9 +505,6 @@ app.MapShells();
 // automatic insertion of these middleware earlier in the pipeline.
 app.UseAuthentication();
 app.UseAuthorization();
-WorkbenchCorePreviewReads.Map(app);
-// The Core Preview's HTTP route host: published HTTP workflows on the kernel, at Elsa:CorePreview:HttpBasePath.
-KernelHttpEdgeHost.Map(app);
 #if ELSA_DASHBOARD_QUALIFICATION
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), "default", configuration);
 HistoryQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());

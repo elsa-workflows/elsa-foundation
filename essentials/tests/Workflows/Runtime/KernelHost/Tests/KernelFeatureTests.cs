@@ -90,7 +90,7 @@ public sealed class KernelFeatureTests
         var refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelFeature().PostConfigureServices(Shell(hostComposesKernel: false)));
 
         Assert.Contains("KernelServing", refused.Message, StringComparison.Ordinal);
-        Assert.Contains("Elsa:CorePreview:Publications", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("WorkflowsRuntimeKernelHosting", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

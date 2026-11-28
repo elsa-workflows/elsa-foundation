@@ -326,6 +326,33 @@ DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` again
   holds the secrets lane. The dashboard projection feature
   is enabled explicitly so run-health and portfolio queries do not fall back to unavailable/in-memory sources.
 
-The explicit mixed Core Preview is a single-host developer profile. It still uses the
-`WorkflowsRuntimeEntityFrameworkCore` recovery and hierarchy signing keys. Its separate `shells.CorePreview.Production.json` overlay clears those development
-values when the preview runs in Production.
+### Workbench mixed-preview compatibility
+
+Current Workbench runs workflows through the stock Actor shell. It refuses an enabled
+`Elsa:CorePreview:Enabled` setting before opening a store. Deployments with that setting must
+drain their previous mixed Workbench on its matching immutable image, shell file and config.
+The verified mixed Workbench image is
+`elsaworkflows/elsa-workbench@sha256:f636daf45f0be85b7caa0c0b87792ba9b4c582518f0433e1b13afebcd36070aa`
+for Linux AMD64 and ARM64. Use an earlier deployment's own digest if it was already pinned.
+Pause new workflow ingress and recurring producers, and let the previous host settle runs already
+committed to it. Keep its Actor and Runtime databases, executable artifacts, volumes and signing
+keys together for history and replay. Only the earlier owner should open its Actor store.
+
+Remove the mixed-preview setting when ready to start stock Workbench. Use a fresh dedicated Actor
+database. Keep Runtime control separate from Actor storage. If earlier work still needs its own
+delivery service, give stock Workbench a new Runtime control database as well. The
+[Curated Essentials workflow execution guidance](../docker/profiles/essentials-curated/README.md#workflow-execution)
+describes the storage boundary and cutover sequence.
+
+Explicitly mounted classic shells in Workbench still use the `WorkflowsRuntimeEntityFrameworkCore`
+recovery and hierarchy signing keys. `shells.CorePreview.Production.json` clears their development
+values in Production.
+
+For the historical apphost witnesses, build both Workbench and the Native runner from the same
+checkout. Pass the checkout as the second argument after the configuration to the scripts in
+`tools/ci/actor-foundation`:
+
+- `check-workbench-core-preview.sh` uses `9e10496bb837b4ce66b0e9d7b1aca6340a0d06b3` for the final mixed apphost.
+- `check-workbench-core-preview-reads.sh` uses `23a7c4a718363bc4f60886426551f189ecc95505` for the earlier diagnostic API.
+
+Use both executables from the selected checkout when calling a historical Native runner mode directly.
