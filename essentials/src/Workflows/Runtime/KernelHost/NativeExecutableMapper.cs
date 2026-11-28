@@ -277,7 +277,7 @@ public static class NativeExecutableMapper
             {
                 var safeSource = binding.Source == RuntimeInputBindingSource.Literal ||
                     scope.Graph is null && binding.Source is (RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember);
-                if (!safeSource || binding.EffectivePolicy.HidesValue() || binding.Literal?.Policy.HidesValue() == true)
+                if (!safeSource || binding.InputKey == nameof(Native.EvaluateDecision.Decision) && RequiresProtectedValue(binding))
                     throw NativeMappingRefusedException.Binding(id, binding.InputKey,
                         "Use a plain literal or an unprotected workflow input for Evaluate Decision.");
             }
@@ -579,15 +579,27 @@ public static class NativeExecutableMapper
             policy.HidesValue() || policy.RedactionMode is not null || policy.RetentionPolicy is not null ||
             policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom;
 
+        private static bool RequiresProtectedValue(RuntimeInputBinding binding) =>
+            UnsupportedOutputPolicy(binding.EffectivePolicy) ||
+            binding.Literal is { } literal && UnsupportedOutputPolicy(literal.Policy);
+
         // ---- inputs, captures ------------------------------------------------------------------------------------
 
         private void MapInputs(ExecutableNode source, Native.Node node, IReadOnlySet<string> consumed, Scope scope)
         {
             var id = source.ExecutableNodeId;
             var shape = NativeActivityShape.For(node.Type);
+            var decision = node.Type == typeof(Native.EvaluateDecision);
+            var verifiedDecisionInputs = decision && ExecutableDecisionPinMetadata.HasVerifiedWorkflowInputs(source.Metadata);
             foreach (var (key, binding) in source.InputBindings.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             {
                 if (consumed.Contains(key)) continue;
+                // An old publication can still be restored and republished. Its Decision runner refuses the
+                // invocation, and the Native model never hydrates these unchecked values or snapshots them.
+                if (decision && key != nameof(Native.EvaluateDecision.Decision) &&
+                    (RequiresProtectedValue(binding) || !verifiedDecisionInputs &&
+                     binding.Source is RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember))
+                    continue;
                 var mapped = MapBinding(binding, id, key, scope);
                 switch (shape.RuleFor(key))
                 {

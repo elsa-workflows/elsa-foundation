@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Metadata keys for the frozen decision bound to a compiled activity node.</summary>
@@ -19,5 +21,24 @@ public static class ExecutableDecisionPinMetadata
 
         var pin = hasBehavioral ? behavioral : historical;
         return pin is { Length: > 0 and <= 2 * 1024 * 1024 } ? pin : null;
+    }
+
+    /// <summary>Whether the behaviorally hashed pin attests that its workflow input sources permit a plain read.</summary>
+    public static bool HasVerifiedWorkflowInputs(IReadOnlyDictionary<string, string> metadata)
+    {
+        if (!metadata.ContainsKey(BehavioralKey) || Read(metadata) is not { } pin)
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(pin, new JsonDocumentOptions { MaxDepth = 16 });
+            return document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.EnumerateObject().Where(property => property.NameEquals("inputProtectionVersion"))
+                    .Take(2).ToArray() is [{ Value.ValueKind: JsonValueKind.Number } marker] &&
+                marker.Value.TryGetInt32(out var version) && version == 1;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

@@ -48,6 +48,11 @@ internal sealed class ActorDecisionRunner(
         if (grant.Status != CurrentSubjectPermissionStatus.Granted)
             return Refuse("decisions.forbidden", "The execution subject cannot evaluate this decision.");
 
+        if (node.InputBindings.Values.Any(DecisionWorkflowPin.RequiresValueProtection) ||
+            node.InputBindings.Values.Any(DecisionWorkflowPin.IsWorkflowInput) &&
+            !ExecutableDecisionPinMetadata.HasVerifiedWorkflowInputs(node.Metadata))
+            return Refuse("decisions.republish-required", "Republish the workflow to verify the decision input sources.");
+
         Dictionary<string, DecisionValue>? inputs;
         try { inputs = invocation.Inputs.Deserialize<Dictionary<string, DecisionValue>>(InputJson); }
         catch (JsonException) { return InvalidInputs(); }

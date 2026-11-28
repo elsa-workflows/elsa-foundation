@@ -39,8 +39,10 @@ internal sealed class DecisionPinSource(IDecisionReader decisions, IDecisionComp
             if (asset is null || asset.Id != assetId || asset.DeletedAt is not null || asset.PublishedVersionId is null) throw Invalid();
             if (versionId == "latest") versionId = asset.PublishedVersionId;
             var version = await decisions.FindVersionAsync(tenant, assetId, versionId, cancellationToken) ?? throw Invalid();
+            var workflowInputs = node.InputBindings.Values.Where(DecisionWorkflowPin.IsWorkflowInput).ToArray();
             if (version.AssetId != assetId || version.Id != versionId || version.IsSensitive ||
-                node.InputBindings.Values.Any(input => RequiresValueProtection(input, context)))
+                node.InputBindings.Values.Any(DecisionWorkflowPin.RequiresValueProtection) ||
+                workflowInputs.Any(input => RequiresSourceProtection(input, context)))
                 throw new DecisionInvocationException("protected-binding-unsupported", "This decision binding cannot preserve the required workflow source or value protection.");
             var compiled = compiler.Compile(version.Xml, cancellationToken);
             if (!compiled.Success || compiled.Artifact is not { } artifact || artifact.ContentHash != version.Artifact.ContentHash ||
@@ -48,21 +50,17 @@ internal sealed class DecisionPinSource(IDecisionReader decisions, IDecisionComp
                 artifact.DecisionId != version.Artifact.DecisionId || artifact.ProfileId != version.Artifact.ProfileId ||
                 artifact.SemanticsId != version.Artifact.SemanticsId ||
                 !artifact.ExecutableBytes.SequenceEqual(version.Artifact.ExecutableBytes)) throw Invalid();
-            var pin = new DecisionWorkflowPin(selection, tenant, assetId, versionId, artifact);
+            var pin = new DecisionWorkflowPin(selection, tenant, assetId, versionId, artifact)
+            {
+                InputProtectionVersion = workflowInputs.Length > 0 ? 1 : 0
+            };
             claims.Add(new(node.ExecutableNodeId, ExecutableDecisionPinMetadata.BehavioralKey, pin.Serialize()));
         }
         return new(nodeMetadata: claims);
     }
 
-    private static bool RequiresValueProtection(RuntimeInputBinding binding, ExecutableCompilationContext context)
+    private static bool RequiresSourceProtection(RuntimeInputBinding binding, ExecutableCompilationContext context)
     {
-        if (RequiresValueProtection(binding.EffectivePolicy) ||
-            binding.Literal is { } literal && RequiresValueProtection(literal.Policy))
-            return true;
-
-        if (binding.Source is not (RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember))
-            return false;
-
         var member = binding.WorkflowRequest?.MemberKey;
         var declarations = context.Source.State.Inputs.Where(input =>
             StringComparer.Ordinal.Equals(input.Name, member)).Take(2).ToArray();
@@ -70,10 +68,6 @@ internal sealed class DecisionPinSource(IDecisionReader decisions, IDecisionComp
             !string.IsNullOrWhiteSpace(source.StorageDriverType) || !string.IsNullOrWhiteSpace(source.ConnectionType) ||
             StringComparer.Ordinal.Equals(source.Type.Alias, typeof(ConnectionReference).FullName);
     }
-
-    private static bool RequiresValueProtection(ValueProtectionPolicy policy) =>
-        policy.HidesValue() || policy.RedactionMode is not null || policy.RetentionPolicy is not null ||
-        policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom;
 
     private static DecisionInvocationException Invalid() => new("invalid-selection", "An exact supported published decision must be selected as asset@version or asset@latest.");
 }

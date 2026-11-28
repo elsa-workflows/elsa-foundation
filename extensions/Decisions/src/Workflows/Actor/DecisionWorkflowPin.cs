@@ -1,12 +1,16 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Decisions.Core;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Decisions.Workflows.Runtime;
 
 /// <summary>Exact publication content embedded in the native executable, with no Design-store dependency.</summary>
 internal sealed record DecisionWorkflowPin(string Selection, string TenantId, string AssetId, string VersionId, DecisionArtifact Artifact)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int InputProtectionVersion { get; init; }
+
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
@@ -14,6 +18,17 @@ internal sealed record DecisionWorkflowPin(string Selection, string TenantId, st
     };
 
     public string Serialize() => JsonSerializer.Serialize(this, Options);
+
+    internal static bool IsWorkflowInput(RuntimeInputBinding binding) =>
+        binding.Source is RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember;
+
+    internal static bool RequiresValueProtection(RuntimeInputBinding binding) =>
+        RequiresValueProtection(binding.EffectivePolicy) ||
+        binding.Literal is { } literal && RequiresValueProtection(literal.Policy);
+
+    private static bool RequiresValueProtection(ValueProtectionPolicy policy) =>
+        policy.HidesValue() || policy.RedactionMode is not null || policy.RetentionPolicy is not null ||
+        policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom;
 
     public static DecisionWorkflowPin Parse(string serialized)
     {
