@@ -180,6 +180,7 @@
 		<ProjectReference Include="../../../essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../../essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../../essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="../../../essentials/src/Workflows/Runtime/Persistence/Standalone/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../../essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj" />
 		<ProjectReference Include="../../../essentials/src/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj" />
 		<!--
