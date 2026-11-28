@@ -89,6 +89,7 @@
       "essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj",
       "essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj",
       "essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj",
+      "essentials/src/Workflows/Dashboard/Retained/Elsa.Workflows.Dashboard.Retained.csproj",
       "essentials/src/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj",
       "essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
       "essentials/src/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj",

@@ -380,6 +380,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
             typeof(WorkflowsDashboardFeature).Assembly,
+            typeof(WorkflowsDashboardRetainedFeature).Assembly,
             // WorkflowsDashboard DependsOn WorkflowDesignValidations — its assembly must be in the catalog or the
             // dependency resolver fails shell activation with FeatureNotFoundException.
             typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
