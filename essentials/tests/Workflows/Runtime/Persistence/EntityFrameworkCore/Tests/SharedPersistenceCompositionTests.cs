@@ -1,9 +1,9 @@
+using Elsa.Locking.Core;
 using System.Text.Json;
 using CShells;
 using CShells.Configuration;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
-using Elsa.Locking.Core;
 using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Tasks;
@@ -12,7 +12,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -26,63 +25,12 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class SharedPersistenceCompositionTests : IDisposable
 {
     private const string ShellName = "shared-runtime-persistence";
-    private const string FeatureName = "WorkflowsRuntimeEntityFrameworkCore";
     private const string ArtifactsFeature = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
     private const string PublicationFeature = "WorkflowsRuntimePublicationEntityFrameworkCorePersistence";
     private const string RecoverySigningKey = "shared-runtime-recovery-signing-key-32-bytes";
-    private const string HierarchySigningKey = "shared-runtime-hierarchy-signing-key-32-bytes";
     private readonly string databasePath = Path.Join(Path.GetTempPath(), $"elsa-shared-runtime-{Guid.NewGuid():N}.db");
 
     private string ConnectionString => $"Data Source={databasePath};Pooling=False";
-
-    [Fact]
-    public async Task Named_resource_materializes_to_runtime_and_execution_state_survives_shell_restart()
-    {
-        const string executionId = "shared-runtime-execution";
-        var now = DateTimeOffset.UtcNow;
-        var state = new WorkflowExecutionState(
-            executionId,
-            new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
-            WorkflowExecutionStatus.Completed,
-            null,
-            now,
-            now,
-            now,
-            now,
-            null,
-            null,
-            null,
-            new Dictionary<string, string>());
-
-        await using (var host = CreateHost())
-        {
-            var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-            await using var scope = shell.ServiceProvider.CreateAsyncScope();
-            var options = scope.ServiceProvider.GetRequiredService<RuntimeWorkflowExecutionEntityFrameworkCoreOptions>();
-
-            Assert.Equal("Sqlite", options.Provider);
-            Assert.Equal("Shared", options.ConnectionName);
-            Assert.Null(options.ConnectionString);
-
-            var database = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
-            Assert.Equal(databasePath, database.Database.GetDbConnection().DataSource);
-            Assert.NotEmpty(await database.Database.GetAppliedMigrationsAsync());
-            Assert.Empty(await database.Database.GetPendingMigrationsAsync());
-
-            await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(state);
-        }
-
-        await using (var host = CreateHost())
-        {
-            var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-            await using var scope = shell.ServiceProvider.CreateAsyncScope();
-            var persisted = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId);
-
-            Assert.NotNull(persisted);
-            Assert.Equal(WorkflowExecutionStatus.Completed, persisted.Status);
-            Assert.Equal("artifact", persisted.PinnedExecutable.ArtifactId);
-        }
-    }
 
     [Fact]
     public async Task Artifact_and_test_scope_features_own_the_durable_state_without_the_resumption_runner()
@@ -212,81 +160,13 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
         }
     }
 
-    [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    public async Task Broad_and_publication_features_share_one_context_and_the_explicit_cache_policy(bool artifactsFirst, bool cacheEnabled)
-    {
-        await using var host = CreateHost(blueprint: shell => ComposeBoth(shell, artifactsFirst, cacheEnabled, RecoverySigningKey));
-        var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-        string[] expectedOrder = artifactsFirst ? [ArtifactsFeature, FeatureName] : [FeatureName, ArtifactsFeature];
-        Assert.Equal(expectedOrder, shell.ServiceProvider.GetRequiredService<ShellSettings>().EnabledFeatures.Where(expectedOrder.Contains));
-        await using var scope = shell.ServiceProvider.CreateAsyncScope();
-        var services = scope.ServiceProvider;
-        var database = Assert.Single(services.GetServices<RuntimeDbContext>());
-        Assert.Equal(databasePath, database.Database.GetDbConnection().DataSource);
-        Assert.NotEmpty(await database.Database.GetAppliedMigrationsAsync());
-        Assert.Empty(await database.Database.GetPendingMigrationsAsync());
-        var cache = Assert.Single(services.GetServices<WorkflowExecutableCacheOptions>());
-        Assert.Equal((cacheEnabled, 19), (cache.Enabled, cache.Capacity));
-        var store = Assert.Single(services.GetServices<IWorkflowExecutableStore>());
-        if (cacheEnabled)
-            Assert.IsType<CachingWorkflowExecutableStore>(store);
-        else
-            Assert.IsType<EfWorkflowExecutableStore>(store);
-        Assert.IsType<EfWorkflowActivationSwitch>(Assert.Single(services.GetServices<IWorkflowActivationSwitch>()));
-        Assert.IsType<EfStandaloneTriggerStore>(services.GetRequiredService<IStandaloneTriggerStore>());
-        var executable = CreateExecutable(DateTimeOffset.UtcNow);
-        await store.SaveAsync(executable);
-        Assert.Equal(executable.Identity, (await store.FindAsync(executable.Identity.ArtifactId))?.Identity);
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Broad_and_publication_features_refuse_conflicting_recovery_keys_in_either_order(bool artifactsFirst)
-    {
-        const string conflictingKey = "shared-runtime-conflicting-recovery-signing-key";
-        await using var host = CreateHost(blueprint: shell => ComposeBoth(shell, artifactsFirst, cacheEnabled: true, conflictingKey));
-        var registry = host.GetRequiredService<IShellRegistry>();
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await registry.GetOrActivateAsync(ShellName));
-        Assert.Contains("requires one compatible recovery-continuation signing key", error.InnerException?.Message);
-    }
-
     public void Dispose()
     {
         foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(path);
     }
 
-    private static void ComposeBoth(ShellBuilder shell, bool artifactsFirst, bool cacheEnabled, string artifactSigningKey)
-    {
-        void AddPublication() => shell.WithFeature(ArtifactsFeature, feature =>
-                feature.WithSetting(nameof(RuntimeArtifactsEntityFrameworkCoreFeature.RecoveryContinuationSigningKey), artifactSigningKey))
-            .WithFeature(PublicationFeature);
-
-        void AddBroad() => shell.WithFeature(FeatureName, feature => feature
-            .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.RecoveryContinuationSigningKey), RecoverySigningKey)
-            .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.HierarchyCursorSigningKey), HierarchySigningKey)
-            .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.CacheWorkflowExecutables), cacheEnabled)
-            .WithSetting(nameof(RuntimeEntityFrameworkCoreFeature.WorkflowExecutableCacheCapacity), 19));
-
-        shell.WithFeature(RuntimeEntityFrameworkCoreFeatureTests.RuntimeRootFeature.Name);
-        if (artifactsFirst)
-        {
-            AddPublication();
-            AddBroad();
-        }
-        else
-        {
-            AddBroad();
-            AddPublication();
-        }
-    }
-
-    private ServiceProvider CreateHost(IReadOnlyDictionary<string, string?>? features = null, Action<ShellBuilder>? blueprint = null)
+    private ServiceProvider CreateHost(IReadOnlyDictionary<string, string?> features)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -296,34 +176,33 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
                 ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
                 ["ConnectionStrings:Shared"] = ConnectionString
             })
-            .AddInMemoryCollection(features ?? new Dictionary<string, string?>
-            {
-                [$"CShells:Shells:{ShellName}:Features:{FeatureName}"] = null,
-                [$"CShells:Shells:{ShellName}:Features:{FeatureName}:RecoveryContinuationSigningKey"] = RecoverySigningKey,
-                [$"CShells:Shells:{ShellName}:Features:{FeatureName}:HierarchyCursorSigningKey"] = HierarchySigningKey,
-                [$"CShells:Shells:{ShellName}:Features:{RuntimeEntityFrameworkCoreFeatureTests.RuntimeRootFeature.Name}"] = null
-            })
+            .AddInMemoryCollection(features)
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton<IDistributedLockProvider, RuntimeEntityFrameworkCoreFeatureTests.ProcessLockProvider>();
+        services.AddSingleton<IDistributedLockProvider, FixtureLockProvider>();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddEfPersistenceResources(configuration, typeof(SharedPersistenceCompositionTests).Assembly);
-        services.AddCShells(shells =>
-        {
-            shells.WithAssemblies(
+        services.AddCShells(shells => shells.WithAssemblies(
                 typeof(RuntimeDbContext).Assembly,
-                typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
-                typeof(WorkflowsRuntimeResumptionFeature).Assembly,
-                typeof(TasksFeature).Assembly,
-                typeof(RuntimeEntityFrameworkCoreFeatureTests.RuntimeRootFeature).Assembly);
-            if (blueprint is null)
-                shells.WithConfigurationProvider(configuration);
-            else
-                shells.AddShell(ShellName, blueprint);
-        });
+                typeof(TasksFeature).Assembly)
+            .WithConfigurationProvider(configuration));
         return services.BuildServiceProvider(validateScopes: true);
+    }
+
+    private sealed class FixtureLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     private static WorkflowExecutable CreateExecutable(DateTimeOffset now)

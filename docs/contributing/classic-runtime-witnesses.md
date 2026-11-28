@@ -119,6 +119,36 @@ dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj \
   --filter 'FullyQualifiedName~RuntimeAlteration|FullyQualifiedName~RuntimeCoreEngineShapeGuardTests|FullyQualifiedName~DomainManagementApiCompositionTests|FullyQualifiedName~DomainApiCapabilityRegistrationTests'
 ```
 
+## Classic Runtime provider witnesses
+
+Use `415905150f6060a2b257649fe48c645873a428cc` for the classic provider
+checkpoint, claim, resumption, dispatch, timer, historical projection and
+executable collection cases. The source pins the original provider runners,
+fixtures, historical snapshots and restore locks. Run the provider suite in an
+owned checkout with disposable databases.
+
+```sh
+ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS=1 \
+  dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
+
+Current provider tests keep the shared schema and historical-row preservation,
+artifact and activation transitions, occurrence claims, Actor publication pins
+and Events, and standalone and TestRun stores.
+
+The same source also pins the classic SQLite checkpoints, resumptions, queue
+drain and collector tests, including their linked fixtures. In that checkout,
+run:
+
+```sh
+dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
+
+The current SQLite suite exercises physical publication, standalone delivery,
+TestRun cleanup, shared Runtime tables, and Actor executable retention roots.
+
 ## Classic Dashboard EF selector
 
 The `WorkflowsDashboardEntityFrameworkCore` shell selector composed the classic

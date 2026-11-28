@@ -53,13 +53,16 @@ internal static class StandaloneTriggerResourceProviderSmoke
         {
             await using (var admin = createContext(fixture.ConnectionString))
                 await admin.Database.ExecuteSqlRawAsync($"CREATE DATABASE {database}");
-            var services = new ServiceCollection(); services.AddLogging(); services.AddWorkflowRuntime();
-            services.AddRuntimeEntityFrameworkCore(new()
+            var services = new ServiceCollection();
+            services.AddLogging();
+            WorkflowPublicationDefaults.Add(services);
+            new RuntimeArtifactsEntityFrameworkCoreFeature
             {
                 Provider = providerName, ConnectionString = connection.ConnectionString,
-                HierarchyCursorSigningKey = "standalone-native-provider-hierarchy-key-32bytes",
                 RecoveryContinuationSigningKey = "standalone-native-provider-recovery-key-32bytes"
-            });
+            }.ConfigureServices(services);
+            new RuntimePublicationEntityFrameworkCoreFeature().ConfigureServices(services);
+            new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
             services.AddEfModuleMigrations<RuntimeDbContext>(providerName);
             await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             foreach (var initializer in provider.GetServices<IShellInitializer>()) await initializer.InitializeAsync();

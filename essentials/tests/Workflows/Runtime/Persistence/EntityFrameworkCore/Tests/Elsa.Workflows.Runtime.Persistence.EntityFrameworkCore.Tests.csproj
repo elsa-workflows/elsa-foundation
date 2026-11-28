@@ -27,13 +27,6 @@
     <ProjectReference Include="../../../../../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="../../../../../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <!-- The EF Runtime feature depends on these features; shell activation resolves them from their assemblies. -->
-    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
-    <!-- The durable timer pump, driven over the EF timer store by ClaimLeaseOverrunContract. -->
-    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="../../../../../../src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\extensions\Tasks\src\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
@@ -42,14 +35,16 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Mediator\Elsa.Mediator\Elsa.Mediator.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../../../../../../extensions/Bpmn/src/Composite/Elsa.Activities.Bpmn.Composite.csproj" />
     <ProjectReference Include="../../../../../../../extensions/Bpmn/src/Design/Elsa.Activities.Bpmn.Design.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="../../../../../../src/Workflows/Runtime/Persistence/Schema/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../src/Workflows/Runtime/Persistence/Standalone/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj" />
     <!-- RecordingLogger, for the crash-repair contract's leaked-reference errors (#2251). -->
     <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
     <!-- A parent waiting on a DispatchWorkflow child, run end to end on the EF stores. -->
@@ -68,10 +63,7 @@
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaVersionSkewTestSupport.cs" Link="EfSchemaVersionSkewTestSupport.cs" />
     <!-- Stages a finalization by a newer build. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
-    <!-- The claim-lease overrun scenarios share the runtime tests' overrunning dispatcher. -->
-    <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />
-    <!-- The live-drain contention scenarios intercept the outbox store through the runtime tests' forwarding base. -->
-    <Compile Include="..\..\..\Tests\ForwardingOutboxStore.cs" Link="ForwardingOutboxStore.cs" />
+    <Compile Include="../../../../../Activities/Testing/ClrActivityContractTestBuilder.cs" Link="ClrActivityContractTestBuilder.cs" />
     <!-- #2230: the base of every activation-switch double, shared rather than copied. -->
     <Compile Include="..\..\..\Tests\Fixtures\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
   </ItemGroup>
