@@ -612,7 +612,11 @@ public sealed class KernelActivationCoordinator(
 
         var result = await RefreshPeerPublicationsUnderLockAsync(snapshot, token, retryMoves: true);
         if (result == PeerRefreshResult.Moved) return (slot, false);
-        return (await authority.FindAsync(definitionId, slotName, token), true);
+        var latest = await authority.FindAsync(definitionId, slotName, token);
+        var stable = latest is not { ActiveActivationId: { } latestId } ||
+            latest.Revision == slot.Revision && latestId == activation ||
+            serving.Find(latest.SlotId) is { } refreshed && refreshed.Revision == latest.Revision && refreshed.ActivationId == latestId;
+        return (latest, stable);
     }
 
     private static WorkflowActivationResult PeerAuthorityMoved(WorkflowActivationSlot slot) =>
