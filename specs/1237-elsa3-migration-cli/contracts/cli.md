@@ -27,6 +27,8 @@ project references on the migration host, and their settings through the host's 
 | 0 | The report was written and has no `mustFix` or `reconsider` finding. |
 | 1 | The report was written and has at least one `mustFix` or `reconsider` finding. |
 | 2 | Refused to run. No report is written, and `--out` is untouched: the run creates it, and its staging folder, only after the shell has been composed. |
+| 3 | The run stopped on an unexpected error (a bug or an environment problem). No report is written, `--out` keeps its previous content, and standard error carries one line naming the error's type, never its message. |
+| 130 | Cancelled (Ctrl+C). No report is written, and the run removes what it created. |
 
 ## Standard output
 
@@ -39,7 +41,7 @@ and a sentence. The report is written only on exit 0 or 1.
 | `arguments` | An unknown command or option, or an invalid combination of options. |
 | `input-missing` | `<export>` does not exist, or is neither a folder nor a zip. |
 | `input-empty` | No file holds an Elsa 3 definition. |
-| `input-unreadable` | The zip cannot be opened. |
+| `input-unreadable` | The zip cannot be opened, or a folder or file of a folder export cannot be read. |
 | `composition-failed` | A listed feature that the CLI's build does not provide, or a feature that throws while the shell is composed. The reason names the feature or the setting key, never a value. |
 
 ## Output layout

@@ -45,6 +45,12 @@ identity from), and validation lives in the feature — not in a property getter
   it into `ActivityVersionReconciliationModel[]` via the shared `IPayloadSerializer` (so casing/naming
   conventions match the rest of the system). A missing or malformed file raises a domain-scoped
   `InvalidActivityCatalogJsonException` carrying the file path (§2.23.5) — never a raw IO/JSON fault.
+- **`JsonActivityCatalogWriter`** (`IJsonActivityCatalogWriter`) — writes `ActivityVersionReconciliationModel`s as
+  the top-level array the reader reads, through the same `IPayloadSerializer`, so the format has one owner and
+  read(write(x)) = x; an opaque `descriptor` is written back verbatim. The file is indented
+  with `\n` line endings, UTF-8 without a byte order mark, and the same models always give the same bytes. The
+  feature does not register it: export tooling, such as the Elsa 3 migration CLI (spec 1237), registers it. IO
+  faults are not wrapped.
 - **`JsonActivityReconciliationFeature`** — `IShellFeature` that registers the options plus the reader
   and the source, each against its contract so an inheriting feature can replace one in isolation
   (§2.5). `ConfigureServices` is `virtual`; the options instance is the only singleton (an

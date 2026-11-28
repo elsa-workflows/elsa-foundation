@@ -1,0 +1,326 @@
+[
+  {
+    "id": "invoice-reminder-v1",
+    "definitionId": "invoice-reminder",
+    "name": "Invoice reminder",
+    "description": "Reminds a customer of an open invoice. SENTINEL-1237",
+    "createdAt": "2025-03-14T09:26:53.589+00:00",
+    "version": 1,
+    "toolVersion": "3.6.3.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+      "usableAsActivity": false,
+      "autoUpdateConsumingWorkflows": false,
+      "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+    },
+    "root": {
+      "id": "Flowchart1",
+      "nodeId": "Workflow1:Flowchart1",
+      "name": "Flowchart1",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": -160,
+            "y": 60
+          },
+          "size": {
+            "width": 180,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "Remind",
+          "nodeId": "Workflow1:Remind",
+          "name": "Remind",
+          "type": "Acme.NotifyCustomer",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 280,
+                "y": 200
+              },
+              "size": {
+                "width": 180,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "SENTINEL-1237: your invoice is due"
+            }
+          }
+        },
+        {
+          "id": "Logged",
+          "nodeId": "Workflow1:Logged",
+          "name": "Logged",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": -380,
+                "y": 340
+              },
+              "size": {
+                "width": 180,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "SENTINEL-1237: reminder sent"
+            }
+          }
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "activity": "Remind",
+            "port": "Done"
+          },
+          "target": {
+            "activity": "Logged",
+            "port": "In"
+          },
+          "vertices": []
+        }
+      ],
+      "variables": []
+    }
+  },
+  {
+    "id": "shipment-notice-v1",
+    "definitionId": "shipment-notice",
+    "name": "Shipment notice",
+    "description": "Tells a customer the order shipped. SENTINEL-1237",
+    "createdAt": "2025-03-14T09:26:53.589+00:00",
+    "version": 1,
+    "toolVersion": "3.6.3.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+      "usableAsActivity": false,
+      "autoUpdateConsumingWorkflows": false,
+      "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+    },
+    "root": {
+      "id": "Flowchart1",
+      "nodeId": "Workflow1:Flowchart1",
+      "name": "Flowchart1",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": 280,
+            "y": 340
+          },
+          "size": {
+            "width": 180,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "Notify",
+          "nodeId": "Workflow1:Notify",
+          "name": "Notify",
+          "type": "Acme.NotifyCustomer",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 60,
+                "y": 200
+              },
+              "size": {
+                "width": 180,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "SENTINEL-1237: your order shipped"
+            }
+          }
+        }
+      ],
+      "connections": [],
+      "variables": []
+    }
+  },
+  {
+    "id": "welcome-customer-v1",
+    "definitionId": "welcome-customer",
+    "name": "Welcome customer",
+    "description": "Welcomes a new customer. SENTINEL-1237",
+    "createdAt": "2025-03-14T09:26:53.589+00:00",
+    "version": 1,
+    "toolVersion": "3.6.3.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+      "usableAsActivity": false,
+      "autoUpdateConsumingWorkflows": false,
+      "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+    },
+    "root": {
+      "id": "Flowchart1",
+      "nodeId": "Workflow1:Flowchart1",
+      "name": "Flowchart1",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": 60,
+            "y": 340
+          },
+          "size": {
+            "width": 180,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "Log",
+          "nodeId": "Workflow1:Log",
+          "name": "Log",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": -380,
+                "y": 60
+              },
+              "size": {
+                "width": 180,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "SENTINEL-1237: new customer"
+            }
+          }
+        },
+        {
+          "id": "Welcome",
+          "nodeId": "Workflow1:Welcome",
+          "name": "Welcome",
+          "type": "Acme.NotifyCustomer",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": -160,
+                "y": 200
+              },
+              "size": {
+                "width": 180,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "SENTINEL-1237: welcome"
+            }
+          }
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "activity": "Log",
+            "port": "Done"
+          },
+          "target": {
+            "activity": "Welcome",
+            "port": "In"
+          },
+          "vertices": []
+        }
+      ],
+      "variables": []
+    }
+  }
+]

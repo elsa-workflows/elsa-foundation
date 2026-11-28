@@ -11,6 +11,11 @@ of definition files, enable the feature in `shells.json`, start the server — z
   version envelopes read from JSON files to the workflow reconcile pass.
 - `JsonWorkflowCatalogReader` — reads one file into `WorkflowVersionReconciliationModel[]`; every IO/parse
   fault becomes an actionable `InvalidWorkflowCatalogJsonException` naming the path.
+- `JsonWorkflowCatalogWriter` (`IJsonWorkflowCatalogWriter`) — writes `WorkflowVersionReconciliationModel`s as the
+  top-level array the reader reads, through the same `IPayloadSerializer`, so the format has one owner and
+  read(write(x)) = x. The file is indented with `\n` line endings, UTF-8 without a byte order mark, and the same
+  models always give the same bytes. This feature does not register it: export tooling, such as the Elsa 3
+  migration CLI (spec 1237), registers it. IO faults are not wrapped.
 - Because the feature extends the abstract `WorkflowsDesignReconciliationFeature`, enabling it also arms
   the reconcile lifecycle: the reconciler, the `[Order(2)]` startup task (on every node, no lock; #2192), and the
   universal contribution handler.

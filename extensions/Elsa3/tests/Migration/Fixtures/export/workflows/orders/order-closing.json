@@ -1,0 +1,77 @@
+{
+  "id": "order-closing-v1",
+  "definitionId": "order-closing",
+  "name": "Order closing",
+  "description": "Uses CloseOrder. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -160,
+          "y": 60
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "CloseIt",
+        "nodeId": "Workflow1:CloseIt",
+        "name": "CloseIt",
+        "type": "CloseOrder",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": -380,
+              "y": 340
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "workflowDefinitionId": "close-order",
+        "workflowDefinitionVersionId": "close-order-v1",
+        "latestAvailablePublishedVersion": 1,
+        "latestAvailablePublishedVersionId": "close-order-v1"
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

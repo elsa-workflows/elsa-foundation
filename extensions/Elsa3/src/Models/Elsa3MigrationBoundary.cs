@@ -203,6 +203,19 @@ public static class Elsa3MigrationDiagnosticCodes
     public const string DefinitionMappingFailed = "ELS3-MIGRATION-DEFINITION-MAPPING-FAILED";
 }
 
+/// <summary>
+/// Metadata keys a diagnostic carries as structured data, so migration tooling never parses a message (spec 1237 FR-016a).
+/// </summary>
+public static class Elsa3MigrationDiagnosticMetadataKeys
+{
+    /// <summary>
+    /// The component a component diagnostic names: the Elsa 3 activity type of an unmapped activity, the function name of
+    /// an undeclared function or global, the type name of an unregistered variable type, or the trimmed Elsa 3 storage
+    /// driver type.
+    /// </summary>
+    public const string ComponentName = "ComponentName";
+}
+
 public enum Elsa3MigrationInputKind
 {
     WorkflowDefinitionExportJson,

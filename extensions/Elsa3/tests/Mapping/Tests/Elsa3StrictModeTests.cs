@@ -67,6 +67,19 @@ public sealed class Elsa3StrictModeTests
         }
     }
 
+    /// <summary>The strict parse runs on the converted, wrapped source, so its position is not the Elsa 3 one and is not named.</summary>
+    [Fact]
+    public async Task The_strict_mode_refusal_names_no_position_of_the_converted_source()
+    {
+        foreach (var result in await ConvertBothAsync("var x = 1;\nx + 010"))
+        {
+            var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+            Assert.Contains("strict mode, where it does not parse", refusal.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("line", refusal.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("column", refusal.Message, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public async Task Javascript_that_does_not_parse_at_all_keeps_the_parse_refusal()
     {
