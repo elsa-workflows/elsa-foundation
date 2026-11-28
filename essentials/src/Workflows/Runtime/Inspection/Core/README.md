@@ -6,4 +6,4 @@ The normal HTTP implementation remains `HttpContextActivityExecutionInspectionAu
 
 This pre-GA assembly/namespace move changes public contract identity. Consumers import `Elsa.Workflows.Runtime.Inspection.Core` and reference this package; no compatibility alias or second authorization policy is introduced.
 
-See [extension points](EXTENSION_POINTS.md) and the [Runtime API catalog](../../Api/EXTENSION_POINTS.md).
+See [extension points](EXTENSION_POINTS.md) and the [Runtime API catalog](../../Api/Elsa.Workflows.Runtime.Api/EXTENSION_POINTS.md).

@@ -53,7 +53,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         var assembly = GetType().Assembly;
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityContractStorageDriverProvider, RuntimeActivityContractStorageDriverProvider>());
-        services.AddWorkflowPublicationDefaults();
+        WorkflowPublicationDefaults.Add(services);
         // Only claim registrations that this feature actually added, for the reason given at the policy and
         // projection-intent stores below.
         PublishingPersistenceFamilyBackend.TryAddInMemory<IPublicationRecordStore, InMemoryPublicationRecordStore>(

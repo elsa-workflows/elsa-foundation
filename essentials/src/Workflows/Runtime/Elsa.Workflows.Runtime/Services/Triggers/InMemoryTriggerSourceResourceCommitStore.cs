@@ -13,9 +13,14 @@ internal sealed class InMemoryTriggerSourceResourceCommitStore(IStandaloneTrigge
     TriggerManagementTargets? targets = null, IEnumerable<IIngressReservationPolicy>? reservationPolicies = null) : ITriggerSourceResourceCommitStore
 {
     private readonly IReadOnlyDictionary<string, IIngressReservationPolicy> policies = RuntimeIngressReservationRules.Policies(reservationPolicies);
+    private readonly PublicationActivationSwitch? publicationSwitch = activationSwitch is InMemoryWorkflowActivationSwitch classic
+        ? classic.Inner
+        : activationSwitch as PublicationActivationSwitch;
+
     public bool SupportsActivatedResources => resources is InMemoryStandaloneTriggerStore store && ReferenceEquals(store.State, state) &&
         ingress.SupportsAdmission && slots is InMemoryWorkflowActivationAuthority && bindings is InMemoryWorkflowTriggerBindingStore &&
-        activationSwitch is InMemoryWorkflowActivationSwitch selected && RuntimeIngressReservationRules.SamePolicies(selected.ReservationPolicies, policies) && ReferenceEquals(selected.ReservationState, state) &&
+        publicationSwitch is { } selected && RuntimeIngressReservationRules.SamePolicies(selected.ReservationPolicies, policies) &&
+        ReferenceEquals(selected.ReservationState, state.PublicationReservations) &&
         ReferenceEquals(selected.ReservationAuthority, slots) && ReferenceEquals(selected.ReservationBindings, bindings) &&
         ReferenceEquals(selected.ReservationReferences, targets?.Sources) &&
         targets is not null && ReferenceEquals(targets.Slots, slots) && targets.Executables is InMemoryWorkflowExecutableStore material &&

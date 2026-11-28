@@ -1,19 +1,18 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
-using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
-public sealed partial class InMemoryWorkflowActivationSwitch
+internal sealed partial class PublicationActivationSwitch
 {
     private readonly IReadOnlyDictionary<string, IIngressReservationPolicy> _reservationPolicies;
     internal IReadOnlyDictionary<string, IIngressReservationPolicy> ReservationPolicies => _reservationPolicies;
-    private readonly InMemoryRuntimeCheckpointStoreState? _reservationState;
+    private readonly InMemoryPublicationReservationState? _reservationState;
     private readonly IPersistenceAccessContextAccessor? _reservationAccess;
     private readonly InMemoryWorkflowTriggerBindingStore? _reservationBindings;
-    internal InMemoryRuntimeCheckpointStoreState? ReservationState => _reservationState;
+    internal InMemoryPublicationReservationState? ReservationState => _reservationState;
     internal InMemoryWorkflowActivationAuthority ReservationAuthority => _authority;
     internal InMemoryWorkflowTriggerBindingStore? ReservationBindings => _reservationBindings;
     internal IWorkflowExecutableSourceReferenceStore ReservationReferences => _references;
@@ -39,9 +38,9 @@ public sealed partial class InMemoryWorkflowActivationSwitch
         RuntimeIngressReservationRules.CheckSemanticCandidates(claims, _reservationPolicies);
         foreach (var claim in claims)
         {
-            foreach (var prior in _reservationState.IngressReservations.Values)
+            foreach (var prior in _reservationState.Reservations.Values)
                 RuntimeIngressReservationRules.CheckSemanticOwner(prior, claim, _reservationPolicies);
-            if (_reservationState.IngressReservations.TryGetValue(claim.ReservationId, out var existing)) RuntimeIngressReservationRules.CheckOwner(existing, claim);
+            if (_reservationState.Reservations.TryGetValue(claim.ReservationId, out var existing)) RuntimeIngressReservationRules.CheckOwner(existing, claim);
             var active = RuntimeIngressReservationRules.ConflictingBindingsAsync(_reservationBindings, claim, _reservationPolicies,
                 exclude: binding => binding.SlotId == slot.SlotId || KnownOtherScope(binding, persistence)).AsTask().GetAwaiter().GetResult();
             if (active.Any(binding => binding.SlotId != slot.SlotId && !KnownOtherScope(binding, persistence)))
@@ -51,7 +50,7 @@ public sealed partial class InMemoryWorkflowActivationSwitch
     }
 
     private bool KnownOtherScope(WorkflowTriggerBinding binding, PersistenceScope current) => binding.SlotId is not null &&
-        _reservationState!.IngressReservations.Values.Any(claim => claim.OwnerKind == RuntimeIngressReservation.PublicationSlotOwner &&
+        _reservationState!.Reservations.Values.Any(claim => claim.OwnerKind == RuntimeIngressReservation.PublicationSlotOwner &&
             claim.OwnerId == binding.SlotId && claim.StimulusType == binding.StimulusType && claim.StimulusHash == binding.StimulusHash && claim.Scope.Persistence != current);
 
     private void ApplyReservations(WorkflowActivationSlot slot, IReadOnlyList<RuntimeIngressReservation> claims)
@@ -59,9 +58,9 @@ public sealed partial class InMemoryWorkflowActivationSwitch
         if (_reservationState is null) return;
         var persistence = _reservationAccess!.Current.RequireScope();
         var retained = claims.Select(claim => claim.ReservationId).ToHashSet(StringComparer.Ordinal);
-        var removed = _reservationState.IngressReservations.Values.Where(claim => claim.Scope.Persistence == persistence &&
+        var removed = _reservationState.Reservations.Values.Where(claim => claim.Scope.Persistence == persistence &&
             claim.OwnerKind == RuntimeIngressReservation.PublicationSlotOwner && claim.OwnerId == slot.SlotId && !retained.Contains(claim.ReservationId)).Select(claim => claim.ReservationId).ToArray();
-        foreach (var id in removed) _reservationState.IngressReservations.Remove(id);
-        foreach (var claim in claims) _reservationState.IngressReservations[claim.ReservationId] = claim;
+        foreach (var id in removed) _reservationState.Reservations.Remove(id);
+        foreach (var claim in claims) _reservationState.Reservations[claim.ReservationId] = claim;
     }
 }
