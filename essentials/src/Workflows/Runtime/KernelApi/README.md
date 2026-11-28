@@ -4,8 +4,8 @@ Serves the workflow runtime API's Runs list, run summaries and activity timeline
 
 - `WorkflowsRuntimeKernelRetainedApi` serves the Actor routes with the shared Runtime HTTP package.
 - The optional hybrid `WorkflowsRuntimeKernelApi` feature depends on `WorkflowsRuntimeKernel` and
-  `WorkflowsRuntimeApi`. A host selecting the hybrid includes the `Elsa.Workflows.Runtime.Api` package
-  and the base Runtime API feature. After every other feature has registered, the hybrid replaces the runtime API's
+  `WorkflowsRuntimeApi`. A host selecting the hybrid includes the matching `Elsa.Workflows.Runtime.Api` package
+  from the same release and selects the base Runtime API feature. After every other feature has registered, the hybrid replaces the runtime API's
   list, details, activity browse and activity inspection services with the kernel's, and refuses a shell that registers any other implementation. It
   requires the host's `KernelRuns` (`Elsa.Workflows.Runtime.KernelHost`), registered by instance on the root container.
 - The kernel's list shows the kernel's runs in the host's bound tenant (`KernelRuns.Tenant`), and no other runs: a
