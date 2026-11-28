@@ -1,5 +1,5 @@
-.backends-page { min-width:0; }
-.backends-heading { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:24px; }
+.backends-page { display:flex; flex-direction:column; gap:var(--studio-page-gap); min-width:0; }
+.backends-heading { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:16px; }
 .backends-heading > div { min-width:0; }
 .backends-heading h2 { margin:0 0 6px; }
 .backends-heading p { margin:0; color:var(--studio-text-muted); overflow-wrap:anywhere; }

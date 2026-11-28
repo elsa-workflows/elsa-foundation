@@ -3459,7 +3459,7 @@
 
 .wf-properties-info input[type="text"],
 .wf-properties-info textarea,
-.wf-properties-table textarea {
+.wf-properties-table textarea:not([data-studio-field-control]) {
   width: 100%;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
@@ -3503,10 +3503,10 @@
   padding-right: 0;
 }
 
-.wf-properties-table input[type="text"],
-.wf-properties-table input[type="number"],
-.wf-properties-table input[type="date"],
-.wf-properties-table select {
+.wf-properties-table input[type="text"]:not([data-studio-field-control]),
+.wf-properties-table input[type="number"]:not([data-studio-field-control]),
+.wf-properties-table input[type="date"]:not([data-studio-field-control]),
+.wf-properties-table select:not([data-studio-field-control]) {
   width: 100%;
   height: 30px;
   border: 1px solid var(--wf-border);
@@ -3516,6 +3516,36 @@
   font: inherit;
   font-size: var(--studio-body-size);
   padding: 0 8px;
+}
+
+/* Table headers already label each column; keep StudioField legends accessible without repeating headers or skewing row heights. */
+.wf-properties-table td > .studio-field > .studio-form-control > .studio-form-legend,
+.wf-properties-table .wf-input-default-editor > .studio-field > .studio-form-control > .studio-form-legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.wf-properties-table td > .studio-field.studio-form-field > .studio-form-control [data-studio-field-control],
+.wf-properties-table .wf-input-default-editor > .studio-field.studio-form-field > .studio-form-control [data-studio-field-control] {
+  padding-block: 5px;
+}
+
+.wf-input-default-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-input-default-editor > .studio-field {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .wf-properties-cell-center {

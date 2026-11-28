@@ -77,10 +77,10 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
   const edit = !!profile && segment[1] === "edit";
   const detailPath = profile ? `/settings/backends/${encodeURIComponent(profile.id)}` : "/settings/backends";
   if (create || edit) return <BackendForm key={create ? "new" : profile!.id} connections={connections} profile={edit ? profile : undefined} navigate={navigate} />;
-  if (segment.length && !profile) return <div className="backends-page"><div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+  if (segment.length && !profile) return <div className="backends-page">
     <BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current="Unavailable profile" navigate={navigate} />
     <StudioAlert tone="warning">This backend profile is no longer available.</StudioAlert>
-  </div></div>;
+  </div>;
   if (profile) return <BackendDetails key={profile.id} connections={connections} profile={profile} navigate={navigate} detailPath={detailPath} featureManagementAvailable={featureManagementAvailable} onRemoved={() => {if (currentPath.current === path && (!routeOwner || routeOwner.isActive())) navigate("/settings/backends");}} />;
   return <section className="backends-page" aria-label="Backends">
     <div className="backends-heading"><div><h2>Backends</h2><p>Choose where you design and run workflows.</p></div>{connections.allowPersonal ? <StudioButton variant="primary" type="button" onClick={() => navigate("/settings/backends/new")}><Plus size={16} aria-hidden="true" />Add backend</StudioButton> : null}</div>
