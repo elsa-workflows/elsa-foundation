@@ -124,9 +124,8 @@ internal static class UserTaskWaitFormatChecks
             await RefusesOtherFormatAsync(() => EfStore.RequireSqliteRootAdmissionAsync(wrongMarker, definitions, token));
         Require(await candidate.UpgradeShippedFormatAsync(token), "A stopped shipped SQLite file must advance exactly once.");
         Require(!await candidate.UpgradeShippedFormatAsync(token), "A resumed SQLite upgrade must be idempotent.");
-        var wrongScope = SqliteEmbeddedFoundation.WithRootStartProtection(path, "incorrect-actor-owner", actorType,
-            (_, _) => ValueTask.FromResult(true), EmbeddedTenant.Bind("other-publisher"));
-        await RefusesOtherFormatAsync(async () => await wrongScope.UpgradeShippedFormatAsync(token));
+        var wrongOwner = new SqliteEmbeddedFoundation(path, "incorrect-actor-owner", "other-actor-type");
+        await RefusesOtherFormatAsync(async () => await wrongOwner.UpgradeShippedFormatAsync(token));
         await using var current = Open(candidate: true);
         await using var old = Open(candidate: false);
         await VerifyMarkersAsync(current, old, token);
