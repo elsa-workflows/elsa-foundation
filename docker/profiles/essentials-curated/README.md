@@ -41,6 +41,14 @@ to the new store format during the preview. An older Actor Foundation database i
 or schema changes. Keep the original volume or PostgreSQL database with the earlier matching image for a
 rollback. Workflow definitions, publication and identity keep their existing module connections.
 
+Pause standalone sources and settle any pending deliveries with the previous Runtime owner before
+switching a reused workflow-control database. Use its [delivery inspection and recovery controls](../../../docs/standalone-triggers.md)
+to drain accepted work or cancel eligible pending recipients. Use the earlier Runtime owner for history
+and replay of its standalone receipts. If the old queue still has work, keep it with the earlier owner.
+To run the new preview separately, use a fresh workflow-control database, then publish the workflows and
+bind their standalone resources in that deployment. Keep the matching Runtime database or rollback
+snapshot with each Actor Foundation database.
+
 ## Build
 
 To build locally, copy this directory, select the matching released Foundation and builder version, and follow
