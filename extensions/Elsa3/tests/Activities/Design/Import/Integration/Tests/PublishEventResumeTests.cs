@@ -23,16 +23,8 @@ public sealed class PublishEventResumeTests
 
         var waiting = await host.ExecuteAsync(waiter);
         var reads = host.Shell.ServiceProvider.GetRequiredService<KernelRuns>();
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        while (true)
-        {
-            var pending = await host.ReadRunAsync(waiting);
-            Assert.True(pending.Workflow?.Status is null or WorkflowExecutionStatus.Running, pending.Describe());
-            if (pending.Activities.Any(activity => activity.AuthoredActivityId == "wait" && activity.Status == ActivityExecutionStatus.Running))
-                break;
-            await Task.Delay(100, deadline.Token);
-        }
-        Assert.False(await reads.ListAsync(starterDefinition, deadline.Token).AnyAsync(deadline.Token));
+        await host.WaitForActiveNodeAsync(waiting, "wait");
+        Assert.False(await reads.ListAsync(starterDefinition).AnyAsync());
 
         var published = await host.RunAsync(publisher);
         var resumed = await host.WaitForSettledAsync(waiting);
