@@ -158,6 +158,28 @@ for the producer, importer, and fixture.
 Current source retains the Publishing executable export and material checks, the Design
 JSON workflow reconciliation path, and the Actor HTTP provider witnesses.
 
+## Classic Dispatch and called-workflow control
+
+Use the pinned source for the classic child start, parent wait and resume, child
+control delivery, and local/EF checkpoint witnesses. Current Native child
+execution uses the same authored publication pin and Actor-owned child execution.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-dispatch" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
+  cd "$compatibility_root/classic-dispatch"
+  dotnet test essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true
+  dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~DispatchWorkflowTests|FullyQualifiedName~BpmnCalledWorkflowControlEfTests'
+  dotnet test extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release -p:RestoreLockedMode=true \
+    --filter FullyQualifiedName~Actual_later_control_producer_can_replace
+)
+```
+
+See the [Actor child execution witness](../../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs)
+for current source.
+
 ## Classic reviews, Decisions, ETL and Rules in workflows
 
 `AgentReview`, `AgentReviewApi` and the Decisions, ETL, and Rules workflow

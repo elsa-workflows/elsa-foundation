@@ -371,11 +371,10 @@ reproduce. This is an architecture difference (like the removed flow-activity mo
 
 The following observations describe the previous runtime. For current Actor child execution, see the [retained kernel tests](../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs).
 
-`Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
-Enabling it (separate from the bug fixes below):
-- `server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj` - project refs to `Elsa.Activities.DispatchWorkflow.{Runtime,Design}`.
-- `server/apps/Elsa.Workbench.Host/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
-- No `Program.cs` change needed: `.WithHostAssemblies()` discovers the referenced assemblies' shell features.
+Use the [classic compatibility checkout](../docs/contributing/workbench-compatibility-tests.md#classic-dispatch-and-called-workflow-control)
+for the `ActivitiesDispatchWorkflowRuntime` configuration and the classic run outcomes below.
+The [pinned Workbench journey](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution)
+covers the earlier hosted test scripts.
 
 Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with
 outcome `Dispatched` while the child runs independently.

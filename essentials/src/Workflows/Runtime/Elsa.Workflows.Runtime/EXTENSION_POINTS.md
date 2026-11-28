@@ -405,7 +405,7 @@ wait. These tests prove the public SDK hook reaches both Test Drive surfaces.
 - **Kind:** Optional replacement contract. Exactly one active owning feature may recognize and safely project its own effective-final intent failures; feature registration rejects an existing replacement with a clear diagnostic.
 - **Signature:** `ProjectAsync(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxDeliveryResult finalResult, ...)` returns an optional dispatch/follow-up aggregate.
 - **Usage and safety:** the outbox processor invokes it only at effective final failure, then passes its result to the fenced claim-completion store. The projection must validate the canonical intent/dispatch identity and may expose only fixed diagnostics and stable identifiers; it cannot persist independently of the claimed outbox completion.
-- **Known cross-domain replacement:** `Elsa.Activities.DispatchWorkflow.Runtime.WorkflowDispatchDeliveryFailureProjector`, selected by `ActivitiesDispatchWorkflowRuntime`; registration rejects a second replacement instead of silently choosing one.
+- **Classic implementation:** `WorkflowDispatchDeliveryFailureProjector` was contributed by `ActivitiesDispatchWorkflowRuntime`. See the [pinned implementation](https://github.com/elsa-workflows/elsa-foundation/blob/ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a/essentials/src/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs).
 
 ### `IWorkflowDispatchRedriveStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Additive atomic provider capability for separately authorized delivery recovery.
