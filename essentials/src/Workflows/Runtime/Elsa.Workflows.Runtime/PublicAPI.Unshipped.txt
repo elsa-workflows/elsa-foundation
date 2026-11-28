@@ -1847,7 +1847,7 @@ static readonly Elsa.Workflows.Runtime.Diagnostics.NullWorkflowEngineTracer.Inst
 static readonly Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames -> System.Collections.Generic.IReadOnlySet<string!>!
 static readonly Elsa.Workflows.Runtime.Services.Executions.NoopWorkflowExecutionCommandExecutor.Instance -> Elsa.Workflows.Runtime.Services.Executions.NoopWorkflowExecutionCommandExecutor!
 virtual Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
-virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke(TClaim! claim, System.DateTimeOffset now, System.TimeSpan visibilityTimeout, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TClaim?>
+virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke(TClaim! claim, System.DateTimeOffset now, System.TimeSpan visibilityTimeout, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TClaim?> (forwarded, contained in Elsa.Workflows.Runtime.Scheduling.Prepared)
 ~override Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionStateStore.ActivityExecutionStateKey.Equals(object obj) -> bool
 ~override Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionStateStore.ActivityExecutionStateKey.ToString() -> string
 ~override Elsa.Workflows.Runtime.Services.Coalescing.RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration.Equals(object obj) -> bool
