@@ -6,7 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Runtime.Core.csproj" />
