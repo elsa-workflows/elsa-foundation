@@ -64,7 +64,7 @@ const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.NewS
 const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.ParseGuid = "parseGuid" -> string!
 const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.StringFromBase64 = "stringFromBase64" -> string!
 const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.StringToBase64 = "stringToBase64" -> string!
-const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.Clone = "clone" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.DeepClone = "deepClone" -> string!
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Equals(object? obj) -> bool
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.GetHashCode() -> int
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.ToString() -> string!

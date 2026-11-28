@@ -84,5 +84,5 @@ public static class ScriptVariableReadDiagnostics
     /// <summary>The diagnostic text of <see cref="InputExpressionWrite"/>, the same at publish and at run time.</summary>
     public static string DescribeInputExpressionWrite(string variable, string path) =>
         $"{InputExpressionWrite}: the input expression changes variable '{variable}' at '{path}'. " +
-        "Input expressions only read; use a script activity (Run JavaScript) to change a variable, or change a copy made with clone(…).";
+        "Input expressions only read; use a script activity (Run JavaScript) to change a variable, or change a copy made with deepClone(…).";
 }

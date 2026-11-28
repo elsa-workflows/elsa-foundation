@@ -463,7 +463,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                         return _path.Take(index - 1).Any(node => node is IFunction);
                     case CallExpression { Callee: Identifier callee } builtInCall when copyingBuiltIns.Contains(callee.Name) &&
                                                                                       builtInCall.Arguments.Any(argument => ReferenceEquals(argument, current)):
-                        // clone(variables.order) and the other built-ins get a JSON copy of the argument.
+                        // deepClone(variables.order) and the other built-ins get a JSON copy of the argument.
                         return false;
                     default:
                         return true;
