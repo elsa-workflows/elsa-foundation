@@ -36,7 +36,8 @@ To use a dedicated PostgreSQL database for workflow execution, set these feature
 | `PostgresConnectionString` | Connection string supplied through your deployment configuration |
 
 The default shell delivers standalone Event, HTTP, Timer and Cron through the prepared Runtime store and
-the same Actor Foundation execution host. Install a fresh dedicated Actor Foundation database when moving
+the same Actor Foundation execution host. Its installed publisher authority pins the configured tenant and
+handoff mode. Install a fresh dedicated Actor Foundation database when moving
 to the new store format during the preview. An older Actor Foundation database is refused before its data
 or schema changes. Keep the original volume or PostgreSQL database with the earlier matching image for a
 rollback. Workflow definitions, publication and identity keep their existing module connections.
