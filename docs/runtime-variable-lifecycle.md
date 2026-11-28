@@ -228,8 +228,9 @@ session ([spec 1231](../specs/1231-step-variable-writes/spec.md) User Story 1, A
 | Dynamic code (`eval`, `Function`, indirect constructors), engine-global access (`globalThis`, `this`), or opaque computed/reflective access | Opaque body access: analysis conservatively keeps the runtime lookup and counts every visible variable as possibly written, including through aliases. |
 | `setTotal(v)` | Not provided: there are no generated setters. |
 
-To change a copy only, copy the value explicitly: `const draft = { ...variables.order }` (a shallow copy; nested objects
-are still the variable's).
+To change a copy only, copy the value explicitly: `const draft = structuredClone(variables.order)` is a deep copy that
+shares nothing with the variable ([value adapters](reference/value-adapters.md#copying-a-value-structuredclone)).
+`{ ...variables.order }` is a shallow copy: nested objects and arrays are still the variable's.
 
 - **Publish.** Every name a script writes literally must resolve to a declared, durable, writable variable visible
   from the node. A refusal names the script position and the target: an undeclared name (`VF-WRITE-002`), a transient
@@ -237,7 +238,9 @@ are still the variable's).
   same, and warns about a computed or opaque write (`VF-WRITE-005`).
 - **The may-write set.** Publish pins the variables a script may write as `runtime.mayWriteVariables`: each variable it
   writes literally, and each variable whose value it lets escape (into a local, an argument, a closure, or a method call
-  on it, such as `push`), unless the variable is a scalar a script cannot change in place. A loop's item or index is
+  on it, such as `push`), unless the variable is a scalar a script cannot change in place. An argument of a built-in
+  function (`structuredClone(variables.order)`) does not escape: the built-in gets a JSON copy. It does when the script
+  declares its own function of that name or its source names `toJSON`, which making the copy runs. A loop's item or index is
   frozen, so it never counts. A computed or opaque write pins `runtime.mayWriteEveryVisibleVariable` instead. The
   concurrent-write warning and the overlap warning count these, and Studio shows the set in the node's properties
   (from the scoped-variable analysis). Run JavaScript, an engine script activity, carries the type-level free-name

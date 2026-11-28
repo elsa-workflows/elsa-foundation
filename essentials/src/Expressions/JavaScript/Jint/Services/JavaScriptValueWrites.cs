@@ -66,7 +66,7 @@ internal static class JavaScriptValueWrites
         var paths = string.Join(", ", change.ChangedPaths);
         string Message(string where) =>
             $"The script changed variable '{name}' ({where}) without assigning it, so the change is written. Assign the variable " +
-            $"({key} = …) to make the write explicit, or copy it ({{...{key}}}) to change a local copy only.";
+            $"({key} = …) to make the write explicit, or change a copy (structuredClone({key})) to leave the variable unchanged.";
         return new ExecutionWarning(
             JavaScriptValueDiagnostics.ChangeWithoutAssignment,
             Message(paths),

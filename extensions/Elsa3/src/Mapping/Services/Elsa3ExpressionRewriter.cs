@@ -1675,7 +1675,7 @@ public sealed class Elsa3ExpressionRewriter(
         /// </summary>
         private static readonly HashSet<string> NeverMatchedGlobals = new(
             PureGlobalCalls
-                .Concat(JavaScriptBuiltInFunctions.Names)
+                .Concat(Elsa3JavaScriptNames.Elsa4BuiltIns)
                 .Concat(["toJson", "setOutcome", "setOutcomes", "Date", "getVariable", "setVariable", "getInput", "getOutputFrom"])
                 .Concat(StateSetters).Concat(StateGetters).Concat(SetterCalls)
                 .Concat(InlineHelpers.Keys).Concat(InstanceMembers.Keys)
@@ -2423,7 +2423,7 @@ public sealed class Elsa3ExpressionRewriter(
                 }
 
                 // Elsa 3's GUID and Base64 functions are Elsa 4 built-ins that return the same text (FR-006, FR-007, FR-026).
-                if (JavaScriptBuiltInFunctions.Names.Contains(callee.Name))
+                if (Elsa3JavaScriptNames.Elsa4BuiltIns.Contains(callee.Name))
                 {
                     // Elsa 3 registered built-ins and generated accessors in an order its source does not fix (R-3).
                     if (callee.Name.StartsWith("get", StringComparison.Ordinal) &&

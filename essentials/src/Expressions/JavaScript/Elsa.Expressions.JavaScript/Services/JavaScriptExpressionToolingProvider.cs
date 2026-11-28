@@ -15,16 +15,17 @@ internal sealed partial class JavaScriptExpressionToolingProvider(
     IEnumerable<JavaScriptHostFunctionDeclaration>? hostFunctions = null) : IExpressionToolingProvider
 {
     /// <summary>What each built-in takes and returns, for completions and hover (spec 1223 FR-006, FR-007, FR-026).</summary>
-    private static readonly (string Name, string[] Parameters, string Documentation)[] BuiltInSignatures =
+    private static readonly (string Name, string[] Parameters, string Documentation, string Returns)[] BuiltInSignatures =
     [
-        (JavaScriptBuiltInFunctions.NewGuid, [], "A new GUID, as its 36-character text."),
-        (JavaScriptBuiltInFunctions.NewGuidString, [], "A new GUID, as its 36-character text."),
-        (JavaScriptBuiltInFunctions.GetGuidString, [], "A new GUID, as its 36-character text."),
-        (JavaScriptBuiltInFunctions.NewShortGuid, [], "A new GUID in Elsa 3's short form: Base64 of its bytes without '/', '+' and '=' (at most 22 characters)."),
-        (JavaScriptBuiltInFunctions.GetShortGuid, [], "A new GUID in Elsa 3's short form: Base64 of its bytes without '/', '+' and '=' (at most 22 characters)."),
-        (JavaScriptBuiltInFunctions.ParseGuid, ["text"], "The 36-character text of the GUID that text denotes, in any form .NET's Guid.Parse accepts; other text fails."),
-        (JavaScriptBuiltInFunctions.StringToBase64, ["text"], "The standard Base64 of the text's UTF-8 bytes."),
-        (JavaScriptBuiltInFunctions.StringFromBase64, ["base64"], "The UTF-8 text of standard Base64; invalid Base64 fails."),
+        (JavaScriptBuiltInFunctions.NewGuid, [], "A new GUID, as its 36-character text.", "String"),
+        (JavaScriptBuiltInFunctions.NewGuidString, [], "A new GUID, as its 36-character text.", "String"),
+        (JavaScriptBuiltInFunctions.GetGuidString, [], "A new GUID, as its 36-character text.", "String"),
+        (JavaScriptBuiltInFunctions.NewShortGuid, [], "A new GUID in Elsa 3's short form: Base64 of its bytes without '/', '+' and '=' (at most 22 characters).", "String"),
+        (JavaScriptBuiltInFunctions.GetShortGuid, [], "A new GUID in Elsa 3's short form: Base64 of its bytes without '/', '+' and '=' (at most 22 characters).", "String"),
+        (JavaScriptBuiltInFunctions.ParseGuid, ["text"], "The 36-character text of the GUID that text denotes, in any form .NET's Guid.Parse accepts; other text fails.", "String"),
+        (JavaScriptBuiltInFunctions.StringToBase64, ["text"], "The standard Base64 of the text's UTF-8 bytes.", "String"),
+        (JavaScriptBuiltInFunctions.StringFromBase64, ["base64"], "The UTF-8 text of standard Base64; invalid Base64 fails.", "String"),
+        (JavaScriptBuiltInFunctions.StructuredClone, ["value"], "An independent deep copy of a JSON value: changing the copy never changes the variable it came from. It copies as JSON.stringify does: a Date becomes its ISO text; undefined becomes null, and a function or symbol fails; below the top level, such a member is left out and such an array item becomes null.", "Any"),
     ];
 
     public ExpressionToolingCapabilities DeclaredCapabilities { get; } = new(
@@ -159,14 +160,14 @@ internal sealed partial class JavaScriptExpressionToolingProvider(
         }
 
         // The built-in functions and the registered function namespaces, on every JavaScript surface (spec 1223 FR-003).
-        foreach (var (name, parameters, documentation) in BuiltInSignatures)
+        foreach (var (name, parameters, documentation, returns) in BuiltInSignatures)
         {
             projected.Add(new(
                 $"javascript:{name}",
                 name,
                 ExpressionSymbolKind.Function,
                 Documentation: documentation,
-                Signatures: [new($"{name}({string.Join(", ", parameters)})", parameters, new("String"))]));
+                Signatures: [new($"{name}({string.Join(", ", parameters)})", parameters, new(returns))]));
         }
 
         foreach (var space in (hostFunctions ?? [])
