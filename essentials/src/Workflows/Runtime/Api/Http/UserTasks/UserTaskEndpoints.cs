@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.Core.UserTasks;
@@ -20,7 +21,8 @@ internal sealed record FormPublishRequest(long Revision, UserTaskForm Form);
 internal sealed record UserTaskView(string Id, string WorkflowExecutionId, string Title, string? Description,
     string? AssigneeId, string? AssigneeName, string? GroupId, string? GroupName, string? ClaimantId, string? ClaimantName,
     IReadOnlyList<string> Actions, IReadOnlyList<string> OptionalFormActions,
-    UserTaskForm? Form, JsonElement Prefill, string Status, long Revision, IReadOnlyList<UserTaskHistoryView> History, UserTaskDecision? Decision);
+    UserTaskForm? Form, JsonElement Prefill, string Status, long Revision, IReadOnlyList<UserTaskHistoryView> History, UserTaskDecision? Decision,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? SupportsActions = null);
 internal sealed record UserTaskHistoryView(string Operation, string ActorId, string? ActorName, DateTimeOffset At, string? Action, string? AssigneeId, string? GroupId);
 internal sealed record UserTaskPageView(IReadOnlyList<UserTaskView> Items, string? Next);
 internal sealed record UserTaskProblem(string Code, string Message, JsonElement? Errors);
