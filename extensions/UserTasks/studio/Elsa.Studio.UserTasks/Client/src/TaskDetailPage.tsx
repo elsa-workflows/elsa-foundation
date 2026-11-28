@@ -2,7 +2,7 @@ import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, us
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { History as HistoryIcon } from "lucide-react";
 import { SkeletonRows, StudioTimestamp, StudioShellBreadcrumbs, OverflowMenu, StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
-import { actor, basicProvider, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
+import { actor, basicProvider, hasTaskOperation, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { resolveTaskFieldControl } from "./fieldControls";
 import { TaskStatus } from "./TaskStatus";
 import { taskPerson } from "./taskPeople";
@@ -58,23 +58,28 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   useEffect(() => () => { lifetime.current++; }, []);
   const edited = useRef(false); const busyRef = useRef(false); const sequence = useRef(0);
   const attempt = useRef<{ action: string; data: Record<string, unknown>; requestId: string; revision: number } | null>(null);
+  const supportsResponse = hasTaskOperation(api, "complete");
+  const supportsClaim = hasTaskOperation(api, "claim");
+  const supportsRelease = hasTaskOperation(api, "release");
+  const supportsReassign = hasTaskOperation(api, "reassign") && hasTaskOperation(api, "targets");
+  const readOnly = !(supportsResponse || supportsClaim || supportsRelease || supportsReassign);
   const refresh = useCallback(async () => {
     const current = ++sequence.current;
     try {
       const next = await read(api, id); if (current !== sequence.current) return; setValidationNotice(false);
       setTask(next); setMissing(false); setStale(false);
-      setNotice(next.status === "CompletionPending" ? responsePendingNotice : "");
+      setNotice(supportsResponse && next.status === "CompletionPending" ? responsePendingNotice : "");
       if (next.decision) edited.current = false;
       if (!edited.current || next.decision) setData(next.decision?.response.data ?? next.prefill ?? {});
       // A newer unaccepted revision proves the previous conditional write cannot still win.
       if (next.decision || next.status === "Completed" || next.status === "Cancelled" ||
           (!next.decision && attempt.current && next.revision > attempt.current.revision)) attempt.current = null;
     } catch (failure) { if (current !== sequence.current) return; setValidationNotice(false); setMissing(statusOf(failure) === 404); setNotice(message(failure)); setStale(true); }
-  }, [api, id]);
+  }, [api, id, supportsResponse]);
   useEffect(() => { void refresh(); return () => { sequence.current++; }; }, [refresh]);
-  useEffect(() => { if (task?.status !== "CompletionPending") return; const timer = setInterval(() => void refresh(), 2000); return () => clearInterval(timer); }, [task?.status, refresh]);
+  useEffect(() => { if (!supportsResponse || task?.status !== "CompletionPending") return; const timer = setInterval(() => void refresh(), 2000); return () => clearInterval(timer); }, [task?.status, refresh, supportsResponse]);
   const act = async (operation: string, action?: string) => {
-    if (!task || busyRef.current) return;
+    if (!task || busyRef.current || !hasTaskOperation(api, operation)) return;
     busyRef.current = true; setBusy(true); setNotice(""); setValidationNotice(false); setErrors({}); const operationSequence = ++sequence.current;
     const retrying = operation === "complete" && attempt.current !== null;
     try {
@@ -142,25 +147,26 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const unavailableFieldControls = task.form?.provider === basicProvider
     ? task.form.fields.map(field => ({ field, result: resolveTaskFieldControl(field, api.userTaskFieldControls) })).filter(item => item.result.status !== "available")
     : [];
-  const canComplete = identity.canAct && own && !terminal && !pending && !stale && unavailableFieldControls.length === 0;
+  const canComplete = supportsResponse && identity.canAct && own && !terminal && !pending && !stale && unavailableFieldControls.length === 0;
   const renderers = task.form ? api.userTaskForms?.list().filter(item => item.provider === task.form?.provider) ?? [] : [];
   const Renderer = renderers.length === 1 ? renderers[0].component : null;
-  const claimable = !own && Boolean(task.groupId) && task.status === "Open" && identity.canAct;
-  const releasable = task.claimantId === identity.userId && task.status === "Claimed" && identity.canAct;
-  const respondable = own && !terminal && !pending && task.actions.length > 0;
-  const manageable = identity.canManage && !terminal && !pending;
+  const claimable = supportsClaim && !own && Boolean(task.groupId) && task.status === "Open" && identity.canAct;
+  const releasable = supportsRelease && task.claimantId === identity.userId && task.status === "Claimed" && identity.canAct;
+  const respondable = supportsResponse && own && !terminal && !pending && task.actions.length > 0;
+  const manageable = supportsReassign && identity.canManage && !terminal && !pending;
   return frame(<>
     <StudioPageHeader title={task.title} refresh={{ id: "user-task-detail", label: "Refresh task", onRefresh: refresh, autoRefresh: !pending, disabled: busy }} description={task.description ? <span className="user-task-description">{task.description}</span> : undefined} actions={<div ref={taskTools} className="user-task-detail-tools">
       <StudioButton aria-controls="user-task-history-dialog" aria-expanded={historyOpen} onClick={() => setHistoryOpen(true)}><HistoryIcon size={16} aria-hidden="true" />History</StudioButton>
       {manageable ? <OverflowMenu ariaLabel="Task actions" items={[{ id: "reassign", label: "Reassign task", onSelect: () => { setReassignError(""); setReassignOpen(true); }, disabled: busy || stale || Boolean(attempt.current) }]} /> : null}
     </div>}><TaskStatus status={task.status} /></StudioPageHeader>
     {accessNotice}
+    {readOnly && !terminal ? <StudioAlert tone="info">This backend provides read-only access to task records.</StudioAlert> : null}
     {notice ? <p role={stale || Object.keys(errors).length ? "alert" : "status"}>{notice}</p> : null}
     {(task.form || claimable || releasable || respondable) ? <section className="user-task-response-card" aria-label="Task response">
-      <h2>Your response</h2>
+      <h2>{readOnly ? "Task form" : "Your response"}</h2>
       {task.form ? Renderer ? <div className="user-task-response" data-final={terminal || undefined}><Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); if (validationNotice) { setNotice(""); setValidationNotice(false); } setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} /></div>
-        : <StudioResultState tone="danger" title="Form integration unavailable" description="Install the matching form integration before completing this task." /> : null}
-      {unavailableFieldControls.length ? <StudioAlert tone="danger">This task form cannot be completed because these field controls are unavailable: {unavailableFieldControls.map(item => `${item.field.label} (${item.result.reason ?? item.result.status})`).join("; ")}. Install the contributing module or contact the Studio administrator.</StudioAlert> : null}
+        : <StudioResultState tone="danger" title="Form integration unavailable" description={readOnly ? "Install the matching integration to view this form." : "Install the matching form integration before completing this task."} /> : null}
+      {supportsResponse && unavailableFieldControls.length ? <StudioAlert tone="danger">This task form cannot be completed because these field controls are unavailable: {unavailableFieldControls.map(item => `${item.field.label} (${item.result.reason ?? item.result.status})`).join("; ")}. Install the contributing module or contact the Studio administrator.</StudioAlert> : null}
       {(claimable || releasable || respondable) && <div className="user-task-actions">
         {claimable ? <StudioButton disabled={busy || stale} onClick={() => void act("claim")}>Claim task</StudioButton> : null}
         {releasable ? <StudioButton disabled={busy || stale || Boolean(attempt.current)} onClick={() => void act("release")}>Release task</StudioButton> : null}

@@ -13,12 +13,19 @@ export interface TaskPage { items: TaskItem[]; next?: string | null }
 export interface TaskTargets { users: { id: string; name: string }[]; groups: { id: string; name: string }[]; moreUsers: boolean; moreGroups: boolean }
 export const basicProvider = "elsa.basic-forms/1";
 export const taskCapability = [{ id: "elsa.api.user-tasks", contractVersion: "1" }];
+export const taskInboxCapability = [{ ...taskCapability[0], relations: ["identity", "tasks", "task"] }];
+export const taskFormsCapability = [{ ...taskCapability[0], relations: ["identity", "forms"] }];
+export const taskAuthoringCapability = [{ ...taskCapability[0], relations: ["complete", "targets"] }];
 const draftFormRelations = ["identity", "form-definitions", "form-definition", "form-history", "save-form-draft", "discard-form-draft", "publish-form"];
 const legacyFormRelations = ["identity", "forms"];
 export type FormsPageMode = "lifecycle" | "legacy" | "unavailable";
 type TaskCapabilityDocument = NonNullable<NonNullable<ElsaStudioModuleApi["backendSession"]>["capabilities"]>;
 function userTaskCapability(document: TaskCapabilityDocument) {
   return document.capabilities.find(item => item.id === "elsa.api.user-tasks" && item.contractVersion === "1" && item.status !== "dormant");
+}
+export function hasTaskOperation(api: ElsaStudioModuleApi, relation: string) {
+  const document = api.backendSession?.capabilities;
+  return document ? userTaskCapability(document)?.links.some(link => link.rel === relation) === true : false;
 }
 export function formsPageModeFromCapabilities(document: TaskCapabilityDocument): FormsPageMode {
   const capability = userTaskCapability(document);

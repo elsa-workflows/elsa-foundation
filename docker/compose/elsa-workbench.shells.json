@@ -126,6 +126,7 @@
           "WorkflowsPublishingApi": {},
           "KernelActivitiesHttp": {},
           "WorkflowsRuntimeKernelRetainedApi": {},
+          "WorkflowsRuntimeKernelUserTasksApi": {},
           "WorkflowsRuntimeKernelHosting": {
             "Provider": "PostgreSql"
           },

@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.UserTasks;
 namespace Elsa.Workflows.Runtime.UserTasks;
 
 internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess access,
-    IEnumerable<IUserTaskFormProvider> providers, TimeProvider time, IUserTaskRuntime runtime,
+    IEnumerable<IUserTaskFormProvider> providers, TimeProvider time, IUserTaskRuntime? runtime,
     UserTaskCursorCodec cursors, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor persistence) : IUserTaskOperations
 {
     public async ValueTask<UserTaskPage> ListAsync(string view, int limit = 25, string? after = null, string? search = null, CancellationToken cancellationToken = default)
@@ -39,6 +39,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
 
     public async ValueTask<UserTaskRecord> ClaimAsync(string id, UserTaskMutation request, CancellationToken cancellationToken = default)
     {
+        if (runtime is null) throw Failure("unavailable", "This host provides read-only task access.");
         var actor = await ActorAsync(cancellationToken);
         var task = await ReadAsync(id, actor, cancellationToken);
         RequireAct(actor); await access.AuthorizeAsync(task, "act", cancellationToken); RequireRevision(task, request.Revision, request.RequestId);
@@ -49,6 +50,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
 
     public async ValueTask<UserTaskRecord> ReleaseAsync(string id, UserTaskMutation request, CancellationToken cancellationToken = default)
     {
+        if (runtime is null) throw Failure("unavailable", "This host provides read-only task access.");
         var actor = await ActorAsync(cancellationToken);
         var task = await ReadAsync(id, actor, cancellationToken);
         RequireAct(actor); await access.AuthorizeAsync(task, "act", cancellationToken); RequireRevision(task, request.Revision, request.RequestId);
@@ -59,6 +61,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
 
     public async ValueTask<UserTaskRecord> ReassignAsync(string id, UserTaskAssignment request, CancellationToken cancellationToken = default)
     {
+        if (runtime is null) throw Failure("unavailable", "This host provides read-only task access.");
         var actor = await ActorAsync(cancellationToken);
         if (!actor.CanManage) throw Failure("forbidden", "Task management permission is required.");
         var task = await ReadAsync(id, actor, cancellationToken);
@@ -71,6 +74,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
 
     public async ValueTask<UserTaskRecord> CompleteAsync(string id, UserTaskCompletion request, CancellationToken cancellationToken = default)
     {
+        if (runtime is null) throw Failure("unavailable", "This host provides read-only task access.");
         var actor = await ActorAsync(cancellationToken);
         var task = await ReadAsync(id, actor, cancellationToken);
         RequireAct(actor);
@@ -263,6 +267,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
         if (task is null || task.Status == UserTaskStatus.Staged || !UserTaskRules.CanSee(task, actor.UserId, actor.GroupIds, actor.CanManage))
             throw Failure("missing", "Task not found.");
         await access.AuthorizeAsync(task, "read", ct);
+        if (runtime is null) return task;
         try { await runtime.ReconcileAsync(task, ct); }
         catch (Exception exception) when (task.Status == UserTaskStatus.CompletionPending &&
             !ct.IsCancellationRequested && (UserTaskAvailability.IsUnavailable(exception, ct) ||

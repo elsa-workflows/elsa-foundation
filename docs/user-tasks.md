@@ -1,8 +1,16 @@
 # User Tasks
 
-This guide describes User Tasks on the classic workflow runtime. Use the
-[pinned qualification source](https://github.com/elsa-workflows/elsa-foundation/blob/aea76c0b38f18e8037050ea53cef20995ec69a03/specs/1196-user-tasks/quickstart.md)
-to compose that workflow execution path.
+Studio's **Operate → User tasks** opens the authorized inbox. The built-in Actor Workbench
+provides read-only access to existing task records. **Task forms** supports drafting,
+publishing and reopening immutable reusable forms. These records and forms use the
+shared Workbench database with SQLite or PostgreSQL.
+
+A stock Actor workflow cannot create or complete user tasks yet. Task responses need a
+workflow host that provides the task actions and can resume their owning execution.
+The [classic Workbench compatibility guide](contributing/workbench-compatibility-tests.md#classic-composed-studio-and-decision-runtime)
+covers replaying the earlier task execution journey on its matching host.
+
+## Classic workflow tasks
 
 User Tasks let a workflow wait for a person to choose an action and optionally submit form data. The task is Runtime-owned human work; `Elsa.Tasks` continues to schedule host startup/background/recurring work.
 

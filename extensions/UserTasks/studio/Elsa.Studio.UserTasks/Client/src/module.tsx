@@ -10,7 +10,7 @@ import { ContributedTaskForm } from "./TaskForm";
 import { builtInTaskFieldControls } from "./fieldControls";
 import { ActionsEditor, AssignmentEditor, AssignmentGroupEditor, FormEditor } from "./PropertyEditors";
 import { FormPicker } from "./FormPicker";
-import { basicProvider, taskCapability } from "./taskApi";
+import { basicProvider, taskAuthoringCapability, taskCapability, taskFormsCapability, taskInboxCapability } from "./taskApi";
 import "./styles.css";
 function FormRoute({ api, navigate, detail = false }: { api: ElsaStudioModuleApi; navigate(path: string): void; detail?: boolean }) {
   const location = useStudioRouteLocation();
@@ -33,16 +33,16 @@ export function register(api: ElsaStudioModuleApi) {
   api.userTaskForms?.add({ id: "user-tasks.basic", provider: basicProvider, component: props => <ContributedTaskForm {...props} controls={api.userTaskFieldControls} /> });
   api.featureAreas.add({ id: "user-tasks", title: "User tasks", navGroup: "Workspace", order: 30, description: "Assigned work, group queues and reusable forms.", ownedPaths: ["/user-tasks"], required: false, defaultEnabled: true,
     nav: { title: "User tasks", icon: ClipboardList, path: "/user-tasks", placement: "operate", order: 30, items: [
-      { title: "Inbox", icon: ClipboardList, path: "/user-tasks", placement: "operate", order: 40, requiresPermission: ["user-tasks:read", "user-tasks:manage"] },
-      { title: "Task forms", icon: FileText, path: "/user-tasks/forms", placement: "operate", order: 41, requiresPermission: ["user-task-forms:read", "user-task-forms:manage"] }
+      { title: "Inbox", icon: ClipboardList, path: "/user-tasks", placement: "operate", order: 40, requiresBackend: taskInboxCapability, requiresPermission: ["user-tasks:read", "user-tasks:manage"] },
+      { title: "Task forms", icon: FileText, path: "/user-tasks/forms", placement: "operate", order: 41, requiresBackend: taskFormsCapability, requiresPermission: ["user-task-forms:read", "user-task-forms:manage"] }
     ], requiresBackend: taskCapability, requiresPermission: ["user-tasks:read", "user-tasks:manage", "user-task-forms:read", "user-task-forms:manage"] },
     routes: [
-      { id: "user-tasks.forms", path: "/user-tasks/forms", label: "Task forms", requiresBackend: taskCapability, component: ({ navigate }) => <FormRoute api={api} navigate={navigate} /> },
-      { id: "user-tasks.form", path: "/user-tasks/forms/:formId", label: "Task form", requiresBackend: taskCapability, workspace: { resourceKey: location => location.pathname }, component: ({ navigate }) => <FormRoute api={api} navigate={navigate} detail /> },
-      { id: "user-tasks.detail", path: "/user-tasks/:id", label: "Task", requiresBackend: taskCapability, workspace: { resourceKey: location => { try { return `user-task:${decodeURIComponent(location.pathname.split("/").at(-1) ?? "")}`; } catch { return null; } } }, component: ({ navigate }) => <DetailRoute api={api} navigate={navigate} /> },
-      { id: "user-tasks", path: "/user-tasks", label: "User tasks", requiresBackend: taskCapability, component: ({ navigate }) => <TasksPage api={api} navigate={navigate} /> }
+      { id: "user-tasks.forms", path: "/user-tasks/forms", label: "Task forms", requiresBackend: taskFormsCapability, component: ({ navigate }) => <FormRoute api={api} navigate={navigate} /> },
+      { id: "user-tasks.form", path: "/user-tasks/forms/:formId", label: "Task form", requiresBackend: taskFormsCapability, workspace: { resourceKey: location => location.pathname }, component: ({ navigate }) => <FormRoute api={api} navigate={navigate} detail /> },
+      { id: "user-tasks.detail", path: "/user-tasks/:id", label: "Task", requiresBackend: taskInboxCapability, workspace: { resourceKey: location => { try { return `user-task:${decodeURIComponent(location.pathname.split("/").at(-1) ?? "")}`; } catch { return null; } } }, component: ({ navigate }) => <DetailRoute api={api} navigate={navigate} /> },
+      { id: "user-tasks", path: "/user-tasks", label: "User tasks", requiresBackend: taskInboxCapability, component: ({ navigate }) => <TasksPage api={api} navigate={navigate} /> }
     ] });
-  api.propertyEditors.add({ id: "user-tasks.actions", requiresBackend: taskCapability, order: 50, supportsValidationReporting: true, supports: (descriptor, context) => descriptor.uiHint === "user-task-actions" && context.scope === "collection", component: ActionsEditor });
+  api.propertyEditors.add({ id: "user-tasks.actions", requiresBackend: taskAuthoringCapability, order: 50, supportsValidationReporting: true, supports: (descriptor, context) => descriptor.uiHint === "user-task-actions" && context.scope === "collection", component: ActionsEditor });
   const assignmentPropertyGroup = {
     id: "assignment",
     label: "Assignment",
@@ -50,7 +50,7 @@ export function register(api: ElsaStudioModuleApi) {
     inputKeys: ["AssigneeId", "GroupId"],
     component: (props: StudioActivityPropertyEditorGroupProps) => <AssignmentGroupEditor {...props} api={api} />
   };
-  for (const group of [false, true]) api.propertyEditors.add({ id: `user-tasks.${group ? "group" : "user"}`, requiresBackend: taskCapability, presentsField: true, propertyGroup: assignmentPropertyGroup, order: 50, supportsValidationReporting: true, readsActivityContext: true,
+  for (const group of [false, true]) api.propertyEditors.add({ id: `user-tasks.${group ? "group" : "user"}`, requiresBackend: taskAuthoringCapability, presentsField: true, propertyGroup: assignmentPropertyGroup, order: 50, supportsValidationReporting: true, readsActivityContext: true,
     supports: descriptor => descriptor.uiHint === (group ? "user-task-group" : "user-task-user"), component: props => <AssignmentEditor {...props} api={api} group={group} /> });
   const taskFormPropertyGroup = {
     id: "task-form",
@@ -59,5 +59,5 @@ export function register(api: ElsaStudioModuleApi) {
     preserveSiblingOnExpression: true,
     component: (props: StudioActivityPropertyEditorGroupProps) => <FormPicker {...props} api={api} />
   };
-  api.propertyEditors.add({ id: "user-tasks.form", requiresBackend: taskCapability, presentsField: true, propertyGroup: taskFormPropertyGroup, order: 50, supportsValidationReporting: true, readsActivityContext: true, supports: (descriptor, context) => ["user-task-form", "user-task-form-version"].includes(descriptor.uiHint ?? "") || (descriptor.name === "FormVersion" && Object.hasOwn(context.inputValues ?? {}, "OptionalFormActions") && Object.hasOwn(context.inputValues ?? {}, "FormId")), component: props => <FormEditor {...props} api={api} /> });
+  api.propertyEditors.add({ id: "user-tasks.form", requiresBackend: taskFormsCapability, presentsField: true, propertyGroup: taskFormPropertyGroup, order: 50, supportsValidationReporting: true, readsActivityContext: true, supports: (descriptor, context) => ["user-task-form", "user-task-form-version"].includes(descriptor.uiHint ?? "") || (descriptor.name === "FormVersion" && Object.hasOwn(context.inputValues ?? {}, "OptionalFormActions") && Object.hasOwn(context.inputValues ?? {}, "FormId")), component: props => <FormEditor {...props} api={api} /> });
 }
