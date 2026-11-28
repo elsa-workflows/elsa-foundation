@@ -91,11 +91,6 @@
           "xunit.extensibility.execution": "2.4.0"
         }
       },
-      "DistributedLock.Core": {
-        "type": "Transitive",
-        "resolved": "1.0.8",
-        "contentHash": "LAOsY8WxX8JU/n3lfXFz+f2pfnv0+4bHkCrOO3bwa28u9HrS3DlxSG6jf+u76SqesKs+KehZi0CndkfaUXBKvg=="
-      },
       "JetBrains.Annotations": {
         "type": "Transitive",
         "resolved": "2025.2.4",
@@ -516,15 +511,6 @@
       "elsa.locking.core": {
         "type": "Project"
       },
-      "elsa.locking.filesystem": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "DistributedLock.FileSystem": "[1.0.3, )",
-          "Elsa.Cluster.Core": "[4.0.0-dev, )",
-          "Elsa.Locking.Core": "[4.0.0-dev, )"
-        }
-      },
       "elsa.mediator": {
         "type": "Project",
         "dependencies": {
@@ -551,9 +537,6 @@
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
-      },
-      "elsa.modularity.planning": {
-        "type": "Project"
       },
       "elsa.persistence.core": {
         "type": "Project"
@@ -929,15 +912,6 @@
         "dependencies": {
           "CShells.Abstractions": "0.0.31",
           "JetBrains.Annotations": "2025.2.4"
-        }
-      },
-      "DistributedLock.FileSystem": {
-        "type": "CentralTransitive",
-        "requested": "[1.0.3, )",
-        "resolved": "1.0.3",
-        "contentHash": "Q88LTgHXzcQq9ATa6SZSqAE+VFyIapNGFs+XG7nHx+SpzUf1ACnZ8iyz6fAT/ojH+OLNnWwF3kCYh83s+vnCbA==",
-        "dependencies": {
-          "DistributedLock.Core": "[1.0.8, 1.1.0)"
         }
       },
       "Microsoft.EntityFrameworkCore": {
