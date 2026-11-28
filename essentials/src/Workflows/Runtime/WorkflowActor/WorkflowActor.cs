@@ -317,6 +317,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     private sealed class WorkflowJob(IJob original, string? arguments) : IJob
     {
         public ActorRef Actor => original.Actor;
+        public string? Tenant => original.Tenant;
         public string Key => original.Key;
         public string? Arguments => arguments;
         public string AttemptId => original.AttemptId;

@@ -329,13 +329,15 @@ public sealed class MappingStructureTests
     public void Send_http_request_content_goes_as_text_by_default()
     {
         var root = Sequence("root",
-            Node("send", Types.SendHttpRequest, [Literal("Url", "https://partner.example/a", "Uri"), Literal("Content", "{\"raw\": 1}", "String")]),
+            Node("send", Types.SendHttpRequest, [Literal("Url", "https://partner.example/a", "Uri"), Literal("Content", "{\"raw\": 1}", "String"),
+                Literal("Connection", new { connection = "partner", type = "http" })]),
             Node("typed", Types.SendHttpRequest, [Literal("Url", "https://partner.example/b", "Uri"), Literal("Content", "x", "String"), Literal("ContentType", "application/json", "String")]),
             Node("empty", Types.SendHttpRequest, [Literal("Url", "https://partner.example/c", "Uri")]));
 
         var workflow = NativeExecutableMapper.Map(Executable(root));
 
         Assert.Equal("text/plain", LiteralOf(workflow.Nodes["send"], "ContentType")!.GetValue<string>());
+        Assert.Equal("partner", LiteralOf(workflow.Nodes["send"], "Connection")!.GetValue<string>());
         Assert.Equal("GET", LiteralOf(workflow.Nodes["send"], "Method")!.GetValue<string>());
         Assert.Equal("application/json", LiteralOf(workflow.Nodes["typed"], "ContentType")!.GetValue<string>());
         Assert.False(workflow.Nodes["empty"].Inputs.ContainsKey("ContentType"));

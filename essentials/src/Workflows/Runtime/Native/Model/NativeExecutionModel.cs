@@ -159,10 +159,10 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         var args = JsonSerializer.Deserialize<BackgroundArgs>(job.Arguments!)!;
         if (args.ExecutableSelection is { } selection)
             return await ExecuteBackground(await SelectAsync(args.Workflow, selection, cancellationToken), job.Actor, args,
-                cancellationToken, _options.Http);
+                cancellationToken, _options.Http, job.Tenant);
         if (Resolves(args.Workflow))
             await ResolveAsync(args.Workflow, cancellationToken);
-        return await ExecuteBackground(registry.Get(args.Workflow), job.Actor, args, cancellationToken, _options.Http);
+        return await ExecuteBackground(registry.Get(args.Workflow), job.Actor, args, cancellationToken, _options.Http, job.Tenant);
     }
 
     internal static ValueTask<object?> ExecuteBackground(WorkflowRegistry registry, Contract.ActorRef actor,
@@ -176,14 +176,14 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     }
 
     private static async ValueTask<object?> ExecuteBackground(Workflow executable, Contract.ActorRef actor,
-        BackgroundArgs args, CancellationToken cancellationToken, NativeHttpOptions? http)
+        BackgroundArgs args, CancellationToken cancellationToken, NativeHttpOptions? http, string? jobTenant = null)
     {
         var node = executable.Nodes[args.Node];
         var activity = (ILeaf)Hydrator.Create(node, args.Inputs);
         var path = args.IterationPath ?? throw new InvalidOperationException("A background job needs an iteration path.");
         var key = args.EffectKey ?? throw new InvalidOperationException("A background job needs an effect key.");
         var result = await activity.ExecuteAsync(new ActivityContext(actor, args.Frame, node.Id, 0,
-            cancellationToken, path, key) { Http = http });
+            cancellationToken, path, key) { Http = http, JobTenant = jobTenant });
         return new BackgroundResult(result.Kind, result.Result, result.Outcome, result.Fault);
     }
 
