@@ -252,3 +252,8 @@ override Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationRepairPla
 static Elsa.Workflows.Runtime.Services.Incidents.IncidentResolutionActions.ContinueWithIncidents() -> Elsa.Workflows.Runtime.Core.Contracts.IIncidentResolutionAction!
 static Elsa.Workflows.Runtime.Services.Incidents.IncidentResolutionActions.FaultWorkflow() -> Elsa.Workflows.Runtime.Core.Contracts.IIncidentResolutionAction!
 static Elsa.Workflows.Runtime.Services.Incidents.IncidentResolutionActions.WaitForIntervention() -> Elsa.Workflows.Runtime.Core.Contracts.IIncidentResolutionAction!
+Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationSwitchCompositionValidator
+Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationSwitchCompositionValidator.InitializeAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationSwitchCompositionValidator.WorkflowActivationSwitchCompositionValidator(Microsoft.Extensions.DependencyInjection.IServiceScopeFactory! scopes, Microsoft.Extensions.DependencyInjection.IServiceProviderIsService! services) -> void
+Elsa.Workflows.Runtime.Extensions.WorkflowPublicationDefaults
+static Elsa.Workflows.Runtime.Extensions.WorkflowPublicationDefaults.Add(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

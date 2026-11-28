@@ -13247,3 +13247,4 @@ Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.Value.init -> vo
 Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.WorkflowOutputProjection(string! Name, System.Text.Json.JsonElement? Value, bool IsRedacted, string? RedactionReason, Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor! Type, System.DateTimeOffset CapturedAt) -> void
 static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator !=(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? left, Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? right) -> bool
 static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator ==(Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? left, Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection? right) -> bool
+const Elsa.Workflows.Runtime.Core.Models.RuntimeOutputCapture.WorkflowVariableValueIdPrefix = "variable:" -> string!

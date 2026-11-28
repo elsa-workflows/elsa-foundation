@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationCoordinator))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationRepairPlan))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationSwitchRules))]
+[assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationSwitchCompositionValidator))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.ContinueWithIncidentsIncidentStrategy))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.FaultIncidentStrategy))]
 [assembly: TypeForwardedTo(typeof(Elsa.Workflows.Runtime.Services.Incidents.IncidentStrategyCatalog))]

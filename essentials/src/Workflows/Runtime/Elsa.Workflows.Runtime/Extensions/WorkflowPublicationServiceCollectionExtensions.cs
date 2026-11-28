@@ -1,4 +1,3 @@
-using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -12,11 +11,7 @@ public static class WorkflowPublicationServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddPersistenceCore();
-        services.TryAddSingleton(TimeProvider.System);
-        services.AddWorkflowPublicationTriggers();
-        AddWorkflowArtifactDefaults(services);
-        services.AddBuiltInIncidentStrategies();
+        WorkflowPublicationDefaults.AddSharedServices(services);
         // The in-memory activation switch uses this shared state to reserve exclusive ingress in the slot commit.
         services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
         services.AddWorkflowActivationDefaults();

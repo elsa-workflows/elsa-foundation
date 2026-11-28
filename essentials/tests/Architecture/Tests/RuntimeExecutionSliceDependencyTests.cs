@@ -34,13 +34,13 @@ public sealed class RuntimeExecutionSliceDependencyTests
     }
 
     [Fact]
-    public void PublishingEngine_DoesNotReferenceRuntimeApi()
+    public void PublishingEngine_DoesNotReferenceClassicRuntimeOrItsApi()
     {
-        // The endpoint-free publish engine composes the Runtime triggers feature via DependsOn
-        // (a shell-composition edge), not an assembly reference — so it must not pull in Runtime.Api.
-        AssertNoReferences(
-            typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,
-            "Elsa.Workflows.Runtime.Api");
+        var engine = typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly;
+        AssertNoReferences(engine, "Elsa.Workflows.Runtime.Api");
+        Assert.DoesNotContain(engine.GetReferencedAssemblies(), reference => reference.Name == "Elsa.Workflows.Runtime");
+        Assert.DoesNotContain(typeof(Elsa.Workflows.Runtime.Extensions.WorkflowPublicationDefaults).Assembly.GetReferencedAssemblies(),
+            reference => reference.Name == "Elsa.Workflows.Runtime");
     }
 
     private static void AssertNoReferences(System.Reflection.Assembly assembly, params string[] forbiddenPrefixes)
