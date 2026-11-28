@@ -180,6 +180,8 @@ and the classic checkpoint, command-budget and route convergence cases from that
     -c Release -p:RestoreLockedMode=true
   dotnet test extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj \
     -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~HttpEndpointMiddlewareTests|FullyQualifiedName~ActivitiesHttpFeatureTests'
+  dotnet test extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~WorkflowsRuntimeHttpShellCompositionTests|FullyQualifiedName~WorkflowsRuntimeHttpFeatureTests'
 )
 ```
 
