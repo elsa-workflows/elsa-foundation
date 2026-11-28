@@ -224,6 +224,27 @@ matching Workbench with `ActivitiesDispatchWorkflowRuntime` and
 See the [Actor child execution witness](../../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs)
 for current source.
 
+## Classic workflow secret activation
+
+The classic CLR runner's secret-rebinding, checkpoint and persistence canaries
+use the original activity activator and workflow stores. Use one checkout for
+the fixture, host, and providers.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-workflow-secrets" 148a17e03fac7b457da011eb91d8901d81494892
+  cd "$compatibility_root/classic-workflow-secrets"
+  dotnet test extensions/Secrets/tests/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true
+)
+```
+
+Current source tests secret resolver registration and failure classification,
+the publishing compiler's secret-reference contract, and storage separately.
+The [Actor HTTP connection witness](../../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellHttpConnectionTests.cs)
+uses the retained connection pipeline and checks that credentials are masked
+before the response becomes retained workflow data.
+
 ## Classic reviews, Decisions, ETL and Rules in workflows
 
 `AgentReview`, `AgentReviewApi` and the Decisions, ETL, and Rules workflow
