@@ -4618,7 +4618,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api.Http, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
