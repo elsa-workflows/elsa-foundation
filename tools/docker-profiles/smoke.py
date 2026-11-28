@@ -19,6 +19,7 @@ from profile_acceptance import MIGRATED_FIXTURE, MIGRATED_PROFILE, verify_migrat
 
 CURATED = "essentials-curated"
 WRITE_LINE = "Elsa.Activities.Primitives.Activities.WriteLine"
+WRITE_LINE_NODE = "write-line"
 LOGIN_PATH = "/_elsa/identity/login"
 COOKIE_DIRECTORY = "/tmp/elsa-profile-smoke"
 COOKIE_JAR = f"{COOKIE_DIRECTORY}/cookies"
@@ -150,6 +151,27 @@ def verify_curated_profile(container, args):
             "secrets": verify_secret_store(lambda path, data=None: read_json(container, path, data))}
 
 
+def verify_curated_workflow_history(container, instance, execution, version, publication):
+    expected = {
+        "workflowExecutionId": execution,
+        "definitionVersionId": version,
+        "artifactId": publication["artifactId"],
+        "sourceReferenceId": publication["sourceReferenceId"],
+    }
+    if any(instance.get(field) != value for field, value in expected.items()):
+        raise RuntimeError(f"Unexpected published executable or source for actor run: {instance}")
+
+    query = urlencode({"name": "ActivityCompleted", "limit": 16})
+    history = read_json(container, f"/runtime/workflows/instances/{execution}/history?{query}")
+    completed = [item for item in history["items"]
+                 if item["workflowExecutionId"] == execution and item["executableNodeId"] == WRITE_LINE_NODE
+                 and item["name"] == "ActivityCompleted" and item["authority"] == "CommittedTransition"
+                 and item["physicalCommitId"] and item["sequence"] > 0]
+    if history["coverage"]["policyId"] != "kernel-activity-journal-v1" or len(completed) != 1:
+        raise RuntimeError(f"The actor History did not contain the committed WriteLine activity: {history}")
+    return completed[0]["historyEventId"]
+
+
 def run_workflow(container, args):
     unauthenticated_status, login_status = authenticate(container, args)
     for type_key in args.expect_activity:
@@ -175,7 +197,7 @@ def run_workflow(container, args):
         "state": {
             "variables": [], "inputs": [], "outputs": [],
             "rootActivity": {
-                "nodeId": "write-line", "activityVersionId": write_line[0]["headVersionId"],
+                "nodeId": WRITE_LINE_NODE, "activityVersionId": write_line[0]["headVersionId"],
                 "inputs": [{"referenceKey": "text", "value": {"value": marker, "expressionType": "Literal"}}],
                 "outputs": [],
             },
@@ -195,14 +217,20 @@ def run_workflow(container, args):
             details = json.loads(body)
             instance = details["instance"]
             if instance["status"] in ("Completed", "Finished"):
-                if instance["activityCount"] < 1 or instance["incidentCount"] != 0:
-                    raise RuntimeError(f"Unexpected workflow activity or incident count: {instance}")
+                if instance["incidentCount"] != 0:
+                    raise RuntimeError(f"Unexpected workflow incidents: {instance}")
+                history_event = None
+                if args.variant == CURATED:
+                    history_event = verify_curated_workflow_history(container, instance, execution, version, publication)
+                elif instance["activityCount"] < 1:
+                    raise RuntimeError(f"Unexpected workflow activity count: {instance}")
                 if marker not in docker("logs", container).splitlines():
                     raise RuntimeError("WriteLine output was absent from container logs")
                 return {
                     "unauthenticatedStatus": unauthenticated_status, "loginStatus": login_status,
                     "executionId": execution, "workflowStatus": instance["status"], "output": marker,
                     "standaloneTriggerTypes": trigger_types,
+                    **({"activityHistoryEventId": history_event} if history_event is not None else {}),
                 }
             if instance["status"] in ("Faulted", "Cancelled"):
                 raise RuntimeError(f"Workflow did not complete: {details}")
