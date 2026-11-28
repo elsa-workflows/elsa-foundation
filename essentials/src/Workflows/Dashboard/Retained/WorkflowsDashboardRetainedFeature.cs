@@ -24,7 +24,7 @@ public sealed class WorkflowsDashboardRetainedFeature : IWebShellFeature, IPostC
     public void ConfigureServices(IServiceCollection services)
     {
         services.TryAddScoped<IWorkflowRunHealthDataSource, UnavailableWorkflowRunHealthDataSource>();
-        WorkflowsDashboardFeature.ConfigureDashboardServices(services, FeatureName);
+        WorkflowsDashboardServices.Configure(services, FeatureName);
     }
 
     public void PostConfigureServices(IServiceCollection services)
