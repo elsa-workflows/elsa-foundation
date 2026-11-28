@@ -6,6 +6,10 @@ namespace Kernel.EntityFramework;
 internal sealed record RootPublicEventHost(string ActorType, bool ProtectsStarts)
 {
     internal const string Table = "FoundationPublicEventHost";
+    internal string? AuthoredStandaloneTenant { get; init; }
+
+    internal bool MatchesEventAuthority(RootPublicEventHost? host) =>
+        host is not null && ActorType == host.ActorType && ProtectsStarts == host.ProtectsStarts;
 
     internal static void RequireConfiguredActorType(string actorType)
     {
@@ -47,7 +51,7 @@ internal sealed record RootPublicEventHost(string ActorType, bool ProtectsStarts
     internal static async Task RequireAsync(KernelDb db, RootPublicEventHost expected, Func<FormattableString, FormattableString>? bind,
         CancellationToken token)
     {
-        if (db.UsesRootPublicEventHost && await ReadAsync(db, bind, token) != expected)
+        if (db.UsesRootPublicEventHost && !expected.MatchesEventAuthority(await ReadAsync(db, bind, token)))
             throw new StoreFormatException("The public Event host authority differs from the configured actor type or root start protection.");
     }
 
@@ -63,7 +67,7 @@ internal sealed record RootPublicEventHost(string ActorType, bool ProtectsStarts
         if (!row.SourceReady || row.ActorType is null || row.ProtectsStarts is null)
             throw new StoreFormatException("The installed public Event host authority is unavailable.");
         var installed = new RootPublicEventHost(row.ActorType, row.ProtectsStarts.Value);
-        if (db.PublicEventHost is { } expected && installed != expected)
+        if (db.PublicEventHost is { } expected && !expected.MatchesEventAuthority(installed))
             throw new StoreFormatException("The public Event host authority differs from the configured actor type or root start protection.");
         return installed;
     }

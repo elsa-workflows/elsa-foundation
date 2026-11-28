@@ -82,6 +82,11 @@ public static partial class SqliteEmbeddedHosting
             IReadOnlyList<EventStartRegistration> registrations, CancellationToken token) =>
             admission.ApplyEventStartsAsync(scope.Tenant, slot, revision, registrations, token);
 
+        internal Contract.IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope) =>
+            new BoundAuthoredStandaloneEventOutbox(
+                (after, token) => admission.ReadAuthoredStandaloneEventsAsync(scope, after, token),
+                (occurrence, fingerprint, token) => admission.AcknowledgeAuthoredStandaloneEventAsync(scope, occurrence, fingerprint, token));
+
         internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(Contract.BoundScope scope, string? after, CancellationToken token) =>
             admission.ListEventStartsAsync(scope.Tenant, after, token);
 
@@ -248,6 +253,16 @@ public static partial class SqliteEmbeddedHosting
                 IReadOnlyList<EventStartRegistration> registrations, CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
                     (admission, ct) => admission.ApplyEventStartsAsync(tenant, slot, revision, registrations, ct), token), token);
+
+            internal Task<IReadOnlyList<Contract.AuthoredStandaloneEvent>> ReadAuthoredStandaloneEventsAsync(Contract.BoundScope scope,
+                Contract.AuthoredStandaloneEventCursor? after, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ReadAuthoredStandaloneEventsAsync(scope, after, ct), token), token);
+
+            internal Task<bool> AcknowledgeAuthoredStandaloneEventAsync(Contract.BoundScope scope, string occurrence,
+                string fingerprint, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.AcknowledgeAuthoredStandaloneEventAsync(scope, occurrence, fingerprint, ct), token), token);
 
             internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(string tenant, string? after, CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,

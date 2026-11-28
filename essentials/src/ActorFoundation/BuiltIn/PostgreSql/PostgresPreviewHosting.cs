@@ -361,7 +361,7 @@ public static partial class PostgresPreviewHosting
         using var db = create();
         if (protectRootStart is not null && (!db.UsesRootReplyProtocol || !db.UsesRootPreparedStarts))
             throw new NotSupportedException("Held root protection requires an installed PostgreSQL prepared-start profile.");
-        if (db.PublicEventHost is { } host && host != new RootPublicEventHost(actorType, protectRootStart is not null))
+        if (db.PublicEventHost is { } host && !host.MatchesEventAuthority(new(actorType, protectRootStart is not null)))
             throw new ArgumentException("Held requests must match the public Event host actor type and root start protection.");
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
         return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),

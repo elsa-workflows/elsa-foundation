@@ -50,6 +50,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
         qualificationFormat == StoreFormat.RootPagedPublicEventsQualification || qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
+        qualificationFormat == StoreFormat.RootAuthoredStandaloneEventQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification || qualificationFormat is { SupportsIsolatedInlineQualification: true } ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
@@ -141,16 +142,36 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal static SqliteEmbeddedFoundation ForPagedPublicEventsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootPagedPublicEventsQualification);
 
+    /// <summary>Selects the private authored standalone Event store for one ordinary publisher scope.</summary>
+    public static SqliteEmbeddedFoundation ForAuthoredStandaloneEventQualification(string databasePath, string node, string actorType,
+        Contract.BoundScope publisherScope, ProtectRootStartAsync? protectRootStart = null)
+    {
+        ArgumentNullException.ThrowIfNull(publisherScope);
+        if (publisherScope.IsHostIsolated)
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
+        return new(databasePath, node, actorType, StoreFormat.RootAuthoredStandaloneEventQualification, protectRootStart, publisherScope);
+    }
+
+    /// <summary>Binds a reader and acknowledgement edge to the installed ordinary publisher scope.</summary>
+    public Contract.IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (qualificationFormat != StoreFormat.RootAuthoredStandaloneEventQualification)
+            throw new NotSupportedException("This SQLite profile cannot transfer authored standalone Events.");
+        return requests.Value.BindAuthoredStandaloneEvents(scope);
+    }
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat,
-        ProtectRootStartAsync? protectRootStart = null)
+        ProtectRootStartAsync? protectRootStart = null, Contract.BoundScope? publisherScope = null)
     {
         path = Path.GetFullPath(databasePath);
         this.node = node;
         this.actorType = actorType;
         this.qualificationFormat = qualificationFormat;
         if (qualificationFormat is null || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
-            qualificationFormat == StoreFormat.RootRetainedResponseQualification)
-            publicEventHost = new(actorType, protectRootStart is not null);
+            qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
+            qualificationFormat == StoreFormat.RootAuthoredStandaloneEventQualification)
+            publicEventHost = new(actorType, protectRootStart is not null) { AuthoredStandaloneTenant = publisherScope?.Tenant };
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
             qualificationFormat: qualificationFormat, protectRootStart: protectRootStart), LazyThreadSafetyMode.PublicationOnly);
     }
@@ -164,6 +185,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat == StoreFormat.RootPublicEventStartsQualification || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
         qualificationFormat == StoreFormat.RootPagedPublicEventsQualification || qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
+        qualificationFormat == StoreFormat.RootAuthoredStandaloneEventQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 

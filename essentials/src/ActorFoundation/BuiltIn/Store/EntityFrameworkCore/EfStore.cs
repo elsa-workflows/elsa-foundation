@@ -184,6 +184,7 @@ public class KernelDb : DbContext
     internal bool UsesRootPublicEventHost => Has(RootCapabilities.PublicEventHost);
     internal RootPublicEventHost? PublicEventHost { get; }
     internal bool UsesRootPagedPublicEvents => Has(RootCapabilities.PagedPublicEvents);
+    internal bool UsesAuthoredStandaloneEvents => Has(RootCapabilities.AuthoredStandaloneEvents);
     internal bool UsesRootKeyedStarts => Has(RootCapabilities.KeyedStarts);
     internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
@@ -215,6 +216,10 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootChildrenQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification, RootProfiles.ChildQualification);
+    internal static KernelDb ForPostgresAuthoredStandaloneEventQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
+        new(options, StoreFormat.RootAuthoredStandaloneEventQualification, RootProfiles.AuthoredStandaloneEventQualification,
+            publicEventHost: host);
+
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options, RootPublicEventHost? publicEventHost = null) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, publicEventHost: publicEventHost);
     internal static KernelDb ForPostgresRootSequencedJournalQualification(DbContextOptions<KernelDb> options) =>
@@ -314,6 +319,9 @@ public class KernelDb : DbContext
         if (qualificationFormat == StoreFormat.RootSharedActivationQualification)
             return new(options, qualificationFormat.Value, RootProfiles.SharedActivationQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootAuthoredStandaloneEventQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.AuthoredStandaloneEventQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
         if (qualificationFormat == StoreFormat.RootPagedPublicEventsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PagedPublicEventsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
