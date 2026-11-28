@@ -74,6 +74,16 @@ public static partial class SqliteEmbeddedHosting
         return file.Path;
     }
 
+    internal static async ValueTask<bool> HasUserTaskWaitAsync(string path, Contract.BoundScope scope, Contract.ActorRef actor,
+        Func<string, bool> matches, RootPublicEventHost? publicEventHost, CancellationToken cancellationToken)
+    {
+        using var file = AcquireFile(path);
+        var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
+            StoreFormat.RootUserTaskWaitsQualification, publicEventHost), postgres: false);
+        return await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken) is
+            { Status: InstanceStatus.Running, State: { } state } && matches(state);
+    }
+
     // A fault or kill may leave work running. Its runtime lease remains held through process exit.
     private static readonly object FileGate = new();
     private static readonly Dictionary<string, ActiveFile> ActiveFiles = new(StringComparer.Ordinal);

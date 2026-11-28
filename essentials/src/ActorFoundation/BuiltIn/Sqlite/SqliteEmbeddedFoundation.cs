@@ -43,11 +43,22 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         bool withTimers = false) =>
         new(databasePath, node, actorType, withTimers ? StoreFormat.RootS6TerminalOutputQualification : StoreFormat.RootTerminalOutputQualification);
 
-    internal static SqliteEmbeddedFoundation ForUserTaskWaitsQualification(string databasePath, string node, string actorType,
+    /// <summary>Binds the private Actor user task qualification to a dedicated SQLite database.</summary>
+    public static SqliteEmbeddedFoundation ForUserTaskWaitsQualification(string databasePath, string node, string actorType,
         ProtectRootStartAsync? protectRootStart = null, Contract.BoundScope? publisherScope = null) =>
         publisherScope is null
             ? new(databasePath, node, actorType, StoreFormat.RootUserTaskWaitsQualification, protectRootStart)
             : ForStandaloneQualification(databasePath, node, actorType, publisherScope, StoreFormat.RootUserTaskWaitsQualification, protectRootStart);
+
+    /// <summary>Evaluates the host's task wait predicate on the committed state of an exact ordinary Actor life.</summary>
+    public async ValueTask<bool> HasUserTaskWaitAsync(Contract.BoundScope scope, Contract.ActorRef actor, Func<string, bool> matches,
+        CancellationToken cancellationToken)
+    {
+        if (scope.IsHostIsolated) return false;
+        if (qualificationFormat != StoreFormat.RootUserTaskWaitsQualification)
+            throw new InvalidOperationException("This store does not support Actor user task waits.");
+        return await SqliteEmbeddedHosting.HasUserTaskWaitAsync(InstalledPath, scope, actor, matches, publicEventHost, cancellationToken);
+    }
 
     internal static SqliteEmbeddedFoundation ForChildQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.SqliteRootChildrenQualification);

@@ -40,6 +40,35 @@ public static partial class PostgresPreviewHosting
             new(actorType, protectsStarts) { AuthoredStandaloneTenant = publisherScope?.Tenant });
     }
 
+    /// <summary>Selects the private Actor user task qualification with the complete ordinary workflow serving profile.</summary>
+    public static KernelDb CreateUserTaskWaitsQualificationContext(DbContextOptions<KernelDb> options, string actorType,
+        Contract.BoundScope? publisherScope)
+    {
+        if (publisherScope is { IsHostIsolated: true })
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
+        RootPublicEventHost.RequireConfiguredActorType(actorType);
+        return KernelDb.ForPostgresUserTaskWaitsQualification(options,
+            new(actorType, true) { AuthoredStandaloneTenant = publisherScope?.Tenant });
+    }
+
+    /// <summary>Installs or verifies the private Actor user task qualification store.</summary>
+    public static Task InstallUserTaskWaitsQualificationAsync(DbContextOptions<KernelDb> options, string actorType,
+        Contract.BoundScope? publisherScope, CancellationToken cancellationToken) =>
+        InstallPreviewFormatAsync(() => CreateUserTaskWaitsQualificationContext(options, actorType, publisherScope), cancellationToken);
+
+    /// <summary>Evaluates the host's task wait predicate on the committed state of an exact ordinary Actor life.</summary>
+    public static async ValueTask<bool> HasUserTaskWaitAsync(Func<KernelDb> open, Contract.BoundScope scope, Contract.ActorRef actor,
+        Func<string, bool> matches, CancellationToken cancellationToken)
+    {
+        if (scope.IsHostIsolated) return false;
+        await using var db = open();
+        if (db.RequiredFormat != StoreFormat.RootUserTaskWaitsQualification)
+            throw new InvalidOperationException("This store does not support Actor user task waits.");
+        var store = new EfStore(open, postgres: true);
+        return await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken) is
+            { Status: InstanceStatus.Running, State: { } state } && matches(state);
+    }
+
     /// <summary>Selects the dedicated preview format for qualifying indexed playback.</summary>
     public static KernelDb CreatePlaybackQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootPlaybackQualification(options);

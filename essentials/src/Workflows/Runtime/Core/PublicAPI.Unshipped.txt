@@ -9980,6 +9980,8 @@ Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ExpectedRecipie
 Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ExpectedRecipient.init -> void
 Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
 Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.HistoryCausation.init -> void
+Elsa.Workflows.Runtime.Core.UserTasks.IActorUserTaskJournal
+Elsa.Workflows.Runtime.Core.UserTasks.IActorUserTaskJournal.RecoverOwnedAsync(string! tenantId, int limit, string? after, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage!>
 Elsa.Workflows.Runtime.Core.UserTasks.IActorUserTaskRuntime
 Elsa.Workflows.Runtime.Core.UserTasks.IActorUserTaskRuntime.Owns(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord! task) -> bool
 Elsa.Workflows.Runtime.Core.UserTasks.IActorUserTaskRuntime.ReconcileAsync(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord! task, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
