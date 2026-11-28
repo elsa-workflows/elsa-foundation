@@ -114,3 +114,19 @@ dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj \
   -c Release -p:RestoreLockedMode=true \
   --filter 'FullyQualifiedName~RuntimeAlteration|FullyQualifiedName~RuntimeCoreEngineShapeGuardTests|FullyQualifiedName~DomainManagementApiCompositionTests|FullyQualifiedName~DomainApiCapabilityRegistrationTests'
 ```
+
+## Classic Agent execution and Dispatch checkpoints
+
+Use the same pinned checkout for the Agent workflow runner, its draft TestRun
+and continuity fixtures, and Dispatch's checkpoint, resume and readiness
+fixtures. Current tests retain Agent publication, journal, provider and evidence
+authorization and Dispatch authoring, source pins, and stored control models.
+
+```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" 91b9aceb2cff489a180196fa1a2e9ee77465018b
+cd "$archive/source"
+dotnet test extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release -p:RestoreLockedMode=true
+dotnet test essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
