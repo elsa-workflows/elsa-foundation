@@ -206,7 +206,6 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `Test-IfWorkflow.ps1`       | `If` decision composite; runs both conditions and asserts the correct Then/Else branch |
 | `Test-SwitchWorkflow.ps1`   | `Switch` composite; asserts the matching case branch runs (or the default) |
 | `Test-HttpWorkflow.ps1`     | `HttpEndpoint` start-trigger; publishes, then fires a real HTTP request at `/workflows/http/<path>` |
-| `Test-ChildWorkflow.ps1`    | parent/child dispatch: a parent `DispatchWorkflow` fires a separately-published child workflow |
 | `single-outcome/Test-ForLoop.ps1` / `Test-ForEachLoop.ps1` / `Test-SetOutput.ps1` / `Test-SetVariable.ps1` | loops + Set/SetOutput intrinsics |
 | `single-outcome/Test-WhileLoop.ps1` | `While` loop terminated by a body `Set` of the condition variable (#977) |
 | `single-outcome/Test-WhileCounter.ps1` | `While` driven by a JS-incremented counter — body reads/writes a variable from JS via `getVariable` (#984 + #977) |
@@ -372,9 +371,7 @@ reproduce. This is an architecture difference (like the removed flow-activity mo
 The following observations describe the previous runtime. For current Actor child execution, see the [retained kernel tests](../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs).
 
 Use the [classic compatibility checkout](../docs/contributing/workbench-compatibility-tests.md#classic-dispatch-and-called-workflow-control)
-for the `ActivitiesDispatchWorkflowRuntime` configuration and the classic run outcomes below.
-The [pinned Workbench journey](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution)
-covers the earlier hosted test scripts.
+for the `ActivitiesDispatchWorkflowRuntime` configuration and replay commands for both classic REST scripts.
 
 Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with
 outcome `Dispatched` while the child runs independently.
@@ -382,7 +379,7 @@ outcome `Dispatched` while the child runs independently.
 **Waited path (`WaitForCompletion=true`) works again (re-verified 2026-07-23 @ `3dd732d07`).** The #1006
 hang is gone since the #982 node-scoped resume-target fix (`4c2386551`): the parent suspends at the dispatch
 node, the child runs, and the parent resumes with the child's terminal outcome (`Completed`/`Faulted`) —
-covered end-to-end by the [archived BPMN call-activity witness](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
+covered end-to-end by the [archived BPMN call-activity witness](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution).
 
 **Historical classic defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
 fault-recording checkpoint commit fails, so the child surfaces a
