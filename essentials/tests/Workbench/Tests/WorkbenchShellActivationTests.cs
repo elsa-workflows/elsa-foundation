@@ -45,7 +45,6 @@ public sealed class WorkbenchShellActivationTests
     /// <summary>Features a stock shell may leave unlisted that must still be in the runtime catalog.</summary>
     private static readonly string[] CatalogedFeatures =
     [
-        "ActivitiesRuntime",
         "ActivitiesGraphRuntime",
         "SecretsWorkflows",
         // ActivitiesHttp depends on its route-table projection by feature name, and a name cannot make an assembly
@@ -119,12 +118,12 @@ public sealed class WorkbenchShellActivationTests
             $"{feature} is not in the runtime catalog."));
 
         Assert.False(Runs("ConnectionsWorkflows"));
-        Assert.False(Runs("ActivitiesRuntime"));
+        Assert.DoesNotContain("ActivitiesRuntime", catalog.Keys);
         Assert.False(Runs("ActivitiesGraphRuntime"));
         Assert.False(Runs("SecretsWorkflows"));
-        Assert.False(Runs("WorkflowsRuntimeApi"));
-        Assert.False(Runs("WorkflowsRuntimeCheckpointPersistence"));
-        Assert.False(Runs("WorkflowsRuntimeResumption"));
+        Assert.DoesNotContain("WorkflowsRuntimeApi", catalog.Keys);
+        Assert.DoesNotContain("WorkflowsRuntimeCheckpointPersistence", catalog.Keys);
+        Assert.DoesNotContain("WorkflowsRuntimeResumption", catalog.Keys);
         Assert.False(Runs("WorkflowsRuntimeDistributed"));
         AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "CacheWorkflowExecutables", "true");
         AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowExecutableCacheCapacity", "256");
