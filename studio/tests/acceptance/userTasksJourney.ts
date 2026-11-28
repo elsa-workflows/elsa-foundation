@@ -145,7 +145,8 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await publishedForm.press("Enter");
     await page.getByRole("tab", { name: "Versions", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeVisible();
-    await expect(page.getByLabel("Published form versions preview", { exact: true }).getByText("Note", { exact: true })).toBeVisible();
+    const fields = page.getByLabel("Published form versions preview", { exact: true });
+    await expect(fields.getByRole("term").filter({ hasText: /^Note$/ })).toBeVisible();
     await capture(page, info, "task-form-versions");
     await page.goto(studioBackendLink(page, "/user-tasks/forms"));
     await page.getByRole("button", { name: "New form", exact: true }).first().press("Enter");
