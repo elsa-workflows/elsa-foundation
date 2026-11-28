@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\..\Attention\Core\Elsa.Attention.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\Persistence\Elsa.Workflows.Runtime.Persistence\Elsa.Workflows.Runtime.Persistence.csproj" />
     <ProjectReference Include="..\Publications\Elsa.Workflows.Runtime.Publications.csproj" />
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
