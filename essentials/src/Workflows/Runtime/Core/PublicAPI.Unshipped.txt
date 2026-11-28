@@ -13250,3 +13250,20 @@ static Elsa.Workflows.Runtime.Services.Values.WorkflowOutputProjection.operator 
 Elsa.Workflows.Runtime.Core.Constants.RuntimeIncidentFailureTypes
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeIncidentFailureTypes.SchedulerWorkPoisoned = "SchedulerWorkPoisoned" -> string!
 const Elsa.Workflows.Runtime.Core.Models.RuntimeOutputCapture.WorkflowVariableValueIdPrefix = "variable:" -> string!
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>.FencedClaimLease(Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim!>! renew, System.TimeSpan visibilityTimeout, System.TimeProvider! timeProvider) -> void
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>.RunAsync<TResult>(TClaim! claim, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<TResult>>! sideEffect, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim!, TResult>!>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease<TClaim>.RunRenewingAsync<TResult>(TClaim! claim, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<TResult>>! sideEffect, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim!, TResult>!>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.Claim.get -> TClaim!
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.ClaimLost.get -> bool
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.Exception.get -> System.Exception?
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.Result.get -> TResult?
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRun<TClaim, TResult>.Status.get -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.Completed = 0 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.Faulted = 1 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.LostBeforeSideEffect = 2 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.LostDuringSideEffect = 3 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
+virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke(TClaim! claim, System.DateTimeOffset now, System.TimeSpan visibilityTimeout, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TClaim?>

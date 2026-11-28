@@ -8,11 +8,15 @@ using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Services.Triggers;
 
 internal static class StandaloneTriggerSourceRegistration
 {
+    internal static void AddPreparedServices(IServiceCollection services) => AddPreparedServices(services, provider =>
+        CreatePreparedOutbox(provider, provider.GetService<ILoggerFactory>()?.CreateLogger(RuntimePostCommitOutboxDelivery.LoggerCategory)));
+
     internal static void AddPreparedServices(IServiceCollection services,
         Func<IServiceProvider, IRuntimePostCommitOutboxProcessor> createOutbox)
     {
@@ -25,6 +29,17 @@ internal static class StandaloneTriggerSourceRegistration
         services.AddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         services.AddScoped<IRuntimePostCommitOutboxProcessor>(provider => new PreparedStandaloneOutboxProcessor(createOutbox(provider)));
     }
+
+    internal static IRuntimePostCommitOutboxProcessor CreatePreparedOutbox(IServiceProvider provider, ILogger? logger) =>
+        new RuntimePostCommitOutboxDelivery(
+            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+            provider.GetRequiredService<IRuntimePostCommitIntentDispatcher>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
+            deliveryFailureProjectors: [],
+            provider.GetServices<RuntimePostCommitIntentHandlerContribution>(),
+            logger,
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>());
 
     internal static void AddServices(IServiceCollection services)
     {

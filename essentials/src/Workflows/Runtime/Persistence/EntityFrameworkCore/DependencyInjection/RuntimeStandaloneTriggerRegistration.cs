@@ -35,7 +35,7 @@ internal static class RuntimeStandaloneTriggerRegistration
         var snapshot = services.ToArray();
         try
         {
-            StandaloneTriggerSourceRegistration.AddPreparedServices(services, PreparedStandaloneOutboxFactory.Create);
+            StandaloneTriggerSourceRegistration.AddPreparedServices(services);
             services.AddScoped<EfRuntimePostCommitOutboxStore>(provider => new(
                 provider.GetRequiredService<RuntimeDbContext>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
