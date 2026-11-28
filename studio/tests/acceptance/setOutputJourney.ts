@@ -54,7 +54,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await page.getByRole("button", { name: "Add output", exact: true }).click();
   await outputName.fill("Sum"); await outputName.press("Enter");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("Double");
-  await page.getByRole("checkbox", { name: /^Required/ }).check();
+  await page.getByRole("checkbox", { name: "Sum required", exact: true }).check();
   await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
   await capture(page, info, "set-output-declaration");
   await views.getByRole("tab", { name: "Designer", exact: true }).click();
