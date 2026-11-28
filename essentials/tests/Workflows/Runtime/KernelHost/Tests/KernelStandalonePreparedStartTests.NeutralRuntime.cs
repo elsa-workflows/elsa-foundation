@@ -92,6 +92,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.Same(directTests, services.GetRequiredService<IWorkflowStartDispatcher>());
                 Assert.Null(services.GetService<IRuntimeIngressWaitTarget>());
                 Assert.Null(services.GetService<IStimulusRouter>());
+                Assert.Null(services.GetService<EfRuntimePostCommitOutboxStore>());
+                var outbox = Assert.IsType<EfRuntimePostCommitOutboxStorage>(services.GetRequiredService<IRuntimePostCommitOutboxStore>());
+                Assert.Same(outbox, services.GetRequiredService<IPostCommitOutboxLookupStore>());
                 await services.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
                 var activation = await PublishAsync(services, material, 0, clock.GetUtcNow(), token);
                 var ingress = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
@@ -106,8 +109,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var item = await ReadAsync(services, sourceId, token);
                 Assert.Equal(material.Identity, Assert.Single(item.SubscriptionDelivery!.Recipients).Material);
                 Assert.Equal(RuntimeRecipientPhase.Pending, Progress(item).Phase);
-                Assert.Contains(material.Identity.ArtifactId, await services.GetRequiredService<EfRuntimePostCommitOutboxStore>()
-                    .ListPinnedExecutableArtifactIdsAsync(token));
+                Assert.Contains(material.Identity.ArtifactId, await outbox.ListPinnedExecutableArtifactIdsAsync(token));
                 Assert.True((await Source(services).AdmitAsync(signal, token)).Replayed);
 
                 await Assert.ThrowsAsync<NotSupportedException>(() => services.GetRequiredService<IStandaloneTriggerIngress<UnqualifiedWaitEvent>>()
@@ -142,7 +144,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                     Assert.Equal(RuntimeTargetAcceptanceKind.PreparedActorBirth, receipt.Kind);
                     Assert.Equal(material.Identity, receipt.Material);
                     Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, accepted.Status);
-                    Assert.DoesNotContain(material.Identity.ArtifactId, await services.GetRequiredService<EfRuntimePostCommitOutboxStore>()
+                    Assert.DoesNotContain(material.Identity.ArtifactId, await services.GetRequiredService<EfRuntimePostCommitOutboxStorage>()
                         .ListPinnedExecutableArtifactIdsAsync(token));
                     Assert.Contains(material.Identity.ArtifactId, await services.GetRequiredService<IRuntimeKernelExecutablePinStore>()
                         .ListPinnedExecutableArtifactIdsAsync(token));

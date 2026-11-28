@@ -44,7 +44,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore : IRuntimeIngressTra
         var rows = context.RuntimePostCommitOutbox.AsNoTracking().Where(row => row.ScopeKeyHash == scopeHash && row.SourceKind != null);
         if (cursor is not null)
         {
-            var order = EfRuntimePostCommitOutboxStore.OutboxOrderKey(cursor);
+            var order = RuntimePostCommitOutboxRow.OutboxOrderKey(cursor);
             rows = rows.Where(row => string.Compare(row.OutboxItemIdOrderKey, order) > 0);
         }
         var scanLimit = query.Limit;

@@ -11,7 +11,7 @@ internal static class RuntimeStandaloneSourceEntityFrameworkRegistration
 {
     private static readonly Type[] PreparedOwnedPorts =
     [
-        typeof(EfRuntimePostCommitOutboxStore), typeof(IRuntimePostCommitOutboxStore), typeof(IPostCommitOutboxLookupStore),
+        typeof(EfRuntimePostCommitOutboxStorage), typeof(IRuntimePostCommitOutboxStore), typeof(IPostCommitOutboxLookupStore),
         typeof(IRuntimePostCommitOutboxProcessor), typeof(IRuntimePostCommitIntentDispatcher), typeof(IRuntimeAuthoredStandaloneEventIngress)
     ];
 
@@ -26,6 +26,7 @@ internal static class RuntimeStandaloneSourceEntityFrameworkRegistration
             throw new InvalidOperationException("Prepared standalone Runtime EF cannot replace an independently selected standalone provider.");
         }
         if (services.Any(descriptor => PreparedOwnedPorts.Contains(descriptor.ServiceType) ||
+            typeof(IEfRuntimePostCommitOutboxOwner).IsAssignableFrom(descriptor.ServiceType) ||
             descriptor.ServiceType == typeof(IStandaloneTriggerStore) || descriptor.ServiceType == typeof(IRuntimeIngressDeliveryStore) ||
             descriptor.ServiceType == typeof(IRuntimeIngressReservationReader) || descriptor.ServiceType == typeof(ITriggerSourceResourceCommitStore)))
             throw new InvalidOperationException("Prepared standalone Runtime EF requires exclusive ownership of its source and outbox ports.");
@@ -34,12 +35,17 @@ internal static class RuntimeStandaloneSourceEntityFrameworkRegistration
         try
         {
             StandaloneTriggerSourceRegistration.AddPreparedServices(services);
-            services.AddScoped<EfRuntimePostCommitOutboxStore>(provider => new(
-                provider.GetRequiredService<RuntimeDbContext>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-                provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
-                provider.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>()) { PreparedStandaloneOnly = true });
-            services.AddScoped<IRuntimePostCommitOutboxStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>());
-            services.AddScoped<IPostCommitOutboxLookupStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>());
+            services.AddScoped<EfRuntimePostCommitOutboxStorage>(provider =>
+            {
+                var context = provider.GetRequiredService<RuntimeDbContext>();
+                var access = provider.GetRequiredService<IPersistenceAccessContextAccessor>();
+                var time = provider.GetRequiredService<TimeProvider>();
+                var references = provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>() as EfWorkflowExecutableSourceReferenceStore;
+                return new(context, access, time, references is not null && ReferenceEquals(references.Context, context) ? references : null,
+                    provider.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>(), preparedStandaloneOnly: true);
+            });
+            services.AddScoped<IRuntimePostCommitOutboxStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStorage>());
+            services.AddScoped<IPostCommitOutboxLookupStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStorage>());
             services.AddScoped<IRuntimeAuthoredStandaloneEventIngress, EfAuthoredStandaloneEventIngress>();
             var resource = ServiceDescriptor.Scoped<IStandaloneTriggerStore, EfStandaloneTriggerStore>();
             var ingress = ServiceDescriptor.Scoped<IRuntimeIngressDeliveryStore>(provider =>
