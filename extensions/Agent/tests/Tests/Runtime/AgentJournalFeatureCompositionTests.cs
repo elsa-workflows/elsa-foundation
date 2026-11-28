@@ -6,6 +6,7 @@ using Elsa.Agent.Inspection.Api;
 using Elsa.Agent.Journal;
 using Elsa.Agent.Persistence.EntityFrameworkCore;
 using Elsa.Agent.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Locking.FileSystem;
 using Elsa.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -45,6 +46,11 @@ public sealed class AgentJournalFeatureCompositionTests
                 settings[$"CShells:Shells:{shellName}:Features:{feature}:ConnectionString"] = $"Data Source={database};Pooling=False";
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var services = new ServiceCollection().AddLogging();
+            if (useEntityFramework)
+            {
+                var locks = directory.CreateSubdirectory("locks");
+                new FileSystemLockingFeature { LocksFolderPath = locks.FullName }.ConfigureServices(services);
+            }
             services.AddSingleton<IConfiguration>(configuration);
             services.AddCShells(shells => shells.WithAssemblies(assemblies).WithConfigurationProvider(configuration));
             await using var host = services.BuildServiceProvider();
