@@ -1,6 +1,6 @@
 # Elsa.Secrets.Workflows
 
-The workflow runtime adapter for the Secrets module resolves an activity input bound to a
+In the classic workflow runtime, the Secrets adapter resolves an activity input bound to a
 `Secret` reference through the Secrets module's `ISecretValueResolver`, each time the activity is activated, for the
 tenant the runtime hands over: the execution partition read at activation. On the background drain path that is the
 host's persistence scope, so the two-tenant scenario is proven with one host per tenant over one secret store; a drain
@@ -14,8 +14,9 @@ which registers `SecretValueRuntimeResolver` as the container's `IRuntimeSecretR
 `ISecretValueResolver` it reads through. It registers nothing else: no event handler, no task and no other runtime
 contract.
 
-`ActorSecretsWorkflows` registers the same resolver and depends on `Secrets` and `ActivitiesRuntimeHosting`. Stock
-Workbench and its Compose reference shell select this feature. The explicit classic configuration uses `SecretsWorkflows`.
+`ActorSecretsWorkflows` makes the resolver contract available in Actor shells and depends on `Secrets` and
+`ActivitiesRuntimeHosting`. Stock Workbench and its Compose reference shell select this feature. General
+secret-bound activity input execution remains a classic runtime capability through `SecretsWorkflows`.
 
 `IRuntimeSecretResolver` is a replacement contract with at most one implementation per container, and the runtime
 registers none. `AddSecretsWorkflows` refuses to register beside another one, as an early diagnostic: when a different
