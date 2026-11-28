@@ -68,11 +68,11 @@ public sealed class EfModelAdmissionLeaseTests
             gate.Inner = actualQueue;
             gate.Entered = first ? firstEntered : secondEntered;
             gate.Release = first ? new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) : releaseSecond;
-            var assembly = typeof(WorkflowExecutableRootWriteLeaseManager).Assembly;
+            var assembly = typeof(RuntimeExecutionOwnershipService).Assembly;
             Type Type(string name) => assembly.GetType("Elsa.Workflows.Runtime.Services.Executions." + name, true)!;
             var registry = Activator.CreateInstance(Type("RuntimeExecutionProtocolRegistry"), true)!;
             Type("RuntimeExecutionProtocolRegistry").GetMethod("Initialize")!.Invoke(registry, [new[] { new RuntimeExecutionProtocolRegistration(model.Protocol, typeof(AdmissionDriver)) { InputKinds = ["start"] } }, services]);
-            var readerType = typeof(EfWorkflowExecutableStore).Assembly.GetType("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeModelExecutionReader", true)!;
+            var readerType = typeof(EfRuntimeCheckpointCommitStore).Assembly.GetType("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeModelExecutionReader", true)!;
             var reader = Activator.CreateInstance(readerType, [context, access, new AdmissionCodec()])!;
             var native = new EfWorkflowExecutionStateStore(context, access, new AdmissionCodec());
             var commits = new EfRuntimeCheckpointCommitStore(context, access);
