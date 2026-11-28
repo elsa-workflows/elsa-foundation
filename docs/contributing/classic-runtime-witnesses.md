@@ -43,7 +43,8 @@ classic checkpoint, invocation, resumption, activity worker and scope tests.
 From that exact checkout, run:
 
 ```sh
-dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj \n  -c Release -p:RestoreLockedMode=true
+dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
 ```
 
 Current source keeps the typed activity and state contracts, schedule metadata,

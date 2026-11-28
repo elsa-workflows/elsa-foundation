@@ -14,7 +14,7 @@ function New-TestTrx {
         [int] $ErrorCount = 0,
         [int] $Total = 1,
         [int] $Executed = 1,
-        [string] $TestName = 'Elsa.Activities.Runtime.Tests.WriteLineBoundInputExecutionTests.WriteLine_hydrates_plain_text_without_an_argument_or_memory_wrapper'
+        [string] $TestName = 'Elsa.Workflows.Runtime.KernelHost.Tests.WriteLineBoundInputExecutionTests.WriteLine_hydrates_plain_text_without_an_argument_or_memory_wrapper'
     )
         @"
 <TestRun>
