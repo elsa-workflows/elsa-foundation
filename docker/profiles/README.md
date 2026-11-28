@@ -103,6 +103,11 @@ This example expects a TLS certificate in `elsa.pfx` readable by the container u
 | `Secrets__EncryptionKey` | Supply for shells that enable Secrets, such as Full. |
 
 Lean Essentials persists Actor runs in `/app/data/elsa-kernel.db`, alongside the separate control-plane database.
+When upgrading from the previous lean profile, stop new workflow ingress and settle pending work with the earlier
+image. Keep that image and its volumes for existing run history and rollback. Start the Actor profile with a fresh
+dedicated Actor database and keep its matching control-plane database. Follow the same drain, history and storage
+sequence as [Curated Essentials](essentials-curated/README.md#workflow-execution).
+
 To enable HTTP in a mounted shell, enable `Http`, `KernelActivitiesHttp`, `WorkflowsRuntimeStandaloneHttp`,
 and `StandaloneHttpTriggerAuthoring`.
 To enable standalone Timer and Cron, select `KernelActivitiesScheduling`, `StandaloneScheduleTriggerAuthoring`,
