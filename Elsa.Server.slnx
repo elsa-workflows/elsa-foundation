@@ -1014,8 +1014,10 @@
     <Project Path="extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
     <Project Path="extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
     <Project Path="extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
-    <Project Path="extensions/Decisions/src/Workflows/Actor/Elsa.Decisions.Workflows.Actor.csproj" />
     <Project Path="extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Decisions/src/Workflows/">
+    <Project Path="extensions/Decisions/src/Workflows/Actor/Elsa.Decisions.Workflows.Actor.csproj" />
   </Folder>
   <Folder Name="/extensions/Decisions/tests/" />
   <Folder Name="/extensions/Decisions/tests/Api/">
