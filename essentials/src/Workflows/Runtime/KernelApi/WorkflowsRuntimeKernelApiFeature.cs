@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
