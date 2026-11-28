@@ -5,6 +5,7 @@ using Elsa.Cluster.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -137,7 +138,12 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
         Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
         var families = status.Response.GetProperty("finalization").GetProperty("families").EnumerateArray().ToArray();
-        Assert.Equal(23, families.Length);
+        var declared = EfSchemaFamilyCatalog.Discover([typeof(SecretsDbContext).Assembly, typeof(RuntimeDbContext).Assembly]);
+        Assert.Equal(declared.Select(family => family.Name).Order(StringComparer.Ordinal),
+            families.Select(family => family.GetProperty("family").GetString()!).Order(StringComparer.Ordinal));
+        var authoredEventCohorts = families.Single(family => family.GetProperty("family").GetString() == "RuntimeAuthoredEventCohort");
+        Assert.Equal(["1.0.0"], authoredEventCohorts.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(JsonValueKind.Null, authoredEventCohorts.GetProperty("finalizedVersion").ValueKind);
         var history = families.Single(family => family.GetProperty("family").GetString() == "RuntimeHistory");
         Assert.Equal(["1.0.0"], history.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         Assert.Equal(JsonValueKind.Null, history.GetProperty("finalizedVersion").ValueKind);
