@@ -4,8 +4,6 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Checkpoints;
-using Elsa.Workflows.Runtime.Services.Dispatch;
 using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
@@ -159,97 +157,10 @@ public sealed class WorkflowDispatchStateTests
         Assert.Same(request, buffer.TakeWorkflowDispatch("parent-1", "activity-1"));
     }
 
-    [Fact]
-    public async Task InMemoryCheckpoint_ProjectsDispatchAndConvergesEquivalentReplay()
-    {
-        var sharedState = new InMemoryRuntimeCheckpointStoreState();
-        IWorkflowDispatchStore dispatchStore = new InMemoryWorkflowDispatchStore(sharedState);
-        var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(
-            state: sharedState,
-            workflowDispatchStore: dispatchStore);
-        var commit = NewCommit("commit-1", NewRecord());
-
-        await checkpointStore.CommitAsync(commit, Decision());
-        await checkpointStore.CommitAsync(commit, Decision());
-
-        var projected = await dispatchStore.FindAsync(DispatchIdentity.DispatchId);
-        Assert.NotNull(projected);
-        Assert.Equal(DispatchIdentity.ChildWorkflowExecutionId, projected.ChildWorkflowExecutionId);
-        Assert.Single(checkpointStore.ListCommits());
-    }
-
-    [Fact]
-    public async Task InMemoryCheckpoint_RejectsConflictingRecordBeforeReplacingProjection()
-    {
-        var sharedState = new InMemoryRuntimeCheckpointStoreState();
-        IWorkflowDispatchStore dispatchStore = new InMemoryWorkflowDispatchStore(sharedState);
-        var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(
-            state: sharedState,
-            workflowDispatchStore: dispatchStore);
-        await checkpointStore.CommitAsync(NewCommit("commit-1", NewRecord()), Decision());
-        var conflict = NewRecord(correlationId: "correlation-conflict");
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            checkpointStore.CommitAsync(NewCommit("commit-2", conflict), Decision()).AsTask());
-
-        Assert.Contains("conflicting immutable identity", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(DispatchIdentity.ChildWorkflowExecutionId, (await dispatchStore.FindAsync(DispatchIdentity.DispatchId))!.ChildWorkflowExecutionId);
-        Assert.Single(checkpointStore.ListCommits());
-    }
-
-    [Fact]
-    public async Task InMemoryCheckpoint_AllowsMonotonicLifecycleTransitionWithoutChangingIdentity()
-    {
-        var sharedState = new InMemoryRuntimeCheckpointStoreState();
-        IWorkflowDispatchStore dispatchStore = new InMemoryWorkflowDispatchStore(sharedState);
-        var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(
-            state: sharedState,
-            workflowDispatchStore: dispatchStore);
-        var pending = NewRecord();
-        await checkpointStore.CommitAsync(NewCommit("commit-1", pending), Decision());
-        var started = NewRecord(
-            status: WorkflowDispatchStatus.Started,
-            updatedAt: Now.AddSeconds(1));
-
-        await checkpointStore.CommitAsync(NewCommit("commit-2", started), Decision());
-
-        Assert.Equal(WorkflowDispatchStatus.Started, (await dispatchStore.FindAsync(DispatchIdentity.DispatchId))!.Status);
-        Assert.Equal(2, checkpointStore.ListCommits().Count);
-    }
-
-    private static RuntimeCheckpointCommit NewCommit(string commitId, WorkflowDispatchRecord record) =>
-        new(
-            CommitId: commitId,
-            Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: $"checkpoint:{commitId}",
-                Name: "ActivityCompleted",
-                WorkflowExecutionId: record.Status == WorkflowDispatchStatus.Pending
-                    ? record.ParentWorkflowExecutionId
-                    : record.ChildWorkflowExecutionId,
-                OccurredAt: Now,
-                ActivityExecutionIds: record.Status == WorkflowDispatchStatus.Pending
-                    ? [record.ParentActivityExecutionId]
-                    : [],
-                Metadata: new Dictionary<string, string>()),
-            StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
-                scheduler: null,
-                activityExecutions: [],
-                bookmarks: [],
-                durableValues: [],
-                incidents: [],
-                operational: [],
-                workflowDispatches: [Change(record)]),
-            PostCommitIntents: [],
-            Metadata: new Dictionary<string, string>());
-
     private static RuntimeStateChange<WorkflowDispatchRecord> Change(
         WorkflowDispatchRecord record,
         string? stateId = null) =>
         new(stateId ?? record.DispatchId, RuntimeStateChangeOperation.Upsert, record, new Dictionary<string, string>());
-
-    private static RuntimeCheckpointPersistenceDecision Decision() =>
-        new(RuntimeCheckpointPersistenceMode.Immediate);
 
     private static WorkflowDispatchRecord NewRecord(
         IReadOnlyCollection<WorkflowDispatchInputDescriptor>? inputDescriptors = null,

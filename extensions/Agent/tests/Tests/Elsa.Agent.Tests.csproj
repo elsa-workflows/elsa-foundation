@@ -22,7 +22,7 @@
     <ProjectReference Include="../../src/JsonSchema/Elsa.Agent.JsonSchema.csproj" />
     <ProjectReference Include="../../src/Design/Elsa.Agent.Design.csproj" />
     <ProjectReference Include="../../src/Elsa.Agent/Elsa.Agent.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Activities/Runtime/Hosting/Elsa.Activities.Runtime.Hosting.csproj" />
     <ProjectReference Include="../../../../essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="../../../Secrets/src/Elsa.Secrets/Elsa.Secrets.csproj" />
     <ProjectReference Include="../../../../essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
@@ -34,10 +34,8 @@
     <ProjectReference Include="../../src/Api/Elsa.Agent.Api.csproj" />
     <ProjectReference Include="../../src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj" />
     <ProjectReference Include="../../../../essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="../../../../essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../../../essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
   </ItemGroup>
