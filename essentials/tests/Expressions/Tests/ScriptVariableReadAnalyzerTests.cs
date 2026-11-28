@@ -168,11 +168,14 @@ public sealed class ScriptVariableReadAnalyzerTests
         Assert.False(analysis.HasComputedWrite);
     }
 
-    [Fact]
-    public void A_value_passed_to_a_script_function_named_like_a_built_in_escapes()
+    [Theory]
+    // The script's own function of that name hides the built-in and can change its argument.
+    [InlineData("function structuredClone(o) { o.items.push(3); return o; } structuredClone(variables.order); return 1;")]
+    // Copying the argument runs the script's toJSON, which can change it.
+    [InlineData("Object.prototype.toJSON = function () { this.items.push(3); return null; }; structuredClone(variables.order); return 1;")]
+    public void A_value_passed_to_structuredClone_escapes_when_the_script_can_run_code_on_it(string source)
     {
-        // The script's own function of that name hides the built-in and can change its argument.
-        var analysis = _javaScript.Analyze("function structuredClone(o) { o.items.push(3); return o; } structuredClone(variables.order); return 1;", scriptBody: true)!;
+        var analysis = _javaScript.Analyze(source, scriptBody: true)!;
 
         Assert.Equal(["order"], analysis.Escapes);
     }

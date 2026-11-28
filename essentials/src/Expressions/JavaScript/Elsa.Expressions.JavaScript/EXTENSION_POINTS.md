@@ -140,7 +140,8 @@ with portable expression evaluation.
   `for…in`/`for…of` head, a parenthesized value (`(variables.o || {}).x = 1`) and, in a script body,
   `setVariable('X', v)`; each `ScriptVariableWrite` carries its source offset (`Start`). `Escapes` lists the literal
   names whose value the script lets escape (a binding, an argument, a container, a closure's return, a method call on
-  it), and `HasComputedWrite` says it writes variables it does not name (spec 1231 FR-019, FR-020a); `MayWriteNames`
+  it; a direct argument of a built-in function the script does not redeclare does not escape, since the built-in gets
+  a JSON copy), and `HasComputedWrite` says it writes variables it does not name (spec 1231 FR-019, FR-020a); `MayWriteNames`
   joins `Writes` and `Escapes`. An analyzer that does not report writes leaves only the run-time `VF-BIND-001` check
   for input expressions, and a script body's may-write set empty.
 - **Implementation:** `JavaScriptVariableReadAnalyzer` (internal, Acornima), registered as a singleton by

@@ -84,7 +84,9 @@ them changes the variable.
 
 - **What it copies.** The copy has a JSON shape, like a host function's argument and result (spec 1223 FR-011): a
   `Date` becomes its ISO text, `undefined` becomes `null` (a member that is `undefined` is left out), and a
-  function or symbol is refused with a `TypeError`. Called with no argument it returns `undefined`.
+  function or symbol is refused with a `TypeError`. Called with no argument it returns `undefined`. Under the .NET
+  interop opt-in (#4103) a .NET object crosses the same JSON boundary as any host function argument: the copy holds
+  its JSON form, never the live object, or the call fails when it has none.
 - **Publish.** A value passed to `structuredClone` does not escape (spec 1231 FR-019), so
   `structuredClone(variables.order)` alone does not put `order` among the variables the step may write. A script that
   declares its own `structuredClone` loses this.

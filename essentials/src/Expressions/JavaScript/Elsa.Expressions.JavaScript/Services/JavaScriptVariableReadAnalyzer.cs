@@ -59,9 +59,13 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
             return new ScriptVariableReadAnalysis([], hasComputedRead: true) { HasComputedWrite = true, WorkflowState = AnalyzeState(parsed) };
 
         // A built-in takes its arguments as JSON copies and cannot change them (JavaScriptHostFunctions), so a value
-        // passed to one does not escape, unless the script declares its own function of that name (issue #6215).
+        // passed to one does not escape, unless the script declares its own function of that name (issue #6215). Making
+        // that copy runs a toJSON method the script defines, which can change the value, so a script that names toJSON
+        // keeps every argument escaping.
         var copyingBuiltIns = JavaScriptBuiltInFunctions.Names.ToHashSet(StringComparer.Ordinal);
         copyingBuiltIns.ExceptWith(JavaScriptReservedNames.CollectDeclarations(parsed, copyingBuiltIns.Contains).Select(identifier => identifier.Name));
+        if (source.Contains("toJSON", StringComparison.Ordinal))
+            copyingBuiltIns.Clear();
         var walker = new Walker(_readingFunctions, copyingBuiltIns, scriptBody);
         walker.Visit(parsed);
         return new ScriptVariableReadAnalysis(walker.LiteralNames, walker.HasComputedRead, walker.LiteralReads)
