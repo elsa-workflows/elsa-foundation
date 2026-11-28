@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Elsa.Events;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -12,10 +13,8 @@ using Elsa.Workflows.Dashboard.Queries;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
-using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -48,7 +47,7 @@ public sealed class WorkflowDashboardQueryTests
         Assert.Contains(validation.Problems, problem => problem.Code == "INVALID_VALUE" && problem.Path == "query.filters");
         var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.ExecuteAsync(Caller, question).AsTask());
         Assert.Equal("INVALID_VALUE", failure.Code);
-        Assert.Empty(host.Store.Requests);
+        Assert.Empty(host.Runs.Requests);
     }
 
     [Theory]
@@ -73,7 +72,7 @@ public sealed class WorkflowDashboardQueryTests
         Assert.Equal("validation", admission.Code);
         var execution = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.ExecuteAsync(Caller, question).AsTask());
         Assert.Equal(input == "missing" ? "INVALID_QUERY" : "INVALID_VALUE", execution.Code);
-        Assert.Empty(host.Store.Requests);
+        Assert.Empty(host.Runs.Requests);
     }
 
     [Theory]
@@ -122,7 +121,7 @@ public sealed class WorkflowDashboardQueryTests
         Assert.Contains(validation.Problems, problem => problem.Code == "UNSUPPORTED_QUERY" && problem.Path == "visualization");
         var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.ExecuteAsync(Caller, question).AsTask());
         Assert.Equal("UNSUPPORTED_QUERY", failure.Code);
-        Assert.Empty(host.Store.Requests);
+        Assert.Empty(host.Runs.Requests);
     }
 
     [Theory]
@@ -165,7 +164,7 @@ public sealed class WorkflowDashboardQueryTests
         Assert.Equal(2m, Number(row, "started"));
         Assert.Equal("unknown", result.Coverage.Status);
         Assert.Contains("current readable Design organization", result.Interpretation);
-        Assert.All(host.Store.Requests, page => { Assert.Null(page.From); Assert.Null(page.To); Assert.Equal("tenant-a", page.TenantId); });
+        Assert.All(host.Runs.Requests, tenant => Assert.Equal(Caller.TenantId, tenant));
     }
 
     [Fact]
@@ -215,14 +214,14 @@ public sealed class WorkflowDashboardQueryTests
         var question = Comparison();
         var preview = await host.Queries.ExecuteAsync(Caller, question);
         var descriptor = Assert.Single(preview.Rows).Drill!;
-        var reads = host.Store.Requests.Count;
+        var reads = host.Runs.Requests.Count;
         var tampered = descriptor with { GroupValues = new Dictionary<string, DashboardValue>
         {
             ["definitionId"] = new("string", "wf-b"), ["currentFolder"] = new("string", "/Operations")
         } };
         var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.DrillAsync(Caller, new(question, tampered)).AsTask());
         Assert.Equal("INVALID_DRILL", failure.Code);
-        Assert.Equal(reads, host.Store.Requests.Count);
+        Assert.Equal(reads, host.Runs.Requests.Count);
     }
 
     [Fact]
@@ -284,7 +283,7 @@ public sealed class WorkflowDashboardQueryTests
         Assert.Empty(await host.Queries.DiscoverAsync(Caller));
         var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.ExecuteAsync(Caller, Aggregate()).AsTask());
         Assert.Equal("DATASET_UNAVAILABLE", failure.Code);
-        Assert.Empty(host.Store.Requests);
+        Assert.Empty(host.Runs.Requests);
     }
 
     [Fact]
@@ -305,7 +304,7 @@ public sealed class WorkflowDashboardQueryTests
         Assert.Empty(await host.Queries.DiscoverAsync(Caller with { SubjectId = "user-b" }));
         host.Access.Subject = "another-external-subject";
         Assert.Empty(await host.Queries.DiscoverAsync(Caller));
-        Assert.Empty(host.Store.Requests);
+        Assert.Empty(host.Runs.Requests);
     }
 
     [Fact]
@@ -315,7 +314,7 @@ public sealed class WorkflowDashboardQueryTests
         host.Permission.MaximumGrantedCalls = 2;
         var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.ExecuteAsync(Caller, Aggregate()).AsTask());
         Assert.Equal("DATASET_UNAVAILABLE", failure.Code);
-        Assert.Empty(host.Store.Requests);
+        Assert.Empty(host.Runs.Requests);
     }
 
     [Fact]
@@ -377,16 +376,16 @@ public sealed class WorkflowDashboardQueryTests
     {
         var finished = Run("actor-finished", "wf-a", Current, WorkflowExecutionStatus.Completed);
         var runningTest = Run("actor-test", "wf-a", Current, WorkflowExecutionStatus.Running) with { RunKind = WorkflowRunKind.TestRun };
-        using var host = new Host(retained: new RetainedRuns([finished, null, runningTest]));
+        using var host = new Host(retained: new TrackingRuns(finished, null, runningTest));
         await host.Add(Run("legacy-not-selected", "wf-a", Current, WorkflowExecutionStatus.Faulted));
         var dataset = Assert.Single(await host.Queries.DiscoverAsync(Caller));
         Assert.Equal("elsa.workflows.runs", dataset.Id);
         Assert.Equal("runs-v1", dataset.SchemaRevision);
         var result = Assert.Single((await host.Queries.ExecuteAsync(Caller, Aggregate())).Rows);
         Assert.Equal(2m, Number(result, "started"));
-        Assert.Empty(host.Store.Requests);
+        Assert.Empty(host.Runs.Requests);
 
-        using var bounded = new Host(limits: new() { MaximumSourceRows = 2 }, retained: new RetainedRuns([finished, null, runningTest]));
+        using var bounded = new Host(limits: new() { MaximumSourceRows = 2 }, retained: new TrackingRuns(finished, null, runningTest));
         var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => bounded.Queries.ExecuteAsync(Caller, Aggregate()).AsTask());
         Assert.Equal("QUERY_LIMIT", failure.Code);
     }
@@ -493,7 +492,7 @@ public sealed class WorkflowDashboardQueryTests
             !query.Metrics.Any(metric => metric.Field == "durationMs" || metric.Metric == "workflow.average-duration-ms");
         var validation = await host.Queries.ValidateAsync(Caller, Aggregate([new("average", Aggregate: "average", Field: "durationMs")]));
         Assert.False(validation.IsValid);
-        Assert.Empty(host.Store.Requests);
+        Assert.Empty(host.Runs.Requests);
     }
 
     [Theory]
@@ -506,13 +505,13 @@ public sealed class WorkflowDashboardQueryTests
         var question = Aggregate();
         var preview = await host.Queries.ExecuteAsync(Caller, question);
         var descriptor = Assert.Single(preview.Rows).Drill!;
-        var before = host.Store.Requests.Count;
+        var before = host.Runs.Requests.Count;
         host.Permission.Predicate = context => context.Resource is not DashboardQueryDefinition query ||
             query.Form != "records" || !query.Fields.Contains(forbiddenField, StringComparer.Ordinal);
         var denied = await Assert.ThrowsAsync<DashboardQueryException>(() =>
             host.Queries.DrillAsync(Caller, new(question, descriptor, 100)).AsTask());
         Assert.Equal("DATASET_UNAVAILABLE", denied.Code);
-        Assert.Equal(before, host.Store.Requests.Count);
+        Assert.Equal(before, host.Runs.Requests.Count);
         host.Permission.Predicate = _ => true;
         Assert.Equal("current", Assert.Single((await host.Queries.DrillAsync(Caller, new(question, descriptor, 100))).Rows).Key);
     }
@@ -529,11 +528,11 @@ public sealed class WorkflowDashboardQueryTests
             query.Form != "records" || query.Time?.From >= new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero);
         var current = await host.Queries.DrillAsync(Caller, new(question, descriptor, 100));
         Assert.Equal(2, current.Rows.Count);
-        var before = host.Store.Requests.Count;
+        var before = host.Runs.Requests.Count;
         var denied = await Assert.ThrowsAsync<DashboardQueryException>(() =>
             host.Queries.DrillAsync(Caller, new(question, descriptor with { Period = "baseline" }, 100)).AsTask());
         Assert.Equal("DATASET_UNAVAILABLE", denied.Code);
-        Assert.Equal(before, host.Store.Requests.Count);
+        Assert.Equal(before, host.Runs.Requests.Count);
     }
 
     private static decimal Number(DashboardResultRow row, string key) => decimal.Parse(row.Values[key].Value!, CultureInfo.InvariantCulture);
@@ -589,7 +588,7 @@ public sealed class WorkflowDashboardQueryTests
     {
         private readonly ServiceProvider _provider;
         private readonly IServiceScope _scope;
-        public TrackingStore Store { get; } = new();
+        public TrackingRuns Runs { get; } = new();
         public Access Access { get; } = new();
         public PermissionService Permission { get; } = new();
         public WorkflowLibraryProxy Library { get; }
@@ -603,7 +602,6 @@ public sealed class WorkflowDashboardQueryTests
             services.AddLogging();
             services.AddSingleton<TimeProvider>(new FakeTimeProvider(new DateTimeOffset(2026, 11, 6, 12, 0, 0, TimeSpan.Zero)));
             if (limits is not null) services.AddSingleton(limits);
-            services.AddSingleton<IWorkflowExecutionStateStore>(Store);
             services.AddSingleton<IActivityInspectionContextAsync>(Access);
             services.AddSingleton<IDashboardActorContext>(new ActorContext());
             services.AddSingleton<IPermissionAuthorizationService>(Permission);
@@ -616,30 +614,32 @@ public sealed class WorkflowDashboardQueryTests
             }
             new EventsFeature().ConfigureServices(services);
             new DashboardManagementFeature().ConfigureServices(services);
-            if (retained is null)
-                new WorkflowDashboardQueriesFeature().ConfigureServices(services);
-            else
-            {
-                services.AddSingleton(retained);
-                new KernelWorkflowDashboardQueriesFeature().ConfigureServices(services);
-            }
+            services.AddSingleton<IWorkflowRetainedRunSource>(retained ?? Runs);
+            new KernelWorkflowDashboardQueriesFeature().ConfigureServices(services);
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             _scope = _provider.CreateScope();
             Queries = _scope.ServiceProvider.GetRequiredService<IDashboardQueryService>();
             Validator = _scope.ServiceProvider.GetRequiredService<IDashboardDefinitionValidator>();
         }
-        public ValueTask<WorkflowExecutionState> Add(WorkflowExecutionState state) => Store.SaveAsync(state);
+        public Task Add(WorkflowExecutionState state)
+        {
+            Runs.Rows.Add(state);
+            return Task.CompletedTask;
+        }
         public void Dispose() { _scope.Dispose(); _provider.Dispose(); }
     }
 
-    private sealed class RetainedRuns(WorkflowExecutionState?[] candidates) : IWorkflowRetainedRunSource
+    private sealed class TrackingRuns(params WorkflowExecutionState?[] candidates) : IWorkflowRetainedRunSource
     {
+        public List<WorkflowExecutionState?> Rows { get; } = [.. candidates];
+        public List<string> Requests { get; } = [];
+
         public async IAsyncEnumerable<WorkflowExecutionState?> ReadAsync(string tenant,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            [EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            Assert.Equal(Caller.TenantId, tenant);
+            Requests.Add(tenant);
             await Task.CompletedTask;
-            foreach (var candidate in candidates)
+            foreach (var candidate in Rows)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return candidate;
@@ -683,18 +683,6 @@ public sealed class WorkflowDashboardQueryTests
         public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken) => ValueTask.FromResult(false);
     }
 
-    private sealed class TrackingStore : IWorkflowExecutionStateStore
-    {
-        private readonly InMemoryWorkflowExecutionStateStore _store = new();
-        public List<WorkflowExecutionStatePageQuery> Requests { get; } = [];
-        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) => _store.SaveAsync(state, cancellationToken);
-        public ValueTask<WorkflowExecutionState?> FindAsync(string id, CancellationToken cancellationToken = default) => _store.FindAsync(id, cancellationToken);
-        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("The query must use finite normal history pages.");
-        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default)
-        { Requests.Add(query); return _store.QueryPageAsync(query, cancellationToken); }
-        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => _store.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
-        public ValueTask<bool> DeleteAsync(string id, CancellationToken cancellationToken = default) => _store.DeleteAsync(id, cancellationToken);
-    }
 }
 
 public class WorkflowLibraryProxy : DispatchProxy

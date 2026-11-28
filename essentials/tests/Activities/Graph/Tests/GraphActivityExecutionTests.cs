@@ -835,7 +835,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
     {
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
-        new GraphActivitiesRuntimeFeature().ConfigureServices(services);
+        new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
         var capability = Assert.Single(
@@ -855,7 +855,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
     {
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
-        new GraphActivitiesRuntimeFeature().ConfigureServices(services);
+        new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services);
         new ExpressionsFeature().ConfigureServices(services);
         services.AddSingleton<IPortableExpressionHandler, TestExpressionHandler>();
         new SerializationFeature().ConfigureServices(services);

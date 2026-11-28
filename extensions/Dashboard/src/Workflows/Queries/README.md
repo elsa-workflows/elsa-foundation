@@ -1,6 +1,6 @@
 # Workflow questions
 
-`WorkflowDashboardQueries` contributes the dataset `elsa.workflows.runs`, schema `runs-v1`, through the native Dashboard query contracts. It depends on the Studio Dashboard and workflow Runtime API composition. Design organization is optional; current-folder fields appear only when the owning Design read contracts are available. Runtime gains no Design dependency.
+`KernelWorkflowDashboardQueries` contributes the dataset `elsa.workflows.runs`, schema `runs-v1`, through the native Dashboard query contracts. It depends on the Studio Dashboard and retained Actor Runtime API. Design organization is optional; current-folder fields appear only when the owning Design read contracts are available. Runtime gains no Design dependency.
 
 ## Permissions and source scope
 
@@ -31,3 +31,5 @@ Drill integrity proofs use a private process-local signing key. A process restar
 The module supplies `IDashboardDatasetExtension`, `IDashboardQueryValidationExtension`, `IDashboardQueryExecutionExtension` and `IDashboardQueryDrillExtension`. Dashboard dispatches these through its named Sequential events and one aggregator per operation. Dataset computation and authorization stay here; the generic query service and Weaver require no workflow-specific branch.
 
 `WorkflowDashboardQueryPermissionExtension` contributes `workflows/dashboard-queries:read` through Foundation Identity's `IPermissionContributor`; see the [owning permission catalog](../../../../../essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md#ipermissioncontributor).
+
+Existing classic deployments replay the previous query selector from the [pinned Workbench source](../../../../../docs/contributing/workbench-compatibility-tests.md).
