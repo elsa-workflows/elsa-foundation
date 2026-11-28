@@ -486,6 +486,13 @@
       "timestamp": "2026-11-28T06:06:53.859988+00:00"
     },
     {
+      "id": "Elsa.Persistence.EntityFramework",
+      "version": "4.0.51-preview",
+      "feed": "elsa-4",
+      "hash": "sha512:rFnGAGixomWTiMIp0g0WH9xQBc5xVpnU/iMWc5LpNaiFYcHVjHbf0lZNSeASdB/fdy47eCsY3/J6C0KAINqzdw==",
+      "timestamp": "2026-11-28T06:10:25.687401+00:00"
+    },
+    {
       "id": "Elsa.Persistence.Schema",
       "version": "4.0.22-preview",
       "feed": "elsa-4",
