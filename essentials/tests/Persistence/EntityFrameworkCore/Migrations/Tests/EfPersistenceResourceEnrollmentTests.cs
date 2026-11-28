@@ -118,6 +118,47 @@ public sealed class EfPersistenceResourceEnrollmentTests
         Assert.Empty(result.RefusalCodes);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Preparation_resolves_the_separate_runtime_schema_and_rejects_only_required_duplicate_modules(bool duplicateRuntime)
+    {
+        var original = duplicateRuntime ? typeof(RuntimeDbContext).Assembly : typeof(WorkflowsDesignDbContext).Assembly;
+        var duplicate = new DuplicateModuleAssembly(original.GetCustomAttribute<EfModuleAttribute>()!);
+        var assemblies = FeatureAssemblies.Append(duplicate);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["Elsa:Persistence:DefaultResource"] = "primary",
+            ["ConnectionStrings:Shared"] = "Data Source=shared.db"
+        }).Build();
+        var context = PreparationContext();
+
+        if (duplicateRuntime)
+        {
+            var refusal = Assert.Throws<InvalidOperationException>(() =>
+                EfPersistencePreparation.Prepare(context, configuration, assemblies));
+            Assert.Contains("Workflows.Runtime", refusal.Message, StringComparison.Ordinal);
+        }
+        else
+        {
+            var result = EfPersistencePreparation.Prepare(context, configuration, assemblies);
+            Assert.Empty(result.RefusalCodes);
+            Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:ConnectionName"]);
+        }
+    }
+
+    // Keeps the duplicate outside the process assembly list used by other metadata tests.
+    private sealed class DuplicateModuleAssembly(EfModuleAttribute module) : Assembly
+    {
+        public override bool IsDynamic => false;
+        public override AssemblyName GetName() => new("DuplicateEfModule");
+        public override AssemblyName[] GetReferencedAssemblies() => [];
+        public override Attribute[] GetCustomAttributes(Type attributeType, bool inherit) =>
+            attributeType == typeof(EfModuleAttribute) ? new[] { module } : [];
+    }
+
     [Fact]
     public void Public_preparation_refusal_returns_no_partial_patch_or_secret()
     {
