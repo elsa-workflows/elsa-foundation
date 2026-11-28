@@ -207,7 +207,7 @@ execution uses the same authored publication pin and Actor-owned child execution
 )
 ```
 
-For the classic REST fire-and-forget and waited outcome cases, use the
+For the classic REST fire-and-forget, input by correlation ID, and waited outcome cases, use the
 `workbench-classic-default` checkout pinned above at
 `18a16dee878106ac525aa9a861d851a200e43c55`. Run against a separately hosted
 matching Workbench with `ActivitiesDispatchWorkflowRuntime` and
@@ -217,6 +217,7 @@ matching Workbench with `ActivitiesDispatchWorkflowRuntime` and
 (
   cd "$compatibility_root/workbench-classic-default"
   pwsh -NoProfile -File e2e-tests/Test-ChildWorkflow.ps1 -BaseUrl "$classic_base_url"
+  pwsh -NoProfile -File e2e-tests/composition/Test-ChildWorkflowInput.ps1 -BaseUrl "$classic_base_url"
   pwsh -NoProfile -File e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1 -BaseUrl "$classic_base_url"
 )
 ```
