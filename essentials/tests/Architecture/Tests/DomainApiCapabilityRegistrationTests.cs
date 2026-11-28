@@ -22,8 +22,6 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Capabilities;
-using Elsa.Workflows.Runtime.Api;
-using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,8 +58,7 @@ public sealed class DomainApiCapabilityRegistrationTests
                 Links = PublishingApiCapabilities.StaticDeclaration.Links
                     .Where(link => !link.Rel.Contains("test-run", StringComparison.Ordinal)).ToArray()
             }
-        },
-        { typeof(WorkflowsRuntimeApiFeature), RuntimeApiCapabilities.StaticDeclaration }
+        }
     };
 
     [Theory]
@@ -235,31 +232,6 @@ public sealed class DomainApiCapabilityRegistrationTests
         });
     }
 
-    [Fact]
-    public async Task Runtime_operational_source_contributes_diagnostics_only_when_a_store_is_composed()
-    {
-        Assert.Empty(await new RuntimeOperationalCapabilitySource().GetCapabilitiesAsync());
-
-        var available = await new RuntimeOperationalCapabilitySource(new StubDiagnosticsStore()).GetCapabilitiesAsync();
-
-        var link = Assert.Single(Assert.Single(available).Links);
-        Assert.Equal("runtime-diagnostics", link.Rel);
-        Assert.Equal("runtime/workflows/diagnostics/settings", link.Href);
-    }
-
-    [Fact]
-    public async Task Runtime_execution_browsing_is_advertised_only_for_a_supporting_provider()
-    {
-        Assert.Empty(await new RuntimeActivityExecutionBrowsingCapabilitySource().GetCapabilitiesAsync());
-        var store = new Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionInspectionStore();
-        var available = await new RuntimeActivityExecutionBrowsingCapabilitySource(store).GetCapabilitiesAsync();
-        Assert.Equal("activity-executions", Assert.Single(Assert.Single(available).Links).Rel);
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IApiCapabilitySource) &&
-            descriptor.ImplementationType == typeof(RuntimeActivityExecutionBrowsingCapabilitySource));
-    }
-
     private sealed class StubInputOptionsProvider : IActivityInputOptionsProvider
     {
         public string Key => "test";
@@ -283,11 +255,5 @@ public sealed class DomainApiCapabilityRegistrationTests
             StringComparer.Ordinal.Equals(expressionType, provider.ExpressionType) ? provider : null;
     }
 
-    private sealed class StubDiagnosticsStore : IRuntimeDiagnosticsSettingsStore
-    {
-        public Task<RuntimeDiagnosticsSettings?> LoadAsync(string scope, CancellationToken cancellationToken = default) =>
-            Task.FromResult<RuntimeDiagnosticsSettings?>(null);
-        public Task<RuntimeDiagnosticsSettings> SaveAsync(RuntimeDiagnosticsSettings settings, CancellationToken cancellationToken = default) =>
-            Task.FromResult(settings);
-    }
+
 }

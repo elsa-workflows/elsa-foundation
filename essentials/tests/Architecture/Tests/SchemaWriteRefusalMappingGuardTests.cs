@@ -12,7 +12,6 @@ using Elsa.Modularity.Api;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
@@ -60,7 +59,6 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         typeof(ModularityApiFeature),
         typeof(WorkflowsDesignApiFeature),
         typeof(WorkflowsPublishingApiFeature),
-        typeof(WorkflowsRuntimeApiFeature),
         typeof(WorkflowsRuntimeKernelRetainedApiFeature),
         typeof(Elsa3ImportActivitiesFeature)
     ];

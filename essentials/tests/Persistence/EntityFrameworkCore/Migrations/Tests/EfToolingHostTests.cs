@@ -5,7 +5,6 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Data.Sqlite;
@@ -127,7 +126,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
             [typeof(EfToolingHostTests).Assembly, .. ModuleContextCatalog.Modules,
-                typeof(WorkflowsPublishingFeature).Assembly, typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(WorkflowsPublishingFeature).Assembly,
                 typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
                 typeof(EventsFeature).Assembly, typeof(ApiCapabilitiesFeature).Assembly], CancellationToken.None);
 
@@ -1389,13 +1388,13 @@ public sealed class EfToolingHostTestDefaults : IEfToolingShellDefaults
     public void Configure(ShellBuilder builder, IConfiguration configuration)
     {
         if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddRuntimeEfFeature"], "true"))
-            builder.WithFeature("WorkflowsRuntimeEntityFrameworkCore");
+            builder.WithFeature("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence");
         if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddDiagnosticEfFeatures"], "true"))
         {
             builder.WithFeature("DiagnosticsStructuredLogsEntityFrameworkCore");
             builder.WithFeature("DiagnosticsOpenTelemetryEntityFrameworkCore");
         }
         if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddOpaqueRuntimeConfigurator"], "true"))
-            builder.WithFeature<RuntimeEntityFrameworkCoreFeature>(_ => Interlocked.Increment(ref OpaqueConfiguratorExecutionCount));
+            builder.WithFeature<RuntimeArtifactsEntityFrameworkCoreFeature>(_ => Interlocked.Increment(ref OpaqueConfiguratorExecutionCount));
     }
 }

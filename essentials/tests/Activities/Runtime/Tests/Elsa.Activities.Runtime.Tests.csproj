@@ -6,11 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <!-- CShells core: the integration test boots a real shell (AddCShells + IShellRegistry) to prove the
-         IFeatureAssemblyProvider seam is reachable from shell scope and that the startup pass runs there. -->
-    <PackageReference Include="CShells" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
@@ -19,8 +15,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
-    <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\Expressions\Testing\Elsa.Expressions.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Testing\TestRunTriggerFixture.cs" Link="TestRunTriggerFixture.cs" />
   </ItemGroup>
 
 </Project>

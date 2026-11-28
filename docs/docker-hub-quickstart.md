@@ -150,7 +150,7 @@ no `"Enabled": false` convention:
       "default": {
         "Name": "default",
         "Features": {
-          "ActivitiesHttp": {},                          // enabled, default config
+          "KernelActivitiesHttp": {},                          // enabled, default config
           "FastEndpoints": { "EndpointRoutePrefix": "" } // enabled, with settings
           // "WeatherForecastSample" absent => disabled
         }

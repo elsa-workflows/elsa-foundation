@@ -14,7 +14,7 @@ namespace Elsa.Activities.Http.Tests;
 public sealed class HttpWorkflowEndpointsCapabilitySourceTests
 {
     [Fact]
-    public async Task ActivitiesHttpFeature_advertises_its_default_workflow_endpoint_base_path()
+    public async Task KernelActivitiesHttpFeature_advertises_its_default_workflow_endpoint_base_path()
     {
         var document = await GetDocumentAsync();
 
@@ -29,7 +29,7 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
     [Theory]
     [InlineData("/tenant/workflows/", "tenant/workflows")]
     [InlineData("/werkstromen/één/", "werkstromen/één")]
-    public async Task ActivitiesHttpFeature_advertises_a_custom_base_path_without_outer_slashes(string basePath, string expectedHref)
+    public async Task KernelActivitiesHttpFeature_advertises_a_custom_base_path_without_outer_slashes(string basePath, string expectedHref)
     {
         var document = await GetDocumentAsync(featureBasePath: basePath);
 
@@ -42,7 +42,7 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
     [InlineData("/tenant/workflow endpoints/", "tenant/workflow%20endpoints")]
     [InlineData("/api:v1/workflows", "api%3Av1/workflows")]
     [InlineData("/https:example.test/workflows", "https%3Aexample.test/workflows")]
-    public async Task ActivitiesHttpFeature_escapes_literal_segments_that_would_not_resolve_as_relative_links(
+    public async Task KernelActivitiesHttpFeature_escapes_literal_segments_that_would_not_resolve_as_relative_links(
         string basePath,
         string expectedHref)
     {
@@ -111,7 +111,7 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
             1,
             [new ApiCapabilityLink("other", "other")],
             "OtherFeature"));
-        new ActivitiesHttpFeature().ConfigureServices(services);
+        new KernelActivitiesHttpFeature().ConfigureServices(services);
         services.Configure<HttpEndpointOptions>(options => options.BasePath = "/workflows/../runtime");
 
         await using var provider = services.BuildServiceProvider();
@@ -145,7 +145,7 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
         services.AddApiCapabilities();
         services.AddLogging();
         if (includeFeature)
-            new ActivitiesHttpFeature { BasePath = featureBasePath }.ConfigureServices(services);
+            new KernelActivitiesHttpFeature { BasePath = featureBasePath }.ConfigureServices(services);
         if (hostBasePathOverride is not null)
             services.Configure<HttpEndpointOptions>(options => options.BasePath = hostBasePathOverride);
 

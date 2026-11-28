@@ -148,7 +148,7 @@ not automatic constitution violations.
 |---|---|
 | Activities flowchart (scoped execution seam + runtime composite activity contracts + gateway policy contract) | [`essentials/src/Activities/Flowchart/EXTENSION_POINTS.md`](essentials/src/Activities/Flowchart/EXTENSION_POINTS.md) |
 | Activities runtime (activity constructors + resume target declarations) | [`essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md`](essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md) |
-| DispatchWorkflow runtime (staged checkpoint dispatch and child-start contribution) | [`essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md`](essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md) |
+| DispatchWorkflow authoring and classic compatibility | [`essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md`](essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md) |
 | DispatchWorkflow design (options and executable-pin contribution) | [`essentials/src/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md`](essentials/src/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md) |
 | Activities HTTP (synchronous-response sink seam; HttpEndpoint/WriteHttpResponse + inbound middleware) | [`extensions/Http/src/Activities/EXTENSION_POINTS.md`](extensions/Http/src/Activities/EXTENSION_POINTS.md) |
 | Activities sequence (runtime composite activity contracts) | [`essentials/src/Activities/Sequence/EXTENSION_POINTS.md`](essentials/src/Activities/Sequence/EXTENSION_POINTS.md) |

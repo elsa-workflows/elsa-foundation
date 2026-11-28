@@ -15,7 +15,7 @@ using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Authorization;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.KernelApi;
 using Elsa3.Activities.Design.Import;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authorization;
@@ -141,7 +141,7 @@ public sealed class EndpointSecurityTests
         new ExpressionsApiFeature().ConfigureServices(services);
         new WorkflowsDesignApiFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        new WorkflowsRuntimeKernelRetainedApiFeature().ConfigureServices(services);
         new Elsa3ImportActivitiesFeature().ConfigureServices(services);
         using var provider = services.AddElsaEndpoints().BuildServiceProvider();
         var contributors = provider.GetServices<IPermissionContributor>().ToArray();

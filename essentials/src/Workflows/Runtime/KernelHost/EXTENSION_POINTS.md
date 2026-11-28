@@ -7,15 +7,14 @@ what it adds, and what it consumes.
 ## Composition
 
 `WorkflowsRuntimeKernelFeature` (`WorkflowsRuntimeKernel`) is a public, inheritable shell feature with virtual
-`ConfigureServices` and `PostConfigureServices`. It depends on `WorkflowsPublishing` and `WorkflowsRuntimeTriggers`. In
+`ConfigureServices` and `PostConfigureServices`. It depends on `WorkflowsPublishing`. In
 `PostConfigureServices`, after every other feature has registered, it:
 
 - requires the host's `KernelServing` and `IScheduleActors`, registered by instance on the root container so that each
   shell resolves the host's own, and refuses the shell without them;
 - puts the kernel's implementations of the two replacement contracts below in the place of the old core's defaults, and
   refuses a shell that registers any other implementation of either, naming it (constitution 2.6.2);
-- leaves the old core's `RouteTableTriggerIndexObserver` out of the shell, and refuses a shell that composes the old
-  core's HTTP feature (`IHttpEndpointRouteTableSynchronizer`) without an observer of that name.
+- preserves independent publication observers, including Studio's workflow library observer.
 
 `WorkflowsRuntimeKernelFeature.IsComposedIn(shellServices)` tells a host whether a shell composes the feature. The
 Workbench uses it to hide the `kernel-unsupported` set (`NativeActivityCatalog`) from that shell's toolbox only, as an

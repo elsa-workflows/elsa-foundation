@@ -44,14 +44,14 @@ public sealed class HttpReservationPolicyTests
     [Fact]
     public void Repeated_feature_configuration_installs_one_semantic_policy()
     {
-        var services = new ServiceCollection(); var feature = new WorkflowsRuntimeHttpFeature();
+        var services = new ServiceCollection(); var feature = new WorkflowsRuntimeStandaloneHttpFeature();
         feature.ConfigureServices(services); feature.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
         Assert.Equal(HttpEndpointRouting.StimulusType, Assert.Single(provider.GetServices<IIngressReservationPolicy>()).StimulusType);
     }
 
     private static ServiceProvider Provider()
-    { var services = new ServiceCollection(); new WorkflowsRuntimeHttpFeature().ConfigureServices(services); return services.BuildServiceProvider(); }
+    { var services = new ServiceCollection(); new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(services); return services.BuildServiceProvider(); }
     private static RuntimeIngressReservationDescriptor Claim(string route, string? method)
     {
         var metadata = new Dictionary<string, string> { [HttpEndpointRouting.TemplateMetadataKey] = route };

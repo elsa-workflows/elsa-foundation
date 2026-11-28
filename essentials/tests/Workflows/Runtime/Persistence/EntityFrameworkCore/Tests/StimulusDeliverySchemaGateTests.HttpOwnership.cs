@@ -145,7 +145,7 @@ public sealed partial class StimulusDeliverySchemaGateTests
     public async Task Http_policy_does_not_block_Event_activation_or_pause_on_a_healthy_predecessor_profile(string lagging)
     {
         await using var schema = await Fixture.CreateIngressReadiness(lagging, "1.0.0"); await using var context = schema.Open();
-        IServiceCollection source = new ServiceCollection(); new WorkflowsRuntimeHttpFeature().ConfigureServices(source);
+        IServiceCollection source = new ServiceCollection(); new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(source);
         using var policies = source.BuildServiceProvider(); using var metadata = new NativeTargetMetadataFixture();
         var prepared = await PrepareGatedIngressAsync(context, metadata.Publisher, policies.GetServices<IIngressReservationPolicy>());
         Assert.True(prepared.Source.SupportsActivatedResources); Assert.True(prepared.Source.SupportsActivatedType("event"));
@@ -213,7 +213,7 @@ public sealed partial class StimulusDeliverySchemaGateTests
             services.AddSingleton(schema.Registry); new EventsFeature().ConfigureServices(services); services.AddWorkflowRuntime(); services.AddWorkflowStimulusRouter();
             services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = connection,
                 CacheWorkflowExecutables = false, RecoveryContinuationSigningKey = new string('r', 64), HierarchyCursorSigningKey = new string('h', 64) });
-            IServiceCollection source = new ServiceCollection(); new WorkflowsRuntimeHttpFeature().ConfigureServices(source);
+            IServiceCollection source = new ServiceCollection(); new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(source);
             services.Add(Assert.Single(source, item => item.ServiceType == typeof(IIngressReservationPolicy)));
             new StandaloneHttpTriggerAuthoringFeature().ConfigureServices(services);
             services.RemoveAll<IWorkflowTriggerIndexer>(); services.AddScoped<IWorkflowTriggerIndexer, HttpOwnershipIndexer>();
