@@ -56,7 +56,7 @@ internal abstract class KernelShellStorage
         Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null,
         ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null);
 
-    public static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString,
+    public static KernelShellStorage CreateBuiltIn(string provider, string? sqlitePath, string? postgresConnectionString,
         BoundScope? publisherScope = null, bool actorUserTaskWaits = false, bool upgradeActorStoreFormat = false) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.Shipped, publisherScope, actorUserTaskWaits, upgradeActorStoreFormat);
 

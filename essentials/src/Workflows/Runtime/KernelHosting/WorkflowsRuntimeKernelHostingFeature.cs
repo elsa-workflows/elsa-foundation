@@ -53,7 +53,11 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
     internal virtual bool RequiresHttp => true;
     internal virtual bool RequiresScheduleActivities => false;
 
-    [ManifestSetting(DisplayName = "Provider", Description = "Use SQLite or PostgreSQL.", Category = "Persistence", DefaultValue = "SQLite")]
+    [ManifestSetting(DisplayName = "Actor Foundation", Description = "Select the Actor Foundation implementation. This host provides BuiltIn.",
+        Category = "Runtime", DefaultValue = "BuiltIn")]
+    public string Foundation { get; set; } = "BuiltIn";
+
+    [ManifestSetting(DisplayName = "Provider", Description = "Use SQLite or PostgreSQL for the built-in Actor Foundation.", Category = "Persistence", DefaultValue = "SQLite")]
     public string Provider { get; set; } = "SQLite";
 
     [ManifestSetting(DisplayName = "SQLite file", Description = "Path to a dedicated local SQLite kernel database. Relative paths are resolved against the process working directory, and the parent directory must already exist.", Category = "Persistence")]
@@ -98,8 +102,11 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
 
     public void ConfigureServices(IServiceCollection services)
     {
+        if (!string.Equals(Foundation?.Trim(), "BuiltIn", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("This workflow host provides the BuiltIn Actor Foundation. Set Foundation to BuiltIn.");
+
         var publisherScope = PreparedStandaloneStarts ? EmbeddedTenant.Bind(Tenant) : null;
-        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString, publisherScope,
+        var storage = KernelShellStorage.CreateBuiltIn(Provider, SqlitePath, PostgresConnectionString, publisherScope,
             ActorUserTaskWaits, UpgradeActorStoreFormat);
         PreparedStandaloneHttpFanOut = storage.TakesRetainedHttpResponse;
         PreparedStandaloneHttpResponses = storage.TakesRetainedHttpResponse;
