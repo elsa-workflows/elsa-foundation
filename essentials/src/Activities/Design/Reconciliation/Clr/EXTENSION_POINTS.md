@@ -91,9 +91,9 @@ holding application-wide static state (§2.5.1).
   author-controlled SemVer. Re-register to change the version-precedence policy; the default (FR-020:
   `[Version]` → `AssemblyInformationalVersion` → 4-part assembly version) is the sanctioned rule.
 - **`IActivityTypeCategoryResolver` → `ActivityTypeCategoryResolver`** — resolves an activity's catalog
-  category. The default takes the last dot-separated segment of the declaring assembly's simple name
-  (e.g. `Elsa.Runtime.Activities.Primitives` → `Primitives`). Re-register for a different scheme
-  (e.g. a type-level `[Category]` attribute).
+  category. The default uses a nonblank `System.ComponentModel.CategoryAttribute` declared directly
+  on the activity or derives the category from the declaring assembly's last name segment.
+  Re-register for a different convention.
 - **`IClrAssemblyScanner` → `ClrAssemblyScanner`** — the reflection-only folder scanner that produces
   one `ActivityVersionReconciliationModel` per discovered `IActivity`. Re-register to change the
   scanning strategy without touching `ClrActivityReconciliationSource`, which depends only on the
