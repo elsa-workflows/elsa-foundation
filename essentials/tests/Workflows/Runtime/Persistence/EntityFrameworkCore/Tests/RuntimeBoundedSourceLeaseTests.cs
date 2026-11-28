@@ -197,14 +197,13 @@ public sealed class RuntimeBoundedSourceLeaseTests
         try
         {
             var services = new ServiceCollection();
-            services.AddWorkflowRuntime();
+            WorkflowPublicationDefaults.Add(services);
             services.AddSingleton<IPersistenceAccessContextAccessor>(new SelectedAccessor(privileged));
-            new RuntimeEntityFrameworkCoreFeature
+            new RuntimeArtifactsEntityFrameworkCoreFeature
             {
                 Provider = "Sqlite", ConnectionString = "Data Source=" + path + ";Pooling=False",
                 CacheWorkflowExecutables = cache,
-                RecoveryContinuationSigningKey = "source-selected-recovery-signing-key-32-bytes",
-                HierarchyCursorSigningKey = "source-selected-hierarchy-signing-key-32-bytes"
+                RecoveryContinuationSigningKey = "source-selected-recovery-signing-key-32-bytes"
             }.ConfigureServices(services);
             await using var provider = services.BuildServiceProvider(validateScopes: true);
             await using var scope = provider.CreateAsyncScope();

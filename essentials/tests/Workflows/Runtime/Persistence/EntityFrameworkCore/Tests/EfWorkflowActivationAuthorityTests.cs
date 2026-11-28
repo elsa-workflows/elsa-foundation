@@ -24,8 +24,8 @@ public sealed class EfWorkflowActivationAuthorityTests
     public void Registration_is_opt_in_and_uses_the_shared_operational_context()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
+        WorkflowPublicationDefaults.Add(services);
+        services.AddRuntimeArtifactsEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
         services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
 
         using var provider = services.BuildServiceProvider(validateScopes: true);
@@ -39,8 +39,8 @@ public sealed class EfWorkflowActivationAuthorityTests
     public void Registration_refuses_an_unowned_activation_authority_without_mutating_services()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
+        WorkflowPublicationDefaults.Add(services);
+        services.AddRuntimeArtifactsEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
         services.AddScoped<IWorkflowActivationAuthority>(_ => throw new InvalidOperationException("Foreign authority."));
         var before = services.ToArray();
 

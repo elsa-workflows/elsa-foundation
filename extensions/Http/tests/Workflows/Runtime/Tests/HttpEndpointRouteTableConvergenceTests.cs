@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Models;
 using Elsa.Workflows.Runtime.Http.Services;
-using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -21,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Http.Tests;
 public sealed class HttpEndpointRouteTableConvergenceTests
 {
     private readonly InMemoryWorkflowTriggerBindingStore _bindings = new();
-    private readonly InMemoryBookmarkStateStore _bookmarks = new();
+    private readonly TestBookmarkLookup _bookmarks = new();
     private readonly FakeRouteTable _routeTable = new();
     private readonly HttpEndpointRouteTableSynchronizer _synchronizer;
 

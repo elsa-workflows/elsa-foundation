@@ -5,7 +5,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Services;
-using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,7 +18,7 @@ public sealed class StandaloneHttpRouteProjectionTests
     public async Task Paused_reserved_resource_projects_without_a_fabricated_binding_and_generations_move_fingerprint()
     {
         var bindings = new InMemoryWorkflowTriggerBindingStore();
-        var reader = new Reader(); var resolver = new HttpEndpointRoutesResolver(bindings, new GlobalBookmarkStimulusLookup(new InMemoryBookmarkStateStore()),
+        var reader = new Reader(); var resolver = new HttpEndpointRoutesResolver(bindings, new TestBookmarkLookup(),
             NullLogger<HttpEndpointRoutesResolver>.Instance, reader, new Access());
         var empty = await resolver.ResolveRouteFingerprintAsync();
         reader.Rows = [Reservation(1, false)];
@@ -46,7 +45,7 @@ public sealed class StandaloneHttpRouteProjectionTests
     {
         var reader = new Reader { Rows = [Reservation(1, false)] };
         var resolver = new HttpEndpointRoutesResolver(new InMemoryWorkflowTriggerBindingStore(),
-            new GlobalBookmarkStimulusLookup(new InMemoryBookmarkStateStore()), NullLogger<HttpEndpointRoutesResolver>.Instance, reader, new Access());
+            new TestBookmarkLookup(), NullLogger<HttpEndpointRoutesResolver>.Instance, reader, new Access());
         Assert.Single(await resolver.ResolveRoutesAsync());
         Assert.Equal("physical-partition", reader.Scope!.Value);
         Assert.Equal("separate-tenant-identity", reader.Rows[0].Scope.TenantId);
