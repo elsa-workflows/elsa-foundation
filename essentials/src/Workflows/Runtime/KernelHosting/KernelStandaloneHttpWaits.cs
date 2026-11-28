@@ -29,7 +29,13 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
         _ = await foundation.DeliverWaitsAsync(operation, source.Fingerprint, plan.Deliveries, allowNew: true, token);
     }
 
-    private bool AllowsNew(WaitPlan plan) => serving.MatchHttp(plan.Method, plan.Path) is not { Route.Route.Start: true };
+    private bool AllowsNew(WaitPlan plan) => serving.MatchHttp(plan.Method, plan.Path) switch
+    {
+        null => true,
+        { Route.Route: { Start: false } route } => route.Template.Segments.All(segment => segment.Kind == HttpRouteSegmentKind.Literal) ||
+            route.Template.Text == plan.Template,
+        _ => false
+    };
 
     private static WaitPlan? Read(RuntimeStandaloneIngressSource source)
     {
@@ -65,18 +71,19 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
             var matches = template.Segments.Any(segment => segment.Kind == HttpRouteSegmentKind.Parameter)
                 ? HttpRoutes.WaitKey(request.Method, template, names)
                 : null;
+            var suffix = matches is null ? null : HttpRoutes.PreparedWaitSuffix(template.Text);
             foreach (var variant in variants)
             {
                 var key = HttpRoutes.ResolvedKey(request.Method, variant);
-                deliveries.Add(key == matches
-                    ? new(key, JsonSerializer.Serialize(model with { RouteValues = names }), HttpRoutes.PreparedWaitSuffix(template.Text))
-                    : new(key, Payload: null));
+                // A stamped alternate is the same template for a different case-sensitive parameter value.
+                // An unstamped or differently stamped alternate could belong to another template's literal.
+                deliveries.Add(new(key, key == matches ? JsonSerializer.Serialize(model with { RouteValues = names }) : null, suffix));
             }
             // The existing hashed alias can coincide with a literal '#<digest>' activity. A resolved key
             // which cannot be checked as a concrete path is likewise unsafe for a new source.
             return deliveries.Any(delivery => delivery.Key.Contains('#')) || !PreparedWaitDelivery.FitsEnvelope(deliveries)
                 ? null
-                : new(request.Method, "/" + path, deliveries);
+                : new(request.Method, "/" + path, template.Text, deliveries);
         }
         catch (Exception error) when (error is JsonException or HttpRouteTemplateException or HttpFieldsException or InvalidOperationException or KeyNotFoundException)
         {
@@ -146,5 +153,5 @@ internal sealed class KernelStandaloneHttpWaits(KernelServing serving)
 
     private sealed record CapturedRequest(string Method, string Path, string? Body, Dictionary<string, string[]> Headers,
         Dictionary<string, string> RouteData);
-    private sealed record WaitPlan(string Method, string Path, IReadOnlyList<PreparedWaitDelivery> Deliveries);
+    private sealed record WaitPlan(string Method, string Path, string Template, IReadOnlyList<PreparedWaitDelivery> Deliveries);
 }

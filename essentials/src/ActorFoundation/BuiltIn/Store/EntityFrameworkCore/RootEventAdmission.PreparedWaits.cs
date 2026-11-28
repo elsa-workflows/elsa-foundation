@@ -62,15 +62,17 @@ internal static partial class RootEventAdmission
             var key = tenant + "_" + delivery.Key;
             var waits = await ReadWaitsAsync(db, tenant, key, Apply, bind is not null, token);
             if (waits.Count == 0) continue;
-            if (delivery.Payload is null || delivery.RequiredWaitSuffix is { } suffix &&
-                waits.Any(wait => wait.Wait?.EndsWith(suffix, StringComparison.Ordinal) != true))
+            if (delivery.RequiredWaitSuffix is { } suffix
+                ? waits.Any(wait => wait.Wait?.EndsWith(suffix, StringComparison.Ordinal) != true)
+                : delivery.Payload is null)
                 throw new NotSupportedException("A committed wait lacks the exact route authority required by the source.");
+            if (delivery.Payload is not { } content) continue;
             if (waits.Count > FoundationMetadataLimits.MaxTurnSends - messages.Count) throw FanoutFull();
             foreach (var wait in waits)
             {
                 if (!FoundationMetadataLimits.FitsLiveWaitName(wait.Wait!)) throw new StoreFormatException("A committed event wait has an invalid identity.");
                 // Use the existing detached matched-event wire without registering a public publication or Event start.
-                var (header, payload, kind) = EncodeDirect(eventId, 1, Kinds.Event, delivery.Payload, null, held: false,
+                var (header, payload, kind) = EncodeDirect(eventId, 1, Kinds.Event, content, null, held: false,
                     new(key, wait.Wait!), eventOccurrence: occurrence);
                 bytes += Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload));
                 if (!FitsEnvelope(header, payload) || bytes > FoundationMetadataLimits.MessageContentBytes) throw FanoutFull();

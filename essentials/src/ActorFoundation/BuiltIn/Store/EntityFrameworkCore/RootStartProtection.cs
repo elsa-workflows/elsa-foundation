@@ -91,8 +91,8 @@ public sealed record PreparedRootResponse(long CapturedAt, bool Present, byte[]?
 
 /// <summary>One exact wait key and detached input, or a key which must have no live matches.</summary>
 /// <param name="Key">The unqualified subscription key.</param>
-/// <param name="Payload">The exact detached input, or null for a require-empty probe.</param>
-/// <param name="RequiredWaitSuffix">An optional attestation on every selected wait identity.</param>
+/// <param name="Payload">The exact detached input, or null to check authority without delivering.</param>
+/// <param name="RequiredWaitSuffix">The attestation required on every matched wait. A probe without one must match nothing.</param>
 public sealed record PreparedWaitDelivery(string Key, string? Payload, string? RequiredWaitSuffix = null)
 {
     /// <summary>The bound on the exact delivered key and checked aliases per request.</summary>
@@ -102,7 +102,7 @@ public sealed record PreparedWaitDelivery(string Key, string? Payload, string? R
     public static bool FitsEnvelope(IReadOnlyList<PreparedWaitDelivery> deliveries) =>
         deliveries.Count is >= 1 and <= MaxKeys &&
         deliveries.All(delivery => delivery is { Key: not null } && FoundationMetadataLimits.FitsLiveWaitName(delivery.Key) &&
-            (delivery.Payload is { } payload ? RootAdmissionWire.FitsRetainedEventPayload(payload) : delivery.RequiredWaitSuffix is null) &&
+            (delivery.Payload is not { } payload || RootAdmissionWire.FitsRetainedEventPayload(payload)) &&
             (delivery.RequiredWaitSuffix is null || delivery.RequiredWaitSuffix.Length > 0 &&
                 FoundationMetadataLimits.FitsLiveWaitName(delivery.RequiredWaitSuffix))) &&
         deliveries.Select(delivery => delivery.Key).Distinct(StringComparer.Ordinal).Count() == deliveries.Count &&

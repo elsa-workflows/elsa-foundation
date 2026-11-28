@@ -55,6 +55,7 @@ public sealed partial class KernelStandalonePreparedStartTests
 {
     private const string HeldRoute = "standalone-held-exact";
     private const string FanOutRoute = "standalone-fan-out-exact";
+    private const string IncompatibleRoute = "standalone-incompatible-route";
     private const string HeldKey = "held-source-key";
     private const string Proceed = "standalone-http-proceed";
     private const string Finish = "standalone-http-finish";
@@ -106,11 +107,13 @@ public sealed partial class KernelStandalonePreparedStartTests
             var proofs = new DelayedFirstBirthAcknowledgement();
             var heldTemplate = actorWaits ? HeldRoute + "/{id}" : HeldRoute;
             var heldPath = actorWaits ? HeldRoute + "/MiXeD" : HeldRoute;
-            var authoredWait = ExecutableOf("standalone-current-wait", "standalone-current-wait", Sequence("sequence",
-                Node("wait", Types.HttpEndpoint, [Literal("Path", heldTemplate), Literal("SupportedMethods", new[] { "POST" }),
-                    Literal("CanStartWorkflow", false), Literal("RouteValues", new Dictionary<string, string> { ["id"] = "MiXeD" })]),
+            WorkflowExecutable AuthoredWait(string id, string routeValue, string? template = null) => ExecutableOf(id, id, Sequence("sequence",
+                Node("wait", Types.HttpEndpoint, [Literal("Path", template ?? heldTemplate), Literal("SupportedMethods", new[] { "POST" }),
+                    Literal("CanStartWorkflow", false), Literal("RouteValues", new Dictionary<string, string> { ["id"] = routeValue })]),
                 SetOutput("result", "route", ResultMember("value", "wait", "RouteData", "id")),
                 SetOutput("body", "body", Result("value", "wait", "ParsedContent"))));
+            var authoredWait = AuthoredWait("standalone-current-wait", "MiXeD");
+            var lowercaseWait = AuthoredWait("standalone-lowercase-wait", "mixed");
             var asyncWait = ExecutableOf("standalone-async-wait", "standalone-async-wait", Sequence("sequence",
                 Node("wait", Types.HttpEndpoint, [Literal("Path", FanOutRoute), Literal("SupportedMethods", new[] { "POST" }),
                     Literal("CanStartWorkflow", false)])));
@@ -149,6 +152,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                 if (actorWaits)
                 {
                     await PublishAuthoredAsync(services, authoredWait);
+                    await PublishAuthoredAsync(services, lowercaseWait);
+                    await PublishAuthoredAsync(services, AuthoredWait("standalone-incompatible-wait", "some", IncompatibleRoute + "/{id}"));
+                    await WriteSourceAsync(services, IncompatibleRoute, "AsyncFanOut", publication, IncompatibleRoute + "/{order}");
                     startConflict = await PublishAuthoredAsync(services, authoredStart);
                 }
                 var shell = host.Services.GetRequiredService<KernelShellRuntime>();
@@ -158,10 +164,19 @@ public sealed partial class KernelStandalonePreparedStartTests
                     await ServeAsync(host);
                     using var client = new HttpClient { BaseAddress = new Uri(host.Urls.Single()) };
                     var wait = actorWaits ? await StartAuthoredWaitAsync(shell, "before-source") : (Contract.ActorRef?)null;
+                    var lowercase = actorWaits ? await StartAuthoredWaitAsync(shell, "lowercase-before-source", lowercaseWait) : (Contract.ActorRef?)null;
                     using var denied = await RequestAsync(client, heldPath, HeldKey, authorized: false);
                     Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
                     var ingress = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
                     Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, heldSource, token));
+                    if (actorWaits)
+                    {
+                        using var incompatible = await RequestAsync(client, IncompatibleRoute + "/some", "current-route-mismatch");
+                        await ExpectStatusAsync(incompatible, HttpStatusCode.ServiceUnavailable);
+                        var incompatibleId = RuntimeStandaloneIngressSource.BuildOutboxItemId(
+                            Persistence, Persistence.Value, IncompatibleRoute, "Http", "current-route-mismatch");
+                        Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, incompatibleId, token));
+                    }
                     var bookmarks = new EfBookmarkStateStore(services.GetRequiredService<RuntimeDbContext>(),
                         services.GetRequiredService<IPersistenceAccessContextAccessor>());
                     var retainedWait = new BookmarkState("legacy-wait", "legacy-execution", "activity", "node", "resume",
@@ -215,6 +230,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                         using var exact = JsonDocument.Parse(Assert.IsType<byte[]>(output?.Values));
                         Assert.Equal("MiXeD", exact.RootElement.GetProperty("route").GetString());
                         Assert.Equal(WaitBody, exact.RootElement.GetProperty("body").GetString());
+                        Assert.Equal(Contract.ActorStatus.Running, (await reads.GetAsync(owner, lowercase!.Value, token))?.Header.Status);
+                        Assert.Empty((await reads.InboxAsync(owner, lowercase.Value, cancellationToken: token)).Items);
                         Assert.Equal(WaitQuery, source.StandaloneIngress!.CanonicalPayload.GetProperty("submittedIntent").GetProperty("rawQuery").GetString());
                         using var changedQuery = await RequestAsync(client, heldPath, HeldKey, query: "?foo=one&foo=two&foo=three");
                         await ExpectStatusAsync(changedQuery, HttpStatusCode.Conflict);

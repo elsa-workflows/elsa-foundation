@@ -16,6 +16,7 @@ internal static class PreparedWaitChecks
     private const string Node = "prepared-wait-owner";
     private const string Literal = "http:POST:orders/amy";
     private const string Resolved = "http:POST=orders/Amy";
+    private const string Alternate = "http:POST=orders/amy";
     private const string Empty = "http:POST:empty";
     private const string Historical = "http:POST=historical/Amy";
     private const string HistoricalLiteral = "http:POST:historical/amy";
@@ -25,7 +26,7 @@ internal static class PreparedWaitChecks
     private static readonly string Source = new('a', 64);
     private static readonly string Zero = new('b', 64);
     private static readonly string Digest = new('c', 64);
-    private static readonly PreparedWaitDelivery[] Deliveries = [new(Literal, "literal reply"), new(Resolved, "resolved reply", RouteSuffix)];
+    private static readonly PreparedWaitDelivery[] Deliveries = [new(Literal, "literal reply"), new(Resolved, "resolved reply", RouteSuffix), new(Alternate, null, RouteSuffix)];
 
     internal static async Task<int> RunAsync(bool postgres, bool fenceInBatch)
     {
@@ -98,14 +99,14 @@ internal static class PreparedWaitChecks
             var literal = await InstallWaitAsync(Tenant, "literal-first", Literal);
             var resolved = await InstallWaitAsync(Tenant, "resolved-first", Resolved, RouteSuffix);
             var foreign = await InstallWaitAsync(Other, "foreign", Literal);
-            var wrongCase = await InstallWaitAsync(Tenant, "wrong-case", Resolved.Replace("Amy", "amy", StringComparison.Ordinal), RouteSuffix);
+            var wrongCase = await InstallWaitAsync(Tenant, "wrong-case", Alternate, RouteSuffix);
             var historical = await InstallWaitAsync(Tenant, "historical", Historical);
             var differentTemplate = await InstallWaitAsync(Tenant, "different-template", Historical, HttpRoutes.PreparedWaitSuffix("historical/{customer}"));
             var historicalLiteral = await InstallWaitAsync(Tenant, "historical-literal", HistoricalLiteral);
             foreach (var (source, key) in new[]
             {
                 (new string('e', 64), new PreparedWaitDelivery(Historical, "wrong route", HttpRoutes.PreparedWaitSuffix("historical/{order}"))),
-                (new string('f', 64), new PreparedWaitDelivery(Historical, Payload: null))
+                (new string('f', 64), new PreparedWaitDelivery(Historical, null, HttpRoutes.PreparedWaitSuffix("historical/{order}")))
             })
             {
                 try
