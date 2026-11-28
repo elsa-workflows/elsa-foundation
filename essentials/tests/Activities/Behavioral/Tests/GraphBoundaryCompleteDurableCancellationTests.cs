@@ -102,7 +102,7 @@ public sealed class GraphBoundaryCompleteDurableCancellationTests
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .WithFeature(services => new Workflows.Runtime.Scheduling.WorkflowsRuntimeSchedulingFeature().ConfigureServices(services))
-            .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .ConfigureServices(services =>

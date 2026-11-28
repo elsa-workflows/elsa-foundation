@@ -527,7 +527,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     .WithFeature(services => new ActivitiesDesignApiFeature().ConfigureServices(services))
                     .WithFeature(services => new WorkflowsPublishingApiFeature().ConfigureServices(services))
                     .WithFeature(services => new GraphActivitiesDesignFeature().ConfigureServices(services))
-                    .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+                    .WithFeature(services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services))
                     .WithFeature(services => new ClrActivityReconciliationFeature().ConfigureServices(services))
                     .WithFeature(services => new ActivitiesDesignEntityFrameworkCoreFeature
                     {
