@@ -24,7 +24,7 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// not hold that store's state with the others: compose a backend's switch with that backend's stores.
 /// </para>
 /// </remarks>
-public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
+public sealed class InMemoryWorkflowActivationSwitch : IDefaultWorkflowActivationSwitch
 {
     internal PublicationActivationSwitch Inner { get; }
 

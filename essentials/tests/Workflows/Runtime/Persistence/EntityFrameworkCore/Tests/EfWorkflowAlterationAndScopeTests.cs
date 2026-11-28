@@ -39,6 +39,24 @@ public sealed class EfWorkflowAlterationAndScopeTests
     }
 
     [Fact]
+    public void Scope_provider_requires_the_exact_classic_default_descriptors()
+    {
+        IServiceCollection services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        var admission = services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeAdmissionStore));
+        services.Remove(admission);
+        services.Add(ServiceDescriptor.Describe(admission.ServiceType, admission.ImplementationFactory!, admission.Lifetime));
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new()
+        {
+            ConnectionString = "Data Source=:memory:"
+        }));
+
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
     public async Task Registrations_are_order_independent_and_foreign_ownership_is_not_mutated()
     {
         var alterationFirst = new ServiceCollection();

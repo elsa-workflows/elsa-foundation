@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Runner-neutral Runtime EF executable artifacts, source references and their shared relational context.</Description>
+    <Description>Runner-neutral Runtime EF executable artifacts, publication controls and test scopes over one shared context.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />

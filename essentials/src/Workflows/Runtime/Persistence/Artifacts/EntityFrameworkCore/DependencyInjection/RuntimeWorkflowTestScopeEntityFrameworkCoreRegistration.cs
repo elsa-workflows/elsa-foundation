@@ -3,15 +3,12 @@ using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
-
-
 
 public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
 {
@@ -103,6 +100,7 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
             services.AddScoped<EfWorkflowTestScopeCleanupStore>();
             var cleanupConcrete = services.Last();
             owned.Add(cleanupConcrete);
+            services.RemoveAll<RuntimeDefaultTestScopeRegistrations>();
             services.RemoveAll<IWorkflowTestScopeStore>();
             services.RemoveAll<IWorkflowTestScopeAdmissionStore>();
             services.RemoveAll<IWorkflowTestScopeCleanupStore>();
@@ -130,9 +128,10 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
         var contracts = services.Where(x => x.ServiceType == typeof(IWorkflowTestScopeStore) || x.ServiceType == typeof(IWorkflowTestScopeAdmissionStore) || x.ServiceType == typeof(IWorkflowTestScopeCleanupStore)).ToArray();
         if (contracts.Length == 0)
             return;
-        var expected = new[] { typeof(IWorkflowTestScopeStore), typeof(IWorkflowTestScopeAdmissionStore), typeof(IWorkflowTestScopeCleanupStore) };
-        if (contracts.Length != expected.Length || expected.Any(serviceType => contracts.Count(x => x.ServiceType == serviceType) != 1) || contracts.Any(x => !IsCoreFactory(x)))
+        var defaults = services.Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<RuntimeDefaultTestScopeRegistrations>().SingleOrDefault();
+        if (defaults is null || contracts.Length != 3 || !contracts.Contains(defaults.Store) ||
+            !contracts.Contains(defaults.Admission) || !contracts.Contains(defaults.Cleanup))
             throw new InvalidOperationException("Runtime test-scope EF persistence refuses to replace an unowned test-scope registration.");
     }
-    private static bool IsCoreFactory(ServiceDescriptor descriptor) => descriptor.ImplementationFactory is { } factory && (factory.Method.DeclaringType == typeof(RuntimeCoreServiceCollectionExtensions) || factory.Method.DeclaringType?.DeclaringType == typeof(RuntimeCoreServiceCollectionExtensions));
 }
