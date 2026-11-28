@@ -43,7 +43,7 @@ Elsa.Serialization.SystemText
 Elsa.Studio.Preferences.Api
 Elsa.Studio.Preferences.Persistence.EntityFrameworkCore
 Elsa.Tasks
-Elsa.Workflows.Dashboard
+Elsa.Workflows.Dashboard.Retained
 Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore
 Elsa.Workflows.Design.Api
 Elsa.Workflows.Design.JavaScript
