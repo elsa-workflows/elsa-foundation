@@ -7795,6 +7795,70 @@
       ]
     },
     {
+      "path": "essentials/src/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj",
+      "name": "Elsa.Workflows.Runtime.Attention",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Attention",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Runtime.Attention",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Attention.Core",
+          "path": "essentials/src/Attention/Core/Elsa.Attention.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
       "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
       "name": "Elsa.Workflows.Runtime.Core",
       "kind": "source",
@@ -7874,6 +7938,11 @@
           "type": "internal",
           "id": "Elsa.Tasks.Schedules",
           "path": "essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Attention",
+          "path": "essentials/src/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj"
         },
         {
           "type": "internal",
@@ -34385,6 +34454,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Api.StandaloneTriggers",
           "path": "essentials/src/Workflows/Runtime/Api/StandaloneTriggers/Elsa.Workflows.Runtime.Api.StandaloneTriggers.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Attention",
+          "path": "essentials/src/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj"
         },
         {
           "type": "internal",
