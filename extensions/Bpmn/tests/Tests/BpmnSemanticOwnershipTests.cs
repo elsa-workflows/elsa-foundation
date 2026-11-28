@@ -14,7 +14,7 @@ public sealed class BpmnSemanticOwnershipTests
             .Where(type => type.Namespace?.StartsWith("Bpmn.Semantics", StringComparison.Ordinal) == true)
             .Select(type => type.Name).ToHashSet(StringComparer.Ordinal);
         Assert.NotEmpty(semanticsNames);
-        var collisions = typeof(Activities.BpmnProcess).Assembly.GetTypes()
+        var collisions = RuntimeTypes()
             .Where(type => semanticsNames.Contains(type.Name)).Select(type => type.FullName).Order().ToArray();
         Assert.Empty(collisions);
     }
@@ -22,19 +22,26 @@ public sealed class BpmnSemanticOwnershipTests
     [Fact]
     public void Deleted_semantic_sources_types_and_host_pruning_do_not_return()
     {
-        var package = PackageDirectory();
-        Assert.True(Directory.Exists(package), "The guard must inspect the real Foundation source package.");
-        foreach (var path in DeletedSources)
-            Assert.False(File.Exists(Path.Combine(package, path)), $"Deleted semantic source returned: {path}");
-        var types = typeof(Activities.BpmnProcess).Assembly.GetTypes();
+        var source = SourceDirectory();
+        foreach (var package in new[] { "Elsa.Activities.Bpmn", "Composite" })
+        {
+            var directory = Path.Combine(source, package);
+            Assert.True(Directory.Exists(directory), $"Missing BPMN source directory: {directory}");
+            foreach (var path in DeletedSources)
+                Assert.False(File.Exists(Path.Combine(directory, path)), $"Deleted semantic source returned: {package}/{path}");
+        }
+        var types = RuntimeTypes().ToArray();
         var deletedNames = DeletedSources.Select(Path.GetFileNameWithoutExtension).ToHashSet(StringComparer.Ordinal);
         Assert.Empty(types.Where(type => deletedNames.Contains(type.Name)).Select(type => type.FullName));
         Assert.DoesNotContain(types.SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)),
             method => method.Name.Contains("PruneForPersistence", StringComparison.Ordinal));
     }
 
-    private static string PackageDirectory([CallerFilePath] string sourcePath = "") =>
-        Path.GetFullPath("../../src/Elsa.Activities.Bpmn", Path.GetDirectoryName(sourcePath)!);
+    private static IEnumerable<Type> RuntimeTypes() =>
+        typeof(ActivitiesBpmnHostingFeature).Assembly.GetTypes().Concat(typeof(ActivitiesBpmnFeature).Assembly.GetTypes());
+
+    private static string SourceDirectory([CallerFilePath] string sourcePath = "") =>
+        Path.GetFullPath("../../src", Path.GetDirectoryName(sourcePath)!);
 
     private static readonly string[] DeletedSources =
     [

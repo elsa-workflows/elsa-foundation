@@ -292,6 +292,7 @@
     <Project Path="extensions/Bpmn/src/Api/Elsa.Activities.Bpmn.Api.csproj" />
     <Project Path="extensions/Bpmn/src/Core/Elsa.Activities.Bpmn.Core.csproj" />
     <Project Path="extensions/Bpmn/src/Design/Elsa.Activities.Bpmn.Design.csproj" />
+    <Project Path="extensions/Bpmn/src/Composite/Elsa.Activities.Bpmn.Composite.csproj" />
     <Project Path="extensions/Bpmn/src/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
     <Project Path="extensions/Bpmn/src/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />
   </Folder>

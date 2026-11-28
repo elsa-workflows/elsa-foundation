@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Composite/Elsa.Activities.Bpmn.Composite.csproj" />
     <ProjectReference Include="../Core/Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="../../../../essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
