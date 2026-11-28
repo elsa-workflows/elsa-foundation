@@ -30,14 +30,14 @@ internal sealed class KernelParkRecovery(KernelRunReader runs, KernelRuns founda
     {
         routes.MapGet(Route, static (string workflowExecutionId, HttpContext context) =>
                 WithRecoveryAsync(context, (recovery, token) => recovery.ReadAsync(workflowExecutionId, context, token)))
-            .WithOwner(WorkflowsRuntimeKernelApiFeature.FeatureName)
+            .WithOwner(WorkflowsRuntimeKernelRetainedApiFeature.RouteOwner)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)
             .WithName("ReadWorkflowRunRecovery")
             .Produces<RecoveryView>();
         routes.MapPost(Route, static (string workflowExecutionId, Selection selection, HttpContext context) =>
                 WithRecoveryAsync(context, (recovery, token) => recovery.ResumeAsync(workflowExecutionId, selection, context, token)))
-            .WithOwner(WorkflowsRuntimeKernelApiFeature.FeatureName)
+            .WithOwner(WorkflowsRuntimeKernelRetainedApiFeature.RouteOwner)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)
             .WithName("RecoverWorkflowRun")
@@ -109,5 +109,5 @@ internal sealed class KernelParkRecoveryCapabilitySource : IApiCapabilitySource
         ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>([
             new(RuntimeApiCapabilities.CapabilityId, 1,
                 [new("workflow-instance-recovery", KernelParkRecovery.Route, templated: true)],
-                $"{WorkflowsRuntimeKernelApiFeature.FeatureName}.Recovery")]);
+                $"{WorkflowsRuntimeKernelRetainedApiFeature.RouteOwner}.Recovery")]);
 }

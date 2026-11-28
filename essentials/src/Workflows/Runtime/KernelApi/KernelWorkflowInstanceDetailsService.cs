@@ -12,8 +12,7 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelWorkflowInstanceDetailsService(
     KernelRunReader runs,
-    IActivityInspectionContextAsync authorization,
-    KernelPreviewRunReads? preview = null) : IWorkflowInstanceDetailsService
+    IActivityInspectionContextAsync authorization) : IWorkflowInstanceDetailsService
 {
     // A kernel turn commits one durable boundary and can execute several activities within it.
     private static readonly RuntimePersistenceModeProjection Balanced = RuntimePersistenceModeProjection.For(PersistenceMode.Balanced);
@@ -23,7 +22,6 @@ internal sealed class KernelWorkflowInstanceDetailsService(
     public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {
         if (await runs.GetAsync(request.WorkflowExecutionId, cancellationToken) is not { } run) return null;
-        if (run.Header is null) return preview?.Details is { } legacy ? await legacy.GetAsync(run.State, request, cancellationToken) : null;
         var state = run.State;
         if (!await authorization.CanInspectStructureAsync(state, cancellationToken)) return null;
 
@@ -36,7 +34,7 @@ internal sealed class KernelWorkflowInstanceDetailsService(
             ProjectOutputs(await runs.ReadTerminalOutputAsync(run, canInspectSensitive, cancellationToken), canInspectSensitive),
             mode.PersistenceMode,
             mode.InspectionGranularity,
-            // The runtime's existing operator endpoints still address legacy executions.
+            // Operator routes authorize the selected execution independently.
             Permissions: new WorkflowInstancePermissionsView(CanManage: false, CanInspectValues: canInspectSensitive))
             { ActivitiesDeferred = KernelActivityTimeline.Supports(run.Header) };
     }

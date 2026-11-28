@@ -22,8 +22,7 @@ internal sealed class KernelWorkflowInstanceDeletionService(
     IHttpContextAccessor httpContext,
     NormalizedPrincipalValidator principals,
     IPermissionAuthorizationService authorization,
-    TimeProvider clock,
-    KernelPreviewRunReads? preview = null) : IWorkflowInstanceDeletionService
+    TimeProvider clock) : IWorkflowInstanceDeletionService
 {
     private static readonly TimeSpan DeletionBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ReadDelay = TimeSpan.FromMilliseconds(100);
@@ -56,11 +55,7 @@ internal sealed class KernelWorkflowInstanceDeletionService(
         {
             var run = await runs.GetAsync(workflowExecutionId, cancellationToken) ?? throw new RuntimeResourceMissingSignal();
             if (run.IsolatedReads is not null) throw new RuntimeResourceMissingSignal();
-            if (run.View is not { } view)
-            {
-                var legacy = preview?.Deletion ?? throw new RuntimeResourceMissingSignal();
-                return await legacy.DeleteAsync(workflowExecutionId, cancellationToken);
-            }
+            var view = run.View;
 
             if (!caller.Matches(binding)) throw new RuntimeResourceMissingSignal();
             var permission = new PermissionEvaluationContext(caller.Principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, caller.Tenant, run.State);
