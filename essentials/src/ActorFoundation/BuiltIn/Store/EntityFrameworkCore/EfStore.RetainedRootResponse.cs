@@ -165,17 +165,16 @@ public sealed partial class EfStore
     }
 
     internal static async Task<Response?> ReadRetainedRootResponseAsync(KernelDb db, PreparedRootStart birth, string responseKey,
-        CancellationToken token)
+        CancellationToken token, Func<FormattableString, FormattableString>? bindSource = null)
     {
         if (!db.UsesRetainedRootResponse || db.Database.CurrentTransaction is null)
             return null;
         if (db.Database.IsNpgsql()) await RequirePostgresRetainedRootResponsesAsync(db, token);
+        if (!await RootPreparedStarts.HasAcceptedBirthAsync(db, birth, token, bindSource))
+            return null;
         return await db.Database.SqlQuery<Response>($"""
-            SELECT response."CapturedAt", response."Present", response."Payload"
-            FROM "FoundationRootResponses" response JOIN "FoundationRootBirths" birth USING ("Reference")
-            WHERE birth."Tenant" = {birth.Tenant} AND birth."Reference" = {birth.Reference} AND birth."Actor" = {birth.Actor}
-                AND birth."Partition" = {birth.Partition} AND birth."Fingerprint" = {birth.Fingerprint}
-                AND birth."Creation" = 1 AND response."ResponseKey" = {responseKey}
+            SELECT "CapturedAt", "Present", "Payload" FROM "FoundationRootResponses"
+            WHERE "Reference" = {birth.Reference} AND "ResponseKey" = {responseKey}
             """).SingleOrDefaultAsync(token);
     }
 }

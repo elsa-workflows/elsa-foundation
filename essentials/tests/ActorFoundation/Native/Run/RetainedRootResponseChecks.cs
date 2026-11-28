@@ -45,9 +45,10 @@ internal static class RetainedRootResponseChecks
                 StartNode = (fault, ct) => PostgresPreviewHosting.StartAsync(Open, Node, actor, Refused, loop, ct,
                     fault, requests, fenceInBatch, _ => TimeSpan.Zero, new Kernel.WorkflowActor.ScheduleActor())
             };
+            var handoff = PostgresPreviewHosting.BindPreparedRootStartQualification(Open, requests, Scope);
+            PendingRootStart accepted;
             await using (hosted)
-                await CheckAsync(hosted, foundation, foundation, foundation, foundation.AdmitRetentionDeleteAsync,
-                    PostgresPreviewHosting.BindPreparedRootStartQualification(Open, requests, Scope),
+                accepted = await CheckAsync(hosted, foundation, foundation, foundation, foundation.AdmitRetentionDeleteAsync, handoff,
                     PostgresPreviewHosting.BindPreparedRootStartQualification(Open, requests, ContractScopes.Bind("other")),
                     () =>
                     {
@@ -58,6 +59,7 @@ internal static class RetainedRootResponseChecks
             var shippedRequests = PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenShipped, Node, ActorType, Allow);
             await RequireStockRefusalAsync(async () =>
                 _ = await PostgresPreviewHosting.OpenFoundationAsync(OpenShipped, ActorType, shippedRequests, cancellationToken: token));
+            await CheckExactPostgresBirthAsync(Open, handoff, accepted, token);
             await CheckInstalledPostgresAuthorityAsync(Open, store, token);
         }
         else
@@ -80,6 +82,33 @@ internal static class RetainedRootResponseChecks
             finally { folder.Delete(recursive: true); }
         }
         return 0;
+    }
+
+    private static async Task CheckExactPostgresBirthAsync(Func<KernelDb> open, IPreparedRootStartHandoff handoff,
+        PendingRootStart accepted, CancellationToken token)
+    {
+        await using var db = open();
+        var reference = accepted.Actor.Id;
+        var creator = await db.Database.SqlQuery<string>($"""
+            SELECT "Creator" AS "Value" FROM "FoundationRootBirths" WHERE "Reference" = {reference}
+            """).SingleAsync(token);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "FoundationRootBirths" SET "Creator" = 'fixture-incorrect-creator' WHERE "Reference" = {reference}
+            """, token);
+        try
+        {
+            Require(await handoff.ReadResponseAsync(accepted.Actor, accepted.Issuance, ResponseKey, token) is null,
+                "the stored response cannot be read through a changed physical birth creator");
+        }
+        finally
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "FoundationRootBirths" SET "Creator" = {creator} WHERE "Reference" = {reference}
+                """, token);
+        }
+        Require(await handoff.ReadResponseAsync(accepted.Actor, accepted.Issuance, ResponseKey, token)
+            is { Present: true, Payload: { } body } && Encoding.UTF8.GetString(body) == First,
+            "the restored exact birth reads the same first response");
     }
 
     private static async Task CheckInstalledPostgresAuthorityAsync(Func<KernelDb> open, EfStore store, CancellationToken token)
@@ -123,7 +152,7 @@ internal static class RetainedRootResponseChecks
         throw new InvalidOperationException(description);
     }
 
-    private static async Task CheckAsync(IHostedService owner, Contract.IIngress ingress, Contract.IActorReads reads,
+    private static async Task<PendingRootStart> CheckAsync(IHostedService owner, Contract.IIngress ingress, Contract.IActorReads reads,
         Contract.IActorRetentionPolicies policies, Func<Contract.BoundScope, Contract.ActorRef, string, CancellationToken, ValueTask<Contract.Admission>> delete,
         IPreparedRootStartHandoff handoff, IPreparedRootStartHandoff foreign,
         Func<IPreparedRootStartHandoff> reopen, CancellationToken token)
@@ -181,6 +210,7 @@ internal static class RetainedRootResponseChecks
         var restored = await reopen().ReadResponseAsync(response.Actor, response.Issuance, ResponseKey, token);
         Require(restored is { Present: true, Payload: { } body } && Encoding.UTF8.GetString(body) == First,
             "a cold reader obtains the same first response after retirement and discards the later response");
+        return response;
 
         async Task<PendingRootStart> StartAsync(string operation, string mode)
         {

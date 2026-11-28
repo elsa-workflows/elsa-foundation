@@ -42,9 +42,9 @@ public static partial class PostgresPreviewHosting
         if (!db.UsesRetainedRootResponse) return null;
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
         await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", token);
-        var (key, _) = await PostgresRootAdmission.PinRootPreparedStartProofAsync(db, token);
+        var (key, bindSource) = await PostgresRootAdmission.PinRootPreparedStartProofAsync(db, token);
         var birth = RootPreparedStarts.Verify(key, scope, actor, issuance);
-        return birth is null ? null : await EfStore.ReadRetainedRootResponseAsync(db, birth, responseKey, token);
+        return birth is null ? null : await EfStore.ReadRetainedRootResponseAsync(db, birth, responseKey, token, bindSource);
     }
 
     /// <summary>Creates a private PostgreSQL context that qualifies prepared held starts and managed schedules.</summary>
