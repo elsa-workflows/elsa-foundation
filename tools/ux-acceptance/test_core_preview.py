@@ -65,11 +65,12 @@ class CorePreviewVerdictTests(unittest.TestCase):
 class CorePreviewCompositionTests(unittest.TestCase):
     def test_postgresql_actor_store_uses_the_stock_host_and_a_separate_platform_store(self):
         connection = "Host=127.0.0.1;Port=1;Database=x"
-        env = acceptance.kernel_environment(Path("/owned/runtime.sqlite"), connection)
+        runtime = Path("owned") / "runtime.sqlite"
+        env = acceptance.kernel_environment(runtime, connection)
         feature = acceptance.KERNEL_HOSTING_FEATURE
         self.assertEqual({f"{feature}__Provider": "PostgreSQL", f"{feature}__Tenant": acceptance.TENANT,
                           f"{feature}__PostgresConnectionString": connection,
-                          "ConnectionStrings__Elsa": "Data Source=/owned/runtime.sqlite"}, env)
+                          "ConnectionStrings__Elsa": f"Data Source={runtime}"}, env)
 
     def test_sqlite_uses_only_its_owned_database(self):
         with tempfile.TemporaryDirectory() as directory:
