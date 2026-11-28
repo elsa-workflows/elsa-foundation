@@ -106,62 +106,25 @@ pwsh ./e2e-tests/Test-WorkflowFlow.ps1 -BaseUrl http://localhost:5295
 pwsh ./e2e-tests/file-deployment/Test-FileBasedDeployment.ps1
 ```
 
-**Run the source smoke scripts against your Workbench on a non-default port.** The sweep prints a separate
-disposition for archived witnesses, evidence-dependent runs, and package-backed tests. Use the
-[classic REST checkout](../docs/contributing/workbench-compatibility-tests.md#classic-workflow-rest-journeys)
-for archived execution.
+**Run the two stock Actor workflow smokes against your Workbench on a non-default port.**
+They read the committed activity evidence through the retained Runtime API.
 
 ```powershell
-# After building, start the server on 5295 instead of the launch profile's 5095 (separate terminal):
+# After building, start Workbench in a separate terminal:
 #   dotnet run --no-build --project server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
-# In another terminal, wait until http://localhost:5295/health/ready reports ready, then use the same $base for each script.
+# Wait for http://localhost:5295/health/ready before invoking the smokes.
 $base = 'http://localhost:5295'
-$classic = @(
-    'Test-ActivityDataSelection.ps1', 'Test-ActivityDraftTestRun.ps1'
-    'Test-AlterationPlans.ps1', 'Test-AlterationReplayAndRestart.ps1'
-    'Test-BpmnCalledAckHost.ps1', 'Test-BpmnCalledControlHost.ps1', 'Test-BpmnCompensationHost.ps1'
-    'Test-BpmnConcurrentCalledHost.ps1', 'Test-BpmnDecision.ps1', 'Test-BpmnLegacyCalledUpgrade.ps1'
-    'Test-BpmnMultiInstanceBaseline.ps1', 'Test-BpmnNativeParentBaseline.ps1'
-    'Test-CorrelationScopedResume.ps1', 'Test-DiagnosticsSettings.ps1', 'Test-Event.ps1'
-    'Test-FanInResume.ps1', 'Test-FaultActivity.ps1', 'Test-FaultVsFinish.ps1', 'Test-FiniteFileEtlStudio.ps1'
-    'Test-IdempotentStart.ps1', 'Test-IncidentQuery.ps1', 'Test-IncidentStrategies.ps1'
-    'Test-IncidentTroubleshooting.ps1', 'Test-ParallelFaultJoin.ps1', 'Test-ParallelSuspendedBranches.ps1'
-    'Test-PoisonedWork.ps1', 'Test-RestartRecovery.ps1', 'Test-StartAndResume.ps1'
-    'Test-StimulusRouting.ps1', 'Test-SuspendResume.ps1', 'Test-UserTasks.ps1'
-    'Test-ValueCapture.ps1', 'Test-VariableSurvivesSuspend.ps1', 'Test-VersionPinning.ps1'
-)
-$withoutBaseUrl = @(
-    'Test-FileBasedDeployment.ps1', 'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1'
-    'Test-ServerLifecycleGuard.ps1', 'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1'
-    'Test-HttpResponseFlowchart.ps1', 'Test-JsonActivityBindings.ps1', 'Test-WorkflowTemplates.ps1'
-    'Test-SetVariableLoop.ps1', 'Test-SequenceWorkflowVerdict.ps1', 'Test-SourceEditTrxVerdict.ps1'
-    'Test-WorkflowFlowVerdict.ps1'
-)
-$evidenceQualified = 'Test-ExitGuard.ps1', 'Test-ReceiptGuards.ps1'
-$packageQualified = 'Test-DurableRules.ps1', 'Test-NativeRulesInstallation.ps1', 'Test-RulesAdmissionRecovery.ps1'
-$failed = @()
-Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
-    if ($_.Name -in $classic) {
-        Write-Host "Classic checkout required: $($_.Name)"
-        return
-    }
-    if ($_.Name -in $evidenceQualified) {
-        Write-Host "Separate evidence directory required: $($_.Name)"
-        return
-    }
-    if ($_.Name -in $packageQualified) {
-        Write-Host "Separate package qualification required: $($_.Name)"
-        return
-    }
-    if ($_.Name -in $withoutBaseUrl) { pwsh -NoProfile -File $_.FullName }
-    else { pwsh -NoProfile -File $_.FullName -BaseUrl $base }
-    if ($LASTEXITCODE -ne 0) { $failed += $_.Name }
-}
-if ($failed) { "FAILED: $($failed -join ', ')" } else { 'All invoked source scripts passed.' }
+pwsh -NoProfile -File e2e-tests/Test-WorkflowFlow.ps1 -BaseUrl $base
+if ($LASTEXITCODE -ne 0) { throw 'WorkflowFlow smoke failed.' }
+pwsh -NoProfile -File e2e-tests/Test-SequenceWorkflow.ps1 -BaseUrl $base
+if ($LASTEXITCODE -ne 0) { throw 'SequenceWorkflow smoke failed.' }
 ```
 
-Each script runs in its own process, so one failure does not end the loop. The two `Test-Shared*` journeys need
-Docker. On Windows replace `pwsh -NoProfile -File` with `powershell -NoProfile -ExecutionPolicy Bypass -File`.
+Run other scenarios individually using the instructions and evidence requirements for that scenario.
+Use the [classic REST checkout](../docs/contributing/workbench-compatibility-tests.md#classic-workflow-rest-journeys)
+for scripts that assert inline activity rows or classic stimuli, bookmarks and incident routes.
+The opt-in `Test-Shared*` journeys need Docker. Rules package qualification and Activity data
+selection have their own package and evidence requirements.
 
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
