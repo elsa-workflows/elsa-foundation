@@ -42,7 +42,7 @@ type PendingImpact = {
 };
 
 export type ActivityDefinitionContractEditorHandle = {
-  revealMember(kind: ContractMemberKind, referenceKey: string): void;
+  revealMember(kind: ContractMemberKind, referenceKey: string, focus?: boolean): void;
 };
 
 type ActivityDefinitionContractEditorProps = {
@@ -87,6 +87,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   const collectionElementRef = useRef<HTMLElement>(null);
   const focusOriginAddOnClose = useRef(false);
   const focusNewMemberId = useRef<string | null>(null);
+  const focusRevealedMemberId = useRef<string | null>(null);
   const newMemberNameInputRef = useRef<HTMLInputElement>(null);
   const editorKeys = useRef(new Map<string, string>());
   const nextEditorKey = useRef(0);
@@ -131,6 +132,14 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
 
   useEffect(() => () => onLocalValidityChange(true), [onLocalValidityChange]);
 
+  useLayoutEffect(() => {
+    if (!activeId || focusRevealedMemberId.current !== activeId) return;
+    focusRevealedMemberId.current = null;
+    const details = collectionElementRef.current?.querySelector<HTMLElement>("[data-contract-selected='true']");
+    details?.focus({ preventScroll: true });
+    details?.scrollIntoView?.({ block: "nearest" });
+  }, [activeId, selectedMemberIds]);
+
   const setDefaultStatus = (memberId: string, valid: boolean, dirty: boolean) => {
     setInvalidDefaults(current => updateSetMembership(current, memberId, !valid));
     setPendingDefaults(current => updateSetMembership(current, memberId, dirty));
@@ -166,9 +175,10 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   };
 
   useImperativeHandle(ref, () => ({
-    revealMember(kind, referenceKey) {
+    revealMember(kind, referenceKey, focus = false) {
       const id = contractMemberId(kind, referenceKey);
       if (!entries.some(entry => entry.id === id)) return;
+      focusRevealedMemberId.current = focus ? id : null;
       setSelectionGuardMessage(null);
       setSelectedMemberIds(current => ({ ...current, [kind]: id }));
     }

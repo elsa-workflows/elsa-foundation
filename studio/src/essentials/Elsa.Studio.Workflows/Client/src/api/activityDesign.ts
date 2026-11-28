@@ -185,10 +185,12 @@ export function useActivityDefinitionVersion(context: StudioEndpointContext, def
   });
 }
 
-export function useWorkflowActivities(context: StudioEndpointContext) {
+export function useWorkflowActivities(context: StudioEndpointContext, options?: { enabled?: boolean; availability?: "All" }) {
+  const availability = options?.availability;
   return useQuery({
-    queryKey: activityDesignKeys.catalog,
-    queryFn: () => listActivities(context),
+    queryKey: availability ? [...activityDesignKeys.catalog, availability] : activityDesignKeys.catalog,
+    queryFn: () => listActivities(context, availability),
+    enabled: options?.enabled,
     staleTime: 60_000
   });
 }
@@ -219,9 +221,9 @@ export function useSaveActivityAvailabilitySettings(context: StudioEndpointConte
   });
 }
 
-export async function listActivities(context: StudioEndpointContext) {
+export async function listActivities(context: StudioEndpointContext, availability?: "All") {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-catalog");
-  const response = await context.http.getJson<ActivityCatalogResponse>(path);
+  const response = await context.http.getJson<ActivityCatalogResponse>(availability ? `${path}?availability=${availability}` : path);
   return { activities: (response.activities ?? []).map(normalizeActivity) } satisfies ActivityCatalogResponse;
 }
 
