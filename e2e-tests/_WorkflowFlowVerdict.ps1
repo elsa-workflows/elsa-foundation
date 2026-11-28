@@ -19,7 +19,10 @@ function Get-WorkflowFlowRequiredProperty {
 
 function Assert-WorkflowFlowResult {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][AllowNull()] $Instance)
+    param(
+        [Parameter(Mandatory)][AllowNull()] $Instance,
+        [AllowNull()][object[]] $DeferredActivities
+    )
 
     $workflow = Get-WorkflowFlowRequiredProperty -Object $Instance -Name 'instance'
     $status = Get-WorkflowFlowRequiredProperty -Object $workflow -Name 'status'
@@ -40,6 +43,12 @@ function Assert-WorkflowFlowResult {
     }
 
     $activitiesValue = Get-WorkflowFlowRequiredProperty -Object $Instance -Name 'activities'
+    if ($null -ne $DeferredActivities) {
+        if ($Instance.activitiesDeferred -isnot [bool] -or -not $Instance.activitiesDeferred) {
+            throw 'Separate activity evidence requires a deferred instance response.'
+        }
+        $activitiesValue = $DeferredActivities
+    }
     if ($null -eq $activitiesValue -or $activitiesValue -is [string]) {
         throw 'Expected exactly one returned WriteLine activity; the activity collection is missing or invalid.'
     }
