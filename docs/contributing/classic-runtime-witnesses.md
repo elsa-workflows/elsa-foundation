@@ -85,3 +85,17 @@ dotnet test essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCor
 Current Publishing tests retain protected source references, executable hash
 compatibility, publication and journal behavior, and real migration and test-run
 transport checks through their current storage and execution providers.
+
+## Classic API composition and alteration contracts
+
+Use `415905150f6060a2b257649fe48c645873a428cc` for the classic runtime
+HTTP manifest, alteration route and failure contracts, and the concrete
+checkpoint engine shape. The current Architecture project checks the Actor API
+and keeps the retained alteration wire models and permission checks.
+
+```sh
+bash tools/architecture/restore-ci-project-graph.sh
+dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true \
+  --filter 'FullyQualifiedName~RuntimeAlteration|FullyQualifiedName~RuntimeCoreEngineShapeGuardTests|FullyQualifiedName~DomainManagementApiCompositionTests|FullyQualifiedName~DomainApiCapabilityRegistrationTests'
+```

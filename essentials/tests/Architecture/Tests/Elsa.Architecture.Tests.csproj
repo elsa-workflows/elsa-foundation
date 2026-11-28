@@ -49,7 +49,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="../../../../extensions/Agent/src/OpenAI/Elsa.Agent.OpenAI.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
@@ -107,6 +106,8 @@
     <ProjectReference Include="../../../src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/Persistence/Standalone/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj" />
     <ProjectReference Include="..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
@@ -142,7 +143,6 @@
     <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Runtime/Source/Elsa.Workflows.Publishing.Releases.Runtime.Source.csproj" />
     <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <!-- Core_projects_contain_no_implementation_shaped_types loads every src .Core assembly; these are not otherwise reachable. -->
     <ProjectReference Include="..\..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
@@ -231,10 +231,7 @@
     <ProjectReference Include="..\..\..\src\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <!-- Feature composition covers classic EF selectors alongside the retained provider. -->
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Http\src\Workflows\Runtime\Elsa.Workflows.Runtime.Http.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Integrations\src\Connectors\Microsoft365\Elsa.Integrations.Connectors.Microsoft365.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Integrations\src\Connectors\OAuth2\Elsa.Integrations.Connectors.OAuth2.csproj" />
@@ -250,9 +247,6 @@
   <ItemGroup>
     <None Include="..\..\..\..\specs\220-domain-owned-apis\contracts\management-api.openapi.yaml"
           Link="Contracts\management-api.openapi.yaml"
-          CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\..\..\specs\141-runtime-alterations\contracts\runtime-alterations.openapi.yaml"
-          Link="Contracts\runtime-alterations.openapi.yaml"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
