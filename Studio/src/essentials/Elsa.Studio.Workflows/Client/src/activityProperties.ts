@@ -139,7 +139,7 @@ export function planExpressionModeTransition(
     return { requiresConfirmation: false, nextValue: currentValue };
   }
 
-  if (isEmptyExpressionValue(currentValue)) {
+  if (isEmptyExpressionValue(currentValue) || (sourceMode === "structured" && isEmptyJsonText(currentValue))) {
     return { requiresConfirmation: false, nextValue: targetDefaultValue };
   }
 
@@ -164,6 +164,17 @@ export function isEmptyExpressionValue(value: unknown): boolean {
   if (typeof value !== "object") return false;
   const prototype = Object.getPrototypeOf(value);
   return (prototype === Object.prototype || prototype === null) && Object.keys(value).length === 0;
+}
+
+// The Object (JSON) editor holds its value as JSON text, so an empty object or array arrives as "{}" or "[]" — for
+// example an unset Run JavaScript Arguments presenting its `{}` default. Switching away from it discards nothing.
+function isEmptyJsonText(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    return isEmptyExpressionValue(JSON.parse(value));
+  } catch {
+    return false;
+  }
 }
 
 export function getLiteralDefaultValue(descriptor: StudioActivityInputDescriptor): unknown {

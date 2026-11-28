@@ -272,6 +272,20 @@ describe("expression mode transitions", () => {
     });
   });
 
+  // The Object editor holds JSON text: an unset Arguments presents its `{}` default as "{}" (#5373).
+  it.each([["{}"], ["[]"], [" { } "]])("treats empty Object JSON text %j as empty when leaving the Object editor", value => {
+    expect(plan("structured", "text", value)).toEqual({ requiresConfirmation: false, nextValue: "target-default" });
+    expect(plan("structured", "literal", value)).toEqual({ requiresConfirmation: false, nextValue: "target-default" });
+  });
+
+  it.each([['{"a":1}'], ["[0]"], ["{"]])("still asks before discarding Object JSON text %j", value => {
+    expect(plan("structured", "text", value).requiresConfirmation).toBe(true);
+  });
+
+  it("does not treat empty JSON text as empty outside the Object editor", () => {
+    expect(plan("text", "literal", "{}", "System.Int32").requiresConfirmation).toBe(true);
+  });
+
   it("preserves text between text syntaxes", () => {
     expect(plan("text", "text", "order.total + 1")).toEqual({
       requiresConfirmation: false,
