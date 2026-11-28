@@ -2082,8 +2082,12 @@ public sealed class Elsa3ExpressionRewriter(
                     if (member.Computed)
                         Visit(member.Property);
                     return;
-                case CallExpression call when IsAmbientReader(call) || IsInstanceReader(call):
+                case CallExpression call when IsAmbientReader(call):
                     VisitArguments(call);
+                    return;
+                case CallExpression call when IsInstanceReader(call):
+                    // The conversion's own checks of the call (its arguments, a clashing parameter or workflowState) still report.
+                    Visit(call);
                     return;
                 case ChainExpression chain:
                     VisitTargetOperands(chain.Expression);
@@ -2109,19 +2113,30 @@ public sealed class Elsa3ExpressionRewriter(
 
         private void VisitNode(Node node)
         {
-            if (node is AssignmentExpression assignment && TargetReachesAmbientRoot(assignment.Left) ||
-                node is UpdateExpression update && TargetReachesAmbientRoot(update.Argument))
+            var changeTarget = node switch
+            {
+                AssignmentExpression assignment => assignment.Left,
+                UpdateExpression update => update.Argument,
+                _ => null,
+            };
+
+            // #6230: a workflow instance value is read-only in Elsa 4. A destructuring target that also reaches an ambient
+            // value goes on to that refusal too.
+            if (changeTarget is not null && InstanceReaderOf(changeTarget) is { } instanceReader)
+            {
+                Issues.Add(InstanceValueChange(instanceReader));
+                if (!TargetReachesAmbientRoot(changeTarget))
+                {
+                    VisitMutationOperands(node, changeTarget);
+                    return;
+                }
+            }
+
+            if (changeTarget is not null && TargetReachesAmbientRoot(changeTarget))
             {
                 // Spec 1231 FR-032: in a Run JavaScript body, a change to a member of a variable's value
                 // (getVariable('order').status = 'Paid') is a member change through variables, written with the step.
-                var target = node is AssignmentExpression changed ? changed.Left : ((UpdateExpression)node).Argument;
-                if (InstanceReaderOf(target) is { } instanceReader)
-                {
-                    Issues.Add(InstanceValueChange(instanceReader));
-                    VisitMutationOperands(node, target);
-                    return;
-                }
-
+                var target = changeTarget;
                 _ambiguousMemberTarget = null;
                 var memberChange = ConvertsVariableWrites && IsVariableMemberTarget(target);
                 if (!memberChange && _ambiguousMemberTarget is { } ambiguous)
@@ -3462,18 +3477,25 @@ public sealed class Elsa3ExpressionRewriter(
             _ => FindInstanceReader(target),
         };
 
-        private string? FindInstanceReader(Node node) =>
-            node is CallExpression call && IsInstanceReader(call) ? ((Identifier)call.Callee).Name
-            : node.ChildNodes.Select(FindInstanceReader).FirstOrDefault(name => name is not null);
+        /// <summary>
+        /// The instance built-in an object the converter cannot follow (a conditional, a sequence) may hand back. Another
+        /// call's arguments only read: what that call returns is its own value.
+        /// </summary>
+        private string? FindInstanceReader(Node node) => node switch
+        {
+            CallExpression call => IsInstanceReader(call) ? ((Identifier)call.Callee).Name : null,
+            _ => node.ChildNodes.Select(FindInstanceReader).FirstOrDefault(name => name is not null),
+        };
 
         /// <summary>
         /// Whether <paramref name="call"/> reads workflow instance metadata through an Elsa 3 built-in the conversion keeps:
-        /// <c>getCorrelationId</c> and <c>getWorkflowInstanceId</c> (an <c>args</c> parameter), and in a Run JavaScript
-        /// body the <c>workflowState</c> getters. The value is read-only, so a change through it is refused (#6230). A
-        /// built-in whose name a variable's or input's generated getter shares is ambiguous, and stays reported as such.
+        /// <c>getCorrelationId</c> and <c>getWorkflowInstanceId</c> (read as <c>args.workflowCorrelationId</c> and
+        /// <c>args.workflowInstanceId</c>), and in a Run JavaScript body the <c>workflowState</c> getters. The value is
+        /// read-only, so a change through it is refused (#6230). A built-in whose name a variable's or input's generated
+        /// getter shares is ambiguous, and a function the script declares in a block is its own; both stay reported as such.
         /// </summary>
         private bool IsInstanceReader(CallExpression call) =>
-            call.Callee is Identifier reader && !IsDeclared(reader.Name) &&
+            call.Callee is Identifier reader && !IsDeclared(reader.Name) && !IsBlockFunctionUse(reader.Name) &&
             (InstanceMembers.ContainsKey(reader.Name) || ConvertsWorkflowState && StateGetters.Contains(reader.Name)) &&
             !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, reader.Name["get".Length..])).Succeeded;
 
@@ -3481,21 +3503,22 @@ public sealed class Elsa3ExpressionRewriter(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
             $"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.",
             $"Copy the value into a local first (var value = {reader}();) and change the local, in the Elsa 3 workflow before import." +
-            (ConvertsWorkflowState
-                ? " To change the instance itself, call setCorrelationId(value) or setWorkflowInstanceName(value)."
+            (!ConvertsWorkflowState ? string.Empty
+                : reader == "getCorrelationId" ? " To change the instance's correlation id, call setCorrelationId(value)."
+                : reader == "getWorkflowInstanceName" ? " To change the instance's name, call setWorkflowInstanceName(value)."
                 : string.Empty));
 
         /// <summary>
         /// Whether a mutation target reaches an ambient value: the <c>variables</c> or <c>args</c> root, or a value read
-        /// through <c>getVariable</c>/<c>getInput</c>, a generated getter or a workflow instance built-in (Elsa 4 hands
-        /// expressions frozen values).
+        /// through <c>getVariable</c>/<c>getInput</c> or a generated getter (Elsa 4 hands expressions frozen values). A
+        /// workflow instance built-in has its own refusal (<see cref="InstanceReaderOf"/>).
         /// </summary>
         private bool ContainsAmbientRoot(Node node)
         {
             if (node is Identifier identifier && !IsDeclared(identifier.Name) &&
                 (TryGetAmbientKind(identifier.Name, out _) || identifier.Name.Equals("args", StringComparison.Ordinal)))
                 return true;
-            if (node is CallExpression call && (IsAmbientReader(call) || IsInstanceReader(call)))
+            if (node is CallExpression call && IsAmbientReader(call))
                 return true;
             foreach (var child in node.ChildNodes)
             {
