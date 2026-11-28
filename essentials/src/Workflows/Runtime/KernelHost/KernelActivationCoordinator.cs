@@ -115,7 +115,7 @@ public sealed class KernelActivationCoordinator(
         KernelServingPlan plan;
         try
         {
-            plan = serving.Plan(slotId, requested);
+            plan = await PlanActivationAsync(requested, cancellationToken);
         }
         catch (Exception refused) when (refused is ArgumentException or InvalidOperationException)
         {
@@ -161,6 +161,17 @@ public sealed class KernelActivationCoordinator(
 
         return result ?? throw new WorkflowActivationException(definitionId, command.SlotName, command.ActivationId,
             $"Activation '{command.ActivationId}' produced no outcome; the retention lease did not run the activation sequence.");
+    }
+
+    private async ValueTask<KernelServingPlan> PlanActivationAsync(KernelServedSlot candidate, CancellationToken token)
+    {
+        try { return serving.Plan(candidate.SlotId, candidate); }
+        catch (HttpRouteConflictException) when (CanRefreshPeerPublications && authority is IWorkflowActivationSnapshot snapshot)
+        {
+            // A peer may have removed the conflicting slot since this node last refreshed.
+            await RefreshPeerPublicationsUnderLockAsync(snapshot, token);
+            return serving.Plan(candidate.SlotId, candidate);
+        }
     }
 
     private async ValueTask<WorkflowActivationResult> RunSequenceAsync(WorkflowActivationCommand command, WorkflowExecutableSourceReference reference,
@@ -574,44 +585,44 @@ public sealed class KernelActivationCoordinator(
         if (!CanRefreshPeerPublications || !HasPublicationScope() || authority is not IWorkflowActivationSnapshot snapshot)
             throw new InvalidOperationException("Peer publication refresh requires a scoped shared activation snapshot and managed schedules.");
 
-        static bool IsCurrent(IReadOnlyCollection<KernelServedSlot> servingSlots, IReadOnlyCollection<WorkflowActivationStamp> active)
-        {
-            var local = servingSlots.Where(slot => slot.Revision > 0).ToDictionary(slot => slot.SlotId, StringComparer.Ordinal);
-            return local.Count == active.Count && active.All(slot => KernelPeerRouteGuard.Matches(local.GetValueOrDefault(slot.SlotId), slot));
-        }
-
-        if (IsCurrent(serving.Slots, await snapshot.ListActiveAsync(cancellationToken)))
+        if (ServesSnapshot(await snapshot.ListActiveAsync(cancellationToken)))
             return false;
 
-        return await serving.RunAsync(async () =>
+        return await serving.RunAsync(() => RefreshPeerPublicationsUnderLockAsync(snapshot, cancellationToken), cancellationToken);
+    }
+
+    private bool ServesSnapshot(IReadOnlyCollection<WorkflowActivationStamp> active)
+    {
+        var local = serving.Slots.Where(slot => slot.Revision > 0).ToDictionary(slot => slot.SlotId, StringComparer.Ordinal);
+        return local.Count == active.Count && active.All(slot => KernelPeerRouteGuard.Matches(local.GetValueOrDefault(slot.SlotId), slot));
+    }
+
+    private async ValueTask<bool> RefreshPeerPublicationsUnderLockAsync(IWorkflowActivationSnapshot snapshot, CancellationToken token)
+    {
+        var active = await snapshot.ListActiveAsync(token);
+        if (ServesSnapshot(active)) return false;
+
+        var material = new KernelPeerRouteGuard(sourceReferenceStore, executableStore, serving);
+        var publications = new List<KernelServedSlot>(active.Count);
+        foreach (var slot in active)
         {
-            var active = await snapshot.ListActiveAsync(cancellationToken);
-            if (IsCurrent(serving.Slots, active))
-                return false;
+            var served = serving.Find(slot.SlotId);
+            if (KernelPeerRouteGuard.Matches(served, slot))
+                publications.Add(served!);
+            else if (await ReadPeerPublicationAsync(slot, material, token) is { } refreshed)
+                publications.Add(refreshed);
+        }
 
-            var material = new KernelPeerRouteGuard(sourceReferenceStore, executableStore, serving);
-            var publications = new List<KernelServedSlot>(active.Count);
-            foreach (var slot in active)
-            {
-                var served = serving.Find(slot.SlotId);
-                if (KernelPeerRouteGuard.Matches(served, slot))
-                    publications.Add(served!);
-                else if (await ReadPeerPublicationAsync(slot, material, cancellationToken) is { } refreshed)
-                    publications.Add(refreshed);
-            }
+        // Build the final route set as one snapshot. Remove departed slots before checking conflicts
+        // with their replacements, including changes that moved a route from one slot to another.
+        var next = serving.PlanPeerPublications(publications);
+        var confirmed = await snapshot.ListActiveAsync(token);
+        if (!active.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)
+            .SequenceEqual(confirmed.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)))
+            return false;
 
-            // Build the final route set as one snapshot. Remove departed slots before checking conflicts
-            // with their replacements, including changes that moved a route from one slot to another.
-            var next = serving.PlanPeerPublications(publications);
-            var confirmed = await snapshot.ListActiveAsync(cancellationToken);
-            if (!active.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)
-                .SequenceEqual(confirmed.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)))
-                return false;
-
-            serving.ApplyPeerPublications(next);
-            return true;
-        }, cancellationToken);
-
+        serving.ApplyPeerPublications(next);
+        return true;
     }
 
     private async ValueTask<KernelServedSlot?> ReadPeerPublicationAsync(WorkflowActivationStamp slot, KernelPeerRouteGuard material,

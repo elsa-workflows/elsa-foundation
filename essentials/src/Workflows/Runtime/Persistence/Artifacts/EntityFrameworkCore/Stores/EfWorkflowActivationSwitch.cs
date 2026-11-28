@@ -83,6 +83,7 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
     }
 
     private readonly IWorkflowActivationRouteGuard? _routeGuard;
+    private bool GuardsPeerRoutes => _routeGuard is not null && ((IWorkflowActivationSnapshot)_authority).SupportsPeerRefresh;
 
     public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
     {
@@ -104,7 +105,7 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 var afterSave = await StageReservationsAsync(transition.Slot, cancellationToken, slotFenced: true);
                 return Step.Commit(transition, afterSave);
             },
-            cancellationToken);
+            cancellationToken, retryStageConflicts: GuardsPeerRoutes);
     }
 
     public ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default)
@@ -137,18 +138,18 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 var afterSave = await StageReservationsAsync(reverted.Slot, cancellationToken, slotFenced: true);
                 return Step.Commit(true, afterSave);
             },
-            cancellationToken);
+            cancellationToken, retryStageConflicts: GuardsPeerRoutes);
     }
 
     private async ValueTask ValidateRoutesAsync(WorkflowActivationSlot slot, CancellationToken cancellationToken)
     {
         IWorkflowActivationSnapshot authority = _authority;
-        if (_routeGuard is null || !authority.SupportsPeerRefresh || slot.ActiveActivationId is not { } activationId) return;
+        if (!GuardsPeerRoutes || slot.ActiveActivationId is not { } activationId) return;
 
         // This predicate read and the slot write share the switch's Serializable transaction. A
         // concurrent commit through a different slot forces a retry against the new route set.
         var active = await authority.ListActiveAsync(cancellationToken);
-        await _routeGuard.ValidateAsync(new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId, slot.Revision),
+        await _routeGuard!.ValidateAsync(new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId, slot.Revision),
             active, cancellationToken);
     }
 

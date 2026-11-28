@@ -498,6 +498,24 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
+    public async Task A_peer_can_publish_a_route_freed_since_its_last_refresh()
+    {
+        using var host = new Host();
+        var serving = new KernelServing();
+        var peer = host.NewCoordinator(host.Switch, new RuntimeManagedScheduleActors(), serving);
+        var original = Orders("orders@1");
+        Assert.True((await host.ActivateAsync(original, "orders-1")).Succeeded);
+        Assert.True(await peer.RefreshPeerPublicationsAsync(CancellationToken.None));
+        Assert.True((await host.DeactivateAsync(original)).Succeeded);
+        Assert.NotNull(serving.MatchHttp("POST", "orders"));
+
+        var replacement = ExecutableOf("reused@1", "reused", HttpWorkflow("orders", "new owner"));
+        var published = await host.ActivateAsync(replacement, "reused-1", coordinator: peer);
+        Assert.True(published.Succeeded);
+        Assert.Equal("reused@1", serving.MatchHttp("POST", "orders")!.Value.Slot!.Workflow.Id);
+    }
+
+    [Fact]
     public async Task Startup_adopts_a_published_schedule_before_serving_its_existing_slot()
     {
         using var host = new Host();
