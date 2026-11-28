@@ -1,0 +1,23 @@
+{
+  "contributor-preview-2026-10-07.1": {
+    "images": [
+      {
+        "product": "elsa-workbench",
+        "index": "sha256:73ef26e41760eaa4618a37cfbd7285002408f634e4089201b3864cb1f6147904",
+        "children": {
+          "linux/amd64": "sha256:e56e093b73ea239c7833107719e23bf1d03a4faaf07d1b704a8523ac88461e46",
+          "linux/arm64": "sha256:a14b221e28e055539da6280e716a1f37798c2f1bf74bedfa3e76e9cb159ee994"
+        }
+      },
+      {
+        "product": "elsa-studio",
+        "index": "sha256:1a4401d2f5bee207c3edbc51d4157ecb23ba796fb1dacc9e5ff6775f6c4f6ad0",
+        "children": {
+          "linux/amd64": "sha256:d151aabcc161474ba5a7d18d9979c65f381571bfb2e96d1840bfc0b99e8bb647",
+          "linux/arm64": "sha256:1410fb295a93e6a4a281bf1baff2ef61f6164a1d1cc9fc457ca4640b4be31079"
+        }
+      }
+    ],
+    "packages": []
+  }
+}
