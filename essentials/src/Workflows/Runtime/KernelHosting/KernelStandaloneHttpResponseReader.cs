@@ -29,6 +29,10 @@ internal sealed class KernelStandaloneHttpResponseReader(PersistenceScope persis
             throw new NotSupportedException("The selected HTTP delivery has unqualified ordinary wait recipients.");
         if (progress.Phase == RuntimeRecipientPhase.CancelledBeforeDispatch)
             return new(RuntimeStandaloneHttpResponseState.Missing);
+        if (item.Status == RuntimePostCommitOutboxStatus.FailedFinal &&
+            progress is { Phase: RuntimeRecipientPhase.Pending, RecoveryState: RuntimeRecipientRecoveryState.BlockedCapability,
+                LastFailureCode: KernelStandaloneHttpWaits.AuthorityConflict })
+            throw new TriggerOperationException("conflict", "An incompatible Actor workflow wait blocks the accepted HTTP delivery.");
         if (progress is not { Seal: { Version: RuntimeDispatchSeal.PreparedStartQualificationVersion } seal,
                 PreparedStartAttempt: { Disarmed: false } birth })
             return new(RuntimeStandaloneHttpResponseState.Pending);

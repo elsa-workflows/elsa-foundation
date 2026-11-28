@@ -62,7 +62,8 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
             { await ProblemAsync(context, 401, "SourceUnauthorized", "Sign in to invoke this HTTP trigger."); return; }
             owner = standalone[0];
             sourceContext.Bind(owner);
-            var waits = deliveryStore?.RequiresEmptyHttpWaitCohort == true
+            var prepared = deliveryStore?.RequiresEmptyHttpWaitCohort == true;
+            var waits = prepared
                 ? Array.Empty<BookmarkStateObservation>()
                 : await ObserveWaitsAsync(owner.Scope, hash, context.RequestAborted);
             var waitOptions = HttpEndpointStimulusOptions.MergeForResume(waits.Select(item => (IReadOnlyDictionary<string, string>?)item.State.Metadata));
@@ -77,9 +78,11 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
                 throw new TriggerOperationException("conflict", "The HTTP route generation changed; retry against the current endpoint.");
             if (ingress is null || observations?.SupportsObservations != true || bodyParser is null || deliveryStore is null)
                 throw new TriggerOperationException("unavailable", "The protected HTTP admission and transport boundary is not installed.");
+            var utf8Body = true;
             var request = await HttpEndpointRequestModelReader.ReadAsync(context, relativePath, match.RouteValues,
                 waitOptions.RequestSizeLimit is { } waitLimit ? Math.Min(options.Value.MaxRequestBodyBytes, waitLimit) : options.Value.MaxRequestBodyBytes,
-                ["Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Api-Key"]);
+                ["Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Api-Key"],
+                prepared ? valid => utf8Body = valid : null);
             if (request is null) { await ProblemAsync(context, 413, "BodyTooLarge", "The HTTP request exceeds the configured body limit."); return; }
             var payload = request.Body is null ? JsonSerializer.SerializeToElement<object?>(null) : bodyParser.Parse(context.Request.ContentType, request.Body);
             if (payload is null) { await ProblemAsync(context, 400, "InvalidBody", "Use a supported content type and valid request body."); return; }
@@ -89,7 +92,7 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
             var metadata = JsonSerializer.SerializeToElement(new { method = request.Method, path = request.Path, query = request.Query,
                 routeValues = request.RouteData, contentType = context.Request.ContentType }, Json);
             sourceContext.CaptureRequest(request, hash, waits.Select(RuntimeIngressWaitObservation.From).ToArray(),
-                deliveryStore.RequiresEmptyHttpWaitCohort ? relativePath : null);
+                prepared ? relativePath : null, utf8Body);
             acceptedSourceId = RuntimeStandaloneIngressSource.BuildOutboxItemId(owner.Scope.Persistence, owner.Scope.TenantId, owner.OwnerId,
                 StandaloneHttpTriggerSource.Descriptor.SourceFamily, key);
             accepted = await ingress.AdmitAsync(new(owner.OwnerId, key, StandaloneHttpTriggerSource.Descriptor.PayloadSchema, payload.Value, metadata), context.RequestAborted);
@@ -147,9 +150,12 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
         }
         catch (TriggerOperationException exception)
         {
+            var status = exception.Code switch { "unauthorized" => 401, "forbidden" => 403, "conflict" => 409, "validation" => 400, _ => 503 };
             if (accepted is not null && owner is not null) await TryRecordFailureAsync(owner.Scope, acceptedSourceId!, exchangeId,
-                writeCompleted ? RuntimeIngressTransportState.ReceiptUnknown : RuntimeIngressTransportState.WriteFailed, writeCompleted ? context.Response.StatusCode : 503);
-            if (!writeCompleted && !context.Response.HasStarted) await ProblemAsync(context, exception.Code switch { "unauthorized" => 401, "forbidden" => 403, "conflict" => 409, "validation" => 400, _ => 503 }, exception.Code, exception.Message, accepted is null ? null : acceptedSourceId);
+                writeCompleted ? RuntimeIngressTransportState.ReceiptUnknown : RuntimeIngressTransportState.WriteFailed,
+                writeCompleted ? context.Response.StatusCode : status);
+            if (!writeCompleted && !context.Response.HasStarted)
+                await ProblemAsync(context, status, exception.Code, exception.Message, accepted is null ? null : acceptedSourceId);
         }
         catch (Exception exception)
         {

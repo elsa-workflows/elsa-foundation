@@ -1,3 +1,6 @@
+using System.Text;
+using Kernel.Durable;
+using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Hosting;
@@ -86,8 +89,33 @@ internal sealed class BoundPreparedRootStartHandoff(
 /// <remarks>A present response with no payload exceeded the provider's bound. An absent response is a committed end.</remarks>
 public sealed record PreparedRootResponse(long CapturedAt, bool Present, byte[]? Payload);
 
-/// <summary>One exact wait key and detached input of a prepared external source.</summary>
-public sealed record PreparedWaitDelivery(string Key, string Payload);
+/// <summary>One exact wait key and detached input, or a key which must have no live matches.</summary>
+/// <param name="Key">The unqualified subscription key.</param>
+/// <param name="Payload">The exact detached input, or null to check authority without delivering.</param>
+/// <param name="RequiredWaitSuffix">The attestation required on every matched wait. A probe without one must match nothing.</param>
+public sealed record PreparedWaitDelivery(string Key, string? Payload, string? RequiredWaitSuffix = null)
+{
+    /// <summary>The bound on the exact delivered key and checked aliases per request.</summary>
+    public const int MaxKeys = 17;
+
+    /// <summary>Checks the same detached-content bounds used by the provider before selecting any waits.</summary>
+    public static bool FitsEnvelope(IReadOnlyList<PreparedWaitDelivery> deliveries) =>
+        deliveries.Count is >= 1 and <= MaxKeys &&
+        deliveries.All(delivery => delivery is { Key: not null } && FoundationMetadataLimits.FitsLiveWaitName(delivery.Key) &&
+            (delivery.Payload is not { } payload || RootAdmissionWire.FitsRetainedEventPayload(payload)) &&
+            (delivery.RequiredWaitSuffix is null || delivery.RequiredWaitSuffix.Length > 0 &&
+                FoundationMetadataLimits.FitsLiveWaitName(delivery.RequiredWaitSuffix))) &&
+        deliveries.Select(delivery => delivery.Key).Distinct(StringComparer.Ordinal).Count() == deliveries.Count &&
+        deliveries.Where(delivery => delivery.Payload is not null).Sum(delivery => (long)Encoding.UTF8.GetByteCount(delivery.Payload!)) <=
+            FoundationMetadataLimits.EventContentBytes;
+}
+
+/// <summary>The provider found incompatible physical waits and did not commit any part of the requested cohort.</summary>
+public sealed class PreparedWaitAuthorityConflictException : NotSupportedException
+{
+    internal PreparedWaitAuthorityConflictException()
+        : base("A committed wait lacks the exact route authority required by the source.") { }
+}
 
 /// <summary>The same immutable cohort receipt is returned after a lost acknowledgement, including for an empty cohort.</summary>
 public sealed record PreparedWaitReceipt(string CohortDigest, int Count);

@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 
@@ -20,7 +21,14 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
             PreparedStandaloneAdmission.RequireSource(item);
             if (prepared is null) throw new NotSupportedException("The accepted source's Foundation handoff is unavailable.");
             // Waits remain owed once the source is accepted, including when a later root policy or cancellation prevents every start.
-            await prepared.PrepareSourceAsync(source, cancellationToken);
+            try { await prepared.PrepareSourceAsync(source, cancellationToken); }
+            catch (RuntimePostCommitDeliveryException failure) when (failure.Kind == PostCommitFailureKind.Permanent)
+            {
+                foreach (var pending in selection.Progress.Where(progress => progress.Phase == RuntimeRecipientPhase.Pending))
+                    await store.RecordRecipientFailureAsync(source, pending.RecipientId, RuntimeRecipientRecoveryState.BlockedCapability,
+                        failure.Code, null, cancellationToken);
+                throw;
+            }
         }
         var blocksOrdinaryWaits = selection.WaitDelivery is not null && !PreparedStandaloneHttp.HasVerifiedEmptyWaits(item) &&
             selection.Recipients.Any(recipient =>
@@ -69,7 +77,7 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
                 item = await store.RecordReceiptAsync(source, receipt, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-            catch (Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitOutboxStaleClaimException) { throw; }
+            catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
             catch (Exception exception)
             {
                 failures.Add(exception);
@@ -110,7 +118,7 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
                 item = await store.RecordWaitReceiptAsync(source, receipt, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-            catch (Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitOutboxStaleClaimException) { throw; }
+            catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
             catch (Exception exception)
             {
                 failures.Add(exception);

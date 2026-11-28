@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using CShells;
 using CShells.Features;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.StandaloneTriggers;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Events;
@@ -53,10 +55,13 @@ public sealed partial class KernelStandalonePreparedStartTests
 {
     private const string HeldRoute = "standalone-held-exact";
     private const string FanOutRoute = "standalone-fan-out-exact";
+    private const string IncompatibleRoute = "standalone-incompatible-route";
     private const string HeldKey = "held-source-key";
     private const string Proceed = "standalone-http-proceed";
     private const string Finish = "standalone-http-finish";
     private const string ResponseText = "first exact committed reply";
+    private const string WaitBody = "qualification café";
+    private const string WaitQuery = "?foo=one&Foo=two&foo=three";
     private const string HttpAuth = "StandaloneHttpQualification";
 
     [Fact]
@@ -102,10 +107,19 @@ public sealed partial class KernelStandalonePreparedStartTests
             var proofs = new DelayedFirstBirthAcknowledgement();
             var heldTemplate = actorWaits ? HeldRoute + "/{id}" : HeldRoute;
             var heldPath = actorWaits ? HeldRoute + "/MiXeD" : HeldRoute;
-            var authoredWait = ExecutableOf("standalone-current-wait", "standalone-current-wait", Sequence("sequence",
-                Node("wait", Types.HttpEndpoint, [Literal("Path", heldTemplate), Literal("SupportedMethods", new[] { "POST" }),
-                    Literal("CanStartWorkflow", false), Literal("RouteValues", new Dictionary<string, string> { ["id"] = "MiXeD" })]),
-                SetOutput("result", "route", ResultMember("value", "wait", "RouteData", "id"))));
+            WorkflowExecutable AuthoredWait(string id, string routeValue, string? template = null) => ExecutableOf(id, id, Sequence("sequence",
+                Node("wait", Types.HttpEndpoint, [Literal("Path", template ?? heldTemplate), Literal("SupportedMethods", new[] { "POST" }),
+                    Literal("CanStartWorkflow", false), Literal("RouteValues", new Dictionary<string, string> { ["id"] = routeValue })]),
+                SetOutput("result", "route", ResultMember("value", "wait", "RouteData", "id")),
+                SetOutput("body", "body", Result("value", "wait", "ParsedContent"))));
+            var authoredWait = AuthoredWait("standalone-current-wait", "MiXeD");
+            var lowercaseWait = AuthoredWait("standalone-lowercase-wait", "mixed");
+            var incompatibleWait = AuthoredWait("standalone-incompatible-wait", "some", IncompatibleRoute + "/{id}");
+            var asyncWait = ExecutableOf("standalone-async-wait", "standalone-async-wait", Sequence("sequence",
+                Node("wait", Types.HttpEndpoint, [Literal("Path", FanOutRoute), Literal("SupportedMethods", new[] { "POST" }),
+                    Literal("CanStartWorkflow", false)])));
+            var laterStart = ExecutableOf("standalone-later-start", "standalone-later-start", Node("start", Types.HttpEndpoint,
+                [Literal("Path", FanOutRoute), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", true)]));
             var authoredStart = ExecutableOf("standalone-current-start", "standalone-current-start", Node("start", Types.HttpEndpoint,
                 [Literal("Path", FanOutRoute), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", true)]));
             var model = ExecutableOf("standalone-held-native", Definition, Sequence("sequence",
@@ -119,8 +133,10 @@ public sealed partial class KernelStandalonePreparedStartTests
                 model.CompatibilityMetadata, new(WorkflowExecutableInputContract.CurrentVersion, []), model.Dependencies, model.IncidentStrategy);
             var heldSource = RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, HeldRoute, "Http", HeldKey);
             Contract.ActorRef actor;
+            Contract.ActorRef? pendingAsyncWait = null;
+            string? pendingAsyncSource = null;
 
-            await using (var host = OpenHost(TimeSpan.FromMilliseconds(700)))
+            await using (var host = OpenHost(TimeSpan.FromMilliseconds(actorWaits ? 1500 : 700)))
             {
                 await using var operation = await host.Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
                 var services = operation.ServiceProvider;
@@ -134,9 +150,13 @@ public sealed partial class KernelStandalonePreparedStartTests
                 await WriteSourceAsync(services, HeldRoute, "WorkflowResponse", publication, heldTemplate);
                 await WriteSourceAsync(services, FanOutRoute, "AsyncFanOut", publication);
                 WorkflowActivationSlot? startConflict = null;
+                WorkflowActivationSlot? incompatibleSlot = null;
                 if (actorWaits)
                 {
                     await PublishAuthoredAsync(services, authoredWait);
+                    await PublishAuthoredAsync(services, lowercaseWait);
+                    incompatibleSlot = await PublishAuthoredAsync(services, incompatibleWait);
+                    await WriteSourceAsync(services, IncompatibleRoute, "WorkflowResponse", publication, IncompatibleRoute + "/{order}");
                     startConflict = await PublishAuthoredAsync(services, authoredStart);
                 }
                 var shell = host.Services.GetRequiredService<KernelShellRuntime>();
@@ -146,10 +166,61 @@ public sealed partial class KernelStandalonePreparedStartTests
                     await ServeAsync(host);
                     using var client = new HttpClient { BaseAddress = new Uri(host.Urls.Single()) };
                     var wait = actorWaits ? await StartAuthoredWaitAsync(shell, "before-source") : (Contract.ActorRef?)null;
+                    var lowercase = actorWaits ? await StartAuthoredWaitAsync(shell, "lowercase-before-source", lowercaseWait) : (Contract.ActorRef?)null;
                     using var denied = await RequestAsync(client, heldPath, HeldKey, authorized: false);
                     Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
                     var ingress = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
                     Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, heldSource, token));
+                    (RuntimePostCommitOutboxItem Retry, Contract.ActorRef Waiting)? conflict = null;
+                    if (incompatibleSlot is { } slot)
+                    {
+                        using var incompatible = await RequestAsync(client, IncompatibleRoute + "/some", "current-route-mismatch");
+                        await ExpectStatusAsync(incompatible, HttpStatusCode.ServiceUnavailable);
+                        var incompatibleId = RuntimeStandaloneIngressSource.BuildOutboxItemId(
+                            Persistence, Persistence.Value, IncompatibleRoute, "Http", "current-route-mismatch");
+                        Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, incompatibleId, token));
+
+                        var historical = await StartAuthoredWaitAsync(shell, "incompatible-historical-wait", incompatibleWait);
+                        var removed = await services.GetRequiredService<IWorkflowActivationCoordinator>().DeactivateAsync(new(incompatibleWait,
+                            slot.SlotName, WorkflowActivationSource.Publishing, slot.Revision), token);
+                        Assert.True(removed.Succeeded, removed.Diagnostic);
+                        conflict = (await BlockedRouteAsync("historical-retry"), historical);
+                        var replay = await BlockedRouteAsync("historical-retry");
+                        Assert.Equal(1, replay.DeliveryAttemptCount);
+                        Assert.Equal(conflict.Value.Retry.SourceFingerprint, replay.SourceFingerprint);
+                        var cancelled = await BlockedRouteAsync("historical-cancel");
+                        var control = Control(cancelled, RuntimeIngressControlKind.CancelPendingRecipients);
+                        await Assert.ThrowsAsync<InvalidOperationException>(() => ingress.ControlAsync(control with
+                        {
+                            Scope = new(new PersistenceScope("foreign"), "foreign")
+                        }, token).AsTask());
+                        var cancelledReceipt = await ingress.ControlAsync(control, token);
+                        Assert.Equal(RuntimeIngressControlOutcome.Cancelled, Assert.Single(cancelledReceipt.Receipt.Recipients).Outcome);
+                        Assert.Equal(RuntimePostCommitOutboxStatus.Cancelled, cancelledReceipt.Item.Status);
+                        Assert.Null(Progress(cancelledReceipt.Item).Seal);
+                        var read = await shell.ReadAsync(token);
+                        Assert.Equal(Contract.ActorStatus.Running, (await read.GetAsync(owner, historical, token))?.Header.Status);
+                        Assert.Empty((await read.InboxAsync(owner, historical, cancellationToken: token)).Items);
+                    }
+
+                    async Task<RuntimePostCommitOutboxItem> BlockedRouteAsync(string key)
+                    {
+                        using var blockedRoute = await RequestAsync(client, IncompatibleRoute + "/some", key);
+                        await ExpectStatusAsync(blockedRoute, HttpStatusCode.Conflict);
+                        var id = RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, IncompatibleRoute, "Http", key);
+                        Assert.Equal(id, (await blockedRoute.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: token)).GetProperty("deliveryId").GetString());
+                        var saved = Assert.IsType<RuntimePostCommitOutboxItem>(await ingress.FindDeliveryAsync(DeliveryScope, id, token));
+                        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, saved.Status);
+                        Assert.Contains(saved.SubscriptionDelivery!.ControlFacts!.Transport,
+                            item => item is { State: RuntimeIngressTransportState.WriteFailed, StatusCode: 409 });
+                        var progress = Progress(saved);
+                        Assert.Equal(RuntimeRecipientPhase.Pending, progress.Phase);
+                        Assert.Equal(RuntimeRecipientRecoveryState.BlockedCapability, progress.RecoveryState);
+                        Assert.Equal(KernelStandaloneHttpWaits.AuthorityConflict, progress.LastFailureCode);
+                        Assert.Null(progress.Seal);
+                        return saved;
+                    }
+
                     var bookmarks = new EfBookmarkStateStore(services.GetRequiredService<RuntimeDbContext>(),
                         services.GetRequiredService<IPersistenceAccessContextAccessor>());
                     var retainedWait = new BookmarkState("legacy-wait", "legacy-execution", "activity", "node", "resume",
@@ -160,6 +231,27 @@ public sealed partial class KernelStandalonePreparedStartTests
                     await ExpectStatusAsync(blocked, HttpStatusCode.ServiceUnavailable);
                     Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, heldSource, token));
                     Assert.True(await bookmarks.DeleteAsync(retainedWait.WorkflowExecutionId, retainedWait.BookmarkId, token));
+                    if (actorWaits)
+                    {
+                        using var charset = new StringContent(WaitBody, Encoding.Latin1, "text/plain");
+                        await AssertUnacceptedAsync("unsupported-encoding", charset);
+                        using var invalid = new ByteArrayContent([0xc3]);
+                        invalid.Headers.ContentType = new("text/plain") { CharSet = "utf-8" };
+                        await AssertUnacceptedAsync("invalid-utf8", invalid);
+                        using var tooLarge = new StringContent(new string('x', 8 * 1024 * 1024), Encoding.UTF8, "text/plain");
+                        await AssertUnacceptedAsync("combined-envelope", tooLarge);
+                    }
+
+                    async Task AssertUnacceptedAsync(string key, HttpContent content)
+                    {
+                        using var rejected = await RequestAsync(client, heldPath, key, content: content);
+                        await ExpectStatusAsync(rejected, HttpStatusCode.ServiceUnavailable);
+                        Assert.Equal("no-eligible-subscribers",
+                            (await rejected.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: token)).GetProperty("code").GetString());
+                        var id = RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, HeldRoute, "Http", key);
+                        Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, id, token));
+                    }
+
                     using var timedOut = await RequestAsync(client, heldPath, HeldKey);
                     await ExpectStatusAsync(timedOut, HttpStatusCode.GatewayTimeout);
                     Assert.Equal(heldSource, (await timedOut.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: token)).GetProperty("deliveryId").GetString());
@@ -181,8 +273,32 @@ public sealed partial class KernelStandalonePreparedStartTests
                             existing, resumed.Header.EndedAt!.Value, includeValues: true, cancellationToken: token);
                         using var exact = JsonDocument.Parse(Assert.IsType<byte[]>(output?.Values));
                         Assert.Equal("MiXeD", exact.RootElement.GetProperty("route").GetString());
+                        Assert.Equal(WaitBody, exact.RootElement.GetProperty("body").GetString());
+                        Assert.Equal(Contract.ActorStatus.Running, (await reads.GetAsync(owner, lowercase!.Value, token))?.Header.Status);
+                        Assert.Empty((await reads.InboxAsync(owner, lowercase.Value, cancellationToken: token)).Items);
+                        Assert.Equal(WaitQuery, source.StandaloneIngress!.CanonicalPayload.GetProperty("submittedIntent").GetProperty("rawQuery").GetString());
+                        using var changedQuery = await RequestAsync(client, heldPath, HeldKey, query: "?foo=one&foo=two&foo=three");
+                        await ExpectStatusAsync(changedQuery, HttpStatusCode.Conflict);
                     }
-                    if (startConflict is { } conflict)
+                    if (conflict is { } handoff)
+                    {
+                        var historical = Assert.IsType<Contract.ActorView>(await reads.GetAsync(owner, handoff.Waiting, token));
+                        var operators = await host.Services.GetRequiredService<KernelShellStorage>().OpenOperatorsAsync(
+                            (scope, target, kind) => scope.Tenant == owner.Tenant && !scope.IsHostIsolated &&
+                                target == handoff.Waiting && kind == Contract.Kinds.Terminate, token);
+                        var stopped = await operators.SendAsync(owner, new Contract.Target.Ref(handoff.Waiting), "resolve-incompatible-wait",
+                            Contract.Kinds.Terminate, JsonSerializer.Serialize(new Contract.OperatorCommand(
+                                Assert.IsType<string>(historical.Selection), ExpectedTarget: handoff.Waiting)), cancellationToken: token);
+                        Assert.Equal(Contract.AdmissionOutcome.Accepted, stopped.Outcome);
+                        _ = await WaitForAsync(reads, owner, handoff.Waiting, state => state.Header.Status == Contract.ActorStatus.Cancelled, token);
+                        var retry = await ingress.ControlAsync(Control(handoff.Retry, RuntimeIngressControlKind.RetryRecipients), token);
+                        Assert.Equal(RuntimeIngressControlOutcome.RetryScheduled, Assert.Single(retry.Receipt.Recipients).Outcome);
+                        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, retry.Item.Status);
+                        Assert.Null(Progress(retry.Item).Seal);
+                        var firstBirth = await CompleteSourceAsync(services, handoff.Retry.OutboxItemId);
+                        Assert.NotEqual(actor.Id, firstBirth.EvidenceId);
+                    }
+                    if (startConflict is { } startSlot)
                     {
                         const string conflictKey = "authored-start-conflict";
                         var refusedId = RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, FanOutRoute, "Http", conflictKey);
@@ -190,15 +306,36 @@ public sealed partial class KernelStandalonePreparedStartTests
                         await ExpectStatusAsync(refused, HttpStatusCode.ServiceUnavailable);
                         Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, refusedId, token));
                         var removed = await services.GetRequiredService<IWorkflowActivationCoordinator>().DeactivateAsync(new(authoredStart,
-                            conflict.SlotName, WorkflowActivationSource.Publishing, conflict.Revision), token);
+                            startSlot.SlotName, WorkflowActivationSource.Publishing, startSlot.Revision), token);
                         Assert.True(removed.Succeeded, removed.Diagnostic);
                     }
 
+                    var waitSlot = actorWaits ? await PublishAuthoredAsync(services, asyncWait) : null;
+                    if (waitSlot is not null)
+                        pendingAsyncWait = await StartAuthoredWaitAsync(shell, "async-before-source", asyncWait);
                     using var accepted = await RequestAsync(client, FanOutRoute, "async-source-key");
                     await ExpectStatusAsync(accepted, HttpStatusCode.Accepted);
                     var asyncSource = (await accepted.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: token)).GetProperty("deliveryId").GetString()!;
-                    var asyncReceipt = await CompleteSourceAsync(services, asyncSource);
-                    Assert.NotEqual(actor.Id, asyncReceipt.EvidenceId);
+                    if (waitSlot is not null)
+                    {
+                        // The async request persists the exact Runtime source but has no in-request processor. Replace
+                        // the authored route before the first physical handoff and finish against a cold owner.
+                        var saved = Assert.IsType<RuntimePostCommitOutboxItem>(await ingress.FindDeliveryAsync(DeliveryScope, asyncSource, token));
+                        Assert.Equal(RuntimeRecipientPhase.Pending, Progress(saved).Phase);
+                        Assert.Null(Progress(saved).Seal);
+                        Assert.Equal(Contract.ActorStatus.Running, (await reads.GetAsync(owner, pendingAsyncWait!.Value, token))?.Header.Status);
+                        Assert.Empty((await reads.InboxAsync(owner, pendingAsyncWait.Value, cancellationToken: token)).Items);
+                        var removed = await services.GetRequiredService<IWorkflowActivationCoordinator>().DeactivateAsync(new(asyncWait,
+                            waitSlot.SlotName, WorkflowActivationSource.Publishing, waitSlot.Revision), token);
+                        Assert.True(removed.Succeeded, removed.Diagnostic);
+                        await PublishAuthoredAsync(services, laterStart);
+                        pendingAsyncSource = asyncSource;
+                    }
+                    else
+                    {
+                        var asyncReceipt = await CompleteSourceAsync(services, asyncSource);
+                        Assert.NotEqual(actor.Id, asyncReceipt.EvidenceId);
+                    }
 
                     var unpublished = await services.GetRequiredService<IWorkflowActivationCoordinator>().DeactivateAsync(new(executable,
                         publication.SlotName, WorkflowActivationSource.Publishing, publication.Revision), token);
@@ -218,6 +355,14 @@ public sealed partial class KernelStandalonePreparedStartTests
                     await ServeAsync(host);
                     using var client = new HttpClient { BaseAddress = new Uri(host.Urls.Single()) };
                     var opened = await host.Services.GetRequiredService<KernelShellStorage>().OpenAsync(token);
+                    if (pendingAsyncSource is { } saved && pendingAsyncWait is { } historical)
+                    {
+                        Assert.True(host.Services.GetRequiredService<KernelServing>().MatchHttp("POST", "/" + FanOutRoute)?.Route.Route.Start);
+                        await using var savedOperation = await host.Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                        var receipt = await CompleteSourceAsync(savedOperation.ServiceProvider, saved);
+                        Assert.NotEqual(actor.Id, receipt.EvidenceId);
+                        _ = await WaitForAsync(opened.Reads, owner, historical, state => state.Header.Status == Contract.ActorStatus.Finished, token);
+                    }
                     var lateWait = actorWaits ? await StartAuthoredWaitAsync(shell, "late-wait") : (Contract.ActorRef?)null;
                     if (lateWait is { })
                     {
@@ -299,6 +444,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                 runtimeHttp.ConfigureServices(services);
                 var activities = new KernelActivitiesHttpFeature { SyncRequestTimeout = timeout };
                 activities.ConfigureServices(services);
+                if (actorWaits)
+                    services.Replace(ServiceDescriptor.Singleton<IOptions<HttpEndpointOptions>>(Microsoft.Extensions.Options.Options.Create(
+                        new HttpEndpointOptions { SyncRequestTimeout = timeout, MaxRequestBodyBytes = 9 * 1024 * 1024 })));
                 var hosting = new WorkflowsRuntimeKernelHostingFeature
                 {
                     Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = true,
@@ -370,9 +518,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                 return activated.Slot;
             }
 
-            async Task<Contract.ActorRef> StartAuthoredWaitAsync(KernelShellRuntime shell, string operation)
+            async Task<Contract.ActorRef> StartAuthoredWaitAsync(KernelShellRuntime shell, string operation, WorkflowExecutable? material = null)
             {
-                var start = WorkflowActor.Start(NativeExecutionModel.Start(NativeExecutableMapper.Map(authoredWait), "Balanced"));
+                var start = WorkflowActor.Start(NativeExecutionModel.Start(NativeExecutableMapper.Map(material ?? authoredWait), "Balanced"));
                 var admitted = await shell.StartPublishedAsync(operation, start, token);
                 Assert.Equal(Contract.AdmissionOutcome.Accepted, admitted.Outcome);
                 var expected = Assert.IsType<Contract.ActorRef>(admitted.Actor);
@@ -400,6 +548,18 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.Equal(route, receipt.TriggerId);
             }
 
+            static RuntimeIngressControlRequest Control(RuntimePostCommitOutboxItem item, RuntimeIngressControlKind kind)
+            {
+                var source = item.StandaloneIngress!;
+                var progress = Progress(item);
+                return new(DeliveryScope, item.OutboxItemId, item.SourceFingerprint, item.SubscriptionDelivery!.SelectionFingerprint,
+                    source.TriggerId, "reader", kind.ToString(), kind.ToString(), kind,
+                    [new(progress.RecipientId, RuntimeIngressInspection.ProgressFingerprint(progress))])
+                {
+                    ExpectedTriggerRevision = source.TriggerRevision
+                };
+            }
+
             async Task<RuntimeTargetAcceptanceReceipt> CompleteSourceAsync(IServiceProvider services, string sourceId)
             {
                 var ingress = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
@@ -417,9 +577,14 @@ public sealed partial class KernelStandalonePreparedStartTests
                 }
             }
 
-            async Task<HttpResponseMessage> RequestAsync(HttpClient client, string route, string key, bool authorized = true)
+            async Task<HttpResponseMessage> RequestAsync(HttpClient client, string route, string key, bool authorized = true,
+                HttpContent? content = null, string? query = null)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post, "/workflows/http/" + route) { Content = JsonContent.Create(new { }) };
+                var exactWait = actorWaits && key == HeldKey;
+                using var request = new HttpRequestMessage(HttpMethod.Post, "/workflows/http/" + route + (query ?? (exactWait ? WaitQuery : "")))
+                {
+                    Content = content ?? (exactWait ? new StringContent(WaitBody, Encoding.UTF8, "text/plain") : JsonContent.Create(new { }))
+                };
                 request.Headers.Host = "qualification.test";
                 request.Headers.Add("Idempotency-Key", key);
                 if (authorized) request.Headers.Add("X-Qualification-Subject", "reader");
