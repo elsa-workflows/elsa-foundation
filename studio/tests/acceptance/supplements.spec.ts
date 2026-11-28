@@ -536,7 +536,7 @@ test("activity availability load failures and recovery", async ({ page }, info) 
 async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane: "design" | "runtime") {
   const backend = required(`UX_${plane.toUpperCase()}_BACKEND_URL`);
   const design = plane === "design";
-  const views = page.getByRole("navigation", { name: "Workflows views", exact: true });
+  const screens = page.getByRole("tablist", { name: "Open screens", exact: true });
   const available = design
     ? { path: "/workflows/definitions", view: "Definitions", heading: page.getByRole("heading", { name: "Workflow definitions", exact: true }) }
     : { path: "/workflows/executables", view: "Executables", heading: page.getByRole("main").getByRole("heading", { name: "Executables", level: 2, exact: true }) };
@@ -558,8 +558,8 @@ async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane
   const workflows = sidebar.getByRole("link", { name: "Workflows", exact: true });
   await workflows.click();
   await expect(page).toHaveURL(url => url.pathname === available.path);
-  await expect(views.getByRole("link", { name: available.view, exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(views.getByRole("link", { name: absent.view, exact: true })).toHaveCount(0);
+  await expect(screens.getByRole("tab", { name: available.view, exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(sidebar.getByRole("link", { name: absent.view, exact: true })).toHaveCount(0);
   await expect(available.heading).toBeVisible();
   if (!design) await expect(page.getByRole("table", { name: "Workflow executables", exact: true })
     .or(page.getByRole("heading", { name: "No workflow executables", exact: true }))).toBeVisible();

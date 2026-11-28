@@ -233,8 +233,11 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   await page.goto("/features");
   const list = page.locator(".feature-management-list");
   const filter = page.getByRole("searchbox", { name: "Filter features", exact: true });
+  const allFeatures = page.getByRole("navigation", { name: "Feature views", exact: true })
+    .getByRole("button", { name: "All features", exact: true });
   for (const host of ["Server", "Studio"]) {
     await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: new RegExp(`^${host}`) }).click();
+    await allFeatures.click();
     await expect(list.locator(".feature-management-card").first()).toBeVisible();
     await filter.fill("no-such-feature-acceptance");
     const message = list.getByText("No features match this filter.", { exact: true });
@@ -260,6 +263,7 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   }
 
   await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: /^Server/ }).click();
+  await allFeatures.click();
   await filter.fill("Workflows Runtime EF Core Executable Artifact Persistence");
   await list.getByRole("button", { name: /^Workflows Runtime EF Core Executable Artifact Persistence/ }).click();
   const edit = page.getByRole("button", { name: "Edit settings", exact: true });
