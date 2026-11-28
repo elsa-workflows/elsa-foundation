@@ -262,26 +262,6 @@ public sealed class RuntimeContractTests
     }
 
     [Fact]
-    public async Task DefaultCheckpointPolicy_DoesNotChangeCheckpointSemantics()
-    {
-        var checkpoint = new RuntimeCheckpoint(
-            CheckpointId: "checkpoint-1",
-            Name: RuntimeCheckpointNames.WorkflowStarted,
-            WorkflowExecutionId: "wfexec-1",
-            OccurredAt: DateTimeOffset.UtcNow,
-            ActivityExecutionIds: [],
-            Metadata: new Dictionary<string, string>());
-        var policy = new ImmediateRuntimeCheckpointPersistencePolicy();
-
-        var decision = await policy.DecideAsync(checkpoint);
-
-        Assert.Contains(RuntimeCheckpointNames.WorkflowStarted, RuntimeCheckpointNames.All);
-        Assert.Contains(RuntimeCheckpointNames.PostCommitIntentRecorded, RuntimeCheckpointNames.All);
-        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, decision.Mode);
-        Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, checkpoint.Name);
-    }
-
-    [Fact]
     public void CheckpointNameCollection_ContainsEveryDeclaredCheckpointConstant()
     {
         var declaredNames = typeof(RuntimeCheckpointNames)

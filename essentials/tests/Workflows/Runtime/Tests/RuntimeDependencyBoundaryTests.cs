@@ -19,9 +19,9 @@ public sealed class RuntimeDependencyBoundaryTests
     }
 
     [Fact]
-    public void RuntimeApiAssembly_DoesNotReferenceWorkflowDesignAssemblies()
+    public void StandaloneTriggerApiAssembly_DoesNotReferenceWorkflowDesignAssemblies()
     {
-        var referencedAssemblies = typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature).Assembly
+        var referencedAssemblies = typeof(Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersApiFeature).Assembly
             .GetReferencedAssemblies()
             .Select(x => x.Name)
             .OfType<string>()

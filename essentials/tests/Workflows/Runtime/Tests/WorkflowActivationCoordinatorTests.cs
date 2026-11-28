@@ -673,7 +673,8 @@ public sealed class WorkflowActivationCoordinatorTests
             References = new(new InMemoryWorkflowExecutableSourceReferenceStore(), Calls);
             Indexer = new(Bindings, Calls);
             Observer = new(Calls);
-            Switch = new(new InMemoryWorkflowActivationSwitch(Authority, References, new FakeTimeProvider(Now), Bindings), Calls);
+            Switch = new(new PublicationActivationSwitch(Authority, References, new FakeTimeProvider(Now),
+                reservationState: null, reservationAccess: null, reservationPolicies: [], triggerBindingStore: Bindings), Calls);
             Coordinator = CreateCoordinator(activationChannelOptions);
         }
 
