@@ -149,7 +149,7 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
     }
 
     [SkippableFact]
-    public async Task Authored_resource_reload_moves_the_target_and_failed_candidate_keeps_the_active_generation()
+    public async Task Actor_requires_restart_to_change_the_active_named_resource()
     {
         Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
         var (firstConnection, secondConnection) = await targets.CreateIsolatedTargetsAsync();
@@ -158,62 +158,78 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
             .ToDictionary(pair => pair.Key, pair => pair.Value);
         settings["ConnectionStrings:ReloadFirst"] = firstConnection;
         settings["ConnectionStrings:ReloadSecond"] = secondConnection;
+        settings["DOTNET_USE_POLLING_FILE_WATCHER"] = "true";
         var shell = WorkbenchShell.Development with { Settings = settings };
-        string? appsettings = null;
         await using var host = await WorkbenchProcess.StartAsync(shell, directory =>
         {
-            appsettings = Path.Combine(directory, "appsettings.json");
-            WriteAuthoredResource(appsettings, "PostgreSql", "ReloadFirst");
+            SharedPersistenceHostFixture.ConfigureNamedRuntimeTargets(directory);
+            DeclareNamedResources(Path.Combine(directory, "appsettings.json"));
         });
         var initialGeneration = await ReadinessGenerationAsync(host.Client);
-        Assert.True(await HasTableAsync(firstConnection, "__EFMigrationsHistory_ElsaActivitiesDesign"));
-        Assert.False(await HasTableAsync(secondConnection, "__EFMigrationsHistory_ElsaActivitiesDesign"));
+        const string history = "__EFMigrationsHistory_ElsaActivitiesDesign";
+        Assert.True(await HasTableAsync(firstConnection, history));
+        Assert.False(await HasTableAsync(secondConnection, history));
 
-        WriteAuthoredResource(appsettings!, "PostgreSql", "ReloadSecond");
-        await Task.Delay(TimeSpan.FromSeconds(1)); // Allow the host's JSON provider to observe the authored file change.
-        var promoted = await ReloadAsync(host);
-        Assert.True((bool?)promoted["success"] is true);
-        var nextGeneration = (int?)promoted["newShell"]?["generation"];
-        Assert.True(nextGeneration > initialGeneration);
-        Assert.Equal(nextGeneration, await ReadinessGenerationAsync(host.Client));
-        Assert.True(await HasTableAsync(secondConnection, "__EFMigrationsHistory_ElsaActivitiesDesign"));
+        SelectNamedResource(Path.Combine(host.ContentRoot, "shells.json"), "candidate");
+        await WaitForAuthoredResourceAsync(host, "candidate");
+        var refused = await ReloadAsync(host);
+        Assert.True((bool?)refused["success"] is false);
+        Assert.Null(refused["newShell"]);
+        Assert.NotNull(refused["error"]);
+        var refusal = refused.ToJsonString();
+        Assert.True(refusal.Contains("requires a host restart", StringComparison.OrdinalIgnoreCase),
+            "The reload did not report the active Actor host restart requirement.");
+        Assert.DoesNotContain(firstConnection, refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain(secondConnection, refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain(PostgreSqlTargetFixture.SyntheticPassword, refusal, StringComparison.Ordinal);
+        Assert.Equal(initialGeneration, await ReadinessGenerationAsync(host.Client));
 
         await SignInAsync(host.Client);
         var sequenceId = await ActivityVersionIdAsync(host.Client, "Elsa.Activities.Sequence.Activities.Sequence");
         var writeLineId = await ActivityVersionIdAsync(host.Client, "Elsa.Activities.Primitives.Activities.WriteLine");
         var marker = $"reload-target-{Guid.NewGuid():N}";
         var published = await PublishReusableActivityAsync(host.Client, marker, sequenceId, writeLineId);
-        Assert.True(await HasActivityAsync(secondConnection, marker));
-        Assert.False(await HasActivityAsync(firstConnection, marker));
-
-        WriteAuthoredResource(appsettings!, "Oracle", "ReloadSecond");
-        await Task.Delay(TimeSpan.FromSeconds(1));
-        var refused = await ReloadAsync(host);
-        Assert.True((bool?)refused["success"] is false);
-        Assert.NotNull(refused["error"]);
-        Assert.Null(refused["newShell"]);
-        var refusal = refused.ToJsonString();
-        Assert.DoesNotContain(firstConnection, refusal, StringComparison.Ordinal);
-        Assert.DoesNotContain(secondConnection, refusal, StringComparison.Ordinal);
-        Assert.DoesNotContain(PostgreSqlTargetFixture.SyntheticPassword, refusal, StringComparison.Ordinal);
-        Assert.Equal(nextGeneration, await ReadinessGenerationAsync(host.Client));
-        Assert.True(await HasActivityAsync(secondConnection, marker));
+        Assert.True(await HasActivityAsync(firstConnection, marker));
+        Assert.False(await HasTableAsync(secondConnection, history));
         var catalog = await GetAsync(host.Client, $"design/activities/definitions?search={Uri.EscapeDataString(marker)}");
         Assert.Contains(catalog["items"]!.AsArray(), item =>
             StringComparer.Ordinal.Equals((string?)item?["definition"]?["definitionId"], published.DefinitionId));
     }
 
-    private static void WriteAuthoredResource(string appsettings, string provider, string connectionName)
+    private static void DeclareNamedResources(string appsettings)
     {
-        var root = JsonNode.Parse(File.ReadAllText(appsettings))!.AsObject();
-        root["Elsa"]!["Persistence"]!["Resources"]!["primary"] = new JsonObject
+        var root = JsonNode.Parse(File.ReadAllText(appsettings))!;
+        root["Elsa"]!["Persistence"]!["Resources"] = new JsonObject
         {
-            ["Provider"] = provider,
-            ["ConnectionName"] = connectionName
+            ["primary"] = new JsonObject { ["Provider"] = "PostgreSql", ["ConnectionName"] = "ReloadFirst" },
+            ["candidate"] = new JsonObject { ["Provider"] = "PostgreSql", ["ConnectionName"] = "ReloadSecond" }
         };
-        var candidate = appsettings + ".candidate";
-        File.WriteAllText(candidate, root.ToJsonString());
-        File.Move(candidate, appsettings, overwrite: true);
+        File.WriteAllText(appsettings, root.ToJsonString());
+    }
+
+    private static void SelectNamedResource(string shellFile, string resource)
+    {
+        var root = JsonNode.Parse(File.ReadAllText(shellFile))!;
+        var configuration = root["CShells"]!["Shells"]!["default"]!["Configuration"]!;
+        configuration["Elsa"] ??= new JsonObject();
+        configuration["Elsa"]!["Persistence"] ??= new JsonObject();
+        configuration["Elsa"]!["Persistence"]!["DefaultResource"] = resource;
+        var temporary = shellFile + ".candidate";
+        File.WriteAllText(temporary, root.ToJsonString());
+        File.Move(temporary, shellFile, overwrite: true);
+    }
+
+    private static async Task WaitForAuthoredResourceAsync(WorkbenchProcess host, string resource)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var token = deadline.Token;
+        while (true)
+        {
+            var blueprint = await host.ManagementClient.GetFromJsonAsync<JsonObject>("/_admin/shells/default/blueprint", token);
+            if (string.Equals((string?)blueprint?["configurationData"]?["Elsa:Persistence:DefaultResource"], resource, StringComparison.Ordinal))
+                return;
+            await Task.Delay(100, token);
+        }
     }
 
     private static async Task<JsonNode> ReloadAsync(WorkbenchProcess host)
