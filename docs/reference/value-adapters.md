@@ -87,7 +87,9 @@ them changes the variable.
   the top level, as in `JSON.stringify`, a member that is `undefined`, a function or a symbol is left out, and such an
   array item becomes `null`. Called with no argument it returns `undefined`. Under the .NET
   interop opt-in (#4103) a .NET object crosses the same JSON boundary as any host function argument: the copy holds
-  its JSON form, never the live object, or the call fails when it has none.
+  its JSON form, never the live object, or the call fails when it has none. The value is bounded by the Jint feature's
+  result limits (`MaxResultBytes`, `MaxResultDepth`, `MaxResultNodes`), as every host function argument is: a larger
+  value fails the call.
 - **Publish.** A value passed to `structuredClone` does not escape (spec 1231 FR-019), so
   `structuredClone(variables.order)` alone does not put `order` among the variables the step may write. A script that
   declares its own `structuredClone`, or whose source names `toJSON` (making the copy runs it, and it can change the

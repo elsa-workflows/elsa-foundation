@@ -25,7 +25,7 @@ internal sealed partial class JavaScriptExpressionToolingProvider(
         (JavaScriptBuiltInFunctions.ParseGuid, ["text"], "The 36-character text of the GUID that text denotes, in any form .NET's Guid.Parse accepts; other text fails.", "String"),
         (JavaScriptBuiltInFunctions.StringToBase64, ["text"], "The standard Base64 of the text's UTF-8 bytes.", "String"),
         (JavaScriptBuiltInFunctions.StringFromBase64, ["base64"], "The UTF-8 text of standard Base64; invalid Base64 fails.", "String"),
-        (JavaScriptBuiltInFunctions.StructuredClone, ["value"], "An independent deep copy of a JSON value: changing the copy never changes the variable it came from. A Date becomes its ISO text and undefined null; a function or symbol fails, and one below the top level is left out.", "Any"),
+        (JavaScriptBuiltInFunctions.StructuredClone, ["value"], "An independent deep copy of a JSON value: changing the copy never changes the variable it came from. It copies as JSON.stringify does: a Date becomes its ISO text; undefined becomes null, and a function or symbol fails; below the top level, such a member is left out and such an array item becomes null.", "Any"),
     ];
 
     public ExpressionToolingCapabilities DeclaredCapabilities { get; } = new(
