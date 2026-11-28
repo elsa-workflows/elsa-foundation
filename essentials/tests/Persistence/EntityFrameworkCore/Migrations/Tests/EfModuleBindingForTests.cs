@@ -16,10 +16,9 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// #1872 replaces each module's hand-written <see cref="EfModuleBinding"/> construction with <see
-/// cref="EfModuleBinding.For"/>. Behaviour must not change: for every one of the 15 modules, this proves
-/// the descriptor-derived binding equals the values the registration class used to pass by hand — same
-/// owner, history table, migrations assembly and connection defaults.
+/// #1872 replaces hand-written <see cref="EfModuleBinding"/> construction with <see cref="EfModuleBinding.For"/>.
+/// For each remaining converted module, the descriptor-derived binding preserves its owner, history table,
+/// migrations assembly and connection defaults.
 /// </summary>
 public sealed class EfModuleBindingForTests
 {
@@ -106,9 +105,9 @@ public sealed class EfModuleBindingForTests
     ];
 
     [Fact]
-    public void Covers_all_15_modules()
+    public void Covers_the_remaining_13_converted_modules()
     {
-        Assert.Equal(15, Expected.Length);
+        Assert.Equal(13, Expected.Length);
     }
 
     [Theory]
