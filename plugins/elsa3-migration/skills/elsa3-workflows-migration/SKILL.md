@@ -221,7 +221,7 @@ When every component is `ported`, `redesign`, `dropped` or `interviewed`, set `S
       (a refusal of the shared import);
    2. per definition, Must fix, then Reconsider, then Take into account;
    3. root causes before the definitions they block: a definition whose `blockedBy` list is not empty waits until
-      every definition that list names is fixed (a reusable with findings of its own is named there too). Until then,
+      every definition that list names is fixed (a reusable with a Must fix finding of its own is named there too). Until then,
       do not patch it; a component its own findings name is ported with that component's row, like any other.
 
    For each finding:
