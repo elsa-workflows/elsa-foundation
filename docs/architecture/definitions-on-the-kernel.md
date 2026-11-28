@@ -190,9 +190,10 @@ workflow's variables. Container-scoped variables are refused until the mapper sl
 
 The mapper, the coordinator and the kernel trigger extractor read `Elsa.Workflows.Runtime.Core` models, the executable and the
 activation commands, which layer 3 does not reference. So they live in a host-side project,
-`Elsa.Workflows.Runtime.KernelHost`, which references those contracts, the Native model and WorkflowActor. The
-Workbench composes them on a kernel host: its Core Preview, with publications enabled, replaces the default shell's
-coordinator and preflight, and shares the kernel's registry between the root host and the shell.
+`Elsa.Workflows.Runtime.KernelHost`, which references those contracts, the Native model and WorkflowActor.
+The original Workbench Core Preview shared the kernel registry between the root host and the default shell.
+Current Workbench uses the shell-owned Actor runtime and serving registry. See the
+[workflow execution architecture](../how-a-workflow-executes.md).
 
 ## Slices
 

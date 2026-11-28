@@ -210,7 +210,7 @@ public sealed class WorkbenchConfigurationTests
         if (production)
             builder.AddJsonFile("shells.Production.json");
         if (preview)
-            builder.AddJsonFile("shells.CorePreview.json");
+            builder.AddJsonFile(Path.Join(RepoRoot, "essentials/tests/Workbench/Fixtures/ClassicRuntime/shells.json"));
         if (production)
             builder.AddJsonFile(preview ? "shells.CorePreview.Production.json" : "shells.Actor.Production.json");
         return builder.AddInMemoryCollection(environment ?? []).Build();

@@ -6,7 +6,8 @@ if (( ${#versions[@]} == 0 )); then
   exit 2
 fi
 repo=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
-revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse --verify --end-of-options "${1:-HEAD}^{commit}")
+revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse --verify --end-of-options \
+  "${1:-e758c2cc86ccdb4294be0aa63bdfe933060db75e}^{commit}")
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/elsa-workbench-preview.XXXXXXXX")
 container=
 cleanup() {
