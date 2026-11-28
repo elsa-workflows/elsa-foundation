@@ -34,6 +34,17 @@ internal sealed class EfRuntimePostCommitOutboxStorage(
     internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
         ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
 
+    public bool CanInspectHistorySources(IRuntimeHistoryStore history)
+    {
+        if (history is not IEfRuntimeHistorySourceOwner reader || !reader.UsesPhysicalHistory(context, accessContextAccessor)) return false;
+        try
+        {
+            _ = accessContextAccessor.Current.RequireScope();
+            return context.Database.IsRelational() && RuntimeHistoryEfModule.HasProjectionModel(context);
+        }
+        catch (InvalidOperationException) { return false; }
+    }
+
     internal bool CanRetainPreparedExecutables(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references) =>
         PreparedStandaloneOnly && CanRetainExecutableFamily(executables, references);
 
