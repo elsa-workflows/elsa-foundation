@@ -23,6 +23,9 @@ public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers =
     /// <summary>A host whose foundation runs everything a published workflow may need.</summary>
     public static KernelHostCapabilities All { get; } = new();
 
+    /// <summary>Whether this shell serves authored HTTP endpoints.</summary>
+    public bool HttpEndpoints { get; init; } = true;
+
     /// <summary>Why a Timer or Cron is refused on a host without schedule actors.</summary>
     public const string SchedulesUnavailable =
         "Timer and Cron triggers don't run on this host yet. Remove the Timer or Cron, or start the workflow from an HTTP endpoint, an event or a Dispatch.";
@@ -54,7 +57,10 @@ public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers =
                 !Timers && activity == typeof(Kernel.Native.Delay) ? DelayUnavailable :
                 !Children && activity == typeof(Kernel.Native.DispatchWorkflow) ? DispatchUnavailable : null;
             if (reason is not null) return (node.Id, reason);
-            if (activity != typeof(Kernel.Native.HttpEndpoint) || starts.Contains(node)) continue;
+            if (activity != typeof(Kernel.Native.HttpEndpoint)) continue;
+            if (!HttpEndpoints)
+                return (node.Id, "Select Kernel Activities HTTP on the shell to use HTTP Endpoint.");
+            if (starts.Contains(node)) continue;
             if (!HttpWaits) return (node.Id, HttpWaitUnavailable);
             if (node.Inputs.GetValueOrDefault("Path") is not Kernel.Native.LiteralBinding { Value: not null })
                 return (node.Id, "An HTTP Endpoint that waits needs a route template the host can publish. Set a literal Path and bind its parameters through Route values.");

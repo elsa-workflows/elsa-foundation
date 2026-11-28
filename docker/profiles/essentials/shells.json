@@ -34,15 +34,16 @@
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingEntityFrameworkCore": {},
-          "WorkflowsRuntimeEntityFrameworkCore": {},
-          "WorkflowsRuntimeApi": {},
-          "WorkflowsRuntimeResumption": {},
-          "WorkflowsRuntimeScheduling": {},
-          "WorkflowsRuntimeRecurringTriggers": {},
-          "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Balanced"
+          "WorkflowsRuntimeKernelOptionalHttpHosting": {
+            "Provider": "SQLite",
+            "SqlitePath": "/app/data/elsa-kernel.db",
+            "Tenant": "default",
+            "PreparedStandaloneStarts": true
           },
-          "WorkflowsRuntimeTriggers": {},
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimePreparedStandaloneSourcePump": {},
           "StandaloneTriggersApi": {},
           "StandaloneEventTriggerAuthoring": false,
           "FoundationIdentityAbstractions": {},
@@ -54,12 +55,12 @@
           },
           "IdentityIamEntityFrameworkCore": {},
           "Http": false,
-          "ActivitiesHttp": false,
-          "WorkflowsRuntimeHttp": false,
+          "KernelActivitiesHttp": false,
+          "WorkflowsRuntimeStandaloneHttp": false,
           "StandaloneHttpTriggerAuthoring": false,
-          "ActivitiesScheduling": false,
+          "KernelActivitiesScheduling": false,
           "StandaloneScheduleTriggerAuthoring": false,
-          "StandaloneScheduleTriggers": false
+          "PreparedStandaloneScheduleTriggers": false
         },
         "Configuration": {
           "WebRouting": {
