@@ -162,12 +162,12 @@ public sealed class WriteHttpResponseStructuredBodyTests
         IHttpContentFactory? factory = null,
         int status = StatusCodes.Status200OK)
     {
-        var store = await StoreWith(new HttpResponseInstruction(status, new Dictionary<string, string[]>(), body, contentType));
-        var delivery = new HttpResponseInstructionDelivery(store, factory is null ? [] : [factory]);
+        var instruction = new HttpResponseInstruction(status, new Dictionary<string, string[]>(), body, contentType);
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = new MemoryStream();
 
-        Assert.True(await delivery.TryDeliverAsync(httpContext.Response, ["wf-1"]));
+        await HttpResponseInstructionDelivery.WriteAsync(httpContext.Response, instruction, "wf-1",
+            factory is null ? [] : [factory], CancellationToken.None);
 
         httpContext.Response.Body.Position = 0;
         using var reader = new StreamReader(httpContext.Response.Body, Encoding.UTF8);
