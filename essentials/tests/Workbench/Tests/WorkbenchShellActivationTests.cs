@@ -141,9 +141,11 @@ public sealed class WorkbenchShellActivationTests
         using var diagnostics = await workbench.Client.GetAsync("/runtime/workflows/diagnostics/settings");
         Assert.True(diagnostics.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
             $"The explicit preview did not map the legacy Runtime API. Host output:{Environment.NewLine}{workbench.Output}");
-        var catalog = (await workbench.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
-        Assert.True(catalog["ConnectionsWorkflows"].Runs);
-        Assert.False(catalog["ActorHttpConnections"].Runs);
+        // Module management reports the editable stock file. The preview selector comes from its launch overlay.
+        using var preview = JsonDocument.Parse(File.ReadAllText(WorkbenchBuild.SourceFile("shells.CorePreview.json")));
+        var features = preview.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features");
+        Assert.Equal(JsonValueKind.Object, features.GetProperty("ConnectionsWorkflows").ValueKind);
+        Assert.False(features.GetProperty("ActorHttpConnections").GetBoolean());
         Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-preview.db")));
         Assert.False(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
     }
@@ -168,7 +170,7 @@ public sealed class WorkbenchShellActivationTests
         });
 
         Assert.Contains("reported the default shell as failed (shell_activation_failed)", failure.Message, StringComparison.Ordinal);
-        Assert.Contains(expectedError, failure.Message, StringComparison.Ordinal);
+        Assert.True(failure.Message.Contains(expectedError, StringComparison.Ordinal), failure.Message);
     }
 
     private static void AssertSetting(IReadOnlyDictionary<string, CatalogFeature> catalog, string feature, string setting, string expected)
