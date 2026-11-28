@@ -4,7 +4,7 @@ A profile runs `Elsa.Foundation.Host.dll`. `packages.txt` selects the NuGet pack
 
 | Profile | Intended use |
 | --- | --- |
-| [Essentials](essentials/shells.json) | Design, publish and execute a workflow with a small activity set, local identity and SQLite. Actor Foundation serves the runtime API with HTTP, cron and timer triggers switched off. The shell keeps the recurring-schedule projection that publishing requires. |
+| [Essentials](essentials/shells.json) | Design, publish and execute a workflow with a small activity set and local identity. Choose [SQLite or PostgreSQL](#choose-an-essentials-database-preset). Actor Foundation serves the runtime API with HTTP, cron and timer triggers switched off. The shell keeps the recurring-schedule projection that publishing requires. |
 | [Curated Essentials](essentials-curated/README.md) | The published server Essentials composition, including the shared token store, package registry, standard Production overlays, and a writable add-on feed. |
 | [Elsa 3 import](elsa3-import/shells.json) | Analyze and import Elsa 3 reusable activity definitions through the migration API. Includes mapping, publishing, persistence and expressions used by the import path. Native and Flowchart consumers execute on the built-in Actor Foundation. The same image can [run already-converted Elsa 4 files](elsa3-import/migrated-files.md) from a read-only `migrated/` mount. |
 | [Archived Full](full-compatibility.md) | The published classic server composition for deployments that still need the previous runner. Use its exact image and matching deployment data. |
@@ -33,6 +33,26 @@ docker pull "$image"
 ```
 
 Use that image with the deployment settings below. The `elsa3-import` profile uses the same tag pattern. For existing Full deployments, use the [archived image pin](full-compatibility.md).
+
+## Choose an Essentials database preset
+
+Both presets run the same versioned Essentials image and use its baked `shells.json`. Use the preset files from the matching release build artifact.
+
+| Preset | Databases |
+| --- | --- |
+| [SQLite](essentials/presets/sqlite.env) | The default. Mount a writable volume at `/app/data` for `elsa.db` and `elsa-kernel.db`. |
+| [PostgreSQL](essentials/presets/postgresql.env) | Provision two databases reachable from the container. Use one for workflow definitions, publication, identity, and Runtime module tables, and a separate one for Actor Foundation execution state. Both can use the same PostgreSQL server. |
+
+From the extracted artifact, use `--env-file ./presets/sqlite.env` or `--env-file ./presets/postgresql.env` in the [deployment command](#configure-a-deployment). Place it **before** `--env-file ./elsa.env` and omit the `shells.json` mount to use the baked feature list.
+
+For PostgreSQL, supply these two keys in `elsa.env` in addition to the usual deployment settings:
+
+| Setting | Value |
+| --- | --- |
+| `ConnectionStrings__Elsa` | Connection string for the module database. |
+| `CShells__Shells__default__Features__WorkflowsRuntimeKernelOptionalHttpHosting__PostgresConnectionString` | Connection string for the dedicated Actor Foundation database. |
+
+Use your deployment's secret management for the connection strings. Prepare the EF module schemas under the same provider and connection settings if your deployment uses the `Validate` migration policy. See [host feed updates and migrations](../../docs/host-feeds/updating-packages.md). Keep the same preset across container replacements. Moving existing SQLite data to PostgreSQL requires a separate data migration.
 
 ## Change only the shell defaults
 
@@ -134,7 +154,7 @@ the import profile.
 
 ## Build in GitHub Actions
 
-Use **build_profiles** on a manual **Docker Images** dispatch to build only the profile builder and profiles. The workflow publishes a run-specific Foundation base tag for the build. That mode uses release-specific Foundation tags. It generates one lock set per profile for the native Linux AMD64 and ARM64 builds. Each image runs the profile smoke with networking disabled and an empty Nuplane cache before export. Essentials also runs with mounted shells that enable HTTP and scheduling separately.
+Use **build_profiles** on a manual **Docker Images** dispatch to build only the profile builder and profiles. The workflow publishes a run-specific Foundation base tag for the build. That mode uses release-specific Foundation tags. It generates one lock set per profile for the native Linux AMD64 and ARM64 builds. Each image runs the profile smoke with networking disabled and an empty Nuplane cache before export. Essentials also runs with mounted shells that enable HTTP and scheduling separately. Both database presets are tested against the same Essentials image ID in Production over HTTPS, using an isolated Docker network for PostgreSQL. With scheduling enabled, each preset must resume a suspended workflow after restart.
 
 Artifacts are retained for seven days. Download the artifact for your architecture and run `docker load -i image.tar.gz` to import the tested runtime image. The profile files and both locks are the build context for replay. To replay using the artifact references, load the native builder artifact's `image.tar.gz` too. Use the `builderImage`, `foundationImage` and `platform` values in the profile artifact's `build.json` as the `PROFILE_BUILDER_IMAGE` and `FOUNDATION_IMAGE` build arguments and the `--platform` option.
 
