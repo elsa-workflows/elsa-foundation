@@ -235,7 +235,7 @@ public sealed class HttpSemanticReservationTests
         {
             IServiceCollection services = new ServiceCollection(); services.AddWorkflowRuntime(); services.AddWorkflowStimulusRouter();
             // Select the owning feature's actual policy contribution; this component fixture installs no HTTP listener.
-            IServiceCollection source = new ServiceCollection(); new WorkflowsRuntimeHttpFeature().ConfigureServices(source);
+            IServiceCollection source = new ServiceCollection(); new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(source);
             services.Add(Assert.Single(source, descriptor => descriptor.ServiceType == typeof(IIngressReservationPolicy)));
             services.RemoveAll<IWorkflowTriggerIndexer>(); services.AddScoped<IWorkflowTriggerIndexer, Indexer>();
             provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

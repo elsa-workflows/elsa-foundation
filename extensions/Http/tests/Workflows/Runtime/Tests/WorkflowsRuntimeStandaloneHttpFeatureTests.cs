@@ -1,10 +1,10 @@
 using CShells.Features;
+using Elsa.Http.Core.Contracts;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Tasks;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Reflection;
@@ -12,35 +12,19 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Http.Tests;
 
-/// <summary>
-/// Feature-composition coverage for <see cref="WorkflowsRuntimeHttpFeature"/>. The regression under test (C1): the
-/// three handler-type settings defaulted to unqualified <c>typeof(X).FullName</c> and were resolved via
-/// <c>Type.GetType</c>, which only searches Elsa.Primitives + corelib — so <c>ConfigureServices</c> threw with the
-/// DEFAULT settings in any real composition. The fix uses assembly-qualified defaults (and a loaded-assembly
-/// fallback in <c>GetLoadedType</c>), so the defaults compose. This test locks that in by building a provider from
-/// the default settings and resolving all three reflectively-registered services.
-/// </summary>
-public sealed class WorkflowsRuntimeHttpFeatureTests
+public sealed class WorkflowsRuntimeStandaloneHttpFeatureTests
 {
-    // Kept beside the composition test: lifetime, the route-table synchronizer is one singleton and the index validator scoped.
     [Fact]
     public void ConfigureServices_RegistersTheRouteTablePopulators()
     {
         var services = new ServiceCollection();
 
-        new WorkflowsRuntimeHttpFeature().ConfigureServices(services);
+        new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(services);
 
-        // The startup task + trigger-index observer are what fill the route table from the durable index; the
-        // route resolver is what they read through. ActivitiesHttp depends on this feature precisely so these
-        // populators always compose with the endpoint activity (B2). The index validator is the publish-time
-        // (template, method) uniqueness gate (issue #592 item 2).
         Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask));
-        Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexObserver));
-        Assert.Contains(services, d =>
-            d.ServiceType == typeof(IWorkflowTriggerIndexValidator) &&
-            d.Lifetime == ServiceLifetime.Scoped);
-        // The bookmark lifecycle observer keeps the table fresh as mid-flow endpoints suspend/resume.
-        Assert.Contains(services, d => d.ServiceType == typeof(IBookmarkLifecycleObserver));
+        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexObserver));
+        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexValidator));
+        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IBookmarkLifecycleObserver));
         Assert.Contains(services, d => d.ServiceType == typeof(IHttpEndpointRoutesResolver));
         // The single serialization point every refresh routes through — registered once as a singleton (review fix).
         var synchronizer = Assert.Single(services, d => d.ServiceType == typeof(IHttpEndpointRouteTableSynchronizer));
@@ -55,7 +39,7 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
         // another node 404s here until a restart.
         var services = new ServiceCollection();
 
-        new WorkflowsRuntimeHttpFeature
+        new WorkflowsRuntimeStandaloneHttpFeature
         {
             RouteTableConvergenceIntervalSeconds = 0.5,
             RouteTableConvergenceMaxBackoffSeconds = 30
@@ -73,14 +57,18 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
     [Fact]
     public void ConfigureServices_DefaultsTheConvergenceBoundToFiveSeconds()
     {
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().AddLogging();
 
-        new WorkflowsRuntimeHttpFeature().ConfigureServices(services);
+        new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<HttpEndpointRouteTableConvergenceOptions>>().Value;
         Assert.Equal(TimeSpan.FromSeconds(5), options.Interval);
         Assert.Equal(TimeSpan.FromMinutes(1), options.MaxBackoffInterval);
+        using var scope = provider.CreateScope();
+        Assert.IsType<Services.HttpEndpointFaultHandler>(scope.ServiceProvider.GetRequiredService<IHttpEndpointFaultHandler>());
+        Assert.IsType<Services.AuthenticationBasedHttpEndpointAuthorizationHandler>(
+            scope.ServiceProvider.GetRequiredService<IHttpEndpointAuthorizationHandler>());
     }
 
     [Theory]
@@ -91,7 +79,7 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
     [InlineData(5, double.PositiveInfinity)]
     public void ConfigureServices_RefusesANonPositiveConvergenceSetting(double intervalSeconds, double maxBackoffSeconds)
     {
-        var feature = new WorkflowsRuntimeHttpFeature
+        var feature = new WorkflowsRuntimeStandaloneHttpFeature
         {
             RouteTableConvergenceIntervalSeconds = intervalSeconds,
             RouteTableConvergenceMaxBackoffSeconds = maxBackoffSeconds
@@ -103,7 +91,7 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
     [Fact]
     public void DependsOn_IncludesTasks_SoTheStartupTaskAndTheConvergencePumpRun()
     {
-        var attribute = typeof(WorkflowsRuntimeHttpFeature).GetCustomAttribute<ShellFeatureAttribute>()!;
+        var attribute = typeof(WorkflowsRuntimeStandaloneHttpFeature).GetCustomAttribute<ShellFeatureAttribute>()!;
 
         Assert.Contains("Tasks", attribute.DependsOn.Cast<object>().Select(d => d.ToString()));
     }

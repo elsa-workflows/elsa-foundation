@@ -10,7 +10,7 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 
 public sealed class PersistenceConfigurationAdapterTests
 {
-    private const string Feature = "WorkflowsRuntimeEntityFrameworkCore";
+    private const string Feature = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
     private static readonly EnrolledPersistenceParticipant Participant =
         new(Feature, ["Workflows.Runtime"], "RuntimeDbContext", true, false);
 
@@ -48,9 +48,9 @@ public sealed class PersistenceConfigurationAdapterTests
     {
         var featureJson = shape switch
         {
-            "object" => "\"Features\": { \"WorkflowsRuntimeEntityFrameworkCore\": { \"Provider\": null } }",
-            "array-direct" => "\"Features\": [ { \"Name\": \"WorkflowsRuntimeEntityFrameworkCore\", \"Provider\": null } ]",
-            _ => "\"Features\": [ { \"Name\": \"WorkflowsRuntimeEntityFrameworkCore\", \"Settings\": { \"Provider\": null } } ]"
+            "object" => "\"Features\": { \"WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence\": { \"Provider\": null } }",
+            "array-direct" => "\"Features\": [ { \"Name\": \"WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence\", \"Provider\": null } ]",
+            _ => "\"Features\": [ { \"Name\": \"WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence\", \"Settings\": { \"Provider\": null } } ]"
         };
         var configuration = Json($$"""
             { "Elsa": { "Persistence": { "Resources": { "primary": { "Provider": "PostgreSql", "ConnectionName": "Shared" } }, "DefaultResource": "primary" } },
@@ -86,7 +86,7 @@ public sealed class PersistenceConfigurationAdapterTests
     {
         var configuration = Json("""
             { "Elsa": { "Persistence": { "Resources": { "primary": { "Provider": "PostgreSql", "ConnectionName": "Shared" } }, "DefaultResource": "primary" } },
-              "CShells": { "Shells": { "default": { "Features": { "WorkflowsRuntimeEntityFrameworkCore": { "ConnectionString": null } } } } } }
+              "CShells": { "Shells": { "default": { "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "ConnectionString": null } } } } } }
             """);
         var context = Context(new Dictionary<string, string?> { ["Unrelated:Value"] = "keep" }, reset: true);
 
@@ -158,7 +158,7 @@ public sealed class PersistenceConfigurationAdapterTests
     {
         var configuration = Json("""
             { "Elsa": { "Persistence": { "Resources": { "primary": { "Provider": "PostgreSql", "ConnectionName": "Shared" } }, "DefaultResource": "primary" } },
-              "CShells": { "Shells": { "default": { "Configuration": { "Elsa": { "Persistence": { "Bindings": { "WorkflowsRuntimeEntityFrameworkCore": { "Unexpected": "value" } } } } } } } } }
+              "CShells": { "Shells": { "default": { "Configuration": { "Elsa": { "Persistence": { "Bindings": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "Unexpected": "value" } } } } } } } } }
             """);
 
         var result = Resolve(Context(), configuration);

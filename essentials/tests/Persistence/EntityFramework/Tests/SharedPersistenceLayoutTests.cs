@@ -14,14 +14,8 @@ public sealed class SharedPersistenceLayoutTests
 {
     private static readonly (string Id, Type StartupType)[] SharedConsumers =
     [
-        ("WorkflowsRuntimeEntityFrameworkCore", typeof(RuntimeEntityFrameworkCoreFeature)),
-        ("WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence", typeof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature)),
-        ("WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence", typeof(RuntimeActivityExecutionEntityFrameworkCoreFeature)),
-        ("WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence", typeof(RuntimeOperationalStateEntityFrameworkCoreFeature)),
-        ("WorkflowsRuntimeAlterationEntityFrameworkCorePersistence", typeof(RuntimeWorkflowAlterationEntityFrameworkCoreFeature)),
-        ("WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", typeof(RuntimeWorkflowTestScopeEntityFrameworkCoreFeature)),
-        ("WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence", typeof(RuntimeBookmarksEntityFrameworkCoreFeature)),
         ("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", typeof(RuntimeArtifactsEntityFrameworkCoreFeature)),
+        ("WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", typeof(RuntimeWorkflowTestScopeEntityFrameworkCoreFeature)),
         ("WorkflowsDesignEntityFrameworkCore", typeof(WorkflowsDesignEntityFrameworkCoreFeature)),
         ("ActivitiesDesignEntityFrameworkCore", typeof(ActivitiesDesignEntityFrameworkCoreFeature)),
         ("WorkflowsPublishingEntityFrameworkCore", typeof(PublishingEntityFrameworkCoreFeature))
