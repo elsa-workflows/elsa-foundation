@@ -63,6 +63,41 @@ public sealed class MappingRefusalTests
     public void A_secret_read_is_refused() => AssertBinding(Refused(Reading(Secret("text", "api-key"))), "reader", "text");
 
     [Fact]
+    public void A_user_task_requires_the_hosts_task_wait_capability()
+    {
+        var task = Executable(Node("review", Kernel.Native.CreateUserTask.ActivityType,
+            [Literal("Actions", new[] { "Approve", "Reject" }), Literal("Title", "Review purchase")]));
+        var refused = Assert.Throws<NativeMappingRefusedException>(() => NativeExecutableMapper.Map(task));
+        AssertActivity(refused, "review");
+        Assert.Contains("Actor User Tasks", refused.Message, StringComparison.Ordinal);
+
+        var supported = KernelHostCapabilities.All with { UserTaskWaits = true };
+        Assert.Equal(typeof(Kernel.Native.CreateUserTask), NativeExecutableMapper.Map(task, supported).Nodes["review"].Type);
+    }
+
+    [Fact]
+    public void A_user_task_refuses_dynamic_actions_and_protected_task_values()
+    {
+        var supported = KernelHostCapabilities.All with { UserTaskWaits = true };
+        var actions = Literal("Actions", new[] { "Approve" });
+        var prefill = Request("Prefill", "Order");
+        var protectedPrefill = new RuntimeInputBinding(prefill.InputKey, prefill.TargetType,
+            new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true), prefill.Source,
+            workflowRequest: prefill.WorkflowRequest);
+
+        AssertExactRefusal("Actions", Request("Actions", "Actions"));
+        AssertExactRefusal("Title", actions, Secret("Title", "task-title"));
+        AssertExactRefusal("Prefill", actions, protectedPrefill);
+
+        void AssertExactRefusal(string input, params RuntimeInputBinding[] bindings)
+        {
+            var workflow = Executable(Node("review", Kernel.Native.CreateUserTask.ActivityType, bindings));
+            var refused = Assert.Throws<NativeMappingRefusedException>(() => NativeExecutableMapper.Map(workflow, supported));
+            AssertBinding(refused, "review", input);
+        }
+    }
+
+    [Fact]
     public void A_member_segment_with_a_dot_is_refused() =>
         AssertBinding(Refused(Reading(VariableMember("text", "v-order", "address", "zip.code")), Variable("v-order", "order")), "reader", "text");
 
