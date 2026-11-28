@@ -21,3 +21,19 @@ Current suites keep Sequence authoring, start-entry and child-result contracts,
 the typed Delay contract, authored Timer and Cron metadata and Test Run drivers,
 and prepared standalone schedule registration. Actor Foundation's Native and
 Kernel Host suites exercise supported workflow execution and restart behavior.
+
+## Control-flow execution and JavaScript input hydration
+
+From the same pinned checkout, run the control-flow module suite for the earlier
+activity scheduler and the focused RunJavaScript test for classic input hydration.
+
+```sh
+dotnet test essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+dotnet test essentials/tests/Activities/Scripting/Tests/Elsa.Activities.Scripting.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true --filter FullyQualifiedName~RunJavaScriptPreparationTests
+```
+
+Current source keeps the control-flow authoring and executable structure contracts,
+including the compiled and remapped loop bytes. It also keeps the typed RunJavaScript
+activity and real script evaluator assertions using the shared Activity execution context.
