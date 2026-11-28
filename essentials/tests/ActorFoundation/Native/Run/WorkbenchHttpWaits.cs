@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.KernelHost;
-using Npgsql;
 
 namespace Elsa.Workbench.Qualification;
 
@@ -76,7 +75,8 @@ internal static partial class WorkbenchPostgresPreview
             await host.StopAsync();
             if (stockExecution is not null)
             {
-                if (sqlite is null) await CheckStockPostgresAsync(stockExecution);
+                if (sqlite is null)
+                    await WorkbenchProcess.CheckStockPostgresStoresAsync(stockExecution.PublishedActor, stockExecution.TestActor, token);
                 else await CheckStockSqliteRestartAsync(stockExecution, sqlite);
             }
 
@@ -152,22 +152,6 @@ internal static partial class WorkbenchPostgresPreview
                 Require(rerun != execution.PublishedActor, "stock SQLite serves the restored publication after restart.");
                 await ExpectCompletedRunAsync(session, rerun, "PublishedRun");
                 await restarted.StopAsync();
-            }
-
-            async Task CheckStockPostgresAsync(StockWorkflowExecution execution)
-            {
-                await using var actor = new NpgsqlConnection(WorkbenchProcess.StockPostgresDatabase("KERNEL_WORKBENCH_ACTOR_POSTGRES").ConnectionString);
-                await actor.OpenAsync(token);
-                await using var roots = new NpgsqlCommand("""SELECT count(*) FROM "Instances" WHERE "Id" = ANY (@actors)""", actor);
-                roots.Parameters.AddWithValue("actors", new[] { execution.PublishedActor, execution.TestActor });
-                Require(await roots.ExecuteScalarAsync(token) is 2L,
-                    "the configured PostgreSQL Actor database contains both exact hosted workflow executions.");
-
-                await using var runtime = new NpgsqlConnection(WorkbenchProcess.StockPostgresDatabase("KERNEL_WORKBENCH_RUNTIME_POSTGRES").ConnectionString);
-                await runtime.OpenAsync(token);
-                await using var migrations = new NpgsqlCommand("""SELECT EXISTS (SELECT 1 FROM "__EFMigrationsHistory_ElsaRuntime")""", runtime);
-                Require(await migrations.ExecuteScalarAsync(token) is true,
-                    "the independently configured PostgreSQL Runtime database has the applied Runtime EF migrations.");
             }
 
             async Task<string> ExecuteAsync(HttpClient session, string artifact, string sourceReferenceId)

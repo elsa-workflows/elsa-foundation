@@ -780,7 +780,27 @@ internal static partial class WorkbenchPostgresPreview
             return Start(executable, "", enabled: false, profile: null, releaseFile: null, retainedWorkspace: workspace, stockSettings: settings);
         }
 
-        internal static NpgsqlConnectionStringBuilder StockPostgresDatabase(string key)
+        internal static async Task CheckStockPostgresStoresAsync(string publishedActor, string testActor, CancellationToken token)
+        {
+            var actorDatabase = StockPostgresDatabase("KERNEL_WORKBENCH_ACTOR_POSTGRES");
+            var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(actorDatabase.ConnectionString).Options;
+            var published = EmbeddedTenant.Bind("default");
+            var test = EmbeddedTenant.Isolate(published, "workflow-test-run");
+            var store = new EfStore(() => PostgresPreviewHosting.CreateShippedContext(options, WorkflowActorType.ActorType,
+                protectsStarts: true, publisherScope: published), postgres: true);
+            var reads = await store.OpenPreviewRootReadsAsync(cancellationToken: token);
+            Require(await reads.GetAsync(published, new(publishedActor), token) is { Header.Status: Contract.ActorStatus.Finished } &&
+                    await reads.GetAsync(test, new(testActor), token) is { Header.Status: Contract.ActorStatus.Finished },
+                "the configured PostgreSQL Actor database contains both exact completed hosted workflow executions.");
+
+            await using var runtime = new NpgsqlConnection(StockPostgresDatabase("KERNEL_WORKBENCH_RUNTIME_POSTGRES").ConnectionString);
+            await runtime.OpenAsync(token);
+            await using var migrations = new NpgsqlCommand("""SELECT EXISTS (SELECT 1 FROM "__EFMigrationsHistory_ElsaRuntime")""", runtime);
+            Require(await migrations.ExecuteScalarAsync(token) is true,
+                "the independently configured PostgreSQL Runtime database has the applied Runtime EF migrations.");
+        }
+
+        private static NpgsqlConnectionStringBuilder StockPostgresDatabase(string key)
         {
             var connection = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(key) ?? "");
             if (string.IsNullOrWhiteSpace(connection.Host) || string.IsNullOrWhiteSpace(connection.Database))
