@@ -16184,11 +16184,6 @@
           "path": "essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj"
         },
         {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests",
-          "path": "essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"
-        },
-        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
@@ -16207,6 +16202,21 @@
           "type": "external",
           "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
           "version": "10.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.MsSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.MySql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.PostgreSql",
+          "version": "4.15.0"
         },
         {
           "type": "external",
@@ -16249,13 +16259,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Resumption",
-          "path": "essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
+          "id": "Elsa.Workflows.Runtime.Publications",
+          "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
         },
         {
           "type": "internal",
