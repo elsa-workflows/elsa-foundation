@@ -14,6 +14,7 @@ import type {
   ActivityTypeReference
 } from "./activityDefinitionTypes";
 import { copyTextToClipboard } from "./workflow-editor/editorHelpers";
+import { notifySuccess, useNotificationGuard } from "./workflow-editor/notifications";
 import "./clrActivityDefinitionOverview.css";
 
 export type ClrOverviewPort = {
@@ -30,20 +31,22 @@ export function ClrActivityDefinitionOverview({ context, version, contract, capa
   capabilities?: ActivityAuthoringCapabilities;
   onOpenPort(port: ClrOverviewPort): void;
 }) {
-  const [copyFeedback, setCopyFeedback] = useState("");
+  const [copyFailed, setCopyFailed] = useState(false);
+  const captureNotificationGuard = useNotificationGuard(context);
   const { definition } = version;
   const definitionDescription = definition.description?.trim();
-  const catalog = useWorkflowActivities(context, !definitionDescription);
+  const catalog = useWorkflowActivities(context, { enabled: !definitionDescription, availability: "All" });
   const catalogEntry = catalog.data?.activities.find(item => item.activityVersionId === version.versionId);
   const description = definitionDescription || catalogEntry?.description?.trim() || catalogEntry?.paletteHints?.description?.trim();
   const activityName = definition.displayName.trim() || definition.activityTypeKey;
   const copySignature = async () => {
-    setCopyFeedback("");
+    setCopyFailed(false);
+    const canNotify = captureNotificationGuard();
     try {
       await copyTextToClipboard(formatSignature(definition.activityTypeKey, contract));
-      setCopyFeedback("Signature copied.");
+      if (canNotify()) notifySuccess("Signature copied.");
     } catch {
-      setCopyFeedback("Could not copy the signature.");
+      if (canNotify()) setCopyFailed(true);
     }
   };
   const renderValue = (port: ValuePort) => {
@@ -57,9 +60,12 @@ export function ClrActivityDefinitionOverview({ context, version, contract, capa
         {description ? <p>{description}</p> : null}
         <p className="ad-clr-source">Implemented in .NET · Read-only in Studio</p>
       </div>
-      <StudioButton type="button" variant="default" size="sm" onClick={() => void copySignature()}>
-        <Copy size={14} aria-hidden="true" /> Copy signature
-      </StudioButton>
+      <div>
+        <StudioButton type="button" variant="default" size="sm" onClick={() => void copySignature()}>
+          <Copy size={14} aria-hidden="true" /> Copy signature
+        </StudioButton>
+        <p className="ad-clr-copy-feedback" role="status">{copyFailed ? "Could not copy the signature." : null}</p>
+      </div>
     </header>
     <div className="ad-clr-schematic" role="group" aria-label="Activity public interface">
       <PortGroup title="Inputs" kind="input" members={contract.inputs} renderAnnotation={renderValue} onOpenPort={onOpenPort} />
@@ -72,7 +78,6 @@ export function ClrActivityDefinitionOverview({ context, version, contract, capa
         <PortGroup title="Outcomes" kind="outcome" members={contract.outcomes} renderAnnotation={outcome => outcome.isEmitted ? null : "Not emitted"} onOpenPort={onOpenPort} />
       </div>
     </div>
-    <p className="ad-clr-copy-feedback" role="status">{copyFeedback}</p>
   </div>;
 }
 
@@ -106,7 +111,9 @@ function formatType(type: ActivityTypeReference, alias: string, nullable: boolea
 }
 
 function formatSignature(activityTypeKey: string, contract: ActivityContract) {
-  const value = (port: ValuePort) => `${port.name || port.referenceKey}: ${formatType(port.type, port.type.alias, port.isNullable)}${port.isRequired ? " (required)" : ""}`;
+  const memberName = (port: ValuePort | ActivityOutcomeContract) =>
+    port.name && port.name !== port.referenceKey ? `${port.name} [key ${port.referenceKey}]` : port.referenceKey;
+  const value = (port: ValuePort) => `${memberName(port)}: ${formatType(port.type, port.type.alias, port.isNullable)}${port.isRequired ? " (required)" : ""}`;
   const input = (port: ActivityInputContract) => {
     if (!port.default) return value(port);
     const { syntax, value: defaultValue } = port.default;
@@ -120,6 +127,6 @@ function formatSignature(activityTypeKey: string, contract: ActivityContract) {
     "  outputs",
     ...contract.outputs.map(port => `    ${value(port)}`),
     "  outcomes",
-    ...contract.outcomes.map(port => `    ${port.name || port.referenceKey}${port.isEmitted ? "" : " (not emitted)"}`)
+    ...contract.outcomes.map(port => `    ${memberName(port)}${port.isEmitted ? "" : " (not emitted)"}`)
   ].join("\n");
 }

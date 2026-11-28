@@ -13,7 +13,7 @@
   margin-block-end: 1rem;
 }
 
-.ad-clr-overview-header > div {
+.ad-clr-overview-header > div:first-child {
   flex: 1 1 16rem;
   min-inline-size: 0;
   overflow-wrap: anywhere;

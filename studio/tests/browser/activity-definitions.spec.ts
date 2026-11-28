@@ -51,8 +51,12 @@ for (const { theme, width, useCatalogDescription } of [
     await page.setViewportSize({ width, height: 900 });
     await page.addInitScript(() => {
       Object.defineProperty(navigator, "clipboard", {
-        value: { writeText: async (text: string) => { document.body.dataset.copiedSignature = text; } }
+        value: { writeText: async (text: string) => {
+          if (document.body.dataset.blockClipboard) throw new Error("Clipboard unavailable");
+          document.body.dataset.copiedSignature = text;
+        } }
       });
+      Object.defineProperty(document, "execCommand", { value: () => false });
     });
     const description = "Sends an outbound HTTP request and captures the response.";
     const providerKey = "elsa.clr-activity";
@@ -83,12 +87,15 @@ for (const { theme, width, useCatalogDescription } of [
         provider: { providerKey, schemaVersion: "1", manifestFingerprint: "sha256:clr" }
       }
     }));
-    await page.route("**/design/activities/catalog", route => route.fulfill({ json: {
-      activities: [
-        { ...catalogActivity("newer-clr-version", "Send Http Request"), paletteHints: { description: "A different version." } },
-        { ...catalogActivity("clr-version", "Send Http Request"), paletteHints: { description } }
-      ]
-    } }));
+    await page.route(/\/design\/activities\/catalog(?:\?|$)/, route => {
+      const includesUnavailable = new URL(route.request().url()).searchParams.get("availability") === "All";
+      return route.fulfill({ json: {
+        activities: [
+          { ...catalogActivity("newer-clr-version", "Send Http Request"), paletteHints: { description: "A different version." } },
+          ...(includesUnavailable ? [{ ...catalogActivity("clr-version", "Send Http Request"), available: false, paletteHints: { description } }] : [])
+        ]
+      } });
+    });
     await page.goto(`/?mode=activity-definitions&definition=activity-def-browser&section=editor&version=clr-version&theme=${theme}`);
     const overview = page.getByRole("tab", { name: "Overview", exact: true });
     await expect(overview).toHaveAttribute("aria-selected", "true");
@@ -104,18 +111,29 @@ for (const { theme, width, useCatalogDescription } of [
     await expect(panel.getByRole("button", { name: "ResponseBody List<Text>?" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await panel.screenshot({ path: testInfo.outputPath(`clr-overview-${theme}-${width}.png`) });
-    await panel.getByRole("button", { name: "Copy signature" }).click();
-    await expect(panel.getByRole("status")).toHaveText("Signature copied.");
+    const copy = panel.getByRole("button", { name: "Copy signature" });
+    await page.locator("body").evaluate(body => { body.dataset.blockClipboard = "true"; });
+    await copy.click();
+    const copyFailure = panel.getByRole("status");
+    await expect(copyFailure).toHaveText("Could not copy the signature.");
+    await expect(copyFailure).toBeInViewport({ ratio: 1 });
+    await page.locator("body").evaluate(body => { delete body.dataset.blockClipboard; });
+    await copy.click();
+    await expect(panel.getByText("Could not copy the signature.", { exact: true })).toHaveCount(0);
+    const copyConfirmation = page.getByRole("group", { name: "Signature copied.", exact: true });
+    await expect(copyConfirmation).toBeVisible();
+    await copyConfirmation.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(panel.getByText("Signature copied.", { exact: true })).toHaveCount(0);
     await expect(page.locator("body")).toHaveAttribute("data-copied-signature", [
       "activity Elsa.Activities.Http.Activities.SendHttpRequest",
       "  inputs",
-      "    Url: String?",
-      '    Method: String (required) = "GET"',
+      "    Url [key url]: String?",
+      '    Method [key method]: String (required) = "GET"',
       "  outputs",
-      "    StatusCode: Int32?",
-      "    ResponseBody: List<String>?",
+      "    StatusCode [key status]: Int32?",
+      "    ResponseBody [key body]: List<String>?",
       "  outcomes",
-      "    Timeout"
+      "    Timeout [key timeout]"
     ].join("\n"));
 
     for (const { name, tab, key } of [
