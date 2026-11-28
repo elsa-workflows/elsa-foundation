@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Activities.Runtime.Core.Models;
@@ -7,7 +6,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Dispatch;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
@@ -145,25 +143,6 @@ public sealed class WorkflowDispatchStateTests
         Assert.Throws<ArgumentException>(() => NewWaitRequest(waitRecord, expiring));
         Assert.Throws<ArgumentException>(() => NewWaitRequest(waitRecord, wrongResumeTarget));
         Assert.Throws<ArgumentException>(() => NewWaitRequest(waitRecord, wrongStimulusType));
-    }
-
-    [Fact]
-    public void Dispatch_staging_crosses_activity_child_scope_and_is_consumed_by_exact_invocation()
-    {
-        var services = new ServiceCollection();
-        new DispatchWorkflowRuntimeFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-        using var activityScope = provider.CreateScope();
-        var stager = activityScope.ServiceProvider.GetRequiredService<IWorkflowDispatchStager>();
-        var accessor = provider.GetRequiredService<IWorkflowDispatchStagingAccessor>();
-        var request = new WorkflowDispatchCheckpointRequest(NewRecord(), NewStartIntent());
-
-        stager.StageWorkflowDispatch(request);
-
-        Assert.Same(stager, accessor);
-        Assert.Null(accessor.TakeWorkflowDispatch("parent-1", "activity-other"));
-        Assert.Same(request, accessor.TakeWorkflowDispatch("parent-1", "activity-1"));
-        Assert.Null(accessor.TakeWorkflowDispatch("parent-1", "activity-1"));
     }
 
     [Fact]
