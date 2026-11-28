@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Connections.Core.Contracts;
@@ -113,15 +114,21 @@ internal sealed class BoundHttpConnection(
                 throw new InvalidOperationException("The HTTP authenticator changed the bound request destination.");
             HttpConnectionCredentials.EnsureHostAllowed(request, resolved);
         }
-        RegisterAppliedValues(request, secretMask, executionId, resolved.Name);
+        RegisterAppliedValues(request, secretMask, executionId, resolved.Name, maskAuthorizationParameter: actorJob);
     }
 
-    private static void RegisterAppliedValues(HttpRequestMessage request, IRuntimeSecretMask mask, string activityExecutionId, string connectionName)
+    private static void RegisterAppliedValues(HttpRequestMessage request, IRuntimeSecretMask mask, string activityExecutionId,
+        string connectionName, bool maskAuthorizationParameter)
     {
         if (request.Headers.TryGetValues("Authorization", out var authorization))
         {
             foreach (var value in authorization)
+            {
                 mask.Register(activityExecutionId, $"{connectionName}:authorization", value);
+                if (maskAuthorizationParameter && AuthenticationHeaderValue.TryParse(value, out var header) &&
+                    header.Parameter is { Length: > 0 } parameter)
+                    mask.Register(activityExecutionId, $"{connectionName}:authorization", parameter);
+            }
         }
 
         if (request.RequestUri?.Query is { Length: > 1 } query)

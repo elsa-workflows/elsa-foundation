@@ -79,7 +79,8 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             return Fault("http.request.invalid", $"The expected status codes '{ExpectedStatusCodes?.ToJsonString()}' are not status codes.");
         using var request = Request(context, out var refused);
         if (request is null) return Fault("http.request.invalid", refused!);
-        if (Connection is { Length: > 0 } connection && context.Http.ApplyConnection is null)
+        var usesScopedConnection = Connection is { Length: > 0 } && context.Http.ApplyConnection is not null;
+        if (Connection is { Length: > 0 } connection && !usesScopedConnection)
         {
             if (context.Http.Connection is not { } resolve) return Fault("http.connection.unavailable", $"The host resolves no Connection, so '{connection}' cannot be used.");
             foreach (var (name, value) in await resolve(connection, context.CancellationToken))
@@ -104,7 +105,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
                     : "The bound HTTP client followed a redirect. Use a client that keeps redirects disabled.");
             var headers = ResponseHeaders(response, mask);
             var status = (int)response.StatusCode;
-            var (body, tooLarge) = await ReadAsync(response, context.Http.MaxResponseBytes, deadline.Token);
+            var (body, tooLarge) = await ReadAsync(response, context.Http.MaxResponseBytes, mask is not null, deadline.Token);
             return tooLarge
                 ? Complete(new HttpResponseResult(status, headers, null), TooLargeOutcome)
                 : Complete(new HttpResponseResult(status, headers, mask is null ? body : MaskBody(body, mask)), OutcomeOf(status, expected));
@@ -121,6 +122,11 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         {
             return Complete(null, FailedOutcome);     // a refused connection, a reset mid-body, a broken encoding
         }
+        catch (Exception) when (usesScopedConnection)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            return Fault("http.connection.response.invalid", "The job could not read a safe bound HTTP response.");
+        }
     }
 
     private async ValueTask<INativeHttpConnectionMask?> ApplyConnectionAsync(HttpRequestMessage request, ActivityContext context,
@@ -129,6 +135,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         if (Connection is not { Length: > 0 } name || context.Http?.ApplyConnection is not { } apply)
             return null;
 
+        var selectedKey = request.Headers.NonValidated[IdempotencyKeyHeader].ToArray();
         INativeHttpConnectionMask? mask;
         try
         {
@@ -144,7 +151,15 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             throw new BoundConnectionUnavailableException();
         }
 
-        return mask ?? throw new BoundConnectionUnavailableException();
+        if (mask is null)
+            throw new BoundConnectionUnavailableException();
+        if (!request.Headers.NonValidated.TryGetValues(IdempotencyKeyHeader, out var appliedKey) ||
+            !selectedKey.SequenceEqual(appliedKey, StringComparer.Ordinal))
+        {
+            mask.Dispose();
+            throw new BoundConnectionUnavailableException();
+        }
+        return mask;
     }
 
     private sealed class BoundConnectionUnavailableException : Exception;
@@ -285,7 +300,8 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
     }
 
     // The body up to the host's cap: past it, nothing is kept. JSON is parsed when the content type says so; else text.
-    private static async Task<(JsonNode? Body, bool TooLarge)> ReadAsync(HttpResponseMessage response, int maxBytes, CancellationToken cancellationToken)
+    private static async Task<(JsonNode? Body, bool TooLarge)> ReadAsync(HttpResponseMessage response, int maxBytes,
+        bool strictJson, CancellationToken cancellationToken)
     {
         if (response.Content.Headers.ContentLength is { } length && length > maxBytes) return (null, true);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -304,7 +320,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             catch (Exception unknown) when (unknown is ArgumentException or NotSupportedException) { }     // a charset this host lacks reads as UTF-8
         var text = encoding.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
         if (response.Content.Headers.ContentType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
-            try { return (JsonNode.Parse(text), false); }
+            try { return (JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { AllowDuplicateProperties = !strictJson }), false); }
             catch (JsonException) { }
         return (JsonValue.Create(text), false);
     }
