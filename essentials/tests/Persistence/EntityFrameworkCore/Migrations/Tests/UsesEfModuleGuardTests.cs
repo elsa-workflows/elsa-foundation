@@ -21,13 +21,14 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 public sealed class UsesEfModuleGuardTests
 {
     /// <summary>
-    /// Every assembly that can carry a mapped feature: the module assemblies and the two projects
-    /// that hold a feature for a module declared elsewhere — the cross-project
-    /// <see cref="AspNetCoreIdentityEntityFrameworkCoreFeature"/> and the two-module dashboard features.
+    /// Every assembly that can carry a mapped feature: the schema assemblies and the host
+    /// feature assemblies for Runtime, ASP.NET Core Identity and Dashboard.
     /// </summary>
     private static readonly Assembly[] FeatureAssemblies =
     [
         .. ModuleContextCatalog.Modules,
+        typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
+        typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly
     ];

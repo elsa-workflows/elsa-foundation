@@ -283,15 +283,21 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
         services.TryAddScoped<IBackgroundActivityWorkStore, InMemoryBackgroundActivityWorkStore>();
         services.TryAddSingleton<InMemoryWorkflowTestScopeStore>();
+        var testScopeDefaultsStart = services.Count;
         services.TryAddSingleton<IWorkflowTestScopeStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
-        services.AddWorkflowTestRunTransport();
-        services.TryAddScoped<ITestRunRootCanceller, TestRunRootCanceller>();
         services.TryAddSingleton<IWorkflowTestScopeAdmissionStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
         if (WorkflowTestScopeStoreBackend.Find(services)?.Name != WorkflowTestScopeStoreBackend.EntityFramework)
             services.TryAddSingleton<IWorkflowTestScopeCleanupStore>(serviceProvider =>
                 serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
+        if (services.Count - testScopeDefaultsStart == 3)
+        {
+            services.Replace(ServiceDescriptor.Singleton(new RuntimeDefaultTestScopeRegistrations(
+                services[testScopeDefaultsStart], services[testScopeDefaultsStart + 1], services[testScopeDefaultsStart + 2])));
+        }
+        services.AddWorkflowTestRunTransport();
+        services.TryAddScoped<ITestRunRootCanceller, TestRunRootCanceller>();
         services.TryAddSingleton<IWorkflowDispatchStore, InMemoryWorkflowDispatchStore>();
         services.TryAddSingleton<IWorkflowDispatchQueryStore>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchQueryStore ??

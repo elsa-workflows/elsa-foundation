@@ -320,6 +320,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(StandaloneTriggersApiFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeDbContext).Assembly,
+            typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.ActivitiesBpmnFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature).Assembly,
 

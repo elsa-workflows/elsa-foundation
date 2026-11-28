@@ -1,7 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -53,8 +52,7 @@ internal static class RuntimePublicationEntityFrameworkCoreRegistration
         if (switches.Length == 1 && switches[0].ImplementationType == typeof(EfWorkflowActivationSwitch))
             return;
         if (switches.Any(descriptor => descriptor.IsKeyedService ||
-            descriptor.ImplementationType != typeof(InMemoryWorkflowActivationSwitch) &&
-            descriptor.ImplementationType != typeof(PublicationActivationSwitch)))
+            !typeof(IDefaultWorkflowActivationSwitch).IsAssignableFrom(descriptor.ImplementationType)))
             throw new InvalidOperationException("An explicit workflow activation switch registration is already present; Runtime EF persistence refuses to replace it implicitly.");
 
         foreach (var descriptor in switches)
