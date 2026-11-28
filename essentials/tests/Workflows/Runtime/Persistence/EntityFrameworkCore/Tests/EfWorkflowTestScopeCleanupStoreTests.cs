@@ -47,7 +47,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var source = Scope("cleanup-token-source");
         var target = Scope("cleanup-token-target");
@@ -75,7 +75,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-cancelled");
         await scopes.CreateAsync(scope, Now);
@@ -98,7 +98,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-tampered-scope");
         await scopes.CreateAsync(scope, Now);
@@ -123,7 +123,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-tampered-dispatch");
         await scopes.CreateAsync(scope, Now);
@@ -149,8 +149,8 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
-        var outbox = new EfRuntimePostCommitOutboxStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
+        var outbox = new EfRuntimePostCommitOutboxStorage(context, access, TimeProvider.System, null, null, preparedStandaloneOnly: false);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-tampered-outbox");
         await scopes.CreateAsync(scope, Now);
@@ -193,7 +193,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-basic");
         await scopes.CreateAsync(scope, Now);
@@ -225,7 +225,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         var outboxId = new WorkflowDispatchIdentity(
             started.ParentWorkflowExecutionId,
             started.ParentActivityExecutionId).ChildCancelOutboxItemId($"test-scope:{scope.ScopeId}");
-        var outbox = new EfRuntimePostCommitOutboxStore(context, access);
+        var outbox = new EfRuntimePostCommitOutboxStorage(context, access, TimeProvider.System, null, null, preparedStandaloneOnly: false);
         var item = await outbox.FindAsync(outboxId);
         Assert.NotNull(item);
         Assert.Equal(RuntimePostCommitOutboxStatus.Pending, item!.Status);
@@ -252,7 +252,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         var access = new FixedAccessor("tenant-a");
         await using var setup = database.Open();
         var scopes = new EfWorkflowTestScopeStore(setup, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(setup, access);
+        var dispatches = new PriorDispatchRows(setup, access);
         var scope = Scope("cleanup-concurrent");
         await scopes.CreateAsync(scope, Now);
         var dispatch = Dispatch("concurrent", scope);
@@ -276,7 +276,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
             var earlier = await new EfWorkflowTestScopeCleanupStore(earlierContext, access, Codec())
                 .CleanupAsync(scope, closingAt, 100, intents);
             Assert.Equal(1, earlier.CancellationQueued);
-            var outbox = new EfRuntimePostCommitOutboxStore(earlierContext, access);
+            var outbox = new EfRuntimePostCommitOutboxStorage(earlierContext, access, TimeProvider.System, null, null, preparedStandaloneOnly: false);
             var claim = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
                 "deliverer", closingAt.AddSeconds(1), TimeSpan.FromMinutes(5), 10, intentKind: CancelChildIntentKind)));
             Assert.Equal(outboxId, claim.OutboxItemId);
@@ -296,10 +296,10 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var verify = database.Open();
         var rows = await verify.RuntimePostCommitOutbox.AsNoTracking().ToArrayAsync();
         Assert.Equal(EfRelationalIdentity.Encode(outboxId), Assert.Single(rows).OutboxItemId);
-        var after = (await new EfRuntimePostCommitOutboxStore(verify, access).FindAsync(outboxId))!;
+        var after = (await new EfRuntimePostCommitOutboxStorage(verify, access, TimeProvider.System, null, null, preparedStandaloneOnly: false).FindAsync(outboxId))!;
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, after.Status);
         Assert.True(delivered.IsEquivalentTo(after), "The late cleaner must leave the delivered cancellation exactly as delivery left it.");
-        var child = (await new EfWorkflowDispatchStore(verify, access).FindAsync(started.DispatchId))!;
+        var child = (await new PriorDispatchRows(verify, access).FindAsync(started.DispatchId))!;
         Assert.Equal(WorkflowDispatchStatus.Started, child.Status);
         Assert.True(WorkflowDispatchLifecycle.IsTestScopeCancellationRequested(child));
     }
@@ -311,7 +311,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-rollback");
         await scopes.CreateAsync(scope, Now);
@@ -340,7 +340,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open(interceptor);
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-provider-failure");
         await scopes.CreateAsync(scope, Now);
@@ -365,7 +365,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-page");
         await scopes.CreateAsync(scope, Now);
@@ -392,7 +392,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         await using var context = database.Open();
         var access = new FixedAccessor("tenant-a");
         var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
-        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var dispatches = new PriorDispatchRows(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
         var scope = Scope("cleanup-tie-order");
         await scopes.CreateAsync(scope, Now);
@@ -485,6 +485,29 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+    }
+
+    private sealed class PriorDispatchRows(RuntimeDbContext context, IPersistenceAccessContextAccessor access)
+    {
+        public async Task SaveAsync(WorkflowDispatchRecord record)
+        {
+            var scope = access.Current.RequireScope().Value;
+            var id = WorkflowDispatchEfSupport.RowId(scope, record.DispatchId);
+            var existing = await context.WorkflowDispatches.FindAsync(id);
+            if (existing is null)
+                context.WorkflowDispatches.Add(WorkflowDispatchEfSupport.ToEntity(record, scope, id, 1));
+            else
+                WorkflowDispatchEfSupport.Copy(existing, record, scope, existing.Revision + 1);
+            await context.SaveChangesAsync();
+        }
+
+        public async Task<WorkflowDispatchRecord?> FindAsync(string dispatchId)
+        {
+            var scope = access.Current.RequireScope().Value;
+            var id = WorkflowDispatchEfSupport.RowId(scope, dispatchId);
+            var row = await context.WorkflowDispatches.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id);
+            return row is null ? null : WorkflowDispatchEfSupport.ReadChecked(row, scope, dispatchId);
+        }
     }
 
     private sealed class TestDatabase(SqliteConnection keeper) : IAsyncDisposable

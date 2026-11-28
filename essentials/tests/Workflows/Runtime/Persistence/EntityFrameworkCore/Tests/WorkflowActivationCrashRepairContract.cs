@@ -954,7 +954,7 @@ internal sealed record ActivationStores(
         WorkflowPublicationDefaults.Add(services);
         var switchType = services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowActivationSwitch)).ImplementationType!;
         var activationSwitch = (IWorkflowActivationSwitch)Activator.CreateInstance(switchType,
-            [authority, references, Clock, null, null, Array.Empty<IIngressReservationPolicy>(), bindings, null])!;
+            [authority, references, Clock, null, null, Array.Empty<IIngressReservationPolicy>(), bindings, schedules])!;
         return new(
             authority,
             activationSwitch,
