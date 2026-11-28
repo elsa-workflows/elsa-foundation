@@ -524,8 +524,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     {
         var shellFile = Path.Combine(directory, "shells.json");
         var shell = JsonNode.Parse(File.ReadAllText(shellFile))!;
-        var preview = JsonNode.Parse(File.ReadAllText(Path.Combine(directory, "shells.CorePreview.json")))!;
-        foreach (var (id, configuration) in Features(preview))
+        var classic = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ClassicRuntime", "shells.json")))!;
+        foreach (var (id, configuration) in Features(classic))
             Features(shell)[id] = configuration?.DeepClone();
         File.WriteAllText(shellFile, shell.ToJsonString());
 
