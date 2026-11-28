@@ -115,6 +115,10 @@
     <Project Path="extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/extensions/Elsa3/src/Mapping/" />
+  <Folder Name="/extensions/Elsa3/src/Migration/">
+    <Project Path="extensions/Elsa3/src/Migration/Cli/Elsa3.Migration.Cli.csproj" />
+    <Project Path="extensions/Elsa3/src/Migration/Tooling/Elsa3.Migration.Tooling.csproj" />
+  </Folder>
   <Folder Name="/extensions/Elsa3/tests/Activities/" />
   <Folder Name="/extensions/Elsa3/tests/Activities/Design/" />
   <Folder Name="/extensions/Elsa3/tests/Activities/Design/Import/" />
@@ -129,7 +133,13 @@
   <Folder Name="/extensions/Elsa3/tests/Mapping/">
     <Project Path="extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>
-  <Folder Name="/extensions/Elsa3/tests/Migration/" />
+  <Folder Name="/extensions/Elsa3/tests/Migration/">
+    <Project Path="extensions/Elsa3/tests/Migration/Tests/Elsa3.Migration.Tests.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Elsa3/tests/Migration/Fixtures/" />
+  <Folder Name="/extensions/Elsa3/tests/Migration/Fixtures/AcmeFeature/">
+    <Project Path="extensions/Elsa3/tests/Migration/Fixtures/AcmeFeature/Acme.Elsa3MigrationFixture.csproj" />
+  </Folder>
   <Folder Name="/extensions/Elsa3/tests/Migration/Sample/">
     <Project Path="extensions/Elsa3/tests/Migration/Sample/Elsa3.Migration.Sample/Elsa3.Migration.Sample.csproj" />
     <Project Path="extensions/Elsa3/tests/Migration/Sample/Tests/Elsa3.Migration.Sample.Tests.csproj" />

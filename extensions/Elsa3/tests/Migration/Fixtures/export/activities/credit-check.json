@@ -1,0 +1,165 @@
+{
+  "id": "credit-check-v1",
+  "definitionId": "credit-check",
+  "name": "CreditCheck",
+  "description": "Reusable credit check that can end with Escalated. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [
+    "Escalated"
+  ],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -160,
+          "y": 340
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "Decide",
+        "nodeId": "Workflow1:Decide",
+        "name": "Decide",
+        "type": "Elsa.FlowDecision",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 60,
+              "y": 340
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "condition": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "JavaScript",
+            "value": "'SENTINEL-1237'.length > 64"
+          }
+        }
+      },
+      {
+        "id": "Escalate",
+        "nodeId": "Workflow1:Escalate",
+        "name": "Escalate",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 280,
+              "y": 60
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "Object",
+          "expression": {
+            "type": "Literal",
+            "value": "[\"Escalated\"]"
+          }
+        }
+      },
+      {
+        "id": "Approve",
+        "nodeId": "Workflow1:Approve",
+        "name": "Approve",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": -380,
+              "y": 200
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "SENTINEL-1237: approved"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "Decide",
+          "port": "True"
+        },
+        "target": {
+          "activity": "Escalate",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "Decide",
+          "port": "False"
+        },
+        "target": {
+          "activity": "Approve",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

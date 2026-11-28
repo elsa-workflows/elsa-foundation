@@ -153,8 +153,11 @@ public sealed class DispatchWorkflowContractTests
             new[] { nameof(Activity.WorkflowDefinitionId), nameof(Activity.Inputs), nameof(Activity.WaitForCompletion), nameof(Activity.CancelChildOnParentCancellation), nameof(Activity.CorrelationId) },
             inputs.Keys.OrderBy(InputOrder).ToArray());
         Assert.Equal(
-            new[] { nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId), nameof(DispatchWorkflowActivityResult.Result) },
+            new[] { nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId), nameof(DispatchWorkflowActivityResult.Output), nameof(DispatchWorkflowActivityResult.Status) },
             outputs.Keys.Order(StringComparer.Ordinal).ToArray());
+        // The stored terminal result is not an output (spec 1245 FR-004).
+        Assert.Null(typeof(DispatchWorkflowActivityResult).GetProperty(nameof(DispatchWorkflowActivityResult.Terminal))!
+            .GetCustomAttribute<OutputAttribute>());
 
         var workflowId = inputs[nameof(Activity.WorkflowDefinitionId)].GetCustomAttribute<ActivityInputAttribute>();
         Assert.NotNull(workflowId);
@@ -164,7 +167,16 @@ public sealed class DispatchWorkflowContractTests
         Assert.Equal("false", inputs[nameof(Activity.WaitForCompletion)].GetCustomAttribute<ActivityInputAttribute>()?.DefaultValue);
         Assert.Equal("true", inputs[nameof(Activity.CancelChildOnParentCancellation)].GetCustomAttribute<ActivityInputAttribute>()?.DefaultValue);
         Assert.Equal(typeof(string), outputs[nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId)].PropertyType);
-        Assert.Equal(typeof(DispatchWorkflowResult), outputs[nameof(DispatchWorkflowActivityResult.Result)].PropertyType);
+        Assert.Equal(typeof(string), outputs[nameof(DispatchWorkflowActivityResult.Status)].PropertyType);
+        Assert.Equal(typeof(System.Text.Json.JsonElement?), outputs[nameof(DispatchWorkflowActivityResult.Output)].PropertyType);
+        var output = outputs[nameof(DispatchWorkflowActivityResult.Output)].GetCustomAttribute<OutputAttribute>()!;
+        Assert.Equal("Output", output.Key);
+        Assert.Equal("output", output.Path);
+        Assert.False(output.IsRequired);
+        // The declared loss (ADR 0046 V6): protected and externally stored child outputs are left out.
+        Assert.Contains("left out", output.Description, StringComparison.Ordinal);
+        Assert.Contains("dispatch.child-output-withheld", output.Description, StringComparison.Ordinal);
+        Assert.True(outputs[nameof(DispatchWorkflowActivityResult.Status)].GetCustomAttribute<OutputAttribute>()!.IsRequired);
 
         Assert.Equal(
             new[] { "Dispatched", "Completed", "Faulted", "Cancelled", "DispatchFailed" },
@@ -186,7 +198,9 @@ public sealed class DispatchWorkflowContractTests
             var model = Assert.Single(scanner.Scan(folder.FullName), candidate => candidate.ActivityTypeKey == typeof(Activity).FullName);
 
             Assert.Equal(5, model.Inputs.Count());
-            Assert.Equal(2, model.Outputs.Count());
+            Assert.Equal(
+                new[] { "ChildWorkflowExecutionId", "Output", "Status" },
+                model.Outputs.Select(output => output.Name).Order(StringComparer.Ordinal).ToArray());
             var workflowId = model.Inputs.Single(input => input.Name == nameof(Activity.WorkflowDefinitionId));
             Assert.Equal(ActivityInputUIHints.Dropdown, workflowId.UiHint);
             Assert.Equal(
@@ -252,35 +266,26 @@ public sealed class DispatchWorkflowContractTests
     }
 
     [Fact]
-    public void Result_snapshots_json_safe_terminal_output_contract()
+    public void Terminal_result_snapshots_its_diagnostics_and_carries_no_child_outputs()
     {
         var metadata = new Dictionary<string, string> { ["trace"] = "abc" };
-        var outputs = new[]
-        {
-            new DispatchWorkflowOutput("Total", System.Text.Json.JsonSerializer.SerializeToElement(42), "System.Int32", false)
-        };
 
-        var result = new DispatchWorkflowResult("child-1", WorkflowDispatchStatus.Completed, outputs, metadata);
+        var result = new DispatchWorkflowResult("child-1", WorkflowDispatchStatus.Completed, metadata);
         metadata["trace"] = "mutated";
 
         Assert.Equal("child-1", result.ChildWorkflowExecutionId);
         Assert.Equal(WorkflowDispatchStatus.Completed, result.Status);
         Assert.Equal("abc", result.DiagnosticMetadata["trace"]);
-        Assert.Equal(42, Assert.Single(result.Outputs).Value?.GetInt32());
+        // Spec 1245 FR-004: the diagnostics-view output entries are gone.
+        Assert.Null(typeof(DispatchWorkflowResult).GetProperty("Outputs"));
+        Assert.DoesNotContain("\"outputs\"", System.Text.Json.JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
     [InlineData(WorkflowDispatchStatus.Faulted)]
     [InlineData(WorkflowDispatchStatus.Cancelled)]
-    public void NonSuccessResult_RejectsOutputsAndCallerSuppliedDiagnostics(WorkflowDispatchStatus status)
+    public void NonSuccessResult_RejectsCallerSuppliedDiagnostics(WorkflowDispatchStatus status)
     {
-        var output = new DispatchWorkflowOutput(
-            "partial",
-            System.Text.Json.JsonSerializer.SerializeToElement("secret-output"),
-            "System.String",
-            false);
-
-        Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult("child-1", status, [output]));
         Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(
             "child-1",
             status,
@@ -344,25 +349,73 @@ public sealed class DispatchWorkflowContractTests
             identity.WaitBookmarkId,
             DispatchWorkflowConstants.WaitStimulusType,
             identity.WaitStimulusHash,
-            result);
+            result,
+            status == WorkflowDispatchStatus.Completed ? System.Text.Json.JsonDocument.Parse("{}").RootElement : null,
+            status == WorkflowDispatchStatus.Completed ? [] : null);
 
         Assert.Equal(status, payload.Result.Status);
     }
 
-    [Fact]
-    public void DispatchFailedResult_RejectsOutputsAndNoncanonicalOrRawDiagnostics()
+    [Theory]
+    [InlineData(WorkflowDispatchStatus.Faulted)]
+    [InlineData(WorkflowDispatchStatus.Cancelled)]
+    [InlineData(WorkflowDispatchStatus.DispatchFailed)]
+    public void ParentResumePayload_rejects_child_outputs_unless_completed(WorkflowDispatchStatus status)
     {
-        var output = new DispatchWorkflowOutput(
-            "partial",
-            System.Text.Json.JsonSerializer.SerializeToElement("secret"),
-            "System.String",
-            false);
-        Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(
-            "child-1",
-            WorkflowDispatchStatus.DispatchFailed,
-            [output],
-            DispatchFailedDiagnostics("incident-1")));
+        var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var result = status switch
+        {
+            WorkflowDispatchStatus.Faulted => new DispatchWorkflowResult(identity.ChildWorkflowExecutionId, status,
+                diagnosticMetadata: new Dictionary<string, string>
+                {
+                    [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.FaultedCode,
+                    [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.Category,
+                    [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.FaultedSummary,
+                    [DispatchWorkflowDiagnostics.IncidentCountKey] = "1",
+                    [DispatchWorkflowDiagnostics.IncidentIdsTruncatedKey] = "false",
+                    ["incidentId.000"] = "incident-a"
+                }),
+            WorkflowDispatchStatus.Cancelled => new DispatchWorkflowResult(identity.ChildWorkflowExecutionId, status,
+                diagnosticMetadata: new Dictionary<string, string>
+                {
+                    [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.CancelledCode,
+                    [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.Category,
+                    [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.CancelledSummary
+                }),
+            _ => new DispatchWorkflowResult(identity.ChildWorkflowExecutionId, status,
+                diagnosticMetadata: DispatchFailedDiagnostics(identity.DeliveryIncidentId(0)))
+        };
+        var output = System.Text.Json.JsonDocument.Parse("{\"Decision\":\"approved\"}").RootElement;
 
+        WorkflowDispatchParentResumePayload Create(System.Text.Json.JsonElement? value, IReadOnlyList<string>? withheld) => new(
+            identity.DispatchId, "parent-1", "activity-1", identity.ChildWorkflowExecutionId, identity.WaitBookmarkId,
+            DispatchWorkflowConstants.WaitStimulusType, identity.WaitStimulusHash, result, value, withheld);
+
+        Assert.Throws<ArgumentException>(() => Create(output, null));
+        Assert.Throws<ArgumentException>(() => Create(null, []));
+        Assert.Null(Create(null, null).Output);
+    }
+
+    [Fact]
+    public void ParentResumePayload_requires_a_completed_childs_output_object_and_sorts_withheld_names()
+    {
+        var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var result = new DispatchWorkflowResult(identity.ChildWorkflowExecutionId, WorkflowDispatchStatus.Completed);
+        WorkflowDispatchParentResumePayload Create(System.Text.Json.JsonElement? value, IReadOnlyList<string>? withheld) => new(
+            identity.DispatchId, "parent-1", "activity-1", identity.ChildWorkflowExecutionId, identity.WaitBookmarkId,
+            DispatchWorkflowConstants.WaitStimulusType, identity.WaitStimulusHash, result, value, withheld);
+
+        Assert.Throws<ArgumentException>(() => Create(null, []));
+        Assert.Throws<ArgumentException>(() => Create(System.Text.Json.JsonDocument.Parse("{}").RootElement, null));
+        Assert.Throws<ArgumentException>(() => Create(System.Text.Json.JsonDocument.Parse("[]").RootElement, []));
+
+        var payload = Create(System.Text.Json.JsonDocument.Parse("{}").RootElement, ["token", "Secret", "apiKey"]);
+        Assert.Equal(new[] { "Secret", "apiKey", "token" }, payload.WithheldOutputs);
+    }
+
+    [Fact]
+    public void DispatchFailedResult_RejectsNoncanonicalOrRawDiagnostics()
+    {
         var raw = DispatchFailedDiagnostics("incident-1")
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         raw["exception"] = "secret provider reason";

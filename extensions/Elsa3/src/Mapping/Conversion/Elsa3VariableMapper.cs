@@ -14,8 +14,11 @@ namespace Elsa3.Mapping.Conversion;
 /// <summary>Why a variable is refused, and how to fix it in the Elsa 3 workflow; <paramref name="Code"/> is the diagnostic code.</summary>
 internal sealed record Elsa3VariableRefusal(string Message, string Guidance, string Code = Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible);
 
-/// <summary>Something a migrator should know about a variable that converts: what changed, and what to do about it.</summary>
-internal sealed record Elsa3VariableNotice(string Message, string Guidance);
+/// <summary>
+/// Something a migrator should know about a variable that converts: what changed, what to do about it and, for a
+/// component notice, the component it names (<see cref="Elsa3MigrationDiagnosticMetadataKeys.ComponentName"/>).
+/// </summary>
+internal sealed record Elsa3VariableNotice(string Message, string Guidance, IReadOnlyDictionary<string, string>? Metadata = null);
 
 /// <summary>
 /// Maps an Elsa 3 variable declaration to an Elsa 4 <see cref="VariableDefinition"/> (spec 264). Elsa 3 stored a
@@ -79,7 +82,8 @@ internal static class Elsa3VariableMapper
         return new(
             $"Variable '{source.Name}' has the Elsa 3 type '{typeName}', {which} is not registered in Elsa 4, so its Elsa 4 type is Any. It stays Any until an Elsa 4 feature registers the type and the workflow is converted again.",
             "To keep the type, have an Elsa 4 feature register its CLR type (module types take dotted aliases), then convert the workflow again. " +
-            "The converter looks the Elsa 3 name up in Elsa 4's type registry, as an alias or as the full name of a registered type, and otherwise loads it as an assembly-qualified CLR name.");
+            "The converter looks the Elsa 3 name up in Elsa 4's type registry, as an alias or as the full name of a registered type, and otherwise loads it as an assembly-qualified CLR name.",
+            new Dictionary<string, string>(StringComparer.Ordinal) { [Elsa3MigrationDiagnosticMetadataKeys.ComponentName] = unregistered });
     }
 
     /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when it cannot be converted: a resource type, or a starting value that cannot start as it did in Elsa 3.</summary>
@@ -152,13 +156,13 @@ internal static class Elsa3VariableMapper
             case ShapeKind.Collection:
                 if (!TryParse(value, JsonValueKind.Array, out var array))
                 {
-                    refusal = NotJsonArray(source, typeName, value, shape.ElementIsText);
+                    refusal = NotJsonArray(source, typeName, shape.ElementIsText);
                     return false;
                 }
                 if (!TryConvert(array, shape.ClrType!, options, report, out json, out var collectionRefusal))
                 {
                     refusal = collectionRefusal ?? new(
-                        $"Variable '{source.Name}' has the starting value '{Echo(value)}', whose items cannot be converted to '{shape.Type.Alias}'.",
+                        $"Variable '{source.Name}' has a starting value whose items cannot be converted to '{shape.Type.Alias}'.",
                         $"In the Elsa 3 workflow, write every item as a JSON {shape.Type.Alias} value, for example {Example(shape.Type.Alias)}.");
                     return false;
                 }
@@ -168,7 +172,7 @@ internal static class Elsa3VariableMapper
                 if (!TryParse(value, JsonValueKind.Object, out json))
                 {
                     refusal = new(
-                        $"Variable '{source.Name}' has the starting value '{Echo(value)}', which is not a JSON object.",
+                        $"Variable '{source.Name}' has a starting value that is not a JSON object.",
                         $"In the Elsa 3 workflow, write the '{typeName}' starting value as a JSON object, for example {shape.Example}.");
                     return false;
                 }
@@ -201,7 +205,7 @@ internal static class Elsa3VariableMapper
                 }
                 catch (JsonException) { json = default; }
                 refusal ??= new(
-                    $"Variable '{source.Name}' has the starting value '{Echo(value)}', which cannot be converted to its type '{typeName}'.",
+                    $"Variable '{source.Name}' has a starting value that cannot be converted to its type '{typeName}'.",
                     $"In the Elsa 3 workflow, change the starting value to a valid {typeName} value, or change the type to Object to keep the value as text.");
                 return false;
 
@@ -211,7 +215,7 @@ internal static class Elsa3VariableMapper
                 if (TryParse(value, JsonValueKind.Object, out json) || TryParse(value, JsonValueKind.Array, out json))
                     return true;
                 refusal = new(
-                    $"Variable '{source.Name}' has the starting value '{Echo(value)}', but its type '{typeName}' is not known in Elsa 4, and the value is not a JSON object or array, so it cannot start as it did in Elsa 3.",
+                    $"Variable '{source.Name}' has a starting value, but its type '{typeName}' is not known in Elsa 4, and the value is not a JSON object or array, so it cannot start as it did in Elsa 3.",
                     "In the Elsa 3 workflow, write the starting value as a JSON object or array, change the variable's type to Object to keep the value as text, or remove the starting value.");
                 return false;
         }
@@ -330,19 +334,14 @@ internal static class Elsa3VariableMapper
         return type != typeof(object) ? registry.TryGetTypeOrDefault(alias, out _) : IsObjectAlias(typeName);
     }
 
-    private static Elsa3VariableRefusal NotJsonArray(Elsa3Variable source, string typeName, string value, bool elementIsText)
-    {
-        // Show the array the author most likely meant: the comma-separated items, as JSON.
-        var items = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var suggestion = items.Length == 0
-            ? "[]"
-            : elementIsText
-                ? JsonSerializer.Serialize(items)
-                : $"[{string.Join(", ", items)}]";
-        return new(
-            $"Variable '{source.Name}' has the starting value '{Echo(value)}', which is not a JSON array.",
-            $"In the Elsa 3 workflow, write the '{typeName}' starting value as a JSON array, for example {suggestion}. Elsa 4 does not split text on commas.");
-    }
+    /// <summary>
+    /// A collection's starting value that is not a JSON array. The example is fixed, never built from the value, so no
+    /// input text reaches the message or guidance (spec 1237 FR-019).
+    /// </summary>
+    private static Elsa3VariableRefusal NotJsonArray(Elsa3Variable source, string typeName, bool elementIsText) =>
+        new(
+            $"Variable '{source.Name}' has a starting value that is not a JSON array.",
+            $"In the Elsa 3 workflow, write the '{typeName}' starting value as a JSON array, for example {(elementIsText ? "[\"a\", \"b\"]" : "[1, 2]")}. Elsa 4 does not split text on commas.");
 
     private static bool TryParse(string value, JsonValueKind kind, out JsonElement element)
     {
@@ -402,7 +401,6 @@ internal static class Elsa3VariableMapper
         string.Equals(typeName, Elsa3ObjectTypeName, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(typeName, "System.Object", StringComparison.Ordinal);
 
-    private static string Echo(string value) => value.Length <= 80 ? value : $"{value[..80]}…";
 
     private enum ShapeKind { Text, Scalar, Collection, Dictionary, Unknown, Resource }
 

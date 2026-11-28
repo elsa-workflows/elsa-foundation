@@ -1,0 +1,105 @@
+{
+  "id": "bad-defaults-v1",
+  "definitionId": "bad-defaults",
+  "name": "Bad defaults",
+  "description": "Known-type variables whose starting values cannot be converted. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [
+    {
+      "id": "RetryCountVar",
+      "name": "RetryCount",
+      "typeName": "Int32",
+      "isArray": false,
+      "value": "SENTINEL-1237",
+      "storageDriverTypeName": null
+    },
+    {
+      "id": "TagsVar",
+      "name": "Tags",
+      "typeName": "String",
+      "isArray": true,
+      "value": "SENTINEL-1237-a, b",
+      "storageDriverTypeName": null
+    },
+    {
+      "id": "HeadersVar",
+      "name": "Headers",
+      "typeName": "ObjectDictionary",
+      "isArray": false,
+      "value": "SENTINEL-1237",
+      "storageDriverTypeName": null
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -380,
+          "y": 340
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "Start",
+        "nodeId": "Workflow1:Start",
+        "name": "Start",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 280,
+              "y": 200
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "SENTINEL-1237: start"
+          }
+        }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

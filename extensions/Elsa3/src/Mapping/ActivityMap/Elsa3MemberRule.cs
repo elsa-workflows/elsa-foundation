@@ -40,6 +40,22 @@ public sealed record Elsa3MemberRule(
 
     /// <summary>Conversion of a resolved Literal expression with a null or omitted value.</summary>
     public Elsa3NullConversion? OnLiteralNull { get; init; }
+
+    /// <summary>
+    /// For a lost output: the refusal message when it is captured, in place of the generic text. <c>{0}</c> is the
+    /// captured property's name.
+    /// </summary>
+    public string? LostMessage { get; init; }
+
+    /// <summary>For a lost output: the guidance when it is captured, in place of the generic text.</summary>
+    public string? LostGuidance { get; init; }
+
+    /// <summary>
+    /// For a carried output: Elsa 3's value wrapped the Elsa 4 output in more members (ExecuteWorkflow's
+    /// <c>ExecuteWorkflowResult</c>), so value-flow lowering rewrites every read of the captured variable to the Elsa 4
+    /// value it stood for (spec 1245 FR-010).
+    /// </summary>
+    public bool WrapsResult { get; init; }
 }
 
 /// <summary>What a JSON <c>null</c> member converts to (spec 267).</summary>

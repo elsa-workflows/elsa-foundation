@@ -291,10 +291,16 @@
         "Path": "childWorkflowExecutionId"
       },
       {
-        "name": "Result",
-        "type": "DispatchWorkflowResult?",
-        "Key": "Result",
-        "Path": "result",
+        "name": "Status",
+        "type": "string",
+        "Key": "Status",
+        "Path": "status"
+      },
+      {
+        "name": "Output",
+        "type": "JsonElement?",
+        "Key": "Output",
+        "Path": "output",
         "IsRequired": false
       }
     ]

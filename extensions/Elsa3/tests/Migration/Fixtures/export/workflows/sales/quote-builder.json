@@ -1,0 +1,119 @@
+{
+  "id": "quote-builder-v1",
+  "definitionId": "quote-builder",
+  "name": "Quote builder",
+  "description": "Pins the older CalculateDiscount version 1. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -160,
+          "y": 340
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "Discount",
+        "nodeId": "Workflow1:Discount",
+        "name": "Discount",
+        "type": "CalculateDiscount",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 280,
+              "y": 60
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "workflowDefinitionId": "calculate-discount",
+        "workflowDefinitionVersionId": "calculate-discount-v1",
+        "latestAvailablePublishedVersion": 1,
+        "latestAvailablePublishedVersionId": "calculate-discount-v1"
+      },
+      {
+        "id": "Quoted",
+        "nodeId": "Workflow1:Quoted",
+        "name": "Quoted",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": -380,
+              "y": 200
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "SENTINEL-1237: quote built"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "Discount",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "Quoted",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

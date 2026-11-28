@@ -1,0 +1,81 @@
+{
+  "id": "instance-label-v1",
+  "definitionId": "instance-label",
+  "name": "Instance label",
+  "description": "Formats a date with moment, which no host function can take over. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -380,
+          "y": 60
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "Label",
+        "nodeId": "Workflow1:Label",
+        "name": "Label",
+        "type": "Elsa.RunJavaScript",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 280,
+              "y": 340
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "script": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "return moment().format('YYYY') + ' SENTINEL-1237';"
+          }
+        },
+        "possibleOutcomes": null
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

@@ -11,13 +11,15 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks`, the compo
   start/stop lifecycle of shell-lifetime background and recurring tasks (and the singleton
   `IEventChannel`), so it must live for the shell's lifetime — a scoped manager is disposed at the
   end of the shell-initializer scope and would tear those singletons down shortly after activation.
-- **Lifecycle:** `RunShellTasksInitializer` starts tasks in CShells' `Start` phase;
+- **Lifecycle:** `RunShellTasksInitializer` starts tasks in CShells' `Start` phase (only the startup tasks, through
+  `RunStartupTasksOnly`, when the feature's `StartupTasksOnly` setting is set; see [README](README.md));
   `StopShellTasksTerminator` stops them at the mirrored `Start`-phase teardown point, before later
   terminators flush stores and before the shell provider is disposed. `TaskManager.DisposeAsync`
   awaits the same idempotent stop operation as a fallback.
 - **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`. A replacement implements
-  both members: `StartExecutingRegisteredTasks` when the shell activates, and `StopExecutingRegisteredTasks`, which
-  `StopShellTasksTerminator` calls before the shell provider is disposed.
+  all three members: `StartExecutingRegisteredTasks` when the shell activates, `RunStartupTasksOnly` when it activates
+  with `StartupTasksOnly` set (startup tasks in dependency order, no background or recurring task), and
+  `StopExecutingRegisteredTasks`, which `StopShellTasksTerminator` calls before the shell provider is disposed.
 
 ### `ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*
 - **Default impl:** `TaskExecutor` (this feature). It applies what a task class declares, in this order:

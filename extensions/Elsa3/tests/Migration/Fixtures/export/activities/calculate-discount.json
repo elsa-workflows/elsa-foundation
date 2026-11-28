@@ -1,0 +1,242 @@
+[
+  {
+    "id": "calculate-discount-v1",
+    "definitionId": "calculate-discount",
+    "name": "CalculateDiscount",
+    "description": "Reusable discount calculation, version 1. SENTINEL-1237",
+    "createdAt": "2024-11-02T10:00:00+00:00",
+    "version": 1,
+    "toolVersion": "3.6.3.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": false,
+    "isPublished": false,
+    "options": {
+      "usableAsActivity": true,
+      "autoUpdateConsumingWorkflows": false,
+      "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+    },
+    "root": {
+      "id": "Flowchart1",
+      "nodeId": "Workflow1:Flowchart1",
+      "name": "Flowchart1",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": 60,
+            "y": 200
+          },
+          "size": {
+            "width": 180,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "Calculate",
+          "nodeId": "Workflow1:Calculate",
+          "name": "Calculate",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": -160,
+                "y": 60
+              },
+              "size": {
+                "width": 180,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "SENTINEL-1237: discount v1"
+            }
+          }
+        }
+      ],
+      "connections": [],
+      "variables": []
+    }
+  },
+  {
+    "id": "calculate-discount-v2",
+    "definitionId": "calculate-discount",
+    "name": "CalculateDiscount",
+    "description": "Reusable discount calculation, version 2. SENTINEL-1237",
+    "createdAt": "2025-01-20T10:00:00+00:00",
+    "version": 2,
+    "toolVersion": "3.6.3.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": false,
+    "isPublished": false,
+    "options": {
+      "usableAsActivity": true,
+      "autoUpdateConsumingWorkflows": false,
+      "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+    },
+    "root": {
+      "id": "Flowchart1",
+      "nodeId": "Workflow1:Flowchart1",
+      "name": "Flowchart1",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": -380,
+            "y": 60
+          },
+          "size": {
+            "width": 180,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "Calculate",
+          "nodeId": "Workflow1:Calculate",
+          "name": "Calculate",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 280,
+                "y": 340
+              },
+              "size": {
+                "width": 180,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "SENTINEL-1237: discount v2"
+            }
+          }
+        }
+      ],
+      "connections": [],
+      "variables": []
+    }
+  },
+  {
+    "id": "calculate-discount-v3",
+    "definitionId": "calculate-discount",
+    "name": "CalculateDiscount",
+    "description": "Reusable discount calculation, version 3. SENTINEL-1237",
+    "createdAt": "2025-02-11T10:00:00+00:00",
+    "version": 3,
+    "toolVersion": "3.6.3.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+      "usableAsActivity": true,
+      "autoUpdateConsumingWorkflows": false,
+      "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+    },
+    "root": {
+      "id": "Flowchart1",
+      "nodeId": "Workflow1:Flowchart1",
+      "name": "Flowchart1",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": 60,
+            "y": 340
+          },
+          "size": {
+            "width": 180,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "Calculate",
+          "nodeId": "Workflow1:Calculate",
+          "name": "Calculate",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": -160,
+                "y": 200
+              },
+              "size": {
+                "width": 180,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "SENTINEL-1237: discount v3"
+            }
+          }
+        }
+      ],
+      "connections": [],
+      "variables": []
+    }
+  }
+]

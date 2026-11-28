@@ -13426,6 +13426,11 @@ static Elsa.Workflows.Runtime.Core.Services.DurableValuePolicies.ApplyMinimum(El
 static Elsa.Workflows.Runtime.Core.Services.DurableValuePolicies.Read(Elsa.Workflows.Runtime.Core.Models.DurableValueState! row) -> Elsa.Workflows.Runtime.Core.Models.ValueProtectionPolicy!
 static Elsa.Workflows.Runtime.Core.Services.NullPolicyDefaults.TryGetTypeDefault(string! alias, Elsa.Serialization.Core.IWellKnownTypeRegistry? registry, out object? value) -> bool
 static Elsa.Workflows.Runtime.Core.Services.NullPolicyDefaults.AcceptsNull(Elsa.Primitives.Models.TypeReference! type, Elsa.Serialization.Core.IWellKnownTypeRegistry? registry, Elsa.Serialization.Core.IRuntimeTypeNullability? nullability) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowOutputSource.ReadValuesAsync(string! workflowExecutionId, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.DurableValueState!>!>? pendingDurableValueChanges = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowOutputValues!>
+Elsa.Workflows.Runtime.Core.Models.WorkflowOutputValues
+Elsa.Workflows.Runtime.Core.Models.WorkflowOutputValues.Values.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.Models.WorkflowOutputValues.WithheldNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowOutputValues.WorkflowOutputValues(System.Text.Json.JsonElement values, System.Collections.Generic.IReadOnlyList<string!>! withheldNames) -> void
 Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry
 const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.ActivityExecuteSpanName = "elsa.runtime.activity.execute" -> string!
 const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.ActivitySourceName = "Elsa.Workflows.Runtime" -> string!

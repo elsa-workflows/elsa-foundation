@@ -29,6 +29,20 @@ public sealed class Elsa3MappingFeatureRegistrationTests
         Assert.True(new Elsa3MappingOptions().ApplyElsa3NullPolicies);
     }
 
+    // Spec 1245 T010: every node-rewrite kind a map entry names has exactly one registered strategy, ExecuteWorkflowAsDispatch
+    // included.
+    [Fact]
+    public void Every_node_rewrite_kind_has_one_registered_strategy()
+    {
+        var services = new ServiceCollection();
+        new Elsa3MappingFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var kinds = provider.GetServices<Elsa3.Mapping.ActivityMap.Rewrites.IElsa3NodeRewrite>().Select(rewrite => rewrite.Kind).ToArray();
+
+        Assert.Equal(Enum.GetValues<Elsa3NodeRewriteKind>().Order(), kinds.Order());
+    }
+
     // Spec 1223 FR-034: a date interpretation the converter cannot apply fails composition, naming the fix.
     [Theory]
     [InlineData(Elsa3DateInterpretation.SourceTimeZone, null, "no source time zone")]

@@ -1,0 +1,129 @@
+{
+  "id": "partner-sync-v1",
+  "definitionId": "partner-sync",
+  "name": "Partner sync",
+  "description": "Dispatches partner-onboarding, which is not in the export. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -160,
+          "y": 200
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "StartOnboarding",
+        "nodeId": "Workflow1:StartOnboarding",
+        "name": "StartOnboarding",
+        "type": "Elsa.DispatchWorkflow",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 280,
+              "y": 340
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "workflowDefinitionId": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "partner-onboarding"
+          }
+        },
+        "waitForCompletion": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "Literal",
+            "value": "false"
+          }
+        }
+      },
+      {
+        "id": "Dispatched",
+        "nodeId": "Workflow1:Dispatched",
+        "name": "Dispatched",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": -380,
+              "y": 60
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "SENTINEL-1237: dispatched"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "StartOnboarding",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "Dispatched",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}
