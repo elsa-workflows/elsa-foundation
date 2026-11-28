@@ -145,7 +145,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.Null(services.GetService<IRuntimeCheckpointCommitStore>());
                 Assert.Null(services.GetService<IRuntimeIngressWaitTarget>());
                 await services.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
-                await EnableHttpReservationsAsync(host);
+                await EnablePreparedRuntimeSchemaAsync(host, token);
                 var publication = await PublishAsync(services, executable, 0, DateTimeOffset.UtcNow, token);
                 await WriteSourceAsync(services, HeldRoute, "WorkflowResponse", publication, heldTemplate);
                 await WriteSourceAsync(services, FanOutRoute, "AsyncFanOut", publication);
@@ -346,7 +346,7 @@ public sealed partial class KernelStandalonePreparedStartTests
 
             await using (var host = OpenHost(TimeSpan.FromSeconds(3)))
             {
-                await EnableHttpReservationsAsync(host);
+                await EnablePreparedRuntimeSchemaAsync(host, token);
                 var shell = host.Services.GetRequiredService<KernelShellRuntime>();
                 await shell.StartAsync(token);
                 try
@@ -472,30 +472,6 @@ public sealed partial class KernelStandalonePreparedStartTests
                 });
                 activities.UseMiddleware(app, app.Environment);
                 return app;
-            }
-
-            async Task EnableHttpReservationsAsync(WebApplication host)
-            {
-                await host.Services.GetRequiredService<EfModuleMigrator<RuntimeDbContext>>().InitializeAsync(token);
-                await using var operation = await host.Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
-                var services = operation.ServiceProvider;
-                var context = services.GetRequiredService<RuntimeDbContext>();
-                var gate = Assert.IsType<EfSchemaModuleGate>(services.GetRequiredService<EfSchemaFinalizationGates>().FindModuleGate(context.GetType()));
-                var store = new EfSchemaFinalizationStore(context);
-                var member = new SchemaFinalizationMember("standalone-http-qualification", "isolated-host");
-                string[] admittedFamilies = ["StandaloneTriggers", RuntimeTriggerBindingEfModule.SchemaFamily,
-                    RuntimeArtifactEfModule.SchemaFamily, RuntimeOperationalStateEfModule.SchemaFamily, RuntimePostCommitOutboxEfModule.SchemaFamily,
-                    "RuntimeSchedulerWork", RuntimeWorkflowExecutionEfModule.SchemaFamily, "RuntimeModelState"];
-                foreach (var chain in gate.Families.Chains.Where(chain => admittedFamilies.Contains(chain.Family)))
-                {
-                    var record = Assert.IsType<SchemaFinalizationRecord>(await store.FindAsync(chain.Family, token));
-                    if (record.FinalizedVersion == chain.CurrentVersion) continue;
-                    var intent = await store.RecordIntentAsync(chain.Family, record.Revision, chain.CurrentVersion, chain.ReadableVersions, member, token);
-                    Assert.True(intent.Applied);
-                    var finalized = await store.CommitIntentAsync(chain.Family, intent.Record.Revision, chain.ReadableVersions, member, token);
-                    Assert.True(finalized.Applied);
-                }
-                await gate.RefreshAsync(context, token);
             }
 
             async Task ServeAsync(WebApplication host)
@@ -668,4 +644,28 @@ public sealed partial class KernelStandalonePreparedStartTests
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
         }
     }
+    private static async Task EnablePreparedRuntimeSchemaAsync(WebApplication host, CancellationToken token)
+    {
+        await host.Services.GetRequiredService<EfModuleMigrator<RuntimeDbContext>>().InitializeAsync(token);
+        await using var operation = await host.Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+        var services = operation.ServiceProvider;
+        var context = services.GetRequiredService<RuntimeDbContext>();
+        var gate = Assert.IsType<EfSchemaModuleGate>(services.GetRequiredService<EfSchemaFinalizationGates>().FindModuleGate(context.GetType()));
+        var store = new EfSchemaFinalizationStore(context);
+        var member = new SchemaFinalizationMember("standalone-ingress-qualification", "isolated-host");
+        string[] admittedFamilies = ["StandaloneTriggers", RuntimeTriggerBindingEfModule.SchemaFamily,
+            RuntimeArtifactEfModule.SchemaFamily, RuntimeOperationalStateEfModule.SchemaFamily, RuntimePostCommitOutboxEfModule.SchemaFamily,
+            "RuntimeSchedulerWork", RuntimeWorkflowExecutionEfModule.SchemaFamily, "RuntimeModelState"];
+        foreach (var chain in gate.Families.Chains.Where(chain => admittedFamilies.Contains(chain.Family)))
+        {
+            var record = Assert.IsType<SchemaFinalizationRecord>(await store.FindAsync(chain.Family, token));
+            if (record.FinalizedVersion == chain.CurrentVersion) continue;
+            var intent = await store.RecordIntentAsync(chain.Family, record.Revision, chain.CurrentVersion, chain.ReadableVersions, member, token);
+            Assert.True(intent.Applied);
+            var finalized = await store.CommitIntentAsync(chain.Family, intent.Record.Revision, chain.ReadableVersions, member, token);
+            Assert.True(finalized.Applied);
+        }
+        await gate.RefreshAsync(context, token);
+    }
+
 }
