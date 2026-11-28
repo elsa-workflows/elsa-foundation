@@ -2,7 +2,6 @@ using System.Net;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
-using Kernel.Foundation.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -25,8 +24,14 @@ public sealed class PublishEventResumeTests
         var waiting = await host.ExecuteAsync(waiter);
         var reads = host.Shell.ServiceProvider.GetRequiredService<KernelRuns>();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        while ((await reads.GetAsync(new ActorRef(waiting), deadline.Token)).Run is not { Run.Suspended: true })
+        while (true)
+        {
+            var pending = await host.ReadRunAsync(waiting);
+            Assert.True(pending.Workflow?.Status is null or WorkflowExecutionStatus.Running, pending.Describe());
+            if (pending.Activities.Any(activity => activity.AuthoredActivityId == "wait" && activity.Status == ActivityExecutionStatus.Running))
+                break;
             await Task.Delay(100, deadline.Token);
+        }
         Assert.False(await reads.ListAsync(starterDefinition, deadline.Token).AnyAsync(deadline.Token));
 
         var published = await host.RunAsync(publisher);

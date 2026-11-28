@@ -562,7 +562,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         await WaitForSettledAsync(await ExecuteAsync(workflow, inputs));
 
     /// <summary>The exact run and its bounded committed activity summaries.</summary>
-    private async Task<RunState> ReadRunAsync(string workflowExecutionId)
+    public async Task<RunState> ReadRunAsync(string workflowExecutionId)
     {
         await using var scope = await Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
             .CreateAsync(new PersistenceScope(TenantId));
