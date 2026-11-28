@@ -15,9 +15,8 @@ public sealed class ActivityTypeCategoryResolver : IActivityTypeCategoryResolver
 {
     public string? Resolve(Type type, Assembly assembly)
     {
-        var explicitCategory = type.GetCustomAttributesData()
-            .FirstOrDefault(attribute => attribute.AttributeType.FullName == typeof(CategoryAttribute).FullName);
-        if (explicitCategory?.ConstructorArguments is [{ Value: string category }] && !string.IsNullOrWhiteSpace(category))
+        var category = ReflectionOnlyAttributes.ReadStringArgument(type.GetCustomAttributesData(), typeof(CategoryAttribute).FullName!);
+        if (!string.IsNullOrWhiteSpace(category))
             return category;
 
         var simpleName = assembly.GetName().Name;
