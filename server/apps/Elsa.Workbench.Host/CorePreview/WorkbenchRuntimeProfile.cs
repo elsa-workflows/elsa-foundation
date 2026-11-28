@@ -8,13 +8,11 @@ internal static class WorkbenchRuntimeProfile
 {
     internal static void Configure(ConfigurationManager configuration, IHostEnvironment environment, string[] args)
     {
-        var shell = configuration[$"{ShellReadinessOptions.SectionName}:{nameof(ShellReadinessOptions.DefaultShellName)}"] is { Length: > 0 } name
-            ? name
-            : "default";
-        var features = configuration.GetSection($"CShells:Shells:{shell}:Features");
+        var features = configuration.GetSection("CShells:Shells:default:Features");
         var hosting = features.GetSection(WorkflowsRuntimeKernelHostingFeature.FeatureName);
         var actors = hosting.Exists() && !string.Equals(hosting.Value, "false", StringComparison.OrdinalIgnoreCase);
-        var preview = actors && shell == "default" && configuration.GetValue<bool>(WorkbenchCorePreview.EnabledKey);
+        var readinessShell = configuration[$"{ShellReadinessOptions.SectionName}:{nameof(ShellReadinessOptions.DefaultShellName)}"];
+        var preview = actors && (readinessShell is null or "default") && configuration.GetValue<bool>(WorkbenchCorePreview.EnabledKey);
         if (preview)
             configuration.AddJsonFile("shells.CorePreview.json", optional: false, reloadOnChange: true);
 
@@ -23,7 +21,7 @@ internal static class WorkbenchRuntimeProfile
             if (preview || !actors && features.GetChildren().Any(feature =>
                     feature.Key is "WorkflowsRuntimeApi" or "WorkflowsRuntimeEntityFrameworkCore"))
                 configuration.AddJsonFile("shells.CorePreview.Production.json", optional: false, reloadOnChange: true);
-            else if (actors && shell == "default")
+            else if (actors)
                 configuration.AddJsonFile("shells.Actor.Production.json", optional: false, reloadOnChange: true);
         }
 

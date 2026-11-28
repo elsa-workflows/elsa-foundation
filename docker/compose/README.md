@@ -90,12 +90,12 @@ The following alternative uses Bash and OpenSSL. Before running it, check that t
 and `14000` are unused. Start the server, then Studio pointed at it:
 
 ```bash
-# Elsa.Workbench (SQLite default composition; elsa-workbench-packages is the Nuplane package feed, elsa-data
-# holds the Data Protection key ring).
+# Elsa.Workbench uses SQLite. elsa-workbench-packages holds the Nuplane feed.
+# elsa-data holds the Actor database and Data Protection key ring.
 # DEMO ONLY: Migrate__Policy=AutoMigrate applies the migrations as the container starts, as the compose file does.
 # Real production keeps the image's default Validate policy and applies them first (see below the example).
-# The last four -e flags supply the Production secrets: recovery and hierarchy cursor signing keys,
-# the seed admin password, and a freshly generated access-token signing key (needs openssl on your machine).
+# The demo supplies the retained Runtime recovery signing key, Secrets key, admin password,
+# and an access-token signing key (generated using openssl).
 docker run -d --name elsa-workbench \
   -p 127.0.0.1:13000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
@@ -105,8 +105,9 @@ docker run -d --name elsa-workbench \
   -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0=http://localhost:14000 \
   -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
   -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
-  -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
-  -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey=elsa-docker-demo-hierarchy-cursor-key \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__SqlitePath=/app/data/elsa-workbench-actors.db \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
+  -e CShells__Shells__default__Features__Secrets__EncryptionKey=elsa-docker-demo-secrets-encryption-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
   -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
   -v elsa-workbench-packages:/app/packages \
@@ -350,7 +351,7 @@ Studio__BackendModuleManagementApiKey=<your-key>
 server node:
 
 ```
-CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=<your-key>
+CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey=<your-key>
 ```
 
 **Replace the demo identity secrets** on the `elsa-workbench` service. The signing key is a base64 PKCS#8

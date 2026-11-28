@@ -121,6 +121,20 @@ public sealed class WorkbenchShellActivationTests
         AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "CacheWorkflowExecutables", "true");
         AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowExecutableCacheCapacity", "256");
         Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
+
+        if (shell == WorkbenchShell.Development)
+        {
+            var active = await ReadEffectiveFeatureClosureAsync(workbench);
+            Assert.Contains("ActorHttpConnections", active);
+            Assert.Contains("DecisionsDesign", active);
+            Assert.Contains("DecisionsApi", active);
+            Assert.Contains("DecisionsEntityFrameworkCore", active);
+            Assert.DoesNotContain("DecisionsWorkflowsDesign", active);
+            Assert.DoesNotContain("ConnectionsWorkflows", active);
+            Assert.DoesNotContain("WorkflowsRuntimeDistributed", active);
+            Assert.DoesNotContain("WorkflowsRuntimeCheckpointPersistence", active);
+            Assert.DoesNotContain("WorkflowsRuntimeResumption", active);
+        }
     }
 
     [Fact]
@@ -141,11 +155,11 @@ public sealed class WorkbenchShellActivationTests
         using var diagnostics = await workbench.Client.GetAsync("/runtime/workflows/diagnostics/settings");
         Assert.True(diagnostics.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
             $"The explicit preview did not map the legacy Runtime API. Host output:{Environment.NewLine}{workbench.Output}");
-        // Module management reports the editable stock file. The preview selector comes from its launch overlay.
-        using var preview = JsonDocument.Parse(File.ReadAllText(WorkbenchBuild.SourceFile("shells.CorePreview.json")));
-        var features = preview.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features");
-        Assert.Equal(JsonValueKind.Object, features.GetProperty("ConnectionsWorkflows").ValueKind);
-        Assert.False(features.GetProperty("ActorHttpConnections").GetBoolean());
+        var active = await ReadEffectiveFeatureClosureAsync(workbench);
+        Assert.Contains("ConnectionsWorkflows", active);
+        Assert.Contains("DecisionsWorkflowsDesign", active);
+        Assert.Contains("WorkflowsRuntimeResumption", active);
+        Assert.DoesNotContain("ActorHttpConnections", active);
         Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-preview.db")));
         Assert.False(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
     }
@@ -172,6 +186,63 @@ public sealed class WorkbenchShellActivationTests
         Assert.Contains("reported the default shell as failed (shell_activation_failed)", failure.Message, StringComparison.Ordinal);
         Assert.True(failure.Message.Contains(expectedError, StringComparison.Ordinal), failure.Message);
     }
+
+    [Fact]
+    public async Task Production_actor_default_clears_its_demo_key_when_readiness_names_another_shell()
+    {
+        const string actorRecoveryKey = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey";
+        var withoutKey = WorkbenchShell.Production.Without(actorRecoveryKey);
+        var shell = withoutKey with
+        {
+            Settings = new Dictionary<string, string>(withoutKey.Settings)
+            {
+                ["Elsa:Readiness:DefaultShellName"] = "health-probe",
+                ["Elsa:Readiness:WarmDefaultShell"] = "false"
+            }
+        };
+        await using var workbench = await WorkbenchProcess.StartAsync(shell, waitForReady: false);
+
+        var details = await workbench.ManagementClient.GetFromJsonAsync<RegisteredShell>("/_admin/shells/default");
+        var blueprint = Assert.IsType<RegisteredShell>(details).Blueprint;
+        Assert.Contains("WorkflowsRuntimeKernelHosting", blueprint.Features);
+        var key = Assert.Single(blueprint.ConfigurationData,
+            setting => string.Equals(setting.Key, actorRecoveryKey, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("", key.Value.GetString());
+    }
+
+    private static async Task<HashSet<string>> ReadEffectiveFeatureClosureAsync(WorkbenchProcess workbench)
+    {
+        // CShells reports the effective registered blueprint. The runtime catalog provides the dependencies for it.
+        var registered = await workbench.ManagementClient.GetFromJsonAsync<RegisteredShell>("/_admin/shells/default");
+        var shell = Assert.IsType<RegisteredShell>(registered);
+        Assert.Contains(shell.Generations, generation => generation.State == "Active");
+
+        using var authenticated = new HttpClient { BaseAddress = workbench.Client.BaseAddress };
+        using var login = await authenticated.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var catalog = Assert.IsType<DependencyCatalog>(
+            await authenticated.GetFromJsonAsync<DependencyCatalog>("/modularity/features"));
+        var descriptors = catalog.Features.Where(feature => feature.RuntimeAvailable)
+            .ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
+
+        var closure = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Queue<string>(shell.Blueprint.Features);
+        while (pending.TryDequeue(out var next))
+        {
+            if (!closure.Add(next)) continue;
+            Assert.True(descriptors.TryGetValue(next, out var descriptor), $"No runtime descriptor for {next}.");
+            foreach (var dependency in descriptor.Dependencies.Where(dependency => !dependency.Optional))
+                pending.Enqueue(dependency.Id);
+        }
+        return closure;
+    }
+
+    private sealed record RegisteredShell(EffectiveBlueprint Blueprint, ActiveGeneration[] Generations);
+    private sealed record EffectiveBlueprint(string[] Features, Dictionary<string, JsonElement> ConfigurationData);
+    private sealed record ActiveGeneration(string State);
+    private sealed record DependencyCatalog(RuntimeFeature[] Features);
+    private sealed record RuntimeFeature(string Id, bool RuntimeAvailable, FeatureDependency[] Dependencies);
+    private sealed record FeatureDependency(string Id, bool Optional);
 
     private static void AssertSetting(IReadOnlyDictionary<string, CatalogFeature> catalog, string feature, string setting, string expected)
     {

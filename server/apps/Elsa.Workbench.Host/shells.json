@@ -165,7 +165,6 @@
           "DecisionsDesign": {},
           "DecisionsApi": {},
           "DecisionsEntityFrameworkCore": {},
-          "DecisionsWorkflowsDesign": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},
           "Serialization": {},
