@@ -58,7 +58,7 @@ public sealed class AuthoringFixtureHostEvidenceTests
         Assert.DoesNotContain(catalog, item => item.Id == "WorkflowsRuntimeApi" && item.Runs);
         Assert.DoesNotContain(catalog, item => item.Id == "WorkflowsRuntimeTriggers" && item.Runs);
 
-        foreach (var route in new[] { "/design/activities/catalog", "/design/workflows/definitions", "/runtime/workflows/executables" })
+        foreach (var route in new[] { "/design/activities/catalog", "/design/workflows/definitions" })
         {
             using var routeResponse = await workbench.Client.GetAsync(route);
             output.WriteLine($"GET {route} -> {(int)routeResponse.StatusCode}");
@@ -66,6 +66,8 @@ public sealed class AuthoringFixtureHostEvidenceTests
         }
         using var publishingResponse = await workbench.Client.GetAsync("/publishing/workflows/version-1/publish");
         Assert.Equal(System.Net.HttpStatusCode.MethodNotAllowed, publishingResponse.StatusCode);
+        using var runtimeResponse = await workbench.Client.GetAsync("/runtime/workflows/executables");
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, runtimeResponse.StatusCode);
         using var absentResponse = await workbench.Client.GetAsync("/not-an-authoring-route");
         Assert.Equal(System.Net.HttpStatusCode.NotFound, absentResponse.StatusCode);
         Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "authoring.db")), "The selected SQLite resource did not create its database.");

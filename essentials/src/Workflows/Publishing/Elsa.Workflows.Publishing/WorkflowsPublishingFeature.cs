@@ -44,7 +44,7 @@ namespace Elsa.Workflows.Publishing;
     name: "WorkflowsPublishing",
     DisplayName = "Workflows Publishing",
     Description = "Endpoint-free engine that compiles designed workflow definitions into canonical executables.",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Events", "WorkflowDesignValidations" }
+    DependsOn = new object[] { "Events", "WorkflowDesignValidations" }
 )]
 public class WorkflowsPublishingFeature : IShellFeature
 {
@@ -53,12 +53,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         var assembly = GetType().Assembly;
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityContractStorageDriverProvider, RuntimeActivityContractStorageDriverProvider>());
-        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
-        services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
-        services.TryAddScoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
-            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
-        services.TryAddScoped<IExecutableActivityTemplateReader>(serviceProvider =>
-            serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
+        services.AddWorkflowPublicationDefaults();
         // Only claim registrations that this feature actually added, for the reason given at the policy and
         // projection-intent stores below.
         PublishingPersistenceFamilyBackend.TryAddInMemory<IPublicationRecordStore, InMemoryPublicationRecordStore>(
@@ -86,10 +81,6 @@ public class WorkflowsPublishingFeature : IShellFeature
         // Deterministic policies hold no request or persistence state and remain safe singletons.
         services.TryAddSingleton<IPublicationPolicyResolver, PublicationPolicyResolver>();
         services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();
-        // Runtime owns activation authority, lifecycle coordination, and serving projections. The runtime core
-        // feature normally supplies these services; keep provider-neutral fallbacks here for engine-only
-        // compositions that do not mount the complete runtime feature.
-        services.AddWorkflowActivationDefaults();
         // Publishing operations consume provider-overridable stores. Durable providers register those stores as
         // scoped services, so their aggregators must share the request scope instead of capturing it globally.
         services.TryAddScoped<IPublicationActivator, PublicationActivator>();
@@ -168,7 +159,6 @@ public class WorkflowsPublishingFeature : IShellFeature
         // event. Only acts on claims whose source opted in (PublishOnReconcile); never throws.
         services.AddEventHandler<WorkflowVersionsReconciled, PublishReconciledWorkflowVersions>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
-        services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);
     }
 }
