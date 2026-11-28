@@ -3063,7 +3063,8 @@ internal static class PostgresRootParkedOperatorChecks
         yield return ("Children", "\"Children\" = coalesce(\"Children\", '') || 'x'");
         yield return ("Parent", "\"Parent\" = coalesce(\"Parent\", '') || 'x'");
         yield return ("FoundationParkAt", "\"FoundationParkAt\" = coalesce(\"FoundationParkAt\", 0) + 1");
-        yield return ("FoundationTerminalRevision", "\"FoundationTerminalRevision\" = \"Revision\" + 1");
+        // A previous revision changes this column without claiming a new terminal stamp without its timestamp.
+        yield return ("FoundationTerminalRevision", "\"FoundationTerminalRevision\" = \"Revision\"");
         yield return ("FoundationTerminalAt", "\"FoundationTerminalAt\" = coalesce(\"FoundationTerminalAt\", 0) + 1");
         yield return ("Model", "\"Model\" = \"Model\" || 'x'");
         yield return ("Definition", "\"Definition\" = \"Definition\" || 'x'");
