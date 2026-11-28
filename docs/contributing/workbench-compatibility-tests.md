@@ -102,6 +102,53 @@ checkpoint implementation.
 )
 ```
 
+## Classic BPMN direct execution
+
+The classic BPMN activity host, its embedded `RunBpmn` activity and its
+direct-run fixtures use the previous execution core. Run the original
+module tests and the checked workflow-history witness from the same pinned
+source. Keep the original Workbench image, package versions and data for
+existing deployments.
+
+```sh
+git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-bpmn" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
+(
+  cd "$compatibility_root/classic-bpmn"
+  python3 tools/bpmn/restore_evidence.py
+  dotnet test extensions/Bpmn/tests/Tests/Elsa.Activities.Bpmn.Tests.csproj -c Release -p:RestoreLockedMode=true
+  dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj -c Release -p:RestoreLockedMode=true
+  dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -c Release -p:RestoreLockedMode=true \
+    --filter FullyQualifiedName~RuntimeHistoryBpmnOrderingTests
+)
+```
+
+Current source keeps BPMN structure, Design and XML interchange packages and
+their authoring tests. Its retained BPMN publication tests exercise provenance
+without starting a classic workflow.
+
+## Classic executable import and HTTP response replay
+
+The classic artifact importer accepts portable executable closures and can start their
+workflows in a runtime-only host. The classic HTTP response replay tests use that importer
+and a disposable process fixture to verify recovery after process loss. Use the same source
+for the producer, importer, and fixture.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-artifact-http" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
+  cd "$compatibility_root/classic-artifact-http"
+  dotnet test essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true
+  dotnet test essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter FullyQualifiedName~WorkflowArtifactExportImportExecutionTests
+  dotnet test extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~ResponseReplaySafetyProcessTests|FullyQualifiedName~ResponseReplayObservationTests'
+)
+```
+
+Current source retains the Publishing executable export and material checks, the Design
+JSON workflow reconciliation path, and the Actor HTTP provider witnesses.
+
 ## Classic reviews, Decisions, ETL and Rules in workflows
 
 `AgentReview`, `AgentReviewApi` and the Decisions, ETL, and Rules workflow

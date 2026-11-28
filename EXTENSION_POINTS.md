@@ -169,10 +169,10 @@ not automatic constitution violations.
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
 | Activities graph release inspection — compiler-free captured provider, plan and overlay verification | [`essentials/src/Activities/Graph/Releases/EXTENSION_POINTS.md`](essentials/src/Activities/Graph/Releases/EXTENSION_POINTS.md) |
 | Primitive release inspection — explicit WriteLine CLR owner profile | [`essentials/src/Activities/Primitives/Releases/EXTENSION_POINTS.md`](essentials/src/Activities/Primitives/Releases/EXTENSION_POINTS.md) |
-| Activities BPMN (released-semantics host adapter, direct model hosting and native RunBpmn) | [`extensions/Bpmn/src/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](extensions/Bpmn/src/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
+| Activities BPMN composite (released-semantics adapter and authored trigger bindings) | [BPMN composite](extensions/Bpmn/src/Composite/README.md) |
 | Activities BPMN hosting contracts (scoped publication/execution/inspection replacement) | [`extensions/Bpmn/src/Core/EXTENSION_POINTS.md`](extensions/Bpmn/src/Core/EXTENSION_POINTS.md) |
 | Activities BPMN design (authored structure lowering and publication pinning) | [`extensions/Bpmn/src/Design/EXTENSION_POINTS.md`](extensions/Bpmn/src/Design/EXTENSION_POINTS.md) |
-| Activities BPMN hosting API (authenticated direct-model commands, cancellation, incident retry and inspection) | [`extensions/Bpmn/src/Api/EXTENSION_POINTS.md`](extensions/Bpmn/src/Api/EXTENSION_POINTS.md) |
+| Archived BPMN hosting API (authenticated direct-model commands, cancellation, incident retry and inspection) | [Classic API extension points](https://github.com/elsa-workflows/elsa-foundation/blob/ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a/extensions/Bpmn/src/Api/EXTENSION_POINTS.md) |
 | Activities BPMN interchange (document importer and exporter replacement) | [`extensions/Bpmn/src/Interchange/EXTENSION_POINTS.md`](extensions/Bpmn/src/Interchange/EXTENSION_POINTS.md) |
 
 ### Workflows

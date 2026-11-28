@@ -92,12 +92,10 @@ public sealed class FeatureCompositionTests
     private static readonly string[] RequiresLegacyRuntime =
     [
         "ActivitiesBpmn",
-        "ActivitiesBpmnHosting",
         "ActivitiesDispatchWorkflowRuntime",
         "ActivitiesPrimitives",
         "ActivitiesRuntime",
         "AgentRuntime",
-        "JsonWorkflowArtifactReconciliation",
         "WorkflowsExecutionEvidence",
         "WorkflowsRuntimeHistory",
         "WorkflowsRuntimeRecurringTriggers",
@@ -493,7 +491,6 @@ public sealed class FeatureCompositionTests
             {
                 ["JsonActivityReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FilePath"] = activities },
                 ["JsonWorkflowReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
-                ["JsonWorkflowArtifactReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
                 ["Elsa3JsonReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = Directory.CreateDirectory(Path.Join(directory, "elsa3")).FullName },
                 ["FileSystemDistributedLocking"] = new() { ["LocksFolderPath"] = Path.Join(directory, "locks") },
                 [WorkflowsRuntimeKernelHostingFeature.FeatureName] = new() { ["SqlitePath"] = Path.Join(directory, "kernel.db") },

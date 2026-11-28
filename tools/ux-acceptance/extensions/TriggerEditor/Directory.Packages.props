@@ -1,4 +1,0 @@
-<Project>
-  <!-- This source Studio editor consumer uses the same package closure as its public SDK. -->
-  <Import Project="../../../../studio/Directory.Packages.props" />
-</Project>

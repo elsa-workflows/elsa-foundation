@@ -88,9 +88,8 @@
     <ProjectReference Include="../../../../extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Weaver\src\Workflows\Elsa.Weaver.Workflows\Elsa.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Weaver\src\Workflows\Runtime\Elsa.Weaver.Workflows.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="../../../../extensions/Bpmn/src/Composite/Elsa.Activities.Bpmn.Composite.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
-    <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Api\Elsa.Activities.Bpmn.Api.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Bpmn\src\Core\Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
@@ -161,7 +160,6 @@
     <ProjectReference Include="../../../../extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj" />
     <!-- Studio Preferences composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
     <ProjectReference Include="..\..\..\src\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Retained\Elsa.Workflows.Dashboard.Retained.csproj" />
@@ -235,7 +233,6 @@
     <!-- Feature composition covers classic EF selectors alongside the retained provider. -->
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Http\src\Workflows\Runtime\Elsa.Workflows.Runtime.Http.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />

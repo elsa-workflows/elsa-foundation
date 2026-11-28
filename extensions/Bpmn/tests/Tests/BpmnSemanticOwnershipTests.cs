@@ -23,13 +23,12 @@ public sealed class BpmnSemanticOwnershipTests
     public void Deleted_semantic_sources_types_and_host_pruning_do_not_return()
     {
         var source = SourceDirectory();
-        foreach (var package in new[] { "Elsa.Activities.Bpmn", "Composite" })
-        {
-            var directory = Path.Combine(source, package);
-            Assert.True(Directory.Exists(directory), $"Missing BPMN source directory: {directory}");
-            foreach (var path in DeletedSources)
-                Assert.False(File.Exists(Path.Combine(directory, path)), $"Deleted semantic source returned: {package}/{path}");
-        }
+        Assert.False(Directory.Exists(Path.Combine(source, "Elsa.Activities.Bpmn")));
+        var directory = Path.Combine(source, "Composite");
+        Assert.True(Directory.Exists(directory), $"Missing BPMN source directory: {directory}");
+        foreach (var path in DeletedSources)
+            Assert.False(File.Exists(Path.Combine(directory, path)), $"Deleted semantic source returned: {path}");
+
         var types = RuntimeTypes().ToArray();
         var deletedNames = DeletedSources.Select(Path.GetFileNameWithoutExtension).ToHashSet(StringComparer.Ordinal);
         Assert.Empty(types.Where(type => deletedNames.Contains(type.Name)).Select(type => type.FullName));
@@ -38,7 +37,7 @@ public sealed class BpmnSemanticOwnershipTests
     }
 
     private static IEnumerable<Type> RuntimeTypes() =>
-        typeof(ActivitiesBpmnHostingFeature).Assembly.GetTypes().Concat(typeof(ActivitiesBpmnFeature).Assembly.GetTypes());
+        typeof(ActivitiesBpmnFeature).Assembly.GetTypes();
 
     private static string SourceDirectory([CallerFilePath] string sourcePath = "") =>
         Path.GetFullPath("../../src", Path.GetDirectoryName(sourcePath)!);
