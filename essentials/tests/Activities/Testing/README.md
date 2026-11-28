@@ -74,3 +74,17 @@ activity contract checks. Supported Actor workflow execution is exercised by the
 Native and Kernel Host suites. They exercise entry selection from a triggered
 Flowchart, multiple authored HTTP entry registrations and exact scheduled trigger
 identity.
+
+## Classic Graph runtime execution and recovery
+
+Run the pinned Graph suite for the previous Runtime's child scheduling,
+checkpoint participation, cancellation and retry tests.
+
+```sh
+dotnet test essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
+
+Current Graph tests retain provider discovery, authored projection and validation,
+descriptor compatibility, boundary scope lookup and activation through the current
+registration. The Native and Kernel Host suites exercise the Actor Graph workflow path.
