@@ -70,9 +70,13 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
         Category = "Runtime")]
     public bool PreparedStandaloneStarts { get; set; }
 
-    /// <summary>Selects the dedicated Actor user task qualification format for a disposable database.</summary>
+    /// <summary>Selects the Actor user task protocol for a shell with the durable task journal and authorized inbox.</summary>
+    [ManifestSetting(DisplayName = "Actor user tasks", Description = "Enable the Actor user task protocol with a durable task journal. Existing store formats require the coordinated upgrade.", Category = "Runtime")]
+    public bool ActorUserTaskWaits { get; set; }
+
+    /// <summary>Explicitly advances an existing, stopped Actor store to the selected user task format.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public bool QualifyActorUserTaskWaits { get; set; }
+    public bool UpgradeActorUserTaskWaitStore { get; set; }
 
     /// <summary>Private opt-in for qualifying standalone asynchronous HTTP fan-out.</summary>
     internal bool PreparedStandaloneHttpFanOut { get; set; }
@@ -94,9 +98,12 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
 
     public void ConfigureServices(IServiceCollection services)
     {
+        if (UpgradeActorUserTaskWaitStore && !ActorUserTaskWaits)
+            throw new InvalidOperationException("An Actor task format upgrade requires the user task wait profile.");
         var publisherScope = PreparedStandaloneStarts ? EmbeddedTenant.Bind(Tenant) : null;
-        var storage = QualifyActorUserTaskWaits
-            ? KernelShellStorage.CreateUserTaskWaitsQualification(Provider, SqlitePath, PostgresConnectionString, publisherScope)
+        var storage = ActorUserTaskWaits
+            ? KernelShellStorage.CreateUserTaskWaitsQualification(Provider, SqlitePath, PostgresConnectionString, publisherScope,
+                UpgradeActorUserTaskWaitStore)
             : KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString, publisherScope);
         PreparedStandaloneHttpFanOut = storage.TakesRetainedHttpResponse;
         PreparedStandaloneHttpResponses = storage.TakesRetainedHttpResponse;

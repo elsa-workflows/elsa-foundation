@@ -8,9 +8,15 @@ namespace Elsa.Workbench.Tests;
 public sealed class WorkbenchUserTaskArchiveTests
 {
     [Fact]
-    public async Task Stock_actor_host_reads_its_inbox_and_reopens_published_task_forms()
+    public async Task Earlier_actor_profile_reads_its_inbox_and_reopens_published_task_forms()
     {
-        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings)
+            {
+                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:ActorUserTaskWaits"] = "false"
+            }
+        });
         using (var anonymous = await host.Client.GetAsync("/runtime/user-task-forms/definitions"))
             Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
 

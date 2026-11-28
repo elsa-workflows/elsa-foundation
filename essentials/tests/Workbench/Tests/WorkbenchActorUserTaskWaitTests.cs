@@ -8,17 +8,9 @@ namespace Elsa.Workbench.Tests;
 
 public sealed class WorkbenchActorUserTaskWaitTests
 {
-    private const string Qualification = "CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:QualifyActorUserTaskWaits";
-
     [Fact]
     public Task Actor_task_resumes_the_exact_form_in_a_reopened_stock_workbench() =>
-        QualifyAsync(() => WorkbenchProcess.StartAsync(WorkbenchShell.Development with
-        {
-            Settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings)
-            {
-                [Qualification] = "true"
-            }
-        }));
+        QualifyAsync(() => WorkbenchProcess.StartAsync(WorkbenchShell.Development));
 
     [SkippableFact]
     public async Task Actor_task_reopens_on_the_postgresql_compose_profile()
@@ -32,7 +24,6 @@ public sealed class WorkbenchActorUserTaskWaitTests
         {
             Settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings)
             {
-                [Qualification] = "true",
                 ["ConnectionStrings:Elsa"] = platform!,
                 ["CShells:Shells:default:Features:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey"] =
                     "workbench-task-fixture-recovery-signing-key",

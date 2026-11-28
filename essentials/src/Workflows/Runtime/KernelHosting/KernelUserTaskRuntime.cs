@@ -18,14 +18,15 @@ internal sealed class KernelUserTaskRuntime(KernelShellStorage storage, IService
     private static readonly TimeSpan ScanDelay = TimeSpan.FromSeconds(1);
     private IIngress? _ingress;
 
-    internal async Task BindAsync(IIngress ingress, CancellationToken cancellationToken)
+    internal async Task RequireJournalAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         await using var scope = await scopes.CreateAsyncScopeAsync(persistence);
         _ = Journal(scope.ServiceProvider);
         _ = scope.ServiceProvider.GetRequiredService<IUserTaskAccess>();
-        Volatile.Write(ref _ingress, ingress);
     }
+
+    internal void Bind(IIngress ingress) => Volatile.Write(ref _ingress, ingress);
 
     public bool Owns(UserTaskRecord task) => task.TenantId == tenant.Tenant &&
         task.ActorRecipient is { } recipient && recipient.ActorId == task.WorkflowExecutionId &&

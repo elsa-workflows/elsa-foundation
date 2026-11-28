@@ -103,19 +103,19 @@ internal abstract class KernelShellStorage
         Create(provider, sqlitePath, postgresConnectionString, Profile.PreparedHttpWaits);
 
     internal static KernelShellStorage CreateUserTaskWaitsQualification(string provider, string? sqlitePath, string? postgresConnectionString,
-        BoundScope? publisherScope) =>
-        Create(provider, sqlitePath, postgresConnectionString, Profile.UserTaskWaits, publisherScope);
+        BoundScope? publisherScope, bool upgradeUserTaskStore) =>
+        Create(provider, sqlitePath, postgresConnectionString, Profile.UserTaskWaits, publisherScope, upgradeUserTaskStore);
 
     private static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString, Profile profile,
-        BoundScope? publisherScope = null)
+        BoundScope? publisherScope = null, bool upgradeUserTaskStore = false)
     {
         var node = $"foundation-kernel-{Environment.ProcessId}-{Guid.NewGuid():N}";
         return provider?.Trim().ToLowerInvariant() switch
         {
             "sqlite" when !string.IsNullOrWhiteSpace(sqlitePath) && string.IsNullOrWhiteSpace(postgresConnectionString) =>
-                new Sqlite(node, Path.GetFullPath(sqlitePath), profile, publisherScope),
+                new Sqlite(node, Path.GetFullPath(sqlitePath), profile, publisherScope, upgradeUserTaskStore),
             "postgresql" when !string.IsNullOrWhiteSpace(postgresConnectionString) && string.IsNullOrWhiteSpace(sqlitePath) =>
-                new Postgres(node, postgresConnectionString, profile, publisherScope),
+                new Postgres(node, postgresConnectionString, profile, publisherScope, upgradeUserTaskStore),
             "sqlite" => throw new InvalidOperationException("Set SqlitePath to a dedicated local database file and leave PostgresConnectionString empty."),
             "postgresql" => throw new InvalidOperationException("Set PostgresConnectionString for the dedicated kernel database and leave SqlitePath empty."),
             _ => throw new InvalidOperationException("Use SQLite or PostgreSQL for WorkflowsRuntimeKernelHosting's Provider.")
@@ -153,7 +153,7 @@ internal abstract class KernelShellStorage
         new(occurrence.Executable.DefinitionId, occurrence.ScheduleKey, new(occurrence.ScheduleReference),
             occurrence.ArmGeneration, occurrence.TimerDeliveryId, occurrence.Due.ToUnixTimeMilliseconds());
 
-    private sealed class Sqlite(string node, string path, Profile profile, BoundScope? publisherScope) : KernelShellStorage
+    private sealed class Sqlite(string node, string path, Profile profile, BoundScope? publisherScope, bool upgradeUserTaskStore) : KernelShellStorage
     {
         private SqliteEmbeddedFoundation? _foundation = profile switch
         {
@@ -213,7 +213,7 @@ internal abstract class KernelShellStorage
         public override ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token) =>
             ValueTask.FromResult(BindSchedules(scope, Foundation.BindScheduleControls(ScheduleActor.ActorType),
                 Foundation.BindScheduleOccurrences(scope, ScheduleActor.ActorType)));
-        public override Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null)
+        public override async Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null)
         {
             if (TakesPreparedStarts)
             {
@@ -237,7 +237,8 @@ internal abstract class KernelShellStorage
                     _ => SqliteEmbeddedFoundation.WithRootStartProtection(path, node, WorkflowActor.ActorType, protectRootStart, publisherScope)
                 };
             }
-            return Foundation.InstallShippedAsync(token);
+            if (upgradeUserTaskStore) await Foundation.UpgradeUserTaskWaitFormatAsync(token);
+            await Foundation.InstallShippedAsync(token);
         }
 
         public override Task<RootStartProof> ConfirmPreparedStartAsync(BoundScope scope, ActorRef actor, string issuance,
@@ -287,12 +288,14 @@ internal abstract class KernelShellStorage
         private readonly string _node;
         private readonly Profile _profile;
         private readonly BoundScope? _publisherScope;
+        private readonly bool _upgradeUserTaskStore;
 
-        public Postgres(string node, string connectionString, Profile profile, BoundScope? publisherScope)
+        public Postgres(string node, string connectionString, Profile profile, BoundScope? publisherScope, bool upgradeUserTaskStore)
         {
             _node = node;
             _profile = profile;
             _publisherScope = publisherScope;
+            _upgradeUserTaskStore = upgradeUserTaskStore;
             _options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connectionString).Options;
             if (!TakesPreparedStarts) _requests = PostgresPreviewHosting.CreateRequests(OpenDatabase, node, WorkflowActor.ActorType);
         }
@@ -371,7 +374,10 @@ internal abstract class KernelShellStorage
                     await PostgresPreviewHosting.InstallHeldEphemeralHttpQualificationAsync(_options, token);
                     break;
                 case Profile.UserTaskWaits:
-                    await PostgresPreviewHosting.InstallUserTaskWaitsQualificationAsync(_options, WorkflowActor.ActorType, _publisherScope, token);
+                    if (_upgradeUserTaskStore)
+                        await PostgresPreviewHosting.UpgradeUserTaskWaitFormatAsync(_options, WorkflowActor.ActorType, _publisherScope, token);
+                    else
+                        await PostgresPreviewHosting.InstallUserTaskWaitsQualificationAsync(_options, WorkflowActor.ActorType, _publisherScope, token);
                     break;
                 case Profile.PreparedStarts:
                     await PostgresPreviewHosting.InstallPreparedStartsQualificationAsync(_options, token);

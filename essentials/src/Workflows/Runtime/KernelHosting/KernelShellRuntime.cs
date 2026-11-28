@@ -97,9 +97,10 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ? new KernelExecutableProtection(scopes, persistenceScope, tenant, serving, storage, clock,
                 logs.CreateLogger<KernelExecutableProtection>(), testTenant)
             : null;
+        if (userTasks is not null) await userTasks.RequireJournalAsync(token);
         await storage.InstallAsync(token, storage.TakesPreparedStarts ? _protection!.ProtectHeldStartAsync : null);
         _foundation = await storage.OpenAsync(token);
-        if (userTasks is not null) await userTasks.BindAsync(_foundation.Ingress, token);
+        userTasks?.Bind(_foundation.Ingress);
         _schedules = await CreateScheduleWorkerAsync(token);
         if (_protection is not null) await _protection.RequireAsync(token);
         await ServePublicationsAsync(token);
