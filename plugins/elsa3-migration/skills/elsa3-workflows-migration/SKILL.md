@@ -293,6 +293,9 @@ the user:
 - **A definition refused only because a dependency was refused**: fix the root; leave the blocked definition alone.
 - **The migration host does not reference or list a planned feature**: report it before running the assessment.
 - **The user stops in the middle of a port**: the component stays `porting`; the next session continues it.
+- **The plan and the files disagree** (the plan records progress the project does not show, or a project path no
+  longer exists): tell the user, ask where the work is, and correct the plan before continuing. The plan records
+  decisions; the files show what is built.
 - **A report with an unknown schema version**: stop and ask the user to update this guide.
 - **The tool refuses to run, or the build fails**: show the reason or the errors, record them, and stop. Never read an
   older report instead.
