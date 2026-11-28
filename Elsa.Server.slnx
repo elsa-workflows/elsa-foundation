@@ -621,6 +621,7 @@
     <Project Path="essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/Persistence/">
+    <Project Path="essentials/src/Workflows/Runtime/Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/">
