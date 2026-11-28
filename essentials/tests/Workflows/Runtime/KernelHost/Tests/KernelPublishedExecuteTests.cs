@@ -267,7 +267,7 @@ public sealed partial class KernelPublishedExecuteTests
         var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
         {
             Provider = provider,
-            SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
+            SqlitePath = directory is null ? null : Path.GetRelativePath(Directory.GetCurrentDirectory(), Path.Combine(directory, "foundation.db")),
             PostgresConnectionString = foundation
         };
         if (shippedTestRuns)
