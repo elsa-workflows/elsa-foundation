@@ -60,7 +60,7 @@ public sealed class GraphActivityDrive : IActivityDrive
         string entryOutcome)
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services))
             .Build("actexec-graph-boundary", "actexec-graph-entry");
 
         var descriptor = NewDescriptor(outcomeMappings);

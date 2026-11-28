@@ -986,11 +986,6 @@
   <Folder Name="/extensions/Http/tests/Workflows/Runtime/">
     <Project Path="extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
   </Folder>
-  <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/">
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/TimerHistoryRestartHost/TimerHistoryRestartHost.csproj" />
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/RuntimeHistoryRestartHost/RuntimeHistoryRestartHost.csproj" />
-    <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/WorkerOidcHost.csproj" />
-  </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/" />
   <Folder Name="/essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/">
     <Project Path="essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj" />

@@ -1,6 +1,6 @@
 # Worker HTTP starting profile
 
-`worker-http@1` is a Foundation-reviewed starting selection for a single HTTP worker with durable workflow execution, event resumption, local filesystem locking and external bearer normalization. It selects [19 explicit feature IDs](../../specs/191-worker-http-profile/contracts/worker-profile.md), including identity abstractions, OIDC and the separate IAM EF feature. It contains no authority, audience, tenant, database connection, signing key or lock-directory value.
+`worker-http@1` is an immutable classic profile for a single HTTP worker with durable workflow execution, event resumption, local filesystem locking and external bearer normalization. Use these instructions with its matching packages and [pinned classic Runtime EF source](../../essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/README.md). The profile selects [19 explicit feature IDs](../../specs/191-worker-http-profile/contracts/worker-profile.md), including identity abstractions, OIDC and the separate IAM EF feature. It contains no authority, audience, tenant, database connection, signing key or lock-directory value.
 
 The profile is a pinned starting point. Individual additions/removals remain available, and the planner explains exact membership and missing required dependencies. The new catalog retains both earlier catalog pins and unchanged Embedded/diagnostics definitions. Package availability and runtime readiness require their own evidence.
 

@@ -2,7 +2,7 @@
 
 ## Contributions
 
-`WorkflowDashboardQueriesFeature` is the composition root. It contributes one scoped `WorkflowDashboardQuerySource` under each of `IDashboardDatasetExtension`, `IDashboardQueryValidationExtension`, `IDashboardQueryExecutionExtension` and `IDashboardQueryDrillExtension`, through `TryAddEnumerable`. These additive Core contracts and their four named Sequential events are owned by the [Dashboard catalog](../../Management/EXTENSION_POINTS.md#implementable-contributor-interfaces). Ownership is `Elsa.Workflows.Dashboard.Queries` / `elsa.workflows.runs`; no second aggregator is registered here.
+`KernelWorkflowDashboardQueriesFeature` is the composition root. It contributes one scoped `WorkflowDashboardQuerySource` under each of `IDashboardDatasetExtension`, `IDashboardQueryValidationExtension`, `IDashboardQueryExecutionExtension` and `IDashboardQueryDrillExtension`, through `TryAddEnumerable`. These additive Core contracts and their four named Sequential events are owned by the [Dashboard catalog](../../Management/EXTENSION_POINTS.md#implementable-contributor-interfaces). Ownership is `Elsa.Workflows.Dashboard.Queries` / `elsa.workflows.runs`; no second aggregator is registered here.
 
 `WorkflowDashboardQueryPermissionExtension` is a singleton `IPermissionContributor`, contributing `workflows/dashboard-queries:read` through [Foundation Identity](../../../../../essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md#ipermissioncontributor). Saved resource access never substitutes for this source permission.
 

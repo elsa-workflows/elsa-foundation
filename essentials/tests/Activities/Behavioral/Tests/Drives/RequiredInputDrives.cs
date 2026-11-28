@@ -50,7 +50,7 @@ public sealed class RequiredInputDrive : IActivityDrive
         (typeof(CronActivity), SchedulingHarnessForRequiredInput),
         (typeof(HttpEndpoint), HttpHarness),
         (typeof(SendHttpRequest), HttpHarness),
-        (typeof(Complete), () => Harness(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services)))
+        (typeof(Complete), () => Harness(services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services)))
     ];
 
     public async Task DriveAsync(ActivityDriveRecorder recorder)

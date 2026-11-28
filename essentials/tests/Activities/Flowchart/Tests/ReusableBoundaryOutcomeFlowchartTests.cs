@@ -18,7 +18,7 @@ public sealed class ReusableBoundaryOutcomeFlowchartTests
     {
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
-            .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new GraphActivitiesRuntimeHostingFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .Build(["actexec-flowchart", "actexec-boundary", "actexec-entry", "actexec-declined"]);
         var reusableBoundary = NewReusableBoundary("Rejected");

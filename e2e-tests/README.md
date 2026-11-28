@@ -158,10 +158,8 @@ Docker. On Windows replace `pwsh -NoProfile -File` with `powershell -NoProfile -
   disposable data, following the exact file inventory and allowlist in the [backend quickstart](../docs/contributing/backend-source-quickstart.md#reset-disposable-sqlite-data).
   Preserve valuable workflows in their existing checkout and use a separate disposable checkout; do not
   delete database files with a wildcard or treat this reset as an in-place data migration.
-- **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
-  `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
-  require the DispatchWorkflow features (see "Composition change" below). A suite whose features aren't composed
-  will fault, not skip.
+- **Opt-in features:** `DispatchWorkflow` and `bpmn` require the DispatchWorkflow features (see
+  “Composition change” below). The [classic scheduling witnesses](scheduling/README.md) use their pinned Workbench.
 
 **A failing e2e test is a signal, not a verdict.** It means one of two things: (1) a genuine **regression** in the
 server, or (2) the test is **stale** because the codebase moved — a contract/response shape changed, a tracked bug
