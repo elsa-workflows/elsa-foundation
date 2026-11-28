@@ -65,7 +65,8 @@ public sealed class CliAcceptanceLegTests
         "StudioPreferencesEntityFrameworkCore",
         "WorkflowsDesignEntityFrameworkCore",
         "WorkflowsPublishingEntityFrameworkCore",
-        "WorkflowsRuntimeEntityFrameworkCore"
+        "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
     ];
 
     [SkippableFact]

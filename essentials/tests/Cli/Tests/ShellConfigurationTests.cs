@@ -25,7 +25,7 @@ public sealed class ShellConfigurationTests : IDisposable
     [Fact]
     public void A_features_section_mixing_array_and_object_map_children_is_refused()
     {
-        var run = List("""{"CShells":{"Shells":{"default":{"Features":{"0":"WorkflowsRuntimeEntityFrameworkCore","WorkflowsRuntimeEntityFrameworkCore":{}}}}}}""");
+        var run = List("""{"CShells":{"Shells":{"default":{"Features":{"0":"WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence","WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence":{}}}}}}""");
 
         Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
         Assert.Contains("shells-configuration-invalid", run.Text, StringComparison.Ordinal);
@@ -35,7 +35,7 @@ public sealed class ShellConfigurationTests : IDisposable
     [Fact]
     public void A_feature_whose_value_is_neither_a_boolean_nor_an_object_is_refused()
     {
-        var run = List("""{"CShells":{"Shells":{"default":{"Features":{"WorkflowsRuntimeEntityFrameworkCore":"PostgreSql"}}}}}""");
+        var run = List("""{"CShells":{"Shells":{"default":{"Features":{"WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence":"PostgreSql"}}}}}""");
 
         Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
         Assert.Contains("must be true, false, a 'true'/'false' string, or an object", run.Text, StringComparison.Ordinal);

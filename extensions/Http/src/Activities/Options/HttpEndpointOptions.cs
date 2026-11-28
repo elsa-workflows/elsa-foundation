@@ -1,7 +1,7 @@
 namespace Elsa.Activities.Http.Options;
 
 /// <summary>
-/// Configuration for the HTTP endpoint request middleware (<c>HttpEndpointMiddleware</c>). Default-constructable
+/// Configuration for workflow HTTP request intake. Default-constructable
 /// so the standard options pipeline can materialize it and hosts can override it via
 /// <c>services.Configure&lt;HttpEndpointOptions&gt;(...)</c>.
 /// </summary>

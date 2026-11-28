@@ -284,7 +284,7 @@ public sealed class StandaloneHttpTriggerTests
             Receipt = new(RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, selection, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1))), false);
             Port = new(Receipt);
             var collection = new ServiceCollection().AddLogging().AddPersistenceCore(scope.Persistence.Value);
-            new Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature().ConfigureServices(collection);
+            new Elsa.Workflows.Runtime.Http.WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(collection);
             collection.AddSingleton<IActivityExecutionStateStore>(Activities);
             collection.AddSingleton<IWorkflowExecutionStateStore>(Executions);
             collection.AddScoped<HttpResponseInstructionDelivery>();

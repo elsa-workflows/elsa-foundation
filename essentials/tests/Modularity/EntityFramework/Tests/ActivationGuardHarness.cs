@@ -61,7 +61,7 @@ internal sealed class CapturedLogs : ILoggerProvider
 internal sealed class ActivationGuardHarness : IDisposable
 {
     public const string SecretsFeature = "SecretsEntityFrameworkCore";
-    public const string RuntimeFeature = "WorkflowsRuntimeEntityFrameworkCore";
+    public const string RuntimeFeature = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
     public const string DashboardFeature = "WorkflowsDashboardEntityFrameworkCore";
 
     /// <summary>What a host running the guard would have loaded: the modules, and the features that map to them.</summary>
@@ -71,7 +71,7 @@ internal sealed class ActivationGuardHarness : IDisposable
         typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimeDbContext).Assembly,
-        typeof(RuntimeEntityFrameworkCoreFeature).Assembly
+        typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly
     ];
 
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("elsa-activation-guard");

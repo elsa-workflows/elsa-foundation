@@ -30,7 +30,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// <para>
 /// Templates are stored <b>endpoint-relative</b> (exactly as authored/normalized, e.g. <c>orders/{id}</c>) —
 /// never base-path-prefixed. The endpoints base path is a middleware concern
-/// (<c>HttpEndpointMiddleware</c> strips it with segment-bounded matching before consulting the route table),
+/// (request intake strips it with segment-bounded matching before consulting the route table),
 /// so prefixing here would both duplicate that concern and couple two independently configurable options.
 /// </para>
 /// <para>

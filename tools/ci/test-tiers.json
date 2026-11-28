@@ -92,11 +92,6 @@
       "medianMinutes": 0.08
     },
     {
-      "project": "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
-      "tier": "integration",
-      "medianMinutes": null
-    },
-    {
       "project": "extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.12
@@ -931,7 +926,6 @@
       {
         "name": "integration-other",
         "units": [
-          "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
           "essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj",
           "essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
           "essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest"
