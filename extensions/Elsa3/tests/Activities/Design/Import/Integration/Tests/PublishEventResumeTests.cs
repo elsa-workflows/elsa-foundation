@@ -40,22 +40,10 @@ public sealed class PublishEventResumeTests
         Assert.True(resumed.Workflow?.Status == WorkflowExecutionStatus.Completed, resumed.Describe());
         Assert.Contains(resumed.Activities, activity => activity.AuthoredActivityId == "wait" && activity.Status == ActivityExecutionStatus.Completed);
 
-        string? started = null;
-        while (started is null)
-        {
-            var candidates = await reads.ListAsync(starterDefinition, deadline.Token).ToListAsync(deadline.Token);
-            if (candidates.Count != 0)
-            {
-                var candidate = Assert.Single(candidates);
-                Assert.Equal(starter.ArtifactId, candidate.Run.Workflow);
-                Assert.Equal(starter.SourceReferenceId, candidate.Run.PublishedStart?.SourceReferenceId);
-                started = candidate.View.Header.Ref.Id;
-            }
-            else
-                await Task.Delay(100, deadline.Token);
-        }
-
-        var settled = await host.WaitForSettledAsync(started);
+        var started = await host.WaitForActorAsync(starterDefinition);
+        Assert.Equal(starter.ArtifactId, started.Run.Workflow);
+        Assert.Equal(starter.SourceReferenceId, started.Run.PublishedStart?.SourceReferenceId);
+        var settled = await host.WaitForSettledAsync(started.View.Header.Ref.Id);
         Assert.True(settled.Workflow?.Status == WorkflowExecutionStatus.Completed, settled.Describe());
     }
 }

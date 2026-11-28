@@ -43,6 +43,7 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHosting;
+using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -50,6 +51,8 @@ using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Publishing;
 using Elsa3.Mapping;
+using Kernel.Foundation.Contracts;
+using Kernel.WorkflowActor;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -113,12 +116,9 @@ public sealed record RunState(IReadOnlyCollection<ActivityExecutionInspectionSum
 }
 
 /// <summary>
-/// The Elsa 3 import host (spec 246 R-13): one CShells web host on a test server whose one shell composes the import,
-/// its EF persistence and, unless turned off, its publishing bridge, over activity and workflow design, the graph
-/// activity provider, publishing and the runtime. Activity design, workflow design and the import share one SQLite file
-/// (the import commits through their transaction); publishing, Runtime artifacts and Actor storage have their own files.
-/// Every file is under one
-/// temporary directory, which disposal deletes.
+/// The Elsa 3 import host composes the import, its persistence and optional publishing bridge in the default shell.
+/// The import shares an SQLite file with activity and workflow design for their transaction. Publishing, Runtime
+/// artifacts and Actor storage each have their own file, all under one temporary directory.
 /// </summary>
 public sealed class Elsa3ImportHost : IAsyncDisposable
 {
@@ -598,6 +598,20 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                 return await ReadRunAsync(workflowExecutionId);
             Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not settle: {run.Describe()}.");
             await Task.Delay(100);
+        }
+    }
+
+    /// <summary>Waits for the one Actor run started for an imported definition.</summary>
+    public async Task<(ActorView View, WorkflowRunHeader Run)> WaitForActorAsync(string definitionId)
+    {
+        var reads = Shell.ServiceProvider.GetRequiredService<KernelRuns>();
+        using var deadline = new CancellationTokenSource(SettleTimeout);
+        while (true)
+        {
+            var candidates = await reads.ListAsync(definitionId, deadline.Token).ToListAsync(deadline.Token);
+            if (candidates.Count != 0)
+                return Assert.Single(candidates);
+            await Task.Delay(100, deadline.Token);
         }
     }
 
