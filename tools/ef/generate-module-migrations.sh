@@ -109,7 +109,7 @@ for row in "${rows[@]}"; do
   IFS='|' read -r context provider assembly namespace <<<"$row"
   project="$(module_project "$assembly")"
   dir="$(dirname "$project")/$(output_dir "$context" "$provider" "$assembly")"
-  if [[ "$mode" != "incremental" && ( "$assembly" == "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" || "$assembly" == "Elsa.Workflows.Design.Persistence.EntityFrameworkCore" ) ]]; then
+  if [[ "$mode" != "incremental" && ( "$assembly" == "Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore" || "$assembly" == "Elsa.Workflows.Design.Persistence.EntityFrameworkCore" ) ]]; then
     echo "skip $context: retained Runtime/Design history requires the corresponding incremental mode"
     continue
   fi

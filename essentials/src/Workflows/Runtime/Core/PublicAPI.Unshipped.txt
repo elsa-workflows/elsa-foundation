@@ -13267,3 +13267,5 @@ Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.Faulted = 1 -> Elsa.
 Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.LostBeforeSideEffect = 2 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
 Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.LostDuringSideEffect = 3 -> Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus
 virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke(TClaim! claim, System.DateTimeOffset now, System.TimeSpan visibilityTimeout, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TClaim?>
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.SavedStimulusStartOrigin = "runtime.savedStimulusStart" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.StandaloneIngressOrigin = "runtime.ingress.origin.v1" -> string!

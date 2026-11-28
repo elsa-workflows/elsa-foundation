@@ -70,6 +70,7 @@ internal sealed class ActivationGuardHarness : IDisposable
         typeof(SecretsEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly,
         typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
+        typeof(RuntimeDbContext).Assembly,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly
     ];
 

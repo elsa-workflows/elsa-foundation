@@ -300,6 +300,7 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
                 typeof(ActivitiesSequenceFeature).Assembly,
                 typeof(ApiCapabilitiesFeature).Assembly,
                 typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(RuntimeDbContext).Assembly,
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(TasksFeature).Assembly)

@@ -262,6 +262,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 typeof(ActivitiesSequenceFeature).Assembly,
                 typeof(ApiCapabilitiesFeature).Assembly,
                 typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(RuntimeDbContext).Assembly,
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(WorkflowsRuntimeTriggersFeature).Assembly,
