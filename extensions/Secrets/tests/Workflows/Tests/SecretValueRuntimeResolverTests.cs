@@ -13,8 +13,7 @@ namespace Elsa.Secrets.Workflows.Tests;
 /// on success, and on failure a runtime code and classification per Secrets failure code, never the store's text.
 /// The runtime copies the classification into the fault unchanged, so the classification rule
 /// (<c>StoreUnavailable</c> transient, every other code permanent) rests on this mapping. The theory here covers every
-/// <see cref="SecretResolutionFailureCode"/> member; <see cref="SecretFailureIntegrationTests"/> covers the states the
-/// Secrets module can reach end to end.
+/// <see cref="SecretResolutionFailureCode"/> member.
 /// </summary>
 public sealed class SecretValueRuntimeResolverTests
 {

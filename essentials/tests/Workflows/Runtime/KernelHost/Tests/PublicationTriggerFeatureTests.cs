@@ -1,6 +1,9 @@
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Events;
+using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -29,10 +32,12 @@ public sealed class PublicationTriggerFeatureTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddCShells(shells => shells
-            .WithAssemblyContaining<WorkflowsRuntimePublicationTriggersFeature>()
+            .WithAssemblyContaining<WorkflowsPublishingFeature>()
+            .WithAssemblyContaining<WorkflowDesignValidationsFeature>()
+            .WithAssemblyContaining<EventsFeature>()
             .WithAssemblyContaining<PublicationTriggerProviderFeature>()
             .AddShell(shellName, shell => shell
-                .WithFeature<WorkflowsRuntimePublicationTriggersFeature>()
+                .WithFeature<WorkflowsPublishingFeature>()
                 .WithFeature<PublicationTriggerProviderFeature>()));
         await using var host = services.BuildServiceProvider(validateScopes: true);
         var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(shellName);

@@ -210,7 +210,6 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `single-outcome/Test-WhileLoop.ps1` | `While` loop terminated by a body `Set` of the condition variable (#977) |
 | `single-outcome/Test-WhileCounter.ps1` | `While` driven by a JS-incremented counter — body reads/writes a variable from JS via `getVariable` (#984 + #977) |
 | `branching/Test-ParallelFork.ps1` | `Parallel` fork/join |
-| `composition/Test-ChildWorkflowInput.ps1` | parent dispatches a child **and passes it an input**; child echoes it; correlate the child by correlationId |
 | `composition/Test-SharedPersistence.ps1` | opt-in shared-resource journeys: create/publish reusable activity, publish/execute workflow, restart and read persisted state, check primary/diagnostics database placement, run same-target resource-scoped CLI `list` and `validate` and refuse a different target; change the authored resource target, reload the shell, verify writes move, then reject an invalid candidate while the active shell remains available |
 | `diagnostics/Test-SharedDiagnosticsPersistence.ps1` | opt-in two-target Workbench journey: persist OTLP and structured logs on the diagnostics target, restart, validate module scope with CLI and refuse a split diagnostics layout before database migration |
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
@@ -371,7 +370,7 @@ reproduce. This is an architecture difference (like the removed flow-activity mo
 The following observations describe the previous runtime. For current Actor child execution, see the [retained kernel tests](../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs).
 
 Use the [classic compatibility checkout](../docs/contributing/workbench-compatibility-tests.md#classic-dispatch-and-called-workflow-control)
-for the `ActivitiesDispatchWorkflowRuntime` configuration and replay commands for both classic REST scripts.
+for the `ActivitiesDispatchWorkflowRuntime` configuration and replay commands for the classic REST scripts.
 
 Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with
 outcome `Dispatched` while the child runs independently.
