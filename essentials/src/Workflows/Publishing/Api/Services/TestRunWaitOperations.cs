@@ -15,15 +15,15 @@ public interface ITestRunWaitOperations
 
 internal sealed class TestRunWaitOperations(
     IWorkflowTestRunStarter testRuns,
-    IWorkflowExecutionStateStore executions,
     IWorkflowTestScopeStore scopes,
     IWorkflowExecutableStore executables,
-    IBookmarkStateStore bookmarks,
-    IActivityExecutionStateStore activities,
-    IBookmarkResumeDispatcher resume,
     IEnumerable<ITestRunWaitDriver> drivers,
     TimeProvider time,
-    IWorkflowTestRunWaitControl? kernel = null) : ITestRunWaitOperations
+    IWorkflowTestRunWaitControl? kernel = null,
+    IWorkflowExecutionStateStore? executions = null,
+    IBookmarkStateStore? bookmarks = null,
+    IActivityExecutionStateStore? activities = null,
+    IBookmarkResumeDispatcher? resume = null) : ITestRunWaitOperations
 {
     public async Task<TestRunWaitsView> GetAsync(string testRunId, CancellationToken cancellationToken)
     {
@@ -33,6 +33,7 @@ internal sealed class TestRunWaitOperations(
             if (await GetKernelRunAsync(run!, cancellationToken) is not { } exact) return new([]);
             return new((await ReadContextsAsync(exact, cancellationToken)).Select(DescribeWait).ToArray());
         }
+        if (bookmarks is null) return new([]);
         var execution = await ResolveExecutionAsync(run, cancellationToken);
         if (execution is null || !await IsOpenAsync(execution, cancellationToken))
             return new([]);
@@ -58,6 +59,7 @@ internal sealed class TestRunWaitOperations(
             var exact = await GetKernelRunAsync(run!, cancellationToken);
             return exact is null ? Missing() : await DeliverKernelAsync(exact, request, cancellationToken);
         }
+        if (bookmarks is null || activities is null || resume is null) return Missing();
         var execution = await ResolveExecutionAsync(run, cancellationToken);
         if (execution is null || !await IsOpenAsync(execution, cancellationToken))
             return Missing();
@@ -111,7 +113,7 @@ internal sealed class TestRunWaitOperations(
 
     private async Task<WorkflowExecutionState?> ResolveExecutionAsync(WorkflowTestRunView? view, CancellationToken cancellationToken)
     {
-        if (view?.WorkflowExecutionId is not { } executionId)
+        if (executions is null || view?.WorkflowExecutionId is not { } executionId)
             return null;
         var execution = await executions.FindAsync(executionId, cancellationToken);
         return execution is { RunKind: WorkflowRunKind.TestRun, TestScope: { } scope } && scope.ScopeId == view.TestRunId ? execution : null;

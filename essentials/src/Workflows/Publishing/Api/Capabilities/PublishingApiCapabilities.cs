@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Capabilities;
@@ -7,7 +8,32 @@ public static class PublishingApiCapabilities
     public const string CapabilityId = "elsa.api.publishing";
     public const string SourceFeatureId = "WorkflowsPublishingApi";
 
-    public static ApiCapabilityDeclaration StaticDeclaration { get; } = new(
+    private static readonly ApiCapabilityLink[] WorkflowTestRunLinks =
+    [
+        new("workflow-test-runs", "publishing/workflows/{versionId}/test-runs", templated: true),
+        new("workflow-draft-test-runs", "publishing/workflows/drafts/test-runs"),
+        new("workflow-draft-test-run-options", "publishing/workflows/drafts/test-run-options"),
+        new("workflow-test-run-status", "publishing/workflow-test-runs/{testRunId}", templated: true),
+        new("workflow-test-run-stop", "publishing/workflow-test-runs/{testRunId}/stop", templated: true)
+    ];
+
+    private static readonly ApiCapabilityLink[] WorkflowTestRunWaitLinks =
+    [
+        new("workflow-test-run-waits", "publishing/workflow-test-runs/{testRunId}/waits", templated: true),
+        new("workflow-test-run-events", "publishing/workflow-test-runs/{testRunId}/events", templated: true)
+    ];
+
+    private static readonly ApiCapabilityLink[] ActivityTestRunLinks =
+    [
+        new("activity-draft-test-run-dispatch", "publishing/activity-drafts/{draftId}/test-runs", templated: true),
+        new("activity-version-test-run-dispatch", "publishing/activity-versions/{versionId}/test-runs", templated: true),
+        new("activity-draft-test-run-status", "publishing/activity-test-runs/{testRunId}", templated: true),
+        new("activity-draft-test-run-idempotency-status", "publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", templated: true),
+        new("activity-version-test-run-idempotency-status", "publishing/activity-versions/{versionId}/test-runs/idempotency/{idempotencyKey}", templated: true),
+        new("activity-draft-test-run-cancel", "publishing/activity-test-runs/{testRunId}/cancel", templated: true)
+    ];
+
+    internal static ApiCapabilityDeclaration BaseDeclaration { get; } = new(
         CapabilityId,
         1,
         [
@@ -23,20 +49,37 @@ public static class PublishingApiCapabilities
             new("publication-slot-restore", "publishing/workflows/{definitionId}/slots/{slotName}/restore", templated: true),
             new("publication-record", "publishing/publications/{publicationId}", templated: true),
             new("workflow-executable-export", "publishing/workflows/{versionId}/executable-export", templated: true),
-            new("publication-policy", "publishing/workflows/{definitionId}/policy", templated: true),
-            new("workflow-test-runs", "publishing/workflows/{versionId}/test-runs", templated: true),
-            new("workflow-draft-test-runs", "publishing/workflows/drafts/test-runs"),
-            new("workflow-draft-test-run-options", "publishing/workflows/drafts/test-run-options"),
-            new("workflow-test-run-status", "publishing/workflow-test-runs/{testRunId}", templated: true),
-            new("workflow-test-run-waits", "publishing/workflow-test-runs/{testRunId}/waits", templated: true),
-            new("workflow-test-run-events", "publishing/workflow-test-runs/{testRunId}/events", templated: true),
-            new("workflow-test-run-stop", "publishing/workflow-test-runs/{testRunId}/stop", templated: true),
-            new("activity-draft-test-run-dispatch", "publishing/activity-drafts/{draftId}/test-runs", templated: true),
-            new("activity-version-test-run-dispatch", "publishing/activity-versions/{versionId}/test-runs", templated: true),
-            new("activity-draft-test-run-status", "publishing/activity-test-runs/{testRunId}", templated: true),
-            new("activity-draft-test-run-idempotency-status", "publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", templated: true),
-            new("activity-version-test-run-idempotency-status", "publishing/activity-versions/{versionId}/test-runs/idempotency/{idempotencyKey}", templated: true),
-            new("activity-draft-test-run-cancel", "publishing/activity-test-runs/{testRunId}/cancel", templated: true)
+            new("publication-policy", "publishing/workflows/{definitionId}/policy", templated: true)
         ],
         SourceFeatureId);
+
+    public static ApiCapabilityDeclaration StaticDeclaration { get; } = new(
+        CapabilityId, BaseDeclaration.ContractMajorVersion,
+        [.. BaseDeclaration.Links, .. WorkflowTestRunLinks, .. WorkflowTestRunWaitLinks, .. ActivityTestRunLinks], SourceFeatureId);
+
+    internal static IReadOnlyCollection<ApiCapabilityLink> TestRunLinks(PublishingTestRunRoutes routes) =>
+    [
+        .. (routes.Workflow ? WorkflowTestRunLinks : []),
+        .. (routes.Waits ? WorkflowTestRunWaitLinks : []),
+        .. (routes.Activity ? ActivityTestRunLinks : [])
+    ];
+}
+
+internal sealed record PublishingTestRunRoutes(bool Workflow, bool Waits, bool Activity)
+{
+    internal static readonly PublishingTestRunRoutes All = new(true, true, true);
+}
+
+internal sealed class PublishingTestRunCapabilitySource(PublishingTestRunRoutes? routes = null) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        var links = PublishingApiCapabilities.TestRunLinks(routes ?? PublishingTestRunRoutes.All);
+        IReadOnlyCollection<ApiCapabilityDeclaration> declarations = links.Count == 0 ? [] :
+        [
+            new(PublishingApiCapabilities.CapabilityId, PublishingApiCapabilities.BaseDeclaration.ContractMajorVersion,
+                links, $"{PublishingApiCapabilities.SourceFeatureId}.TestRuns")
+        ];
+        return ValueTask.FromResult(declarations);
+    }
 }

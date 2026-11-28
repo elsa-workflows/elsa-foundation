@@ -1,4 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Triggers;
@@ -26,6 +28,8 @@ public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
     private readonly IWorkflowTriggerBindingStore _store;
     private readonly IEnumerable<IWorkflowTriggerIndexObserver> _observers;
     private readonly IEnumerable<IWorkflowTriggerIndexValidator> _validators;
+    internal IRecurringTriggerScheduleStore? EmptyRecurringProjection { get; init; }
+    internal IEnumerable<IRecurringTriggerScheduleProvider> RecurringScheduleProviders { get; init; } = [];
 
     public WorkflowTriggerIndexer(
         IWorkflowTriggerBindingExtractor extractor,
@@ -86,8 +90,46 @@ public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
             .ToArray();
 
         await ValidateAsync(executable.Identity.ArtifactId, bindings, cancellationToken);
+        if (EmptyRecurringProjection is not null)
+            EnsureNoRecurringStarts(executable, cancellationToken);
         await _store.PrepareActivationAsync(activationId, bindings, cancellationToken);
+        if (EmptyRecurringProjection is not null)
+            await EmptyRecurringProjection.PrepareActivationAsync(activationId, [], cancellationToken);
         return bindings;
+    }
+
+    private void EnsureNoRecurringStarts(WorkflowExecutable executable, CancellationToken cancellationToken)
+    {
+        var providers = RecurringScheduleProviders.ToArray();
+        if (providers.Length == 0)
+            return;
+
+        foreach (var node in executable.RootActivity.DescendantsAndSelf())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!node.Metadata.TryGetValue(TriggerNodeMetadata.ExecutionTypeKey, out var executionType) ||
+                executionType != TriggerNodeMetadata.TriggerExecutionType)
+                continue;
+
+            foreach (var provider in providers)
+            {
+                try
+                {
+                    if (provider.Describe(node).Count == 0)
+                        continue;
+                }
+                catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
+                {
+                    throw new WorkflowTriggerPreflightException(executable.Identity.ArtifactId, node.ExecutableNodeId,
+                        node.ActivityType, [provider.ProviderId], "RecurringSchedule",
+                        "The recurring start schedule could not be described.", exception);
+                }
+
+                throw new WorkflowTriggerPreflightException(executable.Identity.ArtifactId, node.ExecutableNodeId,
+                    node.ActivityType, [provider.ProviderId], "RecurringSchedule",
+                    "Publishing a recurring start requires a recurring schedule indexer.");
+            }
+        }
     }
 
     private async ValueTask<WorkflowTriggerIndexSnapshot> ValidateAsync(

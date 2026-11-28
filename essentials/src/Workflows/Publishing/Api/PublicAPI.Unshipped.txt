@@ -1430,6 +1430,7 @@ Elsa.Workflows.Publishing.Api.Services.SourceOwnedActivityVersionPublisher.Publi
 Elsa.Workflows.Publishing.Api.WorkflowsPublishingApi
 Elsa.Workflows.Publishing.Api.WorkflowsPublishingApiFeature
 Elsa.Workflows.Publishing.Api.WorkflowsPublishingApiFeature.WorkflowsPublishingApiFeature() -> void
+Elsa.Workflows.Publishing.Api.WorkflowsPublishingApiFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 override Elsa.Workflows.Publishing.Api.Contracts.ActivityDraftTestRunCancellationDecision.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Api.Contracts.ActivityDraftTestRunCancellationDecision.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Api.Contracts.ActivityDraftTestRunCancellationDecision.ToString() -> string!

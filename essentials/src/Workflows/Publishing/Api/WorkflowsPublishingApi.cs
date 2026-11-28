@@ -2,6 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Publishing.Api.Authorization;
+using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Constants;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -31,7 +32,10 @@ public static class WorkflowsPublishingApi
 {
     internal const string OwnerId = "Elsa.Workflows.Publishing.Api";
 
-    public static void MapWorkflowsPublishingApi(IEndpointRouteBuilder endpoints)
+    public static void MapWorkflowsPublishingApi(IEndpointRouteBuilder endpoints) =>
+        MapWorkflowsPublishingApi(endpoints, PublishingTestRunRoutes.All);
+
+    internal static void MapWorkflowsPublishingApi(IEndpointRouteBuilder endpoints, PublishingTestRunRoutes testRuns)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
@@ -40,12 +44,51 @@ public static class WorkflowsPublishingApi
             WorkflowsPublishingJsonOptions.WireContext,
             jsonContentType: "application/json");
 
-        // Endpoint classes are scanned from this module's own assembly: each declares its route,
-        // metadata, and permission on itself under Endpoints/<Resource>/<Operation>/Endpoint.cs.
-        api.MapEndpointsFrom(typeof(WorkflowsPublishingApi).Assembly);
+        api.MapEndpoint<Endpoints.Activities.Construct.Endpoint>();
+        api.MapEndpoint<Endpoints.Activities.List.Endpoint>();
+        api.MapEndpoint<Endpoints.ActivityDrafts.Preflight.Endpoint>();
+        api.MapEndpoint<Endpoints.ActivityDrafts.Publish.Endpoint>();
+        api.MapEndpoint<Endpoints.ActivityPublications.GetReceipt.Endpoint>();
+        api.MapEndpoint<Endpoints.IncidentStrategies.List.Endpoint>();
+        api.MapEndpoint<Endpoints.Policy.Get.Endpoint>();
+        api.MapEndpoint<Endpoints.Policy.Set.Endpoint>();
+        api.MapEndpoint<Endpoints.Publications.Get.Endpoint>();
+        api.MapEndpoint<Endpoints.RuntimePreflight.Run.Endpoint>();
+        api.MapEndpoint<Endpoints.Slots.Restore.Endpoint>();
+        api.MapEndpoint<Endpoints.Slots.Unpublish.Endpoint>();
+        api.MapEndpoint<Endpoints.Slots.UnpublishReviewed.Endpoint>();
+        api.MapEndpoint<Endpoints.ValueConversionProfiles.List.Endpoint>();
+        api.MapEndpoint<Endpoints.Workflows.Preflight.Endpoint>();
+        api.MapEndpoint<Endpoints.Workflows.Publish.Endpoint>();
+        api.MapEndpoint<Endpoints.Workflows.SnapshotPreflight.Endpoint>();
+
+        if (testRuns.Workflow)
+        {
+            api.MapEndpoint<Endpoints.TestRuns.Get.Endpoint>();
+            api.MapEndpoint<Endpoints.TestRuns.Options.Endpoint>();
+            api.MapEndpoint<Endpoints.TestRuns.Start.Endpoint>();
+            api.MapEndpoint<Endpoints.TestRuns.StartDraft.Endpoint>();
+            api.MapEndpoint<Endpoints.TestRuns.Stop.Endpoint>();
+        }
+
+        if (testRuns.Waits)
+        {
+            api.MapEndpoint<Endpoints.TestRuns.DeliverEvent.Endpoint>();
+            api.MapEndpoint<Endpoints.TestRuns.Waits.Endpoint>();
+        }
+
+        if (testRuns.Activity)
+        {
+            api.MapEndpoint<Endpoints.ActivityTestRuns.Cancel.Endpoint>();
+            api.MapEndpoint<Endpoints.ActivityTestRuns.Get.Endpoint>();
+            api.MapEndpoint<Endpoints.ActivityTestRuns.GetByIdempotencyKey.Endpoint>();
+            api.MapEndpoint<Endpoints.ActivityTestRuns.GetVersionByIdempotencyKey.Endpoint>();
+            api.MapEndpoint<Endpoints.ActivityTestRuns.Start.Endpoint>();
+            api.MapEndpoint<Endpoints.ActivityTestRuns.StartVersion.Endpoint>();
+        }
 
         // Export is intentionally a plain Minimal API operation. It returns bytes produced by a target rather
-        // than a JSON response object, so it does not fit the request/response endpoint-class scanner's typed
+        // than a JSON response object, so it does not fit the request/response endpoint class's typed
         // operation shape. The producer and target remain replaceable through the engine/API feature seams.
         ElsaEndpointConventions.WithModuleOperation(
                 endpoints.MapGet(RouteConstants.WorkflowExecutableExport, (RequestDelegate)HandleExportExecutableClosureAsync)
