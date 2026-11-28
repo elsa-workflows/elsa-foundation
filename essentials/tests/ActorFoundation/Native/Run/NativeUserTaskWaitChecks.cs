@@ -91,6 +91,9 @@ internal static class NativeUserTaskWaitChecks
 
             var checkpoint = await ObserveAsync(store, tenant.Tenant, opened.Recipient.Actor,
                 row => row.State?.Contains(opened.Recipient.TaskId, StringComparison.Ordinal) == true, token);
+            var current = await foundation.CreateReads().GetAsync(tenant, opened.Recipient.Actor, token);
+            Require(current is not null && new WorkflowActor.WorkflowActor([ordinary]).Withholds(current.Header),
+                "An Actor owner without the task port must leave the newer committed task checkpoint unchanged.");
             var admitted = await ingress.SendAsync(tenant, new Contract.Target.Ref(result.Actor!.Value), "ordinary-resume", NativeKinds.Resume,
                 JsonSerializer.Serialize(new ResumeStimulus(opened.Recipient.TaskId)), cancellationToken: token);
             Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, "The ordinary stimulus must reach the correct actor.");
