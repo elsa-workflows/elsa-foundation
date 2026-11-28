@@ -2085,11 +2085,6 @@ public sealed class Elsa3ExpressionRewriter(
                 case CallExpression call when IsAmbientReader(call):
                     VisitArguments(call);
                     return;
-                case CallExpression call when IsInstanceReader(call):
-                    // The conversion's own checks of the call still report: its arguments, a clashing parameter or
-                    // workflowState.
-                    Visit(call);
-                    return;
                 case ChainExpression chain:
                     VisitTargetOperands(chain.Expression);
                     return;

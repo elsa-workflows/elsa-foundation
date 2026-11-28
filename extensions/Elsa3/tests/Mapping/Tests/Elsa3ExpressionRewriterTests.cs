@@ -230,10 +230,10 @@ public sealed class Elsa3ExpressionRewriterTests
     }
 
     /// <summary>
-    /// #6230: a member change is told to go, an assignment to the value itself to go to a local copy, and the latter also
-    /// names what changes the instance value where the script runs: in a non-reusable Run JavaScript body the
-    /// workflowState setter (setCorrelationId, setWorkflowInstanceName). Elsewhere, and for the instance ID, it names
-    /// none: whether an activity can change the value there depends on the workflow.
+    /// #6230: the refusal fits the change. A member change is told to go; a change of the value itself (an assignment or
+    /// update of the call, or the call as a destructuring target) is told to use a local copy, and in a non-reusable Run
+    /// JavaScript body also the workflowState setter (setCorrelationId, setWorkflowInstanceName) that changes the instance
+    /// value; elsewhere, and for the instance ID, no route is named. The instance ID is never called empty.
     /// </summary>
     [Theory]
     [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "Remove the change, or keep the member on a local object of the script's own, ")]
@@ -245,13 +245,13 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("getCorrelationId()++", Elsa3JavaScriptMode.Expression, false, "JavaScript changes the value 'getCorrelationId()' returns itself.")]
     [InlineData("getWorkflowInstanceName() = 'acme'", Elsa3JavaScriptMode.Script, false, "; to change the instance's name, call setWorkflowInstanceName(value), ")]
     [InlineData("getWorkflowInstanceId() = 'acme'", Elsa3JavaScriptMode.Script, false, "and change the local, in the Elsa 3 workflow before import.")]
-    public void Change_through_a_workflow_instance_value_names_the_route_that_changes_the_instance(
-        string source, Elsa3JavaScriptMode mode, bool reusable, string route)
+    public void Change_through_a_workflow_instance_value_gets_a_message_and_guidance_that_fit_the_change(
+        string source, Elsa3JavaScriptMode mode, bool reusable, string expected)
     {
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode, reusableWorkflow: reusable);
 
         var issue = Assert.Single(result.Issues);
-        Assert.Contains(route, issue.Message + " " + issue.Guidance, StringComparison.Ordinal);
+        Assert.Contains(expected, issue.Message + " " + issue.Guidance, StringComparison.Ordinal);
     }
 
     /// <summary>
