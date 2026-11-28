@@ -219,8 +219,9 @@ public static class NativeExecutableMapper
         {
             var kind = typeof(ClrActivityDescriptor).FullName;
             if (node.DescriptorType != WellKnownRuntimeActivityConsumers.ClrActivity ||
-                node.DescriptorSchemaVersion != "1" ||
+                node.DescriptorSchemaVersion != RuntimeActivityDescriptor.InitialSchemaVersion ||
                 node.ActivityContract is not { } contract || contract.ActivityTypeKey != node.ActivityType ||
+                contract.ContractVersion != node.ActivityTypeVersion ||
                 contract.DescriptorKind != kind || contract.Activation.DescriptorKind != kind ||
                 node.DescriptorPayload.ValueKind != JsonValueKind.Object ||
                 node.DescriptorPayload.EnumerateObject().Count() != 1 ||

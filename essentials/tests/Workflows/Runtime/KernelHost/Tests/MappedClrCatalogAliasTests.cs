@@ -26,25 +26,26 @@ public sealed class MappedClrCatalogAliasTests
     [InlineData(CatalogKey, Types.WriteLine, Types.WriteLine, "2")]
     [InlineData(CatalogKey, Types.WriteLine, Types.Event, "1")]
     [InlineData(CatalogKey, Types.WriteLine, Types.WriteLine, "1", Types.Event)]
+    [InlineData(CatalogKey, Types.WriteLine, Types.WriteLine, "1", null, "2.0.0")]
     [InlineData(CatalogKey, "Custom.Activity", "Custom.Activity", "1")]
     [InlineData(CatalogKey, "Elsa.Finish", "Elsa.Finish", "1")]
     [InlineData(Types.CompensationScope, Types.WriteLine, Types.WriteLine, "1")]
     public void Stale_hidden_or_unsupported_catalog_aliases_are_refused(string catalogKey, string alias, string activation,
-        string schema, string? contractAlias = null)
+        string schema, string? contractAlias = null, string contractVersion = "1.0.0")
     {
         var fault = Assert.Throws<NativeMappingRefusedException>(() =>
-            NativeExecutableMapper.Map(Executable(ClrNode(catalogKey, alias, activation, schema, contractAlias))));
+            NativeExecutableMapper.Map(Executable(ClrNode(catalogKey, alias, activation, schema, contractAlias, contractVersion))));
 
         Assert.Contains("mounted-activity", fault.Message, StringComparison.Ordinal);
     }
 
     private static ExecutableNode ClrNode(string catalogKey, string alias, string activation, string schema = "1",
-        string? contractAlias = null)
+        string? contractAlias = null, string contractVersion = "1.0.0")
     {
         var kind = typeof(ClrActivityDescriptor).FullName!;
         var descriptor = JsonSerializer.SerializeToElement(new { typeAlias = alias });
         var contractPayload = JsonSerializer.SerializeToElement(new { typeAlias = contractAlias ?? alias });
-        var contract = new ActivityContract(catalogKey, "1.0.0", kind, contractPayload, [],
+        var contract = new ActivityContract(catalogKey, contractVersion, kind, contractPayload, [],
             new ActivityResultContract(new ValueTypeDescriptor("Object"), false, ActivityValuePolicy.Default, []),
             [], new ActivityActivationRequirement(kind, activation));
         return new("mounted-activity", "mounted-activity", catalogKey, "1.0.0",
