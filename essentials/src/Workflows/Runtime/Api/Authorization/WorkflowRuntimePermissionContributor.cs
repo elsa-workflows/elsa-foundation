@@ -1,6 +1,5 @@
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Api.UserTasks;
-using Elsa.Workflows.Runtime.Api.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Authorization;
 
@@ -16,21 +15,5 @@ public sealed class WorkflowRuntimePermissionContributor : IPermissionContributo
         new(UserTaskPermissions.FormsRead, "Read task forms", "User Tasks", "Use published reusable task form versions."),
         new(UserTaskPermissions.FormsManage, "Manage task forms", "User Tasks", "Create immutable reusable task form versions."),
         .. RetainedWorkflowRuntimePermissionContributor.RuntimePermissions()
-    ];
-}
-
-internal sealed class RetainedWorkflowRuntimePermissionContributor : IPermissionContributor
-{
-    public string OwnerId => WorkflowsRuntimeApi.OwnerId;
-    public IEnumerable<Permission> Contribute() => RuntimePermissions();
-
-    internal static IEnumerable<Permission> RuntimePermissions() =>
-    [
-        new(WorkflowRuntimePermissions.WorkflowRuntimeRead, "Read workflow runtime", "Workflow runtime", "Read executable and workflow-instance runtime state."),
-        new(WorkflowRuntimePermissions.WorkflowRuntimeExecute, "Execute workflows", "Workflow runtime", "Start and interact with workflow executions."),
-        new(WorkflowRuntimePermissions.WorkflowRuntimeManage, "Manage workflow runtime", "Workflow runtime", "Alter, cancel, and administer workflow executions."),
-        new(HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission, "Inspect activity executions", "Workflow runtime", "Inspect the structure of recorded activity executions."),
-        new(HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission, "Inspect activity execution values", "Workflow runtime", "Read the captured input and output values of activity executions."),
-        new(HttpContextActivityExecutionInspectionAuthorizationContext.ResolveValuePayloadsPermission, "Resolve activity execution value payloads", "Workflow runtime", "Resolve the stored payloads behind captured activity execution values.")
     ];
 }

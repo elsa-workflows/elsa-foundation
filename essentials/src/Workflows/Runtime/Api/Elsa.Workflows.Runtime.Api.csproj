@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="../HttpApi/Elsa.Workflows.Runtime.Api.Http.csproj" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelApi" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Api.Tests" />

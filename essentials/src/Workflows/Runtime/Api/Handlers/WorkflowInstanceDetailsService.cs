@@ -96,12 +96,3 @@ public sealed class WorkflowInstanceDetailsService(
                 canInspectSensitiveValues));
     }
 }
-
-/// <summary>
-/// The workflow-instance detail read operation the runtime endpoints dispatch to. A null view means the workflow
-/// execution is missing or the caller may not inspect it.
-/// </summary>
-public interface IWorkflowInstanceDetailsService
-{
-    Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken);
-}

@@ -143,9 +143,3 @@ public sealed class WorkflowExecutionStartService : IWorkflowExecutionStartServi
 
     private static readonly IReadOnlyDictionary<string, object?> EmptyVariables = new Dictionary<string, object?>(StringComparer.Ordinal);
 }
-
-/// <summary>The published-workflow start operation the runtime execute endpoint dispatches to.</summary>
-public interface IWorkflowExecutionStartService
-{
-    Task<WorkflowExecutionStartDispatchView> ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken);
-}

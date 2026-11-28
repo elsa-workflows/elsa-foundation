@@ -47,12 +47,3 @@ public sealed class ActivityExecutionInspectionService(
             await authorization.CanResolveSensitiveValuePayloadsAsync(workflowExecution, cancellationToken));
     }
 }
-
-/// <summary>
-/// The single-activity-execution inspection operation the runtime endpoints dispatch to. A null view means the
-/// workflow execution or activity execution is missing, or the caller may not inspect it.
-/// </summary>
-public interface IActivityExecutionInspectionService
-{
-    Task<ActivityExecutionInspectionView?> GetAsync(GetActivityExecution request, CancellationToken cancellationToken);
-}

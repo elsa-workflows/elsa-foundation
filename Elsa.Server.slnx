@@ -601,6 +601,7 @@
     <Project Path="essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
+    <Project Path="essentials/src/Workflows/Runtime/HttpApi/Elsa.Workflows.Runtime.Api.Http.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />

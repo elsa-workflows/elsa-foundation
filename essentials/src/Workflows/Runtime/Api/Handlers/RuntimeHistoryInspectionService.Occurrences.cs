@@ -7,12 +7,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
-/// <summary>Serves the selected, authorized activity occurrence reader for the shell.</summary>
-public interface IRuntimeHistoryOccurrencePageReader
-{
-    Task<RuntimeHistoryOccurrencePageView?> ReadAsync(GetRuntimeHistoryOccurrences request, CancellationToken cancellationToken = default);
-}
-
 public sealed partial class RuntimeHistoryInspectionService
 {
     internal Func<WorkflowExecutionState, string, CancellationToken, ValueTask<string?>>? OccurrenceAccessBinding { get; init; }
