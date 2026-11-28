@@ -92,6 +92,8 @@ docker run -d --name elsa-workbench \
   -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__2=http://localhost:14000 \
   -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
   -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__SqlitePath=/app/data/elsa-workbench-actors.db \
+  -e "ConnectionStrings__Elsa=Data Source=/app/data/elsa.db" \
   -v elsa-workbench-packages:/app/packages \
   -v elsa-data:/app/data \
   elsaworkflows/elsa-workbench:latest
@@ -124,12 +126,10 @@ The non-obvious settings:
   entries, matching `docker-compose.images.yml`.
 - `elsa-workbench-packages:/app/packages` is the Nuplane directory feed: drop `.nupkg`
   activity/extension packages into that volume to load them.
-- `Elsa__DataProtection__EntityFrameworkCore__*` and `elsa-data:/app/data` keep the Data Protection key ring, which
-  protects the sign-in cookie and the antiforgery tokens, in a SQLite file on the `elsa-data` volume. The keys survive a
-  restart and a recreate of `elsa-workbench` for as long as that volume exists; the rest of its data stays in the
-  container. A recreate still signs you out here: the users live in the container too, so a recreated container seeds
-  them again and an earlier session no longer matches a user. Only a stack whose identity store is on a persistent
-  database, such as the PostgreSQL [reference stack](docker.md), keeps everyone signed in across a recreate. See
+- `elsa-data:/app/data` holds the Actor database, the shared Elsa platform database, and the
+  Data Protection key ring. Retaining the volume across container recreation keeps Actor state and
+  its publication material together. Separately configured SQLite files outside `/app/data`,
+  including diagnostics and Studio dashboards, are container-local. See
   [Data Protection keys](docker.md#data-protection-keys).
 - The `elsa-data` volume needs an image built after #2191, which creates `/app/data` owned by the image's `$APP_UID`
   (1654). With an older image the volume starts out owned by root and the container cannot write to it: pull the newer

@@ -1,6 +1,8 @@
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
+using Elsa.Connections.Workflows.Features;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -50,6 +52,44 @@ public sealed class HttpConnectionApplicatorTests
         Assert.Equal("Bearer tok-apply", request.Headers.GetValues("Authorization").Single());
         Assert.True(mask.HasRegistrations("actexec-1"));
         Assert.Equal("[secret:acme:token]", mask.Mask("actexec-1", "tok-apply"));
+    }
+
+    [Fact]
+    public async Task Actor_applicator_refuses_other_tenants_and_unapproved_destinations_before_attaching_credentials()
+    {
+        await using var provider = ConnectionsTestComposition.CreateProvider(configure: services =>
+            new ActorHttpConnectionsFeature().ConfigureServices(services));
+        await using var scope = provider.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IConnectionManager>().CreateAsync(Tenant, new()
+        {
+            Name = "actor-partner",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "127.0.0.1" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "connection-fixture-token" }
+            }
+        });
+
+        var applicator = scope.ServiceProvider.GetRequiredService<IWorkflowHttpConnectionApplier>();
+        var mask = new DefaultRuntimeSecretMask();
+        using var foreign = new HttpRequestMessage(HttpMethod.Get, "https://127.0.0.1");
+        await Assert.ThrowsAsync<ConnectionUnavailableException>(() =>
+            applicator.ApplyAsync(foreign, "actor-partner", "another-tenant", mask, "foreign", CancellationToken.None).AsTask());
+        Assert.False(mask.HasRegistrations("foreign"));
+
+        using var denied = new HttpRequestMessage(HttpMethod.Get, "https://localhost");
+        await Assert.ThrowsAsync<ConnectionUnavailableException>(() =>
+            applicator.ApplyAsync(denied, "actor-partner", Tenant, mask, "denied", CancellationToken.None).AsTask());
+        Assert.False(mask.HasRegistrations("denied"));
+        Assert.Null(denied.Headers.Authorization);
+
+        using var overrideHost = new HttpRequestMessage(HttpMethod.Get, "https://127.0.0.1");
+        overrideHost.Headers.TryAddWithoutValidation("Host", "localhost");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            applicator.ApplyAsync(overrideHost, "actor-partner", Tenant, mask, "override", CancellationToken.None).AsTask());
+        Assert.False(mask.HasRegistrations("override"));
+        Assert.Null(overrideHost.Headers.Authorization);
     }
 
     [Fact]

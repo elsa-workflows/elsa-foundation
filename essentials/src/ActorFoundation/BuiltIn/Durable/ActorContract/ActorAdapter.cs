@@ -535,10 +535,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         if (roots is not null)
         {
             if (rootJobHandle is null || RootActor(type) is not { } handler ||
-                job is not Durable.JobContext { FoundationRootReference: { } bound, Creation: 1 } ||
+                job is not Durable.JobContext { FoundationRoot: { } bound, Creation: 1 } ||
                 (job.Deadline is not null) != rootTimedJobSettlement)
                 throw new NotSupportedException("This root job needs a bound, registered actor reference.");
-            return handler.ExecuteJobAsync(new Job(new(bound), job), cancellationToken);
+            return handler.ExecuteJobAsync(new Job(new(bound.Reference), job, bound.Tenant), cancellationToken);
         }
         var reference = job is Durable.JobContext { FoundationInlineTenant: { } tenant }
             ? store.ReferenceFor(tenant, new(job.Instance.Id, job.Creation))
@@ -666,9 +666,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private static Durable.Message Notice(Durable.InstanceRow row, string? output, bool final) =>
         Durable.FoundationChildNotice.Create(row, output, final);
 
-    private sealed class Job(Contract.ActorRef actor, Durable.IJob job) : Contract.IJob
+    private sealed class Job(Contract.ActorRef actor, Durable.IJob job, string? tenant = null) : Contract.IJob
     {
         public Contract.ActorRef Actor => actor;
+        public string? Tenant => tenant;
         public string Key => job.Key;
         public string? Arguments => job.Arguments;
         public string AttemptId => job.AttemptId ?? throw new InvalidOperationException("A job execution needs an attempt.");

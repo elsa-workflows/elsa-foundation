@@ -34,5 +34,7 @@
     <ProjectReference Include="../../../../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
     <!-- The old core's HTTP endpoint middleware, which the kernel feature unmounts from a shell. -->
     <ProjectReference Include="../../../../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Connections/src/Workflows/Elsa.Connections.Workflows.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Secrets/src/Elsa.Secrets/Elsa.Secrets.csproj" />
   </ItemGroup>
 </Project>

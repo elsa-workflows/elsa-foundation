@@ -214,7 +214,11 @@ internal sealed class NativeActivityShape
     private static JsonNode? ConnectionName(JsonNode? value) => value switch
     {
         JsonValue v when v.TryGetValue<string>(out var name) && !string.IsNullOrWhiteSpace(name) => JsonValue.Create(name),
-        JsonObject o when o["connection"] is JsonValue v && v.TryGetValue<string>(out var name) && !string.IsNullOrWhiteSpace(name) => JsonValue.Create(name),
+        JsonObject o when o["connection"] is JsonValue v && v.TryGetValue<string>(out var name) &&
+            !string.IsNullOrWhiteSpace(name) && IsHttpConnectionType(o["type"]) => JsonValue.Create(name),
         _ => null,
     };
+
+    private static bool IsHttpConnectionType(JsonNode? value) => value is null ||
+        value is JsonValue v && v.TryGetValue<string>(out var type) && string.Equals(type, "http", StringComparison.OrdinalIgnoreCase);
 }
