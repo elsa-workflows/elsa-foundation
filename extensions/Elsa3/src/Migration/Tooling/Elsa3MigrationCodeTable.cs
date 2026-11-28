@@ -169,7 +169,7 @@ internal static class Elsa3MigrationCodeTable
             FixedText: "This definition has no published version, so its latest version was converted.",
             FixedGuidance: "Check that the latest version is the one to migrate."),
         [Elsa3MigrationToolingCodes.SupersededVersion] = new(PatchDefinition,
-            FixedText: "A newer version of this definition was selected, so this version was imported for its findings only and is neither published nor exported.",
+            FixedText: "A newer version of this definition was selected, so this version's workflow was imported for its findings only and is neither published nor exported. For a reusable, only its wrapper workflow is superseded: its activity version is still published and exported.",
             FixedGuidance: "Nothing to do unless this version is the one to migrate."),
         [Elsa3MigrationToolingCodes.ImportRefused] = new(PatchDefinition,
             FixedText: "The import refused the selection as a whole, so no selected definition was applied.",

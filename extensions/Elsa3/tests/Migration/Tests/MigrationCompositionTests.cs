@@ -4,6 +4,7 @@ using Elsa3.Migration.Tests.Support;
 using Elsa3.Migration.Tooling;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -90,6 +91,36 @@ public sealed class MigrationCompositionTests
 
         Assert.Null(refusal);
         await composition!.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task A_malformed_local_source_refuses_assess_with_composition_failed_and_no_value()
+    {
+        using var host = new TestHostFolder();
+        host.WriteLocalSettings("""{ "Elsa": { "DataProtection": { "EntityFrameworkCore": { "Enabled": "SENTINEL-1237" } } } }""");
+
+        var (composition, refusal) = await MigrationComposition.ComposeAsync(MigrationCommand.Assess, host.Wiring, CancellationToken.None);
+
+        Assert.Null(composition);
+        Assert.Equal(MigrationRefusal.CompositionFailed, refusal?.Reason);
+        Assert.DoesNotContain("SENTINEL-1237", refusal!.Sentence);
+    }
+
+    [Fact]
+    public void A_reconciliation_feature_whose_only_settings_are_filtered_stays_listed()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["CShells:Shells:default:Features:JsonWorkflowReconciliation:Options:FilePath"] = "x.json",
+            ["CShells:Shells:default:Features:Serialization"] = null
+        }).Build();
+
+        var filtered = MigrationComposition.Filtered(configuration);
+
+        var features = filtered.GetSection("CShells:Shells:default:Features").GetChildren().Select(feature => feature.Key).ToArray();
+        Assert.Contains("JsonWorkflowReconciliation", features);
+        Assert.Contains("Serialization", features);
+        Assert.Null(filtered["CShells:Shells:default:Features:JsonWorkflowReconciliation:Options:FilePath"]);
     }
 
     [Fact]

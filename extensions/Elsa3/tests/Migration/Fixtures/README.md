@@ -54,13 +54,13 @@ otherwise. Every converted workflow also carries the routine `ELS3-NULL-POLICIES
 | `invoice-tax` | `workflows/invoices/invoice-tax.json` | Workflow whose reusable dependency is refused | skipped as a dependent of `legacy-tax-lookup` (import stage) |
 | `csharp-greeting` | `workflows/legacy/csharp-greeting.json` | C# expression | `VF-IMP-007` |
 | `dotnet-member` | `workflows/legacy/dotnet-member.json` | .NET-style member call on a sentinel literal: `'…'.ToUpper()` | `VF-IMP-012` |
-| `partner-sync` | `workflows/partners/partner-sync.json` | Dispatch target `partner-onboarding` absent from the export | none from the converter; listed as a missing target, Take into account (T020) |
+| `partner-sync` | `workflows/partners/partner-sync.json` | Dispatch target `partner-onboarding` absent from the export | none from the converter; listed as a missing target, Take into account (T020); Elsa 4 refuses to publish it because the target does not resolve (`ELS3-RECONCILE-PUBLISH-FAILED`, publish stage) |
 | `ticket-router` | `workflows/support/ticket-router.json` | Switch case conditions: a non-boolean literal and an unparsable JavaScript expression | `ELS3-ACTIVITY-UNSUPPORTED-MODE` ×2, then `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED` on the case connections |
 | `ticket-escalation` | `workflows/support/ticket-escalation.json` | Switch with an unsupported mode literal | `ELS3-ACTIVITY-UNSUPPORTED-MODE`, then `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED` on the case connection |
 | `parallel-checks` | `workflows/support/parallel-checks.json` | Fork whose join mode is an expression | `ELS3-ACTIVITY-UNSUPPORTED-MODE` |
 | `liquid-letter` | `workflows/legacy/liquid-letter.json` | Unparsable Liquid template | `VF-IMP-007` |
 | `legacy-octal` | `workflows/legacy/legacy-octal.json` | Script that parses only in sloppy mode (`010`) | `VF-IMP-007` |
-| `inventory-sync` (1, twice) | `workflows/inventory/inventory-sync.json`, `duplicates/inventory-sync-copy.json` | Duplicate input: same version id, definition id and version | `ELS3-REUSABLE-DUPLICATE-SOURCE-VERSION` (import stage); both inputs are refused |
+| `inventory-sync` (1, twice) | `workflows/inventory/inventory-sync.json`, `duplicates/inventory-sync-copy.json` | Duplicate input: same version id, definition id and version | `ELS3-RECONCILE-DUPLICATE-INPUT` (import stage, from input selection); both inputs are refused |
 | (file) | `notes/broken-export.json` | Not valid JSON | input `ELS3-MIGRATION-INPUT-UNREADABLE` |
 | (file) | `settings/studio-preferences.json` | Valid JSON that holds no definition | input `ELS3-MIGRATION-UNSUPPORTED-INPUT` |
 | (file) | `notes/export-notes.txt` | Not `*.json` | not read, no finding |

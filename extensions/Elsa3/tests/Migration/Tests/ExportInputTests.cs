@@ -244,16 +244,14 @@ public sealed class VersionSelectionTests
     }
 
     [Fact]
-    public void A_version_without_an_id_does_not_displace_one_with_an_id()
+    public void A_definition_without_a_version_id_is_not_read_as_a_definition()
     {
-        var items = Items(("a", 1, true, null))
-            .Append(Parse("noid.json", ExportInputTests.Definition("a", 2, versionId: "")))
-            .ToArray();
+        // A version without an id could not be reported or imported (the import keys everything by it), so the reader
+        // reports its file as unsupported input and it never reaches the selection.
+        var definitions = ExportInputReader.Parse(Encoding.UTF8.GetBytes(ExportInputTests.Definition("a", 2, versionId: "")), out var findingCode);
 
-        var result = VersionSelection.Select(items, allVersions: false);
-
-        Assert.Equal(["a-v1"], result.Selected.Select(item => item.Definition.Id));
-        Assert.Equal([("a", 2)], result.NotConverted.Select(item => (item.DefinitionId, item.Version)));
+        Assert.Empty(definitions!);
+        Assert.Equal(Elsa3.Models.Elsa3MigrationDiagnosticCodes.UnsupportedInputKind, findingCode);
     }
 
     [Fact]

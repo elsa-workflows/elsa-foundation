@@ -10,6 +10,9 @@ namespace Elsa3.Migration.Cli;
 /// </summary>
 internal static class MigrationCommandLine
 {
+    /// <summary>The exit code of a run cancelled with Ctrl+C (128 + SIGINT, as shells report it).</summary>
+    public const int CancelledExitCode = 130;
+
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error, HostWiring wiring, CancellationToken cancellationToken)
     {
         var export = new Argument<string>("export") { Description = "An Elsa 3 export: a folder (searched recursively for *.json) or a .zip." };
@@ -49,7 +52,17 @@ internal static class MigrationCommandLine
         if (request is null)
             return invoked;
 
-        var result = await Elsa3MigrationRun.RunAsync(request, wiring, cancellationToken);
+        MigrationRunResult result;
+        try
+        {
+            result = await Elsa3MigrationRun.RunAsync(request, wiring, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            error.WriteLine("elsa3-migration: cancelled; --out was left as it was.");
+            return CancelledExitCode;
+        }
+
         if (result.Refusal is { } refusal)
             return Refuse(error, refusal);
 

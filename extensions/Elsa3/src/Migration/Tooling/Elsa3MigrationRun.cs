@@ -66,16 +66,17 @@ internal static class Elsa3MigrationRun
             {
                 var report = await MigrateAsync(request, export, selection, composition!, swap.StagingFolder, cancellationToken);
                 var json = ReportJson.Serialize(report);
-                await File.WriteAllBytesAsync(Path.Combine(swap.StagingFolder, OutputSwap.ReportJsonName), json, cancellationToken);
-                await File.WriteAllBytesAsync(Path.Combine(swap.StagingFolder, OutputSwap.ReportHtmlName), ReportHtml.Render(json), cancellationToken);
                 try
                 {
+                    await File.WriteAllBytesAsync(Path.Combine(swap.StagingFolder, OutputSwap.ReportJsonName), json, cancellationToken);
+                    await File.WriteAllBytesAsync(Path.Combine(swap.StagingFolder, OutputSwap.ReportHtmlName), ReportHtml.Render(json), cancellationToken);
                     swap.Commit();
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
+                    // The swap puts the previous output back, or keeps it in its staging folder when it cannot.
                     return Refused(request, new(MigrationRefusal.Arguments,
-                        "The output could not be moved into the --out folder; its previous content is unchanged or kept in its staging folder."));
+                        "The output could not be written into the --out folder; its previous content was put back or kept in the staging folder."));
                 }
 
                 return new MigrationRunResult(report.ExitCode, request.OutputPath, null);
@@ -147,6 +148,7 @@ internal static class Elsa3MigrationRun
         var noPublished = selection.NoPublishedVersion.ToHashSet(StringComparer.Ordinal);
 
         var definitions = new List<CollectedDefinition>();
+        var occurrences = new Dictionary<(string, string), int>();
         var conversionRefused = new HashSet<string>(StringComparer.Ordinal);
         var candidateWorkflows = new List<ExportWorkflow>();
         var candidateReusables = new List<ExportReusable>();
@@ -171,7 +173,21 @@ internal static class Elsa3MigrationRun
             var blockedBy = new List<string>();
             var publishFailure = workflows.TryGetValue(sourceVersionId, out var failed) ? failed.PublishFailure : null;
             var failureFindings = publishFailure is null ? [] : PublishFindings(publishFailure).ToArray();
-            foreach (var skip in skips[(sourceVersionId, item.File)])
+            reusables.TryGetValue(sourceVersionId, out var reusableState);
+            var notPublished = planItem is { IsReusable: true } && reusableState is not null
+                               && reusableState.Status is not (ReusableActivityPublicationStatus.Published or ReusableActivityPublicationStatus.AlreadyPublished);
+            var reusablePublishFindings = notPublished ? PublishFindings(reusableState!.Diagnostics ?? []).ToArray() : [];
+            // A reusable whose publication a dependency blocked names that dependency (FR-017).
+            if (notPublished && reusableState!.BlockedBy is not null)
+                blockedBy.Add(reusableState.BlockedBy);
+
+            // The same version twice in one file: each input gets one of its duplicate-input skips, in order.
+            var key = (sourceVersionId, item.File);
+            var occurrence = occurrences.GetValueOrDefault(key);
+            occurrences[key] = occurrence + 1;
+            var itemSkips = skips[key].Where(skip => skip.Code != Elsa3ReconciliationDiagnosticCodes.DuplicateInput)
+                .Concat(skips[key].Where(skip => skip.Code == Elsa3ReconciliationDiagnosticCodes.DuplicateInput).Skip(occurrence).Take(1));
+            foreach (var skip in itemSkips)
             {
                 if (skip.BlockedBy is not null)
                     blockedBy.Add(skip.BlockedBy);
@@ -179,21 +195,30 @@ internal static class Elsa3MigrationRun
                 if (diagnostics.Any(diagnostic => diagnostic.Code == skip.Code && diagnostic.Severity == Elsa3MigrationDiagnosticSeverity.Error))
                     continue;
 
-                // A failed publication with no diagnostics of its own is reported by its skip, which stops publishing.
-                var skipFinding = SkipFinding(skip, diagnostics);
-                if (skip.Code == Elsa3ReconciliationDiagnosticCodes.PublishFailed && failureFindings.Length == 0)
-                    skipFinding = skipFinding with { Stage = FindingStage.Publish, PublishStoppedHere = true };
+                // A publication refused with error diagnostics of its own is reported by them; its skip would repeat them.
+                var isWorkflowPublishSkip = skip.Code == Elsa3ReconciliationDiagnosticCodes.PublishFailed;
+                var publishSkip = isWorkflowPublishSkip || notPublished;
+                var ownPublishFindings = isWorkflowPublishSkip ? failureFindings : reusablePublishFindings;
+                if (publishSkip && ownPublishFindings.Any(finding => finding.Severity == FindingSeverity.Error))
+                    continue;
+
+                // Otherwise the skip reports the publication, which stopped there unless a dependency blocked it. The skip
+                // of a reusable the publisher blocked carries no dependency; its publication state names it.
+                var dependency = skip.BlockedBy ?? (notPublished ? reusableState!.BlockedBy : null);
+                var skipFinding = SkipFinding(skip, diagnostics, dependency);
+                if (publishSkip)
+                    skipFinding = skipFinding with { Stage = FindingStage.Publish, PublishStoppedHere = dependency is null };
                 findings.Add(skipFinding);
             }
 
             var published = false;
-            if (planItem is { IsReusable: true } && reusables.TryGetValue(sourceVersionId, out var reusable))
+            if (planItem is { IsReusable: true } && reusableState is not null)
             {
-                published = reusable.Status is ReusableActivityPublicationStatus.Published or ReusableActivityPublicationStatus.AlreadyPublished;
+                published = !notPublished;
                 if (published)
-                    candidateReusables.Add(new ExportReusable(sourceVersionId, reusable.ActivityDefinitionVersionId, planItem.WorkflowDefinitionId));
+                    candidateReusables.Add(new ExportReusable(sourceVersionId, reusableState.ActivityDefinitionVersionId));
                 else
-                    findings.AddRange(PublishFindings(reusable.Diagnostics ?? []));
+                    findings.AddRange(reusablePublishFindings);
             }
 
             if (workflows.TryGetValue(sourceVersionId, out var workflow))
@@ -245,7 +270,8 @@ internal static class Elsa3MigrationRun
         var errors = refusal.Diagnostics.Where(diagnostic => diagnostic.Severity == Elsa3MigrationDiagnosticSeverity.Error).ToArray();
         if (refusal.Code is null || errors.Length == 0)
             return [new(Elsa3MigrationToolingCodes.ImportRefused, FindingSeverity.Error, FindingStage.Import, null, null, string.Empty, null)];
-        return errors.Select(Finding);
+        // Every run finding is an import-stage finding (data-model), whoever owns its code.
+        return errors.Select(error => Finding(error) with { Stage = FindingStage.Import });
     }
 
     /// <summary>
@@ -253,13 +279,13 @@ internal static class Elsa3MigrationRun
     /// a fixed sentence; the skip's cause is never copied, because it can carry an Elsa 4 message (FR-019). A skip code
     /// that is a publication status rather than a code becomes a real code.
     /// </summary>
-    private static CollectedFinding SkipFinding(Elsa3SkippedItem skip, IReadOnlyList<Elsa3MigrationDiagnostic> diagnostics)
+    private static CollectedFinding SkipFinding(Elsa3SkippedItem skip, IReadOnlyList<Elsa3MigrationDiagnostic> diagnostics, string? dependency)
     {
         // A reusable publication with no error code is skipped under its status name ('Refused', 'NotPublishedDependency').
         var isStatusName = skip.Code.All(char.IsLetter);
         var code = !isStatusName
             ? skip.Code
-            : skip.BlockedBy is not null ? ReusableActivityImportDiagnosticCodes.DependencyNotPublished : Elsa3MigrationToolingCodes.ImportRefused;
+            : dependency is not null ? ReusableActivityImportDiagnosticCodes.DependencyNotPublished : Elsa3MigrationToolingCodes.ImportRefused;
         var matching = diagnostics.FirstOrDefault(diagnostic => diagnostic.Code == code);
         return new CollectedFinding(
             code,

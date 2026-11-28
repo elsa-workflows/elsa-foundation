@@ -19,8 +19,8 @@ namespace Elsa3.Migration.Tooling;
 /// <summary>A published workflow version the run can export (the wrapper of a reusable among them).</summary>
 internal sealed record ExportWorkflow(string SourceVersionId, string WorkflowDefinitionId, string WorkflowVersionId);
 
-/// <summary>A published reusable activity version the run can export, and its wrapper workflow definition.</summary>
-internal sealed record ExportReusable(string SourceVersionId, string ActivityDefinitionVersionId, string WrapperWorkflowDefinitionId);
+/// <summary>A published reusable activity version the run can export; its wrapper is an <see cref="ExportWorkflow"/> of the same source version.</summary>
+internal sealed record ExportReusable(string SourceVersionId, string ActivityDefinitionVersionId);
 
 /// <summary>What the run published, for <see cref="MigratedExporter"/>.</summary>
 internal sealed record ExportCandidates(IReadOnlyList<ExportWorkflow> Workflows, IReadOnlyList<ExportReusable> Reusables);
@@ -75,13 +75,14 @@ internal static class MigratedExporter
             exportedTo[reusable.SourceVersionId] = RelativePath(ActivitiesFolderName, ActivitiesFileName);
 
         var workflowWriter = services.GetRequiredService<IJsonWorkflowCatalogWriter>();
-        foreach (var definition in read.Workflows
-                     .GroupBy(workflow => workflow.Version.DefinitionId, StringComparer.Ordinal)
-                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+        var definitions = read.Workflows
+            .GroupBy(workflow => workflow.Version.DefinitionId, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .ToArray();
+        var fileNames = FileNames(definitions.Select(definition => definition.Key).ToArray());
+        foreach (var definition in definitions)
         {
-            var fileName = definition.Key + ".json";
-            if (fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-                throw new InvalidOperationException($"The workflow definition id '{definition.Key}' cannot name a file in the migrated folder.");
+            var fileName = fileNames[definition.Key];
 
             var envelopes = definition
                 .OrderBy(workflow => workflow.Version.SemVerSortKey, StringComparer.Ordinal)
@@ -100,6 +101,28 @@ internal static class MigratedExporter
         }
 
         return new MigratedExportResult(exportedTo, wrapperExportedTo);
+    }
+
+    /// <summary>
+    /// The workflow file name of each definition id: <c>&lt;definitionId&gt;.json</c>, unless the id holds a character
+    /// outside <c>[A-Za-z0-9._-]</c> or equals another id when case is ignored (Windows and macOS file systems ignore case).
+    /// Such an id gets its portable characters, the others as '_', and the first 8 hex digits of its SHA-256, so two
+    /// definitions never share a file and every platform can write it. The host's folder reader reads every file, whatever
+    /// its name.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> FileNames(IReadOnlyList<string> definitionIds)
+    {
+        var caseCounts = definitionIds.GroupBy(id => id, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        return definitionIds.ToDictionary(id => id, id =>
+        {
+            var portable = id.Length > 0 && id.All(IsPortable) && id is not ("." or "..");
+            if (portable && caseCounts[id] == 1)
+                return id + ".json";
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(id)))[..8].ToLowerInvariant();
+            return new string(id.Select(character => IsPortable(character) ? character : '_').ToArray()) + "-" + hash + ".json";
+        }, StringComparer.Ordinal);
+
+        static bool IsPortable(char character) => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-';
     }
 
     /// <summary>

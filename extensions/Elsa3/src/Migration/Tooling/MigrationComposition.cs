@@ -77,6 +77,7 @@ internal sealed class MigrationComposition : IAsyncDisposable
         var connectionString = $"Data Source=file:elsa3-migration-{runId};Mode=Memory;Cache=Shared";
         SqliteConnection? keepAlive = null;
         IHost? host = null;
+        IReadOnlyCollection<string> listedFeatures = [];
         try
         {
             var workflows = Path.Combine(runFolder, "workflows");
@@ -88,6 +89,7 @@ internal sealed class MigrationComposition : IAsyncDisposable
 
             var assemblies = ComposedAssemblies();
             var (layers, facts) = Configure(command, wiring, assemblies, connectionString, new RunFolders(runFolder, workflows, activities));
+            listedFeatures = facts.Features;
 
             var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings
             {
@@ -118,10 +120,17 @@ internal sealed class MigrationComposition : IAsyncDisposable
             await DisposeAsync(host, keepAlive, runFolder);
             return (null, new(MigrationRefusal.CompositionFailed, exception.Sentence));
         }
-        catch
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             await DisposeAsync(host, keepAlive, runFolder);
             throw;
+        }
+        catch (Exception exception)
+        {
+            // A setting no layer can be read from (a malformed local file), or a value the host's root services refuse
+            // while they are registered or built: no partial run, and the sentence never copies the value (T026).
+            await DisposeAsync(host, keepAlive, runFolder);
+            return (null, new(MigrationRefusal.CompositionFailed, DescribeFailure(exception, listedFeatures)));
         }
     }
 
@@ -161,6 +170,9 @@ internal sealed class MigrationComposition : IAsyncDisposable
 
         var missing = chain.OfType<FeatureNotFoundException>().Select(found => found.FeatureName).Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        // The migration host refuses a listed feature it cannot find in its own initializer, which names the features.
+        if (missing.Length == 0 && chain.Any(failure => failure.TargetSite?.DeclaringType?.Name == "ComposedFeaturesCheck"))
+            missing = listed.Where(feature => chain.Any(failure => NamesFeature(failure.Message, feature))).Order(StringComparer.Ordinal).ToArray();
         if (missing.Length > 0)
             return $"The composition lists feature(s) no project the migration host references provides: {string.Join(", ", missing)}. " +
                    "Add the feature's project to Elsa.Migration.Host.csproj, or remove it from the composition.";
@@ -207,8 +219,11 @@ internal sealed class MigrationComposition : IAsyncDisposable
         var additions = Build(builder => builder.AddJsonFile(additionList, optional: false, reloadOnChange: false));
 
         var composed = new ConfigurationBuilder().AddConfiguration(host).AddConfiguration(additions).Build();
-        var shellName = composed.GetSection(ShellsSection).GetChildren().Select(shell => shell.Key).FirstOrDefault()
-                        ?? throw new CompositionConfigurationException("The migration host's configuration composes no shell.");
+        // The shell the addition list adds the Elsa 3 features to, which must be one the host composes.
+        var shellName = additions.GetSection(ShellsSection).GetChildren().Select(shell => shell.Key).SingleOrDefault()
+                        ?? throw new CompositionConfigurationException($"The Elsa 3 addition list '{additionList}' must name exactly one shell.");
+        if (!host.GetSection($"{ShellsSection}:{shellName}").Exists())
+            throw new CompositionConfigurationException($"The migration host's configuration composes no shell '{shellName}'.");
         var featuresPath = $"{ShellsSection}:{shellName}:Features";
         var listed = composed.GetSection(featuresPath).GetChildren().Select(feature => feature.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -224,10 +239,11 @@ internal sealed class MigrationComposition : IAsyncDisposable
             overrides[$"ConnectionStrings:{name}"] = connectionString;
         }
 
-        foreach (var feature in EfFeatures(assemblies).Where(listed.Contains))
+        foreach (var (feature, hasProvider) in ConnectionFeatures(assemblies).Where(candidate => listed.Contains(candidate.Name)))
         {
             replaced |= composed.GetSection($"{featuresPath}:{feature}").GetChildren().Any(setting => IsConnectionSetting(setting.Key));
-            overrides[$"{featuresPath}:{feature}:Provider"] = "Sqlite";
+            if (hasProvider)
+                overrides[$"{featuresPath}:{feature}:Provider"] = "Sqlite";
             overrides[$"{featuresPath}:{feature}:ConnectionString"] = connectionString;
         }
 
@@ -285,16 +301,19 @@ internal sealed class MigrationComposition : IAsyncDisposable
         || key.Equals("ConnectionString", StringComparison.OrdinalIgnoreCase)
         || key.Equals("ConnectionName", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The names of the shell features that carry an EF connection (a <c>ConnectionString</c> setting).</summary>
-    private static IEnumerable<string> EfFeatures(IReadOnlyList<Assembly> assemblies) =>
+    /// <summary>
+    /// The shell features that carry a persistence connection (a <c>ConnectionString</c> setting), and whether they also
+    /// select a <c>Provider</c>.
+    /// </summary>
+    private static IEnumerable<(string Name, bool HasProvider)> ConnectionFeatures(IReadOnlyList<Assembly> assemblies) =>
         assemblies
             .SelectMany(LoadableTypes)
             .Select(type => (Type: type, Attribute: type.GetCustomAttribute<ShellFeatureAttribute>()))
             .Where(candidate => candidate.Attribute?.Name is { Length: > 0 }
-                                && candidate.Type.GetProperty("ConnectionString", BindingFlags.Public | BindingFlags.Instance) is { CanWrite: true }
-                                && candidate.Type.GetProperty("Provider", BindingFlags.Public | BindingFlags.Instance) is { CanWrite: true })
-            .Select(candidate => candidate.Attribute!.Name!)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+                                && candidate.Type.GetProperty("ConnectionString", BindingFlags.Public | BindingFlags.Instance) is { CanWrite: true })
+            .Select(candidate => (candidate.Attribute!.Name!,
+                candidate.Type.GetProperty("Provider", BindingFlags.Public | BindingFlags.Instance) is { CanWrite: true }))
+            .DistinctBy(candidate => candidate.Item1, StringComparer.OrdinalIgnoreCase);
 
     private static IEnumerable<Type> LoadableTypes(Assembly assembly)
     {
@@ -358,6 +377,16 @@ internal sealed class MigrationComposition : IAsyncDisposable
             .Where(setting => !IsFilteredKey(setting.Key)
                               && (setting.Value is not null || !configuration.GetSection(setting.Key).GetChildren().Any()))
             .ToDictionary(setting => setting.Key, setting => setting.Value, StringComparer.OrdinalIgnoreCase);
+        // A listed feature whose only settings were filtered stays listed, as an empty feature.
+        foreach (var shell in configuration.GetSection(ShellsSection).GetChildren())
+        {
+            foreach (var feature in shell.GetSection("Features").GetChildren())
+            {
+                if (!kept.Keys.Any(key => key.Equals(feature.Path, StringComparison.OrdinalIgnoreCase) || key.StartsWith(feature.Path + ":", StringComparison.OrdinalIgnoreCase)))
+                    kept[feature.Path] = null;
+            }
+        }
+
         return new ConfigurationBuilder().AddInMemoryCollection(kept).Build();
     }
 

@@ -6,6 +6,8 @@ namespace Elsa3.Migration.Tests.Support;
 /// <summary>
 /// A temporary copy of the migration host's committed settings files, used as the host folder through the internal seam
 /// (spec 1237 T009), so an engineer's git-ignored <c>shells.Local.json</c> in the host project never reaches a test.
+/// The host's user secrets (its <c>UserSecretsId</c>) still reach <c>assess</c>, as they do for the host's own tests: a secret
+/// that lists a feature or changes a connection setting on a developer's machine can change an <c>assess</c> test's outcome.
 /// </summary>
 internal sealed class TestHostFolder : IDisposable
 {

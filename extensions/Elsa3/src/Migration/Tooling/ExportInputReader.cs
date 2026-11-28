@@ -134,9 +134,10 @@ internal static class ExportInputReader
         }
     }
 
-    /// <summary>An Elsa 3 definition export carries a definition id and a root activity.</summary>
+    /// <summary>An Elsa 3 definition export carries a version id, a definition id and a root activity.</summary>
     private static bool IsDefinition(JsonElement element) =>
         element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(id.GetString())
         && element.TryGetProperty("definitionId", out var definitionId) && definitionId.ValueKind == JsonValueKind.String
         && !string.IsNullOrWhiteSpace(definitionId.GetString())
         && element.TryGetProperty("root", out var root) && root.ValueKind == JsonValueKind.Object;

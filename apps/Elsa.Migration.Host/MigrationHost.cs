@@ -70,8 +70,9 @@ public static class MigrationHost
         ArgumentNullException.ThrowIfNull(hostAssembly);
         ArgumentNullException.ThrowIfNull(args);
 
-        configuration.AddJsonFile(Path.Combine(hostFolder, "appsettings.json"), optional: true, reloadOnChange: false);
-        configuration.AddJsonFile(Path.Combine(hostFolder, $"appsettings.{environment}.json"), optional: true, reloadOnChange: false);
+        // appsettings*.json reload on change, as WebApplication.CreateBuilder's own copies do (log levels, for example).
+        configuration.AddJsonFile(Path.Combine(hostFolder, "appsettings.json"), optional: true, reloadOnChange: true);
+        configuration.AddJsonFile(Path.Combine(hostFolder, $"appsettings.{environment}.json"), optional: true, reloadOnChange: true);
         configuration.AddJsonFile(Path.Combine(hostFolder, "shells.json"), optional: false, reloadOnChange: false);
         configuration.AddJsonFile(Path.Combine(hostFolder, $"shells.{environment}.json"), optional: true, reloadOnChange: false);
         if (!includeLocalSources)
