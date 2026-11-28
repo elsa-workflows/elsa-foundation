@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Tests" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" />
     <PackageReference Include="CShells.Abstractions" />
