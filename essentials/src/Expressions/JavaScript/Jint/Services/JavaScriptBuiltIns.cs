@@ -21,15 +21,15 @@ internal static class JavaScriptBuiltIns
         new(JavaScriptBuiltInFunctions.ParseGuid, call => Text(Guid.Parse(StringArgument(JavaScriptBuiltInFunctions.ParseGuid, call)).ToString())),
         new(JavaScriptBuiltInFunctions.StringToBase64, call => Text(Convert.ToBase64String(Encoding.UTF8.GetBytes(StringArgument(JavaScriptBuiltInFunctions.StringToBase64, call))))),
         new(JavaScriptBuiltInFunctions.StringFromBase64, call => Text(Encoding.UTF8.GetString(Convert.FromBase64String(StringArgument(JavaScriptBuiltInFunctions.StringFromBase64, call))))),
-        new(JavaScriptBuiltInFunctions.StructuredClone, StructuredClone),
+        new(JavaScriptBuiltInFunctions.DeepClone, DeepClone),
     ];
 
     /// <summary>
-    /// <c>structuredClone(value)</c> (issue #6215): the argument already crossed as a JSON value (a Date became its ISO
+    /// <c>deepClone(value)</c> (issue #6215): the argument already crossed as a JSON value (a Date became its ISO
     /// text, <c>undefined</c> null), and the result enters the script as a new value, so the copy shares nothing with the
-    /// variable it came from. Called without an argument it returns <c>undefined</c>, as the web-standard function does.
+    /// variable it came from. Called without an argument it returns <c>undefined</c>, as the web-standard <c>structuredClone</c> does.
     /// </summary>
-    private static JsonElement StructuredClone(JavaScriptHostFunctionCall call) =>
+    private static JsonElement DeepClone(JavaScriptHostFunctionCall call) =>
         call.Arguments.Count == 0 ? default : call.Arguments[0];
 
     /// <summary>
