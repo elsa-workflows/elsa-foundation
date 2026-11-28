@@ -1,0 +1,81 @@
+{
+  "id": "customer-lookup-v1",
+  "definitionId": "customer-lookup",
+  "name": "Customer lookup",
+  "description": "Calls the custom lookupCustomer global. SENTINEL-1237",
+  "createdAt": "2025-03-14T09:26:53.589+00:00",
+  "version": 1,
+  "toolVersion": "3.6.3.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false,
+    "autoUpdateConsumingWorkflows": false,
+    "activationStrategyType": "Elsa.Workflows.Activation.Strategies.AllowAlwaysStrategy, Elsa.Workflows.Core"
+  },
+  "root": {
+    "id": "Flowchart1",
+    "nodeId": "Workflow1:Flowchart1",
+    "name": "Flowchart1",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": -380,
+          "y": 200
+        },
+        "size": {
+          "width": 180,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "Lookup",
+        "nodeId": "Workflow1:Lookup",
+        "name": "Lookup",
+        "type": "Elsa.RunJavaScript",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 280,
+              "y": 60
+            },
+            "size": {
+              "width": 180,
+              "height": 50
+            }
+          }
+        },
+        "script": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "const customer = lookupCustomer('SENTINEL-1237-C042');\nreturn customer;"
+          }
+        },
+        "possibleOutcomes": null
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

@@ -104,6 +104,21 @@ public sealed class Elsa3ActivityResolverTests
         Assert.Equal(code, resolution.Failure!.Code);
     }
 
+    /// <summary>A node without a type names no component to build: the unmapped refusal carries no ComponentName.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public async Task An_untyped_node_is_unmapped_without_a_component_name(string? type)
+    {
+        var resolver = new Elsa3ActivityResolver(TestMap.WriteLine, RealActivityCatalog.Create());
+
+        var resolution = await resolver.ResolveAsync(Node(type!), NoReplacements, default);
+
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, resolution.Failure!.Code);
+        Assert.False(resolution.Failure.Metadata?.ContainsKey(Elsa3MigrationDiagnosticMetadataKeys.ComponentName) ?? false);
+    }
+
     [Fact]
     public async Task A_full_elsa4_type_key_resolves_verbatim()
     {

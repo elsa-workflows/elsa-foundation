@@ -1,3 +1,4 @@
+using Elsa3.Models;
 using Elsa3.Mapping.Services;
 
 namespace Elsa3.Mapping.Conversion;
@@ -25,7 +26,7 @@ internal static class Elsa3StorageDriverCorrections
     public const string StorageDriverTypeKey = "StorageDriverType";
 
     /// <summary>The metadata key naming the component, so migration tooling can list storage drivers without parsing messages.</summary>
-    public const string ComponentNameKey = "ComponentName";
+    public const string ComponentNameKey = Elsa3MigrationDiagnosticMetadataKeys.ComponentName;
 
     /// <summary>The metadata key holding the component's kind; for a storage driver <see cref="StorageDriverComponentKind"/>.</summary>
     public const string ComponentKindKey = "ComponentKind";

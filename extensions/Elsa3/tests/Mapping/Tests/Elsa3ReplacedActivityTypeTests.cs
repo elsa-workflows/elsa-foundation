@@ -63,7 +63,10 @@ public sealed class Elsa3ReplacedActivityTypeTests
 
         var result = await ConversionServices.ConvertAsync(catalog, ConversionServices.Definition(Sequence("root", Activity("invoice", "Acme.SendInvoice"))));
 
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES").Code);
+        var unmapped = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != Elsa3ActivityDiagnosticCodes.NullPolicies);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, unmapped.Code);
+        // Spec 1237 FR-016a: the component is named as data, not only in the message.
+        Assert.Equal("Acme.SendInvoice", unmapped.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
     }
 
     [Fact]

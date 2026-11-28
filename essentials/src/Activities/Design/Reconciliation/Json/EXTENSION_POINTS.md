@@ -36,6 +36,10 @@ holding application-wide static state (§2.5.1); the options instance is the onl
   into reconciliation models via the shared `IPayloadSerializer`. Re-register to change the file
   layout (e.g. a different envelope, an embedded resource, or a remote fetch) without touching
   `JsonActivityReconciliationSource`, which depends only on the contract.
+- **`IJsonActivityCatalogWriter` → `JsonActivityCatalogWriter`** — writes reconciliation models as the JSON array
+  the reader reads, through the same `IPayloadSerializer`; the same models give the same bytes. Not registered by
+  `JsonActivityReconciliationFeature`, so reconciliation behaviour does not depend on it; export tooling (the Elsa 3
+  migration CLI, spec 1237) registers it scoped with `services.AddScoped<IJsonActivityCatalogWriter, JsonActivityCatalogWriter>()`.
 
 ---
 
