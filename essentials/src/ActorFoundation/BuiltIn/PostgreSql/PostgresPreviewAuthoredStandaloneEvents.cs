@@ -24,24 +24,6 @@ public static partial class PostgresPreviewHosting
         InstallPreviewFormatAsync(() => CreateAuthoredStandaloneEventQualificationContext(options, actorType, protectsStarts, publisherScope),
             cancellationToken);
 
-    /// <summary>Selects the private PostgreSQL profile for prepared standalone Events and held responses.</summary>
-    public static KernelDb CreateRetainedStandaloneSourcesQualificationContext(DbContextOptions<KernelDb> options,
-        string actorType, Contract.BoundScope publisherScope)
-    {
-        ArgumentNullException.ThrowIfNull(publisherScope);
-        if (publisherScope.IsHostIsolated)
-            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
-        RootPublicEventHost.RequireConfiguredActorType(actorType);
-        return KernelDb.ForPostgresRetainedStandaloneSourcesQualification(options,
-            new(actorType, true) { AuthoredStandaloneTenant = publisherScope.Tenant });
-    }
-
-    /// <summary>Installs or verifies the private prepared standalone sources profile.</summary>
-    public static Task InstallRetainedStandaloneSourcesQualificationAsync(DbContextOptions<KernelDb> options, string actorType,
-        Contract.BoundScope publisherScope, CancellationToken cancellationToken = default) =>
-        InstallPreviewFormatAsync(() => CreateRetainedStandaloneSourcesQualificationContext(options, actorType, publisherScope),
-            cancellationToken);
-
     internal static KernelDb CreateOptionalAuthoredStandaloneEventsQualificationContext(DbContextOptions<KernelDb> options,
         string actorType, Contract.BoundScope? publisherScope)
     {

@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal abstract class KernelShellStorage
 {
-    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, InlineStarts, EventStarts, EventStartReceipts, EventStartScan, SharedActivation, DirectTestRuns, EphemeralTestRuns, PublicEventHost, AttachedTestRuns, HeldEphemeralHttp, RetainedHttpResponse, PreparedHttpWaits, RetainedStandaloneSources }
+    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, InlineStarts, EventStarts, EventStartReceipts, EventStartScan, SharedActivation, DirectTestRuns, EphemeralTestRuns, PublicEventHost, AttachedTestRuns, HeldEphemeralHttp, RetainedHttpResponse, PreparedHttpWaits }
 
     public abstract bool TakesSelfSends { get; }
     public abstract bool TakesTimers { get; }
@@ -96,10 +96,6 @@ internal abstract class KernelShellStorage
     internal static KernelShellStorage CreateRetainedHttpResponseQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.RetainedHttpResponse);
 
-    internal static KernelShellStorage CreateRetainedStandaloneSourcesQualification(string provider, string? sqlitePath,
-        string? postgresConnectionString, BoundScope publisherScope) =>
-        Create(provider, sqlitePath, postgresConnectionString, Profile.RetainedStandaloneSources, publisherScope);
-
     internal static KernelShellStorage CreatePreparedHttpWaitQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.PreparedHttpWaits);
 
@@ -157,7 +153,7 @@ internal abstract class KernelShellStorage
             Profile.ManagedSchedules => SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.ActorType),
             Profile.PreparedStarts or Profile.InlineStarts or Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan or
                 Profile.SharedActivation or Profile.DirectTestRuns or Profile.EphemeralTestRuns or Profile.PublicEventHost or Profile.AttachedTestRuns or
-                Profile.HeldEphemeralHttp or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources => null,
+                Profile.HeldEphemeralHttp or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits => null,
             Profile.Shipped when SqliteEmbeddedHosting.TakesPreparedStarts => null,
             _ => new(path, node, WorkflowActor.ActorType)
         };
@@ -171,32 +167,32 @@ internal abstract class KernelShellStorage
         public override bool TakesHttpWaits => SqliteEmbeddedHosting.TakesHttpWaits;
         public override bool TakesManagedSchedules => TakesPreparedStarts || Foundation.TakesManagedSchedules;
         public override bool TakesPreparedStarts => profile is Profile.PreparedStarts or Profile.InlineStarts or Profile.DirectTestRuns || TakesEventStarts ||
-            (profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources) && SqliteEmbeddedHosting.TakesPreparedStarts;
+            (profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits) && SqliteEmbeddedHosting.TakesPreparedStarts;
         internal override bool TakesDirectTestRuns => profile == Profile.DirectTestRuns || TakesEphemeralTestRuns;
         internal override bool TakesEphemeralTestRuns => profile == Profile.EphemeralTestRuns || TakesAttachedTestRuns;
         internal override bool TakesAttachedTestRuns => profile == Profile.AttachedTestRuns || TakesHeldEphemeralHttp;
         private bool UsesShippedStandaloneSources => profile == Profile.Shipped && publisherScope is not null;
         internal override bool TakesRetainedHttpResponse => UsesShippedStandaloneSources ||
-            profile is Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources;
+            profile is Profile.RetainedHttpResponse or Profile.PreparedHttpWaits;
         internal override bool TakesPreparedHttpWaits => UsesShippedStandaloneSources ||
-            profile is Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources;
-        internal override bool TakesAuthoredStandaloneEvents => UsesShippedStandaloneSources || profile == Profile.RetainedStandaloneSources;
+            profile == Profile.PreparedHttpWaits;
+        internal override bool TakesAuthoredStandaloneEvents => UsesShippedStandaloneSources;
         internal override IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(BoundScope scope) =>
             Foundation.BindAuthoredStandaloneEvents(scope);
-        internal override bool TakesHeldEphemeralHttp => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources
+        internal override bool TakesHeldEphemeralHttp => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits
             ? SqliteEmbeddedHosting.TakesHeldEphemeralHttpTestRuns
             : profile == Profile.HeldEphemeralHttp;
-        internal override bool TakesEventStarts => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources
+        internal override bool TakesEventStarts => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits
             ? SqliteEmbeddedHosting.TakesEventStarts
             : profile == Profile.EventStarts || RetainsEventStartReceipts;
-        internal override bool RetainsEventStartReceipts => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources
+        internal override bool RetainsEventStartReceipts => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits
             ? SqliteEmbeddedHosting.RetainsEventStartReceipts
             : profile == Profile.EventStartReceipts || TakesOrderedEventScan;
-        internal override bool TakesOrderedEventScan => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources
+        internal override bool TakesOrderedEventScan => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits
             ? SqliteEmbeddedHosting.TakesOrderedEventScan
             : profile is Profile.EventStartScan or Profile.SharedActivation or Profile.PublicEventHost || TakesEphemeralTestRuns;
         internal override IEventStartAdmissions BindEventStarts(BoundScope scope) => Foundation.BindEventStarts(scope);
-        public override bool TakesInlineStarts => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources
+        public override bool TakesInlineStarts => profile is Profile.Shipped or Profile.RetainedHttpResponse or Profile.PreparedHttpWaits
             ? SqliteEmbeddedHosting.TakesInlineStarts
             : profile is Profile.InlineStarts or Profile.SharedActivation or Profile.PublicEventHost || TakesEphemeralTestRuns;
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Foundation.BindProtectedRootStarts(scope);
@@ -225,8 +221,6 @@ internal abstract class KernelShellStorage
                     Profile.AttachedTestRuns => SqliteEmbeddedFoundation.ForAttachedTestRunQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     Profile.PreparedHttpWaits => SqliteEmbeddedFoundation.ForPreparedWaitQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     Profile.RetainedHttpResponse => SqliteEmbeddedFoundation.ForRetainedResponseQualification(path, node, WorkflowActor.ActorType, protectRootStart),
-                    Profile.RetainedStandaloneSources => SqliteEmbeddedFoundation.ForRetainedStandaloneSourcesQualification(
-                        path, node, WorkflowActor.ActorType, publisherScope!, protectRootStart),
                     Profile.HeldEphemeralHttp => SqliteEmbeddedFoundation.ForHeldEphemeralHttpQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     _ => SqliteEmbeddedFoundation.WithRootStartProtection(path, node, WorkflowActor.ActorType, protectRootStart, publisherScope)
                 };
@@ -302,10 +296,10 @@ internal abstract class KernelShellStorage
         internal override bool TakesAttachedTestRuns => _profile == Profile.AttachedTestRuns || TakesHeldEphemeralHttp;
         private bool UsesShippedStandaloneSources => _profile == Profile.Shipped && _publisherScope is not null;
         internal override bool TakesRetainedHttpResponse => UsesShippedStandaloneSources ||
-            _profile is Profile.RetainedHttpResponse or Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources;
+            _profile is Profile.RetainedHttpResponse or Profile.PreparedHttpWaits;
         internal override bool TakesPreparedHttpWaits => UsesShippedStandaloneSources ||
-            _profile is Profile.PreparedHttpWaits or Profile.RetainedStandaloneSources;
-        internal override bool TakesAuthoredStandaloneEvents => UsesShippedStandaloneSources || _profile == Profile.RetainedStandaloneSources;
+            _profile == Profile.PreparedHttpWaits;
+        internal override bool TakesAuthoredStandaloneEvents => UsesShippedStandaloneSources;
         internal override IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(BoundScope scope) =>
             PostgresPreviewHosting.BindAuthoredStandaloneEvents(OpenDatabase, scope);
         internal override bool TakesHeldEphemeralHttp => PostgresPreviewHosting.TakesHeldEphemeralHttpTestRuns(OpenDatabase);
@@ -356,9 +350,6 @@ internal abstract class KernelShellStorage
                     break;
                 case Profile.RetainedHttpResponse:
                     await PostgresPreviewHosting.InstallRetainedResponseQualificationAsync(_options, WorkflowActor.ActorType, token);
-                    break;
-                case Profile.RetainedStandaloneSources:
-                    await PostgresPreviewHosting.InstallRetainedStandaloneSourcesQualificationAsync(_options, WorkflowActor.ActorType, _publisherScope!, token);
                     break;
                 case Profile.HeldEphemeralHttp:
                     await PostgresPreviewHosting.InstallHeldEphemeralHttpQualificationAsync(_options, token);
@@ -449,8 +440,6 @@ internal abstract class KernelShellStorage
             Profile.AttachedTestRuns => PostgresPreviewHosting.CreateAttachedTestRunQualificationContext(_options),
             Profile.PreparedHttpWaits => PostgresPreviewHosting.CreatePreparedWaitQualificationContext(_options, WorkflowActor.ActorType),
             Profile.RetainedHttpResponse => PostgresPreviewHosting.CreateRetainedResponseQualificationContext(_options, WorkflowActor.ActorType),
-            Profile.RetainedStandaloneSources => PostgresPreviewHosting.CreateRetainedStandaloneSourcesQualificationContext(
-                _options, WorkflowActor.ActorType, _publisherScope!),
             Profile.HeldEphemeralHttp => PostgresPreviewHosting.CreateHeldEphemeralHttpQualificationContext(_options),
             _ => PostgresPreviewHosting.CreateShippedContext(_options, WorkflowActor.ActorType, protectsStarts: true, _publisherScope)
         };

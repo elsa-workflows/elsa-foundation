@@ -164,15 +164,6 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         => ForStandaloneQualification(databasePath, node, actorType, publisherScope, StoreFormat.RootAuthoredStandaloneEventQualification,
             protectRootStart);
 
-    /// <summary>Selects the private SQLite profile for prepared standalone Events and held responses.</summary>
-    public static SqliteEmbeddedFoundation ForRetainedStandaloneSourcesQualification(string databasePath, string node, string actorType,
-        Contract.BoundScope publisherScope, ProtectRootStartAsync protectRootStart)
-    {
-        ArgumentNullException.ThrowIfNull(protectRootStart);
-        return ForStandaloneQualification(databasePath, node, actorType, publisherScope,
-            StoreFormat.RootRetainedStandaloneSourcesQualification, protectRootStart);
-    }
-
     internal static SqliteEmbeddedFoundation ForOptionalAuthoredStandaloneEventsQualification(string databasePath, string node,
         string actorType, Contract.BoundScope? publisherScope) => publisherScope is null
         ? new(databasePath, node, actorType, StoreFormat.RootOptionalAuthoredStandaloneEventsQualification)

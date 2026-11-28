@@ -186,10 +186,9 @@ public class KernelDb : DbContext
     internal RootPublicEventHost? PublicEventHost { get; }
     internal bool UsesRootPagedPublicEvents => Has(RootCapabilities.PagedPublicEvents);
     internal bool UsesAuthoredStandaloneEvents => Has(RootCapabilities.AuthoredStandaloneEvents);
-    // The two earlier qualification stores retain their mandatory publisher and physical schema.
+    // The original standalone Event qualification retains its mandatory publisher and physical schema.
     internal bool AllowsDisabledAuthoredStandaloneEvents => UsesAuthoredStandaloneEvents &&
-        RequiredFormat != StoreFormat.RootAuthoredStandaloneEventQualification &&
-        RequiredFormat != StoreFormat.RootRetainedStandaloneSourcesQualification;
+        RequiredFormat != StoreFormat.RootAuthoredStandaloneEventQualification;
     internal bool UsesRootKeyedStarts => Has(RootCapabilities.KeyedStarts);
     internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
@@ -225,12 +224,8 @@ public class KernelDb : DbContext
         new(options, StoreFormat.RootAuthoredStandaloneEventQualification, RootProfiles.AuthoredStandaloneEventQualification,
             publicEventHost: host);
 
-    internal static KernelDb ForPostgresRetainedStandaloneSourcesQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
-        new(options, StoreFormat.RootRetainedStandaloneSourcesQualification, RootProfiles.RetainedStandaloneSourcesQualification,
-            publicEventHost: host);
-
     internal static KernelDb ForPostgresOptionalAuthoredStandaloneEventsQualification(DbContextOptions<KernelDb> options, RootPublicEventHost host) =>
-        new(options, StoreFormat.RootOptionalAuthoredStandaloneEventsQualification, RootProfiles.RetainedStandaloneSourcesQualification,
+        new(options, StoreFormat.RootOptionalAuthoredStandaloneEventsQualification, RootProfiles.OptionalAuthoredStandaloneEventsQualification,
             publicEventHost: host);
 
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options, RootPublicEventHost? publicEventHost = null) =>
@@ -337,9 +332,8 @@ public class KernelDb : DbContext
         if (qualificationFormat == StoreFormat.RootAuthoredStandaloneEventQualification)
             return new(options, qualificationFormat.Value, RootProfiles.AuthoredStandaloneEventQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
-        if (qualificationFormat == StoreFormat.RootRetainedStandaloneSourcesQualification ||
-            qualificationFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification)
-            return new(options, qualificationFormat.Value, RootProfiles.RetainedStandaloneSourcesQualification,
+        if (qualificationFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.OptionalAuthoredStandaloneEventsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
         if (qualificationFormat == StoreFormat.RootPagedPublicEventsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PagedPublicEventsQualification,

@@ -87,11 +87,9 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootRetainedResponseQualification => new(3, 139, 1);
     internal static StoreFormat RootAuthoredStandaloneEventQualification => new(3, 140, 1);
     internal static StoreFormat RootPreparedWaitQualification => new(3, 141, 1);
-    internal static StoreFormat RootRetainedStandaloneSourcesQualification => new(3, 143, 1);
     internal static StoreFormat RootOptionalAuthoredStandaloneEventsQualification => new(3, 144, 1);
     internal bool SupportsAuthoredStandaloneEventQualification =>
-        this == RootAuthoredStandaloneEventQualification || this == RootRetainedStandaloneSourcesQualification ||
-        this == RootOptionalAuthoredStandaloneEventsQualification;
+        this == RootAuthoredStandaloneEventQualification || this == RootOptionalAuthoredStandaloneEventsQualification;
     internal bool SupportsIsolatedInlineQualification =>
         this == RootEphemeralTestRunQualification || SupportsAttachedTestRunQualification;
     internal bool SupportsAttachedTestRunQualification =>
@@ -201,11 +199,12 @@ internal static class RootProfiles
     private const RootCapabilities Shipped34 = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
     private const RootCapabilities Shipped37 = KeyedStartsQualification | PublicEventHostQualification | PagedPublicEventsQualification |
         RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns;
-    internal const RootCapabilities Shipped = RetainedStandaloneSourcesQualification;
+    internal const RootCapabilities Shipped = Shipped38;
     internal const RootCapabilities RetainedResponseQualification = Shipped37 | RootCapabilities.RetainedRootResponse;
     internal const RootCapabilities AuthoredStandaloneEventQualification = Shipped37 | RootCapabilities.AuthoredStandaloneEvents;
-    internal const RootCapabilities RetainedStandaloneSourcesQualification =
+    private const RootCapabilities Shipped38 =
         AuthoredStandaloneEventQualification | RootCapabilities.RetainedRootResponse | RootCapabilities.PreparedWaitDelivery;
+    internal const RootCapabilities OptionalAuthoredStandaloneEventsQualification = Shipped38;
     internal const RootCapabilities PreparedWaitQualification = RetainedResponseQualification | RootCapabilities.PreparedWaitDelivery;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
@@ -516,8 +515,6 @@ internal static class StoreDefinitionsRevision
     private const int SqliteRetainedResponseRevision = 35;
     private const int PostgreSqlAuthoredStandaloneEventRevision = 33;
     private const int SqliteAuthoredStandaloneEventRevision = 36;
-    private const int PostgreSqlRetainedStandaloneSourcesRevision = 36;
-    private const int SqliteRetainedStandaloneSourcesRevision = 39;
     private const int PostgreSqlOptionalAuthoredStandaloneEventsRevision = 37;
     private const int SqliteOptionalAuthoredStandaloneEventsRevision = 40;
     private const int PostgreSqlDirectTestRunRevision = 20;
@@ -599,8 +596,6 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqliteRetainedResponseRevision : PostgreSqlRetainedResponseRevision,
                 _ when db.RequiredFormat == StoreFormat.RootAuthoredStandaloneEventQualification =>
                     sqlite ? SqliteAuthoredStandaloneEventRevision : PostgreSqlAuthoredStandaloneEventRevision,
-                _ when db.RequiredFormat == StoreFormat.RootRetainedStandaloneSourcesQualification =>
-                    sqlite ? SqliteRetainedStandaloneSourcesRevision : PostgreSqlRetainedStandaloneSourcesRevision,
                 _ when db.RequiredFormat == StoreFormat.RootShipped ||
                     db.RequiredFormat == StoreFormat.RootOptionalAuthoredStandaloneEventsQualification =>
                     sqlite ? SqliteOptionalAuthoredStandaloneEventsRevision : PostgreSqlOptionalAuthoredStandaloneEventsRevision,
