@@ -148,9 +148,9 @@ the shape). Then read the result:
    list) and the number of references (`usages`). Add one row per component to the plan with status `todo`. A
    component that exists in the Elsa 3 source but that no definition uses is not migrated. A definition that uses an
    activity Elsa 4 does not know yet is still scanned, so the functions, variable types and activities it uses are
-   listed. One case is not: a definition whose `blockedBy` names a reusable workflow that did not convert is not
-   converted itself, so its own components appear only in a later report, once that reusable converts. Every report
-   can add rows (stage 3).
+   listed. So is a definition whose `blockedBy` names a reusable workflow that did not convert: it stays out of the
+   import, but its own components are listed in the same report. A later report can still add rows (stage 3), for
+   example when a ported component's own code uses another.
 3. Show the user the components with their counts.
 4. Mark the Elsa 3 built-ins: a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as
    `Elsa.SetVariable`), a storage driver whose type name before the comma is exactly `MemoryStorageDriver` (Elsa 3's Memory driver), and a
@@ -220,13 +220,14 @@ When every component is `ported`, `redesign`, `dropped` or `interviewed`, set `S
    1. findings that belong to no definition: `inputFindings` (for example an unreadable export file) and `runFindings`
       (a refusal of the shared import);
    2. per definition, Must fix, then Reconsider, then Take into account;
-   3. root causes before the definitions they block: a definition whose `blockedBy` list is not empty waits until its root is fixed;
-      do not work on it directly.
+   3. root causes before the definitions they block: a definition whose `blockedBy` list is not empty waits until
+      every definition that list names is fixed (a reusable with findings of its own is named there too). Until then,
+      do not patch it; a component its own findings name is ported with that component's row, like any other.
 
    For each finding:
    - `build-component`: go to the component row named by `componentKind` and `componentName`, and return it to
-     `porting`. When the plan has no row for it yet (a definition blocked by a reusable is listed only once that reusable converts, see stage 1), add the row,
-     search for its source as in stage 1 and prepare it as in stage 2;
+     `porting`. When the plan has no row for it yet, add the row, search for its source as in stage 1 and prepare it as
+     in stage 2;
    - `patch-definition`: show the user the definition and the finding's path, with the finding's guidance. Ask before
      opening the raw definition, naming the file and the JSON path;
    - `none`: record the user's decision: redesign, drop, or accept the refusal. Only the user adds an accepted refusal
