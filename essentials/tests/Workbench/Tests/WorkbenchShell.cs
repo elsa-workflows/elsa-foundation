@@ -28,7 +28,8 @@ public sealed record WorkbenchShell(
             [$"{FeaturesPath}:KernelActivitiesHttp"] = "false",
             [$"{FeaturesPath}:KernelWorkflowDashboardQueries"] = "false",
             [$"{FeaturesPath}:WorkflowsRuntimeKernelHosting"] = "false",
-            [$"{FeaturesPath}:WorkflowsRuntimeKernelRetainedApi"] = "false"
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelRetainedApi"] = "false",
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelUserTasksApi"] = "false"
         }
     };
 
