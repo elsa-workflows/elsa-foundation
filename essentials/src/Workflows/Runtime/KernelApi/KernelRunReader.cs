@@ -7,7 +7,7 @@ using Kernel.WorkflowActor;
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access,
-    IWorkflowExecutionStateStore? legacyRuns = null, KernelTestRuns? testRuns = null,
+    KernelTestRuns? testRuns = null, KernelPreviewRunReads? preview = null,
     IWorkflowTestScopeStore? testScopes = null, IWorkflowExecutionPartitionAccessor? partitions = null, TimeProvider? clock = null)
 {
     internal sealed record Run(WorkflowExecutionState State, WorkflowRunHeader? Header, WorkflowExecutable? Executable,
@@ -51,7 +51,7 @@ internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore 
 
         async ValueTask<Run?> FindTestRunAsync()
         {
-            var legacy = legacyRuns is null ? null : await legacyRuns.FindAsync(id, cancellationToken);
+            var legacy = preview?.Runs is { } legacyRuns ? await legacyRuns.FindAsync(id, cancellationToken) : null;
             return legacy is { RunKind: WorkflowRunKind.TestRun } && legacy.WorkflowExecutionId == id && legacy.TenantId == tenant
                 ? new Run(legacy, null, null)
                 : null;

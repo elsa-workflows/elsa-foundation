@@ -33,6 +33,7 @@ using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Values;
 using Kernel.Foundation.Contracts;
 using Microsoft.AspNetCore.Authentication;
@@ -179,10 +180,12 @@ public sealed class KernelRunListTests
     private static readonly PersistenceAccessContext HostTenant = PersistenceAccessContext.Scoped(new PersistenceScope(Tenant));
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task Retained_http_reads_activate_and_serve_without_legacy_execution_services(bool publishingPermissions, bool lateExecute)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task Retained_http_reads_use_only_actor_execution(
+        bool publishingPermissions, bool lateExecute, bool separateLegacyReaders)
     {
         const string scheme = "KernelExecuteFixture";
         var reads = new Reads(Views[0]);
@@ -196,9 +199,21 @@ public sealed class KernelRunListTests
         if (publishingPermissions)
             builder.Services.AddPermissionContributor<WorkflowPublishingPermissionContributor>();
         builder.Services.AddPersistenceCore();
+        builder.Services.AddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
         builder.Services.AddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         builder.Services.AddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         builder.Services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(reads)));
+        if (separateLegacyReaders)
+        {
+            var actorId = Views[0].Header.Ref.Id;
+            var historicalRuns = new LegacyInspectionSpy(actorId);
+            await historicalRuns.SaveAsync(Legacy(actorId, Tenant, WorkflowRunKind.TestRun));
+            await historicalRuns.SaveAsync(Legacy("legacy-test", Tenant, WorkflowRunKind.TestRun));
+            builder.Services.AddSingleton<IWorkflowExecutionStateStore>(historicalRuns);
+            builder.Services.AddSingleton<IActivityExecutionStateStore>(historicalRuns);
+            builder.Services.AddScoped<RuntimeHistoryInspectionService>(_ =>
+                throw new InvalidOperationException("The retained API resolved a legacy history reader."));
+        }
         var feature = new WorkflowsRuntimeKernelRetainedApiFeature();
         feature.ConfigureServices(builder.Services);
         feature.PostConfigureServices(builder.Services);
@@ -209,12 +224,19 @@ public sealed class KernelRunListTests
         app.UseAuthentication();
         app.UseAuthorization();
         feature.MapEndpoints(app, app.Environment);
+        if (separateLegacyReaders)
+            app.MapGet("/fixture/run-inspection/{id}", static (string id, IWorkflowRunInspection inspection, CancellationToken token) =>
+                inspection.GetAsync(new(id, ActivityExecutionId: "legacy-activity"), token));
         await app.StartAsync();
         await using var scope = app.Services.CreateAsyncScope();
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowSchedulerDrainer>());
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionActorProvider>());
-        Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
-        Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
+        Assert.Null(scope.ServiceProvider.GetService<ActivityExecutionBrowseSource>());
+        if (!separateLegacyReaders)
+        {
+            Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
+            Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
+        }
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowRunInspection>());
         var permissions = scope.ServiceProvider.GetRequiredService<IPermissionCatalog>();
         Assert.NotNull(permissions.Find(WorkflowRuntimePermissions.WorkflowRuntimeRead));
@@ -238,7 +260,22 @@ public sealed class KernelRunListTests
         Assert.Equal(Views[0].Header.Ref.Id, Assert.Single(list!.Items).WorkflowExecutionId);
         using var detail = await client.GetAsync("/runtime/workflows/instances/" + Views[0].Header.Ref.Id);
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
-        using var history = await client.GetAsync("/runtime/workflows/instances/missing/history/occurrences");
+        if (separateLegacyReaders)
+        {
+            client.DefaultRequestHeaders.Add("X-Fixture-Inspect-Values", "yes");
+            var inspected = await client.GetFromJsonAsync<WorkflowRunInspectionDetails>(
+                "/fixture/run-inspection/" + Views[0].Header.Ref.Id);
+            Assert.NotNull(inspected);
+            Assert.Equal(Views[0].Header.Ref.Id, inspected.Instance.WorkflowExecutionId);
+            Assert.True(inspected.CanInspectValues);
+            Assert.False(inspected.CanResolveValues);
+            Assert.Equal(new WorkflowRunInspectionSelection("legacy-activity", null, null), inspected.Selection);
+        }
+        using var legacyTest = await client.GetAsync("/runtime/workflows/instances/legacy-test");
+        Assert.Equal(HttpStatusCode.NotFound, legacyTest.StatusCode);
+        using var legacyBrowse = await client.GetAsync("/runtime/workflows/instances/legacy-test/activity-executions");
+        Assert.Equal(HttpStatusCode.NotFound, legacyBrowse.StatusCode);
+        using var history = await client.GetAsync("/runtime/workflows/instances/legacy-test/history/occurrences");
         Assert.Equal(HttpStatusCode.NotFound, history.StatusCode);
         using var legacy = await client.GetAsync("/runtime/workflows/diagnostics/settings");
         Assert.Equal(HttpStatusCode.NotFound, legacy.StatusCode);
@@ -248,6 +285,44 @@ public sealed class KernelRunListTests
             Assert.Equal("fixture-run", (await start.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>())?.WorkflowExecutionId);
         using var inputs = await client.GetAsync("/runtime/workflows/executables/missing/source-references/missing/input-sources");
         Assert.Equal(publishingPermissions ? HttpStatusCode.Forbidden : HttpStatusCode.NotFound, inputs.StatusCode);
+    }
+
+    private sealed class LegacyInspectionSpy(string actorId) : IWorkflowExecutionStateStore, IActivityExecutionStateStore
+    {
+        private readonly InMemoryWorkflowExecutionStateStore _runs = new();
+
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            _runs.SaveAsync(state, cancellationToken);
+
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            workflowExecutionId == actorId
+                ? throw new InvalidOperationException("The retained API read legacy state for the Actor run.")
+                : _runs.FindAsync(workflowExecutionId, cancellationToken);
+
+        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The retained API read legacy activity state.");
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(ActivityExecutionStateParentPageQuery query,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class FixtureStartService : IWorkflowExecutionStartService
