@@ -209,6 +209,9 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("(Math.random() > 0.5 ? getCorrelationId() : {}).x = 1", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
     [InlineData("var a = {}; (a || getCorrelationId()).x = 1", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
     [InlineData("var a = {}; (a, getWorkflowInstanceId()).x = 1", Elsa3JavaScriptMode.Script, true, "getWorkflowInstanceId")]
+    [InlineData("async function f() { (await getCorrelationId()).x = 1; } f(); return 1;", Elsa3JavaScriptMode.Script, false, "getCorrelationId")]
+    [InlineData("var a; (a = getWorkflowInstanceId()).x = 1", Elsa3JavaScriptMode.Expression, false, "getWorkflowInstanceId")]
+    [InlineData("var a; (a ??= getCorrelationId()).x = 1", Elsa3JavaScriptMode.Script, true, "getCorrelationId")]
     [InlineData("({ status: getCorrelationId().x } = { status: 'Paid' })", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
     [InlineData("[getWorkflowInstanceId().x] = [1]", Elsa3JavaScriptMode.Script, false, "getWorkflowInstanceId")]
     public void Change_through_a_workflow_instance_value_is_refused(string source, Elsa3JavaScriptMode mode, bool reusable, string reader)
@@ -221,7 +224,7 @@ public sealed class Elsa3ExpressionRewriterTests
         Assert.Equal($"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.", issue.Message);
         Assert.Contains($"let value = {reader}();", issue.Guidance, StringComparison.Ordinal);
         if (reader == "getWorkflowInstanceId")
-            Assert.DoesNotContain("set", issue.Guidance, StringComparison.Ordinal);
+            Assert.DoesNotContain("call set", issue.Guidance, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -269,6 +272,19 @@ public sealed class Elsa3ExpressionRewriterTests
     }
 
     /// <summary>
+    /// #6230: in a with statement's body the call may read the with object, so only the with statement's refusal reports.
+    /// </summary>
+    [Fact]
+    public void Change_through_an_instance_built_in_in_a_with_body_reports_only_the_with_refusal()
+    {
+        var result = _sut.Rewrite("JavaScript", "var o = {}; with (o) { getCorrelationId().x = 1; } return 1;", new TypeReference("Object"),
+            ResolveVariables, Elsa3JavaScriptMode.Script);
+
+        Assert.False(result.Succeeded);
+        Assert.DoesNotContain(result.Issues, issue => issue.Message.StartsWith("JavaScript changes the workflow instance value", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// #6230: reading a workflow instance value, changing a local copy of it, using it as a computed key (#6222) and
     /// passing it to a call whose result is changed all still convert, as does, in a Run JavaScript body, writing it
     /// into a variable (spec 1231 FR-032).
@@ -288,6 +304,8 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("[getCorrelationId()][0] = 1; return 1;", Elsa3JavaScriptMode.Script, true)]
     [InlineData("({ id: getWorkflowInstanceId() }).id = 'acme'; return 1;", Elsa3JavaScriptMode.Expression, false)]
     [InlineData("var a = {}; (a, getWorkflowInstanceName(), a).x = 1; return a;", Elsa3JavaScriptMode.Script, false)]
+    [InlineData("var a = ''; (a += getCorrelationId()).x = 1; return 1;", Elsa3JavaScriptMode.Expression, false)]
+    [InlineData("var n = 1; (n -= getWorkflowInstanceId()).x = 1; return 1;", Elsa3JavaScriptMode.Script, true)]
     public void Read_or_local_copy_of_a_workflow_instance_value_converts(string source, Elsa3JavaScriptMode mode, bool reusable)
     {
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode, reusableWorkflow: reusable);

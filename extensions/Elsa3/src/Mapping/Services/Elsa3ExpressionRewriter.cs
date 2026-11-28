@@ -2123,7 +2123,8 @@ public sealed class Elsa3ExpressionRewriter(
 
             // #6230: a workflow instance value is read-only in Elsa 4. The change is otherwise visited as usual, so the
             // target's other checks still report: an ambient value it also reaches, an undeclared name, a custom global.
-            if (changeTarget is not null && InstanceReaderOf(changeTarget) is { } instanceReader)
+            // In a with statement's body a call may read the with object, which the with statement's refusal covers.
+            if (changeTarget is not null && _withBodyDepth == 0 && InstanceReaderOf(changeTarget) is { } instanceReader)
                 Issues.Add(InstanceValueChange(instanceReader));
 
             if (changeTarget is not null && TargetReachesAmbientRoot(changeTarget))
@@ -3469,12 +3470,17 @@ public sealed class Elsa3ExpressionRewriter(
             Property property => InstanceReaderOf(property.Value),
             AssignmentPattern assigned => InstanceReaderOf(assigned.Left),
             // An object the converter does not follow is checked where its value can come from: either branch of a
-            // conditional, either side of a logical expression, a sequence's last expression, an assignment's value.
-            // A conditional's test, a literal's elements and another call's arguments only read.
+            // conditional, either side of a logical expression, a sequence's last expression, an awaited value and the
+            // value of an assignment that hands it back (=, ||=, &&=, ??=; += and the like make a new value). A
+            // conditional's test, a literal's elements and another call's arguments only read.
             ConditionalExpression conditional => InstanceReaderOf(conditional.Consequent) ?? InstanceReaderOf(conditional.Alternate),
             LogicalExpression logical => InstanceReaderOf(logical.Left) ?? InstanceReaderOf(logical.Right),
             SequenceExpression sequence => InstanceReaderOf(sequence.Expressions[^1]),
-            AssignmentExpression assignment => InstanceReaderOf(assignment.Right),
+            AwaitExpression awaited => InstanceReaderOf(awaited.Argument),
+            AssignmentExpression
+            {
+                Operator: Operator.Assignment or Operator.LogicalOrAssignment or Operator.LogicalAndAssignment or Operator.NullishCoalescingAssignment,
+            } assignment => InstanceReaderOf(assignment.Right),
             CallExpression call when IsInstanceReader(call) => ((Identifier)call.Callee).Name,
             _ => null,
         };
@@ -3495,7 +3501,8 @@ public sealed class Elsa3ExpressionRewriter(
         private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader) => new(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
             $"JavaScript changes the workflow instance value '{reader}()' reads. Elsa 4 hands it to scripts read-only.",
-            $"Copy the value into a local first (let value = {reader}();) and change the local, in the Elsa 3 workflow before import." +
+            $"Copy the value into a local first (let value = {reader}();) and give the local its new value, in the Elsa 3 workflow before import; " +
+            "the value is text, so it has no members to set." +
             (!ConvertsWorkflowState ? string.Empty
                 : reader == "getCorrelationId" ? " To change the instance's correlation ID, call setCorrelationId(value)."
                 : reader == "getWorkflowInstanceName" ? " To change the instance's name, call setWorkflowInstanceName(value)."
