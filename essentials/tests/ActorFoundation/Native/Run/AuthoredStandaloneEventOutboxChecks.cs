@@ -44,7 +44,7 @@ internal static class AuthoredStandaloneEventOutboxChecks
                 StartNode = (fault, ct) => PostgresPreviewHosting.StartAsync(Open, Node, actor, Refused, loop, ct,
                     fault, requests, fenceInBatch, _ => TimeSpan.Zero, new Kernel.WorkflowActor.ScheduleActor())
             };
-            Contract.IAuthoredStandaloneEventOutbox Bind(Contract.BoundScope scope) => PostgresPreviewHosting.BindAuthoredStandaloneEvents(Open, scope);
+            IAuthoredStandaloneEventOutbox Bind(Contract.BoundScope scope) => PostgresPreviewHosting.BindAuthoredStandaloneEvents(Open, scope);
             await using (hosted)
                 await CheckAsync(hosted, foundation, foundation, Bind, token);
             KernelDb Stock() => PostgresPreviewHosting.CreateShippedContext(options, actor.Type, protectsStarts: false);
@@ -101,7 +101,7 @@ internal static class AuthoredStandaloneEventOutboxChecks
     }
 
     private static async Task CheckAsync(IHostedService owner, Contract.IIngress ingress, Contract.IActorReads reads,
-        Func<Contract.BoundScope, Contract.IAuthoredStandaloneEventOutbox> bind, CancellationToken token)
+        Func<Contract.BoundScope, IAuthoredStandaloneEventOutbox> bind, CancellationToken token)
     {
         var outbox = bind(Scope);
         var author = await StartAsync(Scope, "author");
@@ -115,7 +115,7 @@ internal static class AuthoredStandaloneEventOutboxChecks
             "admitted creators and outside Event ingress do not produce authored transfers");
 
         await owner.StartAsync(token);
-        IReadOnlyList<Contract.AuthoredStandaloneEvent> captured;
+        IReadOnlyList<AuthoredStandaloneEvent> captured;
         try
         {
             await WaitForAsync(Scope, author, Contract.ActorStatus.Finished);
@@ -125,7 +125,7 @@ internal static class AuthoredStandaloneEventOutboxChecks
             await WaitForAsync(Isolated, isolated, Contract.ActorStatus.Finished);
             captured = await outbox.ReadAsync(cancellationToken: token);
             Require(captured.Count == 2 && captured.All(eventItem => eventItem.Publisher == author &&
-                    eventItem.EventName == Key && eventItem.PublisherPartition >= 0 && eventItem.CommittedAt > 0) &&
+                    eventItem.EventName == Key && eventItem.CommittedAt > 0) &&
                 captured.Select(row => row.Occurrence).Distinct().Count() == 2 &&
                 captured.Select(row => row.Payload).ToHashSet().SetEquals([First, Second]),
                 "only the successful bound author's committed publications appear, with exact distinct identity and wire");

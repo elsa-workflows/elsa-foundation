@@ -43,7 +43,7 @@ public static partial class PostgresPreviewHosting
             cancellationToken);
 
     /// <summary>Binds a reader and acknowledgement edge to the installed ordinary publisher scope.</summary>
-    public static Contract.IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Func<KernelDb> open, Contract.BoundScope scope)
+    public static IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Func<KernelDb> open, Contract.BoundScope scope)
     {
         ArgumentNullException.ThrowIfNull(open);
         ArgumentNullException.ThrowIfNull(scope);

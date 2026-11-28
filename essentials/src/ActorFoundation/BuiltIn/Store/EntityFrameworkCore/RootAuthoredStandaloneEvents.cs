@@ -94,8 +94,8 @@ internal static class RootAuthoredStandaloneEvents
     private sealed record Transfer(string Occurrence, string Publisher, int Partition, string EventName,
         string? Payload, bool PayloadEscaped, long CommittedAt, string Fingerprint);
 
-    internal static async Task<IReadOnlyList<Contract.AuthoredStandaloneEvent>> ReadAsync(KernelDb db, Contract.BoundScope scope,
-        Contract.AuthoredStandaloneEventCursor? after, Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    internal static async Task<IReadOnlyList<AuthoredStandaloneEvent>> ReadAsync(KernelDb db, Contract.BoundScope scope,
+        AuthoredStandaloneEventCursor? after, Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         await RequireScopeAsync(db, scope, bind, token);
         if (after is not null && (after.CommittedAt <= 0 || !FoundationRootCreator.IsGeneratedReference(after.Occurrence)))
@@ -119,7 +119,7 @@ internal static class RootAuthoredStandaloneEvents
             if (row.Fingerprint != Fingerprint(scope.Tenant, row.Occurrence, row.Publisher, row.Partition, row.EventName,
                     row.Payload, row.PayloadEscaped, row.CommittedAt))
                 throw new InvalidDataException("The pending standalone Event does not match its captured publication.");
-            return new Contract.AuthoredStandaloneEvent(row.Occurrence, new(row.Publisher), row.Partition, row.EventName,
+            return new AuthoredStandaloneEvent(row.Occurrence, new(row.Publisher), row.EventName,
                 RootAdmissionWire.DecodePayload(row.Payload, row.PayloadEscaped), row.CommittedAt, row.Fingerprint);
         }).ToArray();
     }

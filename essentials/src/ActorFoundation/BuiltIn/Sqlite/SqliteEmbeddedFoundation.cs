@@ -167,7 +167,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     }
 
     /// <summary>Binds a reader and acknowledgement edge to the installed ordinary publisher scope.</summary>
-    public Contract.IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope)
+    public IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (qualificationFormat is not { SupportsAuthoredStandaloneEventQualification: true })

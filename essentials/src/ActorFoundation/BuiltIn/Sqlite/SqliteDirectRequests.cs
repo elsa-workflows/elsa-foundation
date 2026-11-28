@@ -82,7 +82,7 @@ public static partial class SqliteEmbeddedHosting
             IReadOnlyList<EventStartRegistration> registrations, CancellationToken token) =>
             admission.ApplyEventStartsAsync(scope.Tenant, slot, revision, registrations, token);
 
-        internal Contract.IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope) =>
+        internal IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope) =>
             new BoundAuthoredStandaloneEventOutbox(
                 (after, token) => admission.ReadAuthoredStandaloneEventsAsync(scope, after, token),
                 (occurrence, fingerprint, token) => admission.AcknowledgeAuthoredStandaloneEventAsync(scope, occurrence, fingerprint, token));
@@ -254,8 +254,8 @@ public static partial class SqliteEmbeddedHosting
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
                     (admission, ct) => admission.ApplyEventStartsAsync(tenant, slot, revision, registrations, ct), token), token);
 
-            internal Task<IReadOnlyList<Contract.AuthoredStandaloneEvent>> ReadAuthoredStandaloneEventsAsync(Contract.BoundScope scope,
-                Contract.AuthoredStandaloneEventCursor? after, CancellationToken token) =>
+            internal Task<IReadOnlyList<AuthoredStandaloneEvent>> ReadAuthoredStandaloneEventsAsync(Contract.BoundScope scope,
+                AuthoredStandaloneEventCursor? after, CancellationToken token) =>
                 OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
                     (admission, ct) => admission.ReadAuthoredStandaloneEventsAsync(scope, after, ct), token), token);
 

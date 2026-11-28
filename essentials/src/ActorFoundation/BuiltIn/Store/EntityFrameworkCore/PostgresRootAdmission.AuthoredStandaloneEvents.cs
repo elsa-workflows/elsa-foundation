@@ -6,7 +6,7 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
-    internal Contract.IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope) =>
+    internal IAuthoredStandaloneEventOutbox BindAuthoredStandaloneEvents(Contract.BoundScope scope) =>
         new BoundAuthoredStandaloneEventOutbox(
             (after, token) => WithAuthoredStandaloneEventSourceAsync((db, bind) =>
                 RootAuthoredStandaloneEvents.ReadAsync(db, scope, after, bind, token), token),
@@ -30,10 +30,10 @@ internal sealed partial class PostgresRootAdmission
 }
 
 internal sealed class BoundAuthoredStandaloneEventOutbox(
-    Func<Contract.AuthoredStandaloneEventCursor?, CancellationToken, Task<IReadOnlyList<Contract.AuthoredStandaloneEvent>>> read,
-    Func<string, string, CancellationToken, Task<bool>> acknowledge) : Contract.IAuthoredStandaloneEventOutbox
+    Func<AuthoredStandaloneEventCursor?, CancellationToken, Task<IReadOnlyList<AuthoredStandaloneEvent>>> read,
+    Func<string, string, CancellationToken, Task<bool>> acknowledge) : IAuthoredStandaloneEventOutbox
 {
-    public ValueTask<IReadOnlyList<Contract.AuthoredStandaloneEvent>> ReadAsync(Contract.AuthoredStandaloneEventCursor? after = null,
+    public ValueTask<IReadOnlyList<AuthoredStandaloneEvent>> ReadAsync(AuthoredStandaloneEventCursor? after = null,
         CancellationToken cancellationToken = default) => new(read(after, cancellationToken));
 
     public ValueTask<bool> AcknowledgeAsync(string occurrence, string transferFingerprint, CancellationToken cancellationToken = default) =>

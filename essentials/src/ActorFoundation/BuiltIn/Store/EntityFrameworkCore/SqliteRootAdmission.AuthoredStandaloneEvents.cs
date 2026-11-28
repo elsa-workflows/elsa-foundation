@@ -4,8 +4,8 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class SqliteRootAdmission
 {
-    internal Task<IReadOnlyList<Contract.AuthoredStandaloneEvent>> ReadAuthoredStandaloneEventsAsync(Contract.BoundScope scope,
-        Contract.AuthoredStandaloneEventCursor? after, CancellationToken token) =>
+    internal Task<IReadOnlyList<AuthoredStandaloneEvent>> ReadAuthoredStandaloneEventsAsync(Contract.BoundScope scope,
+        AuthoredStandaloneEventCursor? after, CancellationToken token) =>
         InAdmissionTransactionAsync((db, ct) => RootAuthoredStandaloneEvents.ReadAsync(db, scope, after, bind: null, ct), token,
             readOnly: true);
 
