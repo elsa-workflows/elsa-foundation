@@ -13290,6 +13290,10 @@ Elsa.Workflows.Runtime.Services.Claims.FencedClaimRunStatus.LostDuringSideEffect
 virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke(TClaim! claim, System.DateTimeOffset now, System.TimeSpan visibilityTimeout, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TClaim?>
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.SavedStimulusStartOrigin = "runtime.savedStimulusStart" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.StandaloneIngressOrigin = "runtime.ingress.origin.v1" -> string!
+Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata
+const Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata.BehavioralKey = "decisions.artifact.v2" -> string!
+const Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata.HistoricalKey = "decisions.artifact.v1" -> string!
+static Elsa.Workflows.Runtime.Core.Models.ExecutableDecisionPinMetadata.Read(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata) -> string?
 Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId
 static Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId.EnsureNotWritten(System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.ExecutionLivenessState!>!>! changes) -> void
 static Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionOwnershipStateId.For(string! workflowExecutionId) -> string!

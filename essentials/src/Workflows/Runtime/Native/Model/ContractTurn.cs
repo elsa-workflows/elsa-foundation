@@ -17,6 +17,10 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
     public bool SavesWaitRecipes => true;
     public string OperationOrigin => Actor.Id;
     public string? TestScopeId => turn.Instance.TestScopeId;
+    public NativeDecisionSource? ExactDecisionSource =>
+        turn.Instance is { Subject: { } subject, ExecutableSelection: { } selection } instance
+            ? new(instance.Workflow, selection, subject.Tenant, subject.SubjectId)
+            : null;
     public long Now => turn.Now;
     public NativeState State => (NativeState)turn.State;
     public object? Ambient => turn.Ambient;

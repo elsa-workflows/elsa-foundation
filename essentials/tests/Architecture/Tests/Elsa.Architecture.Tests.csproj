@@ -54,6 +54,7 @@
     <ProjectReference Include="../../../../extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
+    <ProjectReference Include="../../../../extensions/Decisions/src/Workflows/Actor/Elsa.Decisions.Workflows.Actor.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" ReferenceOutputAssembly="false" />
