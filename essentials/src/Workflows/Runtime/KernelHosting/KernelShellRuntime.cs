@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.KernelHost;
+using Elsa.Workflows.Runtime.Services.Values;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using Kernel.Foundation.Hosting;
@@ -40,6 +41,41 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private readonly CancellationTokenSource _maintenanceStop = new();
     private Task? _maintenance;
 
+    private async ValueTask<INativeHttpConnectionMask?> ApplyHttpConnectionAsync(HttpRequestMessage request,
+        string name, string? jobTenant, string executionId, CancellationToken cancellationToken)
+    {
+        if (jobTenant is null || !StringComparer.Ordinal.Equals(jobTenant, tenant.Tenant))
+            return null;
+
+        var mask = new HttpConnectionMask(executionId);
+        try
+        {
+            await using var scope = await scopes.CreateAsyncScopeAsync(persistenceScope);
+            if (scope.ServiceProvider.GetService<IWorkflowHttpConnectionApplier>() is { } applier)
+            {
+                await applier.ApplyAsync(request, name, jobTenant, mask.SecretMask, executionId, cancellationToken);
+                return mask;
+            }
+        }
+        catch
+        {
+            mask.Dispose();
+            throw;
+        }
+
+        mask.Dispose();
+        return null;
+    }
+
+    private sealed class HttpConnectionMask(string executionId) : INativeHttpConnectionMask
+    {
+        public IRuntimeSecretMask SecretMask { get; } = new DefaultRuntimeSecretMask();
+
+        public string Mask(string value) => SecretMask.Mask(executionId, value);
+
+        public void Dispose() => SecretMask.Release(executionId);
+    }
+
     public async Task StartAsync(CancellationToken token)
     {
         if (preparedStandaloneStarts)
@@ -71,7 +107,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         {
             Scripts = new ScopedScripts(scopes),
             ConsoleOutput = Console.Out,
-            Http = new NativeHttpOptions { Client = _client },
+            Http = new NativeHttpOptions { Client = _client, ApplyConnection = ApplyHttpConnectionAsync },
             Expressions = expressions,
             SelfSends = serving.Capabilities.SelfSends,
             UseStructuralJournal = Foundation.Reads is IActorSequencedJournalReads { SupportsSequencedJournal: true },

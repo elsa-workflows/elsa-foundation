@@ -4,6 +4,10 @@ namespace Kernel.Foundation.Contracts;
 public interface IJob
 {
     ActorRef Actor { get; }
+
+    /// <summary>The tenant from protected actor dispatch, when supplied by the Foundation.</summary>
+    string? Tenant => null;
+
     string Key { get; }
     string? Arguments { get; }
     string AttemptId { get; }
