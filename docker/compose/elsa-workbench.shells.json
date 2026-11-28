@@ -78,6 +78,7 @@
           },
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
+          "ActivitiesScripting": {},
           "JavaScriptEndpoints": {},
           "JavaScriptExpressions": {
             "TypeDescriptors": [
@@ -126,7 +127,9 @@
           "WorkflowsPublishingApi": {},
           "KernelActivitiesHttp": {},
           "WorkflowsRuntimeKernelRetainedApi": {},
+          "WorkflowsRuntimeKernelUserTasksApi": {},
           "WorkflowsRuntimeKernelHosting": {
+            "ActorUserTaskWaits": true,
             "Provider": "PostgreSql"
           },
           "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {

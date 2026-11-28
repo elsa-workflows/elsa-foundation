@@ -75,6 +75,7 @@
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
+          "ActivitiesScripting": {},
           "JavaScriptEndpoints": {},
           "JavaScriptExpressions": {
             "TypeDescriptors": [
@@ -163,6 +164,7 @@
           "Decisions": {},
           "DecisionsDesign": {},
           "DecisionsApi": {},
+          "ActorDecisionsWorkflows": {},
           "DecisionsEntityFrameworkCore": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},
@@ -190,7 +192,9 @@
           "KernelWorkflowDashboardQueries": {},
           "KernelActivitiesHttp": {},
           "WorkflowsRuntimeKernelRetainedApi": {},
+          "WorkflowsRuntimeKernelUserTasksApi": {},
           "WorkflowsRuntimeKernelHosting": {
+            "ActorUserTaskWaits": true,
             "Provider": "SQLite",
             "PreparedStandaloneStarts": true
           },

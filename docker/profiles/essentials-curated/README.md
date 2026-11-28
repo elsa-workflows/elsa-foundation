@@ -21,7 +21,8 @@ have their own [feature settings](../README.md#configure-a-deployment).
 
 ## Workflow execution
 
-The default shell runs Native and Flowchart workflows on the built-in Actor Foundation. Its dedicated
+The default shell selects `Foundation: BuiltIn` for Native and Flowchart workflows. `Provider` selects the
+database used by that foundation. Its dedicated
 SQLite file is `/app/data/elsa-kernel.db`. Mount a writable volume at `/app/data` to keep workflow
 execution state across container replacement. Run one process per SQLite file. The existing module
 connections still hold workflow definitions, published executables, identity, and other module data.

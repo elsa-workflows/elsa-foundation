@@ -18,6 +18,7 @@ public sealed class WorkbenchEfToolingShellDefaults : IEfToolingShellDefaults
         ArgumentNullException.ThrowIfNull(configuration);
 
         builder.WithFeature<ModularityApiFeature>()
+            .WithFeature<WorkbenchActorUserTaskAuthoringFeature>()
             // The action remains deferred until CShells builds the feature instance.
             .WithFeature<RuntimeFaultStackTraceFeature>(feature =>
                 configuration.GetSection(RuntimeFaultCaptureOptions.SectionName).Bind(feature));

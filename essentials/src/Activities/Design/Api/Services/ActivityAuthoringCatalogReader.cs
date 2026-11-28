@@ -88,12 +88,17 @@ public sealed class ActivityAuthoringCatalogReader(
         var structure = structureFacet is null
             ? null
             : new ActivityAuthoringStructureView(structureFacet.Kind, structureFacet.SchemaVersion, structureFacet.Payload.Clone());
+        var paletteHints = version.DesignFacets.FirstOrDefault(facet => facet.Kind == "elsa.activity-palette" && facet.SchemaVersion == "1")?.Payload;
+        var displayName = paletteHints is { ValueKind: JsonValueKind.Object } hints &&
+                          hints.TryGetProperty("displayName", out var label) && label.ValueKind == JsonValueKind.String
+            ? label.GetString()
+            : null;
 
         return new ActivityAuthoringDescriptorView(
             version.Id,
             definition.ActivityTypeKey,
             version.Version,
-            definition.DisplayName ?? definition.ActivityTypeKey,
+            string.IsNullOrWhiteSpace(displayName) ? definition.DisplayName ?? definition.ActivityTypeKey : displayName,
             definition.Category,
             definition.Description,
             version.ExecutionType.ToString(),
@@ -113,7 +118,7 @@ public sealed class ActivityAuthoringCatalogReader(
             IconName: ActivityIconName.ReadFromFacets(version.DesignFacets))
         {
             DesignFacets = version.DesignFacets.Select(facet => new ActivityDesignFacet(facet.Kind, facet.SchemaVersion, facet.Payload.Clone())).ToArray(),
-            PaletteHints = version.DesignFacets.FirstOrDefault(facet => facet.Kind == "elsa.activity-palette" && facet.SchemaVersion == "1")?.Payload.Clone(),
+            PaletteHints = paletteHints?.Clone(),
             RuntimeActivityType = runtimeActivityType
         };
     }

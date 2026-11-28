@@ -52,6 +52,34 @@ public sealed class CompositionInitCliTests
     ];
 
     [Fact]
+    public void Init_offers_and_plans_the_current_actor_foundation_profile()
+    {
+        using var temp = new TempDirectory("elsa-composition-actor-init-");
+        var outputPath = temp.File("composition.json");
+        var help = DotnetElsa.Run("composition", "init", "--help");
+        Assert.Contains("actor-foundation@1", help.Output, StringComparison.Ordinal);
+
+        var init = DotnetElsa.Run("composition", "init", "--profile", "actor-foundation@1", "--output", outputPath);
+        Assert.Equal(ToolExitCode.Success, init.ExitCode);
+        var catalog = FoundationSelectionCatalog.Load();
+        var profile = Assert.Single(catalog.Profiles);
+        using var composition = JsonDocument.Parse(File.ReadAllText(outputPath));
+        Assert.Equal(catalog.Digest, composition.RootElement.GetProperty("catalog").GetProperty("digest").GetString());
+        Assert.Equal(profile.Digest, composition.RootElement.GetProperty("profile").GetProperty("digest").GetString());
+
+        var plan = DotnetElsa.Run("composition", "plan", "--composition", outputPath, "--format", "json");
+        Assert.Equal(ToolExitCode.Success, plan.ExitCode);
+        using var report = JsonDocument.Parse(plan.Output);
+        var selected = Strings(report.RootElement.GetProperty("candidate").GetProperty("featureIds"));
+        Assert.Equal(profile.Members.ToArray(), selected);
+        Assert.Contains("WorkflowsRuntimeKernelOptionalHttpHosting", selected);
+        Assert.Contains("ActivitiesSequence", selected);
+        Assert.Contains("ActivitiesFlowchart", selected);
+        Assert.DoesNotContain("ActivitiesRuntime", selected);
+        Assert.DoesNotContain("WorkflowsRuntimeEntityFrameworkCore", selected);
+    }
+
+    [Fact]
     public void Init_writes_a_pinned_composition_that_default_plan_inspects_exactly()
     {
         using var temp = new TempDirectory("elsa-composition-init-");
@@ -65,7 +93,7 @@ public sealed class CompositionInitCliTests
 
         using var compositionDocument = JsonDocument.Parse(File.ReadAllText(outputPath));
         var composition = compositionDocument.RootElement;
-        var catalog = FoundationSelectionCatalog.Load();
+        var catalog = FoundationSelectionCatalog.LoadForProfile("embedded-runtime@1");
         var profile = Assert.Single(catalog.Profiles, x => x.Id == "embedded-runtime");
         Assert.Equal(catalog.Id, composition.GetProperty("catalog").GetProperty("id").GetString());
         Assert.Equal(catalog.Version, composition.GetProperty("catalog").GetProperty("version").GetString());
@@ -108,7 +136,7 @@ public sealed class CompositionInitCliTests
         Assert.Contains("worker-http@1", init.Output, StringComparison.Ordinal);
         using var compositionDocument = JsonDocument.Parse(File.ReadAllText(outputPath));
         var composition = compositionDocument.RootElement;
-        var catalog = FoundationSelectionCatalog.Load();
+        var catalog = FoundationSelectionCatalog.LoadForProfile("worker-http@1");
         var profile = Assert.Single(catalog.Profiles, x => x.Id == "worker-http");
         Assert.Equal("4", catalog.Version);
         Assert.Equal("e46f8092771171ad63b0ca81bf307f5ad7ad7a9ca4929dd311bfac6af3cf8fa1", profile.Digest);
@@ -273,7 +301,7 @@ public sealed class CompositionInitCliTests
         Assert.Equal(ToolExitCode.Success,
             DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1", "--output", compositionPath).ExitCode);
 
-        var catalog = FoundationSelectionCatalog.Load();
+        var catalog = FoundationSelectionCatalog.LoadForProfile("embedded-runtime@1");
         var profile = Assert.Single(catalog.Profiles, x => x.Id == "embedded-runtime");
         var changedDraft = profile with { Description = profile.Description + " changed" };
         var changedProfile = changedDraft with { Digest = SelectionDigest.ComputeDefinitionDigest(changedDraft) };

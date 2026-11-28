@@ -4,7 +4,6 @@
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Workflows.Runtime" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />

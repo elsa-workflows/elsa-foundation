@@ -74,6 +74,32 @@ public static partial class SqliteEmbeddedHosting
         return file.Path;
     }
 
+    internal static async Task<bool> UpgradeShippedFormatAsync(string path, RootPublicEventHost? publicEventHost,
+        CancellationToken token)
+    {
+        if (!File.Exists(path)) throw new InvalidOperationException("The previous shipped SQLite file does not exist.");
+        using var file = await AcquireRuntimeFileAsync(path, requests: null, token);
+        KernelDb Previous() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
+            StoreFormat.RootShippedBeforeUserTasks, publicEventHost);
+        var store = new EfStore(Previous, postgres: false);
+        var changed = await store.UpgradeShippedRootFormatAsync(token);
+        await using var current = KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
+            publicEventHost: publicEventHost);
+        await EfStore.InstallSqliteShippedAsync(current, partitions: 1, token);
+        return changed;
+    }
+
+    internal static async ValueTask<Contract.CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(string path, Contract.BoundScope scope,
+        Contract.ActorRef actor, RootPublicEventHost? publicEventHost, CancellationToken cancellationToken)
+    {
+        using var file = AcquireFile(path);
+        var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
+            publicEventHost: publicEventHost), postgres: false);
+        return await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken) is { } checkpoint
+            ? new(checkpoint.State, (Contract.ActorStatus)checkpoint.Status, checkpoint.ParkAt is not null)
+            : null;
+    }
+
     // A fault or kill may leave work running. Its runtime lease remains held through process exit.
     private static readonly object FileGate = new();
     private static readonly Dictionary<string, ActiveFile> ActiveFiles = new(StringComparer.Ordinal);

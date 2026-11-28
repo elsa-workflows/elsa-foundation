@@ -26,6 +26,8 @@ public interface IExecutionModel
     string Key { get; }
     Type StateType { get; }
     int StateVersion { get; }
+    /// <summary>The format needed by this checkpoint, bounded by the model's maximum readable version.</summary>
+    int CheckpointVersion(object state) => StateVersion;
     object CreateState(WorkflowStart start);
     object UpgradeState(string state, int fromVersion);
     ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken);
@@ -41,6 +43,13 @@ public interface IModelMetadata
     ValueTask MetadataAsync(ITurn turn, ActorStatus status, long? endedAt, CancellationToken cancellationToken);
     void TerminateMetadata(object state);
     bool ProtectsDeletion(object state, long? endedAt, long now);
+}
+
+/// <summary>Model-owned confirmation of immutable external obligations before terminal deletion.</summary>
+public interface IModelTerminalDeletionGuard
+{
+    bool HasExternalDeletionGuard { get; }
+    ValueTask<bool> ProtectsTerminalDeletionAsync(ActorHeader header, object state, long now, CancellationToken cancellationToken);
 }
 
 /// <summary>Validates a definition change that preserves model state and all existing waits.</summary>

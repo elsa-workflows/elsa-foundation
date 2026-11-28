@@ -231,13 +231,22 @@ function Get-WorkflowInstance {
 # Poll instance detail until the run reaches a terminal status (or timeout). Execution is async,
 # so callers should wait before asserting on the result.
 function Wait-WorkflowInstance {
-    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)][string] $ExecutionId, [int] $TimeoutSeconds = 15)
+    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)][string] $ExecutionId, [int] $TimeoutSeconds = 15, [switch] $AwaitAdmission)
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $observed = $false
+    $status = $null
     do {
         Start-Sleep -Milliseconds 500
-        $inst = Get-WorkflowInstance -Ctx $Ctx -ExecutionId $ExecutionId
+        try {
+            $inst = Get-WorkflowInstance -Ctx $Ctx -ExecutionId $ExecutionId
+        } catch {
+            if (-not $AwaitAdmission -or $observed -or [int]$_.Exception.Response.StatusCode -ne 404 -or
+                (Get-Date) -ge $deadline) { throw }
+            continue
+        }
+        $observed = $true
         $status = $inst.instance.status
-    } while ($status -notin @('Completed', 'Faulted', 'Cancelled', 'Finished') -and (Get-Date) -lt $deadline)
+    } while (-not $observed -or ($status -notin @('Completed', 'Faulted', 'Cancelled', 'Finished') -and (Get-Date) -lt $deadline))
     return $inst
 }
 

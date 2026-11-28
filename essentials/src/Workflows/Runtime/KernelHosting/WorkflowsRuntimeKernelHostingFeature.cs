@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Data.Common;
 using CShells;
 using CShells.AspNetCore.Features;
@@ -19,6 +20,7 @@ using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Core.UserTasks;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -51,7 +53,11 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
     internal virtual bool RequiresHttp => true;
     internal virtual bool RequiresScheduleActivities => false;
 
-    [ManifestSetting(DisplayName = "Provider", Description = "Use SQLite or PostgreSQL.", Category = "Persistence", DefaultValue = "SQLite")]
+    [ManifestSetting(DisplayName = "Actor Foundation", Description = "Select the Actor Foundation implementation. This host provides BuiltIn.",
+        Category = "Runtime", DefaultValue = "BuiltIn")]
+    public string Foundation { get; set; } = "BuiltIn";
+
+    [ManifestSetting(DisplayName = "Provider", Description = "Use SQLite or PostgreSQL for the built-in Actor Foundation.", Category = "Persistence", DefaultValue = "SQLite")]
     public string Provider { get; set; } = "SQLite";
 
     [ManifestSetting(DisplayName = "SQLite file", Description = "Path to a dedicated local SQLite kernel database. Relative paths are resolved against the process working directory, and the parent directory must already exist.", Category = "Persistence")]
@@ -67,6 +73,14 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
         Description = "Bind standalone Event, HTTP, Timer and Cron sources to this shell with prepared Runtime persistence.",
         Category = "Runtime")]
     public bool PreparedStandaloneStarts { get; set; }
+
+    /// <summary>Enables ordinary Actor user tasks for a shell with the durable task journal and authorized inbox.</summary>
+    [ManifestSetting(DisplayName = "Actor user tasks", Description = "Enable Actor user tasks with a durable task journal.", Category = "Runtime")]
+    public bool ActorUserTaskWaits { get; set; }
+
+    /// <summary>Explicitly advances an existing, stopped Actor store to the current shipped format.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool UpgradeActorStoreFormat { get; set; }
 
     /// <summary>Private opt-in for qualifying standalone asynchronous HTTP fan-out.</summary>
     internal bool PreparedStandaloneHttpFanOut { get; set; }
@@ -88,8 +102,12 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
 
     public void ConfigureServices(IServiceCollection services)
     {
+        if (!string.Equals(Foundation?.Trim(), "BuiltIn", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("This workflow host provides the BuiltIn Actor Foundation. Set Foundation to BuiltIn.");
+
         var publisherScope = PreparedStandaloneStarts ? EmbeddedTenant.Bind(Tenant) : null;
-        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString, publisherScope);
+        var storage = KernelShellStorage.CreateBuiltIn(Provider, SqlitePath, PostgresConnectionString, publisherScope,
+            ActorUserTaskWaits, UpgradeActorStoreFormat);
         PreparedStandaloneHttpFanOut = storage.TakesRetainedHttpResponse;
         PreparedStandaloneHttpResponses = storage.TakesRetainedHttpResponse;
         ConfigureServices(services, storage, protectChildExecutables: storage.TakesPreparedStarts);
@@ -121,6 +139,13 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
             RetentionWindow(FaultedRetentionSeconds, nameof(FaultedRetentionSeconds)));
         var retention = new KernelRetentionActivation(tenant, proposedRetention, RetentionConfirmation);
         services.AddSingleton(storage);
+        if (storage.TakesUserTaskWaits)
+        {
+            services.AddSingleton(sp => new KernelUserTaskRuntime(storage, sp.GetRequiredService<IServiceScopeFactory>(),
+                persistenceScope, tenant, sp.GetService<TimeProvider>() ?? TimeProvider.System,
+                sp.GetRequiredService<ILogger<KernelUserTaskRuntime>>()));
+            services.AddSingleton<IActorUserTaskRuntime>(sp => sp.GetRequiredService<KernelUserTaskRuntime>());
+        }
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, ActivityOutputIntrinsicCapability>());
         services.AddSingleton(new KernelOperatorIngress(storage.OpenOperatorsAsync, storage.ReadClockAsync));
         services.AddSingleton(retention);
@@ -136,7 +161,9 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
                 capabilities: new KernelHostCapabilities(Schedules: servesSchedules, Timers: storage.TakesTimers,
                     Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits)
                 {
-                    HttpEndpoints = httpSelection.IsSelected(sp)
+                    HttpEndpoints = httpSelection.IsSelected(sp),
+                    UserTaskWaits = storage.TakesUserTaskWaits,
+                    Decisions = sp.GetRequiredService<IServiceProviderIsService>().IsService(typeof(Kernel.Native.INativeDecisions))
                 },
                 publicationScope: persistenceScope)
             {
@@ -158,7 +185,7 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
             persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables, testTenant,
-            sp.GetService<KernelEventPublicationRelay>(), PreparedStandaloneStarts));
+            sp.GetService<KernelEventPublicationRelay>(), PreparedStandaloneStarts, sp.GetService<KernelUserTaskRuntime>()));
         if (storage.TakesAuthoredStandaloneEvents)
             services.AddSingleton<IRuntimeAuthoredStandaloneEventAvailability, KernelStandaloneEventAvailability>();
         if (PreparedStandaloneStarts)

@@ -8,17 +8,24 @@ export interface FormVersion { tenantId: string; form: TaskForm; createdAt: stri
 export interface FormDraft { tenantId: string; id: string; form: TaskForm | null; revision: number; updatedAt: string; updatedBy: string }
 export interface FormDefinition { tenantId: string; id: string; latestPublished: FormVersion | null; draft: FormDraft | null; revision: number; deleted?: boolean }
 export interface TaskActor { userId: string; canRead: boolean; canAct: boolean; canManage: boolean; canManageForms: boolean; canReadForms: boolean }
-export interface TaskItem { id: string; title: string; description?: string; assigneeId?: string; assigneeName?: string | null; groupId?: string; groupName?: string | null; claimantId?: string; claimantName?: string | null; actions: string[]; optionalFormActions: string[]; form?: TaskForm; prefill: Record<string, unknown>; status: string; revision: number; history: { operation: string; actorId: string; actorName?: string | null; at: string; action?: string }[]; decision?: { response: { action: string; data: Record<string, unknown> }; actorId: string } }
+export interface TaskItem { id: string; title: string; description?: string; assigneeId?: string; assigneeName?: string | null; groupId?: string; groupName?: string | null; claimantId?: string; claimantName?: string | null; actions: string[]; optionalFormActions: string[]; supportsActions?: boolean; form?: TaskForm; prefill: Record<string, unknown>; status: string; revision: number; history: { operation: string; actorId: string; actorName?: string | null; at: string; action?: string }[]; decision?: { response: { action: string; data: Record<string, unknown> }; actorId: string } }
 export interface TaskPage { items: TaskItem[]; next?: string | null }
 export interface TaskTargets { users: { id: string; name: string }[]; groups: { id: string; name: string }[]; moreUsers: boolean; moreGroups: boolean }
 export const basicProvider = "elsa.basic-forms/1";
 export const taskCapability = [{ id: "elsa.api.user-tasks", contractVersion: "1" }];
+export const taskInboxCapability = [{ ...taskCapability[0], relations: ["identity", "tasks", "task"] }];
+export const taskFormsCapability = [{ ...taskCapability[0], relations: ["identity", "forms"] }];
+export const taskAuthoringCapability = [{ ...taskCapability[0], relations: ["complete", "targets"] }];
 const draftFormRelations = ["identity", "form-definitions", "form-definition", "form-history", "save-form-draft", "discard-form-draft", "publish-form"];
 const legacyFormRelations = ["identity", "forms"];
 export type FormsPageMode = "lifecycle" | "legacy" | "unavailable";
 type TaskCapabilityDocument = NonNullable<NonNullable<ElsaStudioModuleApi["backendSession"]>["capabilities"]>;
 function userTaskCapability(document: TaskCapabilityDocument) {
   return document.capabilities.find(item => item.id === "elsa.api.user-tasks" && item.contractVersion === "1" && item.status !== "dormant");
+}
+export function hasTaskOperation(api: ElsaStudioModuleApi, relation: string) {
+  const document = api.backendSession?.capabilities;
+  return document ? userTaskCapability(document)?.links.some(link => link.rel === relation) === true : false;
 }
 export function formsPageModeFromCapabilities(document: TaskCapabilityDocument): FormsPageMode {
   const capability = userTaskCapability(document);

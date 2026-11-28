@@ -1,0 +1,35 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Elsa.Workflows.Runtime.Api.UserTasks;
+
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor))]
+[JsonSerializable(typeof(UserTasks.FormPageRequest))]
+[JsonSerializable(typeof(UserTasks.FormVersionRequest))]
+[JsonSerializable(typeof(UserTasks.FormDefinitionRequest))]
+[JsonSerializable(typeof(UserTasks.FormHistoryRequest))]
+[JsonSerializable(typeof(UserTasks.FormDraftRequest))]
+[JsonSerializable(typeof(UserTasks.FormRevisionRequest))]
+[JsonSerializable(typeof(UserTasks.FormPublishRequest))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinition))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinitionPage))]
+[JsonSerializable(typeof(UserTasks.TargetRequest))]
+[JsonSerializable(typeof(UserTasks.AssignmentTargets))]
+[JsonSerializable(typeof(UserTasks.UserTaskView))]
+[JsonSerializable(typeof(UserTasks.UserTaskHistoryView))]
+[JsonSerializable(typeof(UserTasks.UserTaskPageView))]
+[JsonSerializable(typeof(UserTasks.TaskListRequest))]
+[JsonSerializable(typeof(UserTasks.TaskIdRequest))]
+[JsonSerializable(typeof(UserTasks.TaskMutationRequest))]
+[JsonSerializable(typeof(UserTasks.TaskCompletionRequest))]
+[JsonSerializable(typeof(UserTasks.UserTaskProblem))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFieldPresentation))]
+[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion))]
+[JsonSerializable(typeof(IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion>))]
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Metadata)]
+internal sealed partial class UserTaskJsonContext : JsonSerializerContext;

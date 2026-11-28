@@ -58,21 +58,26 @@ public sealed partial class EfStore
             await RequireInstalledStoreVersionsAsync(db, FormatLock.None, token);
 
             RequireSqliteDefinitions(installed, expected);
-            if (db.UsesRootPublicEventHost) await RootPublicEventHost.InstallAsync(db, db.PublicEventHost, create, token);
-            if (db.UsesAuthoredStandaloneEvents) await RootAuthoredStandaloneEvents.InstallAsync(db, create, token);
-            if (!await db.Database.SqlQuery<bool>($"""
-                SELECT
-                    (SELECT count(*) FROM "Partitions") = {partitions}
-                    AND (SELECT min("Id") FROM "Partitions") = 0
-                    AND (SELECT max("Id") FROM "Partitions") = {partitions - 1}
-                    AND EXISTS (SELECT 1 FROM "FoundationRootIssuer"
-                        WHERE "Singleton" = 1 AND typeof("Key") = 'blob' AND length("Key") = 32 AND "Partitions" = {partitions}) AS "Value"
-                """).SingleAsync(token))
-                throw new StoreFormatException("The SQLite root issuer and partition count differ from this install. Recreate or migrate the database.");
+            await RequireSqliteFoundationShapeAsync(db, partitions, create, token);
 
             await transaction.CommitAsync(token);
         }
         finally { await db.Database.CloseConnectionAsync(); }
+    }
+
+    private static async Task RequireSqliteFoundationShapeAsync(KernelDb db, int partitions, bool create, CancellationToken token)
+    {
+        if (db.UsesRootPublicEventHost) await RootPublicEventHost.InstallAsync(db, db.PublicEventHost, create, token);
+        if (db.UsesAuthoredStandaloneEvents) await RootAuthoredStandaloneEvents.InstallAsync(db, create, token);
+        if (!await db.Database.SqlQuery<bool>($"""
+            SELECT
+                (SELECT count(*) FROM "Partitions") = {partitions}
+                AND (SELECT min("Id") FROM "Partitions") = 0
+                AND (SELECT max("Id") FROM "Partitions") = {partitions - 1}
+                AND EXISTS (SELECT 1 FROM "FoundationRootIssuer"
+                    WHERE "Singleton" = 1 AND typeof("Key") = 'blob' AND length("Key") = 32 AND "Partitions" = {partitions}) AS "Value"
+            """).SingleAsync(token))
+            throw new StoreFormatException("The SQLite root issuer and partition count differ from this install. Recreate or migrate the database.");
     }
 
     private sealed record SqliteOperationalStamp(bool SafeConnection, long SchemaVersion, int? StoreSchema,

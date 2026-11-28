@@ -128,6 +128,7 @@
 		<ProjectReference Include="../../../essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Runtime/Hosting/Elsa.Activities.Runtime.Hosting.csproj" />
+		<ProjectReference Include="../../../essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
 		<ProjectReference Include="../../../essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
@@ -256,6 +257,7 @@
     <ProjectReference Include="../../../extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
     <ProjectReference Include="../../../extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
     <ProjectReference Include="../../../extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
+    <ProjectReference Include="../../../extensions/Decisions/src/Workflows/Actor/Elsa.Decisions.Workflows.Actor.csproj" />
     <ProjectReference Include="../../../extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 </Project>

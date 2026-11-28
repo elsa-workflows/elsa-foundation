@@ -2,7 +2,7 @@
 
 | Surface | Purpose |
 | --- | --- |
-| `AgentEntityFrameworkCoreFeature` | Selects the provider, connection, schema and pooling for the shell. Depends on AgentRuntime. |
+| `AgentEntityFrameworkCoreFeature` | Selects the provider, connection, schema and pooling for the shell. Depends on Tasks for its source registration check. |
 | `AgentEntityFrameworkCoreRegistration.AddAgentEntityFrameworkCore` | Registers module-owned contexts, the scoped turn journal and the shared migration lifecycle. |
 | `AgentEntityFrameworkCoreOptions` | Explicit choices for that registration. |
 | `AgentModelBuilderExtensions.AddAgentModel` | Installs only the agent mappings in a consumer-owned context. The host owns migrations. |

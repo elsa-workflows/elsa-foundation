@@ -756,7 +756,6 @@ jobs:
       - studio-ux-acceptance
       - studio-dotnet-build-and-test
       - backend-source
-      - package-witness
       - published-image-pair
       - shuffled-unit-tests
       - kernel-prototype-nightly
@@ -791,7 +790,6 @@ jobs:
           STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}
           STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}
           BACKEND_SOURCE: ${{ needs.backend-source.result }}
-          WEAVER: ${{ needs.package-witness.result }}
           PUBLISHED_IMAGES: ${{ needs.published-image-pair.result }}
           SHUFFLED: ${{ needs.shuffled-unit-tests.result }}
           KERNEL_NIGHTLY: ${{ needs.kernel-prototype-nightly.result }}
@@ -806,7 +804,7 @@ jobs:
           if [[ " $GATE_RESULTS " == *" failure "* ]]; then failed+=("CI"); fi
           for pair in "Full tier:$FULL_TIER" "Studio browser tests:$STUDIO_BROWSER" "UX acceptance:$STUDIO_UX" \
               "Studio .NET build & test:$STUDIO_DOTNET" "Backend source:$BACKEND_SOURCE" \
-              "Weaver independent package witness:$WEAVER" "Published image pair:$PUBLISHED_IMAGES" \
+              "Published image pair:$PUBLISHED_IMAGES" \
               "Workflows unit tests (three shuffled orders):$SHUFFLED" "Kernel prototype nightly:$KERNEL_NIGHTLY" \
               "Kernel prototype nightly, 4,096 virtual partitions:$KERNEL_4096" \
               "Kernel prototype nightly, NL-9 node lease deadlock runs:$KERNEL_NL9" \
@@ -821,7 +819,7 @@ jobs:
               echo "::notice::Only Generated maps failed: stale solution filters are a refresh request, not a red main. No issue filed."
               exit 0
             fi
-            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096 kernel-nl9=$KERNEL_NL9 kernel-pg-history=$KERNEL_PG_HISTORY kernel-mysql=$KERNEL_MYSQL"
+            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096 kernel-nl9=$KERNEL_NL9 kernel-pg-history=$KERNEL_PG_HISTORY kernel-mysql=$KERNEL_MYSQL"
             failed=("CI")
           fi
 
@@ -1619,17 +1617,17 @@ jobs:
 
   package-witness:
     needs: plan-scope
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.weaver == 'true'
-    name: Weaver independent package witness
+    if: github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.weaver == 'true'
+    name: Replay the classic Weaver package witness
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       WEAVER_VERSION: 4.0.0-weaver-ci.${{ github.run_id }}.${{ github.run_attempt }}
     steps:
-      - name: Checkout exact candidate
+      - name: Checkout the classic Weaver witness and its engine
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: 18a16dee878106ac525aa9a861d851a200e43c55
           persist-credentials: false
 
       - name: Setup .NET

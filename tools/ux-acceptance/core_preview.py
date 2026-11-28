@@ -35,20 +35,23 @@ SUITE = 'core-preview'
 # The kernel journeys run once, on the desktop: they qualify the kernel path, not the appearance matrix.
 PROJECT = 'desktop-light'
 PARK_RECOVERY_JOURNEY = 'Studio recovers the selected parked workflow'
+TEST_RUN_INSPECTOR_JOURNEY = 'Studio follows an isolated Test Run in the editor'
 CAPTURES = {
     'core preview stack is ready': ['reference'],
     'Studio opens the committed kernel activity timeline': ['activity-timeline', 'activity-selection', 'history-paused',
                                                            'history-catch-up', 'history-committed'],
     'kernel HTTP response opens the committed run': ['kernel-http-result', 'kernel-http-run', 'kernel-http-refusal'],
     PARK_RECOVERY_JOURNEY: ['parked-run', 'park-evidence', 'park-evidence-narrow', 'park-recovery-stale', 'park-recovered', 'park-run-completed'],
+    TEST_RUN_INSPECTOR_JOURNEY: ['test-run-started', 'test-run-completed', 'test-run-opened'],
 }
 EVIDENCE = {
     'core preview stack is ready': ['core-preview-smoke.json'],
     'Studio opens the committed kernel activity timeline': ['activity-timeline.json'],
     'kernel HTTP response opens the committed run': ['kernel-http.json'],
     PARK_RECOVERY_JOURNEY: ['park-recovery.json'],
+    TEST_RUN_INSPECTOR_JOURNEY: ['test-run-inspector.json'],
 }
-JOURNEYS = set(CAPTURES) - {PARK_RECOVERY_JOURNEY}
+JOURNEYS = set(CAPTURES) - {PARK_RECOVERY_JOURNEY, TEST_RUN_INSPECTOR_JOURNEY}
 # The kernel's execution tenant matches the administrator and Studio's scoped reads.
 TENANT = 'default'
 POSTGRES_IMAGE = os.environ.get('UX_CORE_PREVIEW_POSTGRES_IMAGE', 'postgres:17')
@@ -405,7 +408,8 @@ def run(output, journey=None, provider='postgres', history_authority=False, *, i
                                            ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url, UX_HTTP_STUB_URL=stub.url,
                                            UX_CORE_PREVIEW_TENANT=TENANT, UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha,
                                            UX_CORE_PREVIEW_HISTORY_AUTHORITY=str(int(history_authority)),
-                                           UX_CORE_PREVIEW_PARK_RECOVERY=str(int(journey == PARK_RECOVERY_JOURNEY)))
+                                           UX_CORE_PREVIEW_PARK_RECOVERY=str(int(journey == PARK_RECOVERY_JOURNEY)),
+                                           UX_CORE_PREVIEW_TEST_RUN_INSPECTOR=str(int(journey == TEST_RUN_INSPECTOR_JOURNEY)))
                         browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                         if journey:
                             browser_command.extend(['--grep', r'(?:^|\s)' + re.escape(journey) + '$'])

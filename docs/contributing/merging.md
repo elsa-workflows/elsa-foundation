@@ -31,7 +31,7 @@ CI runs in two tiers (spec 263). [`tools/ci/test-tiers.json`](../../tools/ci/tes
 
 - **One gate: the PR tier, on every commit.** The required check `Build & test` (workflow `CI`) is the aggregate of `Plan tiers`, the `PR shard (n)` jobs, `Architecture guards`, `Core-only build & test` and, on a pull request, `Generated maps`, plus `Studio frontend lint, typecheck & unit tests` when the change touches Studio. The Studio frontend and generated-maps results are checked before the documentation-only fast path. Each shard builds the whole solution and runs its projects, or its share of a long project split by test class. This is the lean CI (owner-approved 20 Nov 2026): one gate of about 12 minutes on pull requests and pushes to `main`.
 - **Full tier, nightly.** The integration-tier projects and every EF container suite with its required-provider mode, plus the Secrets EF composition proof, run in `CI`'s nightly schedule (02:41 UTC) and on a manual run, not on pull requests or pushes. Run the full tier on a branch, a draft's head included, with `gh workflow run ci.yml --ref <branch> -f tier=full`; do that before merging a change to a store or another container-backed path (K1b store work included), and say so in the PR's evidence.
-- **The other heavy suites, nightly.** The Studio browser shards, the composed Studio UX acceptance, `Studio .NET build & test`, the Ubuntu/Windows backend source journeys, the Weaver package witness, the pinned published-image pair and the shuffled Workflows unit tests also run only in the nightly schedule and on a manual run that selects them (see below).
+- **The other heavy suites, nightly.** The Studio browser shards, the composed Studio UX acceptance, `Studio .NET build & test`, the Ubuntu/Windows backend source journeys, the pinned published-image pair and the shuffled Workflows unit tests also run only in the nightly schedule and on a manual run that selects them (see below).
 - **One issue per red nightly suite.** `Alert on a red main` files or updates `main is red: CI` when the gate fails on a push or the nightly run, and `main is red: CI nightly, <suite>` for each heavy suite that fails in the nightly run. Elsa 4 Lead triages them each morning.
 - **Two stub checks until the ruleset changes.** `Full tier` and `Generated maps fresh` are still required by ruleset `main-2`, so `CI` keeps both as pass-through jobs that report success on every pull request. The real generated-maps check runs as `Generated maps` inside `Build & test`. Once an admin drops the two contexts from `main-2`, the stubs are deleted. The `full-tier` label and the `CI_FULL_TIER_EVERY_PUSH` variable no longer change anything.
 - **No merge queue.** `main`'s ruleset has no merge queue rule, and `CI` has no `merge_group` trigger (removed with the lean CI, owner-approved 20 Nov 2026). PRs merge directly once the required checks are green on their head; the push run on `main` and the nightly run catch what lands beside them.
@@ -46,7 +46,7 @@ CI runs in two tiers (spec 263). [`tools/ci/test-tiers.json`](../../tools/ci/tes
 - **The tier rule.** A test project that reaches Testcontainers, directly or through a referenced test project, is integration tier. So is one that launches a child host (a Workbench host, a child host process, a worker, a probe or the `dotnet-elsa` CLI) and takes 2 minutes or more. Every other project is PR tier. A new test project needs an entry in the manifest; `Generated maps` (and so `Build & test`) fails until it has one. Check locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
 
 The heavy source proofs run as jobs in `CI`'s nightly schedule: Studio browser/.NET validation and the composed
-Studio UX suite, the Ubuntu/Windows backend source journeys, Weaver package conformance, the pinned published-image
+Studio UX suite, the Ubuntu/Windows backend source journeys, the pinned published-image
 pair and the Workflows unit-order checks. Pull requests and pushes to `main` run the Studio frontend checks when
 Studio changed (`tools/ci/workflow-paths.json` keeps that path scope), not the heavy proofs. Task-specific local UX
 acceptance remains part of each visible change’s review. Run an individual suite on a branch before merging when a
@@ -56,7 +56,9 @@ change needs its proof, without starting the backend tiers:
 gh workflow run ci.yml --ref <branch> -f suite=studio
 ```
 
-Other suite values are `backend-source`, `weaver`, `published-images`, and `studio-order`.
+Other suite values are `backend-source`, `published-images`, and `studio-order`.
+The manual `weaver` value replays the [classic Weaver package witness](../../tools/studio/Weaver.Conformance.Probe/README.md)
+from its pinned source.
 The default `suite=ci` retains the existing `tier=full|pr` dispatch. Marking a PR ready starts a
 complete ready run: the PR tier, generated maps and the two stub checks report together. It supersedes an in-progress
 draft run. This avoids
@@ -81,7 +83,7 @@ a separate issue-write token; ordinary PR jobs still have read-only tokens.
 **Why review the draft.** Code Review is the independent final check of a PR its author is already confident in, not its first reviewer, and a draft push is the cheap place to find and fix problems:
 
 - **Every push**, draft or ready, runs the PR tier, about 13 minutes and about 45 job-minutes when every shard is affected. Only a PR whose whole diff is documentation takes the fast path.
-- **The heavy suites** (the full tier, the Studio Chromium shards, Studio .NET, composed UX and the Weaver witness) do not run on a PR. Dispatch the ones a change needs on its branch (see above). Accepted gap: a regression they would catch shows up in the next nightly run, up to a day after merge, and files its own issue.
+- **The heavy suites** (the full tier, the Studio Chromium shards, Studio .NET and composed UX) do not run on a PR. Dispatch the ones a change needs on its branch (see above). Accepted gap: a regression they would catch shows up in the next nightly run, up to a day after merge, and files its own issue.
 
 So fix rounds belong on the draft. A finding from Code Review is still fixed on the ready PR, but the local rounds should leave few.
 

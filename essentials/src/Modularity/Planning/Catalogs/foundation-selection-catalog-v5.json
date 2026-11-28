@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "1",
+  "id": "elsa-foundation",
+  "version": "5",
+  "publisher": "elsa-foundation",
+  "profiles": [
+    {
+      "kind": "profile",
+      "id": "actor-foundation",
+      "version": "1",
+      "members": [
+        "ActivitiesControlFlow",
+        "ActivitiesDesignApi",
+        "ActivitiesDesignEntityFrameworkCore",
+        "ActivitiesDesignReconciliation",
+        "ActivitiesFlowchart",
+        "ActivitiesGraphDesign",
+        "ActivitiesGraphRuntimeHosting",
+        "ActivitiesPrimitives",
+        "ActivitiesRuntimeHosting",
+        "ActivitiesSequence",
+        "ApiCapabilities",
+        "ClrActivityReconciliation",
+        "Events",
+        "Expressions",
+        "FileSystemDistributedLocking",
+        "FoundationIdentityAbstractions",
+        "FoundationIdentityAspNetCoreIdentity",
+        "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore",
+        "IdentityIamEntityFrameworkCore",
+        "JavaScriptJintEngine",
+        "Mediator",
+        "MemoryCache",
+        "Primitives",
+        "Serialization",
+        "StandaloneTriggersApi",
+        "Tasks",
+        "WorkflowDesignValidations",
+        "WorkflowsDesignApi",
+        "WorkflowsDesignEntityFrameworkCore",
+        "WorkflowsPublishing",
+        "WorkflowsPublishingApi",
+        "WorkflowsPublishingEntityFrameworkCore",
+        "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeKernel",
+        "WorkflowsRuntimeKernelOptionalHttpHosting",
+        "WorkflowsRuntimeKernelRetainedApi",
+        "WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence",
+        "WorkflowsRuntimePreparedStandaloneSourcePump",
+        "WorkflowsRuntimePublicationEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
+      ],
+      "rationale": "The resolved Lean Essentials selection runs Native and Flowchart on Built-in Actor Foundation. Host configuration supplies a dedicated Actor database, the workflow control stores and identity settings.",
+      "title": "Actor Foundation",
+      "description": "Start with the Lean Essentials selection for Native and Flowchart. Configure the Actor and workflow control stores separately before starting the host.",
+      "dependencyExplanations": [
+        {
+          "featureId": "WorkflowsRuntimeKernelRetainedApi",
+          "dependencyId": "WorkflowsRuntimeKernel",
+          "mode": "required",
+          "reason": "The retained workflow Runtime API reads runs and executables from the Actor kernel."
+        },
+        {
+          "featureId": "WorkflowsRuntimePreparedStandaloneSourcePump",
+          "dependencyId": "WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence",
+          "mode": "required",
+          "reason": "The prepared standalone source pump reads durable registrations from the workflow control store."
+        }
+      ],
+      "digest": "a4f2974dd8e0649f099078c402576aeb19b1702713927684813244074320f66d"
+    }
+  ],
+  "groups": [
+    {
+      "kind": "group",
+      "id": "diagnostics-ef",
+      "version": "2",
+      "digest": "f4bbbbf6c7e327e1a56a60c4e890fa163002eea70e10d9088f51007084bab462",
+      "members": [
+        "ApiCapabilities",
+        "DiagnosticsOpenTelemetry",
+        "DiagnosticsOpenTelemetryEntityFrameworkCore",
+        "DiagnosticsStructuredLogs",
+        "DiagnosticsStructuredLogsEntityFrameworkCore"
+      ],
+      "rationale": "Select API capability aggregation, the two server diagnostics features and their EF persistence consumers together. The two consumers still need independently reviewed resource bindings, migration policy, and host prerequisites; this group does not configure or validate a database or enable in-process engine tracing.",
+      "title": "Diagnostics with EF persistence",
+      "description": "Add Structured Logs and OpenTelemetry diagnostic stores to a server composition. Configure each EF consumer and its database resource separately.",
+      "dependencyExplanations": [
+        {
+          "featureId": "DiagnosticsOpenTelemetry",
+          "dependencyId": "ApiCapabilities",
+          "mode": "required",
+          "reason": "The diagnostics feature contributes its management contract through API capability aggregation."
+        },
+        {
+          "featureId": "DiagnosticsOpenTelemetryEntityFrameworkCore",
+          "dependencyId": "DiagnosticsOpenTelemetry",
+          "mode": "required",
+          "reason": "The OpenTelemetry EF persistence consumer depends on the OpenTelemetry diagnostics feature."
+        },
+        {
+          "featureId": "DiagnosticsStructuredLogs",
+          "dependencyId": "ApiCapabilities",
+          "mode": "required",
+          "reason": "The diagnostics feature contributes its management contract through API capability aggregation."
+        },
+        {
+          "featureId": "DiagnosticsStructuredLogsEntityFrameworkCore",
+          "dependencyId": "DiagnosticsStructuredLogs",
+          "mode": "required",
+          "reason": "The Structured Logs EF persistence consumer depends on the Structured Logs diagnostics feature."
+        }
+      ]
+    }
+  ],
+  "digest": "0cfb51f492c5c23fd54d1ad5977ea7b5b8d5673c9fbdcc2bf516c3a036bbfb16"
+}

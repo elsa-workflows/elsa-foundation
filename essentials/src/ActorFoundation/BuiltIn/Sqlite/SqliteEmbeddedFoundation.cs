@@ -43,6 +43,32 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         bool withTimers = false) =>
         new(databasePath, node, actorType, withTimers ? StoreFormat.RootS6TerminalOutputQualification : StoreFormat.RootTerminalOutputQualification);
 
+    internal static SqliteEmbeddedFoundation ForShippedBeforeUserTasks(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootShippedBeforeUserTasks);
+
+    /// <summary>Advances a stopped SQLite store to the current shipped format under the exclusive file ownership gate.</summary>
+    public async Task<bool> UpgradeShippedFormatAsync(CancellationToken cancellationToken)
+    {
+        if (qualificationFormat is not null)
+            throw new InvalidOperationException("The shipped Actor format is required for the upgrade.");
+        await installation.WaitAsync(cancellationToken);
+        try
+        {
+            return await SqliteEmbeddedHosting.UpgradeShippedFormatAsync(installedPath ?? path, publicEventHost, cancellationToken);
+        }
+        finally { installation.Release(); }
+    }
+
+    /// <summary>Reads the committed checkpoint of an exact ordinary Actor life for task reconciliation.</summary>
+    public ValueTask<Contract.CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        CancellationToken cancellationToken)
+    {
+        if (scope.IsHostIsolated) return ValueTask.FromResult<Contract.CommittedActorCheckpoint?>(null);
+        if (qualificationFormat is not null)
+            throw new InvalidOperationException("This store does not support Actor user task waits.");
+        return SqliteEmbeddedHosting.ReadUserTaskCheckpointAsync(InstalledPath, scope, actor, publicEventHost, cancellationToken);
+    }
+
     internal static SqliteEmbeddedFoundation ForChildQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.SqliteRootChildrenQualification);
 
@@ -195,7 +221,8 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         this.node = node;
         this.actorType = actorType;
         this.qualificationFormat = qualificationFormat;
-        if (qualificationFormat is null || qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
+        if (qualificationFormat is null || qualificationFormat == StoreFormat.RootShippedBeforeUserTasks ||
+            qualificationFormat == StoreFormat.RootPublicEventHostQualification ||
             qualificationFormat == StoreFormat.RootRetainedResponseQualification ||
             qualificationFormat == StoreFormat.RootPreparedWaitQualification ||
             qualificationFormat is { SupportsAuthoredStandaloneEventQualification: true })
@@ -206,7 +233,8 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     }
 
     /// <summary>Whether this profile supports managed schedule delivery and irreversible cohort retirement.</summary>
-    public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
+    public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootShippedBeforeUserTasks ||
+        qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
         qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
         qualificationFormat == StoreFormat.RootDirectTestRunQualification ||
         qualificationFormat is { SupportsIsolatedInlineQualification: true } ||

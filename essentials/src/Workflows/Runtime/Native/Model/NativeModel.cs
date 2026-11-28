@@ -16,6 +16,8 @@ public static class NativeKinds
     public const string Continue = "native.continue";   // a Durable boundary: the burst goes on in the next turn
     public const string Timer = "native.timer";         // a Delay is due
     public const string Resume = "native.resume";       // an outsider resumes a wait by its stimulus, without the event tables
+    public const string UserTaskAccepted = "native.user-task.accepted";
+    public const string UserTaskAcknowledged = "native.user-task.acknowledged";
     public const string Cancel = "native.cancel";
 }
 
@@ -76,6 +78,9 @@ public class NativeExecutionOptions
     /// <summary>Attests the exact resolved HTTP template on waits created by a prepared-standalone host.</summary>
     public bool StampPreparedHttpWaits { get; init; }
 
+    /// <summary>Enables the private Actor user-task materialization protocol on a qualified host.</summary>
+    public INativeUserTaskJobs? UserTaskJobs { get; init; }
+
     /// <summary>
     /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
     /// <see cref="MaxActivitiesPerTurn"/> continues in the next turn. Without them a burst runs on to its next wait or end in
@@ -104,6 +109,8 @@ public class NativeExecutionOptions
     public TextWriter? ConsoleOutput { get; init; }
     /// <summary>The host's script engine for RunJavaScript; without it a script faults.</summary>
     public INativeScripts? Scripts { get; init; }
+    /// <summary>The shell's optional evaluator of exactly pinned authored decisions.</summary>
+    public INativeDecisions? Decisions { get; init; }
     /// <summary>The host's evaluator for host expressions (JavaScript, Liquid); without it such a binding faults its activation.</summary>
     public INativeExpressions? Expressions { get; init; }
 
@@ -177,6 +184,12 @@ public sealed partial class NativeState
     public Dictionary<string, Frame> Frames { get; set; } = new(StringComparer.Ordinal);
     public List<Work> Agenda { get; set; } = [];
     public Dictionary<string, WaitEntry> Waits { get; set; } = new(StringComparer.Ordinal);
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal Dictionary<string, NativeUserTaskWaits.Consumption>? UserTaskConsumptions { get; set; }
+
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal bool RequiresUserTaskModel { get; set; }
+
     public Dictionary<string, JsonNode?> Variables { get; set; } = new(StringComparer.Ordinal);
     /// <summary>The correlation id Set Correlation Id set, which an expression's instance parameter reads; the label holds it too.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -226,6 +239,12 @@ public sealed record WaitEntry(string Frame, string Kind, string Key, long Creat
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Contract.JobSpec? Job { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AcceptedTaskCompletionId { get; init; }
+
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal NativeUserTaskWaits.Retry? TaskRetry { get; init; }
 }
 
 // ---- the model -----------------------------------------------------------------------------------------------------
@@ -297,6 +316,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case Contract.Kinds.Start when !_s.Started:
             {
                 _s.Started = true;
+                _s.RequiresUserTaskModel = options.UserTaskJobs is not null && NativeUserTaskWaits.RequiresTaskModel(_wf);
                 InitializeIntervention();
                 var start = System.Text.Json.JsonSerializer.Deserialize<NativeStart>(m.Payload ?? "{}")!;
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
@@ -325,6 +345,15 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 // Friction F-N3, fixed in the merge: the kernel says which wait a delivery is for.
                 if (turn.EventWait(m) is { } eventWait) Resume(eventWait, Values.Parse(m.Payload));
                 break;
+            case NativeKinds.UserTaskAccepted:
+                AcceptUserTask(m.Payload);
+                break;
+            case NativeKinds.UserTaskAcknowledged:
+                AcknowledgeUserTask(m.Payload);
+                break;
+            case NativeUserTaskWaits.RetryKind:
+                RetryUserTaskJob(m);
+                break;
             case NativeKinds.Resume:
             {
                 var stimulus = Read<ResumeStimulus>(m);
@@ -343,7 +372,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case Contract.Kinds.JobFinished:
             {
                 var finished = Read<Contract.JobFinished>(m);
-                Resume(finished.Key, Values.From(finished));
+                if (!HandleUserTaskJob(finished)) Resume(finished.Key, Values.From(finished));
                 break;
             }
             case NativeKinds.Cancel:
@@ -532,12 +561,21 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
         // The wait and the frame are gone by now, so a host expression that fails here faults the frame directly.
         IStateful? activity;
-        try { activity = (IStateful?)CreateActivity(frame, node, frame.RecoveryStateful ? (JsonObject)frame.RecoveryInputs!.DeepClone() : null, new FrameScope(this, frame)); }
+        try
+        {
+            activity = wait.Kind == NativeUserTaskWaits.Kind && node.Type == typeof(CreateUserTask)
+                ? new CreateUserTask()
+                : (IStateful?)CreateActivity(frame, node, frame.RecoveryStateful ? (JsonObject)frame.RecoveryInputs!.DeepClone() : null, new FrameScope(this, frame));
+        }
         catch (NativeExpressionException failed) { Fail(frame, ExpressionFault(frame, failed)); return; }
         if (activity is null) return;
         var context = Context(frame);
         var state = frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State;
-        await ApplyAsync(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
+        var transition = await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload));
+        if (wait.Kind == NativeUserTaskWaits.Kind && node.Type == typeof(CreateUserTask) &&
+            transition is { Kind: TransitionKind.Complete, Effects: null or [] })
+            RecordUserTaskConsumption(frame, work.Wait!, wait, work.Payload);
+        await ApplyAsync(frame, transition);
     }
 
     private ActivityContext Context(Frame frame)
@@ -546,6 +584,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         return new(turn.Actor, frame.Id, frame.Node, frame.Attempt, cancellationToken, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path))
         {
             Scripts = options.Scripts,
+            Decisions = options.Decisions,
+            ExactDecisionSource = options.Decisions is not null && _wf.Nodes[frame.Node].Type == typeof(EvaluateDecision)
+                ? turn.ExactDecisionSource : null,
             ConsoleOutput = options.ConsoleOutput
         };
     }
@@ -646,6 +687,12 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             Exit(frame, exit);
             return;
         }
+        if (t.Kind == TransitionKind.Suspend && t.Triggers?.Any(trigger => trigger is UserTaskWaitTrigger) == true &&
+            CheckUserTaskWait(frame, t) is { } refusal)
+        {
+            Fail(frame, refusal);
+            return;
+        }
         foreach (var effect in t.Effects ?? []) Do(frame, effect, children);
         switch (t.Kind)
         {
@@ -666,6 +713,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         var id = NewId("w");
         switch (trigger)
         {
+            case UserTaskWaitTrigger task:
+                RegisterUserTask(frame, id, task.Request);
+                break;
             case EventTrigger e:
                 _s.Waits[id] = new WaitEntry(frame.Id, "event", "event:" + e.Name);
                 turn.Subscribe("event:" + e.Name, id);
@@ -768,6 +818,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         {
             case "event": turn.Unsubscribe(wait.Key, id); break;
             case "job" when cancel: turn.CancelJob(wait.Key); break;
+            case NativeUserTaskWaits.Kind when cancel:
+                if (wait.Job is { } journalJob) turn.CancelJob(journalJob.Key);
+                if (wait.TaskRetry is { } retry) turn.Recall(retry.Timer.Id);
+                break;
             case "child" when cancel:
                 turn.CancelChild(wait);
                 break;

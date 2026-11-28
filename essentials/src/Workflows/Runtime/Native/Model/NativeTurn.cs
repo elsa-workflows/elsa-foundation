@@ -21,6 +21,7 @@ internal interface INativeTurn
     bool SavesWaitRecipes { get; }
     string OperationOrigin { get; }
     string? TestScopeId => null;
+    NativeDecisionSource? ExactDecisionSource => null;
     long Now { get; }
     NativeState State { get; }
     object? Ambient { get; }
@@ -38,6 +39,8 @@ internal interface INativeTurn
     Contract.ActorRef StartDetached(ChildWorkflowTarget workflow, string mode, JsonObject? input);
     void CancelChild(WaitEntry child);
     void StartJob(string key, BackgroundArgs arguments, TimeSpan? timeout);
+    void StartUserTaskJob(string key, object arguments, TimeSpan timeout) =>
+        throw new NotSupportedException("The turn does not carry Actor user task jobs.");
     void CancelJob(string key);
     void Subscribe(string key, string wait);
     void Unsubscribe(string key, string wait);

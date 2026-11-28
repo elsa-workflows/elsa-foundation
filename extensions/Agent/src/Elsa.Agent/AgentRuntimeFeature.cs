@@ -19,14 +19,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Agent;
 
-/// <summary>Activates pinned native agent boundaries and their background model-turn workers.</summary>
-[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
-[ManifestFeatureCategory("Agent")]
-[ManifestFeatureCategory("Runtime")]
-[ShellFeature(name: "AgentRuntime", DisplayName = "Agents (Runtime)",
-    Description = "Executes published agents through Microsoft Agent Framework. Requires an explicitly configured turn journal and model provider.",
-    DependsOn = new object[] { "BackgroundActivities", "Secrets", "Serialization" })]
-public class AgentRuntimeFeature : IShellFeature
+/// <summary>Programmatically registers the classic agent activation and background turn services.</summary>
+public class AgentRuntimeFeature
 {
     /// <summary>Allows new logical operations. Disabling keeps matching admitted work, readers and settlement available.</summary>
     public bool AllowNewOperations { get; set; } = true;
@@ -37,7 +31,7 @@ public class AgentRuntimeFeature : IShellFeature
     /// <summary>Protected content retention after native workflow completion; active work remains pinned. Defaults to thirty days.</summary>
     public TimeSpan ContentRetention { get; set; } = TimeSpan.FromDays(30);
 
-    /// <inheritdoc />
+    /// <summary>Registers activation, invocation inspection and settlement services.</summary>
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -88,8 +82,7 @@ internal sealed class AgentRegistrationStartupTask(IServiceCollection services) 
 [ManifestFeatureCategory("Agent")]
 [ManifestFeatureCategory("Persistence")]
 [ShellFeature(name: "AgentInMemoryJournal", DisplayName = "Agents: In-memory Journal",
-    Description = "Development and test only. Retains at most 10,000 turns for this host lifetime; missing turns are refused after restart.",
-    DependsOn = new object[] { "AgentRuntime" })]
+    Description = "Development and test only. Retains at most 10,000 turns for this host lifetime; missing turns are refused after restart.")]
 public class AgentInMemoryJournalFeature : IShellFeature
 {
     /// <inheritdoc />

@@ -21,7 +21,7 @@ internal static class CompositionInitCommand
 
     public static Command Build()
     {
-        var profile = Required("--profile", "Foundation profile ID and version, such as embedded-runtime@1.");
+        var profile = Required("--profile", "Foundation profile ID and version, such as actor-foundation@1.");
         var groups = new Option<string[]>("--group") { Description = "Foundation feature-group ID and version. Repeatable." };
         var output = Required("--output", "Fresh authored composition file.");
         var command = new Command("init", "Create a pinned composition from a bundled Foundation profile and optional groups.")
@@ -37,7 +37,7 @@ internal static class CompositionInitCommand
     private static int Run(string profilePin, IReadOnlyList<string> groupPins, string outputPath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var catalog = FoundationSelectionCatalog.Load();
+        var catalog = FoundationSelectionCatalog.LoadForProfile(profilePin);
         var definition = FindDefinition(profilePin, "profile", catalog.Profiles);
         var groupDefinitions = groupPins.Select(pin => FindDefinition(pin, "group", catalog.Groups)).ToArray();
         if (groupDefinitions.Select(item => (item.Id, item.Version)).Distinct().Count() != groupDefinitions.Length)

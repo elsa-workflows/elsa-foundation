@@ -56,6 +56,7 @@ CAPTURES = {
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
     'save template toast': ['reference', 'save-form', 'saved-toast', 'template-list', 'reopened-template'],
     'workflow template metadata defaults': ['reference', 'create-focused-description', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
+    'open the user task inbox and publish a reusable form': ['reference', 'task-inbox', 'form-authoring', 'published-form'],
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
     'executable designer parity': ['reference', 'definition-sequence', 'definition-frame', 'definition-frame-dock', 'definition-frame-retained', 'definition-frame-scroll-top', 'definition-frame-scroll-middle', 'definition-frame-dock-scroll-top', 'definition-frame-dock-scroll-middle', 'definition-frame-retained-scroll-top', 'definition-frame-retained-scroll-middle', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'Double activity output binds to text': ['reference', 'automatic-conversion', 'incompatible-conversion', 'recovered-conversion'],

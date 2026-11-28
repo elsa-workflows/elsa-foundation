@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
@@ -31,6 +32,7 @@ namespace Elsa.Activities.Scripting.Activities;
 /// <see cref="RunJavaScriptResult.Value"/> is populated in every case, including <c>Unmatched</c>.
 /// </para>
 /// </remarks>
+[DisplayName("Run JavaScript")]
 [ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = RunJavaScript.UnmatchedOutcome)]
 public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>
 {

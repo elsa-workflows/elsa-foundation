@@ -64,6 +64,8 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   const authorityChanged = Boolean(testRun?.endpointContext && testRun.endpointContext !== context);
   const eligible = Boolean(snapshot && executionId && artifactId && testRun?.endpointContext === context && testRun && !isRejectedTestRun(testRun.view));
   const attached = eligible && (!stale || snapshotView) && dismissedRunId !== runId && authorized;
+  const sharedDetails = observation ? observation.details : undefined;
+  const canReadRun = sharedDetails !== null;
   const nodeKey = JSON.stringify([...new Set(nodes.map(node => node.data.runtimeNodeId ?? node.id))].sort());
   const identity = JSON.stringify([runId, executionId, artifactId, nodeKey, authorizationVersion, observation?.identity]);
   const key = JSON.stringify([identity, ancestorId, selectedExecution?.activityExecutionId]);
@@ -96,6 +98,11 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
 
   useEffect(() => {
     if (!attached || !executionId || !artifactId) return;
+    if (sharedDetails === null) {
+      setEvidence(null);
+      graphCache.current = null;
+      return;
+    }
     const controller = new AbortController();
     const previous = preparedCanvas ?? previousEvidence.current;
     const next: RunCanvasEvidence = previous?.key === key && previous.context === context
@@ -104,7 +111,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     setEvidence(next);
     const load = async () => {
       try {
-        const details = observation?.details ?? await getWorkflowInstance(context, executionId);
+        const details = sharedDetails ?? await getWorkflowInstance(context, executionId, controller.signal);
         if (controller.signal.aborted) return;
         if (details.instance.workflowExecutionId !== executionId || details.instance.artifactId !== artifactId) {
           throw new Error("This execution does not match the Test Run snapshot.");
@@ -138,9 +145,9 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     return () => controller.abort();
     // Observation revision advances only after a verified read; keep a deliberately selected occurrence.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ancestorId, artifactId, attached, authorizationVersion, catalog, context, executionId, key, nodeKey, observationRevision, revision, selectedExecution]);
+  }, [ancestorId, artifactId, attached, authorizationVersion, canReadRun, catalog, context, executionId, key, nodeKey, observationRevision, revision, selectedExecution]);
 
-  const current = !attached ? null : evidence?.key === key && evidence.context === context ? evidence
+  const current = !attached || !canReadRun ? null : evidence?.key === key && evidence.context === context ? evidence
     : preparedCanvas;
   const shownNodes = useMemo(() => {
     if (!current?.details || !current.graph) return nodes;
@@ -172,7 +179,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     attached,
     stale,
     snapshotView,
-    loading: attached && (!current || current.loading),
+    loading: attached && !observation?.error && (!current || current.loading),
     error: authorityChanged ? "This Test Run belongs to another backend session." : !authorized ? "Sign in again to inspect run data." : current?.error || observation?.error || "",
     repeated: current?.repeated ?? false,
     status: isTerminalExecution(observation?.details?.instance.status) ? observation?.details?.instance.status

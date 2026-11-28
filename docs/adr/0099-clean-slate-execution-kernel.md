@@ -5,6 +5,11 @@ date: 2026-11-17
 
 # Clean-slate execution kernel: actor runtime, durable actors, execution models
 
+Curated Essentials and stock Workbench now use Actor Foundation for Native and Flowchart workflows
+on SQLite and PostgreSQL. See the [implementation and release evidence](../architecture/README.md#implementation-and-evidence)
+and the [owner's release scope](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)
+for the decisions implemented in this release.
+
 Status: accepted with conditions (18 November 2026); proposed on 17 November 2026. Program
 [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229), gate 2. Gate 2 granted design approval at the
 reviewed revision `addffea7c850063d1ebe710b07866ff1640a93cb`, on the eighth independent architecture review's verdict,

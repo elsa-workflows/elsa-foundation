@@ -17,6 +17,10 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
     public bool SavesWaitRecipes => true;
     public string OperationOrigin => Actor.Id;
     public string? TestScopeId => turn.Instance.TestScopeId;
+    public NativeDecisionSource? ExactDecisionSource =>
+        turn.Instance is { Subject: { } subject, ExecutableSelection: { } selection } instance
+            ? new(instance.Workflow, selection, subject.Tenant, subject.SubjectId)
+            : null;
     public long Now => turn.Now;
     public NativeState State => (NativeState)turn.State;
     public object? Ambient => turn.Ambient;
@@ -52,6 +56,7 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
 
     public void CancelChild(WaitEntry child) => turn.Send(new Contract.ActorRef(child.Key), NativeKinds.Cancel);
     public void StartJob(string key, BackgroundArgs arguments, TimeSpan? timeout) => turn.StartJob(key, arguments, timeout);
+    public void StartUserTaskJob(string key, object arguments, TimeSpan timeout) => turn.StartJob(key, arguments, timeout);
     public void CancelJob(string key) => turn.CancelJob(key);
     public void Subscribe(string key, string wait) => turn.Subscribe(key, wait);
     public void Unsubscribe(string key, string wait) => turn.Unsubscribe(key, wait);
