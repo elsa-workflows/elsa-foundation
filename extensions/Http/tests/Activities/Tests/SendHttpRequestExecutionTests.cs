@@ -1,24 +1,15 @@
 using System.Net;
+using System.Text.Json;
 using Elsa.Activities.Http.Constants;
-using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Testing;
-using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Activities.Http.Tests.SendHttpRequestTestSupport;
 
 namespace Elsa.Activities.Http.Tests;
 
-/// <summary>
-/// In-process execution coverage for the <c>SendHttpRequest</c> activity running through the real workflow
-/// agent on the shared <see cref="WorkflowExecutionHarness"/>. The activity is constructed by the production
-/// <see cref="Elsa.Activities.Primitives.Constructors.ClrActivityConstructor"/> (registered by
-/// <see cref="ActivitiesPrimitivesFeature"/>), and the outbound transport is stubbed by overriding the named
-/// client's primary handler — so the tests exercise the descriptor → construct → bind → execute path and the
-/// activity's outcome mapping without a live network.
-/// </summary>
+/// <summary>Verifies the outbound activity's outcomes and result using the production named client.</summary>
 public sealed class SendHttpRequestExecutionTests
 {
     // Values are built at run time from a Guid so no credential-shaped
@@ -30,101 +21,91 @@ public sealed class SendHttpRequestExecutionTests
     [Fact]
     public async Task SuccessfulResponse_WithoutExpectedCodes_EmitsDoneOutcome()
     {
-        await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "hello"));
+        await using var host = NewHost(_ => Respond(HttpStatusCode.OK, "hello"));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode()));
+        var run = await SendAsync(host);
 
-        run.AssertOutcomes(NodeId, ActivityOutcomes.Done);
-        run.AssertWorkflowCompleted();
+        Assert.Equal(ActivityOutcomes.Done, run.Outcome);
     }
 
     [Fact]
     public async Task Response_MatchingExpectedCode_BranchesOnStatusCodeOutcome()
     {
-        await using var harness = NewHarness(_ => Respond(HttpStatusCode.Created, "made"));
+        await using var host = NewHost(_ => Respond(HttpStatusCode.Created, "made"));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
-            NewSendNode(expectedStatusCodes: new[] { 201, 202 })));
+        var run = await SendAsync(host, expectedStatusCodes: [201, 202]);
 
         // Issue #926: a matching status branches on the outcome port named after its numeric code.
-        run.AssertOutcomes(NodeId, "201");
-        run.AssertWorkflowCompleted();
+        Assert.Equal("201", run.Outcome);
     }
 
     [Fact]
     public async Task Response_NotMatchingExpectedCode_BranchesOnUnmatchedStatusCodeOutcome()
     {
-        await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "ok"));
+        await using var host = NewHost(_ => Respond(HttpStatusCode.OK, "ok"));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
-            NewSendNode(expectedStatusCodes: new[] { 201 })));
+        var run = await SendAsync(host, expectedStatusCodes: [201]);
 
-        run.AssertOutcomes(NodeId, HttpActivityOutcomes.UnmatchedStatusCode);
-        run.AssertWorkflowCompleted();
+        Assert.Equal(HttpActivityOutcomes.UnmatchedStatusCode, run.Outcome);
     }
 
     [Fact]
     public async Task ErrorStatus_WithoutExpectedCodes_EmitsFailedOutcome()
     {
-        await using var harness = NewHarness(_ => Respond(HttpStatusCode.InternalServerError, "boom"));
+        await using var host = NewHost(_ => Respond(HttpStatusCode.InternalServerError, "boom"));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode()));
+        var run = await SendAsync(host);
 
-        run.AssertOutcomes(NodeId, HttpActivityOutcomes.Failed);
-        run.AssertWorkflowCompleted();
+        Assert.Equal(HttpActivityOutcomes.Failed, run.Outcome);
     }
 
     [Fact]
     public async Task TransportFailure_EmitsFailedOutcome()
     {
-        await using var harness = NewHarness(_ => throw new HttpRequestException("no route to host"));
+        await using var host = NewHost(_ => throw new HttpRequestException("no route to host"));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode()));
+        var run = await SendAsync(host);
 
-        run.AssertOutcomes(NodeId, HttpActivityOutcomes.Failed);
-        run.AssertWorkflowCompleted();
+        Assert.Equal(HttpActivityOutcomes.Failed, run.Outcome);
     }
 
     [Fact]
     public async Task UnboundConnection_LeavesTheRequestHeadersEntryUnchanged()
     {
-        await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "hello"));
+        await using var host = NewHost(_ => Respond(HttpStatusCode.OK, "hello"));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
-            requestHeaders: new Dictionary<string, string> { ["authorization"] = _headersEntryValue })));
+        var run = await SendAsync(host, requestHeaders: new Dictionary<string, string> { ["authorization"] = _headersEntryValue });
 
-        run.AssertOutcomes(NodeId, ActivityOutcomes.Done);
+        Assert.Equal(ActivityOutcomes.Done, run.Outcome);
         Assert.Equal([_headersEntryValue], Assert.Single(AuthorizationHeaders(Assert.Single(_requests))));
     }
 
     [Fact]
     public async Task BoundConnection_WithoutConnectionsWorkflows_FaultsBeforeSend()
     {
-        await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "hello"));
+        await using var host = NewHost(_ => Respond(HttpStatusCode.OK, "hello"));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
-            connection: new ConnectionReference("acme-api", "http"))));
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SendAsync(host, connection: new ConnectionReference("acme-api", "http")));
 
-        var state = run.State(NodeId);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Contains("acme-api", state.Fault!.Message, StringComparison.Ordinal);
+        Assert.Contains("acme-api", failure.Message, StringComparison.Ordinal);
         Assert.Empty(_requests);
     }
 
     [Fact]
     public async Task Result_HoldsOnlyTheResponse_AndNotRequestHeaderValues()
     {
-        await using var harness = NewHarness(_ =>
+        await using var host = NewHost(_ =>
         {
             var response = Respond(HttpStatusCode.OK, "stub body");
             response.Headers.Add("X-Stub", "answered");
             return response;
         });
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
-            requestHeaders: new Dictionary<string, string> { ["authorization"] = _headersEntryValue, ["X-Trace"] = "sent" })));
+        var completion = await SendAsync(host, requestHeaders:
+            new Dictionary<string, string> { ["authorization"] = _headersEntryValue, ["X-Trace"] = "sent" });
 
-        var result = run.AssertCompleted(NodeId).Completion!.Result.InlineValue!.Value;
+        var result = JsonSerializer.SerializeToElement(completion.Result, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var serialized = result.GetRawText();
         Assert.DoesNotContain(_authorizationValue, serialized, StringComparison.Ordinal);
         Assert.DoesNotContain(_headersEntryValue, serialized, StringComparison.Ordinal);
@@ -139,11 +120,11 @@ public sealed class SendHttpRequestExecutionTests
             .Select(header => header.Value)
             .ToArray();
 
-    private WorkflowExecutionHarness NewHarness(Func<HttpRequestMessage, HttpResponseMessage> responder) =>
-        SendHttpRequestTestSupport.NewStubbedHarness(request =>
+    private ServiceProvider NewHost(Func<HttpRequestMessage, HttpResponseMessage> responder) =>
+        NewServices(StubTransport(request =>
         {
             lock (_requests)
                 _requests.Add(request.Headers.ToDictionary(header => header.Key, header => header.Value.ToArray(), StringComparer.OrdinalIgnoreCase));
             return responder(request);
-        });
+        }));
 }

@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.Authorization" />
     <PackageReference Include="Microsoft.AspNetCore.Http" />
@@ -23,7 +24,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Publications\Elsa.Workflows.Runtime.Publications.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Persistence\Artifacts\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Persistence\Standalone\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Core\Elsa.Http.Core.csproj" />
     <!-- The real Http (route table) and Tasks (recurring-task scheduling) features for the shell composition test. -->
     <ProjectReference Include="..\..\..\..\src\Elsa.Http\Elsa.Http.csproj" />

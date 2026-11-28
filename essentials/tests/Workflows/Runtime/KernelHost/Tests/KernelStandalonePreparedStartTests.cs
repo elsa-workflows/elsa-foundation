@@ -82,7 +82,7 @@ public sealed partial class KernelStandalonePreparedStartTests
             var stores = runtimeScope.ServiceProvider;
             await stores.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
             var before = await PublishAsync(stores, historical, 0, clock.GetUtcNow(), token);
-            var recipient = await AdmitAsync(stores, historical, before, clock.GetUtcNow(), token);
+            var recipient = await AdmitAsync(stores, before, clock.GetUtcNow(), token);
             var shell = host.GetRequiredService<KernelShellRuntime>();
             await shell.StartAsync(token);
             try
@@ -174,15 +174,17 @@ public sealed partial class KernelStandalonePreparedStartTests
             services.AddLogging(builder => builder.AddSimpleConsole().SetMinimumLevel(LogLevel.Warning));
             services.AddSingleton<TimeProvider>(clock);
             services.AddSingleton<IWellKnownTypeRegistry, KernelPublishedExecuteTests.FixtureTypes>();
-            services.AddWorkflowRuntime();
-            services.AddRuntimeEntityFrameworkCore(new()
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
+            KernelRuntimeFixture.Add(services, provider, runtime);
+            new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
+            services.AddStandaloneTriggerIngress<FixtureEvent>(new("event", 1, EventFamily, EventSchema));
+            services.AddScoped<IStandaloneTriggerSourceContext<FixtureEvent>, EventContext>();
+            new WorkflowsRuntimeKernelHostingFeature
             {
-                Provider = provider, ConnectionString = runtime,
-                RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
-            });
-            new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation }
+                Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = true
+            }
                 .ConfigureServices(services);
-            services.AddPersistenceModes();
+            new WorkflowsRuntimeKernelFeature().ConfigureServices(services);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             services.AddScoped<IRuntimePreparedStartAttemptProof>(sp => new KernelStandalonePreparedStartProof(Persistence, ownerScope,
                 () => sp.GetRequiredService<KernelShellStorage>().BindPreparedStartQualification(ownerScope)));
@@ -214,58 +216,34 @@ public sealed partial class KernelStandalonePreparedStartTests
         return published.Slot;
     }
 
-    private static async Task<RuntimeSubscriptionRecipient> AdmitAsync(IServiceProvider stores, WorkflowExecutable material, WorkflowActivationSlot slot,
+    private static async Task<RuntimeSubscriptionRecipient> AdmitAsync(IServiceProvider stores, WorkflowActivationSlot slot,
         DateTimeOffset now, CancellationToken token)
     {
-        const string triggerId = "standalone-trigger";
         const string subscriptionId = "standalone-subscription";
-        const string family = "Test.Source";
-        const string key = "test-source";
-        const string grantId = "standalone-grant";
         var management = new TriggerManagementOrigin(TriggerManagementKind.Studio);
-        var trigger = new StandaloneTrigger(triggerId, "Test standalone", "event", 1, JsonSerializer.SerializeToElement(new { }),
+        var trigger = new StandaloneTrigger(EventId, "Test standalone", "event", 1, JsonSerializer.SerializeToElement(new { eventName = EventId }),
             1, 1, 1, TriggerDesiredState.Enabled, management, now, now, "test-owner", tenantId: Persistence.Value);
-        var subscription = new TriggerSubscription(subscriptionId, triggerId, Definition, slot.SlotName, "native", 1, 1, true, [], management,
-            new(grantId, triggerId, subscriptionId, Definition, slot.SlotName, "native", "event", 1, TriggerGrantStatus.Granted, "test-owner", now));
-        var triggerScope = new TriggerScope(Persistence, Persistence.Value);
-        await stores.GetRequiredService<IStandaloneTriggerStore>().WriteAsync(triggerScope,
+        var subscription = new TriggerSubscription(subscriptionId, EventId, Definition, slot.SlotName, "native", 1, 1, true,
+            [new("value", new TriggerSourceBinding(["payload", "value"]))], management,
+            new("standalone-grant", EventId, subscriptionId, Definition, slot.SlotName, "native", "event", 1,
+                TriggerGrantStatus.Granted, "test-owner", now));
+        await stores.GetRequiredService<IStandaloneTriggerStore>().WriteAsync(DeliveryScope,
             new("create-standalone", "create-standalone", "test-owner", null, trigger, [subscription]), token);
-        var reference = Assert.IsType<WorkflowExecutableSourceReference>(await stores.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
-            .FindAsync(WorkflowActivationReferenceIdentity.Create(slot.ActiveActivationId!), token));
-        var actor = new WorkflowExecutionAuthoritySnapshot("test-source-module", "test-initiator");
-        var schema = new ValueTypeDescriptor("Test.Payload", schemaVersion: 1);
-        var payload = JsonSerializer.SerializeToElement(new { value = "captured-on-v1" });
-        var metadata = JsonSerializer.SerializeToElement(new { });
-        var intent = RuntimeIngressAdmission.ComputeSubmittedIntent(payload, metadata);
-        var envelope = JsonSerializer.SerializeToElement(new
-        {
-            payload, metadata, submittedIntent = intent, source = new { family, key, recordedAt = now, actor },
-            trigger = new { trigger.Id, trigger.Name, trigger.TypeKey, trigger.SchemaVersion, trigger.Revision,
-                trigger.ConfigurationRevision, trigger.AssociationRevision, trigger.Configuration }
-        }, WebJson);
-        var source = new RuntimeStandaloneIngressSource(1, "private-standalone-ingress", "dispatch", now, Persistence, Persistence.Value,
-            new(Persistence.Value), triggerId, 1, 1, family, key,
-            RuntimeStandaloneIngressSource.ComputeRequestFingerprint(Persistence, Persistence.Value, triggerId, family, key, schema, intent, actor),
-            schema, envelope, RuntimeIngressAdmissionPolicy.Independent, actor);
-        var identity = new RuntimeSubscriptionStartIdentity(1, Persistence, source.OutboxItemId, subscriptionId);
-        var recipient = new RuntimeSubscriptionRecipient(identity.Digest, subscriptionId, 1, 1, Definition, "native", slot.SlotId, slot.Revision,
-            slot.ActiveActivationId!, material.Identity, WorkflowExecutableSourceProvenance.From(reference),
-            RuntimeIngressAdmission.ComputeInputContractFingerprint(material.InputContract!), 1, 1,
-            new Dictionary<string, JsonElement> { ["value"] = payload.GetProperty("value") },
-            new("standalone-trigger:" + triggerId, actor.RootInitiator, new Dictionary<string, string>
-            { ["triggerId"] = triggerId, ["subscriptionId"] = subscriptionId, ["grantId"] = grantId, ["sourceFamily"] = family }),
-            Persistence.Value, new(Persistence.Value), identity);
-        var selection = new RuntimeSubscriptionDelivery(1, source.OutboxItemId, source.Fingerprint, Persistence, [recipient], [],
-            [new(recipient.RecipientId, RuntimeRecipientPhase.Pending)]);
-        var item = RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, selection, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5)));
-        var accepted = await stores.GetRequiredService<IRuntimeIngressDeliveryStore>().AdmitAsync(new(triggerScope, 1, item,
-            [new(subscriptionId, Definition, slot.SlotName, slot, reference)]), token);
-        return Assert.Single(accepted.Item.SubscriptionDelivery!.Recipients);
+
+        var accepted = await stores.GetRequiredService<IStandaloneTriggerIngress<FixtureEvent>>().AdmitAsync(
+            new(EventId, "test-source", EventSchema, JsonSerializer.SerializeToElement(new { value = "captured-on-v1" }),
+                JsonSerializer.SerializeToElement(new { })), token);
+        var item = await stores.GetRequiredService<IRuntimeIngressDeliveryStore>().FindDeliveryAsync(DeliveryScope, accepted.AdmissionId, token);
+        return Assert.Single(Assert.IsType<RuntimePostCommitOutboxItem>(item).SubscriptionDelivery!.Recipients);
     }
 
-    private static async Task<RuntimeDeliverySourceContext> ClaimAsync(IServiceProvider stores, string owner, TimeProvider clock, CancellationToken token) =>
-        new(Assert.Single(await stores.GetRequiredService<IRuntimePostCommitOutboxClaimStore>().ClaimAsync(
-            new(owner, clock.GetUtcNow(), TimeSpan.FromMinutes(1), 1), token)), Persistence);
+    private static async Task<RuntimeDeliverySourceContext> ClaimAsync(IServiceProvider stores, string owner, TimeProvider clock, CancellationToken token)
+    {
+        var outbox = Assert.IsAssignableFrom<IRuntimePostCommitOutboxClaimStore>(stores.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        var claims = await outbox.ClaimAsync(new(owner, clock.GetUtcNow(), TimeSpan.FromMinutes(1), 1,
+            intentKind: RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind), token);
+        return new(Assert.Single(claims), Persistence);
+    }
 
     private static RuntimeRecipientProgress Progress(RuntimePostCommitOutboxItem item) => Assert.Single(item.SubscriptionDelivery!.Progress);
 

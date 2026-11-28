@@ -3,7 +3,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Services;
-using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -13,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Http.Tests;
 public sealed class RouteTableBookmarkObserverTests
 {
     private readonly InMemoryWorkflowTriggerBindingStore _bindings = new();
-    private readonly InMemoryBookmarkStateStore _bookmarks = new();
+    private readonly TestBookmarkLookup _bookmarks = new();
     private readonly FakeRouteTable _routeTable = new();
     private readonly IServiceProvider _services;
 
@@ -24,8 +23,7 @@ public sealed class RouteTableBookmarkObserverTests
         var services = new ServiceCollection();
         services.AddLogging(); // the resolver takes ILogger<HttpEndpointRoutesResolver> (conflict-warning path, #592 item 2)
         services.AddSingleton<IWorkflowTriggerBindingStore>(_bindings);
-        services.AddSingleton<IBookmarkStimulusIndex>(_bookmarks);
-        services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
+        services.AddSingleton<IGlobalBookmarkStimulusLookup>(_bookmarks);
         services.AddSingleton<IRouteTable>(_routeTable);
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
         // The observer now delegates the read-then-swap to the shared synchronizer; wire the

@@ -206,7 +206,7 @@ public sealed partial class KernelStandalonePreparedStartTests
             services.AddSingleton<TimeProvider>(clock);
             new EventsFeature().ConfigureServices(services);
             new ActivitiesPrimitivesFeature().ConfigureServices(services);
-            services.AddWorkflowActivationDefaults();
+            WorkflowPublicationDefaults.Add(services);
             new RuntimeArtifactsEntityFrameworkCoreFeature
             {
                 Provider = provider, ConnectionString = runtime, RecoveryContinuationSigningKey = new string('r', 32)

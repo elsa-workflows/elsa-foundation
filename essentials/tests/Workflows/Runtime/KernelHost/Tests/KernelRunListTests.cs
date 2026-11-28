@@ -16,7 +16,6 @@ using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Api.Authorization;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -279,8 +278,6 @@ public sealed class KernelRunListTests
             await historicalRuns.SaveAsync(Legacy("legacy-test", Tenant, WorkflowRunKind.TestRun));
             builder.Services.AddSingleton<IWorkflowExecutionStateStore>(historicalRuns);
             builder.Services.AddSingleton<IActivityExecutionStateStore>(historicalRuns);
-            builder.Services.AddScoped<RuntimeHistoryInspectionService>(_ =>
-                throw new InvalidOperationException("The retained API resolved a legacy history reader."));
         }
         var feature = new WorkflowsRuntimeKernelRetainedApiFeature();
         feature.ConfigureServices(builder.Services);
@@ -301,10 +298,7 @@ public sealed class KernelRunListTests
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionActorProvider>());
         Assert.Null(scope.ServiceProvider.GetService<ActivityExecutionBrowseSource>());
         if (!separateLegacyReaders)
-        {
             Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
-            Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
-        }
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowRunInspection>());
         var permissions = scope.ServiceProvider.GetRequiredService<IPermissionCatalog>();
         Assert.NotNull(permissions.Find(WorkflowRuntimePermissions.WorkflowRuntimeRead));
@@ -357,15 +351,18 @@ public sealed class KernelRunListTests
 
     private sealed class LegacyInspectionSpy(string actorId) : IWorkflowExecutionStateStore, IActivityExecutionStateStore
     {
-        private readonly InMemoryWorkflowExecutionStateStore _runs = new();
+        private readonly Dictionary<string, WorkflowExecutionState> _runs = new(StringComparer.Ordinal);
 
-        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
-            _runs.SaveAsync(state, cancellationToken);
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
+        {
+            _runs.Add(state.WorkflowExecutionId, state);
+            return ValueTask.FromResult(state);
+        }
 
         public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             workflowExecutionId == actorId
                 ? throw new InvalidOperationException("The retained API read legacy state for the Actor run.")
-                : _runs.FindAsync(workflowExecutionId, cancellationToken);
+                : ValueTask.FromResult(_runs.GetValueOrDefault(workflowExecutionId));
 
         public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId,
             CancellationToken cancellationToken = default) =>
@@ -401,18 +398,6 @@ public sealed class KernelRunListTests
     }
 
     [Fact]
-    public void Retained_api_refuses_co_selection_with_the_broad_runtime_routes()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        var retained = new WorkflowsRuntimeKernelRetainedApiFeature();
-        retained.ConfigureServices(services);
-
-        var error = Assert.Throws<InvalidOperationException>(() => retained.PostConfigureServices(services));
-        Assert.Contains("share Workflow Runtime routes", error.Message);
-    }
-
-    [Fact]
     public async Task Retained_api_selection_activates_a_shell_without_the_legacy_runner()
     {
         const string shellName = "retained-kernel-api";
@@ -424,7 +409,6 @@ public sealed class KernelRunListTests
                 typeof(RetainedKernelApiTestHost).Assembly,
                 typeof(WorkflowsRuntimeKernelRetainedApiFeature).Assembly,
                 typeof(WorkflowsRuntimeKernelFeature).Assembly,
-                typeof(WorkflowsRuntimeApiFeature).Assembly,
                 typeof(ApiCapabilitiesFeature).Assembly,
                 typeof(WorkflowsPublishingFeature).Assembly,
                 typeof(WorkflowDesignValidationsFeature).Assembly,
@@ -1035,7 +1019,7 @@ public sealed class KernelRunListTests
         var foreign = new ServiceCollection();
         foreign.AddSingleton(new KernelRuns(Scope, _ => throw new NotSupportedException()));
         retained.ConfigureServices(foreign);
-        foreign.AddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
+        foreign.AddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<KernelWorkflowInstanceDetailsService>());
 
         var refused = Assert.Throws<InvalidOperationException>(() => retained.PostConfigureServices(foreign));
         Assert.Contains(nameof(IWorkflowInstanceDetailsService), refused.Message, StringComparison.Ordinal);

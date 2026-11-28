@@ -3,7 +3,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Services;
-using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -23,8 +22,7 @@ public sealed class RouteTableTriggerIndexObserverTests
         services.AddSingleton<IRouteTable>(_routeTable);
         // The resolver unions waiting-bookmark templates via the expiry-aware lookup; an empty
         // in-memory bookmark store keeps these trigger-index observer tests focused on the trigger path.
-        services.AddSingleton<IBookmarkStimulusIndex>(new InMemoryBookmarkStateStore());
-        services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
+        services.AddSingleton<IGlobalBookmarkStimulusLookup, TestBookmarkLookup>();
         services.AddLogging();
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
         // The observer now delegates the read-then-swap to the shared synchronizer; wire the
