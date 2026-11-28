@@ -554,6 +554,9 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
             [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
             [RootCapabilities.PagedPublicEvents] = RootCapabilities.PublicEventStarts,
+            [RootCapabilities.RetainedRootResponse] = RootCapabilities.PreparedStarts | RootCapabilities.StableBody,
+            [RootCapabilities.AuthoredStandaloneEvents] = RootCapabilities.PagedPublicEvents | RootCapabilities.PublicEventHost,
+            [RootCapabilities.PreparedWaitDelivery] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.HeldEphemeralHttpTestRuns] = RootCapabilities.DirectTestRuns | RootCapabilities.InlinePromotion |
                 RootCapabilities.ReplyProtocol | RootCapabilities.Children,

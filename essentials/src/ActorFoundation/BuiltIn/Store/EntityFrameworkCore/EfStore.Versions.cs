@@ -303,6 +303,7 @@ internal static class RootProfiles
         [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
         [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
         [RootCapabilities.PagedPublicEvents] = RootCapabilities.PublicEventStarts,
+        [RootCapabilities.PreparedWaitDelivery] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
         [RootCapabilities.RetainedRootResponse] = RootCapabilities.PreparedStarts | RootCapabilities.StableBody,
         [RootCapabilities.AuthoredStandaloneEvents] = RootCapabilities.PagedPublicEvents | RootCapabilities.PublicEventHost,
         [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
