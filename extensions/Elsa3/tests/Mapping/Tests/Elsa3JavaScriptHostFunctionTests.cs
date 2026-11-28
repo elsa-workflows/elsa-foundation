@@ -355,7 +355,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("getCustomerData()", "getCustomerData")]
     [InlineData("lookupCustomer('c-1')", "lookupCustomer")]
     // #6215: an Elsa 4 built-in that Elsa 3 did not have is, in an Elsa 3 script, the host's own global.
-    [InlineData("structuredClone({ a: 1 })", "structuredClone")]
+    [InlineData("clone({ a: 1 })", "clone")]
     public async Task An_unmatched_host_function_is_a_missing_host_function_with_the_naming_route(string expression, string name)
     {
         var result = await ConvertTextAsync(expression);
@@ -533,13 +533,13 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [Fact]
     public async Task An_elsa3_global_named_like_a_newer_elsa4_built_in_is_matched_to_its_host_function()
     {
-        // #6215: Elsa 3 had no structuredClone, so an Elsa 3 call of it is the host's own global, not the Elsa 4 built-in.
-        var copy = new JavaScriptHostFunctionDeclaration("acme.structuredClone", call => call.Arguments[0]);
+        // #6215: Elsa 3 had no clone, so an Elsa 3 call of it is the host's own global, not the Elsa 4 built-in.
+        var copy = new JavaScriptHostFunctionDeclaration("acme.clone", call => call.Arguments[0]);
 
-        var result = await ConvertTextAsync("structuredClone(getVariable('Key'))", [copy], new Elsa3Variable { Id = "v", Name = "Key", TypeName = "String" });
+        var result = await ConvertTextAsync("clone(getVariable('Key'))", [copy], new Elsa3Variable { Id = "v", Name = "Key", TypeName = "String" });
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("acme.structuredClone(variables.Key)", ReadExpression(result).Source);
+        Assert.Equal("acme.clone(variables.Key)", ReadExpression(result).Source);
     }
 
     [Fact]

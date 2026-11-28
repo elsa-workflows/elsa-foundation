@@ -370,7 +370,7 @@ and run the converted scripts.
   writes. *(Clarified in implementation, 2026-11-20: an escaped value of a scalar declared type (a string, number,
   boolean, date or GUID) is left out, since a script cannot change a scalar in place; a scalar the script assigns is
   in the set.)* *(Clarified in implementation, 2026-11-28, #6215: a value passed directly as an argument to a built-in
-  function, such as `structuredClone(variables.order)`, does not escape, since a built-in gets a JSON copy of it; this
+  function, such as `clone(variables.order)`, does not escape, since a built-in gets a JSON copy of it; this
   does not hold when the script declares its own function of that name, or when its source names `toJSON`, which
   making the copy runs.)*
 - **FR-020**: Publish MUST refuse a script that: writes an undeclared literal name; reads or writes a transient

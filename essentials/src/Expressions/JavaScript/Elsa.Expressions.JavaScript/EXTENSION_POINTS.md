@@ -66,7 +66,7 @@ with portable expression evaluation.
   `undefined` as `null`. A thrown exception fails the call with a JavaScript error.
 - **Names:** a host function is namespaced (`acme.lookup`) and is installed as a member of a read-only global object
   `acme`. The built-ins (`JavaScriptBuiltInFunctions`: `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`,
-  `getShortGuid`, `parseGuid`, `stringToBase64`, `stringFromBase64`, `structuredClone`) are the only unprefixed functions; the Jint
+  `getShortGuid`, `parseGuid`, `stringToBase64`, `stringFromBase64`, `clone`) are the only unprefixed functions; the Jint
   feature registers them. Shell activation fails, naming the function, on a duplicate, an unprefixed host function, a
   malformed name or a reserved namespace root: a read root (`variables`, `input`, `activities`, `workflow`, `args`), a
   built-in name, `complete`, `getVariable` or a JavaScript global.

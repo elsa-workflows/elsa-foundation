@@ -21,14 +21,14 @@ namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
 /// Issue #6215 end to end, through the real engine, the real JavaScript evaluators and Run JavaScript: a script or an
-/// input expression changes the nested array and the nested object of a <c>structuredClone</c> copy, and the stored
+/// input expression changes the nested array and the nested object of a <c>clone</c> copy, and the stored
 /// variable stays unchanged, with neither <c>VF-WRITE-001</c> nor <c>VF-BIND-001</c>.
 /// </summary>
-public sealed class StructuredCloneRunTests
+public sealed class CloneRunTests
 {
     private const string Order = """{"id":"A-1","customer":{"name":"Ada"},"items":[1,2]}""";
     private const string ChangedCopy = """{"id":"A-1","customer":{"name":"Bob"},"items":[1,2,3]}""";
-    private const string ChangeTheCopy = "const copy = structuredClone(variables.order); copy.items.push(3); copy.customer.name = 'Bob';";
+    private const string ChangeTheCopy = "const copy = clone(variables.order); copy.items.push(3); copy.customer.name = 'Bob';";
 
     [Fact]
     public async Task A_script_that_changes_a_copy_leaves_the_stored_variable_unchanged_without_a_warning()
@@ -54,7 +54,7 @@ public sealed class StructuredCloneRunTests
         run.AssertWorkflowCompleted();
         var warning = Assert.Single(run.AssertCompleted("node-js").Warnings!);
         Assert.Equal(JavaScriptValueDiagnostics.ChangeWithoutAssignment, warning.Code);
-        Assert.Contains("structuredClone(variables.order)", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("clone(variables.order)", warning.Message, StringComparison.Ordinal);
         var frame = Assert.IsType<VariableFrameState>(run.WorkflowState?.RootVariableFrame);
         Assert.Equal("""{"id":"A-1","customer":{"name":"Ada"},"items":[1,2,3]}""", frame.Values["var-order"].InlineValue!.Value.GetRawText());
     }
