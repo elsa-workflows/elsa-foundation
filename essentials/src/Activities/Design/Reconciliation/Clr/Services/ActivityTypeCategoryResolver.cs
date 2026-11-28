@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
 using Elsa.Primitives.Extensions;
+using System.ComponentModel;
 using System.Reflection;
 
 namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
@@ -17,6 +18,11 @@ public sealed class ActivityTypeCategoryResolver : IActivityTypeCategoryResolver
 {
     public string? Resolve(Type type, Assembly assembly)
     {
+        var explicitCategory = type.GetCustomAttributesData()
+            .FirstOrDefault(attribute => attribute.AttributeType.FullName == typeof(CategoryAttribute).FullName);
+        if (explicitCategory?.ConstructorArguments is [{ Value: string category }] && !string.IsNullOrWhiteSpace(category))
+            return category;
+
         var simpleName = assembly.GetName().Name;
         if (string.IsNullOrWhiteSpace(simpleName))
             return null;
