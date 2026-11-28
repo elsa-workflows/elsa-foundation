@@ -78,6 +78,7 @@
           },
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
+          "ActivitiesScripting": {},
           "JavaScriptEndpoints": {},
           "JavaScriptExpressions": {
             "TypeDescriptors": [
