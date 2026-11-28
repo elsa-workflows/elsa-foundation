@@ -3,7 +3,8 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using Elsa.Activities.Http.Constants;
-using Elsa.Activities.Testing;
+using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -35,7 +36,7 @@ public sealed class SendHttpRequestAuthorizationLoggingTests
     {
         var run = await SendAsync(() => Respond(HttpStatusCode.OK, "hello"));
 
-        run.AssertOutcomes(NodeId, "Done");
+        Assert.Equal("Done", run.Outcome);
         AssertLogsDoNotContainTheValue();
     }
 
@@ -45,24 +46,25 @@ public sealed class SendHttpRequestAuthorizationLoggingTests
         // The exception's message carries the value, so a logger that wrote the message or the exception would hold it.
         var run = await SendAsync(() => throw new HttpRequestException($"refused {_authorizationValue}"));
 
-        run.AssertOutcomes(NodeId, HttpActivityOutcomes.Failed);
+        Assert.Equal(HttpActivityOutcomes.Failed, run.Outcome);
         AssertLogsDoNotContainTheValue();
         Assert.Contains(_logs.Lines, line => line.Category == ClientLoggerCategory && line.Text.Contains(nameof(HttpRequestException), StringComparison.Ordinal));
     }
 
-    private async Task<WorkflowExecutionRun> SendAsync(Func<HttpResponseMessage> respond)
+    private async Task<IActivityCompletionTransition<SendHttpRequestResult>> SendAsync(Func<HttpResponseMessage> respond)
     {
-        await using var harness = NewBuilder()
-            .WithFeature(services => services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(_logs)))
-            .WithFeature(StubTransport(request =>
+        await using var host = NewServices(services =>
+        {
+            services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(_logs));
+            StubTransport(request =>
             {
                 _sentAuthorization = request.Headers.GetValues("Authorization").ToArray();
                 return respond();
-            }))
-            .Build(ActivityExecutionId);
+            })(services);
+        });
 
-        return await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
-            requestHeaders: new Dictionary<string, string> { ["Authorization"] = _authorizationValue })));
+        return await SendHttpRequestTestSupport.SendAsync(host,
+            requestHeaders: new Dictionary<string, string> { ["Authorization"] = _authorizationValue });
     }
 
     private void AssertLogsDoNotContainTheValue()

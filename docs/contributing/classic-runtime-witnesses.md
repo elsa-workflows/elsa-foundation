@@ -87,14 +87,18 @@ directly, including per-drain batching, aged flush and nested traces.
 
 Use `45a594857c700de2fe76de9cbcb62d06bbf6876b` for the classic
 Publishing/Runtime API join, activity input hydration, checkpoint execution,
-and optional executable collection witnesses. The two projects at that source
-build their original runtime fixtures and use their matching package locks.
+and optional executable collection witnesses. The projects at that source build
+their original runtime fixtures and use their matching package locks. The
+ordinary Publishing fixture exercises the classic intrinsic registration.
 
 ```sh
 dotnet test essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj \
   -c Release -p:RestoreLockedMode=true
 dotnet test essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj \
   -c Release -p:RestoreLockedMode=true
+dotnet test essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true \
+  --filter FullyQualifiedName~Publication_review_sees_the_registered_intrinsic_consumer_without_an_activation_strategy
 ```
 
 Current Publishing tests retain protected source references, executable hash

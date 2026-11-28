@@ -1,6 +1,5 @@
 using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Http.Services;
-using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -10,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Http.Tests;
 public sealed class HttpEndpointRoutesResolverTests
 {
     private readonly InMemoryWorkflowTriggerBindingStore _store = new();
-    private readonly InMemoryBookmarkStateStore _bookmarks = new();
+    private readonly TestBookmarkLookup _bookmarks = new();
 
     // The resolver projects endpoint-relative templates only — the endpoints base path is a middleware concern
     // (Request intake strips it before consulting the route table), so it takes no base-path option. The

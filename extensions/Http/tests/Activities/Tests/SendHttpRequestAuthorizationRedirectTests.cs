@@ -1,4 +1,4 @@
-using Elsa.Activities.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Activities.Http.Tests.SendHttpRequestTestSupport;
 
@@ -19,7 +19,7 @@ public sealed class SendHttpRequestAuthorizationRedirectTests : IAsyncDisposable
     private readonly string _authorizationValue = NewHeaderValue();
     private readonly LoopbackHttpServer _origin;
     private readonly LoopbackHttpServer _otherOrigin = new(_ => (200, null));
-    private readonly WorkflowExecutionHarness _harness = NewBuilder().Build(ActivityExecutionId);
+    private readonly ServiceProvider _host = NewServices();
 
     public SendHttpRequestAuthorizationRedirectTests()
     {
@@ -53,18 +53,17 @@ public sealed class SendHttpRequestAuthorizationRedirectTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _harness.DisposeAsync();
+        await _host.DisposeAsync();
         await _origin.DisposeAsync();
         await _otherOrigin.DisposeAsync();
     }
 
     private async Task SendAndFollowRedirectAsync()
     {
-        var run = await _harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
-            url: new Uri(_origin.BaseAddress, StartPath),
-            requestHeaders: new Dictionary<string, string> { ["Authorization"] = _authorizationValue })));
+        var result = await SendAsync(_host, url: new Uri(_origin.BaseAddress, StartPath),
+            requestHeaders: new Dictionary<string, string> { ["Authorization"] = _authorizationValue });
 
-        run.AssertOutcomes(NodeId, "Done");
+        Assert.Equal("Done", result.Outcome);
         // The original request carried the value, so its absence on the target is the client's doing.
         var original = Assert.Single(_origin.Requests, request => request.Path == StartPath);
         Assert.Equal(_authorizationValue, original.Headers["Authorization"]);

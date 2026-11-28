@@ -25,14 +25,15 @@
     <!-- The real HttpRequestBodyParser (spec 089 C, T005) is exercised by the middleware ParsedContent tests. -->
     <ProjectReference Include="..\..\..\src\Elsa.Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Elsa.Workflows.Runtime.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\essentials\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\tests\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\essentials\tests\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../../../essentials/tests/Activities/Testing/HttpEndpointTestDoubles.cs" Link="Support/HttpEndpointTestDoubles.cs" />
   </ItemGroup>
 
 </Project>

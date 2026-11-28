@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -138,15 +139,15 @@ internal static class Resolvers
 {
     /// <summary>
     /// Builds a real <see cref="HttpEndpointRoutesResolver"/> over the given trigger-binding store and an
-    /// optional bookmark store (empty by default), wiring the production expiry-aware lookup and a null logger.
+    /// optional bookmark store (empty by default), using an expiry-aware test lookup and a null logger.
     /// Keeps the resolver's construction in one place so tests that don't care about bookmarks stay terse.
     /// </summary>
     public static Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver Build(
         Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore bindingStore,
-        Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryBookmarkStateStore? bookmarks = null) =>
+        TestBookmarkLookup? bookmarks = null) =>
         new(
             bindingStore,
-            new Elsa.Workflows.Runtime.Services.Bookmarks.GlobalBookmarkStimulusLookup(bookmarks ?? new()),
+            bookmarks ?? new TestBookmarkLookup(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>.Instance);
 }
 
@@ -161,13 +162,13 @@ internal static class Synchronizers
     public static Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer Build(
         Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore bindingStore,
         IRouteTable routeTable,
-        Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryBookmarkStateStore? bookmarks = null)
+        TestBookmarkLookup? bookmarks = null)
     {
         var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
         services.AddSingleton(bindingStore);
         services.AddSingleton(routeTable);
         services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IGlobalBookmarkStimulusLookup>(
-            new Elsa.Workflows.Runtime.Services.Bookmarks.GlobalBookmarkStimulusLookup(bookmarks ?? new()));
+            bookmarks ?? new TestBookmarkLookup());
         services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver>(sp =>
             new Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver(
                 sp.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore>(),
@@ -225,4 +226,36 @@ internal static class Bookmarks
             Metadata: metadata,
             CreatedAt: DateTimeOffset.UnixEpoch,
             ExpiresAt: expiresAt);
+}
+
+/// <summary>Supplies waiting routes at the legacy bookmark lookup port for compatibility projection tests.</summary>
+internal sealed class TestBookmarkLookup : IGlobalBookmarkStimulusLookup
+{
+    private readonly Dictionary<(string ExecutionId, string BookmarkId), BookmarkState> rows = [];
+
+    public ValueTask SaveAsync(BookmarkState bookmark)
+    {
+        rows[(bookmark.WorkflowExecutionId, bookmark.BookmarkId)] = bookmark;
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask DeleteAsync(string workflowExecutionId, string bookmarkId)
+    {
+        rows.Remove((workflowExecutionId, bookmarkId));
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<GlobalBookmarkStimulusLookupResult> FindWaitingAsync(GlobalBookmarkStimulusLookupRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    public ValueTask<GlobalBookmarkStimulusLookupResult> FindWaitingByTypeAsync(GlobalBookmarkStimulusTypeLookupRequest request,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult(new GlobalBookmarkStimulusLookupResult(Find(request).ToArray()));
+
+    public ValueTask<IReadOnlyCollection<string>> FindWaitingStimulusHashesByTypeAsync(GlobalBookmarkStimulusTypeLookupRequest request,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>(
+        Find(request).Select(bookmark => bookmark.StimulusHash).Distinct(StringComparer.Ordinal).ToArray());
+
+    private IEnumerable<BookmarkState> Find(GlobalBookmarkStimulusTypeLookupRequest request) =>
+        rows.Values.Where(bookmark => bookmark.StimulusType == request.StimulusType &&
+            (bookmark.ExpiresAt is null || bookmark.ExpiresAt > request.EvaluatedAt));
 }
