@@ -7,9 +7,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// Unit tests for <see cref="ActivityTypeCategoryResolver"/>. The category is the last dot-separated
-/// segment of the declaring assembly's simple name, humanized for display (issue #928), so activities
-/// shipped together share one bucket.
+/// Guards the humanized declaring-assembly fallback for activities without a category annotation.
 /// </summary>
 public sealed class ActivityTypeCategoryResolverTests
 {
@@ -51,7 +49,7 @@ public sealed class ActivityTypeCategoryResolverTests
 
     private static Assembly EmitAssemblyNamed(string simpleName, out Type type)
     {
-        var builder = new PersistedAssemblyBuilder(new AssemblyName(simpleName), typeof(object).Assembly);
+        var builder = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(simpleName), AssemblyBuilderAccess.Run);
         var module = builder.DefineDynamicModule("Main");
         type = module.DefineType("Emitted.MyActivity", TypeAttributes.Public | TypeAttributes.Class).CreateType();
         return builder;

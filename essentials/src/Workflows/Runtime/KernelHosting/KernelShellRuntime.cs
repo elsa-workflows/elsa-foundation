@@ -32,6 +32,9 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private IAsyncDisposable? _lifetime;
     private HttpClient? _client;
     private KernelShellFoundation? _foundation;
+    private KernelExecutableProtection? _protection;
+    private (KernelScheduleReconciliationWorker Worker, ICronCalendar Calendar)? _schedules;
+    private bool _prepared;
     private IProtectedRootStarts? _publishedStarts;
     private IProtectedRootStarts? _testStarts;
     private IPreparedRootStartHandoff? _standaloneStarts;
@@ -76,8 +79,10 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         public void Dispose() => SecretMask.Release(executionId);
     }
 
-    public async Task StartAsync(CancellationToken token)
+    internal async Task PreparePublicationsAsync(CancellationToken token)
     {
+        if (_prepared) return;
+
         if (preparedStandaloneStarts)
         {
             await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
@@ -86,15 +91,23 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             if (storage.TakesAuthoredStandaloneEvents)
                 _ = runtime.ServiceProvider.GetRequiredService<IRuntimeAuthoredStandaloneEventIngress>();
         }
-        var protection = protectChildExecutables || storage.TakesPreparedStarts
+        _protection = protectChildExecutables || storage.TakesPreparedStarts
             ? new KernelExecutableProtection(scopes, persistenceScope, tenant, serving, storage, clock,
                 logs.CreateLogger<KernelExecutableProtection>(), testTenant)
             : null;
-        await storage.InstallAsync(token, storage.TakesPreparedStarts ? protection!.ProtectHeldStartAsync : null);
+        await storage.InstallAsync(token, storage.TakesPreparedStarts ? _protection!.ProtectHeldStartAsync : null);
         _foundation = await storage.OpenAsync(token);
-        var schedules = await CreateScheduleWorkerAsync(token);
-        if (protection is not null) await protection.RequireAsync(token);
+        _schedules = await CreateScheduleWorkerAsync(token);
+        if (_protection is not null) await _protection.RequireAsync(token);
         await ServePublicationsAsync(token);
+        _prepared = true;
+    }
+
+    public async Task StartAsync(CancellationToken token)
+    {
+        await PreparePublicationsAsync(token);
+        var protection = _protection;
+        var schedules = _schedules;
         if (events is not null) await events.RestoreAsync(token);
 
         _client = NativeHttpOptions.CreateClient();
@@ -480,6 +493,11 @@ internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, 
             _ = WorkflowsRuntimeKernelHostingFeature.HttpBasePath(WorkflowsRuntimeKernelHostingFeature.RequireHttpSettings(services));
         return Task.CompletedTask;
     }
+}
+
+internal sealed class PrepareKernelPublications(KernelShellRuntime runtime) : IShellInitializer
+{
+    public Task InitializeAsync(CancellationToken cancellationToken) => runtime.PreparePublicationsAsync(cancellationToken);
 }
 
 internal sealed class StartKernelShell(KernelShellRuntime runtime) : IShellInitializer
