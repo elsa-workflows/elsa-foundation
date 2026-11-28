@@ -332,9 +332,6 @@
       "elsa.api.capabilities.core": {
         "type": "Project"
       },
-      "elsa.attention.core": {
-        "type": "Project"
-      },
       "elsa.events.core": {
         "type": "Project",
         "dependencies": {
@@ -390,29 +387,6 @@
       "elsa.tasks.core": {
         "type": "Project"
       },
-      "elsa.tasks.schedules": {
-        "type": "Project",
-        "dependencies": {
-          "Cronos": "[0.13.0, )",
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Elsa.Tasks.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.workflows.runtime": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Attention.Core": "[4.0.0-dev, )",
-          "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.PreparedSchedules": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Publications": "[4.0.0-dev, )"
-        }
-      },
       "elsa.workflows.runtime.api.http": {
         "type": "Project",
         "dependencies": {
@@ -451,9 +425,9 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Api.Http": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )"
+          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.kernelhost": {
@@ -486,16 +460,6 @@
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.workflows.runtime.preparedschedules": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Cronos": "[0.13.0, )",
-          "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },

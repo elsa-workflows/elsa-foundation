@@ -2913,9 +2913,9 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Api.Http": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )"
+          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.kernelhost": {
@@ -2941,7 +2941,9 @@
           "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Api.Http": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.KernelApi": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )"
+          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Publications": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.native.activities": {

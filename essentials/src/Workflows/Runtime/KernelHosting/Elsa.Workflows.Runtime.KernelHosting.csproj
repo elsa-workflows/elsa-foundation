@@ -21,6 +21,8 @@
     <ProjectReference Include="../Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj" />
     <ProjectReference Include="../KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
     <ProjectReference Include="../KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+    <ProjectReference Include="../Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj" />
+    <ProjectReference Include="../Publications/Elsa.Workflows.Runtime.Publications.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="/" />
