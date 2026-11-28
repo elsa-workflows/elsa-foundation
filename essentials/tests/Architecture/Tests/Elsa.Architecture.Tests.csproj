@@ -151,7 +151,7 @@
     <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Runtime/Source/Elsa.Workflows.Publishing.Releases.Runtime.Source.csproj" />
     <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <!-- Core_projects_contain_no_implementation_shaped_types loads every src .Core assembly; these are not otherwise reachable. -->
     <ProjectReference Include="..\..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />

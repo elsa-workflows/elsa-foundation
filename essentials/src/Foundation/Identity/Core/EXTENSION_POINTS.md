@@ -43,7 +43,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 ### `IPermissionContributor`
 
-- **Cross-domain:** `TriggerPermissionContributor` in `Elsa.Workflows.Runtime.Api` contributes the seven standalone trigger management/delivery permissions. `StandaloneTriggersApiFeature` registers it through `AddPermissionContributor`; see the [contribution note](../../../Workflows/Runtime/Api/StandaloneTriggers/README.md#cross-domain-contributions).
+- **Cross-domain:** `TriggerPermissionContributor` in `Elsa.Workflows.Runtime.Api` contributes the seven standalone trigger management/delivery permissions. `StandaloneTriggersApiFeature` registers it through `AddPermissionContributor`; see the [contribution note](../../../Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/StandaloneTriggers/README.md#cross-domain-contributions).
 
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
