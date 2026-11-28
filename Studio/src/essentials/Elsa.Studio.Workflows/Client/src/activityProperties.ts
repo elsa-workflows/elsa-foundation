@@ -213,16 +213,31 @@ export function getLiteralEditorValue(activity: ActivityNode, descriptor: Studio
 // The demotion is read-only; it reaches the wire once the author edits the input: `withLiteralValue` keeps the
 // Literal type and `toWireArgument` sends the list as a typed Literal, which the backend reads as strict JSON into
 // the same collection. An untouched input is saved as the Object text it already holds.
+//
+// The reverse case: a scalar input (no list or dictionary editor, e.g. HTTP Body typed JSON) whose Literal holds an
+// object or array, as migrated and imported drafts carry. Every Literal editor for a scalar is a text field, which
+// would show `[object Object]` and save the author's edit as a string. Present it as the Object (JSON) expression
+// instead; an edit then sends JSON text that the backend parses into the same value. Read-only, like the demotion.
 function resolveAuthoredExpression(
   expression: ActivityExpression,
   descriptor: StudioActivityInputDescriptor
 ): ActivityExpression {
+  if (expression.type === "Literal") return presentStructuredScalarLiteral(expression, descriptor);
   if (expression.type !== "Object" || isRepeaterOptOut(descriptor)) return expression;
   const structured = asStructuredValue(expression.value);
   if (structured === undefined) return expression;
   const kind = structuredEditorKind(descriptor);
   if (!kind || conflictsWithStructuredEditor(kind, structured)) return expression;
   return { type: "Literal", value: structured };
+}
+
+function presentStructuredScalarLiteral(
+  expression: ActivityExpression,
+  descriptor: StudioActivityInputDescriptor
+): ActivityExpression {
+  const value = expression.value;
+  if (typeof value !== "object" || value === null || structuredEditorKind(descriptor)) return expression;
+  return { type: "Object", value: JSON.stringify(value, null, 2) };
 }
 
 /** Which structured editor a descriptor authors with, or null for a scalar input. */

@@ -660,6 +660,47 @@ describe("Object-to-Literal demotion on read", () => {
   });
 });
 
+// Migrated and imported drafts carry a JSON-typed scalar (HTTP Body) as a Literal object. A scalar's Literal editors are
+// text fields, which would show "[object Object]", so it is presented as the Object (JSON) expression instead.
+describe("structured Literal on a scalar input on read", () => {
+  const bodyInput: StudioActivityInputDescriptor = {
+    name: "Body",
+    referenceKey: "body",
+    typeName: "System.Text.Json.JsonElement",
+    isWrapped: true
+  };
+  const literalExpression = (value: unknown) => ({
+    ...activity("http"),
+    body: { typeName: "", expression: { type: "Literal", value } }
+  });
+
+  it("presents a Literal object as Object JSON text", () => {
+    expect(readWrappedInput(literalExpression({ message: "Hello", count: 2 }), bodyInput).expression)
+      .toEqual({ type: "Object", value: '{\n  "message": "Hello",\n  "count": 2\n}' });
+  });
+
+  it("presents a Literal array as Object JSON text", () => {
+    expect(readWrappedInput(literalExpression([1, true]), bodyInput).expression)
+      .toEqual({ type: "Object", value: "[\n  1,\n  true\n]" });
+  });
+
+  it("leaves scalar Literal values alone", () => {
+    for (const value of ["Hello", 5, true, null]) {
+      expect(readWrappedInput(literalExpression(value), bodyInput).expression).toEqual({ type: "Literal", value });
+    }
+  });
+
+  it("leaves a collection input's Literal list to the repeater", () => {
+    const listInput = { ...bodyInput, typeName: "System.String", collectionKind: "List" } as StudioActivityInputDescriptor;
+    expect(readWrappedInput(literalExpression(["GET"]), listInput).expression).toEqual({ type: "Literal", value: ["GET"] });
+  });
+
+  it("leaves a dictionary input's Literal object to the dictionary editor", () => {
+    const dictionaryInput = { ...bodyInput, typeName: "System.String", collectionKind: "Dictionary" } as StudioActivityInputDescriptor;
+    expect(readWrappedInput(literalExpression({ a: "1" }), dictionaryInput).expression).toEqual({ type: "Literal", value: { a: "1" } });
+  });
+});
+
 describe("secret-only input values", () => {
   const secretOnly: StudioActivityInputDescriptor = {
     name: "Authorization",

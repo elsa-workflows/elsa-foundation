@@ -24,6 +24,33 @@ describe("activity input wire adapter", () => {
     expect(canonicalizeStateForWire(expandStateFromWire(JSON.parse(JSON.stringify(saved))))).toEqual(saved);
   });
 
+  // Migrated drafts store a JSON-typed Body as a Literal object. Studio presents it as Object JSON text, saves it
+  // untouched as stored, and after an edit in the Object editor sends Object JSON text the backend parses back.
+  it("shows a migrated Literal object Body as JSON, saves it untouched, and sends Object text after an edit", () => {
+    const bodyInput = { name: "Body", referenceKey: "Body", typeName: "System.Text.Json.JsonElement", isWrapped: true };
+    const loaded = stateOf({
+      ...writeLine("respond", {}),
+      inputs: [
+        { referenceKey: "Body", value: { expressionType: "Literal", value: { message: "Hello" } } },
+        { referenceKey: "StatusCode", value: { expressionType: "Literal", value: 200 } }
+      ]
+    });
+    const expanded = expandStateFromWire(loaded);
+    expect(readWrappedInput(expanded.rootActivity!, bodyInput).expression)
+      .toEqual({ type: "Object", value: '{\n  "message": "Hello"\n}' });
+
+    const untouched = { ...expanded, rootActivity: { ...expanded.rootActivity!, StatusCode: wrapped(201, "Literal") } };
+    expect(canonicalizeStateForWire(untouched).rootActivity!.inputs).toEqual([
+      { referenceKey: "Body", value: { expressionType: "Literal", value: { message: "Hello" } } },
+      { referenceKey: "StatusCode", value: { expressionType: "Literal", value: 201 } }
+    ]);
+
+    const edited = { ...expanded, rootActivity: { ...expanded.rootActivity!, Body: wrapped({ message: "Hi" }, "Object") } };
+    expect(canonicalizeStateForWire(edited).rootActivity!.inputs).toContainEqual(
+      { referenceKey: "Body", value: { expressionType: "Object", value: '{"message":"Hi"}' } }
+    );
+  });
+
   it("keeps the existing empty editor fallback when a wire argument has no value", () => {
     const loaded = stateOf({ ...writeLine("review", {}), inputs: [{ referenceKey: "GroupId", value: { expressionType: "Literal" } }] });
     expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.inputs)
