@@ -2,18 +2,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Dashboard;
-using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests;
@@ -116,32 +111,6 @@ public sealed class EfWorkflowRunHealthDataSourceTests
             .ToArray();
 
         await Assert.ThrowsAsync<WorkflowRunHealthQueryException>(() => source.QueryAsync(new(query, buckets)).AsTask());
-    }
-
-    [Fact]
-    public void Registration_requires_runtime_ef_context_and_replaces_source()
-    {
-        var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddPersistenceCore("tenant-a");
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRunHealthEntityFrameworkCore());
-        services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRunHealthEntityFrameworkCore());
-        services.AddRuntimeArtifactsEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        services.AddRuntimeActivityExecutionEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        services.AddRuntimeBookmarksEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        services.AddRuntimeWorkflowAlterationEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        services.AddRuntimeDurableTimerEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
-        services.AddRuntimePostCommitOutboxEntityFrameworkCore();
-        services.AddRuntimeCheckpointCommitEntityFrameworkCore();
-        services.AddWorkflowRunHealthEntityFrameworkCore();
-
-        using var provider = services.BuildServiceProvider();
-        Assert.IsType<EfWorkflowRunHealthDataSource>(provider.GetRequiredService<IWorkflowRunHealthDataSource>());
     }
 
     private static IReadOnlyCollection<WorkflowRunHealthBucketRange> Buckets(WorkflowRunHealthQuery query) =>

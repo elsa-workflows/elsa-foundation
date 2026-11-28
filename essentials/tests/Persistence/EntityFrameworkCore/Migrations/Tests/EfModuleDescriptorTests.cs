@@ -327,7 +327,7 @@ public sealed class EfModuleDescriptorTests
     [Fact]
     public void The_two_context_free_ef_projects_declare_no_module()
     {
-        var dashboard = typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly;
+        var dashboard = typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly;
         var aspNetCoreIdentity = typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly;
 
         var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules.Append(dashboard).Append(aspNetCoreIdentity).Distinct());
