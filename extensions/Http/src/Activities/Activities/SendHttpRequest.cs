@@ -17,7 +17,7 @@ namespace Elsa.Activities.Http.Activities;
 /// <see cref="HttpClient"/> is supplied through constructor-injected infrastructure from
 /// <see cref="IHttpClientFactory"/> under the well-known <see cref="HttpActivityConstants.HttpClientName"/>
 /// client, so connection pooling, redirect policy and timeouts are configured once by
-/// <c>ActivitiesHttpFeature</c> rather than per activity.
+/// <c>KernelActivitiesHttpFeature</c> rather than per activity.
 /// </summary>
 /// <remarks>
 /// <para>

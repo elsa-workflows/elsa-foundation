@@ -46,15 +46,9 @@
       "medianMinutes": 0.37
     },
     {
-      "project": "essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
-    },
-    {
       "project": "essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj",
       "tier": "pr",
-      "medianMinutes": 8.09
+      "medianMinutes": null
     },
     {
       "project": "essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
@@ -96,11 +90,6 @@
       "project": "essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.08
-    },
-    {
-      "project": "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
-      "tier": "integration",
-      "medianMinutes": null
     },
     {
       "project": "extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj",
@@ -794,27 +783,6 @@
           "rest": true
         }
       ]
-    },
-    "essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj": {
-      "groups": [
-        {
-          "name": "compensation-nesting",
-          "classes": [
-            "Elsa.Activities.Compensation.Tests.CompensationNestingJourneyTests"
-          ]
-        },
-        {
-          "name": "compensation-provider",
-          "classes": [
-            "Elsa.Activities.Compensation.Tests.CompensationProviderSubsetTests",
-            "Elsa.Activities.Compensation.Tests.CompensationBackoffJourneyTests"
-          ]
-        },
-        {
-          "name": "compensation-rest",
-          "rest": true
-        }
-      ]
     }
   },
   "shards": {
@@ -822,7 +790,7 @@
       {
         "name": "pr-1",
         "units": [
-          "essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj#compensation-nesting",
+          "essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj",
           "extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
           "essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj",
           "essentials/tests/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj",
@@ -867,7 +835,6 @@
       {
         "name": "pr-2",
         "units": [
-          "essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj#compensation-provider",
           "extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Elsa3.Activities.Design.Import.Integration.Tests.csproj",
           "essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
           "essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
@@ -905,7 +872,6 @@
       {
         "name": "pr-3",
         "units": [
-          "essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj#compensation-rest",
           "extensions/Secrets/tests/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj",
           "essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
           "essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
@@ -960,7 +926,6 @@
       {
         "name": "integration-other",
         "units": [
-          "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
           "essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj",
           "essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
           "essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest"
@@ -999,7 +964,6 @@
         "name": "ef-3",
         "suites": [
           "cli-acceptance",
-          "compensation",
           "dashboard",
           "studio-dashboard",
           "data-protection",
@@ -1040,11 +1004,6 @@
       "suite": "activities-design",
       "project": "essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_ACTIVITIES_DESIGN_EF_REQUIRE_NATIVE_PROVIDERS"
-    },
-    {
-      "suite": "compensation",
-      "project": "essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests.csproj",
-      "require": "ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
       "suite": "cluster-membership",

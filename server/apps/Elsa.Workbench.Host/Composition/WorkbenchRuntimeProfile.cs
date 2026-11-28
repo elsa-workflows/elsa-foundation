@@ -6,6 +6,14 @@ namespace Elsa.Workbench.Composition;
 /// <summary>Resolves the Workbench store and hardens production runtime settings.</summary>
 internal static class WorkbenchRuntimeProfile
 {
+    private static readonly HashSet<string> ClassicRuntimeFeatures = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "WorkflowsRuntimeApi",
+        "WorkflowsRuntimeEntityFrameworkCore",
+        "ActivitiesHttp",
+        "WorkflowsRuntimeHttp"
+    };
+
     internal static void Configure(ConfigurationManager configuration, IHostEnvironment environment, string[] args)
     {
         if (configuration.GetValue<bool>("Elsa:CorePreview:Enabled"))
@@ -28,8 +36,7 @@ internal static class WorkbenchRuntimeProfile
 
         if (shells.GetChildren()
             .SelectMany(shell => new ShellBuilder(shell.Key).FromConfiguration(shell).Build().EnabledFeatures)
-            .Any(feature => string.Equals(feature, "WorkflowsRuntimeApi", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(feature, "WorkflowsRuntimeEntityFrameworkCore", StringComparison.OrdinalIgnoreCase)))
+            .Any(ClassicRuntimeFeatures.Contains))
             throw new InvalidOperationException("The classic Workbench workflow runtime has been retired. Use its pinned image " +
                 "to open the existing classic stores. See the Workbench compatibility guidance in docs/docker.md.");
 

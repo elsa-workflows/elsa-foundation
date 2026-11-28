@@ -13,7 +13,7 @@ public sealed class HttpEndpointRoutesResolverTests
     private readonly InMemoryBookmarkStateStore _bookmarks = new();
 
     // The resolver projects endpoint-relative templates only — the endpoints base path is a middleware concern
-    // (HttpEndpointMiddleware strips it before consulting the route table), so it takes no base-path option. The
+    // (Request intake strips it before consulting the route table), so it takes no base-path option. The
     // waiting-bookmark union goes through the REAL expiry-aware lookup over the in-memory store (via Resolvers.Build),
     // exercising the production expiry-filtering path rather than a fake; a null logger stands in for the conflict
     // warning.

@@ -23,7 +23,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
-using Elsa.Workflows.Runtime.Services.Dispatch;
+using Elsa.Workflows.Runtime.Persistence.TestScopes;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Values;
@@ -72,17 +73,6 @@ public sealed class EfActivityDraftTestRunServiceTests : IAsyncLifetime
             Assert.Single(await verify.Runtime.WorkflowExecutables.AsNoTracking().ToArrayAsync());
             var row = (await verify.Runtime.WorkflowExecutableSourceReferences.AsNoTracking().ToArrayAsync()).SingleOrDefault(IsWrapperSource);
             Assert.Equal(committed, row is not null); firstBytes = row?.ContentJson; firstIncarnation = row?.IncarnationId;
-        }
-        await using (var collection = Open())
-        {
-            var collector = new WorkflowExecutableReferenceGarbageCollector(collection.Artifacts, collection.Sources,
-                collection.Templates, new InMemoryWorkflowExecutionStateStore(), null,
-                Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
-                clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
-            Assert.False(collector.SupportsStimulusDeliveryRetention); // Ordinary Test Run roots; no default cohort activation is claimed.
-            await collector.SweepAsync();
-            Assert.Equal(committed ? 1 : 0, await collection.Runtime.WorkflowExecutables.CountAsync());
-            Assert.NotNull(await collection.Templates.FindAsync(Template.TemplateId));
         }
         clock.Now += TimeSpan.FromSeconds(10);
         await using (var retry = Open())
@@ -194,8 +184,8 @@ public sealed class EfActivityDraftTestRunServiceTests : IAsyncLifetime
                     new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(SerializationServices.TypeRegistry()),
                     new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]))),
                 new Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher(), Artifacts, Dispatcher,
-                new InMemoryWorkflowTestScopeStore(), new Partition(), Receipts, new InMemoryWorkflowExecutionStateStore(),
-                new InMemoryActivityExecutionStateStore(), new DefaultActivityDraftTestRunCancellationPolicy(), null!, null!, clock,
+                WorkflowTestScopeStoreFactory.CreateInMemory(), new Partition(), Receipts, new UnobservedTestRunStore(),
+                null!, new DefaultActivityDraftTestRunCancellationPolicy(), null!, null!, clock,
                 new WorkflowExecutableRootWriteLeaseManager(Artifacts, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), clock));
         }
         public RuntimeDbContext Runtime { get; }

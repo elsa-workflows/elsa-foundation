@@ -461,9 +461,9 @@ public sealed class HttpEndpointExecutionTests
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesHttpFeature().ConfigureServices(services))
+            .WithFeature(services => new KernelActivitiesHttpFeature().ConfigureServices(services))
             // The HttpEndpoint activity derives ParsedContent from the raw body via IHttpRequestBodyParser.
-            // Full CShells composition registers it through ActivitiesHttp's DependsOn "Http";
+            // Full CShells composition registers it through KernelActivitiesHttp's DependsOn "Http";
             // this manual harness composes only the named feature, so register the seam it consumes directly.
             .WithFeature(services => services.AddSingleton<IHttpRequestBodyParser, HttpRequestBodyParser>())
             .Build("actexec-http-endpoint");

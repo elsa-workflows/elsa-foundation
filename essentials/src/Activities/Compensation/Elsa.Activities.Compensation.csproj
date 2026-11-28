@@ -15,7 +15,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Activities.Compensation.Tests" />
-    <InternalsVisibleTo Include="Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests" />
   </ItemGroup>
 
 </Project>

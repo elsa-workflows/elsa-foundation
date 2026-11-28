@@ -16,7 +16,7 @@ namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
 /// Shared arrangement for the <c>SendHttpRequest</c> suites: a one-node executable over the production CLR
-/// constructor, the harness composition with <see cref="ActivitiesHttpFeature"/>, and the stub transport.
+/// constructor, the harness composition with <see cref="KernelActivitiesHttpFeature"/>, and the stub transport.
 /// </summary>
 internal static class SendHttpRequestTestSupport
 {
@@ -44,7 +44,7 @@ internal static class SendHttpRequestTestSupport
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesHttpFeature().ConfigureServices(services));
+            .WithFeature(services => new KernelActivitiesHttpFeature().ConfigureServices(services));
 
     // Overrides the named client's primary handler with the stub so no live network is touched (the last
     // ConfigurePrimaryHttpMessageHandler wins).

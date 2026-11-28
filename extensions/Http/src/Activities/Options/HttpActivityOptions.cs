@@ -4,7 +4,7 @@ namespace Elsa.Activities.Http.Options;
 /// Transport defaults for the outbound HTTP activity client (<c>SendHttpRequest</c>). Default-constructable
 /// (init-only properties) so the standard options pipeline can materialize it and hosts can override it via
 /// <c>services.Configure&lt;HttpActivityOptions&gt;(...)</c>. Applied to the named
-/// <see cref="System.Net.Http.IHttpClientFactory"/> client in <c>ActivitiesHttpFeature</c>.
+/// <see cref="System.Net.Http.IHttpClientFactory"/> client in <c>KernelActivitiesHttpFeature</c>.
 /// </summary>
 /// <remarks>
 /// A per-request <c>Timeout</c> input on the activity overrides <see cref="DefaultTimeout"/>; the timeout is

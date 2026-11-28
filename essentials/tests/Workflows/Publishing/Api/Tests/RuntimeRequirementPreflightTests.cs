@@ -4,7 +4,6 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Serialization.Core;
@@ -114,27 +113,6 @@ public sealed class RuntimeRequirementPreflightTests
             RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, []).AsTask());
         await Assert.ThrowsAsync<RuntimeRequirementPreflightRequestException>(() => service.RunAsync(
             RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, ["artifact-1", "artifact-1"]).AsTask());
-    }
-
-    [Fact]
-    public void Activation_classifier_marks_missing_consumers_as_deployment_recovery_not_activity_retry()
-    {
-        var handler = new ActivityActivationFailureHandler();
-
-        var missing = handler.Classify(new UnknownActivityConsumerException("sample.missing", "1"), "artifact-1", "node-1");
-        var unsupported = handler.Classify(new UnsupportedActivityDescriptorSchemaException("sample.schema", "2", ["1"]));
-        var storageDriver = handler.Classify(new RuntimeDurableValueStorageDriverNotFoundException("sample.external"));
-
-        Assert.NotNull(missing);
-        Assert.Equal(ActivityActivationFailureKind.MissingConsumer, missing!.Kind);
-        Assert.Equal("false", missing.Metadata[ActivityActivationFailureHandler.RetryEligibleMetadataKey]);
-        Assert.Equal(ActivityActivationFailureHandler.DeploymentCorrectionRecoveryAction, missing.Metadata[ActivityActivationFailureHandler.RecoveryActionMetadataKey]);
-        Assert.Equal(ActivityActivationFailureKind.UnsupportedSchema, unsupported!.Kind);
-        Assert.Equal(ActivityActivationFailureKind.MissingStorageDriver, storageDriver!.Kind);
-        Assert.Equal(RuntimeActivationCapabilityKind.DurableValueStorageDriver, storageDriver.CapabilityKind);
-        Assert.Null(storageDriver.ConsumerKey);
-        Assert.Equal("sample.external", storageDriver.StorageDriverKey);
-        Assert.Null(handler.Classify(new InvalidOperationException("ordinary failure")));
     }
 
     private static WorkflowExecutable Executable(

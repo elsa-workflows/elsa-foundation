@@ -25,10 +25,9 @@ Runtime implementation dependency.
   the 4-part assembly version's `Major.Minor.Build` → `MAJOR.MINOR.PATCH`. Invalid attribute semver /
   unresolvable assembly version raise domain-scoped exceptions carrying the activity type + offending
   value (§2.23.5).
-- **`ActivityTypeCategoryResolver`** (`IActivityTypeCategoryResolver`) — pure category decision: the
-  last dot-separated segment of the declaring assembly's simple name (e.g.
-  `Elsa.Runtime.Activities.Primitives` → `Primitives`), so every activity an author ships in one
-  assembly shares one catalog bucket.
+- **`ActivityTypeCategoryResolver`** (`IActivityTypeCategoryResolver`) uses a nonblank `CategoryAttribute`
+  declared directly on the activity. Without it, the declaring assembly's last name segment supplies
+  the shared category, such as `Primitives` for `Elsa.Runtime.Activities.Primitives`.
 - **`ClrActivityReconciliationFeature`** — `IShellFeature` that registers the options plus the two
   resolvers, the scanner, and the source — each against its contract so an inheriting feature can
   replace one in isolation (§2.5). `ConfigureServices` is `virtual`; options and the default activated

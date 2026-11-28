@@ -123,25 +123,6 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
         Assert.DoesNotContain(notTaken, run.ExecutedNodeIds);
     }
 
-    [Theory]
-    [InlineData("approval-v1", "Approved")]
-    [InlineData("rejection-v1", "Rejected")]
-    public async Task Direct_start_wrapper_runs_the_published_activity(string sourceVersionId, string outcome)
-    {
-        var reusable = sourceVersionId == "approval-v1" ? fixture.Reusable : fixture.Rejecting;
-        var wrapper = await fixture.PublishAsync(Elsa3ImportHost.Required(reusable, "workflowVersionId"));
-
-        // The approval wrapper passes its request's approve member to the declared input. The rejecting reusable declares
-        // no inputs, so its wrapper is started without one: an undeclared input is refused at start (#3728).
-        var run = sourceVersionId == "approval-v1"
-            ? await Host.RunAsync(wrapper, new JsonObject { ["approve"] = true })
-            : await Host.RunAsync(wrapper);
-
-        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
-        var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal(outcome, activity.Completion?.OutcomeKey);
-    }
-
     [Fact]
     public async Task Flowchart_bodied_reusable_publishes_and_runs()
     {
@@ -153,9 +134,9 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         // The body ran: its flowchart, the decision and the one Complete it reached.
-        Assert.Contains(run.Activities, state => state.Execution.ActivityType == "Elsa.Activities.Flowchart.Activities.Flowchart");
-        Assert.Contains(run.Activities, state => state.Execution.ActivityType == "Elsa.Activities.If.Activities.If" && state.Status == ActivityExecutionStatus.Completed);
-        Assert.Single(run.Activities, state => state.Execution.ActivityType == "Elsa.Activities.Graph.Runtime.Activities.Complete" && state.Status == ActivityExecutionStatus.Completed);
+        Assert.Contains(run.Activities, state => state.ActivityType == "Elsa.Activities.Flowchart.Activities.Flowchart");
+        Assert.Contains(run.Activities, state => state.ActivityType == "Elsa.Activities.If.Activities.If" && state.Status == ActivityExecutionStatus.Completed);
+        Assert.Single(run.Activities, state => state.ActivityType == "Elsa.Activities.Graph.Runtime.Activities.Complete" && state.Status == ActivityExecutionStatus.Completed);
     }
 
     [Fact]
@@ -182,8 +163,8 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
         await Host.ReadAsync(services => services.GetRequiredService<IActivityDefinitionVersionPublicationStore>().FindAsync(fixture.ActivityVersionId))
         ?? throw new InvalidOperationException($"Activity version '{fixture.ActivityVersionId}' has no publication: {fixture.Apply.Body.ToJsonString()}");
 
-    private static ActivityExecutionState Node(RunState run, string nodeId) =>
-        run.Activities.SingleOrDefault(state => state.Execution.ExecutableNodeId == nodeId)
+    private static ActivityExecutionInspectionSummaryProjection Node(RunState run, string nodeId) =>
+        run.Activities.SingleOrDefault(state => state.AuthoredActivityId == nodeId)
         ?? throw new Xunit.Sdk.XunitException($"Node '{nodeId}' did not run: {run.Describe()}.");
 }
 
@@ -195,23 +176,6 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
 /// </summary>
 public sealed class ImportedReusableValueReadTests
 {
-    [Theory]
-    [InlineData(true, "Approved")]
-    [InlineData(false, "Rejected")]
-    public async Task A_body_reads_the_input_its_wrapper_passed(bool approve, string outcome)
-    {
-        await using var host = await Elsa3ImportHost.StartAsync();
-        var (apply, items) = await host.ImportAsync("reads-input", "reusable-reads-input");
-        var reusable = Assert.Single(items);
-        var wrapper = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(reusable, "workflowVersionId"));
-
-        var run = await host.RunAsync(wrapper, new JsonObject { ["approve"] = approve });
-
-        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
-        var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal(outcome, activity.Completion?.OutcomeKey);
-    }
-
     [Fact]
     public async Task A_body_reads_the_value_its_caller_passed_not_the_callers_own_input()
     {

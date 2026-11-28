@@ -44,8 +44,9 @@ and restart tests.
 ```
 
 Current test tiers still run stock Workbench process, authoring and configuration
-checks, along with the independent Agent, Compensation, BPMN, ETL and Rules
-module and provider suites.
+checks, along with independent module and provider suites. The
+[classic Compensation test archive](../../essentials/tests/Activities/Compensation/Tests/README.md)
+contains the earlier Runtime's Compensation execution and provider witnesses.
 
 The optional Studio live compensation, nesting and operator journeys require an
 owned classic Workbench and matching Studio. Set `ELSA_CLASSIC_COMPENSATION_LIVE=1`
@@ -122,6 +123,20 @@ git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-b
 )
 ```
 
+Use the last source before the shared classic BPMN fixture was retired for the
+linked Runtime EF called-workflow control, checkpoint upgrade and combined BPMN
+child outcome tests. The upgrade tests extract and verify the SQLite snapshots
+tracked in that checkout under `specs/1006-bpmn-library-adoption/evidence/legacy`.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-bpmn-ef" bc616099bd58d75e962ce6cb9f53c8f68c2e772e
+  cd "$compatibility_root/classic-bpmn-ef"
+  dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~BpmnCalledWorkflowControlEfTests|FullyQualifiedName~BpmnUpgradeRecoveryEfTests|FullyQualifiedName~Bpmn_combined_outcome'
+)
+```
+
 The main BPMN test project in this checkout also runs the archived classic
 checkpoint/child/compensation journeys. For the actual BPMN CallActivity REST
 witness, run the following script from the classic-default checkout above
@@ -155,8 +170,59 @@ for the producer, importer, and fixture.
 )
 ```
 
+Use the same pinned source to replay the classic authored middleware, synchronous replies, HTTP TestRun,
+and the classic checkpoint, command-budget and route convergence cases from that HTTP host.
+
+```sh
+(
+  cd "$compatibility_root/classic-artifact-http"
+  dotnet test extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj \
+    -c Release -p:RestoreLockedMode=true
+  dotnet test extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~HttpEndpointMiddlewareTests|FullyQualifiedName~ActivitiesHttpFeatureTests'
+  dotnet test extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~WorkflowsRuntimeHttpShellCompositionTests|FullyQualifiedName~WorkflowsRuntimeHttpFeatureTests'
+)
+```
+
 Current source retains the Publishing executable export and material checks, the Design
-JSON workflow reconciliation path, and the Actor HTTP provider witnesses.
+JSON workflow reconciliation path, and the [Actor HTTP provider witnesses](../../essentials/tests/Workflows/Runtime/KernelHost/Tests).
+
+## Classic Dispatch and called-workflow control
+
+Use the pinned source for the classic child start, parent wait and resume, child
+control delivery, and local/EF checkpoint witnesses. Current Native child
+execution uses the same authored publication pin and Actor-owned child execution.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-dispatch" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
+  cd "$compatibility_root/classic-dispatch"
+  dotnet test essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true
+  dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~DispatchWorkflowTests|FullyQualifiedName~BpmnCalledWorkflowControlEfTests'
+  dotnet test extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release -p:RestoreLockedMode=true \
+    --filter FullyQualifiedName~Actual_later_control_producer_can_replace
+)
+```
+
+For the classic REST fire-and-forget and waited outcome cases, use the
+`workbench-classic-default` checkout pinned above at
+`18a16dee878106ac525aa9a861d851a200e43c55`. Run against a separately hosted
+matching Workbench with `ActivitiesDispatchWorkflowRuntime` and
+`ActivitiesDispatchWorkflowDesign` enabled.
+
+```sh
+(
+  cd "$compatibility_root/workbench-classic-default"
+  pwsh -NoProfile -File e2e-tests/Test-ChildWorkflow.ps1 -BaseUrl "$classic_base_url"
+  pwsh -NoProfile -File e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1 -BaseUrl "$classic_base_url"
+)
+```
+
+See the [Actor child execution witness](../../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs)
+for current source.
 
 ## Classic reviews, Decisions, ETL and Rules in workflows
 

@@ -9,7 +9,6 @@ using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Resolvers;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using VariableDefinition = Elsa.Expressions.Core.Models.VariableDefinition;
@@ -82,13 +81,6 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         }
         else
             Assert.Null(binding.ConversionPlan);
-        var resolved = new RuntimeInputBindingResolver().Resolve(binding,
-            new RuntimeInputBindingResolutionContext("request-workflow", "request-consumer", executable: executable,
-                workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
-                {
-                    ["customer"] = ValueEnvelope.Inline(new ValueTypeDescriptor("String"), JsonSerializer.SerializeToElement("customer-42"), ValueProtectionPolicy.InstanceInline)
-                }));
-        Assert.Equal("customer-42", resolved.Envelope!.InlineValue!.Value.GetString());
     }
 
     [Theory]

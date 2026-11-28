@@ -67,3 +67,35 @@ dotnet test essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Test
 The retained suite verifies contracts and publication services through their
 current owners. Physical provider and Actor cases continue to exercise
 publication pins, History, prepared starts and protected material across restart.
+
+## Classic Publishing and Runtime integration
+
+Use `45a594857c700de2fe76de9cbcb62d06bbf6876b` for the classic
+Publishing/Runtime API join, activity input hydration, checkpoint execution,
+and optional executable collection witnesses. The two projects at that source
+build their original runtime fixtures and use their matching package locks.
+
+```sh
+dotnet test essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+dotnet test essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
+
+Current Publishing tests retain protected source references, executable hash
+compatibility, publication and journal behavior, and real migration and test-run
+transport checks through their current storage and execution providers.
+
+## Classic API composition and alteration contracts
+
+Use `415905150f6060a2b257649fe48c645873a428cc` for the classic runtime
+HTTP manifest, alteration route and failure contracts, and the concrete
+checkpoint engine shape. The current Architecture project checks the Actor API
+and keeps the retained alteration wire models and permission checks.
+
+```sh
+bash tools/architecture/restore-ci-project-graph.sh
+dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true \
+  --filter 'FullyQualifiedName~RuntimeAlteration|FullyQualifiedName~RuntimeCoreEngineShapeGuardTests|FullyQualifiedName~DomainManagementApiCompositionTests|FullyQualifiedName~DomainApiCapabilityRegistrationTests'
+```

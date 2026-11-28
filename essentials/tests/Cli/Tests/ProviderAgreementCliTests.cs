@@ -10,8 +10,8 @@ namespace Elsa.Cli.Tests;
 /// </summary>
 public sealed class ProviderAgreementCliTests : IDisposable
 {
-    private const string Runtime = "WorkflowsRuntimeEntityFrameworkCore";
-    private const string Bookmarks = "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence";
+    private const string Runtime = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+    private const string TestScope = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
 
     private static readonly string Host = DotnetElsa.Host("ShellsHost");
 
@@ -39,7 +39,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
 
         Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
         Assert.Contains("provider-disagreement", run.Text, StringComparison.Ordinal);
-        Assert.Contains(Bookmarks, run.Text, StringComparison.Ordinal);
+        Assert.Contains(TestScope, run.Text, StringComparison.Ordinal);
         Assert.Contains("'Workflows.Runtime'", run.Text, StringComparison.Ordinal);
         Assert.Contains("'Sqlite'", run.Text, StringComparison.Ordinal);
         Assert.False(File.Exists(output.File(MigrationPlan.FileName)), "A refused run must write nothing.");
@@ -51,7 +51,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
         var run = Script("one-offender", "PostgreSql", "--modules", "Workflows.Runtime");
 
         Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
-        Assert.Contains(Bookmarks, run.Text, StringComparison.Ordinal);
+        Assert.Contains(TestScope, run.Text, StringComparison.Ordinal);
         Assert.DoesNotContain($"'{Runtime}'", run.Text, StringComparison.Ordinal);
     }
 
@@ -61,7 +61,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
     /// never exercises. <c>Workflows.Runtime</c> is backed by a feature that several of this fixture's
     /// shells configure, and three of them disagree with <c>--provider</c> in this default (Production)
     /// environment: <c>array-shape</c> is left at its base file's <c>Sqlite</c> (no overlay), and
-    /// <c>one-offender</c>/<c>unset-offender</c> configure <c>Sqlite</c> for the bookmarks feature. A
+    /// <c>one-offender</c>/<c>unset-offender</c> configure <c>Sqlite</c> for the test-scope feature. A
     /// disagreement in any one configured shell must still refuse, and must still name that shell.
     /// </summary>
     [Fact]
@@ -105,7 +105,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
         var plan = DotnetElsa.Run("persistence", "plan", "--host", Host, "--provider", "PostgreSql", "--modules", "Workflows.Runtime", "--shell", "one-offender");
 
         Assert.Equal(ToolExitCode.ResolutionFailure, plan.ExitCode);
-        Assert.Contains(Bookmarks, plan.Text, StringComparison.Ordinal);
+        Assert.Contains(TestScope, plan.Text, StringComparison.Ordinal);
     }
 
     /// <summary>
