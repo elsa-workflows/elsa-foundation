@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.KernelHost;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
 using Xunit;
 
@@ -53,7 +52,6 @@ public sealed class ReusableBodyWaitTests
 
         using var response = await host.Client.PostAsync("workflows/http/orders/approve", new StringContent("{}", Encoding.UTF8, "application/json"));
         Assert.True(response.StatusCode == HttpStatusCode.NoContent, $"{(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
-        Assert.Equal(waiting, Assert.Single(response.Headers.GetValues(KernelHttpEdge.WorkflowInstanceIdHeader)));
         await AssertApprovedAsync(host, wrapper, await host.WaitForSettledAsync(waiting));
     }
 

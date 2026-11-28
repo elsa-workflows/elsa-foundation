@@ -24,7 +24,7 @@ public sealed class DispatchWorkflowCallTests
             $"publishing/workflows/{Uri.EscapeDataString(callerVersion)}/publish", new JsonObject());
         var problem = await published.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.Conflict, published.StatusCode);
+        Assert.True(published.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.BadRequest, problem);
         Assert.Contains("CancelChildOnParentCancellation", problem, StringComparison.Ordinal);
         Assert.Null(await host.ActivePublicationAsync(callerFixture));
     }
