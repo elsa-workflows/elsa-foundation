@@ -1,5 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Services.Dispatch;
+using Elsa.Workflows.Runtime.Persistence.TestScopes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
@@ -11,12 +11,12 @@ internal static class TestRunCompatibilityScope
 
     static TestRunCompatibilityScope()
     {
-        Store = new InMemoryWorkflowTestScopeStore();
+        Store = new InMemoryWorkflowTestScopeLifecycleStore();
         Provider = new ServiceCollection()
             .AddSingleton<IWorkflowTestScopeStore>(Store)
             .BuildServiceProvider();
     }
 
-    public static InMemoryWorkflowTestScopeStore Store { get; }
+    public static IWorkflowTestScopeStore Store { get; }
     public static IServiceScopeFactory ScopeFactory => Provider.GetRequiredService<IServiceScopeFactory>();
 }
