@@ -146,6 +146,32 @@ public sealed class AuthoringCompositionHostEvidenceTests : IDisposable
         Assert.Null(provider.GetService<IWorkflowTestRunStarter>());
         Assert.Null(provider.GetService<ITestRunWaitOperations>());
         Assert.Null(provider.GetService<IActivityDraftTestRunService>());
+        Assert.Contains("/publishing/incident-strategies", endpoints);
+        Assert.Contains(declared.Links, link => link.Rel == "incident-strategies");
+        var incidentCatalog = provider.GetRequiredService<IIncidentStrategyCatalog>();
+        Assert.Equal(IncidentStrategyBuiltIns.FaultReference, incidentCatalog.DefaultStrategy);
+        Assert.Equal(2, incidentCatalog.List().Count);
+
+        var publishingOptions = provider.GetRequiredService<PublishingEntityFrameworkCoreOptions>();
+        Assert.Equal("Sqlite", publishingOptions.Provider);
+        Assert.Equal(ResourceName, publishingOptions.ConnectionName);
+        Assert.Null(publishingOptions.ConnectionString);
+
+        DbContext[] contexts =
+        [
+            scope.ServiceProvider.GetRequiredService<ActivitiesDesignDbContext>(),
+            scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>(),
+            scope.ServiceProvider.GetRequiredService<PublishingSnapshotReviewDbContext>()
+        ];
+        foreach (var context in contexts)
+        {
+            Assert.Equal(databasePath, context.Database.GetDbConnection().DataSource);
+            var appliedMigrations = await context.Database.GetAppliedMigrationsAsync();
+            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+            Assert.NotEmpty(appliedMigrations);
+            Assert.Empty(pendingMigrations);
+            output.WriteLine($"Persistence context {context.GetType().Name}: provider=Sqlite, resource={ResourceName}, applied={appliedMigrations.Count()}, pending={pendingMigrations.Count()}");
+        }
     }
 
     [Fact]
