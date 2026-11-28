@@ -14,10 +14,14 @@ import time
 from urllib.parse import urlencode, urlsplit
 from uuid import uuid4
 
-from profile_acceptance import MIGRATED_FIXTURE, MIGRATED_PROFILE, verify_migrated_files, verify_secret_store, verify_variant
+from profile_acceptance import (
+    MIGRATED_FIXTURE, MIGRATED_PROFILE, ProfileRequestError, actor_activity_completions,
+    verify_migrated_files, verify_secret_store, verify_variant,
+)
 
 
 CURATED = "essentials-curated"
+ACTOR_PROFILES = {"elsa3-import", CURATED}
 WRITE_LINE = "Elsa.Activities.Primitives.Activities.WriteLine"
 WRITE_LINE_NODE = "write-line"
 LOGIN_PATH = "/_elsa/identity/login"
@@ -58,7 +62,7 @@ def request(container, path, data=None, *, authenticated=True, header_file=COOKI
 def read_json(container, path, data=None, *, authenticated=True):
     status, body, _ = request(container, path, data, authenticated=authenticated)
     if not 200 <= status < 300:
-        raise RuntimeError(f"{path} returned HTTP {status}: {body}")
+        raise ProfileRequestError(path, status, body)
     return json.loads(body)
 
 
@@ -151,25 +155,16 @@ def verify_curated_profile(container, args):
             "secrets": verify_secret_store(lambda path, data=None: read_json(container, path, data))}
 
 
-def verify_curated_workflow_history(container, instance, execution, version, publication):
-    expected = {
-        "workflowExecutionId": execution,
-        "definitionVersionId": version,
-        "artifactId": publication["artifactId"],
-        "sourceReferenceId": publication["sourceReferenceId"],
-    }
-    if any(instance.get(field) != value for field, value in expected.items()):
-        raise RuntimeError(f"Unexpected published executable or source for actor run: {instance}")
+def verify_actor_workflow_history(container, instance, execution, version, publication):
+    def request_json(path):
+        return read_json(container, path)
 
-    query = urlencode({"name": "ActivityCompleted", "limit": 16})
-    history = read_json(container, f"/runtime/workflows/instances/{execution}/history?{query}")
-    completed = [item for item in history["items"]
-                 if item["workflowExecutionId"] == execution and item["executableNodeId"] == WRITE_LINE_NODE
-                 and item["name"] == "ActivityCompleted" and item["authority"] == "CommittedTransition"
-                 and item["physicalCommitId"] and item["sequence"] > 0]
-    if history["coverage"]["policyId"] != "kernel-activity-journal-v1" or len(completed) != 1:
-        raise RuntimeError(f"The actor History did not contain the committed WriteLine activity: {history}")
-    return completed[0]["historyEventId"]
+    completed = actor_activity_completions(
+        request_json, instance, execution, publication["artifactId"], publication["sourceReferenceId"], version)
+    write_line = [item for item in completed if item["executableNodeId"] == WRITE_LINE_NODE]
+    if len(write_line) != 1:
+        raise RuntimeError(f"The Actor History did not contain the committed WriteLine activity: {completed}")
+    return write_line[0]["historyEventId"]
 
 
 def run_workflow(container, args):
@@ -220,8 +215,8 @@ def run_workflow(container, args):
                 if instance["incidentCount"] != 0:
                     raise RuntimeError(f"Unexpected workflow incidents: {instance}")
                 history_event = None
-                if args.variant == CURATED:
-                    history_event = verify_curated_workflow_history(container, instance, execution, version, publication)
+                if args.variant in ACTOR_PROFILES:
+                    history_event = verify_actor_workflow_history(container, instance, execution, version, publication)
                 elif instance["activityCount"] < 1:
                     raise RuntimeError(f"Unexpected workflow activity count: {instance}")
                 if marker not in docker("logs", container).splitlines():
@@ -375,7 +370,7 @@ def verify_profile(args):
             "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword": args.password,
             "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__IsDevelopmentOrDemo": "true",
         }
-        if args.variant == CURATED:
+        if args.variant in ACTOR_PROFILES:
             settings["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey"] = secrets.token_hex(32)
         else:
             settings.update({

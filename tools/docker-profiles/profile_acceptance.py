@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import secrets
 import time
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from uuid import uuid4
 
 
@@ -15,12 +15,48 @@ MIGRATED_FIXTURE = MIGRATED_PROFILE / "example-migrated"
 DECISION_FIXTURE = REPOSITORY / "specs/1195-business-decisions/evidence/interop/matrix/approval.dmn"
 
 
+class ProfileRequestError(RuntimeError):
+    def __init__(self, path, status, body):
+        super().__init__(f"{path} returned HTTP {status}: {body}")
+        self.status = status
+
+
+def actor_activity_completions(request_json, instance, execution_id, artifact_id, source_reference_id, version_id=None):
+    expected = {"workflowExecutionId": execution_id, "artifactId": artifact_id,
+                "sourceReferenceId": source_reference_id}
+    if version_id is not None:
+        expected["definitionVersionId"] = version_id
+    if any(instance.get(field) != value for field, value in expected.items()):
+        raise RuntimeError(f"Unexpected published executable or source for actor run: {instance}")
+
+    path = f"/runtime/workflows/instances/{quote(execution_id, safe='')}/history"
+    query = {"name": "ActivityCompleted", "limit": 100}
+    completions = []
+    cursors = set()
+    while True:
+        history = request_json(f"{path}?{urlencode(query)}")
+        if history["coverage"]["policyId"] != "kernel-activity-journal-v1":
+            raise RuntimeError(f"Expected canonical Actor History: {history}")
+        completions.extend(item for item in history["items"]
+                           if item["workflowExecutionId"] == execution_id and item["name"] == "ActivityCompleted"
+                           and item["authority"] == "CommittedTransition" and item["physicalCommitId"] and item["sequence"] > 0)
+        cursor = history.get("nextContinuationToken")
+        if cursor is None:
+            if not history["scopeComplete"]:
+                raise RuntimeError(f"Actor History did not complete the retained scope: {history}")
+            return completions
+        if cursor in cursors:
+            raise RuntimeError(f"Actor History repeated a continuation for {execution_id}")
+        cursors.add(cursor)
+        query["cursor"] = cursor
+
+
 def publish_and_execute(request_json, version_id):
     publication = request_json(f"/publishing/workflows/{quote(version_id, safe='')}/publish", {})
-    return execute(request_json, publication["artifactId"], publication["sourceReferenceId"])
+    return execute(request_json, publication["artifactId"], publication["sourceReferenceId"], version_id)
 
 
-def execute(request_json, artifact_id, source_reference_id):
+def execute(request_json, artifact_id, source_reference_id, version_id=None):
     execution = request_json(f"/runtime/workflows/executables/{quote(artifact_id, safe='')}/execute", {
         "sourceReferenceId": source_reference_id,
     })
@@ -28,12 +64,20 @@ def execute(request_json, artifact_id, source_reference_id):
     path = f"/runtime/workflows/instances/{quote(execution_id, safe='')}"
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
-        details = request_json(path)
+        try:
+            details = request_json(path)
+        except ProfileRequestError as unavailable:
+            if unavailable.status != 404:
+                raise
+            time.sleep(0.25)
+            continue
         instance = details["instance"]
         if instance["status"] in ("Faulted", "Cancelled") or instance["incidentCount"]:
             raise RuntimeError(f"Workflow {execution_id} did not complete successfully: {details}")
         if instance["status"] in ("Completed", "Finished"):
-            nodes = sorted({item["executableNodeId"] for item in details["activities"]})
+            completed = actor_activity_completions(
+                request_json, instance, execution_id, artifact_id, source_reference_id, version_id)
+            nodes = sorted({item["executableNodeId"] for item in completed})
             return {"executionId": execution_id, "status": instance["status"], "executedNodes": nodes}
         time.sleep(0.25)
     raise RuntimeError(f"Workflow {execution_id} did not complete within 30s")
