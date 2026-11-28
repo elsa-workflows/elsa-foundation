@@ -60,8 +60,10 @@ the design side), and converter rules.
   - It implements no child or descendant fault handler, as `ForEach` and `If` do not, so the workflow's incident
     strategy decides every fault (spec FR-008). `RequestChildFaultIntervention` is not used: it would bypass the
     strategy and leave the run waiting under the default Fault.
-  - It does not implement `IRuntimeAcceptsRescheduledFaultedChild`, because retry goes through
-    `RetryFaultedActivity`, which does not need it.
+  - It implements `IRuntimeAcceptsRescheduledFaultedChild`, as `Sequence` does: it keeps waiting for a faulted child
+    without consuming its fault, so `RescheduleActivity` of that child ends the pass. Under ContinueWithIncidents the
+    incident is open rather than waiting for intervention, so `RetryFaultedActivity` refuses it (`NoBlockingIncident`)
+    and rescheduling is the operator's path (amended during implementation).
 - **Input**: `Items`.
 - **Attributes**: `[ActivityStructure("elsa.bulk-dispatch-workflows.structure", "1.0.0")]` and
   `[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]`, as `ForEach` has. The bulk node performs no effect
@@ -115,7 +117,9 @@ the design side), and converter rules.
 - **State**: kept in the activity's structural state, which commits with each evaluation:
   - the item count;
   - the next item index to schedule;
-  - the set of ended item indexes.
+  - the set of ended item indexes;
+  - the set of item indexes whose `Dispatch` outcome already scheduled a slot, so a second `Dispatch` completion for
+    that pass (an operator's reschedule of the `Dispatch` run) does not run the slot twice.
 - **Ending a pass**: an index is marked ended only when its pass has really ended: after a `Dispatch` outcome with no
   slot to run, or after its slot child completes. Only a newly ended index schedules the next item, so a repeated
   callback cannot exceed the window. There is no recount and no new store method.
@@ -127,10 +131,10 @@ the design side), and converter rules.
     index.
     - A frame belongs to one activity execution, not to an iteration id (`RuntimeContainerScopeService`), so without
       that request `variables.currentItem` fails at run time in the slot, even though publish passes.
-    - A `RetryFaultedActivity` successor gets its frame from the source's frame (`ActivitySuccessorStaging`).
+    - A `RescheduleActivity` (or `RetryFaultedActivity`) successor gets its frame from the source's frame (`ActivitySuccessorStaging`).
   - Complete with `Done` when the set holds every index.
 - **Faults**: no handler. The incident strategy decides. Under ContinueWithIncidents the pass stays open until a
-  `RetryFaultedActivity`, and the retried child's completion ends the pass as usual.
+  `RescheduleActivity` of the faulted child, and the successor's completion ends the pass as usual.
 - **Concurrent same-node scheduling**: no new scheduler (FR-024). Every `ScheduleChildActivity` call gets its own
   activity execution id (`SchedulerWorkItems.cs`). `BpmnProcessRuntime` already schedules one bound node, its
   call-activity `DispatchWorkflow` included, once per instance with an `IterationId` and a
@@ -165,8 +169,9 @@ the design side), and converter rules.
     - It sets every member explicitly: `WorkflowDefinitionId` (literal only), `Inputs` (the per-item script),
       `CorrelationId`, `WaitForCompletion` (missing → true, null or valueless → false, case-insensitive literal,
       otherwise carried), and `CancelChildOnParentCancellation` false.
-    - It refuses a bound `StartNewTrace` or `ChannelName`. The normalizer's `CheckRemoved` is private and those members
-      are `Structure` on the bulk entry, so the rewrite repeats that check.
+    - It refuses a bound `StartNewTrace` or `ChannelName`. Those members are `Structure` on the bulk entry, so the
+      normalizer never checks them; the rewrite calls the normalizer's `CheckRemoved`, made internal for it, together
+      with `TryReadObject`, `Describe` and `TryGetObjectExpression`.
     - It refuses any non-null literal `Items` with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-014). No existing value
       contract refuses literals; if spec 1243 adds one for FR-017, use it instead.
     - It records the wait classification (missing, literal true, literal false, expression) in a plan field on the
@@ -202,11 +207,14 @@ the design side), and converter rules.
     same-import scope.
     - `Elsa3ReusableActivityImportMaterializer` fills it before conversion, because the request is synchronous. It
       pre-scans the import's sources for `BulkDispatchWorkflows` nodes with a literal `WorkflowDefinitionId`, and for
-      each target id takes the same-import declarations, or else loads the published Elsa 4 definition's declared
-      inputs.
+      each target id takes the same-import declarations, or else the declared inputs of the published Elsa 4
+      executable a dispatch would pin.
     - The Elsa 4 workflow definition id is the Elsa 3 `DefinitionId` unchanged (`ReusableActivityCollectionAnalyzer`),
       so the id maps one to one.
-    - Research item R-3 is narrowed to which store or lookup service gives the published workflow's declared inputs.
+    - R-3 is settled: the materializer reads the newest live published `WorkflowExecutableSourceReference` of the
+      definition in the import's tenant (the access scope's, else the request's: the tenant the import stamps on its rows
+      and publishes under), as `DispatchPinSource` picks it, and that executable's `InputContract`. The Runtime stores
+      are optional (a constructor that takes them), so a Design-only host knows same-import targets only.
     - A target in neither place is refused (`…-TARGET-UNKNOWN`). The single-definition entry point
       `Elsa3WorkflowDefinitionImporter.ImportAsync` passes no targets, so a bulk node converted there is always refused
       as target-unknown. Its callers are the test fixture and the migration boundary, so that is acceptable.
@@ -245,13 +253,16 @@ the design side), and converter rules.
   - an empty or null `Items`;
   - the cap fault;
   - under the default Fault strategy a `Dispatch` or slot fault faults the workflow;
-  - under ContinueWithIncidents a slot fault is a retryable incident, other passes go on, and a retry ends the pass;
-  - a `Dispatch` self-fault stays an incident (`ChildFaulted` does not run), and a retry ends the pass;
-  - the window of 16: never more than 16 passes open, including under repeated callbacks;
+  - under ContinueWithIncidents a slot fault is an open incident, other passes go on, `RetryFaultedActivity` is
+    refused, and a `RescheduleActivity` ends the pass;
+  - a `Dispatch` self-fault follows the strategy (`ChildFaulted` does not run);
+  - the window of 16: never more than 16 passes open after any sweep, and passes open in item order;
+  - the pass bookkeeping (a unit test of the state): ending or routing a pass twice changes nothing, so a repeated
+    callback cannot schedule a further item and a second Dispatch completion for a routed pass schedules nothing;
   - publish refuses an empty or wrong `Dispatch` slot (`BulkDispatch/DispatchSlot`);
   - `variables.currentItem` reads in `Dispatch` and in the slots resolve at publish;
   - at run time, `ChildCompleted` and `ChildFaulted` read the right `currentItem` and `currentIndex` for their pass, also
-    after a retry;
+    after a reschedule;
   - a fault inside a `Sequence` in a slot follows the incident strategy in the same way;
   - parent cancellation cancels the waiting children;
   - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`;

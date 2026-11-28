@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Activities.DispatchWorkflow.Design.Services;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -14,7 +15,7 @@ namespace Elsa.Activities.DispatchWorkflow.Design;
 [ShellFeature(
     name: "ActivitiesDispatchWorkflowDesign",
     DisplayName = "Activities Dispatch Workflow (Design)",
-    Description = "Provides live Published workflow options and exact publication pins for DispatchWorkflow.",
+    Description = "Provides live Published workflow options and exact publication pins for DispatchWorkflow, and the BulkDispatchWorkflows slots and Dispatch slot check.",
     DependsOn = new object[] { "WorkflowsDesignApi", "WorkflowsPublishing" })]
 public class DispatchWorkflowDesignFeature : IShellFeature
 {
@@ -22,5 +23,7 @@ public class DispatchWorkflowDesignFeature : IShellFeature
     {
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityInputOptionsProvider, WorkflowDefinitionOptionsProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, DispatchPinSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BulkDispatchWorkflowsStructureHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IDraftValidator, BulkDispatchSlotValidator>());
     }
 }

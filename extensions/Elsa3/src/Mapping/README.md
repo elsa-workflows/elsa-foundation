@@ -340,6 +340,42 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - To test-migrate a whole export and get a redacted report and a `migrated/` folder, run the migration CLI:
     [Elsa 3 workflows migration tooling](../Migration/Tooling/README.md).
 
+- **BulkDispatchWorkflows** (spec 1242). It becomes the Elsa 4 structural activity `BulkDispatchWorkflows` with the
+  same `Items` and branches. The conversion generates its `Dispatch` slot child, a `DispatchWorkflow` with id
+  `{elsa3NodeId}.dispatch`, from the Elsa 3 dispatch members:
+  - `WorkflowDefinitionId` must be a literal (it is pinned at publish); `StartNewTrace` and `ChannelName` must be unset,
+    false or empty (`ELS3-ACTIVITY-REMOVED-INPUT-BOUND`); `CancelChildOnParentCancellation` is `false`.
+  - `WaitForCompletion` goes to the Dispatch node: missing is `true` (Elsa 3's default), null or a valueless literal is
+    `false`, a literal is read in any letter case, an expression is carried and now evaluated once per item.
+  - `CorrelationIdFunction` becomes the Dispatch node's `CorrelationId`. `get{DefaultItemInputKey}()` (for example
+    `getItem()`) and `args.<camelKey>` read the item as the bulk node's `variables.currentItem`; a workflow input or
+    variable named like the accessor still wins, as in Elsa 3.
+  - `Inputs` is generated per item: the literal `Input` map's entries, then a map item's members that the target
+    declares (matched in any letter case, passed in the declared spelling), or any other item under the item key when
+    the target declares it. The item wins a clash. `ParentInstanceId` is not passed. The target's declared inputs come
+    from the same import or from a workflow already published in Elsa 4 (read by the reusable-activity materializer
+    from the newest live published executable, when the host registers the runtime's executable and source-reference
+    stores; a Design-only host knows same-import targets only); a target in neither is
+    `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`. A target declaring two inputs that differ only in letter case is
+    `ELS3-LITERAL-KEY-AMBIGUOUS`. A literal `Items`, an expression or blank `DefaultItemInputKey` and an
+    expression `Input` are `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+  - With a literal-false wait `Completed` is never emitted, and it is dropped with
+    `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, as is `Canceled` (never emitted), also where `Done` reaches the same
+    target. Otherwise `Completed` is dropped silently where `Done` already reaches its target (not a WaitAll join). Any other route, and any
+    connection Elsa 3 never followed into a WaitAll join, is `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`: connect the follow-up to `Done`. With a literal-false
+    wait the branches never ran in Elsa 3 and are dropped with the same warning.
+  - A branch reading what Elsa 3 passed it about the child (`ChildInstanceId`, `WorkflowOutput`, `WorkflowInstanceId`,
+    `WorkflowStatus`, `WorkflowSubStatus`) is `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`.
+  - Every conversion warns `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` (more than 1,000 items fault; at most 16 passes open at
+    once; batch with a sequential ForEach) and `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` (only declared inputs, no
+    `ParentInstanceId`, `ChildFaulted` also for cancelled and undispatchable children, an inherited correlation id
+    without a function, a per-item wait).
+  - Outer writes: Elsa 3 ran the branches one at a time, Elsa 4 runs them concurrently. A branch that writes a variable
+    declared outside the bulk node (a Set Variable, a captured output or a script) converts with
+    `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`, and publish adds Elsa 4's `ValueFlow/ConcurrentWrite` warning. Record
+    per-child results in the child workflow, or compute the total after the bulk dispatch.
+  - Elsa 3 silently dispatched nothing for an `Items` value that is not a collection; Elsa 4 faults, as ForEach does.
+
 ## Migrating Elsa 3 JavaScript
 
 Elsa 4 evaluates JavaScript in a sandbox. Each expression sees the parameters it declares (`args`) and the workflow

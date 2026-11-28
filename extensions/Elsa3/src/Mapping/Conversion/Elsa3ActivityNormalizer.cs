@@ -777,7 +777,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
             propertyName);
     }
 
-    private static void CheckRemoved(Elsa3RewriteContext context, Elsa3MemberRule rule, string propertyName, JsonElement value)
+    internal static void CheckRemoved(Elsa3RewriteContext context, Elsa3MemberRule rule, string propertyName, JsonElement value)
     {
         var expected = rule.Elsa3Default is { ValueKind: JsonValueKind.String } text ? text.GetString() : null;
         var matches = !Elsa3TypedValues.IsBound(value)
@@ -1004,7 +1004,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         return null;
     }
 
-    private static bool TryGetObjectExpression(JsonElement value, out string? json)
+    internal static bool TryGetObjectExpression(JsonElement value, out string? json)
     {
         json = null;
         if (!Elsa3TypedValues.TryGetExpression(value, out var type, out var expressionValue) ||
@@ -1245,7 +1245,13 @@ internal sealed partial class Elsa3ActivityNormalizer(
             wellKnownTypeRegistry.GetAliasOrDefault);
 
     private static void Warn(Elsa3RewriteContext context, string code, string? property) =>
-        context.Warning(code, WarningMessages.GetValueOrDefault(code, code), "Review the converted workflow's behaviour for this difference.", property);
+        context.Warning(code, WarningMessages.GetValueOrDefault(code, code),
+            WarningGuidance.GetValueOrDefault(code, "Review the converted workflow's behaviour for this difference."), property);
+
+    private static readonly IReadOnlyDictionary<string, string> WarningGuidance = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [BulkDispatchCapped] = "For more than 1,000 items, split them into batches and run one bulk dispatch per batch from a sequential ForEach over the batches.",
+    };
 
     private static void Error(Elsa3ConversionPlan plan, Elsa3NodePlan node, string code, string message, string guidance,
         IReadOnlyDictionary<string, string>? metadata = null)
@@ -1271,6 +1277,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         [ExecuteWorkflowDurable] = ExecuteWorkflowDurableMessage,
         [OutcomeUndeclared] = "The reusable workflow completes with an outcome its definition does not declare; it is declared in the converted contract.",
         [OutcomeUnreached] = "The reusable workflow declares an outcome that nothing completes with; it is left out of the converted contract.",
+        [BulkDispatchCapped] = "Elsa 4 faults a bulk dispatch of more than 1,000 items, and keeps at most 16 item passes open at once (a waiting pass ends when its child ends and its branch has run; a fire-and-forget pass ends once its child is dispatched), starting the next as one ends; Elsa 3 dispatched every child at once, with no cap.",
         [HttpResponseJsonVariant] = "Elsa 3 matched this JSON content type only by exact string and sent the object's type name; Elsa 4 sends the object as JSON.",
     };
 }
