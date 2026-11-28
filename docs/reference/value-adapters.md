@@ -99,8 +99,8 @@ them changes the variable.
 - **Numbers.** A lossy number stays lossy in the copy: passing it raises `VF-PREC-002` like any host function
   argument, and writing it is refused (`VF-PREC-001`). Hold such numbers as strings.
 - **Name.** Built-in names are reserved and unprefixed (ADR 0045 §5 D-5): a script or expression that declares one
-  gets the `ShadowedFunction` warning, and a `let`, `const`, `class` or function declaration hides the built-in. A
-  top-level `var` of a built-in name fails in a statement-form input expression, since it would write the read-only
+  gets the `ShadowedFunction` warning, and a `let`, `const`, `class` or function declaration hides the built-in (a
+  host function's namespace root, such as `acme`, behaves the same). A top-level `var` of such a name fails in a statement-form input expression, since it would write the read-only
   global; it works in Run JavaScript, whose body runs inside a function. The web-standard name was chosen over `clone`, which scripts commonly use for
   their own locals (`const clone = …`), so reserving it would warn on ordinary code.
 

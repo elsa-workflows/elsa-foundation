@@ -265,9 +265,9 @@ internal sealed class JavaScriptHostFunctions
         }
     }
 
-    // A global the engine already holds read-only cannot be replaced; failing beats a silently missing function. The
-    // function is configurable, as the standard globals are, so an expression's own top-level let, const, class or
-    // function declaration of the name hides it (spec 1223 FR-027: a warning, not an error) instead of failing as a
+    // A global the engine already holds read-only cannot be replaced; failing beats a silently missing function. A
+    // built-in or a namespace root object is configurable, as the standard globals are, so an expression's own top-level
+    // let, const, class or function declaration of the name hides it (spec 1223 FR-027: a warning, not an error) instead of failing as a
     // redeclared global. It stays read-only, so a top-level var of the name, which writes the global, still fails.
     private static void Define(Engine engine, string name, JsValue value)
     {
