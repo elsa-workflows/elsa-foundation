@@ -52,7 +52,11 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
   useEffect(() => {
     request.current?.abort();
     retrySelection.current = null;
-    setState(value => value?.loading ? { ...value, loading: false, error: "" } : value);
+    if (enabled) setState(value => value?.loading ? { ...value, loading: false, error: "" } : value);
+    else {
+      setState(null);
+      setPending(null);
+    }
     return () => request.current?.abort();
   }, [enabled, key, nodeId]);
 
