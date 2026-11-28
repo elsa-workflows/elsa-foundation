@@ -55,6 +55,9 @@ POSTGRES_IMAGE = os.environ.get('UX_CORE_PREVIEW_POSTGRES_IMAGE', 'postgres:17')
 DATABASE = 'ux_core_preview'
 FOUNDATION_HOST = 'Elsa.Foundation.Host.dll'
 KERNEL_HOSTING_FEATURE = 'CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting'
+# The format and definitions markers are independent of the PostgreSQL format-lock rows.
+MARKER_QUERY = ('SELECT "Id", "StoreSchema", "MessageProtocol", "JournalCodec" '
+                'FROM "KernelStoreVersions" WHERE "Id" IN (1, 2) ORDER BY "Id"')
 KERNEL_PACKAGES = (
     'Elsa.ActorFoundation.Contracts', 'Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore',
     'Elsa.Workflows.Runtime.KernelApi', 'Elsa.Workflows.Runtime.KernelHost', 'Elsa.Workflows.Runtime.KernelHosting',
@@ -70,8 +73,9 @@ def inventory(journeys=None):
 
 def kernel_environment(runtime_path, connection=None, *, sqlite_path=None):
     """Use the stock Actor hosting feature with separate, owned Actor and platform stores."""
-    path_settings = {'SqlitePath': str(sqlite_path)} if sqlite_path is not None else {'PostgresConnectionString': connection}
-    kernel_settings = dict(path_settings, Provider='SQLite' if sqlite_path is not None else 'PostgreSQL', Tenant=TENANT)
+    kernel_settings = dict(SqlitePath=str(sqlite_path) if sqlite_path is not None else '',
+                           PostgresConnectionString=connection or '',
+                           Provider='SQLite' if sqlite_path is not None else 'PostgreSQL', Tenant=TENANT)
     return dict({f'{KERNEL_HOSTING_FEATURE}__{key}': value for key, value in kernel_settings.items()},
                 ConnectionStrings__Elsa=f'Data Source={runtime_path}')
 
@@ -88,14 +92,14 @@ def installed_packages(backend, provider, log):
     return hashes
 
 
-def sqlite_shipped_markers():
-    # Derive the expected release from the same source as Workbench. Refuse an unrecognized declaration.
+def shipped_markers(provider):
+    # Derive the expected release from the same source as the host. Refuse an unrecognized declaration.
     source = STORE_VERSIONS.read_text(encoding='utf-8')
 
     def number(pattern):
         match = re.search(pattern, source)
         if not match:
-            raise ValueError('Cannot derive SQLite shipped markers from EfStore.Versions.cs')
+            raise ValueError('Cannot derive shipped markers from EfStore.Versions.cs')
         return int(match.group(1))
 
     def constant(name):
@@ -112,27 +116,36 @@ def sqlite_shipped_markers():
             if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', value):
                 break
             name = value
-        raise ValueError(f'Cannot derive SQLite shipped markers from EfStore.Versions.cs at {name}')
+        raise ValueError(f'Cannot derive shipped markers from EfStore.Versions.cs at {name}')
 
     protocol = number(r'\bStoreFormat RootShipped\s*=>\s*Current with\s*\{\s*MessageProtocol\s*=\s*(\d+)\s*\}\s*;')
     shipped = re.search(
         r'when\s+db\.RequiredFormat\s*==\s*StoreFormat\.RootShipped'
         r'(?:\s*\|\|\s*db\.RequiredFormat\s*==\s*StoreFormat\.\w+)*'
-        r'\s*=>\s*sqlite\s*\?\s*(\w+)\s*:', source)
+        r'\s*=>\s*sqlite\s*\?\s*(\w+)\s*:\s*(\w+)\s*,', source)
     if not shipped:
-        raise ValueError('Cannot derive SQLite shipped markers from the RootShipped provider definition')
+        raise ValueError('Cannot derive shipped markers from the RootShipped provider definition')
+    provider_constant, revision = {'sqlite': ('Sqlite', shipped.group(1)),
+                                   'postgres': ('PostgreSql', shipped.group(2))}[provider]
     return [(1, constant('StoreSchemaVersion'), protocol, constant('JournalCodecVersion')),
-            (2, constant('Sqlite'), constant(shipped.group(1)), 0)]
+            (2, constant(provider_constant), constant(revision), 0)]
 
 
-def sqlite_markers(path, expected):
+def sqlite_markers(path):
     # The owned writer has exited. Read a checkpointed WAL file without creating shared-memory sidecars.
     with closing(sqlite3.connect(path.as_uri() + '?mode=ro&immutable=1', uri=True)) as store:
-        markers = store.execute('SELECT "Id", "StoreSchema", "MessageProtocol", "JournalCodec" '
-                                'FROM "KernelStoreVersions" ORDER BY "Id"').fetchall()
+        return store.execute(MARKER_QUERY).fetchall()
+
+
+def postgres_markers(database):
+    rows = subprocess.check_output(['docker', 'exec', database['container'], 'psql', '-XAt', '-U', 'postgres',
+                                    '-d', database['database'], '-v', 'ON_ERROR_STOP=1', '-c', MARKER_QUERY], text=True)
+    return [tuple(int(value) for value in row.split('|')) for row in rows.splitlines()]
+
+
+def require_markers(provider_name, markers, expected):
     if markers != expected:
-        raise ValueError(f'Expected SQLite shipped markers {expected}, got {markers}')
-    return markers
+        raise ValueError(f'Expected {provider_name} shipped markers {expected}, got {markers}')
 
 
 LABEL = 'elsa.ux-acceptance=core-preview'
@@ -360,17 +373,19 @@ def run(output, journey=None, provider='postgres', history_authority=False, *, i
             env = dict(clean_environment(), DOTNET_PROCESSOR_COUNT='2', HOME=str(data / 'home'), DOTNET_CLI_HOME=str(data / 'home'),
                        **{'Logging__LogLevel__Microsoft.Hosting.Lifetime': 'Information'})
             report['stage'] = provider
+            expected_markers = shipped_markers(provider)
             sqlite_path = data / 'kernel.sqlite' if provider == 'sqlite' else None
             if sqlite_path is None:
                 report['staleContainers'] = sweep_stale_containers()
                 store = postgres(output / 'postgres.log')
             else:
                 store = nullcontext()
-                report['sqlite'] = {'database': sqlite_path.name, 'expectedMarkers': sqlite_shipped_markers()}
+                report['sqlite'] = {'database': sqlite_path.name, 'expectedMarkers': expected_markers}
             with store as database, Stub() as stub:
                 connection = None
                 if sqlite_path is None:
                     report['postgres'] = {key: database[key] for key in ('container', 'image', 'database')}
+                    report['postgres']['expectedMarkers'] = expected_markers
                     connection = database['connection']
                 kernel = kernel_environment(data / 'runtime.sqlite', connection, sqlite_path=sqlite_path)
                 report.update(stage='host-start', backendUrl=backend_url, studioUrl=studio_url, stubUrl=stub.url)
@@ -404,6 +419,8 @@ def run(output, journey=None, provider='postgres', history_authority=False, *, i
                     calls = [item for item in report['stubRequests'] if item['path'] == '/core-preview/k10-order']
                     if calls != [{'method': 'POST', 'path': '/core-preview/k10-order', 'body': 'kernel-outbound'}] * 2:
                         raise ValueError(f'Expected the two kernel workflow requests at the stub, got {calls!r}')
+                if sqlite_path is None:
+                    report['postgres']['markers'] = postgres_markers(database)
             if sqlite_path is None:
                 report['postgres']['containerRemoved'] = container_gone(report['postgres']['container'])
                 if not report['postgres']['containerRemoved']:
@@ -411,7 +428,8 @@ def run(output, journey=None, provider='postgres', history_authority=False, *, i
             else:
                 if processes['backend'].returncode != 0:
                     raise ValueError('The SQLite backend did not stop cleanly before checking the markers')
-                report['sqlite']['markers'] = sqlite_markers(sqlite_path, report['sqlite']['expectedMarkers'])
+                report['sqlite']['markers'] = sqlite_markers(sqlite_path)
+            require_markers(provider_name, report[provider]['markers'], expected_markers)
             report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected)
         report['hostExitCodes'] = {key: process.returncode for key, process in processes.items()}
         report['ownedRootRemoved'] = not data.exists()
