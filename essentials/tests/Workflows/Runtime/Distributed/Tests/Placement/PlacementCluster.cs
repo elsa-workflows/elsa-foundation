@@ -2,7 +2,6 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
-using Elsa.Cluster.Testing.Runtime;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Testing;
 using Microsoft.Extensions.DependencyInjection;

@@ -94,6 +94,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var resource = services.GetRequiredService<ITriggerSourceResourceCommitStore>();
                 Assert.True(resource.SupportsActivatedType("event"));
                 await WriteTriggerAsync(resource, activation, EventId, "event", new { eventName = EventId });
+                await AssertHistoricalIdentityFenceAsync(services, ingress);
                 var accepted = await Source(services).AdmitAsync(signal, token);
                 sourceId = accepted.AdmissionId;
                 Assert.False(accepted.Replayed);
@@ -186,6 +187,40 @@ public sealed partial class KernelStandalonePreparedStartTests
                     (item.OutboxItemId, item.SourceFingerprint, Progress(item).Phase));
                 Assert.Equal((0, 0L), (item.DeliveryAttemptCount, item.DeliveryFencingToken));
                 Assert.Null(item.DeliveringOwnerId);
+            }
+
+            async Task AssertHistoricalIdentityFenceAsync(IServiceProvider prepared, IRuntimeIngressDeliveryStore ingress)
+            {
+                var historicalSignal = Signal("historical-execution-conflict");
+                var source = RuntimeStandaloneIngressSource.BuildOutboxItemId(Persistence, Persistence.Value, EventId,
+                    EventFamily, historicalSignal.SourceKey);
+                var trigger = Assert.IsType<TriggerAggregate>(await prepared.GetRequiredService<IStandaloneTriggerStore>()
+                    .FindAsync(DeliveryScope, EventId, token));
+                var subscription = Assert.Single(trigger.Subscriptions);
+                var executionId = new RuntimeSubscriptionStartIdentity(RuntimeSubscriptionStartIdentity.CurrentVersion,
+                    Persistence, source, subscription.Id).WorkflowExecutionId;
+
+                await using var legacy = OpenHost(neutral: false);
+                await using var operation = await legacy.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                var executions = operation.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
+                await executions.SaveAsync(new(executionId, material.Identity, WorkflowExecutionStatus.Completed, null,
+                    clock.GetUtcNow(), null, null, clock.GetUtcNow(), null, null, Persistence.Value,
+                    new Dictionary<string, string>()), token);
+
+                await AssertConflictAsync("The deterministic target identity was already used before admission.");
+                Assert.NotNull(await executions.FindAsync(executionId, token));
+                Assert.True(await executions.DeleteAsync(executionId, token));
+                Assert.Null(await executions.FindAsync(executionId, token));
+                Assert.True(await executions.IsDeletionTombstonedAsync(executionId, token));
+                await AssertConflictAsync("A saved cohort execution dependency was retired before acceptance.");
+
+                async Task AssertConflictAsync(string reason)
+                {
+                    var failure = await Assert.ThrowsAsync<TriggerOperationException>(() => Source(prepared).AdmitAsync(historicalSignal, token).AsTask());
+                    Assert.Equal("conflict", failure.Code);
+                    Assert.Equal(reason, Assert.IsType<InvalidDataException>(failure.InnerException).Message);
+                    Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, source, token));
+                }
             }
 
             ServiceProvider OpenHost(bool neutral, bool authoredOnly = false, PersistenceScope? relayScope = null)

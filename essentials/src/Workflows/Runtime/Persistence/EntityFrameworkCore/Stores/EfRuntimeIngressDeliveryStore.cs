@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext context, IStandaloneTriggerStore resources,
     IRuntimePostCommitOutboxStore outbox, IWorkflowActivationAuthority slots, IWorkflowExecutableStore executables,
-    IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions,
+    IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore? legacyExecutions,
     IWorkflowExecutableRootWriteLeaseManager leases, IPersistenceAccessContextAccessor access, TimeProvider time,
     NativeIngressTargetEvidence? evidence = null, IRuntimeModelExecutionReader? modelInputs = null,
     IRecurringTriggerScheduleStore? schedules = null, IEnumerable<IStimulusDeliveryIntentAdapter>? stimulusAdapters = null,
@@ -66,8 +66,11 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                 evidence.PhysicalExecutions is not EfWorkflowExecutionStateStore proofExecutions || !ReferenceEquals(proofExecutions.Context, context))
                 return false;
             var scope = access.Current.RequireScope();
-            return sourceStore.Uses(context, scope) && authority.AccessContext.RequireScope() == scope &&
-                ((IStimulusDeliveryStore)sourceStore).CanRetainExecutables(outbox, executables, references, executions);
+            if (!sourceStore.Uses(context, scope) || authority.AccessContext.RequireScope() != scope) return false;
+            return sourceStore.PreparedStandaloneOnly
+                ? sourceStore.CanRetainPreparedExecutables(executables, references)
+                : legacyExecutions is not null &&
+                    ((IStimulusDeliveryStore)sourceStore).CanRetainExecutables(outbox, executables, references, legacyExecutions);
         }
     }
 
@@ -215,10 +218,14 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         var actual = await executables.FindMaterialAsync(recipient.Material.ArtifactId, token) ??
             throw new InvalidDataException("The accepted target material was removed.");
         RuntimeIngressAdmissionValidation.CheckMaterial(recipient, actual);
-        await ((EfRuntimePostCommitOutboxStore)outbox).FenceExecutionDependencyAsync(scope.Value, recipient.StartIdentity.WorkflowExecutionId, token);
-        if (await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, token) is not null)
-            throw new InvalidDataException("The deterministic target identity was already used before admission.");
-        var modelId = EfRuntimeOperationalStoreSupport.CompositeId(scope.Value, recipient.StartIdentity.WorkflowExecutionId);
+        var executionId = recipient.StartIdentity.WorkflowExecutionId;
+        await ((EfRuntimePostCommitOutboxStore)outbox).FenceExecutionDependencyAsync(scope.Value, executionId, token);
+        // Any old row at this exact physical identity blocks prepared admission, even if its payload cannot be read.
+        var used = PreparedStandaloneOnly
+            ? await context.WorkflowExecutionStates.AnyAsync(row => row.Id == EfRuntimeOperationalStoreSupport.ExecutionStateRowId(scope.Value, executionId), token)
+            : await LegacyExecutions.FindAsync(executionId, token) is not null;
+        if (used) throw new InvalidDataException("The deterministic target identity was already used before admission.");
+        var modelId = EfRuntimeOperationalStoreSupport.CompositeId(scope.Value, executionId);
         if (await context.Set<RuntimeModelExecutionEntity>().AnyAsync(row => row.Id == modelId, token))
             throw new InvalidDataException("The deterministic target identity already belongs to a model execution.");
     }
@@ -375,7 +382,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                 var current = Read(row, scope, id);
                 if (claim is not null && current.Intent is { } intent)
                 {
-                    var publisher = await executions.FindAsync(intent.WorkflowExecutionId, cancellationToken) ??
+                    var publisher = await LegacyExecutions.FindAsync(intent.WorkflowExecutionId, cancellationToken) ??
                         throw new InvalidDataException("The physical workflow publisher is missing.");
                     RuntimeIngressAdmissionValidation.CheckPublisher(current, publisher, scope);
                 }
@@ -406,6 +413,9 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
     }
 
     private bool PreparedStandaloneOnly => outbox is EfRuntimePostCommitOutboxStore { PreparedStandaloneOnly: true };
+
+    private IWorkflowExecutionStateStore LegacyExecutions => legacyExecutions ??
+        throw new NotSupportedException("This Runtime owner does not provide legacy workflow execution access.");
 
     private RuntimePostCommitOutboxItem Read(RuntimePostCommitOutboxEntity row, PersistenceScope scope, string id)
     {

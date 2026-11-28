@@ -2832,7 +2832,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             int attemptNumber;
             string? inlineTenant;
-            string? rootReference;
+            FoundationDispatchHeader? root;
             lock (slot)
             {
                 if (!JobMayRun(generation) || _releasing || PoisonPending(slot) || slot.PendingJobRestrictions != 0 ||
@@ -2847,10 +2847,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (ticket.JobEntries < int.MaxValue) ticket.JobEntries++;
                 attemptNumber = ticket.JobEntries;
                 inlineTenant = slot.CurrentRow?.FoundationInlineBirth?.Tenant;
-                rootReference = slot.CurrentRow?.FoundationDispatchHeader?.Reference;
+                root = slot.CurrentRow?.FoundationDispatchHeader;
             }
             var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber, job.Deadline)
-                { FoundationInlineTenant = inlineTenant, FoundationRootReference = rootReference };
+                { FoundationInlineTenant = inlineTenant, FoundationRoot = root };
             return _type.ExecuteJobAsync(job.Model, context, token);
         }
         async Task ExecuteAndPublish(bool scheduled)
@@ -4381,7 +4381,7 @@ internal sealed record JobDeadline([property: System.Text.Json.Serialization.Jso
 internal sealed class JobContext(InstanceRef instance, string key, string? arguments, long creation, int attemptNumber, long? deadline) : IJob
 {
     internal string? FoundationInlineTenant { get; init; }
-    internal string? FoundationRootReference { get; init; }
+    internal FoundationDispatchHeader? FoundationRoot { get; init; }
     public InstanceRef Instance { get; } = instance;
     public string Key { get; } = key;
     public string? Arguments { get; } = arguments;

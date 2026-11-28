@@ -78,7 +78,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore : IRuntimeIngressTra
                 throw new TriggerOperationException("conflict", "The current resource or deletion tombstone is unavailable.");
             if (request.Kind == RuntimeIngressControlKind.RetryRecipients && current.Intent is { } intent)
             {
-                var publisher = await executions.FindAsync(intent.WorkflowExecutionId, token) ?? throw new InvalidDataException("The physical workflow publisher is missing.");
+                var publisher = await LegacyExecutions.FindAsync(intent.WorkflowExecutionId, token) ?? throw new InvalidDataException("The physical workflow publisher is missing.");
                 RuntimeIngressAdmissionValidation.CheckPublisher(current, publisher, request.Scope.Persistence);
             }
             result = RuntimeIngressControlRules.Apply(current, request, time.GetUtcNow());

@@ -1,8 +1,10 @@
+using System.Net.Http.Headers;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
+using Elsa.Connections.Http;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Connections.Workflows.Services;
@@ -18,7 +20,7 @@ internal sealed class HttpConnectionApplicator(
     IWorkflowExecutionPartitionAccessor partitionAccessor,
     IRuntimeSecretMask secretMask) : IHttpConnectionApplicator
 {
-    private readonly IReadOnlyList<IHttpRequestAuthenticator> _authenticators = authenticators.ToArray();
+    private readonly BoundHttpConnection _connection = new(resolver, authenticators, schemes);
 
     public async ValueTask ApplyAsync(
         HttpRequestMessage request,
@@ -37,12 +39,38 @@ internal sealed class HttpConnectionApplicator(
                 "A bound connection reference has no name.");
         }
 
-        var tenantId = partitionAccessor.Current.Value;
+        await _connection.ApplyAsync(request, connection.Name, connection.Type ?? ConnectionTypeNames.Http,
+            partitionAccessor.Current.Value, secretMask, context.InvocationId, actorJob: false, cancellationToken);
+    }
+}
+
+internal sealed class ActorHttpConnectionApplicator(
+    IConnectionResolver resolver,
+    IEnumerable<IHttpRequestAuthenticator> authenticators,
+    IAuthenticationSchemeRegistry schemes) : IWorkflowHttpConnectionApplier
+{
+    private readonly BoundHttpConnection _connection = new(resolver, authenticators, schemes);
+
+    public ValueTask ApplyAsync(HttpRequestMessage request, string name, string tenantId, IRuntimeSecretMask mask,
+        string executionId, CancellationToken cancellationToken) =>
+        _connection.ApplyAsync(request, name, ConnectionTypeNames.Http, tenantId, mask, executionId, actorJob: true, cancellationToken);
+}
+
+internal sealed class BoundHttpConnection(
+    IConnectionResolver resolver,
+    IEnumerable<IHttpRequestAuthenticator> authenticators,
+    IAuthenticationSchemeRegistry schemes)
+{
+    private readonly IReadOnlyList<IHttpRequestAuthenticator> _authenticators = authenticators.ToArray();
+
+    internal async ValueTask ApplyAsync(HttpRequestMessage request, string name, string type, string tenantId,
+        IRuntimeSecretMask secretMask, string executionId, bool actorJob, CancellationToken cancellationToken)
+    {
         await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest
         {
             TenantId = tenantId,
-            Name = connection.Name,
-            RequiredType = connection.Type ?? ConnectionTypeNames.Http,
+            Name = name,
+            RequiredType = type,
             Owner = ConnectionOwners.Tenant
         }, cancellationToken);
 
@@ -56,20 +84,51 @@ internal sealed class HttpConnectionApplicator(
                 $"No HTTP authenticator is registered for scheme '{resolved.AuthScheme}'.");
         }
 
-        if (schemes.Find(resolved.AuthScheme)?.Descriptor.HasRefreshableState == true)
+        var scheme = schemes.Find(resolved.AuthScheme)?.Descriptor;
+        var originalDestination = request.RequestUri;
+        if (actorJob)
+        {
+            if (!string.Equals(resolved.TenantId, tenantId, StringComparison.Ordinal) ||
+                !string.Equals(resolved.Owner, ConnectionOwners.Tenant, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(resolved.TypeName, ConnectionTypeNames.Http, StringComparison.OrdinalIgnoreCase))
+                throw new ConnectionUnavailableException(name, ConnectionFaultCodes.Unavailable,
+                    "The resolved HTTP Connection does not match the admitted tenant, owner and type.");
+            if (scheme is null || scheme.HasRefreshableState)
+                throw new ConnectionUnavailableException(resolved.Name, ConnectionFaultCodes.Unavailable,
+                    "The Actor HTTP job requires a registered authentication scheme with no refreshable state.");
+            if (request.Headers.Contains("Host"))
+                throw new InvalidOperationException("A bound Actor HTTP request cannot override its destination host.");
+            HttpConnectionCredentials.EnsureHostAllowed(request, resolved);
+        }
+        else if (scheme?.HasRefreshableState == true)
+        {
             request.Options.Set(HttpConnectionApplyOptions.HasRefreshableState, true);
+        }
 
-        var masked = new MaskingResolvedConnection(resolved, secretMask, context.InvocationId);
+        var masked = new MaskingResolvedConnection(resolved, secretMask, executionId);
         await authenticator.ApplyAsync(request, masked, cancellationToken);
-        RegisterAppliedValues(request, secretMask, context.InvocationId, resolved.Name);
+        if (actorJob)
+        {
+            if (request.Headers.Contains("Host") ||
+                request.RequestUri?.GetLeftPart(UriPartial.Authority) != originalDestination?.GetLeftPart(UriPartial.Authority))
+                throw new InvalidOperationException("The HTTP authenticator changed the bound request destination.");
+            HttpConnectionCredentials.EnsureHostAllowed(request, resolved);
+        }
+        RegisterAppliedValues(request, secretMask, executionId, resolved.Name, maskAuthorizationParameter: actorJob);
     }
 
-    private static void RegisterAppliedValues(HttpRequestMessage request, IRuntimeSecretMask mask, string activityExecutionId, string connectionName)
+    private static void RegisterAppliedValues(HttpRequestMessage request, IRuntimeSecretMask mask, string activityExecutionId,
+        string connectionName, bool maskAuthorizationParameter)
     {
         if (request.Headers.TryGetValues("Authorization", out var authorization))
         {
             foreach (var value in authorization)
+            {
                 mask.Register(activityExecutionId, $"{connectionName}:authorization", value);
+                if (maskAuthorizationParameter && AuthenticationHeaderValue.TryParse(value, out var header) &&
+                    header.Parameter is { Length: > 0 } parameter)
+                    mask.Register(activityExecutionId, $"{connectionName}:authorization", parameter);
+            }
         }
 
         if (request.RequestUri?.Query is { Length: > 1 } query)

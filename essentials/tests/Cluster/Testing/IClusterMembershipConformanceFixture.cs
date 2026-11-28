@@ -66,8 +66,7 @@ public interface IConformanceMember
     IClusterMembership Membership { get; }
 
     /// <summary>
-    /// The member's clock. Clocks of different members may be offset from each other. The runtime tier runs the
-    /// distributed runtime on it, whose identities need a clock that reads after 2020-01-01.
+    /// The member's clock. Clocks of different members may be offset from each other.
     /// </summary>
     TimeProvider Clock { get; }
 

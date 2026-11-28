@@ -3,7 +3,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Cluster.Testing.Runtime;
+namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>Executables and commands for runtime conformance and placement tests.</summary>
 public static class RuntimeWork

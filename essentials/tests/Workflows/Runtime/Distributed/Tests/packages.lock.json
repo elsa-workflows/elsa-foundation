@@ -262,9 +262,6 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
-          "Elsa.Serialization.SystemText": "[4.0.0-dev, )",
-          "Elsa.Serialization.Testing": "[1.0.0, )",
-          "Elsa.Workflows.Runtime.Distributed": "[4.0.0-dev, )",
           "Xunit.SkippableFact": "[1.5.23, )",
           "xunit": "[2.9.3, )"
         }

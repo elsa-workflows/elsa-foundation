@@ -149,6 +149,7 @@ public class ActivityContext
         => (Instance, FrameId, NodeId, Attempt, CancellationToken, OperationKey, RecoverySource, IterationPath, EffectKey) =
             (instance, frame, node, attempt, cancellationToken, operationKey ?? frame, recoverySource, iterationPath, effectKey);
 
+    internal string? JobTenant { get; init; }
     internal string OperationKey { get; }
     internal string? RecoverySource { get; }
     internal TextWriter? ConsoleOutput { get; init; }
@@ -218,6 +219,15 @@ public sealed class NativeHttpOptions
 
     /// <summary>The credential headers for a Connection name, resolved when the job runs.</summary>
     public Func<string, CancellationToken, ValueTask<IReadOnlyDictionary<string, string>>>? Connection { get; init; }
+
+    /// <summary>Applies a bound Connection to the outgoing request in the current job's admitted tenant.</summary>
+    public Func<HttpRequestMessage, string, string?, string, CancellationToken, ValueTask<INativeHttpConnectionMask?>>? ApplyConnection { get; init; }
+}
+
+/// <summary>Masks credential material from the resulting durable activity data for one HTTP attempt.</summary>
+public interface INativeHttpConnectionMask : IDisposable
+{
+    string Mask(string value);
 }
 
 public sealed class StartContext<TTrigger> : ActivityContext
