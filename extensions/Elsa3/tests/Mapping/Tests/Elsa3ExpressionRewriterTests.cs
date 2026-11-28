@@ -231,8 +231,9 @@ public sealed class Elsa3ExpressionRewriterTests
 
     /// <summary>
     /// #6230: a member change is told to go, an assignment to the value itself to go to a local copy, and the latter also
-    /// names what changes the instance value where the script runs: in a Run JavaScript body the workflowState setter,
-    /// elsewhere a Correlate activity for the correlation ID; the instance ID has no route.
+    /// names what changes the instance value where the script runs: in a non-reusable Run JavaScript body the
+    /// workflowState setter (setCorrelationId, setWorkflowInstanceName), elsewhere a Correlate activity for the
+    /// correlation ID; the instance ID has no route.
     /// </summary>
     [Theory]
     [InlineData("getCorrelationId().x = 1", Elsa3JavaScriptMode.Script, false, "Remove the change, or keep the member on a local object of the script's own, ")]

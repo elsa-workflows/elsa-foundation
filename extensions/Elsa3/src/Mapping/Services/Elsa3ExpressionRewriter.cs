@@ -3490,7 +3490,7 @@ public sealed class Elsa3ExpressionRewriter(
         /// <summary>
         /// Whether <paramref name="call"/> reads workflow instance metadata through an Elsa 3 built-in the conversion keeps:
         /// <c>getCorrelationId</c> and <c>getWorkflowInstanceId</c> (read as <c>args.workflowCorrelationId</c> and
-        /// <c>args.workflowInstanceId</c>), and in a Run JavaScript body the <c>workflowState</c> getters, which take over
+        /// <c>args.workflowInstanceId</c>), and in a non-reusable Run JavaScript body the <c>workflowState</c> getters, which take over
         /// <c>getCorrelationId</c> there (<c>workflowState.getCorrelationId()</c>). Scripts only read the value, so a
         /// change through it is refused (#6230). A built-in whose name a variable's or input's generated getter shares is
         /// ambiguous, and a function the script declares in a block is its own; both stay reported as such.
@@ -3502,14 +3502,14 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// The refusal of a change through the value <paramref name="reader"/> returns (text or null): a member change, which
-        /// Elsa 3 ignored on text and Elsa 4's strict mode throws on, or an assignment to the value itself, which failed in
+        /// Elsa 3 ignored or failed on and Elsa 4's strict mode throws on, or an assignment to the value itself, which failed in
         /// Elsa 3 and which the conversion does not reproduce.
         /// </summary>
         private Elsa3ExpressionRewriteIssue InstanceValueChange(string reader, bool changesMember) => changesMember
             ? new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                 $"JavaScript sets a member of the value '{reader}()' returns. The value is text (or null): Elsa 3 ignored the change " +
-                "(or failed on null), and Elsa 4 runs scripts in strict mode, where it throws.",
+                "or failed on it, and Elsa 4 runs scripts in strict mode, where it throws.",
                 "Remove the change, or keep the member on a local object of the script's own, in the Elsa 3 workflow before import.")
             : new(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
