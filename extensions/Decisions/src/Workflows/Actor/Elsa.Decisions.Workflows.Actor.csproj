@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Authorized authoring and execution of exactly published decisions in Actor Foundation workflows.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <ProjectReference Include="../../Core/Elsa.Decisions.Core.csproj" />
+    <ProjectReference Include="../../Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj" />
+  </ItemGroup>
+</Project>

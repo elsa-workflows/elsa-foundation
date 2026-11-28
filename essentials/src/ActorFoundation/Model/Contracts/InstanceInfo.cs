@@ -20,4 +20,11 @@ public sealed record InstanceInfo(ActorRef Ref, string Tenant, string Model, str
     /// <summary>The exact isolated authoring scope when the workflow host admitted a Test Run.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? TestScopeId { get; init; }
+
+    /// <summary>The authenticated subject recorded by the start boundary, in its ordinary application tenant.</summary>
+    [JsonIgnore]
+    public WorkflowExecutionSubject? Subject { get; init; }
 }
+
+/// <summary>Authenticated execution attribution for model operations that must recheck a current grant.</summary>
+public sealed record WorkflowExecutionSubject(string Tenant, string SubjectId);

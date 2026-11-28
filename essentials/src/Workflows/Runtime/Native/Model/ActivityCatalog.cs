@@ -54,6 +54,7 @@ public static class NativeActivityCatalog
         ["Elsa.Activities.Primitives.Activities.Fault"] = typeof(Fault),
         ["Elsa.Activities.Primitives.Activities.Inline"] = typeof(Inline),
         ["Elsa.Activities.Scripting.Activities.RunJavaScript"] = typeof(RunJavaScript),
+        [EvaluateDecision.ActivityType] = typeof(EvaluateDecision),
         ["Elsa.Activities.Primitives.Activities.Event"] = typeof(Event),
         ["Elsa.Activities.Primitives.Activities.PublishEvent"] = typeof(PublishEvent),
         ["Elsa.Activities.Scheduling.Activities.Delay"] = typeof(Delay),
@@ -90,7 +91,6 @@ public static class NativeActivityCatalog
         "Elsa.Activities.Primitives.Activities.CreateUserTask",
         "Elsa.Activities.Primitives.Activities.ReadLine",
         "Elsa.Agent.Review.Activities.HumanReview",
-        "Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision",
         "Elsa.Etl.Workflows.Runtime.Activities.RunEtl",
         "Elsa.Rules.Workflows.Runtime.Activities.RunRules",
     ];

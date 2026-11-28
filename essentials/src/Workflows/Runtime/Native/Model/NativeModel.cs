@@ -104,6 +104,8 @@ public class NativeExecutionOptions
     public TextWriter? ConsoleOutput { get; init; }
     /// <summary>The host's script engine for RunJavaScript; without it a script faults.</summary>
     public INativeScripts? Scripts { get; init; }
+    /// <summary>The shell's optional evaluator of exactly pinned authored decisions.</summary>
+    public INativeDecisions? Decisions { get; init; }
     /// <summary>The host's evaluator for host expressions (JavaScript, Liquid); without it such a binding faults its activation.</summary>
     public INativeExpressions? Expressions { get; init; }
 
@@ -546,6 +548,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         return new(turn.Actor, frame.Id, frame.Node, frame.Attempt, cancellationToken, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path))
         {
             Scripts = options.Scripts,
+            Decisions = options.Decisions,
+            ExactDecisionSource = options.Decisions is not null && _wf.Nodes[frame.Node].Type == typeof(EvaluateDecision)
+                ? turn.ExactDecisionSource : null,
             ConsoleOutput = options.ConsoleOutput
         };
     }

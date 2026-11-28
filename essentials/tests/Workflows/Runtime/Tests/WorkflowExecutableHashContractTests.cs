@@ -85,6 +85,41 @@ public sealed class WorkflowExecutableHashContractTests
         Assert.False(_hasher.MatchesHash(changed));
     }
 
+    [Fact]
+    public void Behavioral_decision_pins_distinguish_frozen_versions_and_preserve_historical_identity()
+    {
+        var legacy = LegacyWorkflowHashFixture.Load();
+        var old = legacy.RootActivity;
+        ExecutableNode WithPin(string key, string pin, bool includeHistorical = false)
+        {
+            var metadata = new Dictionary<string, string>(old.Metadata, StringComparer.Ordinal) { [key] = pin };
+            if (includeHistorical)
+                metadata.Add(ExecutableDecisionPinMetadata.HistoricalKey, "historical");
+            return new ExecutableNode(old.ExecutableNodeId, old.AuthoredActivityId, old.ActivityType, old.ActivityTypeVersion,
+                old.Descriptor, old.InputBindings, old.OutputCaptures, metadata, childSlots: old.ChildSlots, structure: old.Structure,
+                activityContract: old.ActivityContract, intrinsicKind: old.IntrinsicKind, intrinsicVariable: old.IntrinsicVariable,
+                executionPlacement: old.ExecutionPlacement);
+        }
+
+        var historicalNode = WithPin(ExecutableDecisionPinMetadata.HistoricalKey, "version-one");
+        Assert.Equal(Hash(legacy), Hash(LegacyWorkflowHashFixture.WithRoot(legacy, historicalNode)));
+        Assert.Equal(_hasher.ComputeHash(old), _hasher.ComputeHash(historicalNode));
+        Assert.True(_hasher.MatchesHash(LegacyWorkflowHashFixture.WithRoot(legacy, historicalNode)));
+
+        var firstNode = WithPin(ExecutableDecisionPinMetadata.BehavioralKey, "version-one");
+        var secondNode = WithPin(ExecutableDecisionPinMetadata.BehavioralKey, "version-two");
+        var first = LegacyWorkflowHashFixture.WithRoot(legacy, firstNode, _hasher);
+        var second = LegacyWorkflowHashFixture.WithRoot(legacy, secondNode, _hasher);
+        Assert.NotEqual(first.Identity.ArtifactHash, second.Identity.ArtifactHash);
+        Assert.NotEqual(_hasher.ComputeHash(firstNode), _hasher.ComputeHash(secondNode));
+        Assert.True(_hasher.MatchesHash(first));
+        Assert.True(_hasher.MatchesHash(second));
+        Assert.False(_hasher.MatchesHash(LegacyWorkflowHashFixture.WithRoot(first, secondNode)));
+        Assert.False(_hasher.MatchesHash(LegacyWorkflowHashFixture.WithRoot(first, historicalNode)));
+        Assert.False(_hasher.MatchesHash(LegacyWorkflowHashFixture.WithRoot(
+            first, WithPin(ExecutableDecisionPinMetadata.BehavioralKey, "version-one", includeHistorical: true))));
+    }
+
     [Theory]
     [InlineData("alias")]
     [InlineData("collection")]
