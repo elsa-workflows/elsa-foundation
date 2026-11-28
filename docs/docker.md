@@ -6,7 +6,7 @@
 > build)? See the [Docker Hub quickstart](docker-hub-quickstart.md), which also covers supplying a
 > custom `shells.json` and how Studio feature toggles are persisted.
 
-For a server composed from NuGet packages, see [Foundation server image profiles](../docker/profiles/README.md) for Essentials, Elsa 3 import, Full and custom image builds.
+For a server composed from NuGet packages, see [Foundation server image profiles](../docker/profiles/README.md) for Essentials, Elsa 3 import and custom image builds. Existing classic Full deployments use the [archived Full profile](../docker/profiles/full-compatibility.md).
 
 | File | What it is |
 |---|---|
