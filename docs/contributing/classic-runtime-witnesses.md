@@ -50,3 +50,19 @@ Current source keeps the typed activity and state contracts, schedule metadata,
 Event wire and source-registration checks, and scope-name behavior. Actor
 Foundation qualifies the supported activity execution paths against its own
 engine, stores and host.
+
+## Classic runtime internals and collectible material
+
+Use source revision `b5e76081ff405049f335d6b222de18ed96ae8966` for the
+classic run loop, coalesced checkpoint, scheduler, historical inspection,
+runtime alteration, stimulus router and opt-in executable collector tests.
+Run their original project from that source:
+
+```sh
+dotnet test essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true
+```
+
+The retained suite verifies contracts and publication services through their
+current owners. Physical provider and Actor cases continue to exercise
+publication pins, History, prepared starts and protected material across restart.

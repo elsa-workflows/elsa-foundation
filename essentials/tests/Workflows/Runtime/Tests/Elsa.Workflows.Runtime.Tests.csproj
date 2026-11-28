@@ -13,17 +13,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Native history stories use public activity callbacks while internal history stays in its own test assembly. -->
-    <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
-    <!-- Authoring composition exercises the real event publisher and startup aggregation. -->
+    <!-- Keep compiling the documented independent Standalone Trigger SDK consumer. -->
     <ProjectReference Include="../Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj" />
     <ProjectReference Include="../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
-    <ProjectReference Include="../../../../src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
-    <!-- Qualifies the public publication feature with internal native history; no cross-domain test friendship. -->
-    <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/Api/StandaloneTriggers/Elsa.Workflows.Runtime.Api.StandaloneTriggers.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
