@@ -10,6 +10,8 @@
       "essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj",
       "essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj",
       "essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj",
+      "essentials/src/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj",
+      "essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
       "essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj",
       "essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
       "essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",

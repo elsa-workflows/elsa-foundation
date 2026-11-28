@@ -228,7 +228,7 @@ JOURNEY_PROJECTS = {journey: SUPPLEMENT_PROJECTS.get(journey, PROJECTS) for jour
 SUBSET_COMPOSITIONS = {
     'runtime-api-subset': {
         'journeys': {'runtime-only API composition and combined return'},
-        'remove': ['ActivitiesDesignApi', 'ActivitiesGraphDesign', 'AgentApi', 'AgentDesign',
+        'remove': ['ActivitiesDesignApi', 'ActivitiesDispatchWorkflowDesign', 'ActivitiesGraphDesign', 'AgentApi', 'AgentDesign',
                    'ConnectionsApi', 'SecretsApi', 'WorkflowsDashboardRetained', 'WorkflowsDesignApi'],
     },
 }
