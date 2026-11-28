@@ -49,6 +49,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="../../../../extensions/Agent/src/OpenAI/Elsa.Agent.OpenAI.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj" />
     <ProjectReference Include="../../../../extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
