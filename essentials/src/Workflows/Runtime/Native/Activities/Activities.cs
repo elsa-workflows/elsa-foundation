@@ -6,14 +6,14 @@ namespace Kernel.Native;
 
 public sealed class WriteLine : Activity
 {
-    /// <summary>Where the lines go. Null in measurements, so that the console is not what is measured.</summary>
+    /// <summary>The fallback writer for standalone and prototype models without configured console output.</summary>
     public static TextWriter? Out { get; set; }
 
     [Input] public string? Text { get; set; }
 
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
-        Out?.WriteLine(Text);
+        (context.ConsoleOutput ?? Out)?.WriteLine(Text);
         return new(Complete());
     }
 }
@@ -33,7 +33,8 @@ public sealed class WriteLines : Activity
         if (Lines is not JsonArray lines || lines.Any(line => line is not (null or JsonValue)))
             return new(Fault("writelines.lines.invalid", "WriteLines takes a list of strings, numbers or Booleans."));
         var text = lines.Select(line => line is null ? "" : line.GetValueKind() == System.Text.Json.JsonValueKind.String ? line.GetValue<string>() : line.ToJsonString()).ToList();
-        foreach (var line in text) WriteLine.Out?.WriteLine(line);
+        var output = context.ConsoleOutput ?? WriteLine.Out;
+        foreach (var line in text) output?.WriteLine(line);
         return new(Complete());
     }
 }

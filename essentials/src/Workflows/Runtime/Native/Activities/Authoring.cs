@@ -148,6 +148,7 @@ public class ActivityContext
 
     internal string OperationKey { get; }
     internal string? RecoverySource { get; }
+    internal TextWriter? ConsoleOutput { get; init; }
     public ActorRef Instance { get; }
     public string FrameId { get; }
     public string NodeId { get; }

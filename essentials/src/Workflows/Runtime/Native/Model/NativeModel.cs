@@ -97,6 +97,8 @@ public class NativeExecutionOptions
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
     /// <summary>The host's outbound HTTP for SendHttpRequest's job; without it the activity faults.</summary>
     public NativeHttpOptions? Http { get; init; }
+    /// <summary>The console stream for WriteLine and WriteLines in this model.</summary>
+    public TextWriter? ConsoleOutput { get; init; }
     /// <summary>The host's script engine for RunJavaScript; without it a script faults.</summary>
     public INativeScripts? Scripts { get; init; }
     /// <summary>The host's evaluator for host expressions (JavaScript, Liquid); without it such a binding faults its activation.</summary>
@@ -535,7 +537,11 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     private ActivityContext Context(Frame frame)
     {
         var path = IterationPath(frame);
-        return new(turn.Actor, frame.Id, frame.Node, frame.Attempt, cancellationToken, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path)) { Scripts = options.Scripts };
+        return new(turn.Actor, frame.Id, frame.Node, frame.Attempt, cancellationToken, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path))
+        {
+            Scripts = options.Scripts,
+            ConsoleOutput = options.ConsoleOutput
+        };
     }
 
     // ---- the effect key (round 5 C) ----------------------------------------------------------------------------------
