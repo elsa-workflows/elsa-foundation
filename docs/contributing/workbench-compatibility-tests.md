@@ -230,6 +230,34 @@ matching Workbench with `ActivitiesDispatchWorkflowRuntime` and
 See the [Actor child execution witness](../../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs)
 for current source.
 
+## Classic workflow REST journeys
+
+The [backend source test sweep](../../e2e-tests/README.md#running-these-tests--read-this-agents-included)
+identifies the scripts that exercise classic workflow REST contracts. Replay those scripts from the
+`workbench-classic-default` checkout at `18a16dee878106ac525aa9a861d851a200e43c55`. Build its
+Workbench and use its [backend instructions](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/e2e-tests/README.md)
+for each script's configuration and arguments. Use a disposable database.
+
+From that checkout, start your own classic Workbench on a free port for the single-server cases.
+The two restart witnesses below launch and stop their own matching Workbench processes.
+
+```sh
+(
+  cd "$compatibility_root/workbench-classic-default"
+  pwsh -NoProfile -File e2e-tests/events/Test-Event.ps1 -BaseUrl "$classic_base_url"
+  pwsh -NoProfile -File e2e-tests/logging/Test-DiagnosticsSettings.ps1 -BaseUrl "$classic_base_url"
+  pwsh -NoProfile -File e2e-tests/logging/Test-ValueCapture.ps1 -BaseUrl "$classic_base_url"
+  pwsh -NoProfile -File e2e-tests/runtime-alterations/Test-AlterationPlans.ps1 -BaseUrl "$classic_base_url"
+  pwsh -NoProfile -File e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1
+  pwsh -NoProfile -File e2e-tests/durability/Test-RestartRecovery.ps1
+)
+```
+
+The same revision contains the classic stimulus callers, version pinning, scheduler and incident
+diagnostics, activity-draft execution, executed user tasks, and the classic BPMN and ETL REST
+witnesses. Use the archived [activity data selection instructions](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/e2e-tests/activity-data-selection/README.md)
+for the value-capture fixture and its evidence guards.
+
 ## Classic HTTP activity execution
 
 The classic HTTP activity tests exercise the original activate, checkpoint and
