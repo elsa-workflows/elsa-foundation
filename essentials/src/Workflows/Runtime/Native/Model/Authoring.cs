@@ -99,6 +99,9 @@ public sealed record GraphVariable(string Name, Binding? Value = null);
 /// </summary>
 public sealed record GraphOutput(string Name, Binding? Value = null, bool Required = false);
 
+/// <summary>The value contract pinned on a Set Output assignment in a placed reusable activity.</summary>
+public sealed record GraphOutputAssignment(string TypeAlias, string CollectionKind, bool IsNullable);
+
 /// <summary>A flowchart connection from a source's outcome to a target.</summary>
 public sealed record Connection(string Source, string Target, string Outcome = "Done");
 
@@ -116,6 +119,8 @@ public sealed class Node(string id, Type type)
     public List<SwitchCase> Cases { get; } = [];
     /// <summary>For a GraphActivity: what it declares.</summary>
     public GraphBoundary? Graph { get; set; }
+    /// <summary>The pinned contract on an authored reusable activity's Set Output node.</summary>
+    public GraphOutputAssignment? OutputAssignment { get; set; }
     /// <summary>Output captures: variable name to a path in the result ("" is the whole result).</summary>
     public Dictionary<string, string> Captures { get; } = new(StringComparer.Ordinal);
     /// <summary>The named child slot this node fills in its parent, where the parent has slots (If: Then, Else).</summary>
@@ -157,7 +162,15 @@ public sealed class Workflow
             if (node.Type == typeof(GraphActivity)) GraphActivity.Validate(node, id);
             else if (node.Graph is not null) throw new InvalidOperationException($"Node '{node.Id}' in '{id}' declares a boundary and is no GraphActivity.");
             if (node.Type == typeof(Complete)) GraphActivity.ValidateExit(node, Boundary(parent), id);
-            if (node.Type == typeof(SetOutput)) GraphActivity.ValidateOutput(node, Boundary(parent), id);
+            if (node.Type == typeof(SetOutput))
+            {
+                var boundary = Boundary(parent);
+                GraphActivity.ValidateOutput(node, boundary, id);
+                if (node.OutputAssignment is not null && boundary is null)
+                    throw new InvalidOperationException($"Set Output '{node.Id}' in '{id}' needs an enclosing GraphActivity to assign a pinned output.");
+            }
+            else if (node.OutputAssignment is not null)
+                throw new InvalidOperationException($"Node '{node.Id}' in '{id}' declares an output assignment and is no Set Output.");
             if (node.Type == typeof(Finish) && !(node.Inputs.GetValueOrDefault("Outcome") is LiteralBinding { Value: JsonValue outcome } && outcome.TryGetValue<string>(out var named) && !string.IsNullOrWhiteSpace(named)))
                 throw new InvalidOperationException($"Finish '{node.Id}' in '{id}' needs a literal outcome.");
         }

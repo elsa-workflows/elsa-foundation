@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests;
 
-/// <summary>Two physical databases in one disposable PostgreSQL container for shared and split layout tests.</summary>
+/// <summary>Disposable PostgreSQL databases for the Runtime resource, diagnostics, and dedicated Actor store.</summary>
 public sealed class PostgreSqlTargetFixture : IAsyncLifetime
 {
     public const string CollectionName = "shared-persistence-postgresql";
@@ -19,6 +19,7 @@ public sealed class PostgreSqlTargetFixture : IAsyncLifetime
     public string? SkipReason { get; private set; }
     public string PrimaryConnectionString { get; private set; } = null!;
     public string DiagnosticsConnectionString { get; private set; } = null!;
+    public string ActorConnectionString { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
@@ -40,6 +41,7 @@ public sealed class PostgreSqlTargetFixture : IAsyncLifetime
         var adminConnection = _container.GetConnectionString();
         PrimaryConnectionString = await CreateDatabaseAsync(adminConnection, "primary");
         DiagnosticsConnectionString = await CreateDatabaseAsync(adminConnection, "diagnostics");
+        ActorConnectionString = await CreateDatabaseAsync(adminConnection, "actors");
         IsAvailable = true;
     }
 

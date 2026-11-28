@@ -497,8 +497,11 @@ public static class NativeExecutableMapper
                     node.Inputs["Value"] = Input(WorkflowIntrinsicInputKeys.Value);
                     break;
                 case WorkflowIntrinsicKind.SetOutput:
-                    node.Inputs["Name"] = LiteralText(WorkflowIntrinsicInputKeys.Name);
-                    node.Inputs["Value"] = Input(WorkflowIntrinsicInputKeys.Value);
+                    var outputName = LiteralText(WorkflowIntrinsicInputKeys.Name);
+                    node.Inputs[nameof(Native.SetOutput.Name)] = source.Descriptor.SchemaVersion == WorkflowIntrinsicDescriptorSchemas.ActivityOutput
+                        ? MapScopedOutput(source, node, scope)
+                        : outputName;
+                    node.Inputs[nameof(Native.SetOutput.Value)] = Input(WorkflowIntrinsicInputKeys.Value);
                     break;
                 case WorkflowIntrinsicKind.SetCorrelationId or WorkflowIntrinsicKind.SetInstanceName:
                     node.Inputs["Value"] = Input(WorkflowIntrinsicInputKeys.Value);
@@ -508,6 +511,53 @@ public static class NativeExecutableMapper
                     break;
             }
         }
+
+        private static Native.Binding MapScopedOutput(ExecutableNode source, Native.Node node, Scope scope)
+        {
+            var id = source.ExecutableNodeId;
+            if (scope.Graph is null)
+                throw NativeMappingRefusedException.Activity(id, "This Set Output requires an enclosing reusable activity.");
+
+            // Published Graph outputs are addressed by the pinned reference key. The authored name is display text.
+            var descriptor = source.DescriptorPayload;
+            if (descriptor.ValueKind != JsonValueKind.Object ||
+                !descriptor.TryGetProperty("referenceKey", out var key) ||
+                key.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(key.GetString()))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Name,
+                    "This Set Output has no pinned output reference. Publish the reusable activity and workflow again.");
+            if (!descriptor.TryGetProperty("storageDriverKey", out var driver) ||
+                driver.ValueKind != JsonValueKind.String || !driver.ValueEquals(WellKnownRuntimeDurableValueStorageDrivers.Json))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
+                    $"This Set Output requires the '{WellKnownRuntimeDurableValueStorageDrivers.Json}' storage driver. Change the reusable output's storage driver.");
+            if (!descriptor.TryGetProperty("isNullable", out var nullable) || nullable.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
+                    "This Set Output has no pinned output nullability. Publish the reusable activity and workflow again.");
+
+            var value = source.InputBindings[WorkflowIntrinsicInputKeys.Value];
+            if (UnsupportedOutputPolicy(value.EffectivePolicy) || value.Literal is { } literal && UnsupportedOutputPolicy(literal.Policy))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
+                    "This Set Output cannot preserve its value's protection policy. Bind a value that can be stored inline.");
+
+            TypeReference? type;
+            try
+            {
+                type = descriptor.TryGetProperty("type", out var typePayload) ? typePayload.Deserialize<TypeReference>(PayloadOptions) : null;
+            }
+            catch (JsonException)
+            {
+                type = null;
+            }
+            if (type is null || string.IsNullOrWhiteSpace(type.Alias) || !Enum.IsDefined(type.CollectionKind))
+                throw NativeMappingRefusedException.Binding(id, WorkflowIntrinsicInputKeys.Value,
+                    "This Set Output has no supported pinned output type. Publish the reusable activity and workflow again.");
+
+            node.OutputAssignment = new(type.Alias, type.CollectionKind.ToString(), nullable.GetBoolean());
+            return Native.Binding.Literal(key.GetString());
+        }
+
+        private static bool UnsupportedOutputPolicy(ValueProtectionPolicy policy) =>
+            policy.HidesValue() || policy.RedactionMode is not null || policy.RetentionPolicy is not null ||
+            policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom;
 
         // ---- inputs, captures ------------------------------------------------------------------------------------
 

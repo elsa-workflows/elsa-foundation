@@ -39,6 +39,19 @@ internal sealed partial class Burst
                 Fail(frame, new ActivityFault("activity.graph.output-unassignable", $"Set Output '{frame.Node}' names '{name}', which GraphActivity '{boundary.Node}' does not declare as an output to assign."));
                 return;
             }
+            if (_wf.Nodes[frame.Node].OutputAssignment is { } assignment)
+            {
+                if (value is null && !assignment.IsNullable)
+                {
+                    Fail(frame, new ActivityFault("activity.graph.output-null", $"Activity output '{name}' does not accept null."));
+                    return;
+                }
+                if (value is not null && options.ValidateGraphOutput?.Invoke(assignment, value) != true)
+                {
+                    Fail(frame, new ActivityFault("activity.graph.output-invalid", $"Activity output '{name}' does not match its declared type '{assignment.TypeAlias}'."));
+                    return;
+                }
+            }
             var state = Values.To<GraphState>(boundary.State)!;
             var assigned = new Dictionary<string, JsonNode?>(state.Assigned ?? [], StringComparer.Ordinal) { [name] = value?.DeepClone() };
             boundary.State = Values.From(state with { Assigned = assigned });

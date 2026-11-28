@@ -3,6 +3,8 @@ using CShells;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
@@ -119,6 +121,7 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
             RetentionWindow(FaultedRetentionSeconds, nameof(FaultedRetentionSeconds)));
         var retention = new KernelRetentionActivation(tenant, proposedRetention, RetentionConfirmation);
         services.AddSingleton(storage);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, ActivityOutputIntrinsicCapability>());
         services.AddSingleton(new KernelOperatorIngress(storage.OpenOperatorsAsync, storage.ReadClockAsync));
         services.AddSingleton(retention);
         services.AddSingleton(new ShellRestartRequirement(SelectedFeatureName));
@@ -216,6 +219,13 @@ public class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature, IPostConfi
         // Start the owner after the task initializer has completed.
         services.AddShellInitializer<StartKernelShell>(LifecyclePhase.Start, order: 100);
         services.AddShellTerminator<StopKernelShell>(LifecyclePhase.Start, order: 100);
+    }
+
+    private sealed class ActivityOutputIntrinsicCapability : IRuntimeActivityConsumerCapability
+    {
+        public string ConsumerKey => WellKnownRuntimeActivityConsumers.Intrinsic;
+
+        public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [WorkflowIntrinsicDescriptorSchemas.ActivityOutput];
     }
 
     private static TimeSpan? RetentionWindow(int? seconds, string setting) => seconds switch

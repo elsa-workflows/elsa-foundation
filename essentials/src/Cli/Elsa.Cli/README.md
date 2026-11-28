@@ -308,7 +308,7 @@ Which features are compared is decided by `[UsesEfModule("<module>")]` on the fe
 - A feature that is not enabled in the shell is ignored.
 - A feature that declares a `Provider` setting and leaves it unset is compared as `Sqlite`, which is that
   feature's own default.
-- A feature that declares **no** `Provider` setting at all — `WorkflowsDashboardEntityFrameworkCoreFeature`,
+- A feature that declares **no** `Provider` setting at all — `WorkflowsDashboardPortfolioEntityFrameworkCoreFeature`,
   which reads two modules' contexts and registers migrations for neither — is skipped entirely. It is not
   defaulted to `Sqlite`: the provider of the contexts it reads is decided by the features that register
   their migrations, and those are the ones compared.

@@ -29,7 +29,7 @@ cannot do this itself, since runtime projects take no design reference.
   routes and schedules over the serving set (`KernelServing`), moves the slot through `IWorkflowActivationSwitch` with
   schedule claims for adapters that require them, then serves. A mapping refusal fails at `Mapping`, a serving refusal at `ServingCheck`.
   `ServeActiveSlotsAsync` serves every active slot when a host starts.
-- **Replaces:** `WorkflowActivationCoordinator`, the [Runtime catalog's](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md) default, through the feature only.
+- **Replaces:** `WorkflowActivationCoordinator`, the [publication package's](../Publications/Executables/WorkflowActivationCoordinator.cs) default, through the feature only.
 
 ### `IWorkflowTriggerBindingExtractor` *(Core contract — `Elsa.Workflows.Runtime.Core`; kernel implementation here)*
 - **Kind:** Replacement (one extractor derives trigger bindings from a published executable).
