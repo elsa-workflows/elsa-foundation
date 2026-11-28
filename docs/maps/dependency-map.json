@@ -8759,6 +8759,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Standalone/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Publications",
           "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
         },
@@ -8939,6 +8944,140 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "essentials/src/Workflows/Runtime/Persistence/Standalone/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj",
+      "name": "Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Persistence.Standalone.EntityFrameworkCore",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Schema/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Schema.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Publications",
+          "path": "essentials/src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Json",
           "version": "10.0.10"
         },
         {
@@ -12381,6 +12520,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Standalone/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -34638,6 +34782,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/Standalone/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
