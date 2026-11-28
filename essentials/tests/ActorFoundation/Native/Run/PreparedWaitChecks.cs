@@ -1,9 +1,11 @@
 using Elsa.ActorFoundation.TestSupport;
+using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Hosting;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
 using Kernel.Runtime.Hosting;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Contract = Kernel.Foundation.Contracts;
@@ -20,6 +22,7 @@ internal static class PreparedWaitChecks
     private const string Empty = "http:POST:empty";
     private const string Historical = "http:POST=historical/Amy";
     private const string HistoricalLiteral = "http:POST:historical/amy";
+    private const string OversizedAlias = "http:POST=oversized/amy";
     private static readonly string RouteSuffix = HttpRoutes.PreparedWaitSuffix("orders/{order}");
     private static readonly Contract.BoundScope Tenant = ContractScopes.Bind("default");
     private static readonly Contract.BoundScope Other = ContractScopes.Bind("other");
@@ -53,7 +56,7 @@ internal static class PreparedWaitChecks
                     fault, requests, fenceInBatch, _ => null, new Kernel.WorkflowActor.ScheduleActor())
             })
                 await QualifyAsync(hosted, foundation, foundation, PostgresPreviewHosting.BindPreparedRootStartQualification(Open, requests, Tenant),
-                    PostgresPreviewHosting.BindPreparedRootStartQualification(Open, peer, Tenant), token);
+                    PostgresPreviewHosting.BindPreparedRootStartQualification(Open, peer, Tenant), Open, token);
             await store.InstallPreviewRootSchemaAsync(token);
             await using var proof = Open();
             Require(await proof.Database.SqlQueryRaw<long>("""
@@ -73,11 +76,16 @@ internal static class PreparedWaitChecks
             {
                 var path = Path.Combine(folder.FullName, "prepared-waits.db");
                 var foundation = SqliteEmbeddedFoundation.ForPreparedWaitQualification(path, Node, ActorType, Allow);
+                var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
+                {
+                    DataSource = path, Pooling = false, DefaultTimeout = 8
+                }.ToString()).Options;
+                KernelDb Open() => KernelDb.ForSqliteRootShipped(options, StoreFormat.RootPreparedWaitQualification);
                 await foundation.InstallShippedAsync(token);
                 await using (var hosted = foundation.CreateHostedServiceWithAuxiliaryActor(actor, new Kernel.WorkflowActor.ScheduleActor(), Refused,
                     _ => null, loop, fenceInBatch))
                     await QualifyAsync(hosted, await foundation.OpenIngressAsync(token), foundation.CreateReads(),
-                        foundation.BindPreparedRootStartQualification(Tenant), foundation.BindPreparedRootStartQualification(Tenant), token);
+                        foundation.BindPreparedRootStartQualification(Tenant), foundation.BindPreparedRootStartQualification(Tenant), Open, token);
                 try
                 {
                     await SqliteEmbeddedFoundation.ForRetainedResponseQualification(path, Node, ActorType, Allow).InstallShippedAsync(token);
@@ -91,7 +99,7 @@ internal static class PreparedWaitChecks
     }
 
     private static async Task QualifyAsync(IHostedService owner, Contract.IIngress ingress, Contract.IActorReads reads,
-        IPreparedRootStartHandoff handoff, IPreparedRootStartHandoff peer, CancellationToken token)
+        IPreparedRootStartHandoff handoff, IPreparedRootStartHandoff peer, Func<KernelDb> open, CancellationToken token)
     {
         await owner.StartAsync(token);
         try
@@ -103,6 +111,24 @@ internal static class PreparedWaitChecks
             var historical = await InstallWaitAsync(Tenant, "historical", Historical);
             var differentTemplate = await InstallWaitAsync(Tenant, "different-template", Historical, HttpRoutes.PreparedWaitSuffix("historical/{customer}"));
             var historicalLiteral = await InstallWaitAsync(Tenant, "historical-literal", HistoricalLiteral);
+            var oversized = await InstallWaitAsync(Tenant, "oversized-attested-probe", OversizedAlias, RouteSuffix);
+            await SeedOversizedProbeAsync(open, token);
+            var blockedOperation = new string('1', 64);
+            try
+            {
+                _ = await handoff.DeliverWaitsAsync(blockedOperation, Digest,
+                    [new(Literal, "must not deliver"), new(OversizedAlias, null, RouteSuffix)], allowNew: true, token);
+                throw new InvalidOperationException("An oversized alias probe accepted its truncated matching page.");
+            }
+            catch (PreparedWaitAuthorityConflictException) { Console.WriteLine("ok a truncated same-template alias probe refuses with no cohort"); }
+            await using (var db = open())
+                Require(await db.Database.SqlQuery<long>($"""
+                    SELECT count(*) AS "Value" FROM "FoundationPreparedWaitReceipts"
+                    WHERE "Operation" = {blockedOperation}
+                    """).SingleAsync(token) == 0, "oversized probe records no successful source receipt");
+            foreach (var untouched in new[] { literal, oversized })
+                Require((await reads.InboxAsync(Tenant, untouched, cancellationToken: token)).Items.Count == 0,
+                    "oversized probe enqueues neither its alias nor the otherwise eligible literal delivery");
             foreach (var (source, key) in new[]
             {
                 (new string('e', 64), new PreparedWaitDelivery(Historical, "wrong route", HttpRoutes.PreparedWaitSuffix("historical/{order}"))),
@@ -177,6 +203,26 @@ internal static class PreparedWaitChecks
                 await Task.Delay(20, token);
             }
         }
+    }
+
+    private static async Task SeedOversizedProbeAsync(Func<KernelDb> open, CancellationToken token)
+    {
+        // Seed more than one admission page on one real committed Actor. Every row the bounded
+        // probe returns has a valid stamp, while the incompatible registration sorts after the cap.
+        var key = Tenant.Tenant + "_" + OversizedAlias;
+        await using var db = open();
+        var added = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            WITH RECURSIVE positions(n) AS (
+                VALUES (1) UNION ALL SELECT n + 1 FROM positions WHERE n < {FoundationMetadataLimits.MaxTurnSends + 1}
+            )
+            INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition")
+            SELECT base."Key", base."Instance", CAST(n AS text) || {RouteSuffix}, base."Partition"
+            FROM positions CROSS JOIN "Subscriptions" base WHERE base."Key" = {key}
+            UNION ALL
+            SELECT base."Key", base."Instance", 'zzz-incompatible', base."Partition"
+            FROM "Subscriptions" base WHERE base."Key" = {key}
+            """, token);
+        Require(added == FoundationMetadataLimits.MaxTurnSends + 2, "physical alias range contains a hidden incompatible wait beyond the probe cap");
     }
 
     private static ValueTask<bool> Allow(PendingRootStart _, CancellationToken token) => ValueTask.FromResult(true);
