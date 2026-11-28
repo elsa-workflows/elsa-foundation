@@ -46,9 +46,10 @@ public sealed class ActivityAuthoringCatalogIconTests
     public async Task Catalog_projects_only_supported_palette_hint_versions(string schemaVersion, bool supported)
     {
         var view = await ListAsync(new ActivityDesignFacet("elsa.activity-palette", schemaVersion,
-            JsonSerializer.SerializeToElement(new { containerModes = new[] { "bpmn" } })));
+            JsonSerializer.SerializeToElement(new { containerModes = new[] { "bpmn" }, displayName = "Notify Slack Channel" })));
         var descriptor = Assert.Single(view.Activities, item => item.ActivityTypeKey == "Acme.Activities.NotifySlack");
         Assert.Equal(supported, descriptor.PaletteHints.HasValue);
+        Assert.Equal(supported ? "Notify Slack Channel" : "Notify Slack", descriptor.DisplayName);
         if (supported) Assert.Equal("bpmn", descriptor.PaletteHints!.Value.GetProperty("containerModes")[0].GetString());
     }
 
