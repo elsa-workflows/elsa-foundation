@@ -26,7 +26,7 @@ the event contribution pattern. Handlers append the same declaration type and ob
 
 ## Known implementations
 
-- **Cross-domain:** `StandaloneTriggerCapabilitySource` in `Elsa.Workflows.Runtime.Api`, registered by `StandaloneTriggersApiFeature` through `AddApiCapabilitySource`, contributes `elsa.api.standalone-triggers` v1 only for actual resource/discovery/mapping composition; delivery links require physical inspection. See the [contribution note](../../../Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api/StandaloneTriggers/README.md#cross-domain-contributions).
+- **Cross-domain:** `StandaloneTriggerCapabilitySource` in `Elsa.Workflows.Runtime.Api.StandaloneTriggers`, registered by `StandaloneTriggersApiFeature` through `AddApiCapabilitySource`, contributes `elsa.api.standalone-triggers` v1 only for actual resource/discovery/mapping composition; delivery links require physical inspection. See the [contribution note](../../../Workflows/Runtime/Api/StandaloneTriggers/README.md#cross-domain-contributions).
 
 - **Cross-domain:** `StructuredLogsApiCapabilitySource` in Diagnostics Structured Logs contributes the
   `elsa.api.structured-logs` contract with the host-configured recent, sources and stream paths. Registered by

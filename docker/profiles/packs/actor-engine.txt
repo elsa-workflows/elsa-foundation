@@ -30,7 +30,7 @@ Elsa.Workflows.Design.Validations
 Elsa.Workflows.Publishing
 Elsa.Workflows.Publishing.Api
 Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore
-Elsa.Workflows.Runtime.Api
+Elsa.Workflows.Runtime.Api.StandaloneTriggers
 Elsa.Workflows.Runtime.KernelApi
 Elsa.Workflows.Runtime.KernelHost
 Elsa.Workflows.Runtime.KernelHosting
