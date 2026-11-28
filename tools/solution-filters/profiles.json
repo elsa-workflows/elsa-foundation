@@ -82,8 +82,6 @@
         "Elsa.Workflows.Runtime.Api",
         "Elsa.Workflows.Runtime.Api.Tests",
         "Elsa.Workflows.Runtime.Core",
-        "Elsa.Workflows.Runtime.Reconciliation",
-        "Elsa.Workflows.Runtime.Reconciliation.Core",
         "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
         "Elsa.Workflows.Runtime.Resumption",
         "Elsa.Workflows.Runtime.Resumption.Tests",

@@ -59,6 +59,19 @@ public sealed class WorkbenchActorShellTests
     }
 
     [Theory]
+    [InlineData("WorkflowsRuntimeApi")]
+    [InlineData("WorkflowsRuntimeEntityFrameworkCore")]
+    public void Workbench_refuses_retired_classic_shell_selectors(string feature)
+    {
+        using var configuration = new ConfigurationManager();
+        configuration[$"CShells:Shells:previous:Features:{feature}:Provider"] = "SQLite";
+        var environment = new HostingEnvironment { EnvironmentName = Environments.Production };
+
+        var failure = Assert.Throws<InvalidOperationException>(() => WorkbenchRuntimeProfile.Configure(configuration, environment, []));
+        Assert.Contains("The classic Workbench workflow runtime has been retired", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("false")]
     public void Production_actor_host_keeps_unselected_artifact_persistence_unconfigured(string? selection)

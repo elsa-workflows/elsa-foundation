@@ -233,8 +233,11 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   await page.goto("/features");
   const list = page.locator(".feature-management-list");
   const filter = page.getByRole("searchbox", { name: "Filter features", exact: true });
+  const allFeatures = page.getByRole("navigation", { name: "Feature views", exact: true })
+    .getByRole("button", { name: "All features", exact: true });
   for (const host of ["Server", "Studio"]) {
     await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: new RegExp(`^${host}`) }).click();
+    await allFeatures.click();
     await expect(list.locator(".feature-management-card").first()).toBeVisible();
     await filter.fill("no-such-feature-acceptance");
     const message = list.getByText("No features match this filter.", { exact: true });
@@ -260,22 +263,23 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   }
 
   await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: /^Server/ }).click();
-  await filter.fill("Activities Dispatch Workflow (Runtime)");
-  await list.getByRole("button", { name: /^Activities Dispatch Workflow \(Runtime\)/ }).click();
+  await allFeatures.click();
+  await filter.fill("Workflows Runtime EF Core Executable Artifact Persistence");
+  await list.getByRole("button", { name: /^Workflows Runtime EF Core Executable Artifact Persistence/ }).click();
   const edit = page.getByRole("button", { name: "Edit settings", exact: true });
   await edit.click();
-  const settings = page.getByRole("dialog", { name: "Activities Dispatch Workflow (Runtime)", exact: true });
+  const settings = page.getByRole("dialog", { name: "Workflows Runtime EF Core Executable Artifact Persistence", exact: true });
   await expect(settings).toBeVisible();
   await capture(page, info, "feature-settings-dialog");
-  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click({ timeout: 10_000 });
   await expect(settings).toBeHidden();
   await edit.click();
-  await settings.getByLabel(/^Child-start maximum delivery attempts/).fill("5");
+  await settings.getByLabel(/^Workflow executable cache capacity/).fill("96");
   await settings.getByRole("button", { name: "Save", exact: true }).click();
   await expect(settings).toBeHidden();
   await edit.click();
-  await expect(settings.getByLabel(/^Child-start maximum delivery attempts/)).toHaveValue("5");
-  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(settings.getByLabel(/^Workflow executable cache capacity/)).toHaveValue("96");
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click({ timeout: 10_000 });
   await page.getByRole("button", { name: "Review changes", exact: true }).click();
   const review = page.getByRole("dialog", { name: "Review changes", exact: true });
   await expect(review).toBeVisible();

@@ -40,6 +40,29 @@ separate tests for the actual held-v1 write gate. It does not prove host admissi
 
 ## Native RunBpmn recovery
 
+The classic BPMN/ETL native-work dispatcher runs with the Workbench, reader and controller
+from its pinned source checkout. The archived Workbench defaults to the same classic runtime
+as this controller. Build all three programs there and give the controller a fresh output directory.
+
+```sh
+archive="$(mktemp -d)"
+git -c core.fsmonitor=false worktree add --detach "$archive/source" 18a16dee878106ac525aa9a861d851a200e43c55
+cd "$archive/source"
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release -p:RestoreLockedMode=true
+dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj -c Release -p:RestoreLockedMode=true
+dotnet build tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj -c Release -p:RestoreLockedMode=true
+python3 e2e-tests/etl/qualify_http_recovery.py --parent BpmnModel \
+  --model-cancel-before-admission --queued-native-stage start \
+  --workbench-assembly "$PWD/server/apps/Elsa.Workbench.Host/bin/Release/net10.0/Elsa.Workbench.Host.dll" \
+  --reader-assembly "$PWD/tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll" \
+  --dispatcher-assembly "$PWD/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/NativeWorkDispatch.dll" \
+  --output "$archive/queued-start"
+```
+
+Use `checkpoint` with a different output path to capture that queue boundary.
+The [archived dispatcher guide](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/tools/bpmn/NativeWorkDispatch/README.md)
+records the other owned recovery commands. Its snapshots remain with their matching prior runtime.
+
 `verify_runbpmn_recovery.py` checks the [actual human-work embedding captures](../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/README.md) without starting hosts or changing stores. Eight real native/model journeys cover root, Sequence, Flowchart and CompensationScope completion/whole-parent cancellation after a real process loss. Four same-process direct counterparts compare released-interpreter states. The verifier checks all32 closed stores and exact native/model settlement receipts; `test_verify_runbpmn_recovery.py` supplies seven rehashed corrupt-copy controls. The receipt explicitly leaves ETL embedding, additional crash/race cuts and final upgrade/Studio acceptance open.
 
 `verify_runbpmn_admission_cancel.py` checks the separate [actual root cancellation before first model admission](../../specs/1017-direct-bpmn-hosting/evidence/embedding/cancel-before-admission/README.md). The normal alteration pump cancels the real parent while start/cancel sources remain owed; process-loss recovery records cancellation without starting semantics and settles its original delivery responsibility. Four closed stores and five corrupt-copy controls preserve this narrower claim. Run both control suites with `python3 -m unittest discover -s tools/bpmn -p 'test_verify_runbpmn*.py' -v`.

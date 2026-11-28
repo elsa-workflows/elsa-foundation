@@ -13,7 +13,7 @@ using Elsa.Modularity.Api.ModuleManagement;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Secrets.Features;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
@@ -38,14 +38,14 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
     private const string PackagedFeatureId = "PackagedFeature";
 
     private const string RecoveryKey = "recovery-signing-key-that-must-not-leak";
-    private const string PayloadProtectionKey = "payload-protection-key-that-must-not-leak";
+    private const string EncryptionKey = "encryption-key-that-must-not-leak";
     private const string SeedAdminPassword = "seed-admin-password-that-must-not-leak";
     private const string PackageToken = "package-token-that-must-not-leak";
 
     private static readonly (string FeatureId, string Setting)[] SecretSettings =
     [
-        ("WorkflowsRuntimeEntityFrameworkCore", "RecoveryContinuationSigningKey"),
-        ("WorkflowsRuntimeApi", "WorkflowAlterationPayloadProtectionKeys"),
+        ("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "RecoveryContinuationSigningKey"),
+        ("Secrets", "Keys"),
         ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", "SeedAdminPassword"),
         (PackagedFeatureId, "ApiToken")
     ];
@@ -57,8 +57,8 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
 
     public SecretSettingCatalogEndpointTests()
     {
-        _store.Features["WorkflowsRuntimeEntityFrameworkCore"] = Json($$"""{"RecoveryContinuationSigningKey":"{{RecoveryKey}}"}""");
-        _store.Features["WorkflowsRuntimeApi"] = Json($$$"""{"WorkflowAlterationPayloadProtectionActiveKeyId":"active","WorkflowAlterationPayloadProtectionKeys":{"active":"{{{PayloadProtectionKey}}}"}}""");
+        _store.Features["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"] = Json($$"""{"RecoveryContinuationSigningKey":"{{RecoveryKey}}"}""");
+        _store.Features["Secrets"] = Json($$$"""{"ActiveKeyId":"active","Keys":{"active":"{{{EncryptionKey}}}"}}""");
         _store.Features["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore"] = Json($$"""{"SeedAdminPassword":"{{SeedAdminPassword}}"}""");
         _store.Features[PackagedFeatureId] = Json($$"""{"ApiToken":"{{PackageToken}}"}""");
         _nuplane.Packages.Add(CreatePackage());
@@ -104,7 +104,7 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
 
     private static void AssertSecretsMasked(string body, Func<JsonElement, IEnumerable<JsonElement>> selectFeatures)
     {
-        foreach (var secret in new[] { RecoveryKey, PayloadProtectionKey, SeedAdminPassword, PackageToken })
+        foreach (var secret in new[] { RecoveryKey, EncryptionKey, SeedAdminPassword, PackageToken })
             Assert.DoesNotContain(secret, body);
 
         using var document = JsonDocument.Parse(body);
@@ -116,7 +116,7 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
             Assert.Equal(SecretSettingMask.Placeholder, configurationById[featureId].GetProperty(setting).GetString());
 
         // A non-secret setting beside a secret one still comes through verbatim.
-        Assert.Equal("active", configurationById["WorkflowsRuntimeApi"].GetProperty("WorkflowAlterationPayloadProtectionActiveKeyId").GetString());
+        Assert.Equal("active", configurationById["Secrets"].GetProperty("ActiveKeyId").GetString());
     }
 
     private async Task<HttpClient> StartAsync()
@@ -135,8 +135,8 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
 
         // The production catalog composition, fed by the real runtime and package contributors.
         builder.Services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog(
-            Descriptor<RuntimeEntityFrameworkCoreFeature>("WorkflowsRuntimeEntityFrameworkCore"),
-            Descriptor<WorkflowsRuntimeApiFeature>("WorkflowsRuntimeApi"),
+            Descriptor<RuntimeArtifactsEntityFrameworkCoreFeature>("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"),
+            Descriptor<SecretsFeature>("Secrets"),
             Descriptor<AspNetCoreIdentityEntityFrameworkCoreFeature>("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore")));
         builder.Services.AddSingleton<INuplaneAdminOperations>(_nuplane);
         builder.Services.AddSingleton<IShellFeatureConfigurationStore>(_store);

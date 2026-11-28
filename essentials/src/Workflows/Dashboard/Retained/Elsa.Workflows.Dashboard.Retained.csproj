@@ -3,7 +3,6 @@
     <Description>Workflow portfolio and run health HTTP services shared by the retained and classic Dashboard features.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Workflows.Dashboard" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />

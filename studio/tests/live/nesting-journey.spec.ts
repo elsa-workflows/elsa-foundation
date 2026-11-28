@@ -7,7 +7,10 @@ import { addSteps, createScopeWorkflow, expectAccessible, publish, recoveryChip,
 // newest first when the shipment fails. Every step and compensation but Ship is a Write Line. Restarts and every
 // persistence mode are proven by the backend nesting journeys and the Workbench owned-process test.
 
-test.skip(!process.env.ELSA_STUDIO_URL, "Set ELSA_STUDIO_URL to a running Studio connected to a Workbench.");
+test.skip(
+  process.env.ELSA_CLASSIC_COMPENSATION_LIVE !== "1" || !process.env.ELSA_STUDIO_URL,
+  "Set ELSA_CLASSIC_COMPENSATION_LIVE=1 and ELSA_STUDIO_URL for an owned classic Workbench and Studio pair."
+);
 
 test("a nested scope with a Confirm is authored, published, run, and its hand-over and kept step are shown", async ({ page }) => {
   test.setTimeout(300_000);

@@ -3,7 +3,6 @@ using Xunit;
 
 namespace Elsa.Workbench.Tests;
 
-[Collection(WorkbenchBackgroundActivityRecoveryTests.Name)]
 public sealed class WorkbenchProcessTests
 {
     [SkippableTheory]

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Workbench.Tests;
@@ -45,9 +46,7 @@ public sealed class WorkbenchShellActivationTests
     /// <summary>Features a stock shell may leave unlisted that must still be in the runtime catalog.</summary>
     private static readonly string[] CatalogedFeatures =
     [
-        "ActivitiesRuntime",
-        "ActivitiesGraphRuntime",
-        "SecretsWorkflows",
+        "ActivitiesBpmn",
         // ActivitiesHttp depends on its route-table projection by feature name, and a name cannot make an assembly
         // that is absent from the host discoverable. A shell that does not list it gets it as a dependency.
         "WorkflowsRuntimeHttp",
@@ -119,12 +118,12 @@ public sealed class WorkbenchShellActivationTests
             $"{feature} is not in the runtime catalog."));
 
         Assert.False(Runs("ConnectionsWorkflows"));
-        Assert.False(Runs("ActivitiesRuntime"));
+        Assert.DoesNotContain("ActivitiesRuntime", catalog.Keys);
         Assert.False(Runs("ActivitiesGraphRuntime"));
         Assert.False(Runs("SecretsWorkflows"));
-        Assert.False(Runs("WorkflowsRuntimeApi"));
-        Assert.False(Runs("WorkflowsRuntimeCheckpointPersistence"));
-        Assert.False(Runs("WorkflowsRuntimeResumption"));
+        Assert.DoesNotContain("WorkflowsRuntimeApi", catalog.Keys);
+        Assert.DoesNotContain("WorkflowsRuntimeCheckpointPersistence", catalog.Keys);
+        Assert.DoesNotContain("WorkflowsRuntimeResumption", catalog.Keys);
         Assert.False(Runs("WorkflowsRuntimeDistributed"));
         AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "CacheWorkflowExecutables", "true");
         AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowExecutableCacheCapacity", "256");
@@ -184,6 +183,49 @@ public sealed class WorkbenchShellActivationTests
         }
     }
 
+    [Theory]
+    [InlineData("default", "workflowsruntimeapi", "true")]
+    [InlineData("custom", "WORKFLOWSRUNTIMEENTITYFRAMEWORKCORE:Provider", "SQLite")]
+    [InlineData("custom", "0", "WorkflowsRuntimeApi")]
+    [InlineData("custom", "0:Name", "WorkflowsRuntimeEntityFrameworkCore")]
+    [InlineData("default", "WorkflowsRuntimeApi", null)]
+    public async Task Retired_classic_selector_in_any_shell_is_refused_before_opening_the_actor_store(
+        string shellName, string selector, string? value)
+    {
+        var stores = Directory.CreateTempSubdirectory("elsa-retired-classic-stores-");
+        var settings = new Dictionary<string, string>
+        {
+            ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:SqlitePath"] =
+                Path.Combine(stores.FullName, "actors.db")
+        };
+        if (value is not null)
+            settings[$"CShells:Shells:{shellName}:Features:{selector}"] = value;
+
+        var shell = WorkbenchShell.Development with { Settings = settings };
+        try
+        {
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            {
+                await using var _ = await WorkbenchProcess.StartAsync(shell, directory =>
+                {
+                    if (value is not null)
+                        return;
+
+                    var path = Path.Combine(directory, "shells.json");
+                    var content = JsonNode.Parse(File.ReadAllText(path))!;
+                    content["CShells"]!["Shells"]![shellName]!["Features"]![selector] = new JsonObject();
+                    File.WriteAllText(path, content.ToJsonString());
+                });
+            });
+            Assert.Contains("The classic Workbench workflow runtime has been retired", failure.Message, StringComparison.Ordinal);
+            Assert.Empty(stores.EnumerateFileSystemInfos());
+        }
+        finally
+        {
+            stores.Delete(recursive: true);
+        }
+    }
+
     /// <summary>
     /// Each secret the Production overlay requires must fail activation when omitted, so <c>/health/ready</c> reports
     /// the misconfiguration instead of the host reporting ready and failing later: token issuance and authentication,
@@ -226,9 +268,12 @@ public sealed class WorkbenchShellActivationTests
         // Resolving a route in the real default shell still requires its own production key.
         using var response = await workbench.Client.GetAsync("/modularity/features");
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        await NativeHostingScenario.WaitForAsync(workbench,
-            () => workbench.Output.Contains("Runtime recovery continuation signing key must be configured", StringComparison.Ordinal),
-            "the routable default shell to report the missing retained Runtime key", timeout: TimeSpan.FromSeconds(10));
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        while (!workbench.Output.Contains("Runtime recovery continuation signing key must be configured", StringComparison.Ordinal))
+        {
+            Assert.True(DateTimeOffset.UtcNow < deadline, $"The default shell did not report its missing Runtime key. {workbench.Output}");
+            await Task.Delay(100);
+        }
     }
 
     private static async Task<HashSet<string>> ReadEffectiveFeatureClosureAsync(WorkbenchProcess workbench)

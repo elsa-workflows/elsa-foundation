@@ -6,9 +6,12 @@ import { addSteps, createScopeWorkflow, expectAccessible, openScope, publish, re
 // the recovery. Every step and compensation is a Write Line, which is safe to repeat, so the publication review lists
 // the replay-safe warnings for both reservations (spec 250 FR-014, spec 261 FR-515) and still publishes. Restart
 // recovery and the participant's persisted state are proven against a real process by
-// essentials/tests/Workbench/Tests/WorkbenchCompensationRecoveryTests.cs; this journey proves authoring and inspection.
+// the pinned classic Workbench suite documented in docs/contributing/workbench-compatibility-tests.md.
 
-test.skip(!process.env.ELSA_STUDIO_URL, "Set ELSA_STUDIO_URL to a running Studio connected to a Workbench.");
+test.skip(
+  process.env.ELSA_CLASSIC_COMPENSATION_LIVE !== "1" || !process.env.ELSA_STUDIO_URL,
+  "Set ELSA_CLASSIC_COMPENSATION_LIVE=1 and ELSA_STUDIO_URL for an owned classic Workbench and Studio pair."
+);
 
 test("a compensation scope is authored, published with its warnings, run and inspected in Studio", async ({ page }) => {
   await signIn(page);

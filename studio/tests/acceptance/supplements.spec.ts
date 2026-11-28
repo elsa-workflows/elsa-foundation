@@ -536,7 +536,7 @@ test("activity availability load failures and recovery", async ({ page }, info) 
 async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane: "design" | "runtime") {
   const backend = required(`UX_${plane.toUpperCase()}_BACKEND_URL`);
   const design = plane === "design";
-  const views = page.getByRole("navigation", { name: "Workflows views", exact: true });
+  const screens = page.getByRole("tablist", { name: "Open screens", exact: true });
   const available = design
     ? { path: "/workflows/definitions", view: "Definitions", heading: page.getByRole("heading", { name: "Workflow definitions", exact: true }) }
     : { path: "/workflows/executables", view: "Executables", heading: page.getByRole("main").getByRole("heading", { name: "Executables", level: 2, exact: true }) };
@@ -558,8 +558,8 @@ async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane
   const workflows = sidebar.getByRole("link", { name: "Workflows", exact: true });
   await workflows.click();
   await expect(page).toHaveURL(url => url.pathname === available.path);
-  await expect(views.getByRole("link", { name: available.view, exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(views.getByRole("link", { name: absent.view, exact: true })).toHaveCount(0);
+  await expect(screens.getByRole("tab", { name: available.view, exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(sidebar.getByRole("link", { name: absent.view, exact: true })).toHaveCount(0);
   await expect(available.heading).toBeVisible();
   if (!design) await expect(page.getByRole("table", { name: "Workflow executables", exact: true })
     .or(page.getByRole("heading", { name: "No workflow executables", exact: true }))).toBeVisible();
@@ -568,9 +568,15 @@ async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane
   // A bookmark into the absent plane explains the composition instead of failing.
   await page.goto(absent.path);
   // Open-screen tabs keep hidden panels mounted; only the visible screen is the presentation.
-  const unavailable = page.locator(".content .empty-state[role=status]").filter({ visible: true });
-  await expect(unavailable).toHaveText(`This backend does not support ${absent.capability}.`);
-  const viewPresentation = (await unavailable.textContent()) ?? "";
+  const unavailable = page.getByRole("main").getByRole("status").filter({
+    has: page.getByRole("heading", { name: "Page unavailable", exact: true }),
+    visible: true
+  });
+  const notice = unavailable.getByText("This page is unavailable on the selected backend.", { exact: true });
+  await expect(notice).toBeVisible();
+  const viewPresentation = (await notice.textContent()) ?? "";
+  await unavailable.getByRole("button", { name: "Technical details", exact: true }).click();
+  await expect(unavailable.getByText(`This backend does not support ${absent.capability}.`, { exact: true })).toBeVisible();
   await capture(page, info, `${plane}-${design ? "runtime" : "design"}-view-unavailable`);
   await page.goto(absent.settings);
   const sections = page.getByRole("navigation", { name: "Settings sections", exact: true });
@@ -614,7 +620,11 @@ async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane
       const integrations = combinedSidebar.getByRole("button", { name: "Integrations", exact: true });
       await expect(integrations).toBeVisible();
       await combinedSidebar.getByRole("navigation", { name: "Integrations", exact: true }).getByRole("link", { name: "Connections", exact: true }).click();
-      await expect(combined.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
+      const connections = combined.getByRole("region", { name: "Connections management", exact: true });
+      const readyTable = connections.getByRole("table", { name: "Connections", exact: true })
+        .and(connections.locator('table:not([aria-busy="true"])'));
+      const empty = connections.getByRole("heading", { name: "No connections yet", exact: true });
+      await expect(readyTable.or(empty)).toBeVisible();
       await capture(combined, info, "combined-integrations-return");
       observation.combinedReturn = { studio: combinedStudio, integrationsVisible: true, pageErrors: combinedErrors };
       expect(combinedErrors, "Uncaught browser errors on the combined return").toEqual([]);

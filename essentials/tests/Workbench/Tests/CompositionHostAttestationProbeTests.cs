@@ -13,8 +13,9 @@ namespace Elsa.Workbench.Tests;
 /// </summary>
 public sealed class CompositionHostAttestationProbeTests
 {
-    private const string FeatureSetting = "WorkflowsRuntimeCheckpointPersistence";
-    private const string ReceiptOverrideKey = "CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxActivitiesPerCommit";
+    private const string ArtifactFeature = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+    private const string CacheCapacitySetting = "WorkflowExecutableCacheCapacity";
+    private const string ReceiptOverrideKey = $"CShells:Shells:default:Features:{ArtifactFeature}:{CacheCapacitySetting}";
     // A distinctive valid integer avoids matching unrelated numbers in lifecycle JSON during redaction checks.
     private const string ProcessValue = "73190483";
     private const string Canary = "host-attestation-secret-canary-2039";
@@ -191,7 +192,7 @@ public sealed class CompositionHostAttestationProbeTests
     {
         const string oldOrigin = "https://old-studio.example.invalid";
         const string newOrigin = "https://new-studio.example.invalid";
-        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, directory =>
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Reloadable, directory =>
         {
             WorkbenchConfigurationFile.WriteValue(
                 Path.Join(directory, "appsettings.Development.json"),
@@ -207,7 +208,7 @@ public sealed class CompositionHostAttestationProbeTests
             Path.Join(host.ContentRoot, "appsettings.Development.json"),
             ["Cors", "AllowedOrigins", "0"], newOrigin);
         WriteSetting(Path.Join(host.ContentRoot, "shells.Development.json"), 402);
-        await Task.Delay(TimeSpan.FromMilliseconds(1200));
+        await WorkbenchConfigurationFile.WaitForBlueprintValueAsync(host, $"{ArtifactFeature}:{CacheCapacitySetting}", "402");
 
         using var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null);
         response.EnsureSuccessStatusCode();
@@ -226,10 +227,9 @@ public sealed class CompositionHostAttestationProbeTests
     [Fact]
     public async Task All_six_bundle_files_and_process_override_have_no_generation_bound_marker()
     {
-        var overrideKey = $"CShells:Shells:default:Features:{FeatureSetting}:MaxActivitiesPerCommit";
-        var shell = WorkbenchShell.Development with
+        var shell = WorkbenchShell.Reloadable with
         {
-            Settings = new Dictionary<string, string> { [overrideKey] = ProcessValue }
+            Settings = new Dictionary<string, string>(WorkbenchShell.Reloadable.Settings) { [ReceiptOverrideKey] = ProcessValue }
         };
         await using var host = await WorkbenchProcess.StartAsync(shell, directory =>
         {
@@ -267,7 +267,7 @@ public sealed class CompositionHostAttestationProbeTests
         var failedGeneration = (int)readiness["generation"]!;
         var failedOverlay = Path.Combine(host.ContentRoot, "shells.Development.json");
         WorkbenchConfigurationFile.WriteOpenIddictSigningKey(failedOverlay, Canary);
-        await Task.Delay(TimeSpan.FromMilliseconds(1200));
+        await WorkbenchConfigurationFile.WaitForBlueprintValueAsync(host, "FoundationIdentityOpenIddict:SigningKey", Canary);
         using (var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null))
         {
             Assert.True(response.IsSuccessStatusCode);
@@ -347,7 +347,7 @@ public sealed class CompositionHostAttestationProbeTests
 
     private static void WriteSetting(string path, int value) =>
         WorkbenchConfigurationFile.WriteValue(
-            path, ["CShells", "Shells", "default", "Features", FeatureSetting, "MaxActivitiesPerCommit"], value);
+            path, ["CShells", "Shells", "default", "Features", ArtifactFeature, CacheCapacitySetting], value);
 
     private static string CreateBundle()
     {

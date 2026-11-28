@@ -73,10 +73,9 @@ Studio wiring (see `docker-compose.yml`):
   the OpenIddict identity module"** (or "must be a base64-encoded PKCS#8 RSA private key") — set
   `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` to a valid key (see
   [Environment variables](#environment-variables)).
-- **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — the host is
-  missing the `Elsa.Workflows.Runtime.Resumption` project reference that every durable
-  persistence provider depends on. It is wired in `Elsa.Workbench.Host.csproj` / `Program.cs`; rebuild the
-  image if you see this.
+- **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — a mounted shell
+  requests a classic workflow feature. Open that deployment with its [matching classic image and settings](#workbench-mixed-preview-compatibility).
+  The stock Actor shell uses `WorkflowsRuntimeKernelHosting` and `WorkflowsRuntimeKernelRetainedApi`.
 - **`Npgsql … Failed to connect to 127.0.0.1:5432`** — the feature fell back to its default
   connection string, meaning `ConnectionString` did not bind. Ensure it is a **top-level** property
   on the feature section (not nested under `Options`).
@@ -328,7 +327,8 @@ DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` again
 
 ### Workbench mixed-preview compatibility
 
-Current Workbench runs workflows through the stock Actor shell. It refuses an enabled
+Current Workbench runs workflows through the stock Actor shell. Restart the process to change the
+Actor shell configuration. A refused live replacement leaves the active owner serving. It refuses an enabled
 `Elsa:CorePreview:Enabled` setting before opening a store. Deployments with that setting must
 drain their previous mixed Workbench on its matching immutable image, shell file and config.
 The verified mixed Workbench image is
@@ -344,9 +344,12 @@ delivery service, give stock Workbench a new Runtime control database as well. T
 [Curated Essentials workflow execution guidance](../docker/profiles/essentials-curated/README.md#workflow-execution)
 describes the storage boundary and cutover sequence.
 
-Explicitly mounted classic shells in Workbench still use the `WorkflowsRuntimeEntityFrameworkCore`
-recovery and hierarchy signing keys. `shells.CorePreview.Production.json` clears their development
-values in Production.
+Open an explicitly mounted classic shell with its matching immutable Workbench image and configuration.
+Keep its `WorkflowsRuntimeEntityFrameworkCore` recovery and hierarchy signing keys with that deployment.
+Current Workbench refuses the classic Runtime API and persistence selectors before opening a store.
+Keep the matching classic deployment for prior opt-ins such as workflow Decisions, Agent human review,
+ETL and Rules workflow waits, classic dispatch, JSON artifact import, reference cleanup and engine tracing.
+The stock Workbench keeps the independent Decision, Agent authoring, ETL, Rules and OpenTelemetry modules.
 
 For the historical apphost witnesses, build both Workbench and the Native runner from the same
 checkout. Pass the checkout as the second argument after the configuration to the scripts in

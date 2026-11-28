@@ -1,5 +1,9 @@
 # Validation Guide: Response Replay Safety
 
+The classic replay process and its frozen fixtures are preserved in the
+[`ef70e5acd7` source checkout with locked commands](../../docs/contributing/workbench-compatibility-tests.md#classic-executable-import-and-http-response-replay).
+The sections below record the original qualification.
+
 Run after implementation is authorized. Use the build-slot wrapper and test-owned databases, child processes, and signing keys. No command in the parent test may invoke a nested dotnet build/run/test process.
 
 ## One-time baseline artifact capture

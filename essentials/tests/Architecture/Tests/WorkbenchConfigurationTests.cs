@@ -183,24 +183,21 @@ public sealed class WorkbenchConfigurationTests
     }
 
     [Theory]
-    [InlineData("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword", false)]
-    [InlineData("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey", false)]
-    [InlineData("WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey", true)]
-    [InlineData("WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey", true)]
-    [InlineData("Secrets:EncryptionKey", false)]
-    public void Production_shell_overlays_clear_their_committed_development_secrets(string featureSetting, bool preview)
+    [InlineData("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword")]
+    [InlineData("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey")]
+    [InlineData("Secrets:EncryptionKey")]
+    public void Production_shell_overlays_clear_their_committed_development_secrets(string featureSetting)
     {
         var path = $"CShells:Shells:default:Features:{featureSetting}";
 
-        Assert.False(string.IsNullOrEmpty(BuildShellConfiguration(preview, production: false)[path]));
-        Assert.True(string.IsNullOrEmpty(BuildShellConfiguration(preview, production: true)[path]));
+        Assert.False(string.IsNullOrEmpty(BuildShellConfiguration(production: false)[path]));
+        Assert.True(string.IsNullOrEmpty(BuildShellConfiguration(production: true)[path]));
         Assert.Equal(
             "environment-override",
-            BuildShellConfiguration(preview, production: true, new() { [path] = "environment-override" })[path]);
+            BuildShellConfiguration(production: true, new() { [path] = "environment-override" })[path]);
     }
 
     private static IConfiguration BuildShellConfiguration(
-        bool preview,
         bool production,
         Dictionary<string, string?>? environment = null)
     {
@@ -208,11 +205,7 @@ public sealed class WorkbenchConfigurationTests
             .SetBasePath(Path.Join(RepoRoot, "server/apps", "Elsa.Workbench.Host"))
             .AddJsonFile("shells.json");
         if (production)
-            builder.AddJsonFile("shells.Production.json");
-        if (preview)
-            builder.AddJsonFile(Path.Join(RepoRoot, "essentials/tests/Workbench/Fixtures/ClassicRuntime/shells.json"));
-        if (production)
-            builder.AddJsonFile(preview ? "shells.CorePreview.Production.json" : "shells.Actor.Production.json");
+            builder.AddJsonFile("shells.Production.json").AddJsonFile("shells.Actor.Production.json");
         return builder.AddInMemoryCollection(environment ?? []).Build();
     }
 
