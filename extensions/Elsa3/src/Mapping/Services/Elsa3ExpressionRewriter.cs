@@ -221,6 +221,24 @@ public sealed class Elsa3ExpressionRewriter(
         "Move the assignment into a Set Variable activity in the Elsa 3 workflow. In a reusable workflow, Elsa 4 has no Set Variable yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED); a Run JavaScript script can set its variables.";
 
     /// <summary>
+    /// #5894: an input expression changes a value it read from a variable. Elsa 3 handed scripts an object variable live,
+    /// so the change reached the variable, and an array variable as a copy, so it did not; both are usually declared
+    /// <c>Object</c>, so the converter cannot tell them apart, and Elsa 4 faults on either (VF-BIND-001). The guidance
+    /// therefore names both cases.
+    /// </summary>
+    internal static readonly Elsa3ExpressionRewriteIssue InputChangesReadValueIssue = new(
+        Elsa3ImportDiagnosticCodes.InputChangesVariable,
+        "JavaScript in an input changes a value it read from a variable (for example 'var order = getOrder(); order.status = ...', " +
+        "'delete order[key]' or 'items.push(item)'). An Elsa 4 input expression only reads, so the converted workflow would fault " +
+        "with VF-BIND-001 when the input is evaluated.",
+        "Elsa 3 handed an object variable to the script live, so the change also reached the variable; it handed an array variable " +
+        "as a copy, so the variable stayed as it was. Both are usually declared as Object, so the converter refuses either. " +
+        "In the Elsa 3 workflow, if later steps rely on the change, move it into a Run JavaScript step before this input, which can " +
+        "set variables. Otherwise change a local copy and leave the variable as it is: 'items.slice()' for an array, " +
+        "'Object.assign({}, order)' for an object, or 'JSON.parse(JSON.stringify(value))' for either when the change reaches " +
+        "a nested member or an array element.");
+
+    /// <summary>
     /// What to change when an input expression writes a variable (spec 1231 FR-033): Elsa 4 input expressions only read,
     /// and a Run JavaScript script is where a step writes variables (its setters convert there).
     /// </summary>
@@ -477,6 +495,14 @@ public sealed class Elsa3ExpressionRewriter(
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
+
+        // #5894: an input expression that changes a value it read from a variable (var o = getOrder(); o.status = 'Paid',
+        // delete o.key, items.push(x)) converts, then faults on its first run with VF-BIND-001, because an Elsa 4 input
+        // expression only reads (spec 1228 FR-006a). A direct change (getOrder().status = 'Paid') is refused by the visit
+        // above; this pass follows the value through local names, members and branches. It runs on an otherwise clean
+        // conversion only: a refused call's effect is unknown, and an unknown effect is never refused as a change.
+        if (mode == Elsa3JavaScriptMode.Expression && analyzer.InputChangesReadValue(script))
+            return Elsa3ExpressionRewriteResult.Failure(InputChangesReadValueIssue);
 
         // Elsa 4 reserves 'complete' in every JavaScript surface, setter or not: a script or expression that declares it
         // would import and then fail draft validation (Scripts/ReservedName, JavaScript/ReservedName), so the import
@@ -3038,6 +3064,26 @@ public sealed class Elsa3ExpressionRewriter(
             resolve(new Elsa3AmbientReference(kind, name)) is { Succeeded: true, VariableName: not null, Binding: VariableExpressionParameterBinding variable } &&
             !IsReadAsCopy(variable);
 
+        /// <summary>
+        /// Whether an input expression itself changes a value it read from a variable (#5894): a member assignment, update
+        /// or delete, a changing array method, or Object.assign and its kin, through any local name or member. An opaque
+        /// call is no change here. An analysis that fails reports no change: the run-time guard still applies.
+        /// </summary>
+        public bool InputChangesReadValue(Script script)
+        {
+            try
+            {
+                return new Elsa3ReusableVariableWriteAnalyzer(CachedScope, IsSessionVariable,
+                    name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null,
+                    name => !NeverMatchedGlobals.Contains(name) && ReplacedGlobals.ContainsKey(name),
+                    definiteWritesOnly: true).MayWrite(script);
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+            {
+                return false;
+            }
+        }
+
         public bool ReusableScriptMayWrite(Script script) =>
             new Elsa3ReusableVariableWriteAnalyzer(CachedScope, IsSessionVariable,
                 name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null,
@@ -4367,6 +4413,13 @@ public static class Elsa3ImportDiagnosticCodes
     /// function directly.
     /// </summary>
     public const string ReplacedFunctionReference = "ELS3-REPLACED-FUNCTION-REFERENCE";
+
+    /// <summary>
+    /// An input expression changes a value it read from a variable, through a local name or a member (#5894): Elsa 4 input
+    /// expressions only read (spec 1228 FR-006a), so the converted workflow would fault with VF-BIND-001. Refused, with
+    /// guidance to move the change into a Run JavaScript step or to change a local copy.
+    /// </summary>
+    public const string InputChangesVariable = "ELS3-INPUT-CHANGES-VARIABLE";
 
     /// <summary>
     /// A script calls, or uses as a value, a global no Elsa 4 built-in and no registered host function provides, and that a
