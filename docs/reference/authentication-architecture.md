@@ -317,10 +317,11 @@ from their own credential check (an endpoint filter or the handler) instead.
 **There is no auth off-switch for API routes.** The `ApiSecurity.AllowAnonymous` kill-switch was removed with the
 FastEndpoints surface ([#1405](https://github.com/elsa-workflows/elsa-foundation/pull/1405)), and no setting
 replaces it. An `ApiSecurity` entry left in a shell's feature list names a feature that no longer exists; CShells
-logs a warning and activates the shell without it. Workflow-defined HTTP endpoints are separate: they are anonymous
-unless their `HttpEndpoint` activity sets `Authorize` (optionally with a `Policy`). For those that do, the
-`WorkflowsRuntimeStandaloneHttp` feature's `AuthorizationHandlerType` setting chooses how the check runs, and pointing it at
-`AllowAnonymousHttpEndpointAuthorizationHandler` lets every such request through.
+logs a warning and activates the shell without it. The Actor authored HTTP endpoint checks its supported shape at publication and refuses enabled
+`Authorize` and configured `Policy`. Its supported published workflow routes are anonymous. Standalone HTTP
+resources have a separate `sourceAccess` setting and require a saved invocation grant. The
+`WorkflowsRuntimeStandaloneHttp` feature supplies the standalone and TestRun authorization handler.
+See [standalone HTTP management and authorization](../standalone-triggers.md).
 
 **Antiforgery on the login form.** The backend login page embeds an antiforgery token (form field
 `__csrf`) and the paired cookie; the `POST /_elsa/identity/login` HTML-form flow validates it before

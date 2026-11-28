@@ -189,6 +189,8 @@ public sealed class WorkbenchShellActivationTests
     [InlineData("custom", "0", "WorkflowsRuntimeApi")]
     [InlineData("custom", "0:Name", "WorkflowsRuntimeEntityFrameworkCore")]
     [InlineData("default", "WorkflowsRuntimeApi", null)]
+    [InlineData("default", "ActivitiesHttp", null)]
+    [InlineData("custom", "0", "WorkflowsRuntimeHttp")]
     public async Task Retired_classic_selector_in_any_shell_is_refused_before_opening_the_actor_store(
         string shellName, string selector, string? value)
     {
