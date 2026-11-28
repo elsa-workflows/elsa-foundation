@@ -224,6 +224,45 @@ public sealed class BulkDispatchWorkflowsEndToEndTests
         Assert.Equal(["completed:0:slot-fault", "completed:1:item-1", "completed:2:item-2"], SlotRuns(fixture, parentId));
     }
 
+    [Fact]
+    public async Task A_fault_inside_a_Sequence_in_a_slot_follows_the_strategy_in_the_same_way()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        const string parentId = "parent-bulk-sequence-fault";
+        object?[] items = [Fixture.BulkItem(0, message: Fixture.FaultingSlotMessage), Fixture.BulkItem(1)];
+
+        await fixture.StartBulkParentAsync("bulk-sequence-fault", parentId, items, waitForCompletion: true, completedSlot: true,
+            completedSlotInSequence: true);
+        await fixture.SweepUntilQuietAsync();
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await fixture.FindWorkflowAsync(parentId))?.Status);
+        var activities = await fixture.ListActivitiesAsync(parentId);
+        Assert.Contains(activities, state => state.Execution.ExecutableNodeId == Fixture.CompletedSlotNodeId && state.Status == ActivityExecutionStatus.Faulted);
+        // The faulted pass's Sequence never reached its next activity.
+        Assert.DoesNotContain(SlotRuns(fixture, parentId), run => run.StartsWith("completed-tail:0:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Cancelling_the_parent_cancels_the_children_it_waits_for()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        const string parentId = "parent-bulk-cancel";
+        object?[] items = [Fixture.BulkItem(0), Fixture.BulkItem(1), Fixture.BulkItem(2)];
+
+        await fixture.StartBulkParentAsync("bulk-cancel", parentId, items, waitForCompletion: true, completedSlot: true);
+        Assert.All(await fixture.ListDispatchesAsync(parentId), dispatch => Assert.Equal(WorkflowDispatchStatus.Pending, dispatch.Status));
+
+        var job = await fixture.CancelWorkflowAsync(parentId);
+
+        Assert.True(job.Status == WorkflowAlterationJobStatus.Succeeded, JsonSerializer.Serialize(new { job.SafeFailure, job.Outcomes }));
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, (await fixture.FindWorkflowAsync(parentId))?.Status);
+        var dispatches = await fixture.ListDispatchesAsync(parentId);
+        Assert.Equal(3, dispatches.Count);
+        Assert.All(dispatches, dispatch => Assert.Equal(WorkflowDispatchStatus.Cancelled, dispatch.Status));
+        Assert.DoesNotContain(fixture.ChildProbe.Observations, observation => !StringComparer.Ordinal.Equals(observation.WorkflowExecutionId, parentId));
+        Assert.Empty(SlotRuns(fixture, parentId));
+    }
+
     private static async Task<ActivityExecutionState[]> DispatchExecutionsAsync(Fixture fixture, string parentId) =>
         (await fixture.ListActivitiesAsync(parentId))
         .Where(state => state.Execution.ExecutableNodeId == Fixture.BulkDispatchNodeId)

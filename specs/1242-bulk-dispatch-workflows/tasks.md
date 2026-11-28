@@ -27,7 +27,8 @@ converter) needs the activity in the catalog.
   - faults: no fault handler, so the incident strategy decides; never absorb (FR-008);
   - the `Items` durable-binding treatment, and slots scheduled with the pass's iteration id and their own
     `LoopIterationScopeRequest` (plan §2).
-- [X] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
+- [X] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime). Parent cancellation and a fault inside a slot
+  `Sequence` were added in review round 6 (`BulkDispatchWorkflowsEndToEndTests`).
 - [ ] T006 [P] [US1] Check in Studio that the designer shows the three slots through the generic rendering, and that
   the instance view shows the per-item `Dispatch` executions. Add no Studio-specific code (FR-003).
   - Not verified in PR #6067: no Studio code was added, and the generic slot rendering is not exercised here.

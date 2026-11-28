@@ -26,6 +26,8 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
     internal const string BulkDispatchNodeId = "node-bulk-dispatch";
     internal const string CompletedSlotNodeId = "node-bulk-completed";
     internal const string FaultedSlotNodeId = "node-bulk-faulted";
+    internal const string CompletedSlotSequenceNodeId = "node-bulk-completed-sequence";
+    internal const string CompletedSlotTailNodeId = "node-bulk-completed-tail";
 
     /// <summary>The slot probe faults for an item whose message is this, until <see cref="SlotFaultRepaired"/> is set.</summary>
     internal const string FaultingSlotMessage = "slot-fault";
@@ -45,7 +47,19 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
     /// Submits <c>RetryFaultedActivity/1</c> for a faulted activity as an operator does, runs the alteration pump until
     /// the job ends and sweeps until the run is quiet.
     /// </summary>
-    internal async ValueTask<WorkflowAlterationJobState> AlterFaultedActivityAsync(string workflowExecutionId, string sourceActivityExecutionId, string kind, int schemaVersion)
+    internal ValueTask<WorkflowAlterationJobState> AlterFaultedActivityAsync(string workflowExecutionId, string sourceActivityExecutionId, string kind, int schemaVersion) =>
+        AlterAsync(workflowExecutionId, new WorkflowAlterationEnvelope(kind, schemaVersion,
+            kind == "RescheduleActivity"
+                ? JsonSerializer.SerializeToElement(new { sourceActivityExecutionId })
+                : JsonSerializer.SerializeToElement(new { sourceActivityExecutionId, reason = "Slot repaired" })),
+            $"{kind}:{sourceActivityExecutionId}");
+
+    /// <summary>Cancels the whole run with <c>CancelWorkflow/1</c>, as an operator does, and sweeps until it is quiet.</summary>
+    internal ValueTask<WorkflowAlterationJobState> CancelWorkflowAsync(string workflowExecutionId) =>
+        AlterAsync(workflowExecutionId, new WorkflowAlterationEnvelope("CancelWorkflow", 1, JsonSerializer.SerializeToElement(new { })),
+            $"CancelWorkflow:{workflowExecutionId}");
+
+    private async ValueTask<WorkflowAlterationJobState> AlterAsync(string workflowExecutionId, WorkflowAlterationEnvelope envelope, string idempotencyKey)
     {
         WorkflowAlterationPlanAdmissionResult admission;
         await using (var scope = _provider.CreateAsyncScope())
@@ -54,12 +68,9 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
                 new WorkflowAlterationSubmission(
                     new WorkflowAlterationAuthorityScope("tenant-42", "parent-caller", "root-initiator"),
                     WorkflowAlterationTargetSelector.ForExecutionIds([workflowExecutionId]),
-                    [new WorkflowAlterationEnvelope(kind, schemaVersion,
-                        kind == "RescheduleActivity"
-                        ? JsonSerializer.SerializeToElement(new { sourceActivityExecutionId })
-                        : JsonSerializer.SerializeToElement(new { sourceActivityExecutionId, reason = "Slot repaired" }))]),
+                    [envelope]),
                 new WorkflowAlterationOperatorProvenance("operator-1", correlationId: null),
-                $"{kind}:{sourceActivityExecutionId}");
+                idempotencyKey);
         }
 
         var jobId = WorkflowAlterationIdentity.CreateJobId(admission.Plan.PlanId, workflowExecutionId);
@@ -94,10 +105,11 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
         bool faultedSlot = false,
         IncidentStrategyReference? incidentStrategy = null,
         bool withDispatch = true,
-        JsonElement? itemsJson = null)
+        JsonElement? itemsJson = null,
+        bool completedSlotInSequence = false)
     {
         var parentExecutable = NewBulkParentExecutable(caseId, itemsJson ?? JsonSerializer.SerializeToElement(items, SerializerOptions),
-            waitForCompletion, completedSlot, faultedSlot, incidentStrategy, withDispatch);
+            waitForCompletion, completedSlot, faultedSlot, incidentStrategy, withDispatch, completedSlotInSequence);
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
@@ -152,7 +164,8 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
         bool completedSlot,
         bool faultedSlot,
         IncidentStrategyReference? incidentStrategy,
-        bool withDispatch)
+        bool withDispatch,
+        bool completedSlotInSequence)
     {
         var dispatchInputs = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
         {
@@ -179,7 +192,8 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
         if (withDispatch)
             slots.Add(new ExecutableChildSlot(BulkDispatchWorkflowsConstants.DispatchSlotName, [dispatch]));
         if (completedSlot)
-            slots.Add(new ExecutableChildSlot(BulkDispatchWorkflowsConstants.ChildCompletedSlotName, [SlotProbe(CompletedSlotNodeId, "completed")]));
+            slots.Add(new ExecutableChildSlot(BulkDispatchWorkflowsConstants.ChildCompletedSlotName,
+                [completedSlotInSequence ? SlotSequence(SlotProbe(CompletedSlotNodeId, "completed"), SlotProbe(CompletedSlotTailNodeId, "completed-tail")) : SlotProbe(CompletedSlotNodeId, "completed")]));
         if (faultedSlot)
             slots.Add(new ExecutableChildSlot(BulkDispatchWorkflowsConstants.ChildFaultedSlotName, [SlotProbe(FaultedSlotNodeId, "faulted")]));
 
@@ -198,7 +212,7 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
                 BulkDispatchWorkflowsConstants.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new BulkDispatchWorkflowsExecutableStructure(
                     withDispatch ? BulkDispatchNodeId : null,
-                    completedSlot ? CompletedSlotNodeId : null,
+                    completedSlot ? completedSlotInSequence ? CompletedSlotSequenceNodeId : CompletedSlotNodeId : null,
                     faultedSlot ? FaultedSlotNodeId : null), SerializerOptions)));
 
         return new WorkflowExecutable(
@@ -219,6 +233,19 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
             ],
             incidentStrategy: incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference);
     }
+
+    // A Sequence holding the slot's activities, as an author nests several activities in one slot.
+    private static ExecutableNode SlotSequence(params ExecutableNode[] activities) =>
+        NewNode(
+            executableNodeId: CompletedSlotSequenceNodeId,
+            activityType: typeof(Elsa.Activities.Sequence.Activities.Sequence),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal),
+            childSlots: [new ExecutableChildSlot(Elsa.Activities.Sequence.Activities.Sequence.ActivitiesSlotName, activities)],
+            structure: new ExecutableActivityStructure(
+                Elsa.Activities.Sequence.Activities.Sequence.StructureKind,
+                Elsa.Activities.Sequence.Activities.Sequence.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new Elsa.Activities.Sequence.Models.SequenceExecutableStructure(
+                    activities.Select(activity => activity.ExecutableNodeId).ToArray()))));
 
     private static ExecutableNode SlotProbe(string nodeId, string slot) =>
         NewNode(

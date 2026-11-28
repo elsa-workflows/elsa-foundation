@@ -92,6 +92,7 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture : IAsyncDisposa
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new ActivitiesPrimitivesFeature().ConfigureServices(services);
+        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
         new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
         new DispatchWorkflowRuntimeFeature { MaxNestingDepth = maxNestingDepth }.ConfigureServices(services);
         services.Replace(ServiceDescriptor.Singleton<IWellKnownTypeRegistry>(typeRegistry));
@@ -731,6 +732,7 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture : IAsyncDisposa
             typeof(ReplaySafeChildProbeActivity),
             typeof(BulkDispatchWorkflowsActivity),
             typeof(BulkSlotProbeActivity),
+            typeof(Elsa.Activities.Sequence.Activities.Sequence),
             typeof(ActivityUnit),
             typeof(JsonElement),
             typeof(IReadOnlyDictionary<string, JsonElement>)

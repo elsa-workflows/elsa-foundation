@@ -418,6 +418,7 @@ and on-completed-callbacks suites pass.
 | Elsa 3 use | Result |
 |---|---|
 | `WorkflowDefinitionId` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
+| `WaitForCompletion` a literal that is not true or false (in any case) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: set it to true or false |
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` |
 | `Items` a non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: Elsa 3 read it as text and dispatched no child |
 | `DefaultItemInputKey` not a literal or a blank literal, or a static `Input` that is an expression (JavaScript or another language) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: put the values in the items, or use a literal map |
