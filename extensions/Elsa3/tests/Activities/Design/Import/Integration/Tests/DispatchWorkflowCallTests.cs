@@ -1,9 +1,6 @@
-using System.Diagnostics;
 using System.Net;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa3.Activities.Design.Import.Integration.Tests;
@@ -29,31 +26,20 @@ public sealed class DispatchWorkflowCallTests
         var target = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item("dispatch-target-v1"), "workflowVersionId"));
         var caller = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item($"{callerFixture}-v1"), "workflowVersionId"));
 
-        var callerRun = await host.RunAsync(caller);
-        var targetRun = await host.WaitForSettledAsync(await TargetExecutionIdAsync(host, target));
+        var callerId = await host.ExecuteAsync(caller);
+        var callerRun = await host.WaitForSettledAsync(callerId);
+        var child = await host.WaitForActorAsync("dispatch-target");
+        Assert.Equal(target.ArtifactId, child.Run.Workflow);
+        var targetRun = await host.WaitForSettledAsync(child.View.Header.Ref.Id);
 
         Assert.True(callerRun.Workflow?.Status == WorkflowExecutionStatus.Completed, callerRun.Describe());
         Assert.True(targetRun.Workflow?.Status == WorkflowExecutionStatus.Completed, targetRun.Describe());
-        Assert.Contains(callerRun.Activities, state => state.Execution.ExecutableNodeId == "after" && state.Status == ActivityExecutionStatus.Completed);
+        Assert.Contains(callerRun.Activities, state => state.AuthoredActivityId == "after" && state.Status == ActivityExecutionStatus.Completed);
         if (callerFixture == "execute-caller")
         {
-            // Execute Workflow waits for the target, so the caller completes after it.
+            Assert.Equal(callerId, child.View.Header.Parent?.Id);
             Assert.True(targetRun.Workflow!.CompletedAt <= callerRun.Workflow!.CompletedAt,
                 $"target {targetRun.Workflow.CompletedAt:O}, caller {callerRun.Workflow.CompletedAt:O}");
-        }
-    }
-
-    /// <summary>The execution started from <paramref name="target"/>'s artifact; the dispatch may start it after the caller's request.</summary>
-    private static async Task<string> TargetExecutionIdAsync(Elsa3ImportHost host, PublishedWorkflow target)
-    {
-        var deadline = Stopwatch.StartNew();
-        while (true)
-        {
-            var executions = await host.ReadAsync(services => services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync().AsTask());
-            if (executions.SingleOrDefault(execution => execution.PinnedExecutable.ArtifactId == target.ArtifactId) is { } execution)
-                return execution.WorkflowExecutionId;
-            Assert.True(deadline.Elapsed < Elsa3ImportHost.SettleTimeout, "No execution of the dispatched target was started.");
-            await Task.Delay(100);
         }
     }
 }
