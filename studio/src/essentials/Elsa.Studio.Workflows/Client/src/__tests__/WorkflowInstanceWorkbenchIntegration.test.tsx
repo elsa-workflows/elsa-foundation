@@ -2565,13 +2565,14 @@ it("keeps custom activity and sibling execution details accessible after steppin
   await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope")?.textContent).toContain("Greeter"));
   await vi.waitFor(() => expect(container.querySelector(".wf-instance-breadcrumb")).toBeTruthy());
 
-  const stepItem = (id: string) => container.querySelector<HTMLElement>(`.wf-sequence-step[data-id='${id}']`)?.closest<HTMLElement>(".wf-sequence-item");
+  const stepButton = (id: string) => container.querySelector<HTMLButtonElement>(`.wf-sequence-step[data-id='${id}']`);
 
   // Case A: Click Greeter in the execution breadcrumb so active scope stays Sequence > Greeter while on the outer canvas.
   click([...container.querySelectorAll<HTMLButtonElement>(".wf-execution-scope > button")].find(button => button.textContent?.includes("Greeter")));
   await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step[data-id='write-1']")).toBeTruthy());
-  await vi.waitFor(() => expect(stepItem("write-1")?.querySelector(".wf-sequence-runtime-strip")?.textContent ?? "").toContain("Completed"));
-  await vi.waitFor(() => expect(stepItem("greeter")?.querySelector(".wf-sequence-runtime-strip")?.textContent ?? "").toContain("Completed"));
+  await vi.waitFor(() => expect(stepButton("write-1")?.querySelector(".wf-sequence-status")?.textContent).toBe("Completed"));
+  await vi.waitFor(() => expect(stepButton("greeter")?.querySelector(".wf-sequence-status")?.textContent).toBe("Completed"));
+  expect(stepButton("write-1")?.getAttribute("aria-describedby")).toBe(stepButton("write-1")?.querySelector(".wf-sequence-status")?.id);
   // Clicking Greeter on the outer canvas while Greeter is the active execution scope still displays Greeter's details.
   click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='greeter']"));
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
@@ -2597,7 +2598,7 @@ it("keeps custom activity and sibling execution details accessible after steppin
   click(container.querySelector<HTMLButtonElement>(".wf-instance-breadcrumb button"));
   await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step[data-id='greeter']")).toBeTruthy());
   expect(container.querySelector(".wf-execution-scope")?.textContent).not.toContain("Greeter");
-  await vi.waitFor(() => expect(stepItem("greeter")?.querySelector(".wf-sequence-runtime-strip")?.textContent ?? "").toContain("Completed"));
+  await vi.waitFor(() => expect(stepButton("greeter")?.querySelector(".wf-sequence-status")?.textContent).toBe("Completed"));
   click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='greeter']"));
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
   expect(container.textContent).not.toContain("No execution recorded in this scope.");
