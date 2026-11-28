@@ -365,7 +365,7 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(Elsa.Studio.Dashboard.Api.DashboardResourcesApiFeature).Assembly,
             typeof(Elsa.Studio.Dashboard.Management.DashboardManagementFeature).Assembly,
             typeof(Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQueriesFeature).Assembly,
+            typeof(Elsa.Workflows.Dashboard.Queries.KernelWorkflowDashboardQueriesFeature).Assembly,
             typeof(Elsa.Weaver.Dashboard.DashboardWeaverFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
