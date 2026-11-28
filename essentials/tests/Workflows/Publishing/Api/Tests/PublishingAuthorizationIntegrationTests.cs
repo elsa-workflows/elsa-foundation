@@ -291,7 +291,7 @@ internal sealed class PublishingAuthorizationHost(IHost host) : IAsyncDisposable
                     services.AddLogging();
                     services.AddRouting();
                     services.AddHttpContextAccessor();
-                    services.AddWorkflowRuntime();
+                    WorkflowPublicationDefaults.Add(services);
                     services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
                     services.AddAuthentication(PublishingAuthorizationAuthenticationHandler.SchemeName)
                         .AddScheme<AuthenticationSchemeOptions, PublishingAuthorizationAuthenticationHandler>(

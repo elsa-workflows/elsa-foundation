@@ -18,7 +18,7 @@ public sealed partial class ActivityDraftTestRunServiceTests
     [InlineData(false)] [InlineData(true)]
     public async Task Atomic_template_handoff_refuses_real_mixed_DI_before_any_hidden_material_or_reference_write(bool replaceReferences)
     {
-        var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(new(2026, 10, 17, 9, 0, 0, TimeSpan.Zero))); services.AddWorkflowRuntime();
+        var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(new(2026, 10, 17, 9, 0, 0, TimeSpan.Zero))); WorkflowPublicationDefaults.Add(services);
         if (replaceReferences) services.AddScoped<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         else services.AddScoped<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }); using var scope = provider.CreateScope();
@@ -35,7 +35,7 @@ public sealed partial class ActivityDraftTestRunServiceTests
     [Fact]
     public async Task Atomic_template_handoff_uses_real_default_DI_and_the_winning_root_for_wrapper_placement()
     {
-        var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(new(2026, 10, 17, 9, 0, 0, TimeSpan.Zero))); services.AddWorkflowRuntime();
+        var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(new(2026, 10, 17, 9, 0, 0, TimeSpan.Zero))); WorkflowPublicationDefaults.Add(services);
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }); using var scope = provider.CreateScope();
         AtomicTemplateProbe probe = null!;
         var fixture = await CreateFixture(inner => probe = new(inner), childTemplate: ValidChildTemplate(), runtimeServices: scope.ServiceProvider);

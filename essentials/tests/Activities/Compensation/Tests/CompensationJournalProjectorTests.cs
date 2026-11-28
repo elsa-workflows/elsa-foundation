@@ -1,13 +1,14 @@
 using System.Text.Json;
 using Elsa.Activities.Compensation.Activities;
 using Elsa.Activities.Compensation.Internal;
+using Elsa.Activities.Compensation.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using static Elsa.Activities.Compensation.Tests.Support.CompensationGraph;
 
 namespace Elsa.Activities.Compensation.Tests;
 
@@ -18,7 +19,8 @@ namespace Elsa.Activities.Compensation.Tests;
 public sealed class CompensationJournalProjectorTests
 {
     private const string ScopeExecutionId = "actexec-scope";
-    private static readonly ExecutableNode Journey = ReservationJourney();
+    private const string ScopeNodeId = "node-scope";
+    private static readonly ExecutableNode Journey = CreateJourney();
     private static readonly string[] Offer = CompensationScope.Decisions.Offer.ToArray();
 
     [Fact]
@@ -355,4 +357,32 @@ public sealed class CompensationJournalProjectorTests
     }
 
     private static string?[] Strings(JsonElement array) => array.EnumerateArray().Select(item => item.GetString()).ToArray();
+
+    private static ExecutableNode CreateJourney()
+    {
+        CompensationScopeExecutableStep[] steps =
+        [
+            new("Reserve inventory", "reserve-inventory", "release-inventory"),
+            new("Reserve delivery", "reserve-delivery", "cancel-delivery"),
+            new("Confirm order", "confirm-order")
+        ];
+        var slots = new List<ExecutableChildSlot>();
+        foreach (var step in steps)
+        {
+            slots.Add(new(CompensationScope.StepSlotName(step.Name), [Child(step.Activity!)]));
+            if (step.Compensation is { } handler)
+                slots.Add(new(CompensationScope.CompensationSlotName(step.Name), [Child(handler)]));
+        }
+        return new(
+            ScopeNodeId, $"authored-{ScopeNodeId}", typeof(CompensationScope).FullName!, "1.0.0",
+            Descriptor(), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(),
+            childSlots: slots,
+            structure: new(CompensationScope.StructureKind, CompensationScope.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new CompensationScopeExecutableStructure(steps))));
+
+        static ExecutableNode Child(string id) => new(id, $"authored-{id}", "test/participant", "1.0.0",
+            Descriptor(), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
+
+        static RuntimeActivityDescriptor Descriptor() => new("test", "1", JsonSerializer.SerializeToElement(new { }));
+    }
 }

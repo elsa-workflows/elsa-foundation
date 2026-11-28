@@ -31,6 +31,8 @@ using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.KernelHosting;
+using Elsa.Workflows.Runtime.Persistence.TestScopes;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -47,7 +49,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _sourceReferenceStore = new();
-    private readonly InMemoryWorkflowTestScopeStore _testScopeStore = new();
+    private readonly IWorkflowTestScopeStore _testScopeStore = WorkflowTestScopeStoreFactory.CreateInMemory();
     private readonly InMemoryWorkflowTestRunStore _testRunStore;
 
     public WorkflowTestRunRequestHandlerTests() =>
@@ -177,7 +179,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     {
         var driver = new ExternalTestRunDriver();
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        using var runtime = CreateTestRunRuntime(driver);
+        await using var runtime = CreateTestRunRuntime(driver);
         using var services = expiredOnPrivateHost ? new ServiceCollection()
             .AddSingleton<IWorkflowDirectTestRunDispatcher>(new UnadmittedTestRunDispatcher(_executableStore, WorkflowExecutionCommandDispatchStatus.Rejected))
             .BuildServiceProvider() : null;
@@ -230,7 +232,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     public async Task DraftTriggerTestRunRejectsUnknownOptionBeforeSavingExecutableOrOpeningScope()
     {
         var driver = new ExternalTestRunDriver();
-        using var runtime = CreateTestRunRuntime(driver);
+        await using var runtime = CreateTestRunRuntime(driver);
         var handler = DraftSnapshotHandler(
             triggerBindingExtractor: new SingleBindingTriggerExtractor(),
             triggerDrivers: [driver],
@@ -255,7 +257,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     public async Task TestRunInspectionAndStopAreHiddenOutsideTheOwningTenant()
     {
         var driver = new ExternalTestRunDriver();
-        using var runtime = CreateTestRunRuntime(driver);
+        await using var runtime = CreateTestRunRuntime(driver);
         var authorized = DraftSnapshotHandler(
             triggerBindingExtractor: new SingleBindingTriggerExtractor(),
             triggerDrivers: [driver],
@@ -286,7 +288,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     public async Task StopKeepsTargetForRetryWhenDriverCleanupFails()
     {
         var driver = new ExternalTestRunDriver { FailStopCalls = 1 };
-        using var runtime = CreateTestRunRuntime(driver);
+        await using var runtime = CreateTestRunRuntime(driver);
         var handler = DraftSnapshotHandler(
             triggerBindingExtractor: new SingleBindingTriggerExtractor(),
             triggerDrivers: [driver],
@@ -317,7 +319,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     public async Task TriggerStartRejectsInputsWhenTheExecutableValidatorReportsFindings()
     {
         var driver = new ExternalTestRunDriver();
-        using var runtime = CreateTestRunRuntime(driver);
+        await using var runtime = CreateTestRunRuntime(driver);
         var state = new WorkflowDefinitionState(
             [],
             Node("write-one", Text("hello")),
@@ -912,12 +914,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
         // Drive the dispatcher's clock past the reference expiry so the same-scope reference is present but lapsed.
-        var expiredDispatcher = new WorkflowStartDispatcher(
-            _executableStore,
-            _sourceReferenceStore,
-            new InProcessWorkflowExecutionActorProvider(),
-            new ShortRuntimeExecutionIdGenerator(),
-            new FakeTimeProvider(view.ExpiresAt!.Value.AddSeconds(1)));
+        var expiredDispatcher = Dispatcher(new FakeTimeProvider(view.ExpiresAt!.Value.AddSeconds(1)));
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
             expiredDispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "test-run"), WorkflowExecutableReferenceScope.TestRun).AsTask());
@@ -1038,7 +1035,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     private static InMemoryWorkflowTestRunStore CreateTestRunStore(IWorkflowTestScopeStore? scopeStore = null)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IWorkflowTestScopeStore>(scopeStore ?? new InMemoryWorkflowTestScopeStore());
+        services.AddSingleton<IWorkflowTestScopeStore>(scopeStore ?? WorkflowTestScopeStoreFactory.CreateInMemory());
         var provider = services.BuildServiceProvider();
         return new InMemoryWorkflowTestRunStore(provider.GetRequiredService<IServiceScopeFactory>());
     }
@@ -1046,7 +1043,13 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     private TestRunRuntime CreateTestRunRuntime(ITestRunTriggerDriver driver)
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
+        services.AddLogging();
+        WorkflowPublicationDefaults.Add(services);
+        new WorkflowsRuntimeKernelHostingFeature
+        {
+            Provider = "Sqlite",
+            SqlitePath = Path.Combine(Path.GetTempPath(), $"publishing-test-transport-{Guid.NewGuid():N}.sqlite")
+        }.ConfigureServices(services);
         services.RemoveAll<IWorkflowTestScopeStore>();
         services.AddSingleton<IWorkflowTestScopeStore>(_testScopeStore);
         services.RemoveAll<IWorkflowExecutableStore>();
@@ -1271,12 +1274,28 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
             Validate(contract, inputs);
     }
 
-    private WorkflowStartDispatcher Dispatcher() =>
-        new(
-            _executableStore,
-            _sourceReferenceStore,
-            new InProcessWorkflowExecutionActorProvider(),
-            new ShortRuntimeExecutionIdGenerator());
+    private IWorkflowStartDispatcher Dispatcher(TimeProvider? time = null) =>
+        new CapturedTestRunStart(_executableStore, _sourceReferenceStore, time ?? TimeProvider.System);
+
+    private sealed class CapturedTestRunStart(IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, TimeProvider time) : IWorkflowStartDispatcher
+    {
+        public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
+            WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+            CancellationToken cancellationToken = default)
+        {
+            var executable = await executables.FindAsync(request.ArtifactId, cancellationToken)
+                ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
+            var source = await new WorkflowExecutableStartSourceResolver(references, time).ResolveAsync(
+                request.ArtifactId, request.SourceSelection, request.ProvenanceRequirement, requiredScope, cancellationToken);
+            var id = Guid.NewGuid().ToString("N");
+            var now = time.GetUtcNow();
+            return new(id, executable.Identity, new(id, id, WorkflowExecutionCommandDispatchStatus.Accepted, now),
+                new(id, id, "test", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, now), source);
+        }
+    }
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         new("definition-1", "1.0.0")
@@ -1413,15 +1432,15 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         }
     }
 
-    private sealed class TestRunRuntime : IDisposable
+    private sealed class TestRunRuntime : IAsyncDisposable
     {
         private readonly ServiceProvider _provider;
-        private readonly IServiceScope _scope;
+        private readonly AsyncServiceScope _scope;
 
         public TestRunRuntime(ServiceProvider provider)
         {
             _provider = provider;
-            _scope = provider.CreateScope();
+            _scope = provider.CreateAsyncScope();
             Targets = _scope.ServiceProvider.GetRequiredService<ITestRunTargetStore>();
             Dispatcher = _scope.ServiceProvider.GetRequiredService<ITestRunTargetDispatcher>();
             Cleaner = _scope.ServiceProvider.GetRequiredService<ITestRunTargetCleaner>();
@@ -1431,10 +1450,10 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         public ITestRunTargetDispatcher Dispatcher { get; }
         public ITestRunTargetCleaner Cleaner { get; }
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
-            _scope.Dispose();
-            _provider.Dispose();
+            await _scope.DisposeAsync();
+            await _provider.DisposeAsync();
         }
     }
 
