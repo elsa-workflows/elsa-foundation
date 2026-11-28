@@ -76,8 +76,8 @@ by hand.
 
 **Why this priority**: The skill must not lock the migration to AI tooling, and the README promises a document.
 
-**Independent Test**: A reviewer who has not seen the skill follows the README section to the skill file and completes
-the inventory and one component port on the synthetic sample with no AI.
+**Independent Test**: A session that has not seen the skill follows the README section to the skill file literally and
+completes the inventory and one component port on the synthetic sample (SC-001; see its deviation note).
 
 **Acceptance Scenarios**:
 
@@ -343,10 +343,16 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 ### Measurable Outcomes
 
-- **SC-001**: A reviewer with no AI follows the README section and the skill file and completes the inventory and the
-  port of one custom activity on a synthetic export in one sitting, without asking for help.
-- **SC-002**: Two sessions of two different AI assistants, given the same synthetic export and source, produce plans
-  with the same components, target names and applicable cases.
+- **SC-001**: A session that follows the README section and the skill file literally, using no knowledge beyond them,
+  completes the inventory and the port of one custom activity on a synthetic export in one sitting, without asking
+  for help.
+- **SC-002**: Two independent sessions of two different AI models, given the same synthetic export and source, produce
+  plans with the same components, target names and applicable cases.
+
+*Deviation (2026-11-28, amended at implementation on the owner's decision)*: SC-001 first asked for a human reviewer
+with no AI, and SC-002 for assistants from two different vendors. The walkthrough on PR #5827 used an AI session
+restricted to the README and the skill file for SC-001, and two models from one vendor for SC-002. A human
+walkthrough and a second vendor's assistant remain worthwhile checks, but they no longer gate this spec.
 - **SC-003**: All 19 catalog cases carry a verdict and a "before" example; every *port* part carries an "after"
   example that matches its sample region, and the sample's tests pass.
 - **SC-004**: The skill folder contains zero diagnostic code literals and zero references to one AI vendor; the

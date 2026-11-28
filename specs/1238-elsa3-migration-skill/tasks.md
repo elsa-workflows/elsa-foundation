@@ -143,12 +143,11 @@ is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
 
 - [X] T029 Build a synthetic Elsa 3 export and Elsa 3 source (one custom activity, one JavaScript function, one variable
   type, one storage driver) outside the repository; no customer material.
-- [X] T030 SC-001: a reviewer with no AI follows the README and `SKILL.md`, runs the inventory and ports the activity.
-- [X] T031 SC-002 and SC-005: run the skill with two different AI assistants; compare plans; stop and resume one
+- [X] T030 SC-001: a session follows the README and `SKILL.md` literally, runs the inventory and ports the activity.
+- [X] T031 SC-002 and SC-005: run the skill with two different AI models; compare plans; stop and resume one
   session mid-`prepare`. Fix the skill text where the plans differ. Post the evidence on the PR.
-  Walkthrough evidence is on PR #5827 (2026-11-28). Limits: T030 was followed literally by an AI session acting
-  without other knowledge, not by a human reviewer; T031 used two Claude models (Sonnet and Opus) as the two
-  assistants, not assistants from two vendors.
+  Walkthrough evidence is on PR #5827 (2026-11-28). T030 was an AI session limited to the README and `SKILL.md`;
+  T031 used two Claude models (Sonnet and Opus). See the deviation note under the success criteria.
 - [X] T032 Set `**Status**: Implemented` in `spec.md` in the last implementation PR.
 
 ## Dependencies

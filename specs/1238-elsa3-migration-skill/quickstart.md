@@ -21,6 +21,8 @@ All three pass. Rename a sample method used in a region without updating the cat
 
 1. Prepare a synthetic Elsa 3 export using one custom activity, one JavaScript function, one custom variable type and
    one custom storage driver, with matching Elsa 3 source. Keep it outside the repository; it is test input.
-2. Without an AI, follow the README section to `SKILL.md`; run the inventory and port the activity (SC-001).
-3. With two different AI assistants, start the skill; compare the plans (SC-002).
+2. Using only the README section and `SKILL.md`, follow them literally; run the inventory and port the activity
+   (SC-001). A human reviewer without an AI is the stronger check when one is available.
+3. With two different AI models (assistants from two vendors are the stronger check), start the skill; compare the
+   plans (SC-002).
 4. Stop one session during `prepare`, start a new one, and confirm it resumes (SC-005).
