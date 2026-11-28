@@ -89,8 +89,6 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
   draft-retention compatibility, independent of execution admission; schema-2 compilation remains closed
   until the owning lowering slice is qualified. No extensibility slot or execution permission is added.
 
-- Optional `ActivitiesBpmnDirectPublishing`: `POST interchange/bpmn/versions/{versionId}/publish-direct`, capability `elsa.api.bpmn-publishing` with relations `bpmn-authored-publish`, `bpmn-authored-service-publish` and `bpmn-authored-claim-publish` on the same route. Requires both `bpmn:publish` and existing workflow publication management permission for the actual source version, and `workflows/runtime:read` on each selected service source reference. Its keyed `BpmnDirectPublishingFaultRenderer` is a cross-domain `IEndpointFaultRenderer` contribution. Reads only immutable Design versions; runtime commands use the BPMN Core replacement port and existing store fencing. No event handler, background task or scheduler is added.
-
 - `POST interchange/bpmn/analyze` / `import` / `export` (`Endpoints/Documents/*`, mapped in
   `Endpoints/BpmnInterchangeApi.cs`), permission-gated by `bpmn-interchange:read` / `bpmn-interchange:manage`. Analyze and
   import accept `confirmedBindings` (element ids); export returns `omissions` beside the XML.
@@ -103,6 +101,10 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
 - `Elsa.Activities.Design.Core` `IActivityDefinitionLookup` (optional, for both export and import) and `InputDefinition`
   declarations, which decide whether a task binding may travel and whether a confirmed one runs here.
 
-## Material-neutral authored publication
+## Archived direct publication
 
-`BpmnAuthoredDirectPublisher` remains an internal scoped service registered by `ActivitiesBpmnDirectPublishingFeature`. It now calls Bpmn.Core's opt-in `IBpmnModelRuntime.PreparePublicationAsync` member and Publishing.Core's `IPublicationActivator.ActivateMaterialAsync`. These are independent replacement members: unsupported hosts refuse instead of fabricating a native executable or a live raw source. The publisher owns authenticated authored projection and expected logical slot/publication intent; Runtime owns stored material, leases and atomic serving authority; Publishing owns the ordinary journal/completion/compensation. Same-artifact results retain the actual serving logical source. See [the target contract](../../../../specs/1217-standalone-triggers/contracts/targets.md#material-neutral-publication-slot-bridge).
+The [classic BPMN checkout](../../../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution) retains this route and its material publication behavior.
+
+`ActivitiesBpmnDirectPublishing`: `POST interchange/bpmn/versions/{versionId}/publish-direct`, capability `elsa.api.bpmn-publishing` with relations `bpmn-authored-publish`, `bpmn-authored-service-publish` and `bpmn-authored-claim-publish` on the same route. Requires both `bpmn:publish` and existing workflow publication management permission for the actual source version, and `workflows/runtime:read` on each selected service source reference. Its keyed `BpmnDirectPublishingFaultRenderer` is a cross-domain `IEndpointFaultRenderer` contribution. Reads only immutable Design versions; runtime commands use the BPMN Core replacement port and existing store fencing. No event handler, background task or scheduler is added.
+
+`BpmnAuthoredDirectPublisher` is the archived internal scoped service registered by `ActivitiesBpmnDirectPublishingFeature`. It calls Bpmn.Core's opt-in `IBpmnModelRuntime.PreparePublicationAsync` member and Publishing.Core's `IPublicationActivator.ActivateMaterialAsync`. These are independent replacement members: unsupported hosts refuse instead of fabricating a native executable or a live raw source. The publisher owns authenticated authored projection and expected logical slot/publication intent; Runtime owns stored material, leases and atomic serving authority; Publishing owns the ordinary journal/completion/compensation. Same-artifact results retain the actual serving logical source. See [the target contract](../../../../specs/1217-standalone-triggers/contracts/targets.md#material-neutral-publication-slot-bridge).
