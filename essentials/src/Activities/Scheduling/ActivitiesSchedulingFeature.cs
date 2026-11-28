@@ -33,23 +33,27 @@ public sealed class ActivitiesSchedulingFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        ConfigureAuthoredActivities(services);
+
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Singleton<IRecurringTriggerScheduleProvider, TimerRecurringScheduleProvider>(),
+            ServiceDescriptor.Singleton<IRecurringTriggerScheduleProvider, CronRecurringScheduleProvider>()
+        });
+    }
+
+    internal static void ConfigureAuthoredActivities(IServiceCollection services)
+    {
         services.TryAddEnumerable(new[]
         {
             ServiceDescriptor.Scoped<ITestRunTriggerDriver, TimerTestRunDriver>(),
             ServiceDescriptor.Scoped<ITestRunTriggerDriver, CronTestRunDriver>()
         });
 
-        // Timer/Cron each contribute the trigger-index stimulus and the recurring schedule for their nodes.
         services.TryAddEnumerable(new[]
         {
             ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, TimerTriggerStimulusProvider>(),
             ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, CronTriggerStimulusProvider>()
-        });
-
-        services.TryAddEnumerable(new[]
-        {
-            ServiceDescriptor.Singleton<IRecurringTriggerScheduleProvider, TimerRecurringScheduleProvider>(),
-            ServiceDescriptor.Singleton<IRecurringTriggerScheduleProvider, CronRecurringScheduleProvider>()
         });
     }
 }
