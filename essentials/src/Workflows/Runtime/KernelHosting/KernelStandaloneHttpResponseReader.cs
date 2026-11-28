@@ -30,21 +30,23 @@ internal sealed class KernelStandaloneHttpResponseReader(PersistenceScope persis
         if (progress.Phase == RuntimeRecipientPhase.CancelledBeforeDispatch)
             return new(RuntimeStandaloneHttpResponseState.Missing);
         if (progress is not { Seal: { Version: RuntimeDispatchSeal.PreparedStartQualificationVersion } seal,
-                Receipt: { Kind: RuntimeTargetAcceptanceKind.PreparedActorBirth } receipt,
                 PreparedStartAttempt: { Disarmed: false } birth })
             return new(RuntimeStandaloneHttpResponseState.Pending);
-        if (receipt.EvidenceId != birth.Identity.ActorReference || birth.Identity.Tenant != actors.Tenant)
-            throw new InvalidDataException("The acceptance receipt does not name the exact prepared actor.");
+        var actor = birth.Identity.ActorReference;
+        if (birth.Identity.Tenant != actors.Tenant || progress.Receipt is { } receipt &&
+            (receipt.Kind != RuntimeTargetAcceptanceKind.PreparedActorBirth || receipt.EvidenceId != actor))
+            throw new InvalidDataException("The accepted delivery does not name the exact prepared actor.");
 
-        var response = await foundation().ReadResponseAsync(new(receipt.EvidenceId), birth.Identity.Issuance, seal.Fingerprint,
-            cancellationToken);
+        // The provider proves the signed birth and this committed response together. A lost producer acknowledgement
+        // does not delay a response whose authority is already physical and survives actor retirement.
+        var response = await foundation().ReadResponseAsync(new(actor), birth.Identity.Issuance, seal.Fingerprint, cancellationToken);
         if (response is null) return new(RuntimeStandaloneHttpResponseState.Pending);
         if (!response.Present) return new(RuntimeStandaloneHttpResponseState.Missing);
         if (response.Payload is null) return new(RuntimeStandaloneHttpResponseState.TooLarge);
         var instruction = JsonSerializer.Deserialize<HttpResponse>(response.Payload);
         if (instruction is not { StatusCode: >= 100 and <= 599 })
             throw new InvalidDataException("The retained workflow response instruction is invalid.");
-        return new(RuntimeStandaloneHttpResponseState.Ready, receipt.EvidenceId, instruction.StatusCode, instruction.ContentType,
+        return new(RuntimeStandaloneHttpResponseState.Ready, actor, instruction.StatusCode, instruction.ContentType,
             instruction.Body is null ? null : JsonSerializer.SerializeToElement(instruction.Body), instruction.Headers);
     }
 }
