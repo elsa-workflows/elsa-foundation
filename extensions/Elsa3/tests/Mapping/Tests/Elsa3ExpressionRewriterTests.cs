@@ -207,6 +207,8 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("getWorkflowInstanceId()[getHttpRequestBody().name]--", Elsa3JavaScriptMode.Script, true, "getWorkflowInstanceId")]
     [InlineData("getWorkflowInstanceName().x = 1", Elsa3JavaScriptMode.Script, false, "getWorkflowInstanceName")]
     [InlineData("(Math.random() > 0.5 ? getCorrelationId() : {}).x = 1", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
+    [InlineData("var a = {}; (a || getCorrelationId()).x = 1", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
+    [InlineData("var a = {}; (a, getWorkflowInstanceId()).x = 1", Elsa3JavaScriptMode.Script, true, "getWorkflowInstanceId")]
     [InlineData("({ status: getCorrelationId().x } = { status: 'Paid' })", Elsa3JavaScriptMode.Expression, false, "getCorrelationId")]
     [InlineData("[getWorkflowInstanceId().x] = [1]", Elsa3JavaScriptMode.Script, false, "getWorkflowInstanceId")]
     public void Change_through_a_workflow_instance_value_is_refused(string source, Elsa3JavaScriptMode mode, bool reusable, string reader)
@@ -230,6 +232,7 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("getCorrelationId(1).x = 2", Elsa3JavaScriptMode.Expression, "JavaScript calls 'getCorrelationId' with arguments, which it does not take.")]
     [InlineData("var workflowState = 1; getCorrelationId().x = 2;", Elsa3JavaScriptMode.Script, "JavaScript declares its own 'workflowState', and a converted read in its scope would become 'workflowState' too, reading the script's value instead of the workflow's.")]
     [InlineData("[getInput('a').x, getCorrelationId().y] = [1, 2]", Elsa3JavaScriptMode.Script, "JavaScript mutates an Elsa 3 ambient value.")]
+    [InlineData("[getCorrelationId().x, acme] = [1, 2]; return acme;", Elsa3JavaScriptMode.Script, "JavaScript assigns to 'acme', which it never declares. Elsa 3 created a global; Elsa 4 runs in strict mode, where the assignment fails.")]
     public void Change_through_a_workflow_instance_value_keeps_the_other_refusals(string source, Elsa3JavaScriptMode mode, string otherMessage)
     {
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode);
@@ -263,9 +266,9 @@ public sealed class Elsa3ExpressionRewriterTests
     }
 
     /// <summary>
-    /// #6230: reading a workflow instance value, changing a local copy of it, using it as a computed key (#6222) and, in
-    /// a Run JavaScript body, writing it into a variable (spec 1231 FR-032) and passing it to a call whose result is changed all
-    /// still convert.
+    /// #6230: reading a workflow instance value, changing a local copy of it, using it as a computed key (#6222) and
+    /// passing it to a call whose result is changed all still convert, as does, in a Run JavaScript body, writing it
+    /// into a variable (spec 1231 FR-032).
     /// </summary>
     [Theory]
     [InlineData("return getCorrelationId() + '-acme';", Elsa3JavaScriptMode.Expression, false)]
@@ -278,6 +281,10 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData("variables.Order[getWorkflowInstanceId()] = 1;", Elsa3JavaScriptMode.Script, false)]
     [InlineData("var wrap = function (id) { return { id: id }; }; wrap(getCorrelationId()).x = 1; return 1;", Elsa3JavaScriptMode.Script, false)]
     [InlineData("var wrap = function (id) { return { id: id }; }; wrap(getWorkflowInstanceId()).x = 1; return 1;", Elsa3JavaScriptMode.Expression, false)]
+    [InlineData("var a = {}, b = {}; (getCorrelationId() === 'acme' ? a : b).x = 1; return a;", Elsa3JavaScriptMode.Expression, false)]
+    [InlineData("[getCorrelationId()][0] = 1; return 1;", Elsa3JavaScriptMode.Script, true)]
+    [InlineData("({ id: getWorkflowInstanceId() }).id = 'acme'; return 1;", Elsa3JavaScriptMode.Expression, false)]
+    [InlineData("var a = {}; (a, getWorkflowInstanceName(), a).x = 1; return a;", Elsa3JavaScriptMode.Script, false)]
     public void Read_or_local_copy_of_a_workflow_instance_value_converts(string source, Elsa3JavaScriptMode mode, bool reusable)
     {
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("Object"), ResolveVariables, mode, reusableWorkflow: reusable);

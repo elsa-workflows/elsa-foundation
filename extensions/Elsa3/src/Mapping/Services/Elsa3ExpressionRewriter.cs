@@ -2111,6 +2111,21 @@ public sealed class Elsa3ExpressionRewriter(
             }
         }
 
+        private void RecordUndeclaredWrites(Node node)
+        {
+            foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
+            {
+                var takesEffect = node switch
+                {
+                    ForInStatement forIn => forIn.Left.End,
+                    ForOfStatement forOf => forOf.Left.End,
+                    _ => node.End,
+                };
+                _undeclaredWrites[written] = _undeclaredWrites.TryGetValue(written, out var earlier) ? Math.Min(earlier, takesEffect) : takesEffect;
+                Issues.Add(UndeclaredWrite(written));
+            }
+        }
+
         private void VisitNode(Node node)
         {
             var changeTarget = node switch
@@ -2127,6 +2142,8 @@ public sealed class Elsa3ExpressionRewriter(
                 Issues.Add(InstanceValueChange(instanceReader));
                 if (!TargetReachesAmbientRoot(changeTarget))
                 {
+                    // A name the same destructuring target writes is still an undeclared write (VF-IMP-007).
+                    RecordUndeclaredWrites(node);
                     VisitMutationOperands(node, changeTarget);
                     return;
                 }
@@ -2171,17 +2188,7 @@ public sealed class Elsa3ExpressionRewriter(
                 _usesWith = true;
                 Issues.Add(WithStatementUse);
             }
-            foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
-            {
-                var takesEffect = node switch
-                {
-                    ForInStatement forIn => forIn.Left.End,
-                    ForOfStatement forOf => forOf.Left.End,
-                    _ => node.End,
-                };
-                _undeclaredWrites[written] = _undeclaredWrites.TryGetValue(written, out var earlier) ? Math.Min(earlier, takesEffect) : takesEffect;
-                Issues.Add(UndeclaredWrite(written));
-            }
+            RecordUndeclaredWrites(node);
             CheckThisAndArguments(node);
 
             // Names in a with statement's body resolve against its object first, so none of them is known to be a custom
@@ -3464,7 +3471,7 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// The workflow instance built-in (<c>getCorrelationId</c>, …) a change of <paramref name="target"/> goes through
-        /// (#6230), followed like <see cref="TargetReachesAmbientRoot"/>: along the object chain only, so a computed key
+        /// (#6230), followed along the object chain only, like <see cref="TargetReachesAmbientRoot"/>, so a computed key
         /// that reads one stays a read; or null.
         /// </summary>
         private string? InstanceReaderOf(Node target) => target switch
@@ -3474,23 +3481,22 @@ public sealed class Elsa3ExpressionRewriter(
             ArrayPattern or ObjectPattern or RestElement => target.ChildNodes.Select(InstanceReaderOf).FirstOrDefault(name => name is not null),
             Property property => InstanceReaderOf(property.Value),
             AssignmentPattern assigned => InstanceReaderOf(assigned.Left),
-            _ => FindInstanceReader(target),
-        };
-
-        /// <summary>
-        /// The instance built-in an object the converter cannot follow (a conditional, a sequence) may hand back. Another
-        /// call's arguments only read: what that call returns is its own value.
-        /// </summary>
-        private string? FindInstanceReader(Node node) => node switch
-        {
-            CallExpression call => IsInstanceReader(call) ? ((Identifier)call.Callee).Name : null,
-            _ => node.ChildNodes.Select(FindInstanceReader).FirstOrDefault(name => name is not null),
+            // An object the converter does not follow is checked where its value can come from: either branch of a
+            // conditional, either side of a logical expression, a sequence's last expression, an assignment's value.
+            // A conditional's test, a literal's elements and another call's arguments only read.
+            ConditionalExpression conditional => InstanceReaderOf(conditional.Consequent) ?? InstanceReaderOf(conditional.Alternate),
+            LogicalExpression logical => InstanceReaderOf(logical.Left) ?? InstanceReaderOf(logical.Right),
+            SequenceExpression sequence => InstanceReaderOf(sequence.Expressions[^1]),
+            AssignmentExpression assignment => InstanceReaderOf(assignment.Right),
+            CallExpression call when IsInstanceReader(call) => ((Identifier)call.Callee).Name,
+            _ => null,
         };
 
         /// <summary>
         /// Whether <paramref name="call"/> reads workflow instance metadata through an Elsa 3 built-in the conversion keeps:
         /// <c>getCorrelationId</c> and <c>getWorkflowInstanceId</c> (read as <c>args.workflowCorrelationId</c> and
-        /// <c>args.workflowInstanceId</c>), and in a Run JavaScript body the <c>workflowState</c> getters. The value is
+        /// <c>args.workflowInstanceId</c>), and in a Run JavaScript body the <c>workflowState</c> getters, which take over
+        /// <c>getCorrelationId</c> there (<c>workflowState.getCorrelationId()</c>). The value is
         /// read-only, so a change through it is refused (#6230). A built-in whose name a variable's or input's generated
         /// getter shares is ambiguous, and a function the script declares in a block is its own; both stay reported as such.
         /// </summary>
