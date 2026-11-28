@@ -3112,14 +3112,17 @@ internal static class PostgresRootParkedOperatorChecks
             Cold = Store();
             await Cold.CreateAsync(PartitionCount);
             Admission = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
-            await Admission.InstallAsync(stop);
+            await using var profile = open();
+            if (profile.RequiredFormat == StoreFormat.RootShipped)
+                await Cold.InstallPreviewRootSchemaAsync(stop);
+            else
+                await Admission.InstallAsync(stop);
             _cursor = await Admission.OpenJournalCursorAsync(stop);
             _reads = new PostgresRootReads(Cold, _cursor, 12);
-            await using (var profile = open())
-                // Format 22 has no selected-root ingress; its Recover is admitted directly.
-                _ingress = profile.UsesRootTerminalSelection
-                    ? await Cold.OpenSelectedRootIngressAsync(Probe.Type, TimeSpan.FromHours(1), (scope, _) => ReferenceEquals(scope, tenant), stop)
-                    : new PostgresRootIngress(Admission, Probe.Type, authorizeRecover: (_, _) => true);
+            // Format 22 has no selected-root ingress; its Recover is admitted directly.
+            _ingress = profile.UsesRootTerminalSelection
+                ? await Cold.OpenSelectedRootIngressAsync(Probe.Type, TimeSpan.FromHours(1), (scope, _) => ReferenceEquals(scope, tenant), stop)
+                : new PostgresRootIngress(Admission, Probe.Type, authorizeRecover: (_, _) => true);
         }
 
         // Sees every commit an owner of the set writes, with that owner's store.
