@@ -464,7 +464,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 }
 
 internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, IServiceProvider services,
-    ILogger<PrepareKernelShell> logger) : IShellInitializer
+    KernelHttpEndpointSelection httpSelection, ILogger<PrepareKernelShell> logger) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -476,7 +476,8 @@ internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, 
             logger.LogWarning("Kernel hosting requires a host restart to replace the active shell {ShellName}.", defaultShell);
             throw new InvalidOperationException("Kernel hosting requires a host restart to replace the active shell.");
         }
-        _ = WorkflowsRuntimeKernelHostingFeature.HttpBasePath(WorkflowsRuntimeKernelHostingFeature.RequireHttpSettings(services));
+        if (httpSelection.IsSelected(services))
+            _ = WorkflowsRuntimeKernelHostingFeature.HttpBasePath(WorkflowsRuntimeKernelHostingFeature.RequireHttpSettings(services));
         return Task.CompletedTask;
     }
 }

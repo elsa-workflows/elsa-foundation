@@ -4,7 +4,7 @@ A profile runs `Elsa.Foundation.Host.dll`. `packages.txt` selects the NuGet pack
 
 | Profile | Intended use |
 | --- | --- |
-| [Essentials](essentials/shells.json) | Design, publish and execute a workflow with a small activity set, local identity and SQLite. The runtime API works with HTTP, cron and timer triggers switched off. The shell keeps the recurring-schedule projection that publishing requires. |
+| [Essentials](essentials/shells.json) | Design, publish and execute a workflow with a small activity set, local identity and SQLite. Actor Foundation serves the runtime API with HTTP, cron and timer triggers switched off. The shell keeps the recurring-schedule projection that publishing requires. |
 | [Curated Essentials](essentials-curated/README.md) | The published server Essentials composition, including the shared token store, package registry, standard Production overlays, and a writable add-on feed. |
 | [Elsa 3 import](elsa3-import/shells.json) | Analyze and import Elsa 3 reusable activity definitions through the migration API. Includes mapping, publishing, persistence and expressions used by the import path. Native and Flowchart consumers execute on the built-in Actor Foundation. The same image can [run already-converted Elsa 4 files](elsa3-import/migrated-files.md) from a read-only `migrated/` mount. |
 | [Full](full/shells.json) | Explore a broader server composition, including import, native BPMN runtime and design, decisions, diagnostics, connections and Studio backend services. XML interchange stays opt-in pending [published activity version support](https://github.com/elsa-workflows/elsa-foundation/issues/5809). The linked shell file is the exact selection. Run a separate compatible Studio for a browser UI. |
@@ -40,7 +40,7 @@ docker build -t "$image" .
 
 Copy a profile directory or its release build context into your project. Keep the Dockerfile, package list, shell files, and any settings the Dockerfile copies. The directory is the complete build context. Docker with BuildKit and Linux containers is sufficient. The builder image carries the .NET SDK, package version plan, feeds and built-in package packs.
 
-- Edit `packages.txt` to select what the image carries. Lines such as `@engine`, `@http-trigger` and `@sqlite` select built-in groups of package roots. List a first-party package by ID to use the release plan. For example, an `Elsa.Expressions.Liquid` line selects that package at the matching release version. Give an external package an exact pin using `Package.Id [1.2.3]`. List your CLR activity package explicitly so the builder includes its assembly in the activity reconciliation folder. The builder restores the dependencies of the listed packages.
+- Edit `packages.txt` to select what the image carries. Lines such as `@actor-engine`, `@http-trigger` and `@sqlite` select built-in groups of package roots. List a first-party package by ID to use the release plan. For example, an `Elsa.Expressions.Liquid` line selects that package at the matching release version. Give an external package an exact pin using `Package.Id [1.2.3]`. List your CLR activity package explicitly so the builder includes its assembly in the activity reconciliation folder. The builder restores the dependencies of the listed packages.
 - Edit `shells.json` to select active features and their settings. A package can remain available while its features are disabled. Keep the features and package dependencies the shell needs to activate. Do not include deployment credentials in the profile directory.
 
 ### Generate and review locks
@@ -96,11 +96,26 @@ This example expects a TLS certificate in `elsa.pfx` readable by the container u
 | Feature setting (after prefix) | Value |
 | --- | --- |
 | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | Password for the initial `admin` user. |
-| `WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey` | Persistent signing key with at least 32 UTF-8 bytes for Elsa 3 import and Curated Essentials. |
-| `WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` and `WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey` | Separate persistent signing keys for Essentials and Full, each at least 32 UTF-8 bytes. |
-| `WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionActiveKeyId` | ID of the active payload protection key for Essentials and Full. |
+| `WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey` | Persistent signing key with at least 32 UTF-8 bytes for Essentials, Curated Essentials and Elsa 3 import. |
+| `WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` and `WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey` | Separate persistent signing keys for Full, each at least 32 UTF-8 bytes. |
+| `WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionActiveKeyId` | ID of the active payload protection key for Full. |
 | `WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionKeys__<id>` | Base64-encoded 32-byte key for that ID. |
 | `Secrets__EncryptionKey` | Supply for shells that enable Secrets, such as Full. |
+
+Lean Essentials persists Actor runs in `/app/data/elsa-kernel.db`, alongside the separate control-plane database.
+When upgrading from the previous lean profile, stop new workflow ingress and settle pending work with the earlier
+image. Keep that image and its volumes for existing run history and rollback. Start the Actor profile with a fresh
+dedicated Actor database and keep its matching control-plane database. Follow the same drain, history and storage
+sequence as [Curated Essentials](essentials-curated/README.md#workflow-execution).
+
+To enable HTTP in a mounted shell, enable `Http`, `KernelActivitiesHttp`, `WorkflowsRuntimeStandaloneHttp`,
+and `StandaloneHttpTriggerAuthoring`.
+To enable standalone Timer and Cron, select `KernelActivitiesScheduling`, `StandaloneScheduleTriggerAuthoring`,
+and `PreparedStandaloneScheduleTriggers`. The host loads these settings from the replacement shell file.
+The existing `WorkflowsRuntimeKernelHosting` selector includes HTTP. Lean Essentials uses
+`WorkflowsRuntimeKernelOptionalHttpHosting` to keep those routes off until the shell selects them.
+Before disabling a transport in a shell that keeps its databases, unpublish the active slots that require it.
+On startup the host reloads those publications and requires the transports they use.
 
 The Elsa 3 import image keeps `elsa.db` and `elsa-kernel.db` separately under `/app/data`.
 Persist the directory so publication material, executable pins, and Actor state survive together.

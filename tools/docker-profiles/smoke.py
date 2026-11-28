@@ -21,7 +21,8 @@ from profile_acceptance import (
 
 
 CURATED = "essentials-curated"
-ACTOR_PROFILES = {"elsa3-import", CURATED}
+LEAN = "essentials"
+ACTOR_PROFILES = {LEAN, CURATED, "elsa3-import"}
 WRITE_LINE = "Elsa.Activities.Primitives.Activities.WriteLine"
 WRITE_LINE_NODE = "write-line"
 LOGIN_PATH = "/_elsa/identity/login"
@@ -29,10 +30,15 @@ COOKIE_DIRECTORY = "/tmp/elsa-profile-smoke"
 COOKIE_JAR = f"{COOKIE_DIRECTORY}/cookies"
 COOKIE_HEADER = f"{COOKIE_DIRECTORY}/cookie-header"
 OPTIONAL_TRIGGER_FEATURES = {
-    "http": ("Http", "ActivitiesHttp", "WorkflowsRuntimeHttp", "StandaloneHttpTriggerAuthoring"),
-    "cron": ("ActivitiesScheduling", "StandaloneScheduleTriggerAuthoring", "StandaloneScheduleTriggers"),
+    "http": ("Http", "KernelActivitiesHttp", "WorkflowsRuntimeStandaloneHttp", "StandaloneHttpTriggerAuthoring"),
+    "cron": ("KernelActivitiesScheduling", "StandaloneScheduleTriggerAuthoring", "PreparedStandaloneScheduleTriggers"),
 }
 OPTIONAL_TRIGGER_TYPES = {"http": ("http",), "cron": ("cron", "timer")}
+OPTIONAL_TRIGGER_ACTIVITIES = {
+    "http": "Elsa.Activities.Http.Activities.HttpEndpoint",
+    "cron": "Elsa.Activities.Scheduling.Activities.Cron",
+    "timer": "Elsa.Activities.Scheduling.Activities.Timer",
+}
 ALL_OPTIONAL_TRIGGER_TYPES = [kind for family in OPTIONAL_TRIGGER_TYPES.values() for kind in family]
 OPTIONAL_TRIGGER_FEATURE_NAMES = {name for group in OPTIONAL_TRIGGER_FEATURES.values() for name in group}
 
@@ -155,12 +161,13 @@ def verify_curated_profile(container, args):
             "secrets": verify_secret_store(lambda path, data=None: read_json(container, path, data))}
 
 
-def verify_actor_workflow_history(container, instance, execution, version, publication):
+def verify_actor_workflow_history(container, instance, execution, version, publication, *, scheduled=False):
     def request_json(path):
         return read_json(container, path)
 
+    source_reference_id = None if scheduled else publication["sourceReferenceId"]
     completed = actor_activity_completions(
-        request_json, instance, execution, publication["artifactId"], publication["sourceReferenceId"], version)
+        request_json, instance, execution, publication["artifactId"], source_reference_id, version)
     write_line = [item for item in completed if item["executableNodeId"] == WRITE_LINE_NODE]
     if len(write_line) != 1:
         raise RuntimeError(f"The Actor History did not contain the committed WriteLine activity: {completed}")
@@ -235,6 +242,90 @@ def run_workflow(container, args):
     raise RuntimeError(f"Workflow {execution} did not complete within 30s")
 
 
+def profile_activity(container, type_key, node_id, inputs=None, structure=None):
+    definition, = matching_activities(container, type_key)
+    return {"nodeId": node_id, "activityVersionId": definition["headVersionId"],
+            "inputs": [{"referenceKey": key, "value": {"value": value, "expressionType": "Literal"}}
+                       for key, value in (inputs or {}).items()],
+            "outputs": [], "structure": structure}
+
+
+def submit_lean_sequence(container, name, activities):
+    root = profile_activity(container, "Elsa.Activities.Sequence.Activities.Sequence", "root",
+                            structure={"kind": "elsa.sequence.structure", "schemaVersion": "1.0.0",
+                                       "payload": {"activities": activities}})
+    draft = read_json(container, "/design/workflows/definitions/submit", {
+        "name": name, "state": {"rootActivity": root, "variables": [], "inputs": [], "outputs": []},
+    })
+    version = draft["version"]["id"]
+    return draft["definition"]["id"], version
+
+
+def verify_lean_triggers(container, expected_types):
+    marker = f"elsa-lean-trigger-{uuid4().hex}"
+    route = f"/workflows/http/{marker}"
+    catalog = read_json(container, "/design/activities/catalog?availability=Addable")
+    addable_types = {value["activityTypeKey"] for value in catalog["activities"]}
+    addable_triggers = {kind for kind, type_key in OPTIONAL_TRIGGER_ACTIVITIES.items() if type_key in addable_types}
+    if addable_triggers != set(expected_types):
+        raise RuntimeError(f"Lean Essentials advertised the wrong addable trigger activities: {sorted(addable_triggers)}")
+
+    catalog = read_json(container, "/design/activities/catalog?availability=All")
+    all_types = {value["activityTypeKey"] for value in catalog["activities"]}
+    missing_definitions = set(OPTIONAL_TRIGGER_ACTIVITIES.values()) - all_types
+    if missing_definitions:
+        raise RuntimeError(f"Lean Essentials omitted underlying trigger definitions: {sorted(missing_definitions)}")
+
+    capabilities = {value["id"] for value in read_json(container, "/capabilities")["capabilities"]}
+    expects_http = "http" in expected_types
+    if ("elsa.http.workflow-endpoints" in capabilities) != expects_http:
+        raise RuntimeError("Lean Essentials advertised the wrong authored HTTP endpoint capability")
+
+    result = {"authoredHttp": "disabled", "addableTriggerActivities": sorted(addable_triggers)}
+    if expects_http:
+        _, version = submit_lean_sequence(container, marker, [
+            profile_activity(container, OPTIONAL_TRIGGER_ACTIVITIES["http"], "http",
+                             {"Path": marker, "SupportedMethods": ["POST"], "CanStartWorkflow": True}),
+            profile_activity(container, "Elsa.Activities.Http.Activities.WriteHttpResponse", "respond",
+                             {"StatusCode": 201, "Body": marker}),
+        ])
+        read_json(container, f"/publishing/workflows/{version}/publish", {})
+        status, body, _ = request(container, route, {})
+        if status != 201 or body.strip('"') != marker:
+            raise RuntimeError(f"The mounted Actor HTTP endpoint returned HTTP {status}: {body}")
+        result["authoredHttp"] = "verified"
+    elif request(container, route, {})[0] != 404:
+        raise RuntimeError("Lean Essentials served the authored HTTP route without the mounted feature")
+
+    definition, version = submit_lean_sequence(container, marker + "-timer", [
+        profile_activity(container, OPTIONAL_TRIGGER_ACTIVITIES["timer"], "timer", {"Interval": "PT4S"}),
+        profile_activity(container, WRITE_LINE, WRITE_LINE_NODE, {"text": marker}),
+    ])
+    publish = f"/publishing/workflows/{version}/publish"
+    if "timer" in expected_types:
+        publication = read_json(container, publish, {})
+        query = urlencode({"definitionId": definition, "take": 10})
+        deadline = time.monotonic() + 35
+        while time.monotonic() < deadline:
+            instances = read_json(container, f"/runtime/workflows/instances/page?{query}")["items"]
+            for instance in instances:
+                if instance["status"] not in ("Completed", "Finished"):
+                    continue
+                execution = instance["workflowExecutionId"]
+                full = read_json(container, f"/runtime/workflows/instances/{execution}")["instance"]
+                history_event = verify_actor_workflow_history(container, full, execution, version, publication, scheduled=True)
+                result["authoredTimer"] = history_event
+                return result
+            time.sleep(0.25)
+        raise RuntimeError("The mounted Actor Timer did not complete its published workflow")
+
+    status, body, _ = request(container, publish, {})
+    if status < 400 or "definition_unsupported" not in body:
+        raise RuntimeError(f"Lean Essentials accepted an authored Timer with scheduling disabled: HTTP {status}: {body}")
+    result["authoredTimer"] = "disabled"
+    return result
+
+
 def smoke(args, migrated_directory=None):
     create = ["create", "--pull", "never", "--network", "none",
               "-e", "ASPNETCORE_ENVIRONMENT=Development"]
@@ -280,6 +371,8 @@ def smoke(args, migrated_directory=None):
                 else:
                     results.update(run_workflow(container, args))
                     results.update(verify_variant(args.variant, request_json))
+                    if args.variant == LEAN:
+                        results.update(verify_lean_triggers(container, args.expect_trigger))
                     if args.variant == CURATED:
                         results.update(verify_curated_profile(container, args))
                 lines = docker("logs", container).splitlines()
@@ -388,7 +481,7 @@ def verify_profile(args):
             lines.append(f"Elsa__ModuleManagement__ApiKey={args.management_key}\n")
         args.env_file.write_text("".join(lines))
 
-        if args.variant != "essentials":
+        if args.variant != LEAN:
             args.expect_trigger.extend(ALL_OPTIONAL_TRIGGER_TYPES)
             smoke(args)
             if args.variant == "elsa3-import":
