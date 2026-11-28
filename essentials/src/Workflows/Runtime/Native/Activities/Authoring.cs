@@ -179,6 +179,9 @@ public class ActivityContext
 
     /// <summary>The host's script engine, for <see cref="RunJavaScript"/>; null where the host composes none.</summary>
     public INativeScripts? Scripts { get; internal init; }
+
+    internal INativeDecisions? Decisions { get; init; }
+    internal NativeDecisionSource? ExactDecisionSource { get; init; }
 }
 
 /// <summary>

@@ -164,6 +164,7 @@
           "Decisions": {},
           "DecisionsDesign": {},
           "DecisionsApi": {},
+          "ActorDecisionsWorkflows": {},
           "DecisionsEntityFrameworkCore": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},

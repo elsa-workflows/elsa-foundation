@@ -20,11 +20,14 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers = true, bool Children = true, bool SelfSends = true,
     bool HttpWaits = true)
 {
-    /// <summary>A host whose foundation runs everything a published workflow may need.</summary>
+    /// <summary>A host whose foundation runs the complete built-in workflow capability set.</summary>
     public static KernelHostCapabilities All { get; } = new();
 
     /// <summary>Whether this shell serves authored HTTP endpoints.</summary>
     public bool HttpEndpoints { get; init; } = true;
+
+    /// <summary>Whether the shell composes the exact decision execution port.</summary>
+    public bool Decisions { get; init; }
 
     /// <summary>Why a Timer or Cron is refused on a host without schedule actors.</summary>
     public const string SchedulesUnavailable =
@@ -55,7 +58,8 @@ public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers =
             var activity = node.Type;
             var reason = !Schedules && (activity == typeof(Kernel.Native.Timer) || activity == typeof(Kernel.Native.Cron)) ? SchedulesUnavailable :
                 !Timers && activity == typeof(Kernel.Native.Delay) ? DelayUnavailable :
-                !Children && activity == typeof(Kernel.Native.DispatchWorkflow) ? DispatchUnavailable : null;
+                !Children && activity == typeof(Kernel.Native.DispatchWorkflow) ? DispatchUnavailable :
+                !Decisions && activity == typeof(Kernel.Native.EvaluateDecision) ? "Select Actor Decision Workflows on this shell to use Evaluate Decision." : null;
             if (reason is not null) return (node.Id, reason);
             if (activity != typeof(Kernel.Native.HttpEndpoint)) continue;
             if (!HttpEndpoints)
