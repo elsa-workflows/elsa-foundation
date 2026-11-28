@@ -44,7 +44,7 @@ public sealed record WorkflowTestStart(string ScopeId, DateTimeOffset ExpiresAt,
 }
 
 /// <summary>Runs workflow models through the public actor contract.</summary>
-public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
+public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType, IActorTerminalDeletionGuard
 {
     public const string ActorType = "workflow";
 
@@ -108,7 +108,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
                 var state = ReadState(terminatingModel, workflow, saved, turn.Inbox);
                 metadata.TerminateMetadata(state);
                 turn.State = JsonSerializer.Serialize(state, terminatingModel.StateType);
-                WriteHeader(turn, workflow, workflow with { Version = terminatingModel.StateVersion });
+                WriteHeader(turn, workflow, workflow with { Version = terminatingModel.CheckpointVersion(state) });
             }
             if (header.Status == ActorStatus.Running)
             {
@@ -144,7 +144,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
         turn.State = JsonSerializer.Serialize(modelTurn.State, model.StateType);
         // The turn that creates the state is the run's start: its time is kept in the header, which reads list runs by.
-        WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion, StartedAt = modelTurn.Workflow.StartedAt ?? turn.Now },
+        WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.CheckpointVersion(modelTurn.State), StartedAt = modelTurn.Workflow.StartedAt ?? turn.Now },
             modelLabels: modelTurn.LabelsChanged ? modelTurn.Labels : null);
         if (header.Status == ActorStatus.Running && modelTurn.Status != ActorStatus.Running)
         {
@@ -175,7 +175,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         if (!_models.TryGetValue(workflow.Model, out var model) || workflow.Version > model.StateVersion) return 0;
         var restored = ReadState(model, workflow, state, []);
         var growth = model.TerminalGrowth(Instance(header, workflow), restored);
-        if (workflow.Version == model.StateVersion || growth < 0 || model is not IModelMetadata) return growth;
+        if (workflow.Version == model.CheckpointVersion(restored) || growth < 0 || model is not IModelMetadata) return growth;
 
         // The foundation counts the stored bytes. A readable older state may expand when termination writes it back.
         var encoded = JsonSerializer.SerializeToUtf8Bytes(restored, model.StateType);
@@ -188,6 +188,20 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         var workflow = ReadHeader(header);
         return !_models.TryGetValue(workflow.Model, out var model) || workflow.Version > model.StateVersion ||
             model is IModelMetadata metadata && metadata.ProtectsDeletion(ReadState(model, workflow, state, []), header.EndedAt, now);
+    }
+
+    bool IActorTerminalDeletionGuard.HasExternalDeletionGuard =>
+        _models.Values.Any(model => model is IModelTerminalDeletionGuard { HasExternalDeletionGuard: true });
+
+    ValueTask<bool> IActorTerminalDeletionGuard.ProtectsTerminalDeletionAsync(ActorHeader header, string state, long now,
+        CancellationToken cancellationToken)
+    {
+        var workflow = ReadHeader(header);
+        if (!_models.TryGetValue(workflow.Model, out var model) || workflow.Version > model.StateVersion)
+            return ValueTask.FromResult(true);
+        if (model is IModelTerminalDeletionGuard { HasExternalDeletionGuard: true } guard)
+            return guard.ProtectsTerminalDeletionAsync(header, ReadState(model, workflow, state, []), now, cancellationToken);
+        return ValueTask.FromResult(ProtectsDeletion(header, state, now));
     }
 
     private IExecutionModel GetModel(string model) => _models.TryGetValue(model, out var found) ? found :

@@ -22,7 +22,7 @@ public static class WorkflowsRuntimeApi
     {
         var api = MapGroup(endpoints);
         RuntimeHttpApi.MapEndpoints(api, includeExecute: true, includeDelete: true, includeInputSources: true);
-        UserTasks.UserTaskHttpApi.MapEndpoints(api, includeAssignmentTargets: true);
+        UserTasks.UserTaskHttpApi.MapEndpoints(api, includeAssignmentTargets: true, includeParticipantActions: true);
         api.MapEndpointsFrom(typeof(WorkflowsRuntimeApi).Assembly);
     }
 

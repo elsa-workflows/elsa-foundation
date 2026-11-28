@@ -6,8 +6,6 @@ namespace Elsa.Workflows.Runtime.Api.UserTasks;
 
 internal static class UserTaskHttpApi
 {
-    internal const string CapabilityId = "elsa.api.user-tasks";
-
     // Route discovery is also the contract for clients that connect to different execution backends.
     internal static readonly ApiCapabilityLink[] ArchiveLinks =
     [
@@ -23,7 +21,15 @@ internal static class UserTaskHttpApi
         new("identity", "runtime/user-task-identity")
     ];
 
-    internal static void MapEndpoints(EndpointGroup api, bool includeAssignmentTargets)
+    internal static readonly ApiCapabilityLink[] ParticipantLinks =
+    [
+        new("claim", "runtime/user-tasks/{id}/claim", templated: true),
+        new("release", "runtime/user-tasks/{id}/release", templated: true),
+        new("complete", "runtime/user-tasks/{id}/complete", templated: true),
+        new("targets", "runtime/user-task-targets")
+    ];
+
+    internal static void MapEndpoints(EndpointGroup api, bool includeAssignmentTargets, bool includeParticipantActions)
     {
         api.MapEndpoint<ListTasks>();
         api.MapEndpoint<ReadTask>();
@@ -40,6 +46,12 @@ internal static class UserTaskHttpApi
         api.MapEndpoint<ReadTaskForm>();
         if (includeAssignmentTargets)
             api.MapEndpoint<ReadAssignmentTargets>();
+        if (includeParticipantActions)
+        {
+            api.MapEndpoint<ClaimTask>();
+            api.MapEndpoint<ReleaseTask>();
+            api.MapEndpoint<CompleteTask>();
+        }
     }
 
     internal static IEnumerable<Permission> ReadAndFormPermissions() =>

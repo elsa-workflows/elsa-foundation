@@ -8,7 +8,7 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
-    private const int PreparedWaitAuthorityMarkerId = 6;
+    internal const int PreparedWaitAuthorityMarkerId = 6;
 
     private sealed record PreparedWaitInstallState(bool HasTable, bool HasRoot, bool HasMarker);
 

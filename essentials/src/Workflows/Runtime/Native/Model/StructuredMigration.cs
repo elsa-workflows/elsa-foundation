@@ -23,7 +23,7 @@ internal static class StructuredMigration
     {
         if (!state.Started || state.Mode is not (Modes.Balanced or Modes.Durable) ||
             (state.Frames.Count == 0 && state.Agenda.Count == 0) ||
-            state.Waits.Values.Any(wait => wait.Kind == "job" || !state.Frames.ContainsKey(wait.Frame)) ||
+            state.Waits.Values.Any(wait => wait.Kind is "job" or NativeUserTaskWaits.Kind || !state.Frames.ContainsKey(wait.Frame)) ||
             state.InterventionEnabled || state.CheckpointControl || state.Inboxes is { Count: > 0 })
             return StructuredMigrationFinding.UnsupportedCheckpoint;
 

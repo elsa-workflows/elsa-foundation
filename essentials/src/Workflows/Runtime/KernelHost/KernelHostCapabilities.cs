@@ -29,6 +29,9 @@ public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers =
     /// <summary>Whether the shell composes the exact decision execution port.</summary>
     public bool Decisions { get; init; }
 
+    /// <summary>Whether this shell serves durable Actor user task waits and responses.</summary>
+    public bool UserTaskWaits { get; init; }
+
     /// <summary>Why a Timer or Cron is refused on a host without schedule actors.</summary>
     public const string SchedulesUnavailable =
         "Timer and Cron triggers don't run on this host yet. Remove the Timer or Cron, or start the workflow from an HTTP endpoint, an event or a Dispatch.";
@@ -59,7 +62,8 @@ public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers =
             var reason = !Schedules && (activity == typeof(Kernel.Native.Timer) || activity == typeof(Kernel.Native.Cron)) ? SchedulesUnavailable :
                 !Timers && activity == typeof(Kernel.Native.Delay) ? DelayUnavailable :
                 !Children && activity == typeof(Kernel.Native.DispatchWorkflow) ? DispatchUnavailable :
-                !Decisions && activity == typeof(Kernel.Native.EvaluateDecision) ? "Select Actor Decision Workflows on this shell to use Evaluate Decision." : null;
+                !Decisions && activity == typeof(Kernel.Native.EvaluateDecision) ? "Select Actor Decision Workflows on this shell to use Evaluate Decision." :
+                !UserTaskWaits && activity == typeof(Kernel.Native.CreateUserTask) ? "This shell must serve Actor User Tasks to create a user task or form wait." : null;
             if (reason is not null) return (node.Id, reason);
             if (activity != typeof(Kernel.Native.HttpEndpoint)) continue;
             if (!HttpEndpoints)

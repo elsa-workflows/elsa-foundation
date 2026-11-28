@@ -40,6 +40,10 @@ public sealed class StudioEssentialsDriftGuardTests
         {
             // The shared HTTP library owns this declaration. Each Runtime API host can contribute it.
             ["elsa.api.runtime"] = ["WorkflowsRuntimeKernelRetainedApi", "WorkflowsRuntimeKernelHosting"]
+        },
+        ["Elsa.Workflows.Runtime.KernelApi.csproj"] = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["elsa.api.user-tasks"] = ["WorkflowsRuntimeKernelUserTasksApi"]
         }
     };
 
@@ -220,6 +224,7 @@ public sealed class StudioEssentialsDriftGuardTests
     [Theory]
     [InlineData("WorkflowsRuntimeKernelRetainedApi", "elsa.api.runtime")]
     [InlineData("WorkflowsRuntimeKernelHosting", "elsa.api.runtime")]
+    [InlineData("WorkflowsRuntimeKernelUserTasksApi", "elsa.api.user-tasks")]
     [InlineData("StandaloneTriggersApi", "elsa.api.standalone-triggers")]
     public void Runtime_API_capabilities_are_selected_independently(string feature, params string[] capabilities) =>
         Assert.Equal(capabilities.Order(StringComparer.Ordinal),

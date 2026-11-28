@@ -116,6 +116,12 @@ internal sealed class NativeActivityShape
         Add(typeof(Native.RunJavaScript)).Results["result"] = new("Value");
         Add(typeof(Native.EvaluateDecision)).Results["$result"] = new("");
 
+        var userTask = Add(typeof(Native.CreateUserTask));
+        userTask.Results["$result"] = new("");
+        userTask.Results["TaskId"] = new("taskId");
+        userTask.Results["Action"] = new("action");
+        userTask.Results["Data"] = new("data");
+
         var @event = Add(typeof(Native.Event));
         // Start new workflows is fixed at publish on the old core: a literal boolean. Event's old default, true, is Native's.
         @event.Rules[Native.NativeStartTriggers.Input] = StartsWorkflows(true);

@@ -349,6 +349,44 @@ internal sealed partial class PostgresRootAdmission
     internal static async Task<uint?> PinRootCommitNamespaceAsync(KernelDb db, bool writesJournal, CancellationToken token) =>
         (await PinRootNamespaceAsync(db, loadIssuer: false, token, writesJournal))?.Marker;
 
+    internal static async Task VerifyEstablishedShippedSourceAsync(KernelDb db, CancellationToken token)
+    {
+        // Pin the physical source. A migration holds the exclusive format lock before this check, which also
+        // binds its subsequent node lease read to the shard's actual namespace.
+        var pin = await PinRootNamespaceAsync(db, loadIssuer: true, token, writesJournal: true)
+            ?? throw new StoreFormatException("The task upgrade requires the selected PostgreSQL root source.");
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", token);
+        var bind = await PinAuthoredEventSourceAsync(db, pin.Marker, token);
+        var host = db.PublicEventHost ?? throw new StoreFormatException("The task upgrade requires the configured public Event host.");
+        await RootPublicEventHost.RequireAsync(db, host, bind, token);
+        await RootAuthoredStandaloneEvents.ReadTenantAsync(db, bind, token);
+
+        // Reuse the established installer checks under this exact source and discard the verification DDL. Root
+        // authorities must all exist before verification and their definition twins are temporary to this transaction.
+        var transaction = db.Database.CurrentTransaction!;
+        const string verification = "shipped_root_upgrade_verification";
+        await transaction.CreateSavepointAsync(verification, token);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            SELECT pg_catalog.set_config('search_path', pg_catalog.quote_ident(nspname) || ',pg_catalog,pg_temp', true)
+            FROM pg_catalog.pg_namespace WHERE oid::bigint = {(long)pin.Namespace}
+            """, token);
+        var tables = await ReadPersistentTablesAsync();
+        await InstallUnderFormatFenceAsync(db, token, existingAuthoritiesOnly: true);
+        await EfStore.InstallRootWorkflowHistoryUnderFormatFenceAsync(db, token);
+        var verifiedTables = await ReadPersistentTablesAsync();
+        if (!tables.SequenceEqual(verifiedTables))
+            throw new StoreFormatException("The selected PostgreSQL store is missing established root tables.");
+        await transaction.RollbackToSavepointAsync(verification, token);
+
+        Task<long[]> ReadPersistentTablesAsync() => db.Database.SqlQuery<long>($"""
+            SELECT relation.oid::bigint AS "Value"
+            FROM pg_catalog.pg_class relation
+            WHERE relation.relnamespace::bigint = {(long)pin.Namespace}
+                AND relation.relkind IN ('r', 'p') AND relation.relpersistence <> 't'
+            ORDER BY relation.oid
+            """).ToArrayAsync(token);
+    }
+
     internal static Task<uint> PinRetentionPolicySourceAsync(KernelDb db, CancellationToken token)
     {
         var pin = new NpgsqlBatchCommand("""

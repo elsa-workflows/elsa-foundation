@@ -25,6 +25,13 @@ public interface IUserTaskStore
     ValueTask<bool> TryPublishFormAsync(UserTaskFormVersion version, UserTaskFormDraft definitionState, long expectedRevision, CancellationToken cancellationToken = default);
 }
 
+/// <summary>The ordinary Actor journal, separate from historic task writers in the same persistence partition.</summary>
+public interface IActorUserTaskJournal : IUserTaskStore
+{
+    /// <summary>Fair bounded scan of accepted response work or open tasks in the exact ordinary tenant.</summary>
+    ValueTask<UserTaskPage> RecoverOwnedAsync(string tenantId, bool accepted, int limit, string? after, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Replacement current identity/eligibility authority. Unsupported hosts refuse; inputs never grant authority.</summary>
 public interface IUserTaskAccess
 {
@@ -55,6 +62,13 @@ public interface IUserTaskRuntime
 {
     ValueTask<UserTaskRecord> StageAsync(UserTaskCreation request, CancellationToken cancellationToken = default);
     ValueTask<UserTaskResponse> ReadAcceptedAsync(string tenantId, string taskId, string completionId, CancellationToken cancellationToken = default);
+    ValueTask ReconcileAsync(UserTaskRecord task, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Completes journal reconciliation for tasks owned by the selected ordinary Actor runtime.</summary>
+public interface IActorUserTaskRuntime
+{
+    bool Owns(UserTaskRecord task);
     ValueTask ReconcileAsync(UserTaskRecord task, CancellationToken cancellationToken = default);
 }
 

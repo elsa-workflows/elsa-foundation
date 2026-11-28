@@ -58,7 +58,7 @@ public sealed partial class WorkflowActor
                 result = new(MigrationPlanOutcome.Refused, finding);
             else
             {
-                next = next with { Workflow = request.To, Version = model.StateVersion, ExecutableSelection = selection };
+                next = next with { Workflow = request.To, Version = model.CheckpointVersion(state), ExecutableSelection = selection };
                 result = new(MigrationPlanOutcome.Migrated);
             }
         }

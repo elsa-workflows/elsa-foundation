@@ -376,8 +376,8 @@ internal sealed partial class ActorAdapter
         var now = input.Services.Now;
         if (command.RetentionDelete && roots?.RequiresDurableRetentionPolicy != true && !RetentionElapsed(current, header.Terminal.At, now))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "NotEligible");
-        var protection = DeletionRefusal(current, row.State, now);
-        if (protection is not null)
+        var externalGuard = RootActor(row.Model) as Contract.IActorTerminalDeletionGuard;
+        if (externalGuard is not { HasExternalDeletionGuard: true } && DeletionRefusal(current, row.State, now) is { } protection)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, protection);
         var marker = Durable.CreationProtocol.Retire(row);
         var outcome = new Durable.TurnOutcome(input.Actor)
@@ -385,6 +385,22 @@ internal sealed partial class ActorAdapter
             Row = marker, Expected = row.Revision, Revision = marker.Revision, Status = marker.Status,
             Consumed = [.. input.Taken], Journal = """["delete"]""", Delete = true, Unsubscribe = true
         };
+        if (externalGuard is { HasExternalDeletionGuard: true })
+            outcome.PrepareCommand = async cancellationToken =>
+            {
+                string? refusal;
+                try
+                {
+                    refusal = await externalGuard.ProtectsTerminalDeletionAsync(current, row.State, now, cancellationToken)
+                        ? "Protected" : null;
+                }
+                catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    refusal = "ProtectionUnavailable";
+                }
+
+                return refusal is null ? outcome : Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, refusal);
+            };
         outcome.ReplyTo(input.Taken[0], "deleted");
         return outcome;
     }

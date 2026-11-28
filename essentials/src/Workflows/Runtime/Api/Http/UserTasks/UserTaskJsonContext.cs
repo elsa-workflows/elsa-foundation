@@ -22,6 +22,8 @@ namespace Elsa.Workflows.Runtime.Api.UserTasks;
 [JsonSerializable(typeof(UserTasks.UserTaskPageView))]
 [JsonSerializable(typeof(UserTasks.TaskListRequest))]
 [JsonSerializable(typeof(UserTasks.TaskIdRequest))]
+[JsonSerializable(typeof(UserTasks.TaskMutationRequest))]
+[JsonSerializable(typeof(UserTasks.TaskCompletionRequest))]
 [JsonSerializable(typeof(UserTasks.UserTaskProblem))]
 [JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage))]
 [JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord))]

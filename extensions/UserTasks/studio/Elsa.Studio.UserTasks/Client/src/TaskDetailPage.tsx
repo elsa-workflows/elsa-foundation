@@ -58,28 +58,30 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   useEffect(() => () => { lifetime.current++; }, []);
   const edited = useRef(false); const busyRef = useRef(false); const sequence = useRef(0);
   const attempt = useRef<{ action: string; data: Record<string, unknown>; requestId: string; revision: number } | null>(null);
-  const supportsResponse = hasTaskOperation(api, "complete");
-  const supportsClaim = hasTaskOperation(api, "claim");
-  const supportsRelease = hasTaskOperation(api, "release");
-  const supportsReassign = hasTaskOperation(api, "reassign") && hasTaskOperation(api, "targets");
+  const recordAllowsActions = task?.supportsActions !== false;
+  const backendAllowsResponse = hasTaskOperation(api, "complete");
+  const supportsResponse = recordAllowsActions && backendAllowsResponse;
+  const supportsClaim = recordAllowsActions && hasTaskOperation(api, "claim");
+  const supportsRelease = recordAllowsActions && hasTaskOperation(api, "release");
+  const supportsReassign = recordAllowsActions && hasTaskOperation(api, "reassign") && hasTaskOperation(api, "targets");
   const readOnly = !(supportsResponse || supportsClaim || supportsRelease || supportsReassign);
   const refresh = useCallback(async () => {
     const current = ++sequence.current;
     try {
       const next = await read(api, id); if (current !== sequence.current) return; setValidationNotice(false);
       setTask(next); setMissing(false); setStale(false);
-      setNotice(supportsResponse && next.status === "CompletionPending" ? responsePendingNotice : "");
+      setNotice(backendAllowsResponse && next.supportsActions !== false && next.status === "CompletionPending" ? responsePendingNotice : "");
       if (next.decision) edited.current = false;
       if (!edited.current || next.decision) setData(next.decision?.response.data ?? next.prefill ?? {});
       // A newer unaccepted revision proves the previous conditional write cannot still win.
       if (next.decision || next.status === "Completed" || next.status === "Cancelled" ||
           (!next.decision && attempt.current && next.revision > attempt.current.revision)) attempt.current = null;
     } catch (failure) { if (current !== sequence.current) return; setValidationNotice(false); setMissing(statusOf(failure) === 404); setNotice(message(failure)); setStale(true); }
-  }, [api, id, supportsResponse]);
+  }, [api, id, backendAllowsResponse]);
   useEffect(() => { void refresh(); return () => { sequence.current++; }; }, [refresh]);
   useEffect(() => { if (!supportsResponse || task?.status !== "CompletionPending") return; const timer = setInterval(() => void refresh(), 2000); return () => clearInterval(timer); }, [task?.status, refresh, supportsResponse]);
   const act = async (operation: string, action?: string) => {
-    if (!task || busyRef.current || !hasTaskOperation(api, operation)) return;
+    if (!task || !recordAllowsActions || busyRef.current || !hasTaskOperation(api, operation)) return;
     busyRef.current = true; setBusy(true); setNotice(""); setValidationNotice(false); setErrors({}); const operationSequence = ++sequence.current;
     const retrying = operation === "complete" && attempt.current !== null;
     try {
@@ -160,7 +162,7 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
       {manageable ? <OverflowMenu ariaLabel="Task actions" items={[{ id: "reassign", label: "Reassign task", onSelect: () => { setReassignError(""); setReassignOpen(true); }, disabled: busy || stale || Boolean(attempt.current) }]} /> : null}
     </div>}><TaskStatus status={task.status} /></StudioPageHeader>
     {accessNotice}
-    {readOnly && !terminal ? <StudioAlert tone="info">This backend provides read-only access to task records.</StudioAlert> : null}
+    {readOnly && !terminal ? <StudioAlert tone="info">{recordAllowsActions ? "This backend provides read-only access to task records." : "This task record is read-only."}</StudioAlert> : null}
     {notice ? <p role={stale || Object.keys(errors).length ? "alert" : "status"}>{notice}</p> : null}
     {(task.form || claimable || releasable || respondable) ? <section className="user-task-response-card" aria-label="Task response">
       <h2>{readOnly ? "Task form" : "Your response"}</h2>

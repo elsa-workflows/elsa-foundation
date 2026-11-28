@@ -5,7 +5,8 @@ namespace Elsa.Workflows.Runtime.UserTasks;
 
 internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess access,
     IEnumerable<IUserTaskFormProvider> providers, TimeProvider time, IUserTaskRuntime? runtime,
-    UserTaskCursorCodec cursors, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor persistence) : IUserTaskOperations
+    UserTaskCursorCodec cursors, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor persistence,
+    IActorUserTaskRuntime? actorRuntime = null) : IUserTaskOperations
 {
     public async ValueTask<UserTaskPage> ListAsync(string view, int limit = 25, string? after = null, string? search = null, CancellationToken cancellationToken = default)
     {
@@ -39,9 +40,9 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
 
     public async ValueTask<UserTaskRecord> ClaimAsync(string id, UserTaskMutation request, CancellationToken cancellationToken = default)
     {
-        if (runtime is null) throw Failure("unavailable", "This host provides read-only task access.");
         var actor = await ActorAsync(cancellationToken);
         var task = await ReadAsync(id, actor, cancellationToken);
+        RequireTaskActions(task);
         RequireAct(actor); await access.AuthorizeAsync(task, "act", cancellationToken); RequireRevision(task, request.Revision, request.RequestId);
         if (task.Status != UserTaskStatus.Open || task.GroupId is null || task.ClaimantId is not null || !actor.GroupIds.Contains(task.GroupId))
             throw Failure("conflict", "This task is no longer available to claim.");
@@ -50,9 +51,9 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
 
     public async ValueTask<UserTaskRecord> ReleaseAsync(string id, UserTaskMutation request, CancellationToken cancellationToken = default)
     {
-        if (runtime is null) throw Failure("unavailable", "This host provides read-only task access.");
         var actor = await ActorAsync(cancellationToken);
         var task = await ReadAsync(id, actor, cancellationToken);
+        RequireTaskActions(task);
         RequireAct(actor); await access.AuthorizeAsync(task, "act", cancellationToken); RequireRevision(task, request.Revision, request.RequestId);
         if (task.Status != UserTaskStatus.Claimed || task.ClaimantId != actor.UserId || task.GroupId is null || !actor.GroupIds.Contains(task.GroupId))
             throw Failure("conflict", "Only the current eligible claimant can release this task.");
@@ -74,9 +75,9 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
 
     public async ValueTask<UserTaskRecord> CompleteAsync(string id, UserTaskCompletion request, CancellationToken cancellationToken = default)
     {
-        if (runtime is null) throw Failure("unavailable", "This host provides read-only task access.");
         var actor = await ActorAsync(cancellationToken);
         var task = await ReadAsync(id, actor, cancellationToken);
+        RequireTaskActions(task);
         RequireAct(actor);
         await access.AuthorizeAsync(task, "act", cancellationToken);
         if (task.Decision is { } accepted && accepted.RequestId == request.RequestId)
@@ -91,6 +92,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
             throw Failure("forbidden", "Claim the task or ask its assignee to complete it.");
         if (!task.Actions.Contains(request.Action, StringComparer.Ordinal)) throw Failure("validation", "Choose one of this task's actions.");
         if (request.Data.ValueKind != JsonValueKind.Object) throw Failure("validation", "The response must be an object.");
+        if (actorRuntime?.Owns(task) == true) UserTaskRules.ValidateActorData(request.Data);
         if (task.Form is { } form)
         {
             var errors = await Provider(form.Provider).ValidateResponseAsync(form, task.Prefill, request.Data,
@@ -267,8 +269,12 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
         if (task is null || task.Status == UserTaskStatus.Staged || !UserTaskRules.CanSee(task, actor.UserId, actor.GroupIds, actor.CanManage))
             throw Failure("missing", "Task not found.");
         await access.AuthorizeAsync(task, "read", ct);
-        if (runtime is null) return task;
-        try { await runtime.ReconcileAsync(task, ct); }
+        if (runtime is null && actorRuntime?.Owns(task) != true) return task;
+        try
+        {
+            if (runtime is not null) await runtime.ReconcileAsync(task, ct);
+            else await actorRuntime!.ReconcileAsync(task, ct);
+        }
         catch (Exception exception) when (task.Status == UserTaskStatus.CompletionPending &&
             !ct.IsCancellationRequested && (UserTaskAvailability.IsUnavailable(exception, ct) ||
                 exception is Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException))
@@ -288,6 +294,12 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
             History = before.History.Append(new UserTaskHistory(operation, actor, now, next.Decision?.Response.Action, next.AssigneeId, next.GroupId)).ToArray() };
         if (!await store.TryWriteAsync(next, before.Revision, ct)) throw Failure("conflict", "This task changed. Refresh and try again.");
         return next;
+    }
+
+    private void RequireTaskActions(UserTaskRecord task)
+    {
+        if (runtime is null && actorRuntime?.Owns(task) != true)
+            throw Failure("unavailable", "This host provides read-only access to this task.");
     }
 
     private static void RequireAct(UserTaskActor actor) { if (!actor.CanAct) throw Failure("forbidden", "Task action permission is required."); }

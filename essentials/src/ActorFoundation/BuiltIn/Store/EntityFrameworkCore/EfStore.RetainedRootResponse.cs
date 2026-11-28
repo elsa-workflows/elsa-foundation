@@ -14,7 +14,7 @@ public sealed partial class EfStore
             AND ("Present" OR "Payload" IS NULL))
         """));
 
-    private const int RetainedResponseAuthorityMarkerId = 5;
+    internal const int RetainedResponseAuthorityMarkerId = 5;
 
     private sealed record RetainedResponseInstallState(bool HasResponse, bool HasRootSchema, bool HasMarker, bool ExactMarker);
 

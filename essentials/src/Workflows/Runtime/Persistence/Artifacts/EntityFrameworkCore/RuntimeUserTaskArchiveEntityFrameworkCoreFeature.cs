@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.UserTasks;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -21,6 +22,13 @@ public sealed class RuntimeUserTaskArchiveEntityFrameworkCoreFeature : IShellFea
     {
         if (services.Any(descriptor => descriptor.ServiceType == typeof(IUserTaskStore) && !descriptor.IsKeyedService))
             throw new InvalidOperationException("The user task journal and forms require a single persistence owner.");
-        services.AddScoped<IUserTaskStore, EfUserTaskArchiveStore>();
+        services.AddScoped<IUserTaskStore>(provider =>
+        {
+            var context = provider.GetRequiredService<RuntimeDbContext>();
+            var access = provider.GetRequiredService<IPersistenceAccessContextAccessor>();
+            return provider.GetServices<IActorUserTaskRuntime>().SingleOrDefault() is null
+                ? new EfUserTaskArchiveStore(context, access)
+                : new EfActorUserTaskJournal(context, access);
+        });
     }
 }
