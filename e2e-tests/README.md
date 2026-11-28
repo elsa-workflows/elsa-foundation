@@ -367,7 +367,9 @@ Classic Elsa let each variable pick a storage driver (Memory vs WorkflowInstance
 is no Memory/WorkflowInstance dichotomy to select between, so the classic per-variable-driver tests do not
 reproduce. This is an architecture difference (like the removed flow-activity model), not a bug; no script.
 
-## Composition change: DispatchWorkflow (child workflows)
+## Classic DispatchWorkflow evidence
+
+The following observations describe the previous runtime. For current Actor child execution, see the [retained kernel tests](../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs).
 
 `Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
 Enabling it (separate from the bug fixes below):
@@ -383,7 +385,7 @@ hang is gone since the #982 node-scoped resume-target fix (`4c2386551`): the par
 node, the child runs, and the parent resumes with the child's terminal outcome (`Completed`/`Faulted`) —
 covered end-to-end by the [archived BPMN call-activity witness](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
 
-**Known defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
+**Historical classic defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
 fault-recording checkpoint commit fails, so the child surfaces a
 `Critical`/`SchedulerWorkPoisoned` incident instead of the normal `ActivityReturnedFault` one and the faulted
 activity's state stays uncommitted (`Running`). Dispatched executions only; a directly-executed `Fault`
