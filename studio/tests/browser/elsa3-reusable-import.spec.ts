@@ -42,7 +42,8 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
   await expect(page.getByRole("heading", { name: "Import from Elsa 3" })).toBeVisible();
-  await expect(page.getByText("Uses reusable activities directly")).toBeVisible();
+  await expect(page.getByLabel("Elsa 3 export files")).toBeVisible();
+  await page.getByRole("button", { name: "Use an existing collection ID" }).click();
   await page.getByPlaceholder("Collection ID").fill("collection");
   await page.getByRole("button", { name: "Analyze collection" }).click();
 
@@ -72,12 +73,18 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
   await expect(progress).toHaveText(/Confirm import/);
   const review = page.getByRole("heading", { name: "4. Confirm import" }).locator("xpath=ancestor::section[1]");
   await expect(review).toContainText("Exact source versions2");
-  await expect(review).toContainText("Activity Definitions2");
-  await expect(review).toContainText("Activity Definition versions2");
-  await expect(review).toContainText("Exact reusable rewrites1");
+  await expect(review).toContainText("Reusable activities2");
+  await expect(review.getByRole("heading")).toBeFocused();
+  const planDetails = review.getByRole("button", { name: "Import plan details" });
+  await expect(planDetails).toHaveAttribute("aria-expanded", "false");
+  await page.setViewportSize({ width: 390, height: 900 });
+  await planDetails.click();
+  await expect(review.getByText("Exact reusable rewrites", { exact: true })).toBeVisible();
+  expect(await review.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 
   await page.getByRole("button", { name: "Apply reviewed import" }).click();
   await expect(page.getByRole("heading", { name: "Import results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Import results" })).toBeFocused();
   expect(state.applyBody).toMatchObject({
     publishImportedActivities: false,
     planId: "plan",
@@ -126,6 +133,7 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
   });
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
+  await page.getByRole("button", { name: "Use an existing collection ID" }).click();
   await page.getByPlaceholder("Collection ID").fill("collection");
   await page.getByRole("button", { name: "Analyze collection" }).click();
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
@@ -235,6 +243,7 @@ test("captures Classic light receipt screenshots when asked", async ({ page }) =
   await page.goto("/workflows/activity-definitions/import-elsa3?theme=classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "light");
+  await page.getByRole("button", { name: "Use an existing collection ID" }).click();
   await page.getByPlaceholder("Collection ID").fill("collection");
   await page.getByRole("button", { name: "Analyze collection" }).click();
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
@@ -255,6 +264,7 @@ test("Elsa 3 expired handles require a fresh collection without retaining an ana
   }, 410));
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
+  await page.getByRole("button", { name: "Use an existing collection ID" }).click();
   await page.getByPlaceholder("Collection ID").fill("expired");
   await page.getByRole("button", { name: "Analyze collection" }).click();
 
