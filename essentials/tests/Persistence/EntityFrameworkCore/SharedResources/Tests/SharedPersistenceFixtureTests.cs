@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json.Nodes;
 using Elsa.Workbench.Tests;
 using Npgsql;
 using Xunit;
@@ -159,7 +158,11 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
         var shell = WorkbenchShell.Development with { Settings = settings };
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            WorkbenchProcess.StartAsync(shell, SharedPersistenceHostFixture.RemoveLegacyDiagnosticsTargets));
+            WorkbenchProcess.StartAsync(shell, contentRoot =>
+            {
+                SharedPersistenceHostFixture.ConfigureNamedRuntimeTargets(contentRoot);
+                SharedPersistenceHostFixture.RemoveLegacyDiagnosticsTargets(contentRoot);
+            }));
         Assert.Contains("resource-context-conflict", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(primary, failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(diagnostics, failure.Message, StringComparison.Ordinal);
@@ -227,8 +230,8 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
     {
         Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
 
-        const string artifacts = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
-        const string testScope = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
+        const string artifacts = SharedPersistenceHostFixture.RuntimeArtifacts;
+        const string testScope = SharedPersistenceHostFixture.RuntimeTestScope;
         const string preparedStandalone = "WorkflowsRuntimePreparedStandaloneEntityFrameworkCorePersistence";
         var settings = new Dictionary<string, string>
         {
@@ -237,7 +240,8 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
             [$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{artifacts}"] = "primary",
             [$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{testScope}"] = "primary"
         };
-        await using var host = new SharedPersistenceHostFixture(targets, settings, ConfigureRuntimeResource);
+        await using var host = new SharedPersistenceHostFixture(targets, settings,
+            contentRoot => SharedPersistenceHostFixture.ConfigureNamedRuntimeTargets(contentRoot, preparedStandalone));
         await host.StartAsync();
 
         var catalog = (await host.Process.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
@@ -273,15 +277,5 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
         Assert.True(reader.GetBoolean(2), "The test-scope table is missing from the shared target.");
         Assert.True(reader.GetBoolean(3), "The standalone trigger table is missing from the shared target.");
 
-        static void ConfigureRuntimeResource(string contentRoot)
-        {
-            var shellFile = Path.Combine(contentRoot, "shells.json");
-            var root = JsonNode.Parse(File.ReadAllText(shellFile))!;
-            var features = root["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
-            Assert.True(features[artifacts]!.AsObject().Remove("Provider"));
-            Assert.True(features[testScope]!.AsObject().Remove("Provider"));
-            features[preparedStandalone] = new JsonObject();
-            File.WriteAllText(shellFile, root.ToJsonString());
-        }
     }
 }

@@ -163,6 +163,7 @@ cd "$archive/source"
 dotnet test extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release -p:RestoreLockedMode=true
 dotnet test essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj \
   -c Release -p:RestoreLockedMode=true
+```
 
 ## Classic Dashboard EF selector
 
@@ -192,12 +193,14 @@ original projection, and physical provider tests.
 The classic Workbench multi-selector case needs the older
 [`workbench-classic-default` checkout](workbench-compatibility-tests.md)
 at `18a16dee878106ac525aa9a861d851a200e43c55`. Its stock shell supplies the
-comprehensive Runtime feature that the test replaces. Run the archived
-case from that checkout.
+comprehensive Runtime feature that the test replaces. It also owns the two
+shared-resource workflow journeys that verify classic physical execution rows
+and the live named-resource replacement test.
+Run the archived cases from that checkout.
 
 ```sh
 ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1 \
   dotnet test essentials/tests/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj \
   -c Release -p:RestoreLockedMode=true \
-  --filter 'FullyQualifiedName~Partial_opt_in_runtime_stores_activate_without_the_comprehensive_execution_profile'
+  --filter 'FullyQualifiedName~Partial_opt_in_runtime_stores_activate_without_the_comprehensive_execution_profile|FullyQualifiedName~Shared_resource_preserves_reusable_activity_published_workflow_and_execution_after_restart|FullyQualifiedName~Separate_diagnostics_resource_keeps_representative_workflow_on_primary_after_restart|FullyQualifiedName~Authored_resource_reload_moves_the_target_and_failed_candidate_keeps_the_active_generation'
 ```
