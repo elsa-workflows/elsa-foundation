@@ -307,6 +307,10 @@ the ticket, timer, checkpoint and waiting journal row.
 
 ### Workbench opt-in
 
+This section documents the retired mixed-preview host. Run its commands from the historical
+checkout with the matching Workbench and Native runner. See the
+[Workbench compatibility notes](../../docs/docker.md#workbench-mixed-preview-compatibility).
+
 Run from the repository root with Docker available:
 
 ```bash

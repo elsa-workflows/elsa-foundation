@@ -5,10 +5,14 @@ case "$configuration" in
   Debug|Release) ;;
   *) echo "Choose Debug or Release." >&2; exit 2 ;;
 esac
-root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
+root=$(cd "${2:-.}" && git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
 export MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_USE_MSBUILD_SERVER=0
 app=server/apps/Elsa.Workbench.Host
+if [[ ! -f "$app/CorePreview/WorkbenchCorePreview.cs" ]]; then
+  echo "Supply the historical Workbench checkout as the second argument. See docs/docker.md." >&2
+  exit 2
+fi
 runner=essentials/tests/ActorFoundation/Native/Run
 dotnet build "$app" -c "$configuration" -p:RestoreLockedMode=true -p:WarningsNotAsErrors=NU1603 -p:ElsaDashboardQualification=true -m:3
 dotnet build "$runner" -c "$configuration" -p:RestoreLockedMode=true -m:3

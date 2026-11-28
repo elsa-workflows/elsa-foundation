@@ -2,7 +2,7 @@ using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
-using Elsa.Workbench.CorePreview;
+using Elsa.Workbench.Composition;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -16,8 +16,8 @@ using Xunit;
 
 namespace Elsa.Modularity.Tests;
 
-/// <summary>The Workbench Core Preview's composition of the kernel shell: the feature it writes, and the toolbox it narrows.</summary>
-public sealed class WorkbenchCorePreviewKernelShellTests
+/// <summary>Tests the Workbench Actor toolbox and production configuration.</summary>
+public sealed class WorkbenchActorShellTests
 {
     private sealed record Activity(string ActivityTypeKey) : IActivityDefinition
     {
@@ -75,58 +75,5 @@ public sealed class WorkbenchCorePreviewKernelShellTests
 
         Assert.Equal(selection, configuration[artifact]);
         Assert.Empty(configuration.GetSection(artifact).GetChildren());
-    }
-
-    [Fact]
-    public void Publications_compose_the_feature_into_the_default_shell_as_shells_json_writes_it()
-    {
-        var configuration = new ConfigurationManager();
-        configuration.AddInMemoryCollection([new("Elsa:CorePreview:Enabled", "true"), new(WorkbenchCorePreview.PublicationsKey, "true")]);
-
-        var shell = WorkbenchCorePreview.ComposeKernelShell(configuration);
-
-        Assert.Equal("default", shell);
-        // The kernel serves the shell's publications, and the kernel's run list serves its runtime API's Runs list.
-        var features = configuration.GetSection("CShells:Shells:default:Features").GetChildren().ToArray();
-        Assert.Equal([WorkflowsRuntimeKernelFeature.FeatureName, Elsa.Workflows.Runtime.KernelApi.WorkflowsRuntimeKernelApiFeature.FeatureName],
-            features.Select(feature => feature.Key).Order(StringComparer.Ordinal));
-        Assert.All(features, feature => Assert.True(feature.Value is null && !feature.GetChildren().Any()));
-    }
-
-    [Fact]
-    public void Without_publications_nothing_is_composed()
-    {
-        var configuration = new ConfigurationManager();
-        configuration.AddInMemoryCollection([new("Elsa:CorePreview:Enabled", "true")]);
-
-        Assert.Null(WorkbenchCorePreview.ComposeKernelShell(configuration));
-        Assert.False(configuration.GetSection("CShells:Shells").Exists());
-    }
-
-    [Theory]
-    [InlineData(null, "/workflows/http")]
-    [InlineData("", "/workflows/http")]
-    [InlineData("/kernel/", "/kernel")]
-    [InlineData("hooks/in", "/hooks/in")]
-    public void The_http_edge_base_path_defaults_to_the_address_studio_shows(string? configured, string expected) =>
-        Assert.Equal(expected, KernelHttpEdgeHost.NormalizeBasePath(configured));
-
-    [Fact]
-    public void The_http_edge_base_path_is_never_the_root() =>
-        Assert.Throws<InvalidOperationException>(() => KernelHttpEdgeHost.NormalizeBasePath("/"));
-
-    [Theory]
-    [InlineData(null, null, "default", null)]
-    [InlineData("acme", null, "acme", "acme")]
-    [InlineData(null, "acme", "acme", "acme")]
-    [InlineData("acme", "acme", "acme", "acme")]
-    public void The_core_preview_binds_one_tenant_for_its_edge_and_reads(string? tenant, string? reads, string edge, string? expectedReads) =>
-        Assert.Equal((edge, expectedReads), WorkbenchCorePreview.Tenants(tenant, reads));
-
-    [Fact]
-    public void The_core_preview_refuses_two_different_tenants()
-    {
-        var refused = Assert.Throws<InvalidOperationException>(() => WorkbenchCorePreview.Tenants("acme", "globex"));
-        Assert.Contains("one tenant per process", refused.Message, StringComparison.Ordinal);
     }
 }

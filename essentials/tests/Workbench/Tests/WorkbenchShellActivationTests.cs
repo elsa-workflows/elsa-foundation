@@ -121,6 +121,8 @@ public sealed class WorkbenchShellActivationTests
         AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "CacheWorkflowExecutables", "true");
         AssertSetting(catalog, "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowExecutableCacheCapacity", "256");
         Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
+        using var retiredRoute = await workbench.Client.GetAsync("/runtime/core-preview/workflows/instances");
+        Assert.Equal(HttpStatusCode.NotFound, retiredRoute.StatusCode);
 
         if (shell == WorkbenchShell.Development)
         {
@@ -138,74 +140,34 @@ public sealed class WorkbenchShellActivationTests
     }
 
     [Fact]
-    public async Task Explicit_core_preview_keeps_the_mixed_workflow_shell()
+    public async Task Retired_mixed_preview_is_refused_before_opening_either_actor_store()
     {
+        var stores = Directory.CreateTempSubdirectory("elsa-retired-preview-stores-");
         var shell = WorkbenchShell.Development with
         {
             Settings = new Dictionary<string, string>
             {
                 ["Elsa:CorePreview:Enabled"] = "true",
-                ["Elsa:CorePreview:Publications"] = "true",
                 ["Elsa:CorePreview:Provider"] = "SQLite",
-                ["Elsa:CorePreview:SqlitePath"] = "elsa-workbench-preview.db"
+                ["Elsa:CorePreview:SqlitePath"] = Path.Combine(stores.FullName, "preview.db"),
+                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:SqlitePath"] =
+                    Path.Combine(stores.FullName, "actors.db")
             }
         };
 
-        await using var workbench = await WorkbenchProcess.StartAsync(shell);
-        using var diagnostics = await workbench.Client.GetAsync("/runtime/workflows/diagnostics/settings");
-        Assert.True(diagnostics.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
-            $"The explicit preview did not map the legacy Runtime API. Host output:{Environment.NewLine}{workbench.Output}");
-        var active = await ReadEffectiveFeatureClosureAsync(workbench);
-        Assert.Contains("ConnectionsWorkflows", active);
-        Assert.Contains("DecisionsWorkflowsDesign", active);
-        Assert.Contains("WorkflowsRuntimeResumption", active);
-        Assert.DoesNotContain("ActorHttpConnections", active);
-        Assert.DoesNotContain("WorkflowsRuntimeDistributed", active);
-        Assert.DoesNotContain("WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", active);
-        Assert.DoesNotContain("WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence", active);
-        Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-preview.db")));
-        Assert.False(File.Exists(Path.Combine(workbench.ContentRoot, "elsa-workbench-actors.db")));
-
-        const string publishedMarker = "mixed-preview-published-execute";
-        const string draftMarker = "mixed-preview-draft-test-run";
-        await NativeHostingScenario.LoginAsync(workbench);
-        var writeLine = await NativeHostingScenario.ActivityVersionAsync(workbench, "Elsa.Activities.Primitives.Activities.WriteLine");
-        var publishedVersion = await SubmitAsync("Mixed preview published execution", publishedMarker);
-        var published = await NativeHostingScenario.PostAsync(workbench, $"/publishing/workflows/{publishedVersion}/publish", new { });
-        var artifact = published["artifactId"]!.GetValue<string>();
-        var source = published["sourceReferenceId"]!.GetValue<string>();
-        var draft = await SubmitAsync("Mixed preview draft Test Run", draftMarker);
-        await ExecuteAndTestAsync(workbench);
-
-        await using var restarted = await workbench.CrashAndRestartAsync();
-        await NativeHostingScenario.LoginAsync(restarted);
-        await ExecuteAndTestAsync(restarted);
-
-        async Task<string> SubmitAsync(string name, string marker)
+        try
         {
-            var root = NativeHostingScenario.Node("write", writeLine, [NativeHostingScenario.Input("text", marker)]);
-            var definition = await NativeHostingScenario.PostAsync(workbench, "/design/workflows/definitions/submit", new
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             {
-                name,
-                state = new { variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
+                await using var _ = await WorkbenchProcess.StartAsync(shell);
             });
-            return definition["version"]!["id"]!.GetValue<string>();
+            Assert.Contains("The Workbench mixed Core Preview has been retired", failure.Message, StringComparison.Ordinal);
+            Assert.Empty(stores.EnumerateFileSystemInfos());
         }
-
-        async Task ExecuteAndTestAsync(WorkbenchProcess app)
+        finally
         {
-            var execute = await NativeHostingScenario.PostAsync(app, $"/runtime/workflows/executables/{artifact}/execute",
-                new { sourceReferenceId = source });
-            Assert.False(string.IsNullOrWhiteSpace(execute["workflowExecutionId"]?.GetValue<string>()));
-            await WaitForOutputAsync(app, publishedMarker);
-            var testRun = await NativeHostingScenario.PostAsync(app, $"/publishing/workflows/{draft}/test-runs", new { });
-            Assert.False(string.IsNullOrWhiteSpace(testRun["workflowExecutionId"]?.GetValue<string>()));
-            await WaitForOutputAsync(app, draftMarker);
+            stores.Delete(recursive: true);
         }
-
-        static Task WaitForOutputAsync(WorkbenchProcess app, string marker) => NativeHostingScenario.WaitForAsync(app,
-            () => app.Output.Split('\n').Any(line => line.TrimEnd('\r') == marker),
-            $"the local runner to write {marker}", timeout: TimeSpan.FromSeconds(20));
     }
 
     /// <summary>

@@ -1,7 +1,6 @@
 using System.Text.Json.Nodes;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Expressions.JavaScript.Jint.Services;
-using Elsa.Workbench.CorePreview;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Xunit;
 
