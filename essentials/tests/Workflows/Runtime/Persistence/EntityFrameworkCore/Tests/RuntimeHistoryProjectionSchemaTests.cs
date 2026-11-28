@@ -172,7 +172,7 @@ public sealed class RuntimeHistoryProjectionSchemaTests
             PhysicalCommitId = "physical", RecordedAt = Now, OccurredAtKnown = false, ActivityAncestryKnown = true };
         return new()
         {
-            Id = ActivityExecutionEfSupport.CreateId("history:event", scope, run, eventId), ScopeKey = EfRelationalIdentity.Encode(scope),
+            Id = HistoryId("history:event", scope, run, eventId), ScopeKey = EfRelationalIdentity.Encode(scope),
             ScopeKeyHash = EfRelationalIdentity.Hash(scope), WorkflowExecutionId = EfRelationalIdentity.Encode(run), WorkflowExecutionIdHash = EfRelationalIdentity.Hash(run),
             ContentJson = RuntimeArtifactJson.Serialize(item), SchemaVersion = "1.0.0", Revision = 1,
             HistoryEventId = EfRelationalIdentity.Encode(eventId), HistoryEventIdHash = EfRelationalIdentity.Hash(eventId),
@@ -181,6 +181,9 @@ public sealed class RuntimeHistoryProjectionSchemaTests
             ActivityExecutionIdHash = EfRelationalIdentity.Hash("activity"), Sequence = sequence
         };
     }
+
+    private static string HistoryId(string kind, string scope, string run, string id) =>
+        EfRelationalIdentity.Hash($"{kind.Length}:{kind}{scope.Length}:{scope}{run.Length}:{run}{id.Length}:{id}");
 
     private static RuntimeHistoryHead Head(long sequence) => new("run", 1, sequence, "physical", Now, Policy, true, false, 0);
 
@@ -195,7 +198,7 @@ public sealed class RuntimeHistoryProjectionSchemaTests
         await using var context = database.Open();
         context.Add(new RuntimeHistoryHeadEntity
         {
-            Id = ActivityExecutionEfSupport.CreateId("history:head", "tenant", "run", ""), ScopeKey = EfRelationalIdentity.Encode("tenant"),
+            Id = HistoryId("history:head", "tenant", "run", ""), ScopeKey = EfRelationalIdentity.Encode("tenant"),
             ScopeKeyHash = EfRelationalIdentity.Hash("tenant"), WorkflowExecutionId = EfRelationalIdentity.Encode("run"),
             WorkflowExecutionIdHash = EfRelationalIdentity.Hash("run"), ContentJson = RuntimeArtifactJson.Serialize(Head(1)),
             SchemaVersion = "1.0.0", Revision = 1, FirstSequence = 1, LastSequence = 1
