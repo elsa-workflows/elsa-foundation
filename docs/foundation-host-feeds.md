@@ -27,7 +27,8 @@ defaults to `elsa-kernel.db` and resolves against the process working directory.
 database and tenant. To use PostgreSQL, set `Provider` to `PostgreSQL`, clear `SqlitePath`, and
 provide `PostgresConnectionString`. The shell's EF control-plane connection remains separately configured.
 
-In Production, provide the recovery continuation signing key through
+For a shell that enables Runtime artifact persistence, supply the recovery continuation signing key in operator
+configuration. The default shell's environment key is
 `CShells__Shells__default__Features__WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence__RecoveryContinuationSigningKey`.
 Use at least 32 UTF-8 bytes and share the key with nodes that consume the same durable runtime pages.
 
