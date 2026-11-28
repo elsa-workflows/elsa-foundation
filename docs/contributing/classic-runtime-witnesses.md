@@ -68,6 +68,21 @@ The retained suite verifies contracts and publication services through their
 current owners. Physical provider and Actor cases continue to exercise
 publication pins, History, prepared starts and protected material across restart.
 
+## Classic Runtime tracing producer
+
+Replay the classic engine tracer and its OpenTelemetry bridge on the pinned
+source. The current bridge tests exercise the stable activity source and tags
+directly, including per-drain batching, aged flush and nested traces.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-tracing" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
+  cd "$compatibility_root/classic-tracing"
+  dotnet test extensions/Diagnostics.OpenTelemetry/tests/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter FullyQualifiedName~EngineTracingBridgeTests
+)
+```
+
 ## Classic Publishing and Runtime integration
 
 Use `45a594857c700de2fe76de9cbcb62d06bbf6876b` for the classic
@@ -85,6 +100,20 @@ dotnet test essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCor
 Current Publishing tests retain protected source references, executable hash
 compatibility, publication and journal behavior, and real migration and test-run
 transport checks through their current storage and execution providers.
+
+## Classic API composition and alteration contracts
+
+Use `415905150f6060a2b257649fe48c645873a428cc` for the classic runtime
+HTTP manifest, alteration route and failure contracts, and the concrete
+checkpoint engine shape. The current Architecture project checks the Actor API
+and keeps the retained alteration wire models and permission checks.
+
+```sh
+bash tools/architecture/restore-ci-project-graph.sh
+dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj \
+  -c Release -p:RestoreLockedMode=true \
+  --filter 'FullyQualifiedName~RuntimeAlteration|FullyQualifiedName~RuntimeCoreEngineShapeGuardTests|FullyQualifiedName~DomainManagementApiCompositionTests|FullyQualifiedName~DomainApiCapabilityRegistrationTests'
+```
 
 ## Classic Runtime provider witnesses
 

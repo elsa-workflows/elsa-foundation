@@ -1,6 +1,6 @@
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelApi;
@@ -25,7 +25,7 @@ public sealed class RuntimeExecutionSliceDependencyTests
     public void RuntimeApi_DoesNotReferenceWorkflowDesignOrPublishing()
     {
         AssertNoReferences(
-            typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(WorkflowRuntimePermissions).Assembly,
             "Elsa.Workflows.Design.",
             "Elsa.Workflows.Publishing.");
     }

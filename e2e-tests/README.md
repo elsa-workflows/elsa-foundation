@@ -206,12 +206,10 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `Test-IfWorkflow.ps1`       | `If` decision composite; runs both conditions and asserts the correct Then/Else branch |
 | `Test-SwitchWorkflow.ps1`   | `Switch` composite; asserts the matching case branch runs (or the default) |
 | `Test-HttpWorkflow.ps1`     | `HttpEndpoint` start-trigger; publishes, then fires a real HTTP request at `/workflows/http/<path>` |
-| `Test-ChildWorkflow.ps1`    | parent/child dispatch: a parent `DispatchWorkflow` fires a separately-published child workflow |
 | `single-outcome/Test-ForLoop.ps1` / `Test-ForEachLoop.ps1` / `Test-SetOutput.ps1` / `Test-SetVariable.ps1` | loops + Set/SetOutput intrinsics |
 | `single-outcome/Test-WhileLoop.ps1` | `While` loop terminated by a body `Set` of the condition variable (#977) |
 | `single-outcome/Test-WhileCounter.ps1` | `While` driven by a JS-incremented counter — body reads/writes a variable from JS via `getVariable` (#984 + #977) |
 | `branching/Test-ParallelFork.ps1` | `Parallel` fork/join |
-| `composition/Test-ChildWorkflowInput.ps1` | parent dispatches a child **and passes it an input**; child echoes it; correlate the child by correlationId |
 | `composition/Test-SharedPersistence.ps1` | opt-in shared-resource journeys: create/publish reusable activity, publish/execute workflow, restart and read persisted state, check primary/diagnostics database placement, run same-target resource-scoped CLI `list` and `validate` and refuse a different target; change the authored resource target, reload the shell, verify writes move, then reject an invalid candidate while the active shell remains available |
 | `diagnostics/Test-SharedDiagnosticsPersistence.ps1` | opt-in two-target Workbench journey: persist OTLP and structured logs on the diagnostics target, restart, validate module scope with CLI and refuse a split diagnostics layout before database migration |
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
@@ -371,11 +369,8 @@ reproduce. This is an architecture difference (like the removed flow-activity mo
 
 The following observations describe the previous runtime. For current Actor child execution, see the [retained kernel tests](../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs).
 
-`Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
-Enabling it (separate from the bug fixes below):
-- `server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj` - project refs to `Elsa.Activities.DispatchWorkflow.{Runtime,Design}`.
-- `server/apps/Elsa.Workbench.Host/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
-- No `Program.cs` change needed: `.WithHostAssemblies()` discovers the referenced assemblies' shell features.
+Use the [classic compatibility checkout](../docs/contributing/workbench-compatibility-tests.md#classic-dispatch-and-called-workflow-control)
+for the `ActivitiesDispatchWorkflowRuntime` configuration and replay commands for the classic REST scripts.
 
 Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with
 outcome `Dispatched` while the child runs independently.
@@ -383,7 +378,7 @@ outcome `Dispatched` while the child runs independently.
 **Waited path (`WaitForCompletion=true`) works again (re-verified 2026-07-23 @ `3dd732d07`).** The #1006
 hang is gone since the #982 node-scoped resume-target fix (`4c2386551`): the parent suspends at the dispatch
 node, the child runs, and the parent resumes with the child's terminal outcome (`Completed`/`Faulted`) —
-covered end-to-end by the [archived BPMN call-activity witness](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
+covered end-to-end by the [archived BPMN call-activity witness](../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-direct-execution).
 
 **Historical classic defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
 fault-recording checkpoint commit fails, so the child surfaces a

@@ -26,7 +26,6 @@ using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Validations;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -141,7 +140,7 @@ public sealed class RetainedWorkflowOverviewCompositionTests
         builder.Services.AddSingleton<IDistributedLockProvider, OverviewLockProvider>();
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(typeof(WorkflowsDashboardRetainedFeature).Assembly, typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly,
-                typeof(WorkflowsRuntimeRetainedAttentionFeature).Assembly, typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(WorkflowsRuntimeRetainedAttentionFeature).Assembly,
                 typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly, typeof(RuntimeDbContext).Assembly,
                 typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsDesignApiFeature).Assembly, typeof(WorkflowDesignValidationsFeature).Assembly, typeof(TasksFeature).Assembly,
