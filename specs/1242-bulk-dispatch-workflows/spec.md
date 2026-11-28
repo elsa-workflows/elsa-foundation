@@ -420,7 +420,7 @@ and on-completed-callbacks suites pass.
 | `WorkflowDefinitionId` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
 | `WaitForCompletion` a literal that is not true or false (in any case) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: set it to true or false |
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` |
-| `Items` a non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: Elsa 3 read it as text and dispatched no child |
+| `Items` a non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`; the message says Elsa 3 read it as text and dispatched no child; guidance: bind `Items` to an expression that returns the collection |
 | `DefaultItemInputKey` not a literal or a blank literal, or a static `Input` that is an expression (JavaScript or another language) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, guidance: put the values in the items, or use a literal map |
 | Target workflow neither in the import nor published in Elsa 4 | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target first, or in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |

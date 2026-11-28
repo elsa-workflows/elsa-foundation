@@ -104,7 +104,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("waitForCompletion", Literal("yes", "Boolean"))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "true or false");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, guidance: "to true or false before converting", "is not true or false");
     }
 
     // ── Branches (FR-018) ───────────────────────────────────────────────────────────────────────────────────────────
@@ -131,7 +131,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("items", Literal("[1,2,3]", "Object"))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "expression", "raw JSON text");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, guidance: "Bind 'items' to an expression that returns the collection", "raw JSON text", "dispatched no child");
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("workflowDefinitionId", Expression("JavaScript", "return 'x';"))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "literal id");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, guidance: "to the literal id of the workflow", "must be a literal");
     }
 
     [Theory]
@@ -160,7 +160,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk((member, Literal(JsonSerializer.Deserialize<JsonElement>(literal).ToString(), type))));
 
-        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.RemovedInputBound, member);
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.RemovedInputBound, guidance: "before converting", member);
         Assert.Contains("clear", error.Guidance, StringComparison.OrdinalIgnoreCase);
         Assert.EndsWith("before converting.", error.Guidance, StringComparison.Ordinal);
     }
@@ -170,7 +170,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("channelName", Expression("JavaScript", "return getChannel();"))));
 
-        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.RemovedInputBound, "channelName");
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.RemovedInputBound, guidance: "Clear the input before converting", "channelName", "expression");
         Assert.Contains("clear", error.Guidance, StringComparison.OrdinalIgnoreCase);
         Assert.EndsWith("before converting.", error.Guidance, StringComparison.Ordinal);
     }
@@ -188,7 +188,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(), targets: new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal));
 
-        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchTargetUnknown, "Import the target workflow first");
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchTargetUnknown, guidance: "Import the target workflow first");
         Assert.Contains(Child, error.Message, StringComparison.Ordinal);
     }
 
@@ -197,7 +197,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("defaultItemInputKey", Expression("JavaScript", "return 'Item';"))));
 
-        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "literal");
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, guidance: "to a literal input name", "literal key");
         AssertItemKeyGuidance(error);
     }
 
@@ -208,7 +208,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("defaultItemInputKey", Literal(key))));
 
-        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "blank");
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, guidance: "to a literal input name", "blank");
         AssertItemKeyGuidance(error);
     }
 
@@ -219,7 +219,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("input", Expression(language, expression, "ObjectDictionary"))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, "put those values in the items", "literal map");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, guidance: "Put those values in the items as members, or use a literal map", "expression");
     }
 
     [Fact]
@@ -227,7 +227,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertAsync(Bulk(("input", Literal("""{"Debug":true}""", "ObjectDictionary"))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.DispatchInputUndeclared, "'Sku'");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.DispatchInputUndeclared, guidance: "It declares 'Sku'");
     }
 
     [Theory]
@@ -243,7 +243,7 @@ public sealed class Elsa3BulkDispatchConversionTests
 
         var result = await ConvertAsync(Bulk(("childCompleted", Port(branch))));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead, "not available in the branch");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead, guidance: "the child's result is not available in the branch yet");
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public sealed class Elsa3BulkDispatchConversionTests
 
         var result = await ConvertAsync(Bulk(("childCompleted", Port(branch))), variables: [Variable("ChildInstanceId")]);
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead, "not available in the branch");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead, guidance: "the child's result is not available in the branch yet");
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public sealed class Elsa3BulkDispatchConversionTests
         var result = await ConvertAsync(Bulk(("childCompleted", Port(branch))),
             inputs: [new Elsa3WorkflowArgumentDefinition { Name = "WorkflowStatus", Type = "String" }]);
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead, "not available in the branch");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchChildResultRead, guidance: "the child's result is not available in the branch yet");
     }
 
     [Fact]
@@ -298,7 +298,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertFlowchartAsync("WaitAll", ["Done", "Completed"]);
 
-        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, "Connect the follow-up to 'Done'");
+        var error = AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, guidance: "Connect the follow-up to 'Done'");
         Assert.Contains("WaitAll", error.Message, StringComparison.Ordinal);
     }
 
@@ -307,7 +307,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertFlowchartAsync("WaitAll", ["Done", "Canceled"]);
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, "'Done'");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, guidance: "Connect the follow-up to 'Done'", "WaitAll");
     }
 
     [Fact]
@@ -315,7 +315,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     {
         var result = await ConvertFlowchartAsync(null, ["Completed"]);
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, "Connect the follow-up to 'Done'");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, guidance: "Connect the follow-up to 'Done'");
     }
 
     [Fact]
@@ -336,7 +336,7 @@ public sealed class Elsa3BulkDispatchConversionTests
         // Elsa 3 never followed this edge; dropping it would let the WaitAll join run where Elsa 3 never ran it.
         var result = await ConvertFlowchartAsync("WaitAll", ["Done", "Completed"], ("waitForCompletion", Literal("false", "Boolean")));
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, "'Done'");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.BulkDispatchOutcomeRoute, guidance: "Connect the follow-up to 'Done'", "WaitAll");
     }
 
     // ── Correlation function (FR-015) ───────────────────────────────────────────────────────────────────────────────
@@ -396,7 +396,7 @@ public sealed class Elsa3BulkDispatchConversionTests
 
         var result = await ConvertAsync(Bulk(), targets);
 
-        AssertRefused(result, Elsa3ActivityDiagnosticCodes.LiteralKeyAmbiguous, "differ only in letter case", "Rename the inputs");
+        AssertRefused(result, Elsa3ActivityDiagnosticCodes.LiteralKeyAmbiguous, guidance: "Rename the inputs", "differ only in letter case");
     }
 
     [Fact]
@@ -438,7 +438,7 @@ public sealed class Elsa3BulkDispatchConversionTests
 
         var result = await ConvertAsync(Bulk(("childCompleted", Port(branch))), variables: [Variable("currentItem")]);
 
-        AssertRefused(result, Elsa3ImportDiagnosticCodes.ResolutionDiffers, "Rename");
+        AssertRefused(result, Elsa3ImportDiagnosticCodes.ResolutionDiffers, guidance: "Rename one of the two variables");
     }
 
     // ── Per-item inputs (FR-016) ────────────────────────────────────────────────────────────────────────────────────
@@ -762,15 +762,16 @@ public sealed class Elsa3BulkDispatchConversionTests
         Assert.Contains("literal 'input' map", error.Guidance, StringComparison.Ordinal);
     }
 
+    // SC-005: each refusal carries its code and guidance; the guidance is checked on its own, not through the message.
     private static Elsa3MigrationDiagnostic AssertRefused(
-        Elsa3MigrationResult<Elsa3ConvertedDefinition> result, string code, params string[] guidanceOrMessage)
+        Elsa3MigrationResult<Elsa3ConvertedDefinition> result, string code, string guidance, params string[] message)
     {
         Assert.False(result.Succeeded, "The conversion succeeded.");
         var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == code);
         Assert.Equal(Elsa3MigrationDiagnosticSeverity.Error, error.Severity);
-        foreach (var text in guidanceOrMessage)
-            Assert.True($"{error.Message} {error.Guidance}".Contains(text, StringComparison.OrdinalIgnoreCase),
-                $"'{text}' is in neither the message nor the guidance: {error.Message} / {error.Guidance}");
+        Assert.Contains(guidance, error.Guidance, StringComparison.Ordinal);
+        foreach (var text in message)
+            Assert.Contains(text, error.Message, StringComparison.Ordinal);
         return error;
     }
 }
