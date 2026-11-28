@@ -149,6 +149,7 @@
       "extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj",
       "extensions/Attention/src/Api/Elsa.Attention.Api.csproj",
       "extensions/Bpmn/src/Api/Elsa.Activities.Bpmn.Api.csproj",
+      "extensions/Bpmn/src/Composite/Elsa.Activities.Bpmn.Composite.csproj",
       "extensions/Bpmn/src/Core/Elsa.Activities.Bpmn.Core.csproj",
       "extensions/Bpmn/src/Design/Elsa.Activities.Bpmn.Design.csproj",
       "extensions/Bpmn/src/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj",
