@@ -1,0 +1,77 @@
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Inspection.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Elsa.Workflows.Runtime.Api;
+
+/// <summary>Registers the exact executable and run inspection used by the Runtime HTTP API and its consumers.</summary>
+internal static class RuntimeHttpInspectionServices
+{
+    // The hybrid API recognizes only the known reader type or its owning assembly's default registration.
+    internal static void AddLegacyExecutableRetentionReader(IServiceCollection services)
+    {
+        services.TryAddScoped<LegacyWorkflowExecutableRetentionReader>();
+        services.TryAddScoped<IWorkflowExecutableRetentionReader>(sp => sp.GetRequiredService<LegacyWorkflowExecutableRetentionReader>());
+    }
+
+    internal static void AddStoredActivityInspection(IServiceCollection services)
+    {
+        services.TryAddScoped<ActivityExecutionInspectionService>();
+        services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
+        services.TryAddScoped<IActivityExecutionBrowseSource, ActivityExecutionBrowseSource>();
+    }
+
+    internal static void AddExecutableInspectionServices(IServiceCollection services)
+    {
+        services.TryAddScoped(sp => new WorkflowExecutableInspector(sp.GetRequiredService<IWorkflowExecutableStore>(),
+            sp.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), sp.GetRequiredService<IWorkflowExecutableRetentionReader>(),
+            sp.GetService<TimeProvider>()));
+        services.TryAddScoped<WorkflowActivationSlotInspectionService>();
+        services.TryAddScoped<IWorkflowExecutableInspector>(sp => sp.GetRequiredService<WorkflowExecutableInspector>());
+        // The exact Executable read for other domains uses the same inspector as the HTTP endpoints.
+        WorkflowExecutableInspectionStartupTask.Validate(services);
+        services.TryAddScoped<IWorkflowExecutableInspection, WorkflowExecutableInspection>();
+        AddExecutableInspectionValidator(services);
+    }
+
+    internal static void AddRunInspectionServices(IServiceCollection services,
+        Func<IServiceProvider, IWorkflowRunInspection>? create = null)
+    {
+        // Other domains use the endpoint's run services through the single exact Runtime Core contract.
+        WorkflowRunInspectionStartupTask.Validate(services);
+        if (create is null)
+            services.TryAddScoped<IWorkflowRunInspection, WorkflowRunInspection>();
+        else
+            services.TryAddScoped(create);
+
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowRunInspectionStartupTask))
+                ?.ImplementationInstance is not WorkflowRunInspectionStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowRunInspectionStartupTask(services);
+        services.RemoveAll<WorkflowRunInspectionStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowRunInspectionStartupTask
+                         || item.ImplementationType == typeof(WorkflowRunInspectionStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
+    }
+
+    // One validator per configuring collection: a copied child shell rebinds it to its own collection.
+    private static void AddExecutableInspectionValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowExecutableInspectionStartupTask))
+                ?.ImplementationInstance is not WorkflowExecutableInspectionStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowExecutableInspectionStartupTask(services);
+        services.RemoveAll<WorkflowExecutableInspectionStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowExecutableInspectionStartupTask
+                         || item.ImplementationType == typeof(WorkflowExecutableInspectionStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
+    }
+}

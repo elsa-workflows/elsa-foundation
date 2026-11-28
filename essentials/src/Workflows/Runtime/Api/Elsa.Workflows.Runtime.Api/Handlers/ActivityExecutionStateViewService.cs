@@ -94,9 +94,3 @@ public sealed class ActivityExecutionStateViewService(
             canInspectValues,
             View: null);
 }
-
-/// <summary>The activity state view operation the runtime endpoint dispatches to.</summary>
-public interface IActivityExecutionStateViewService
-{
-    Task<ActivityStateView?> GetAsync(GetActivityExecutionStateView request, CancellationToken cancellationToken);
-}

@@ -37,8 +37,8 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
     internal static void ConfigureRetainedServices(IServiceCollection services)
     {
         services.AddRetainedRuntimeHttpServices();
-        services.AddExecutableInspectionServices();
-        services.AddRunInspectionServices(provider => new WorkflowRunInspection(
+        RuntimeHttpInspectionServices.AddExecutableInspectionServices(services);
+        RuntimeHttpInspectionServices.AddRunInspectionServices(services, provider => new WorkflowRunInspection(
             provider.GetRequiredService<IWorkflowInstanceDetailsService>(),
             provider.GetRequiredService<IActivityExecutionInspectionService>(),
             timeProvider: provider.GetRequiredService<TimeProvider>(),
