@@ -4,7 +4,7 @@
 
 ## Composition and discovery
 
-Select feature `StandaloneTriggersApi` with its `ApiCapabilities` and `Events` dependencies. Its authoring subset collects installed type sources/validators and initializes the metadata catalog. The selected host must also supply exactly one `IStandaloneTriggerStore`, `IStandaloneTriggerTargetDiscovery` and `ITriggerInputMapper`. Without them, the feature does not advertise its capability. The normal Runtime composition supplies these services; an authoring-only host must supply suitable replacements explicitly.
+Select feature `StandaloneTriggersApi` with its `ApiCapabilities` and `Events` dependencies. It ships in `Elsa.Workflows.Runtime.Api.StandaloneTriggers`. Hosts that list feature assemblies explicitly include the assembly of `StandaloneTriggersApiFeature`. Its authoring subset collects installed type sources/validators and initializes the metadata catalog. The selected host must also supply exactly one `IStandaloneTriggerStore`, `IStandaloneTriggerTargetDiscovery` and `ITriggerInputMapper`. Without them, the feature does not advertise its capability. The normal Runtime composition supplies these services; an authoring-only host must supply suitable replacements explicitly.
 
 The default `AuthoringTriggerCommitter` accepts only never-activated paused resources with disabled associations. When a protected `ITriggerSourceResourceCommitStore` is present, post-configuration selects `ProtectedTriggerManagementCommitter`. Source-specific activation still requires an installed producer descriptor and compatible physical projection/storage. Duplicate selected resource, management-committer, type-catalog, target-discovery or mapper registrations fail configuration.
 
