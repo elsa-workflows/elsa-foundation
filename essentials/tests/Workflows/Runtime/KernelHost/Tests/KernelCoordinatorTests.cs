@@ -532,6 +532,10 @@ public sealed class KernelCoordinatorTests
         Assert.True((await host.ActivateAsync(moved, "ship-2")).Succeeded);
         Assert.Equal("orders@1", serving.MatchHttp("POST", "orders")!.Value.Slot!.Workflow.Id);
 
+        // Publishing completes the currently occupied slot before it tries to activate the candidate.
+        Assert.True((await peer.EnsureServingAsync("ship", KernelServing.DefaultSlotName)).Succeeded);
+        Assert.Equal("ship@2", serving.MatchHttp("POST", "orders")!.Value.Slot!.Workflow.Id);
+
         var later = ExecutableOf("ship@3", "ship", HttpWorkflow("ship", "final"));
         Assert.True((await host.ActivateAsync(later, "ship-3", coordinator: peer)).Succeeded);
         Assert.Equal("ship@3", serving.MatchHttp("POST", "ship")!.Value.Slot!.Workflow.Id);
