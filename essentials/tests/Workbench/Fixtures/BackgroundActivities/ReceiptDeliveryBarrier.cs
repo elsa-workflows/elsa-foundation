@@ -24,10 +24,6 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner,
     public async ValueTask<BackgroundActivityWorkClaim?> ClaimNextAsync(string ownerId, DateTimeOffset now,
         TimeSpan visibilityTimeout, CancellationToken cancellationToken = default)
     {
-        // Suppress this test host's poll without creating a lease or passing a stale timestamp after a long wait.
-        if (File.Exists(Path.Combine(Journal, $"hold-workers-{role}")))
-            return null;
-
         if (File.Exists(Path.Combine(Journal, "attempt-late-receipt-after-restart")))
             await ReplayCancelledClaimsAsync(cancellationToken);
 

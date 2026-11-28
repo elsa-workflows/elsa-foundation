@@ -90,7 +90,9 @@ public sealed class CommittedCompositionConnectionTests
     /// </summary>
     private static readonly HashSet<string> ContextSharingFeatures = new(StringComparer.Ordinal)
     {
-        "WorkflowsDashboardEntityFrameworkCore"
+        "WorkflowsDashboardEntityFrameworkCore",
+        "WorkflowsDashboardPortfolioEntityFrameworkCore",
+        "WorkflowsRuntimePublicationEntityFrameworkCorePersistence"
     };
 
     // The compose stacks run in Production, where shells.Production.json sits above the composition the stack
@@ -171,6 +173,7 @@ public sealed class CommittedCompositionConnectionTests
         WorkbenchConfiguration()
             .AddJsonFile(Path.Join(RepoRoot, shellsJson))
             .AddJsonFile(Path.Join(RepoRoot, "server/apps", "Elsa.Workbench.Host", "shells.Production.json"))
+            .AddJsonFile(Path.Join(RepoRoot, "server/apps", "Elsa.Workbench.Host", "shells.Actor.Production.json"))
             .AddInMemoryCollection(ReadWorkbenchEnvironment(Path.Join(RepoRoot, "docker", "compose", composeFile))
                 .Select(entry => KeyValuePair.Create(entry.Key.Replace("__", ":"), (string?)entry.Value)))
             .Build();

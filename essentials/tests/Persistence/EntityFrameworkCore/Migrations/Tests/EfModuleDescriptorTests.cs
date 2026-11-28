@@ -19,7 +19,6 @@ using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Xunit;
@@ -54,8 +53,6 @@ public sealed class EfModuleDescriptorTests
         ("Workflows.Runtime", typeof(RuntimeDbContext), RuntimeEfModule.HistoryModuleName),
         ("Workflows.Design", typeof(WorkflowsDesignDbContext), WorkflowsDesignEfModule.HistoryModuleName),
         ("Workflows.Publishing", typeof(PublishingSnapshotReviewDbContext), PublishingSnapshotReviewEfModule.HistoryModuleName),
-        ("Workflows.Runtime.Distributed.Placement", typeof(ExecutionPlacementDbContext), ExecutionPlacementEfModule.HistoryModuleName),
-        ("Workflows.Runtime.Distributed.CommandTransport", typeof(ExecutionCommandTransportDbContext), ExecutionCommandTransportEfModule.HistoryModuleName),
         ("Activities.Design", typeof(ActivitiesDesignDbContext), ActivitiesDesignEfModule.HistoryModuleName),
         ("Identity.Iam", typeof(IdentityIamDbContext), IdentityIamEfModule.HistoryModuleName),
         ("Identity.ProviderConfiguration", typeof(IdentityProviderConfigurationDbContext), IdentityProviderConfigurationEfModule.HistoryModuleName),
@@ -71,10 +68,10 @@ public sealed class EfModuleDescriptorTests
     private static IReadOnlyList<EfModuleDescriptor> Discover() => EfModuleCatalog.Discover(ModuleContextCatalog.Modules);
 
     [Fact]
-    public void Discover_returns_all_19_modules_with_correct_names_contexts_and_frozen_history()
+    public void Discover_returns_all_expected_modules_with_correct_names_contexts_and_frozen_history()
     {
         var descriptors = Discover();
-        Assert.Equal(19, descriptors.Count);
+        Assert.Equal(Expected.Length, descriptors.Count);
 
         foreach (var (name, context, historyModule) in Expected)
         {
@@ -162,7 +159,7 @@ public sealed class EfModuleDescriptorTests
             .ToHashSet(StringComparer.Ordinal);
 
     // One project directory per module assembly (thirteen module projects carry fifteen
-    // [EfModule] declarations; Identity and Workflows.Runtime.Distributed each carry two in one project).
+    // [EfModule] declarations; Identity carries two in one project).
     // Repo-relative, not derived from the assembly's bin/obj output path, for the same reason
     // SecretsEfPersistencePilotArchitectureTests reads project files from the repo rather than from disk
     // layout: it is the source, not the build output, that a guard test must hold to account.
@@ -182,7 +179,6 @@ public sealed class EfModuleDescriptorTests
         (typeof(StudioPreferencesDbContext).Assembly, "essentials/src/Preferences/Persistence/EntityFrameworkCore"),
         (typeof(WorkflowsDesignDbContext).Assembly, "essentials/src/Workflows/Design/Persistence/EntityFrameworkCore"),
         (typeof(PublishingSnapshotReviewDbContext).Assembly, "essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore"),
-        (typeof(ExecutionPlacementDbContext).Assembly, "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore"),
         (typeof(RuntimeDbContext).Assembly, "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore"),
         (typeof(Elsa3ImportDbContext).Assembly, "extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore")
     ];
@@ -336,7 +332,7 @@ public sealed class EfModuleDescriptorTests
 
         var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules.Append(dashboard).Append(aspNetCoreIdentity).Distinct());
 
-        Assert.Equal(19, descriptors.Count);
+        Assert.Equal(Expected.Length, descriptors.Count);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == dashboard);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == aspNetCoreIdentity);
     }

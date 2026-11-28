@@ -63,16 +63,17 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             Directory.CreateDirectory(Path.Combine(host.ContentRoot, "packages"));
             var shellPath = Path.Combine(host.ContentRoot, "shells.json");
             var shells = JsonNode.Parse(await File.ReadAllTextAsync(shellPath))!;
-            var features = shells["CShells"]!["Shells"]!["default"]!["Features"]!;
+            var features = DefaultFeatures(shells);
+            // These BPMN journeys use the legacy in-process Runtime and its saved execution data.
+            var legacy = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(source, "shells.CorePreview.json")))!;
+            foreach (var (name, settings) in DefaultFeatures(legacy))
+                features[name] = settings?.DeepClone();
             if (recoverySweepSeconds is { } interval)
                 features["WorkflowsRuntimeResumption"] = new JsonObject { ["SweepIntervalSeconds"] = interval };
             if (directBpmn)
             {
                 features["ActivitiesBpmnHosting"] = new JsonObject { ["AdmitNewExecutions"] = admitNewBpmnExecutions };
                 features["ActivitiesBpmnHostingApi"] = new JsonObject();
-                // Qualify the built-in single-node profile first. Clustered model placement remains a separate gate.
-                foreach (var name in new[] { "WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence" })
-                    features.AsObject().Remove(name);
             }
             if (authoredDirectPublication)
             {
@@ -99,8 +100,8 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
                     features["ActivitiesFlowchart"] = new JsonObject();
                     features["ActivitiesPrimitives"] = new JsonObject();
                 }
-                foreach (var name in features.AsObject().Select(item => item.Key).Where(name => !allowed.Contains(name)).ToArray())
-                    features.AsObject().Remove(name);
+                foreach (var name in features.Select(item => item.Key).Where(name => !allowed.Contains(name)).ToArray())
+                    features.Remove(name);
             }
             features["WorkflowsRuntimeEntityFrameworkCore"]!["ConnectionString"] = "Data Source=runtime.db";
             foreach (var name in new[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore" })
@@ -114,7 +115,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             if (host.separateActivityDesign)
                 // Recover captured executables without republishing a changed current-build CLR catalog
                 // under the captured immutable source identities. Fresh-store profiles still reconcile it.
-                features.AsObject().Remove("ClrActivityReconciliation");
+                features.Remove("ClrActivityReconciliation");
             await File.WriteAllTextAsync(shellPath, shells.ToJsonString());
             await host.LaunchAsync();
             return host;
@@ -125,6 +126,8 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             throw;
         }
     }
+
+    private static JsonObject DefaultFeatures(JsonNode shell) => shell["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
 
     public async Task LoginAsync(string username = "admin")
     {

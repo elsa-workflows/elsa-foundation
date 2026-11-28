@@ -1,6 +1,6 @@
 # Recovering a workflow after a crash
 
-> **Current core.** This page describes the current Elsa core, which stays the default until the switch to the clean-slate kernel (milestone K13). The kernel is in development, tracked in [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229); its design is in the [kernel architecture pages](architecture/README.md). This page will be rewritten for the new core as part of that switch.
+> **Earlier workflow engine.** This page describes the in-process runner used by explicit compatibility profiles. The default workflow profiles use [Built-in Actor Foundation](architecture/README.md). Existing clustered installations can drain old commands with their matching previous host and database as part of the [store changeover](#retiring-the-clustered-runner).
 
 **Who this is for:** contributors working on the Elsa 4 runtime who need to know what happens to a running workflow when the server process dies, and what brings it back.
 
@@ -271,13 +271,9 @@ asks the drain to yield too. It answers `Deferred` and runs nothing once the pas
 is cancelled first, the drain still yields to the Cancel, which then runs on that mailbox. A Cancel that resolves the
 mailbox only then waits for the passivation and runs on a fresh mailbox. A drain that yielded to a passivation is not re-driven on that
 mailbox: the resumption sweep delivers its flushed continuations and re-drives the execution, on its next owner. A passivation that is cancelled before it takes
-the mailbox re-drives a drain that yielded to it, as a withdrawn Cancel does. Distributed placement uses the configured
-local mailbox on the owning node. A Cancel sent through another node takes effect once the owner's next placement pump
-sweep that lists the execution delivers it to that mailbox, usually within `SweepInterval` (default 10 seconds). The
-sweep's own waits for local work or failure backoff can make it later, and one sent while the owner hands the execution
-off takes effect on the next owner, or on a fresh mailbox on the owner when a sweep that overlaps the stop path's
-hand-off already leased it. The sweep does not wait for the running drain (see the
-[distributed delivery contract](../essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
+the mailbox re-drives a drain that yielded to it, as a withdrawn Cancel does.
+The former clustered workflow runner and its command-delivery behavior are described in the
+[previous release source](https://github.com/elsa-workflows/elsa-foundation/blob/18a16dee878106ac525aa9a861d851a200e43c55/essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract).
 The yield signal is internal to the default in-process provider: a custom actor provider that wraps the registered
 `InProcessWorkflowExecutionActorProvider` keeps the handoff, and an independent provider does not get it.
 
@@ -431,3 +427,18 @@ This page was first written as the worked reference for roadmap unit **W2** of t
 - Still owned elsewhere: drainer/handler refactors (**W1**), runtime-spine decomposition (specs/083), serializer-policy remediation (**PS-3**, **W3**).
 
 Programme context: [review remediation goals](program-goals/elsa-4-review-remediation.md) · [W2 roadmap brief](reports/elsa-4-architecture-review-2026-07/roadmap.md).
+
+
+## Retiring the clustered runner
+
+Stop new ingress to the earlier workflow host and settle its pending execution commands using the matching
+previous host and database. Keep a rollback copy of that database together with the old Runtime control and
+bookmark data. The [previous source and migrations](https://github.com/elsa-workflows/elsa-foundation/tree/18a16dee878106ac525aa9a861d851a200e43c55/essentials/src/Workflows/Runtime/Distributed)
+remain available with the installed package versions. One verified previous source host used
+`Elsa.Workflows.Runtime.Distributed` `4.0.24-preview` and
+`Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore` `4.0.29-preview`. Existing installations
+can use their own pinned previous versions.
+
+Provision the Actor database for the new workflow host. The old placement and transport tables record the
+earlier engine's command delivery. Keep them with the old database for inspection and rollback. The schema
+files for Actor Foundation leave those tables and old migration history in place.

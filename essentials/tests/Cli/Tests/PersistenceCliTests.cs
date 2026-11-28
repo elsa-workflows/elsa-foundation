@@ -31,9 +31,7 @@ public sealed class PersistenceCliTests : IDisposable
         "Studio.Preferences",
         "Workflows.Design",
         "Workflows.Publishing",
-        "Workflows.Runtime",
-        "Workflows.Runtime.Distributed.CommandTransport",
-        "Workflows.Runtime.Distributed.Placement"
+        "Workflows.Runtime"
     ];
 
     private static readonly JsonSerializerOptions ToolingJson = new()

@@ -1,0 +1,20 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Features": {
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "configure-via-environment",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": ""
+            }
+          },
+          "WorkflowsRuntimeEntityFrameworkCore": {
+            "RecoveryContinuationSigningKey": "",
+            "HierarchyCursorSigningKey": ""
+          }
+        }
+      }
+    }
+  }
+}
