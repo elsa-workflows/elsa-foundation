@@ -5,9 +5,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelHost;
-using Elsa.Workflows.Runtime.Services.ActivityExecutions;
-using Elsa.Workflows.Runtime.Services.Executions;
-using Elsa.Workflows.Runtime.Services.Incidents;
 using Kernel.Foundation.Contracts;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
@@ -15,8 +12,8 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 /// <summary>
 /// A kernel shell's workflow-instance list (Studio's Runs page): the kernel's runs in the host's bound tenant, and no other
 /// runs. Each request reads the tenant's runs from the foundation (those of one definition when the request names one),
-/// maps them to <see cref="WorkflowExecutionState"/>, and lists them through the runtime API's own list service over an
-/// in-memory store, so filters, paging cursors and per-run authorization behave as they do on the old core.
+/// maps them to <see cref="WorkflowExecutionState"/>, and uses the shared runtime API list projection for filtering,
+/// paging and per-run authorization.
 /// </summary>
 /// <remarks>
 /// Preview limit: the read is whole, once per request. A kernel list query that pages in the store comes later (K14).
@@ -30,7 +27,7 @@ internal sealed class KernelWorkflowInstanceListService(
     public async Task<WorkflowInstanceListView> ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var store = new InMemoryWorkflowExecutionStateStore();
+        var states = new Dictionary<string, WorkflowExecutionState>(StringComparer.Ordinal);
         if (KernelRunStates.CanReadTenant(access.Current, runs.Tenant))
         {
             var identities = new Dictionary<string, WorkflowExecutableIdentity?>(StringComparer.Ordinal);
@@ -39,12 +36,12 @@ internal sealed class KernelWorkflowInstanceListService(
             {
                 if (!identities.TryGetValue(run.Workflow, out var identity))
                     identities[run.Workflow] = identity = (await executables.FindAsync(run.Workflow, cancellationToken))?.Identity;
-                await store.SaveAsync(KernelRunStates.From(view, run, identity, runs.Tenant.Tenant), cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                var state = KernelRunStates.From(view, run, identity, runs.Tenant.Tenant);
+                ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
+                states[state.WorkflowExecutionId] = state;
             }
         }
-        // The old core's activity and incident stores hold nothing for a kernel run: empty ones in memory answer its counts
-        // (0) without a database round trip per row.
-        return await new WorkflowInstanceListService(store, new InMemoryActivityExecutionStateStore(), new InMemoryIncidentStateStore(), authorization)
-            .ListAsync(request, cancellationToken);
+        return await WorkflowInstanceListProjection.ListSnapshotAsync(states.Values, authorization, request, cancellationToken);
     }
 }
