@@ -39,7 +39,7 @@ export async function corePreviewTestRunInspectorJourney(page: Page, info: TestI
   const run = await (await started).json() as WorkflowTestRunView;
   expect(run.workflowExecutionId).toBeTruthy();
   const summary = page.getByRole("region", { name: "Test run summary", exact: true });
-  await expect(summary.getByText(/^(Accepted|Running|Waiting|Pending)$/)).toBeVisible();
+  await expect(summary.getByText(/^(Test accepted\. Waiting for execution status\.|Workflow execution is running\.|Execution is waiting for input\.|Workflow execution is pending\.)$/)).toBeVisible();
   await expect(page.getByText(/Execution status is unavailable|Request failed with 404|Live updates disconnected/)).toHaveCount(0);
   await capture(page, info, "test-run-started");
   await expect(summary.getByText("Workflow execution completed.", { exact: true })).toBeVisible({ timeout: 25_000 });
