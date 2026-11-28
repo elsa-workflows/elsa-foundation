@@ -100,6 +100,7 @@ export function Elsa3ReusableImportPage({
   const [step, setStep] = useState<ImportStep>("export");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [applyStatus, setApplyStatus] = useState<OperationStatus>("idle");
+  const [applyMessage, setApplyMessage] = useState("");
   const [receipt, setReceipt] = useState<Elsa3ReusableImportReceipt | null>(null);
   const [message, setMessage] = useState("");
   const [diagnostics, setDiagnostics] = useState<Elsa3MigrationDiagnostic[]>([]);
@@ -165,6 +166,7 @@ export function Elsa3ReusableImportPage({
     setPublishImportedActivities(false);
     setIdempotencyKey("");
     setApplyStatus("idle");
+    setApplyMessage("");
     setReceipt(null);
     setDiagnostics([]);
     setMessage(nextMessage);
@@ -322,6 +324,7 @@ export function Elsa3ReusableImportPage({
     setIdempotencyKey("");
     setReceipt(null);
     setApplyStatus("idle");
+    setApplyMessage("");
     if (requested.size === 0) {
       selectionController.current?.abort();
       setExpandedSelection(new Set());
@@ -401,7 +404,7 @@ export function Elsa3ReusableImportPage({
     if (!analysis || step !== "review" || !idempotencyKey || expandedSelection.size === 0) return;
     const generation = reviewedOperationGeneration.current;
     setApplyStatus("loading");
-    setMessage("Saving the reviewed drafts…");
+    setApplyMessage("Saving the reviewed drafts…");
     setDiagnostics([]);
     try {
       const result = await applyElsa3ReusableImport(
@@ -426,17 +429,17 @@ export function Elsa3ReusableImportPage({
       }
       if (error instanceof StudioHttpError && error.status === 501) {
         setApplyStatus("failed");
-        setMessage("This server could not apply the collection as drafts. Check that the server supports draft imports and that the collection is still available.");
+        setApplyMessage("This server could not apply the collection as drafts. Check that the server supports draft imports and that the collection is still available.");
         return;
       }
       const rejection = atomicRejection(error);
       if (rejection) {
         setApplyStatus("failed");
         setDiagnostics(rejection.diagnostics);
-        setMessage(rejection.message);
+        setApplyMessage(rejection.message);
         return;
       }
-      setMessage("The Apply response was ambiguous. Studio is reconciling through the durable receipt without resubmitting.");
+      setApplyMessage("The Apply response was ambiguous. Studio is reconciling through the durable receipt without resubmitting.");
       await reconcile(true, generation);
     }
   };
@@ -478,7 +481,7 @@ export function Elsa3ReusableImportPage({
           const rejection = atomicRejection(retryError);
           setApplyStatus("failed");
           setDiagnostics(rejection?.diagnostics ?? []);
-          setMessage(rejection?.message ?? identicalRetryReconciliationMessage(retryError));
+          setApplyMessage(rejection?.message ?? identicalRetryReconciliationMessage(retryError));
           return;
         }
       }
@@ -487,7 +490,7 @@ export function Elsa3ReusableImportPage({
         return;
       }
       setApplyStatus("failed");
-      setMessage(reconciliationMessage(error));
+      setApplyMessage(reconciliationMessage(error));
     }
   };
 
@@ -498,6 +501,7 @@ export function Elsa3ReusableImportPage({
     if (generation !== reviewedOperationGeneration.current) return;
     setReceipt(result);
     setApplyStatus("ready");
+    setApplyMessage("");
     goToStep("result");
   };
 
@@ -517,12 +521,13 @@ export function Elsa3ReusableImportPage({
     setUploadStatus("idle");
   };
 
-  const feedback = message ? (
+  const activeMessage = step === "review" ? applyMessage : message;
+  const feedback = activeMessage ? (
     <div
       className="elsa3-import-status"
-      role={applyStatus === "failed" || uploadStatus === "failed" || analysisStatus === "failed" || selectionStatus === "failed" ? "alert" : "status"}
+      role={(step === "review" ? applyStatus === "failed" : uploadStatus === "failed" || analysisStatus === "failed" || selectionStatus === "failed") ? "alert" : "status"}
     >
-      {message}
+      {activeMessage}
     </div>
   ) : null;
 

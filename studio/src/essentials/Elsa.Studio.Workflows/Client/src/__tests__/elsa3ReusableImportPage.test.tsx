@@ -299,8 +299,15 @@ describe("Elsa 3 reusable import workbench", () => {
     click(button(container, "Review exact import"));
     click(button(container, "Apply reviewed import"));
 
-    await waitFor(() => expect(container.textContent).toContain("guarantees that no partial Design documents were written"));
+    const rejectionMessage = "guarantees that no partial Design documents were written";
+    await waitFor(() => expect(container.textContent).toContain(rejectionMessage));
     expect(getElsa3ReusableImportReceipt).not.toHaveBeenCalled();
+
+    click(button(container, "Back"));
+    expect(container.textContent).not.toContain(rejectionMessage);
+    click(button(container, "Review exact import"));
+    expect(container.textContent).toContain(rejectionMessage);
+    expect(button(container, "Check import status")).toBeTruthy();
   });
 
   it("shows a partly published apply as partly published, with publication state and conversion warnings", async () => {
