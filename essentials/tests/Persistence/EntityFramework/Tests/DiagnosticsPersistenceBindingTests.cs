@@ -12,7 +12,7 @@ public sealed class DiagnosticsPersistenceBindingTests
 {
     private const string StructuredLogs = "DiagnosticsStructuredLogsEntityFrameworkCore";
     private const string OpenTelemetry = "DiagnosticsOpenTelemetryEntityFrameworkCore";
-    private const string Runtime = "WorkflowsRuntimeEntityFrameworkCore";
+    private const string Runtime = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
 
     private static readonly IReadOnlyList<EnrolledPersistenceParticipant> Participants =
     [

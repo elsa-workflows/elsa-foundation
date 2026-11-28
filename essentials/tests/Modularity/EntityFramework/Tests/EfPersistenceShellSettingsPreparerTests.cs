@@ -9,7 +9,10 @@ namespace Elsa.Modularity.EntityFramework.Tests;
 
 public sealed class EfPersistenceShellSettingsPreparerTests
 {
-    private const string FeatureId = "WorkflowsRuntimeEntityFrameworkCore";
+    private const string FeatureId = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+
+    // The storage schema now lives in a separate assembly from the feature.
+    static EfPersistenceShellSettingsPreparerTests() => _ = typeof(RuntimeDbContext).Assembly;
 
     [Fact]
     public async Task Resource_selection_patches_only_the_target_fields_before_feature_construction()
@@ -48,7 +51,7 @@ public sealed class EfPersistenceShellSettingsPreparerTests
 
     private static ShellSettingsPreparationContext Context(IReadOnlyDictionary<string, string?>? values = null) =>
         new(new ShellId("default"), values ?? new Dictionary<string, string?>(), [FeatureId], [], [],
-            [new ShellFeaturePreparationDescriptor(FeatureId, [], typeof(RuntimeEntityFrameworkCoreFeature), false)],
+            [new ShellFeaturePreparationDescriptor(FeatureId, [], typeof(RuntimeArtifactsEntityFrameworkCoreFeature), false)],
             [FeatureId], [], []);
 
     private static IConfiguration Configuration(params (string Key, string Value)[] values) =>

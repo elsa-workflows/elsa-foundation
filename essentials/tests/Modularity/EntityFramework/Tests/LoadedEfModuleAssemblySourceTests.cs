@@ -5,6 +5,7 @@ using CShells;
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -68,19 +69,24 @@ public sealed class LoadedEfModuleAssemblySourceTests : IDisposable
     [Fact]
     public async Task The_shell_settings_preparer_reads_only_the_current_generation_so_a_reload_after_an_upgrade_prepares()
     {
+        const string feature = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+        _ = typeof(RuntimeDbContext).Assembly;
+        var replaced = Load(Image("Workflows.Runtime"));
+        var context = new ShellSettingsPreparationContext(new ShellId("default"),
+            new Dictionary<string, string?>(), [feature], [], [],
+            [new ShellFeaturePreparationDescriptor(feature, [], typeof(RuntimeArtifactsEntityFrameworkCoreFeature), false)],
+            [feature], [], []);
+
         var unaware = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new EfPersistenceShellSettingsPreparer(EmptyConfiguration).PrepareAsync(PreparationContext));
+            new EfPersistenceShellSettingsPreparer(EmptyConfiguration).PrepareAsync(context));
         Assert.Contains("configuration-invalid", unaware.Message, StringComparison.Ordinal);
 
-        var patch = await new EfPersistenceShellSettingsPreparer(EmptyConfiguration, new Replaced(_previous)).PrepareAsync(PreparationContext);
+        var patch = await new EfPersistenceShellSettingsPreparer(EmptyConfiguration, new Replaced(replaced)).PrepareAsync(context);
 
         Assert.Empty(patch.ConfigurationData);
     }
 
     private static readonly IConfiguration EmptyConfiguration = new ConfigurationBuilder().Build();
-
-    private static ShellSettingsPreparationContext PreparationContext =>
-        new(new ShellId("default"), new Dictionary<string, string?>(), [], [], [], [], [], [], []);
 
     public void Dispose() => _contexts.ForEach(context => context.Unload());
 
