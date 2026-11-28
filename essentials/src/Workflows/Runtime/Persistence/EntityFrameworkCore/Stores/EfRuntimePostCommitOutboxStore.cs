@@ -267,9 +267,11 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
                     {
                         var progress = subscriptions.Progress.Single(item => item.RecipientId == recipient.RecipientId);
                         if (progress.Phase == RuntimeRecipientPhase.CancelledBeforeDispatch) continue;
-                        if (source.Status != RuntimePostCommitOutboxStatus.Delivered ||
-                            !await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(context, scope, recipient.StartIdentity.WorkflowExecutionId, cancellationToken))
-                            roots.Add(recipient.Material.ArtifactId);
+                        if (source.Status == RuntimePostCommitOutboxStatus.Delivered &&
+                            (TransferredToActorPin(source, progress) ||
+                             await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(context, scope, recipient.StartIdentity.WorkflowExecutionId, cancellationToken)))
+                            continue;
+                        roots.Add(recipient.Material.ArtifactId);
                     }
                     foreach (var wait in subscriptions.WaitDelivery?.Recipients ?? [])
                         if (source.Status != RuntimePostCommitOutboxStatus.Delivered ||
@@ -293,6 +295,15 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
         catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
         { throw new StimulusDeliveryRetentionException(retentionScope, exception); }
     }
+
+    // The protected Actor start commits its executable pin before Foundation can issue this birth receipt.
+    // After source delivery settles, only the Actor's retirement proof can release that pin.
+    private bool TransferredToActorPin(RuntimePostCommitOutboxItem source, RuntimeRecipientProgress progress) =>
+        PreparedStandaloneOnly &&
+        source.StandaloneIngress is { } ingress && PreparedStandaloneAdmission.IsMarked(ingress) &&
+        progress is { Seal.Version: RuntimeDispatchSeal.PreparedStartQualificationVersion,
+            Receipt.Kind: RuntimeTargetAcceptanceKind.PreparedActorBirth, PreparedStartAttempt: { Disarmed: false } attempt } &&
+        progress.Receipt.EvidenceId == attempt.Identity.ActorReference;
 
     // Finite same-scope pages; deliberate conservative traversal on rare GC/deletion paths. Do not use the current
     // claim/publisher authorization read: delivered sources can outlive the publisher and an uncreated target.

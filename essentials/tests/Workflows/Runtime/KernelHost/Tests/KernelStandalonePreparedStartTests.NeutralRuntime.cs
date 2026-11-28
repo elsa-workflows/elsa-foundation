@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Kernel.Foundation.Hosting;
@@ -99,6 +100,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var item = await ReadAsync(services, sourceId, token);
                 Assert.Equal(material.Identity, Assert.Single(item.SubscriptionDelivery!.Recipients).Material);
                 Assert.Equal(RuntimeRecipientPhase.Pending, Progress(item).Phase);
+                Assert.Contains(material.Identity.ArtifactId, await services.GetRequiredService<EfRuntimePostCommitOutboxStore>()
+                    .ListPinnedExecutableArtifactIdsAsync(token));
                 Assert.True((await Source(services).AdmitAsync(signal, token)).Replayed);
 
                 await Assert.ThrowsAsync<NotSupportedException>(() => services.GetRequiredService<IStandaloneTriggerIngress<UnqualifiedWaitEvent>>()
@@ -132,6 +135,11 @@ public sealed partial class KernelStandalonePreparedStartTests
                     var receipt = Assert.IsType<RuntimeTargetAcceptanceReceipt>(Progress(accepted).Receipt);
                     Assert.Equal(RuntimeTargetAcceptanceKind.PreparedActorBirth, receipt.Kind);
                     Assert.Equal(material.Identity, receipt.Material);
+                    Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, accepted.Status);
+                    Assert.DoesNotContain(material.Identity.ArtifactId, await services.GetRequiredService<EfRuntimePostCommitOutboxStore>()
+                        .ListPinnedExecutableArtifactIdsAsync(token));
+                    Assert.Contains(material.Identity.ArtifactId, await services.GetRequiredService<IRuntimeKernelExecutablePinStore>()
+                        .ListPinnedExecutableArtifactIdsAsync(token));
                     var reads = await shell.ReadAsync(token);
                     var owner = EmbeddedTenant.Bind(Persistence.Value);
                     var finished = await WaitForAsync(reads, owner, new(receipt.EvidenceId),
